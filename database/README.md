@@ -68,8 +68,26 @@ ALLOW_REMOTE_DB=1 pnpm db:migrate
 docker compose up -d        # Postgres 16 + PostGIS on localhost:5432
 ```
 
-Two databases are created on first start: `healthcare_dev` for development and
-`healthcare_test` for the repository and API suites.
+Three databases are created on first start:
+
+| Database              | Used by                                            |
+| --------------------- | -------------------------------------------------- |
+| `healthcare_dev`      | development, and whatever `pnpm db:seed` put there |
+| `healthcare_test`     | the schema suite (`database/tests`)                |
+| `healthcare_api_test` | the API suite (`backend/api/src/__tests__`)        |
+
+The two test databases are separate deliberately. Both are rebuilt and seeded
+by their global setup, so every test runs against real demo data (CLAUDE.md
+§6) — but the API suite _mutates_ it: it creates sessions, appends to a log
+that cannot be cleaned up, and drives queues to completion, while the schema
+suite asserts on exact counts of the seeded set. One database between them made
+each suite's outcome depend on which project vitest started first.
+
+A container created before this change has only two. Recreate it:
+
+```bash
+docker compose down -v && docker compose up -d
+```
 
 ## Commands
 

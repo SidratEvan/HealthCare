@@ -305,7 +305,11 @@ importers:
 
   shared/config: {}
 
-  shared/domain: {}
+  shared/domain:
+    dependencies:
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
 
   shared/i18n: {}
 

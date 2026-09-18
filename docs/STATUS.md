@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: end of step 5 (`feat/seed-demo`).
+Last updated: end of step 6 (`feat/queue-service`).
 
 ---
 
@@ -21,7 +21,8 @@ Last updated: end of step 5 (`feat/seed-demo`).
 | 3 | `feat/api-foundation` | merged — env, db, logger, middleware, errors, health |
 | ~~4~~ | ~~`feat/auth-guest`~~ | **deferred, do not build** — see `CLAUDE.md` §4.1 |
 | 5 | `feat/seed-demo` | merged — `database/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) |
-| **6** | **`feat/queue-service`** | **next** — `appendEvent()`, queue routes, realtime rooms |
+| 6 | `feat/queue-service` | merged — `appendEvent()`, 13 queue routes, realtime seam |
+| **7** | **`feat/ui-tokens`** | **next** — `shared/ui`: tokens and primitives |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -36,7 +37,7 @@ tokens stays; no OTP flows, staff passwords or argon2id are to be written. The
 guest tracking link (`FR-GST-05`) is kept, because it is a capability token the
 demo depends on rather than a login.
 
-`pnpm test` reports 665 at the time of writing: 464 unit, 122 api, 79 schema.
+`pnpm test` reports 697 at the time of writing: 464 unit, 153 api, 80 schema.
 
 **Supabase holds the seeded demo data** as of the end of step 5: 6 hospitals,
 40 doctors, 200 patients, 1,181 bookings, 1,221 queue events, and one
@@ -61,6 +62,15 @@ afternoon.
   recreates schemas, so it must never touch a shared database; `DATABASE_URL_TEST`
   stays on localhost and the guard in `database/scripts/lib/env.ts` refuses otherwise.
 - Supabase project region is `ap-southeast-1` (Singapore), closest to Dhaka.
+- **The container carries three databases**, and the two test ones are separate
+  on purpose: `healthcare_dev`, `healthcare_test` (schema suite) and
+  `healthcare_api_test` (API suite). Both test databases are seeded from
+  `database/seeds` by their global setup, so every test runs against real demo
+  data (CLAUDE.md §6) — but the API suite *mutates* it, appending to a log that
+  cannot be cleaned up, while the schema suite asserts on exact counts of the
+  seeded set. Sharing one made each suite's result depend on which vitest
+  started first. If your container predates this, recreate it:
+  `docker compose down -v && docker compose up -d`.
 
 ### Things learned the hard way, so they are not relearned
 
@@ -142,6 +152,15 @@ Raised while building the seeds (step 5):
    tokens on Anek Bangla — but the canvas's serif display carries the hero
    numeral well, and switching later is a token change, not a rewrite.
 
+11. **Socket.IO is not installed.** `BACKEND.md` §0 fixes it as the realtime
+   transport, and step 6 built everything up to it: `realtime/rooms.ts` names
+   the rooms and the membership rules, `realtime/emit.ts` is the typed
+   publisher behind a one-method interface, and the queue service publishes
+   through it. The default emitter records instead of sending, which is what
+   the tests assert on. Adding the dependency needs the owner's yes
+   (CLAUDE.md §7); until then nothing is broadcast over a wire, and the socket
+   server plus the handshake in `realtime/auth.ts` are what remain of §6.
+
 Two are the owner's and are not code:
 
 8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
@@ -178,6 +197,14 @@ Two are the owner's and are not code:
   shows as scheduled with no events. That is honest — nothing was recorded —
   but it is a wart for a late demo. The pitch session itself is always built
   backwards from the current instant, so it is correctly mid-queue at any hour.
+- **Notifications are not published from the queue service.** Step 11 of
+  `BACKEND.md` §4.1 fires the called / delayed / two-away / slot-offered
+  messages; that is build step 11. The seam is marked in `queue.service.ts` and
+  the events that would fire one are already identified by `isMaterialEvent` in
+  the domain, so it is a call to add rather than a decision to make.
+- **`/sync/*` is not built** (`BACKEND.md` §5). The offline batch endpoints
+  belong with the console that fills the batch, in step 8. The domain already
+  has `applyBatch`, which returns the accepted/conflict split `SY-05` describes.
 - **`middleware/audit.ts` is not written.** `audit_log` is migration 0010 and
   the schema is at 0006, so it would have no table to write to. It lands with
   the migration.

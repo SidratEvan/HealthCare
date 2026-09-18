@@ -25,27 +25,33 @@ import {
   GUEST_COUNT,
   HISTORY_VISIT_TARGET,
   PATIENT_COUNT,
-  seedDemoData,
+  SEED_MODULES,
   SPECIALTIES,
-  type SeedResult,
+  doctor,
+  facility,
 } from '../seeds/index.js';
+import { tableExists } from '../seeds/lib/insert.js';
 import { createRng } from '../seeds/lib/random.js';
 
-import { withRollback } from './support/database.js';
+import { connect } from './support/database.js';
 
 import type { Client } from 'pg';
 
 /**
- * One seed run, shared by every assertion in this file.
+ * Reads the seeded demo data.
  *
- * The body may be synchronous: an assertion about what the *runner* reported
- * needs no further queries, and forcing it to be async would be ceremony.
+ * The seed is run once, committed, by the suite's global setup — so these are
+ * assertions about the database a developer and the API tests actually share,
+ * not about a transaction that existed for the length of one test. Nothing
+ * here writes, so nothing needs rolling back.
  */
-async function seeded<T>(body: (client: Client, result: SeedResult) => T | Promise<T>): Promise<T> {
-  return await withRollback(async (client) => {
-    const result = await seedDemoData(client);
-    return await body(client, result);
-  });
+async function seeded<T>(body: (client: Client) => T | Promise<T>): Promise<T> {
+  const client = await connect();
+  try {
+    return await body(client);
+  } finally {
+    await client.end();
+  }
 }
 
 /** `count(*)` as a number, because pg returns bigint as a string. */
@@ -56,6 +62,17 @@ async function count(client: Client, sql: string, values: unknown[] = []): Promi
 
 // The full seed writes a few thousand rows over a few hundred statements.
 const SEED_TIMEOUT = 180_000;
+
+/**
+ * The doctor and facility the pitch session belongs to, read from the declared
+ * demo set rather than written out here.
+ *
+ * Every query about that session matches on these. The test database is shared
+ * with the API suite, which creates sessions of its own, so "the running
+ * session" is not a thing a query can ask for.
+ */
+const PITCH_DOCTOR = doctor(DEMO_LIVE.doctorSlug).nameEn;
+const PITCH_FACILITY = facility(DEMO_LIVE.hospitalSlug).nameEn;
 
 describe('FR-DEM-01: six facilities, of the kinds the requirement names', () => {
   it(
@@ -309,6 +326,10 @@ describe('FR-DEM-06: a session mid-queue, ready for the pitch', () => {
     'opens on the state PRD.md §24 describes',
     async () => {
       await seeded(async (client) => {
+        // Identified by the declared demo doctor and facility rather than as
+        // "the only running session": this database is shared with the API
+        // suite, which creates and drives sessions of its own, so a bare count
+        // would pass or fail depending on which suite ran first.
         const { rows } = await client.query<{
           id: string;
           status: string;
@@ -319,9 +340,13 @@ describe('FR-DEM-06: a session mid-queue, ready for the pitch', () => {
           capacity: number;
         }>(
           `SELECT s.id, s.status, q.now_serving_serial, q.waiting_count,
-                q.late_count, q.done_count, s.capacity
-           FROM sessions s JOIN queue_state q ON q.session_id = s.id
-          WHERE s.status = 'running'`,
+                  q.late_count, q.done_count, s.capacity
+             FROM sessions s
+             JOIN queue_state q ON q.session_id = s.id
+             JOIN doctors d     ON d.id = s.doctor_id
+             JOIN hospitals h   ON h.id = s.hospital_id
+            WHERE s.status = 'running' AND d.full_name_en LIKE $1 AND h.name_en LIKE $2`,
+          [`${PITCH_DOCTOR}%`, `${PITCH_FACILITY}%`],
         );
 
         expect(rows).toHaveLength(1);
@@ -355,9 +380,12 @@ describe('FR-DEM-06: a session mid-queue, ready for the pitch', () => {
         const { rows } = await client.query<{ started_minutes_ago: number }>(
           // Cast to double precision: `extract` returns numeric, which pg hands
           // back as a string, and a string compares as neither greater nor less.
-          `SELECT (extract(epoch FROM (now() - actual_start)) / 60)::double precision
-                  AS started_minutes_ago
-           FROM sessions WHERE status = 'running'`,
+          `SELECT (extract(epoch FROM (now() - s.actual_start)) / 60)::double precision
+                    AS started_minutes_ago
+             FROM sessions s
+             JOIN doctors d ON d.id = s.doctor_id
+            WHERE s.status = 'running' AND d.full_name_en LIKE $1`,
+          [`${PITCH_DOCTOR}%`],
         );
         const elapsed = rows[0]?.started_minutes_ago ?? 0;
 
@@ -377,8 +405,11 @@ describe('FR-DEM-06: a session mid-queue, ready for the pitch', () => {
         const standby = await count(
           client,
           `SELECT count(*)::text AS n
-           FROM standby_list sl JOIN sessions s ON s.id = sl.session_id
-          WHERE s.status = 'running' AND sl.removed_at IS NULL`,
+             FROM standby_list sl
+             JOIN sessions s ON s.id = sl.session_id
+             JOIN doctors d  ON d.id = s.doctor_id
+            WHERE d.full_name_en LIKE $1 AND sl.removed_at IS NULL`,
+          [`${PITCH_DOCTOR}%`],
         );
         expect(standby).toBeGreaterThan(0);
       });
@@ -538,21 +569,32 @@ describe('FR-SEC-08: no real patient data, ever', () => {
 });
 
 describe('the runner reports what it could not do', () => {
-  it(
-    'skips the modules whose migrations do not exist, and names them',
-    async () => {
-      await seeded((_client, result) => {
-        const skipped = result.results.filter((entry) => !entry.ran);
-        expect(skipped.map((entry) => entry.module.name)).toEqual([
-          'seed_05_beds',
-          'seed_06_ancillary',
-        ]);
+  it('declares which migration each unbuildable module is waiting for', () => {
+    // FR-DEM-04 and FR-DEM-05 are not covered in this version. The modules
+    // exist and say so; the runner checks their tables before calling them and
+    // skips with the migration named, rather than producing an empty ward
+    // board silently. Asserted on the declarations and the live schema, since
+    // the seed run itself happened in global setup.
+    const pending = SEED_MODULES.filter((module) => module.pendingMigration !== undefined);
+    expect(pending.map((module) => module.name)).toEqual(['seed_05_beds', 'seed_06_ancillary']);
 
-        // FR-DEM-04 and FR-DEM-05 are not covered in this version, and the run
-        // says so rather than producing an empty ward board silently.
-        for (const entry of skipped) {
-          expect(entry.skippedBecause).toContain('exist yet');
-          expect(entry.module.pendingMigration).toMatch(/^00\d\d_/);
+    for (const module of pending) {
+      expect(module.pendingMigration).toMatch(/^00\d\d_/);
+      expect(module.deferred?.length ?? 0).toBeGreaterThan(0);
+    }
+  });
+
+  it(
+    'is waiting on tables that genuinely do not exist yet',
+    async () => {
+      await seeded(async (client) => {
+        for (const module of SEED_MODULES) {
+          if (module.pendingMigration === undefined) continue;
+          for (const table of module.writes) {
+            // If one of these ever appears, the module is no longer pending and
+            // its body has to be written — which is exactly the failure wanted.
+            expect(await tableExists(client, table)).toBe(false);
+          }
         }
       });
     },
@@ -560,17 +602,15 @@ describe('the runner reports what it could not do', () => {
   );
 
   it(
-    'runs every module whose tables the schema already has',
+    'ran every module whose tables the schema already has',
     async () => {
-      await seeded((_client, result) => {
-        const ran = result.results.filter((entry) => entry.ran).map((entry) => entry.module.name);
-        expect(ran).toEqual([
-          'seed_01_hospitals',
-          'seed_02_doctors_sessions',
-          'seed_03_patients',
-          'seed_04_history',
-          'seed_07_demo_live',
-        ]);
+      await seeded(async (client) => {
+        // The proof that they ran is the rows they wrote.
+        for (const table of ['hospitals', 'doctors', 'patients', 'bookings', 'queue_events']) {
+          expect(await count(client, `SELECT count(*)::text AS n FROM ${table}`)).toBeGreaterThan(
+            0,
+          );
+        }
       });
     },
     SEED_TIMEOUT,
