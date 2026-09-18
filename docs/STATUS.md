@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: end of step 3, plus the Supabase connection work.
+Last updated: end of step 5 (`feat/seed-demo`).
 
 ---
 
@@ -20,7 +20,8 @@ Last updated: end of step 3, plus the Supabase connection work.
 | 2 | `feat/domain-queue` | merged — reducer, ETA, rate, rules, replay |
 | 3 | `feat/api-foundation` | merged — env, db, logger, middleware, errors, health |
 | ~~4~~ | ~~`feat/auth-guest`~~ | **deferred, do not build** — see `CLAUDE.md` §4.1 |
-| **5** | **`feat/seed-demo`** | **next** — `db/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) |
+| 5 | `feat/seed-demo` | merged — `db/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) |
+| **6** | **`feat/queue-service`** | **next** — `appendEvent()`, queue routes, realtime rooms |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -35,7 +36,12 @@ tokens stays; no OTP flows, staff passwords or argon2id are to be written. The
 guest tracking link (`FR-GST-05`) is kept, because it is a capability token the
 demo depends on rather than a login.
 
-`pnpm test` reports 640 at the time of writing: 464 unit, 122 api, 54 schema.
+`pnpm test` reports 665 at the time of writing: 464 unit, 122 api, 79 schema.
+
+**Supabase holds the seeded demo data** as of the end of step 5: 6 hospitals,
+40 doctors, 200 patients, 1,181 bookings, 1,221 queue events, and one
+cardiology session sitting mid-queue. It is visible in the table editor, which
+is the first output of this build anyone can look at.
 
 ---
 
@@ -87,8 +93,8 @@ the storage work in steps 12–13.
 
 ## Open decisions
 
-Four are documentation questions raised while building, each implemented one way
-and flagged rather than settled silently. All four need an owner's ruling.
+Seven are questions raised while building, each implemented one way and flagged
+rather than settled silently. All of them need an owner's ruling.
 
 1. **`FR-QUE-20` grace period.** "2 patients or 15 minutes, whichever is longer"
    is implemented as the longer of *two patients' time at the current rate* and
@@ -106,13 +112,35 @@ and flagged rather than settled silently. All four need an owner's ruling.
    is already the primary and foreign key, so the reverse link `DATABASE.md`
    §2.2 lists would be a second source of truth for one relationship.
 
+Raised while building the seeds (step 5):
+
+5. **A national role has no home facility.** `staff_users.hospital_id` and
+   `staff_roles.hospital_id` are both NOT NULL, but `FR-ROLE-01` says every
+   role is hospital-scoped *except* the platform and government ones. The seeds
+   therefore write no `platform_admin` and no `gov_viewer` rather than invent a
+   facility for them. Steps 19 and 20 need this answered — either those columns
+   become nullable, or those roles live somewhere else.
+6. **`db:reset` truncates; migration 0006's comment says it drops the schema.**
+   The comment predates Supabase, where dropping `public` would take Supabase's
+   own objects with it. `DATABASE.md` §7 ("truncate + reseed in one command")
+   is the authority and is what `reset.ts` does. The comment cannot be edited —
+   a shipped migration never is, and the checksum would stop `db:migrate`. A
+   later migration could carry a corrected `COMMENT ON`.
+7. **Repo layout.** The owner has asked for `frontend/`, `backend/`,
+   `database/` top-level folders instead of the `apps/` + `packages/` + `db/`
+   layout that `BACKEND.md` §1 fixes. Agreed, with `shared/` for the packages
+   both sides import — `packages/domain` is imported unchanged by the API and
+   the console, and that shared import is the mechanism behind `FR-QUE-05`, so
+   it belongs to neither side. To be done on `chore/repo-layout`; `BACKEND.md`
+   §1 needs updating with it.
+
 Two are the owner's and are not code:
 
-5. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
+8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
    commercial strategy that `9697d43` removed from the working tree — deleting a
    file does not remove it from history. Either make the repository private, or
    rewrite history and force-push.
-6. **Rotate the Supabase credentials.** The database password and the
+9. **Rotate the Supabase credentials.** The database password and the
    `sb_secret_…` key were pasted into a chat transcript. Nothing references the
    secret key yet, so rotating it is free; rotating the password means
    re-encoding `DATABASE_URL`.
@@ -126,6 +154,22 @@ Two are the owner's and are not code:
   and a booking returns a signed guest tracking link. Requirements not covered
   in this version: `FR-PAT-01`, `FR-PAT-04`, `FR-GST-03/04/09/12`, `FR-SEC-05`,
   `FR-SEC-06`.
+- **`FR-DEM-04` and `FR-DEM-05` are not covered.** `seed_05_beds` needs
+  migration 0008 (`wards`, `beds`, `bed_events`) and `seed_06_ancillary` needs
+  0011 (`ambulances`, `blood_donors`, `pharmacy_stock`). Both files exist and
+  declare what they are waiting for; the seed runner checks each module's
+  tables before calling it and prints the skip with the migration name. They
+  fill in at steps 14 and 17, in the branches that render them.
+- **`seed_04_history` defers prescriptions and reports** to migration 0007. It
+  writes the half the schema holds — past sessions, `done` bookings with
+  measured consultation lengths, and the event log behind them — which is what
+  the rolling rate (`FR-QUE-12`) and the admin figures read. The clinical
+  records land in step 12.
+- **Today's sessions other than the pitch one are left `scheduled`.** If a
+  reset happens late at night, an 18:00 chamber that has already passed still
+  shows as scheduled with no events. That is honest — nothing was recorded —
+  but it is a wart for a late demo. The pitch session itself is always built
+  backwards from the current instant, so it is correctly mid-queue at any hour.
 - **`middleware/audit.ts` is not written.** `audit_log` is migration 0010 and
   the schema is at 0006, so it would have no table to write to. It lands with
   the migration.

@@ -11,9 +11,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { verifySchema } from '../scripts/lib/verify.js';
+import { facility } from '../seeds/data/hospitals.js';
 
 import { connect, expectRejection, withRollback } from './support/database.js';
-import { insertExtraPatient, insertGraph, insertBooking } from './support/fixtures.js';
+import {
+  insertExtraPatient,
+  insertGraph,
+  insertBooking,
+  GRAPH_FACILITY,
+} from './support/fixtures.js';
 
 describe('schema invariants (DATABASE.md §0)', () => {
   it('holds every invariant db:verify checks', async () => {
@@ -302,8 +308,12 @@ describe('hospital geography is derived, never entered twice (DATABASE.md §6)',
         [graph.hospitalId],
       );
 
-      expect(rows[0]?.lat).toBeCloseTo(23.7806, 4);
-      expect(rows[0]?.lng).toBeCloseTo(90.4074, 4);
+      // Read from the declared demo set rather than repeated here, so a
+      // facility that moves does not leave a passing test asserting the old
+      // coordinates (CLAUDE.md §6: one description of demo data).
+      const declared = facility(GRAPH_FACILITY);
+      expect(rows[0]?.lat).toBeCloseTo(declared.lat, 4);
+      expect(rows[0]?.lng).toBeCloseTo(declared.lng, 4);
     });
   });
 
