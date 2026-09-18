@@ -93,8 +93,8 @@ the storage work in steps 12–13.
 
 ## Open decisions
 
-Six are open questions, each implemented one way and flagged rather than
-settled silently; all six need an owner's ruling. The seventh is recorded as
+Seven are open questions, each implemented one way and flagged rather than
+settled silently; all seven need an owner's ruling. One more is recorded as
 settled because the answer changed the tree.
 
 1. **`FR-QUE-20` grace period.** "2 patients or 15 minutes, whichever is longer"
@@ -134,6 +134,13 @@ Raised while building the seeds (step 5):
    `FR-QUE-05` — it belongs to neither side. `BACKEND.md` §1 was updated in the
    same branch, and the layering rules now also forbid `frontend/` importing
    `backend/` or `database/`.
+
+10. **Which typeface.** The design canvas (`FRONTEND.md` §0.4) pairs Hind
+   Siliguri for body with Noto Serif Bengali for display. `FRONTEND.md` §2.1
+   mandates one superfamily, Anek Bangla, self-hosted, with Hind Siliguri only
+   as a fallback. The document stands until ruled otherwise, so step 7 builds
+   tokens on Anek Bangla — but the canvas's serif display carries the hero
+   numeral well, and switching later is a token change, not a rewrite.
 
 Two are the owner's and are not code:
 
