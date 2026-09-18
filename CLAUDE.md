@@ -135,7 +135,7 @@ Do not jump ahead. Do not start step N+1 until step N is merged into `mvp`.
 | 1 | `feat/db-core` | Migrations 0001–0006 (`DATABASE.md` §7), `db:migrate`, `db:verify` | Schema applies clean on a fresh DB |
 | 2 | `feat/domain-queue` | `packages/domain`: types, events, reducer, eta, rate, rules, replay | Unit tests green, including replay determinism |
 | 3 | `feat/api-foundation` | `apps/api`: env, db, logger, middleware chain, error codes, health routes | `/healthz` responds; auth matrix tests pass |
-| 4 | `feat/auth-guest` | OTP auth, staff login, guest identity + guest links (`FR-GST-*`) | Guest can be created and verified via API tests |
+| ~~4~~ | ~~`feat/auth-guest`~~ | **DEFERRED — do not build.** See §4.1 | — |
 | 5 | `feat/seed-demo` | `db/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) | `pnpm db:reset` produces 6 hospitals, 40 doctors, a mid-queue session |
 | 6 | `feat/queue-service` | `queue.service.appendEvent()` + queue routes + realtime rooms | Every event type appends, reduces, broadcasts; conflict test passes |
 | 7 | `feat/ui-tokens` | `packages/ui`: tokens, Button, Input, OTP, Card, Chip, Sheet, Toast | Storybook-less visual check + a11y tests pass |
@@ -154,6 +154,43 @@ Do not jump ahead. Do not start step N+1 until step N is merged into `mvp`.
 | 20 | `feat/gov-dashboard` | Aggregate-only national layer | No identifiable row reachable |
 
 **Step 10 is the milestone.** When it passes, tell me — that is the pitch demo.
+
+### 4.1 Authentication is deferred (step 4 is not built)
+
+**Do not build OTP flows, staff passwords, argon2id, or account management.**
+Authentication will be handled by Supabase Auth when this goes beyond the pitch.
+Writing our own now would be code thrown away.
+
+What that means concretely:
+
+- **Skipped:** `POST /auth/otp`, `/auth/verify`, `/auth/refresh`, `/staff/login`,
+  `/staff/2fa`, `/guest/start`, `/guest/verify`, `/guest/claim`, the argon2id
+  dependency, and any write to `sessions_auth`.
+- **Kept, because it already exists and Supabase will not replace it:** the
+  middleware from step 3 — `attachPrincipal`, `requireAuth`, `requireRole`,
+  `requireHospitalScope`, `guestAuth` — plus `config/jwt.ts`. These *verify* a
+  token. When Supabase Auth issues the tokens, verification is a configuration
+  change, not a rewrite. Deleting them now would be waste.
+- **Kept, because the demo depends on it:** the **guest tracking link**
+  (`FR-GST-05`). It is not a login — it is how a patient opens an SMS and sees
+  their live serial, and both the pitch script (`PRD.md` §24) and the required
+  `e2e/guest-booking.spec.ts` need it. Minting one is a single call to
+  `signToken({ kind: 'guest', … })`, which already works. Build it when step 9
+  or 10 needs it, not as an auth step.
+- **How the demo gets a principal:** under `DEMO_MODE=true`, the console picks a
+  hospital and a role without a password, and a booking hands back a signed
+  guest link. That is the correct implementation for a pitch version (§1.1), not
+  a shortcut to apologise for.
+
+Requirements consequently not implemented in this version: `FR-PAT-01`,
+`FR-PAT-04`, `FR-GST-03`, `FR-GST-04`, `FR-GST-09`, `FR-GST-12`, `FR-SEC-05`,
+`FR-SEC-06`, and the 2FA half of `FR-SUP-01`. They stay in `PRD.md` because they
+are still requirements of the product — they are simply not this version's
+scope. Do not delete them from the document; do not build them either.
+
+**The build plan therefore runs 0, 1, 2, 3, 5, 6, 7 …** Step numbering is left
+alone so that every requirement ID, branch name and commit message already
+written still points at the same thing.
 
 ---
 

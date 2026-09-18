@@ -19,14 +19,21 @@ Last updated: end of step 3, plus the Supabase connection work.
 | 1 | `feat/db-core` | merged — migrations 0001–0006 |
 | 2 | `feat/domain-queue` | merged — reducer, ETA, rate, rules, replay |
 | 3 | `feat/api-foundation` | merged — env, db, logger, middleware, errors, health |
-| **4** | **`feat/auth-guest`** | **next** — OTP, staff login, guest identity, tracking links |
+| ~~4~~ | ~~`feat/auth-guest`~~ | **deferred, do not build** — see `CLAUDE.md` §4.1 |
+| **5** | **`feat/seed-demo`** | **next** — `db/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
 
-**Step 8 is the first step with a screen.** Steps 4–7 are API, seeds and design
+**Step 8 is the first step with a screen.** Steps 5–7 are seeds and design
 tokens; nothing renders before `feat/console-reception`. Step 5 is the first
 step whose output is *visible* — demo data in Supabase's table editor.
+
+**Authentication is deferred** (`CLAUDE.md` §4.1). Supabase Auth will issue
+tokens when this goes past the pitch. The step-3 middleware that *verifies*
+tokens stays; no OTP flows, staff passwords or argon2id are to be written. The
+guest tracking link (`FR-GST-05`) is kept, because it is a capability token the
+demo depends on rather than a login.
 
 `pnpm test` reports 640 at the time of writing: 464 unit, 122 api, 54 schema.
 
@@ -114,6 +121,11 @@ Two are the owner's and are not code:
 
 ## Known gaps, deliberate
 
+- **No authentication is implemented, by decision** (`CLAUDE.md` §4.1). Under
+  `DEMO_MODE=true` the console selects a hospital and role without a password,
+  and a booking returns a signed guest tracking link. Requirements not covered
+  in this version: `FR-PAT-01`, `FR-PAT-04`, `FR-GST-03/04/09/12`, `FR-SEC-05`,
+  `FR-SEC-06`.
 - **`middleware/audit.ts` is not written.** `audit_log` is migration 0010 and
   the schema is at 0006, so it would have no table to write to. It lands with
   the migration.
