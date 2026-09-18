@@ -14,7 +14,55 @@
  * container. In production none of them may be.
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { z } from 'zod';
+
+/**
+ * Merges the repository's `.env` into `process.env`, without overwriting
+ * anything already set.
+ *
+ * Skipped in production, where the platform injects real environment
+ * variables and a file on disk would be both absent and the wrong source of
+ * truth. Node 20 can do this with `--env-file`, but that flag *errors* when
+ * the file is missing — which is exactly the situation in CI and in a
+ * container — so the read happens here instead, in nine lines and with no
+ * dependency.
+ *
+ * A real environment variable always wins over the file, which is what lets
+ * the test suite decide its own environment and lets Render override anything.
+ */
+function loadDotEnv(): void {
+  if (process.env['NODE_ENV'] === 'production') return;
+
+  let contents: string;
+  try {
+    contents = readFileSync(resolve(import.meta.dirname, '../../..', '.env'), 'utf8');
+  } catch {
+    return;
+  }
+
+  for (const rawLine of contents.split(new RegExp('\\r?\\n'))) {
+    const line = rawLine.trim();
+    if (line === '' || line.startsWith('#')) continue;
+
+    const separator = line.indexOf('=');
+    if (separator === -1) continue;
+
+    const key = line.slice(0, separator).trim();
+    if (key === '' || process.env[key] !== undefined) continue;
+
+    let value = line.slice(separator + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}
 
 /** Secrets must be long enough that a leaked one is not brute-forceable. */
 const MIN_SECRET_LENGTH = 32;
@@ -166,6 +214,11 @@ const PRODUCTION_REQUIREMENTS: readonly {
  * and so a worker can validate its own subset later.
  */
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  // Only when reading the real environment. A caller passing its own source —
+  // the tests — is describing a complete environment and must not have a file
+  // merged into it.
+  if (source === process.env) loadDotEnv();
+
   const parsed = schema.safeParse(source);
 
   if (!parsed.success) {
