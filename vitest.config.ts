@@ -40,7 +40,9 @@ export default defineConfig({
           include: ['backend/*/src/**/*.{test,spec}.ts'],
           // Must run before any import: env.ts validates at module load.
           setupFiles: ['backend/api/src/__tests__/support/env.setup.ts'],
-          globalSetup: ['database/tests/support/global-setup.ts'],
+          // Its own database: this suite mutates the demo data, the schema
+          // suite asserts on exact counts of it.
+          globalSetup: ['database/tests/support/api-global-setup.ts'],
           environment: 'node',
           globals: false,
           restoreMocks: true,

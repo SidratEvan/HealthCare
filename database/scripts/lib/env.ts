@@ -194,6 +194,46 @@ export function resolveTestDatabaseUrl(): string {
   return url;
 }
 
+/**
+ * Connection string for the API suite's database.
+ *
+ * Its own, not the schema suite's. The API suite commits rows — sessions,
+ * bookings, events — while the schema suite asserts on exact counts of the
+ * seeded demo set, so one shared database makes both suites' results depend on
+ * the order vitest happened to start them in.
+ *
+ * `DATABASE_URL_API_TEST` overrides; otherwise the name is the schema suite's
+ * with `_test` swapped for `_api_test`. The same `*_test` guard applies: these
+ * databases get dropped and rebuilt.
+ */
+export function resolveApiTestDatabaseUrl(): string {
+  loadEnvFile();
+
+  const explicit = process.env['DATABASE_URL_API_TEST'];
+  if (explicit !== undefined && explicit !== '') return assertDisposable(explicit);
+
+  const parsed = new URL(resolveTestDatabaseUrl());
+  const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+  parsed.pathname = `/${name.replace(/_test$/, '')}_api_test`;
+  return assertDisposable(parsed.toString());
+}
+
+/** Refuses anything that is not obviously a throwaway test database. */
+function assertDisposable(url: string): string {
+  const { database } = describe(url);
+  if (!database.endsWith('_test')) {
+    throw new Error(
+      [
+        `The test database must be named "*_test"; got "${database}".`,
+        '',
+        'These suites drop and recreate the public schema. They will not do',
+        'that to anything that is not obviously disposable.',
+      ].join('\n'),
+    );
+  }
+  return url;
+}
+
 function deriveTestUrl(devUrl: string): string {
   const parsed = new URL(devUrl);
   const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
