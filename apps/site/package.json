@@ -1,0 +1,11 @@
+{
+  "name": "@platform/site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Marketing website (Part C) — the front door, with the patient and hospital entrances (APP_FLOW.md Part C).",
+  "dependencies": {
+    "@platform/i18n": "workspace:*",
+    "@platform/ui": "workspace:*"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@platform/patient",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Patient PWA (Part A) — Bangla-first, installable, offline-tolerant. Next.js App Router (FRONTEND.md §9).",
+  "dependencies": {
+    "@platform/client": "workspace:*",
+    "@platform/domain": "workspace:*",
+    "@platform/i18n": "workspace:*",
+    "@platform/ui": "workspace:*"
+  }
+}

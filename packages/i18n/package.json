@@ -1,0 +1,17 @@
+{
+  "name": "@platform/i18n",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bangla-first messages and formatters. bn is the default locale; en is the toggle (FR-LOC-01, FRONTEND.md §8).",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

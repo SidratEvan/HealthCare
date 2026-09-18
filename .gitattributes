@@ -1,0 +1,15 @@
+# Normalise to LF in the repository; Windows checkouts keep LF so that
+# shell scripts, SQL migrations and CI on Linux behave identically.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+
+# Generated — collapse in diffs and exclude from language stats
+pnpm-lock.yaml linguist-generated=true -diff

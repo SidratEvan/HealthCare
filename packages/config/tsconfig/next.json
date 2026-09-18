@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "@platform next",
+  "_comment": "Next.js App Router clients: apps/patient, apps/console, apps/site (FRONTEND.md §9). Bundler resolution, because Next resolves imports, not Node.",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "preserve",
+    "noEmit": true,
+    "incremental": true,
+    "allowSyntheticDefaultImports": true
+  }
+}

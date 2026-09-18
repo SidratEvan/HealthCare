@@ -1,0 +1,71 @@
+# Continuous integration.
+#
+# BACKEND.md §11 fixes the gates: typecheck, lint (the layering rule), unit,
+# API, one E2E smoke, and db:verify. They are added to this file by the step
+# that makes each one meaningful, and none is ever removed:
+#
+#   step 1  feat/db-core            → Postgres service + `pnpm db:verify`
+#   step 2  feat/domain-queue       → reducer and replay-determinism units
+#   step 3  feat/api-foundation     → Supertest auth-matrix suite
+#   step 7  feat/ui-tokens          → a11y checks, bn/en message-key parity (I18N-02)
+#   step 10 feat/patient-live-serial → the two-device queue E2E smoke, which is
+#                                      the product's canary and is never skipped
+#                                      or marked flaky (CLAUDE.md §6)
+
+name: CI
+
+on:
+  push:
+    branches: [main, mvp]
+  pull_request:
+    branches: [main, mvp]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Node 20 is the deployment runtime (BACKEND.md §0); CI matches production.
+  NODE_VERSION: "20"
+
+jobs:
+  verify:
+    name: typecheck · lint · format · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The pnpm version is pinned by the `packageManager` field in
+      # package.json, so corepack installs exactly what developers run.
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Includes the architectural boundaries: routes → controllers → services
+      # → repositories → db, the purity of packages/domain, and SQL confined to
+      # repositories (BACKEND.md §3, CLAUDE.md §7).
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format
+        run: pnpm format:check
+
+      - name: Test
+        run: pnpm test

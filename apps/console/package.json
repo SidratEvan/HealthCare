@@ -1,0 +1,13 @@
+{
+  "name": "@platform/console",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hospital staff console (Part B) — reception, doctor, ward, emergency, lab, pharmacy, admin. Offline-first (FR-OFF-01).",
+  "dependencies": {
+    "@platform/client": "workspace:*",
+    "@platform/domain": "workspace:*",
+    "@platform/i18n": "workspace:*",
+    "@platform/ui": "workspace:*"
+  }
+}

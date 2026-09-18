@@ -1,0 +1,18 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+pnpm-lock.yaml
+
+# The five source-of-truth documents are hand-formatted; Prettier would reflow
+# their tables and diff noise would bury real changes (CLAUDE.md §2).
+docs/
+CLAUDE.md
+
+# Migrations are read as SQL, not as Prettier output.
+db/migrations/
+db/docker/
