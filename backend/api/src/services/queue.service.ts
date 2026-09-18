@@ -676,6 +676,36 @@ export async function listBookings(sessionId: string): Promise<bookingRepo.Booki
   return await bookingRepo.listForSession(sessionId);
 }
 
+/**
+ * The events a client missed, for the resume handshake (`SY-01`).
+ *
+ * A reconnecting socket says how far it got and receives what followed, in
+ * order, before any live event reaches it — which is what makes a dropped
+ * connection a non-event for a patient in a corridor with one bar of signal.
+ */
+export async function eventsSince(sessionId: string, afterSeq: number): Promise<QueueEvent[]> {
+  return await eventRepo.listForSession(sessionId, afterSeq);
+}
+
+/**
+ * Whether a patient or guest holds a booking in this session.
+ *
+ * The room check for a non-staff socket (BACKEND.md §6): a patient may listen
+ * to a queue they are standing in and to no other. A tracking link is narrower
+ * still — it names exactly one booking (`FR-GST-05`), so it is that booking
+ * being in this session that admits them, not the guest identity behind it.
+ */
+export async function principalHoldsBooking(
+  sessionId: string,
+  who: {
+    readonly userId: string | null;
+    readonly guestId: string | null;
+    readonly bookingId: string | null;
+  },
+): Promise<boolean> {
+  return await bookingRepo.existsForPrincipal(sessionId, who);
+}
+
 /** The serial a walk-in should be given: one past the highest issued. */
 export async function nextSerial(sessionId: string): Promise<number> {
   const state = await getState(sessionId);
