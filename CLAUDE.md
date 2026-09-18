@@ -59,6 +59,10 @@ not a code decision.
 | `docs/DATABASE.md` | **Schema.** Tables, columns, enums, indexes, RLS, migration order. |
 | `docs/BACKEND.md` | **Services, files, APIs, realtime, sync, workers, build order.** |
 
+`docs/STATUS.md` is **not** one of the five. It records where the build has got
+to and what is still undecided; it has no authority over behaviour and the five
+documents above override it.
+
 Rules:
 - If code and a document disagree, **the document wins** — fix the code.
 - If a document is wrong or incomplete, **stop and tell me**. Propose the edit; do not silently invent behaviour.
@@ -215,7 +219,8 @@ pnpm db:reset        # rebuild demo data
 
 ## 9. How to work with me
 
-- **Start each session** by reading `CLAUDE.md`, then `git status` and `git log --oneline -10`, then tell me which step you are on before writing code.
+- **Start each session** by reading `CLAUDE.md`, then `docs/STATUS.md`, then `git status` and `git log --oneline -10`, then tell me which step you are on before writing code.
+- **Update `docs/STATUS.md` at the end of every step.** It carries what a fresh session cannot derive from the code: which environment is for what, the decisions still awaiting my ruling, and the gaps that are deliberate. I switch sessions often; that file is what makes it cheap.
 - **Plan before building.** For each step, state the files you will create or change, and wait for my go-ahead if the step touches more than ten files.
 - **One step at a time.** Finish, test, merge, report, then ask for the next.
 - **Report like this:** what you built, requirement IDs covered, tests added and their result, demo data added, anything you could not do and why.
