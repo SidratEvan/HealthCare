@@ -38,5 +38,62 @@ Two databases are created on first start: `healthcare_dev` for development and
 
 ## Commands
 
-`pnpm db:migrate`, `pnpm db:seed`, `pnpm db:reset` and `pnpm db:verify` are wired
-up in step 1 (`feat/db-core`), together with migrations 0001–0006.
+```bash
+pnpm db:migrate        # apply pending migrations, in order
+pnpm db:verify         # assert the DATABASE.md §0 invariants
+pnpm test              # unit tests + the schema suite
+```
+
+`pnpm db:seed` and `pnpm db:reset` arrive with step 5 (`feat/seed-demo`),
+together with `seeds/seed_00` … `seed_07`.
+
+## How the runner behaves
+
+- **Forward-only.** There is no `down`. A mistake is corrected by the next
+  numbered migration.
+- **One transaction per file.** A failure rolls that file back, so the database
+  is never left half-migrated.
+- **Checksums are recorded.** Editing an applied migration stops the next run
+  with the recorded and on-disk hashes, rather than pretending the database
+  matches the repository. If the database is disposable:
+  `docker compose down -v && docker compose up -d && pnpm db:migrate`.
+- **It refuses remote targets.** `assertNotProduction` blocks anything that is
+  neither a local host nor a `_dev`/`_test` database. Production migrations run
+  from CI against an explicit target (BACKEND.md §12).
+
+## The schema suite
+
+`db/tests` drops the public schema of the `*_test` database, applies every
+migration from scratch, and then attempts the writes the schema is supposed to
+refuse — a constraint that is present but misspelled enforces nothing, and only
+an attempted insert tells the difference.
+
+Each test runs in a transaction that is rolled back. That is the only cleanup
+the design permits: rows in `queue_events` cannot be deleted at all (DB-P1).
+
+The test database name must end in `_test`. `DATABASE_URL_TEST` sets it
+explicitly; otherwise it is derived from `DATABASE_URL` by swapping `_dev` for
+`_test`, and the suite refuses to run if the result is not obviously
+disposable — it drops schemas, and one day it would be pointed at something
+that matters.
+
+## Deviations from DATABASE.md worth knowing
+
+Both are flagged for a document edit rather than settled silently:
+
+1. **RLS is enabled in the migration that creates each table**, not deferred to
+   `0014_rls.sql`. An enabled table with no policy denies all access to
+   non-owner roles, so this fails safe for the several steps between now and
+   0014; 0014 still adds the policies (DATABASE.md §5).
+2. **`hospitals.settings_id` is not created.** `hospital_settings.hospital_id`
+   is already the primary key and the foreign key, so the reverse link listed
+   in DATABASE.md §2.2 would be a second source of truth for one relationship,
+   free to drift.
+
+A third point is a schema clarification rather than a deviation:
+`queue_events.undone_by_event_id` is documented as "set when compensated",
+which is necessarily after insert. The append-only trigger therefore permits
+exactly one mutation — a null `undone_by_event_id` becoming set, with every
+other column unchanged — and refuses everything else, including clearing it
+again. The recorded fact stays immutable and undo still appends `ACTION_UNDONE`
+(GR-02).

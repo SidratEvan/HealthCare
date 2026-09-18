@@ -3,5 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Migrations, seeds and schema scripts (DATABASE.md §7). Forward-only; a shipped migration is never edited."
+  "description": "Migrations, seeds and schema scripts (DATABASE.md §7). Forward-only; a shipped migration is never edited.",
+  "scripts": {
+    "migrate": "tsx scripts/migrate.ts",
+    "verify": "tsx scripts/verify_schema.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.13"
+  }
 }

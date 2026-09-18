@@ -15,7 +15,7 @@
 // that guarantee eroding one convenient import at a time.
 //
 // Implementation note — read before editing a zone:
-//   `import/no-restricted-paths` matches a zone with minimatch when the path
+//   `import-x/no-restricted-paths` matches a zone with minimatch when the path
 //   looks like a glob, and with a real path comparison when it does not. On
 //   Windows the resolved glob contains backslashes, which minimatch reads as
 //   escape characters, so a zone written as `apps/api/src/services/**` matches
@@ -38,7 +38,7 @@ const SIDE_EFFECT_DIRS = ['realtime', 'adapters', 'jobs'];
 const SERVER_APPS = ['apps/api', 'apps/workers'];
 
 /**
- * Builds the `import/no-restricted-paths` zones for one server app: each layer
+ * Builds the `import-x/no-restricted-paths` zones for one server app: each layer
  * is blocked from importing any layer above it, plus the leaf modules that only
  * services are allowed to reach.
  */
@@ -137,14 +137,14 @@ export const layering = [
   // ---------------------------------------------------------------------------
   // Server layering and package boundaries.
   //
-  // Both sets live in one rule invocation because `import/no-restricted-paths`
+  // Both sets live in one rule invocation because `import-x/no-restricted-paths`
   // is a single rule: a second config block would replace the first zone list
   // rather than add to it.
   // ---------------------------------------------------------------------------
   {
     files: ['{apps,packages}/*/src/**/*.{ts,tsx}', 'db/**/*.ts'],
     rules: {
-      'import/no-restricted-paths': [
+      'import-x/no-restricted-paths': [
         'error',
         {
           basePath: REPO_ROOT,
