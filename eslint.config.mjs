@@ -1,7 +1,7 @@
 // Root ESLint configuration.
 //
-// Rules live in packages/config so that every workspace shares one definition
-// (FRONTEND.md §10: "packages/config — eslint, tsconfig, tailwind preset").
+// Rules live in shared/config so that every workspace shares one definition
+// (FRONTEND.md §10: "shared/config — eslint, tsconfig, tailwind preset").
 // This file only composes them, and the order matters:
 //
 //   base       the shared baseline, ending with Prettier's rule switch-off

@@ -24,24 +24,30 @@ repository — branch policy, definition of done, testing rules — are in
 ## Layout
 
 ```
-apps/
+frontend/      Everything that runs in a browser
   patient/     Patient PWA (Part A)              — Next.js, Bangla-first, installable
   console/     Hospital consoles (Part B)        — Next.js, keyboard-first, offline-first
   site/        Marketing website (Part C)        — Next.js, server-rendered
+backend/       Everything that runs on a server
   api/         HTTP + realtime                   — Express 5, Socket.IO, the queue service
   workers/     Background jobs                   — pg-boss
-packages/
+shared/        Imported by both sides
   domain/      Types, queue event log, reducer, ETA maths — pure, no I/O
   client/      Typed API client, session channel, offline queue
   ui/          Design system: tokens, primitives, signature components
   i18n/        Messages and formatters (bn default, en toggle)
   config/      Shared TypeScript and ESLint configuration
-db/            Migrations, seeds, schema scripts
+database/      Migrations, seeds, schema scripts
 ```
 
-`packages/domain` holds the queue reducer, and both the API and the console
+Three directories divided by where the code runs, and a fourth for the schema.
+
+`shared/domain` holds the queue reducer, and both the API and the console
 import it unchanged. That is the mechanism that stops the server and the client
-ever disagreeing about what a queue event means (`FR-QUE-05`).
+ever disagreeing about what a queue event means (`FR-QUE-05`) — which is why it
+belongs to neither side and sits in neither. The boundaries are lint-enforced:
+`frontend/` cannot import from `backend/` or `database/`, and `shared/domain`
+imports nothing at all.
 
 ## Getting started
 
@@ -87,7 +93,7 @@ need `docker compose up -d`. Run one with `pnpm vitest run --project unit`.
   rules — unawaited promises, non-exhaustive switches over the queue event union
   — matter more here than compile speed. One compiler serves both `typecheck`
   and `lint`; revisit when typescript-eslint supports 7.1.
-- **`packages/config` owns every tooling decision.** A tsconfig or lint rule
+- **`shared/config` owns every tooling decision.** A tsconfig or lint rule
   defined inside an app or package is a bug.
 
 ## Boundaries the linter enforces
@@ -97,7 +103,7 @@ These are load-bearing, not stylistic:
 - `routes → controllers → services → repositories → db`. A controller never
   touches SQL; a repository never emits events or sends notifications.
 - SQL exists only in `*.repo.ts`.
-- `packages/domain` imports no Node built-in, no database driver and no
+- `shared/domain` imports no Node built-in, no database driver and no
   framework, and its queue code may not read the clock or a random number —
   replay determinism is a tested guarantee, not an aspiration.
 - The queue reducer is defined once.

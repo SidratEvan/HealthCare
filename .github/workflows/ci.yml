@@ -82,7 +82,7 @@ jobs:
         run: pnpm typecheck
 
       # Includes the architectural boundaries: routes → controllers → services
-      # → repositories → db, the purity of packages/domain, and SQL confined to
+      # → repositories → db, the purity of shared/domain, and SQL confined to
       # repositories (BACKEND.md §3, CLAUDE.md §7).
       - name: Lint
         run: pnpm lint
