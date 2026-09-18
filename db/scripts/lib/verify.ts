@@ -13,11 +13,14 @@
  *   DB-P6  identity-bearing phone columns are constrained to +8801…
  *   DB-P8  row-level security is enabled on every table
  *   DB-P9  primary keys are uuid
- *   §1     the enum label sets still match the document exactly
+ *   §1     the enum label sets still match @platform/domain, which is the
+ *          single definition shared with the API and the client
  *
  * A violation is reported, not thrown, so one run lists everything that is
  * wrong instead of the first thing.
  */
+
+import { DATABASE_ENUMS } from '@platform/domain';
 
 import type { Client } from 'pg';
 
@@ -35,104 +38,6 @@ const INFRASTRUCTURE_TABLES = new Map<string, string>([
   ['schema_migrations', 'migration ledger; created before the first migration can record itself'],
   ['spatial_ref_sys', 'created by the PostGIS extension; not ours to shape'],
 ]);
-
-/**
- * Enum label sets exactly as DATABASE.md §1 defines them.
- *
- * This list is the second half of a contract: `packages/domain/types/enums.ts`
- * is the first. Step 2 replaces this constant with an import from the domain
- * package, so that one definition serves the database, the API and the client
- * — until then the labels are repeated here on purpose, because a drift
- * between the database and the document is precisely what this check exists
- * to catch.
- */
-const EXPECTED_ENUMS: Record<string, readonly string[]> = {
-  user_kind: ['patient', 'guest', 'staff', 'platform'],
-  sex: ['male', 'female', 'other'],
-  staff_role: [
-    'receptionist',
-    'doctor',
-    'ward',
-    'emergency',
-    'lab',
-    'pharmacy',
-    'hospital_admin',
-    'platform_admin',
-    'gov_viewer',
-  ],
-  facility_kind: ['hospital', 'clinic', 'diagnostic', 'government'],
-  session_status: ['scheduled', 'running', 'paused', 'ended', 'cancelled'],
-  booking_status: [
-    'booked',
-    'waiting',
-    'in_chamber',
-    'done',
-    'late',
-    'no_show',
-    'cancelled',
-    'rescheduled',
-  ],
-  booking_source: ['app', 'guest_link', 'counter', 'phone', 'walkin'],
-  queue_event_type: [
-    'SESSION_OPENED',
-    'DOCTOR_ARRIVED',
-    'DELAY_DECLARED',
-    'SESSION_PAUSED',
-    'SESSION_RESUMED',
-    'PATIENT_CALLED',
-    'PATIENT_DONE',
-    'PATIENT_LATE',
-    'PATIENT_NO_SHOW',
-    'PATIENT_REINSERTED',
-    'WALKIN_ADDED',
-    'BOOKING_CANCELLED',
-    'SLOT_OFFERED',
-    'SLOT_ACCEPTED',
-    'SLOT_EXPIRED',
-    'PRIORITY_REORDERED',
-    'SESSION_ENDED',
-    'ACTION_UNDONE',
-  ],
-  bed_kind: ['general', 'cabin', 'hdu', 'icu', 'ccu', 'nicu', 'isolation', 'burn'],
-  bed_state: ['free', 'occupied', 'cleaning', 'reserved', 'out_of_service'],
-  triage_color: ['red', 'yellow', 'green'],
-  emergency_state: [
-    'inbound',
-    'acknowledged',
-    'arrived',
-    'in_treatment',
-    'admitted',
-    'discharged',
-    'referred',
-    'cancelled',
-  ],
-  referral_state: ['sent', 'seen', 'accepted', 'declined', 'arrived', 'cancelled'],
-  test_state: [
-    'ordered',
-    'sample_collected',
-    'processing',
-    'report_ready',
-    'delivered',
-    'cancelled',
-  ],
-  payment_method: ['bkash', 'nagad', 'card', 'cash', 'at_hospital'],
-  payment_state: ['pending', 'paid', 'failed', 'refunded', 'partially_refunded'],
-  notif_channel: ['push', 'sms', 'ivr', 'in_app'],
-  notif_state: ['queued', 'sent', 'delivered', 'failed', 'skipped'],
-  capability_kind: [
-    'burn_unit',
-    'cardiac',
-    'cath_lab',
-    'stroke',
-    'dialysis',
-    'nicu',
-    'trauma_ot',
-    'blood_bank',
-    'ambulance',
-    'isolation',
-  ],
-  consent_scope: ['visit', 'hospital', 'doctor', 'full'],
-};
 
 /** Runs every check and returns everything that is wrong. */
 export async function verifySchema(client: Client): Promise<Violation[]> {
@@ -406,7 +311,14 @@ async function checkAppendOnlyLog(client: Client): Promise<Violation[]> {
   return violations;
 }
 
-/** DATABASE.md §1: the enum label sets are a contract shared with packages/domain. */
+/**
+ * DATABASE.md §1: the enum label sets are a contract.
+ *
+ * `DATABASE_ENUMS` in @platform/domain is the single definition — the same one
+ * the reducer switches over and the client validates against. Comparing the
+ * database to it here means a label added on one side and forgotten on the
+ * other fails CI rather than reaching a console as an unhandled case.
+ */
 async function checkEnums(client: Client): Promise<Violation[]> {
   // enumlabel is of type `name`; pg has no array parser for name[], so it would
   // arrive as the raw string "{a,b,c}". Cast to text[] to get a real array.
@@ -423,7 +335,12 @@ async function checkEnums(client: Client): Promise<Violation[]> {
   const actual = new Map(rows.map((row) => [row.enum_name, row.labels]));
   const violations: Violation[] = [];
 
-  for (const [name, expected] of Object.entries(EXPECTED_ENUMS)) {
+  // DATABASE_ENUMS is declared with literal tuples so the domain gets exact
+  // union types from it; widening here is what lets this loop compare them
+  // against labels read out of the catalogue as plain strings.
+  const expectedEnums: Record<string, readonly string[]> = DATABASE_ENUMS;
+
+  for (const [name, expected] of Object.entries(expectedEnums)) {
     const labels = actual.get(name);
 
     if (labels === undefined) {
