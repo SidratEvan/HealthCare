@@ -171,7 +171,7 @@ importers:
         version: 10.0.1(eslint@10.10.0)
       '@platform/config':
         specifier: workspace:*
-        version: link:packages/config
+        version: link:shared/config
       '@types/node':
         specifier: ^26.6.1
         version: 26.6.1
@@ -200,11 +200,11 @@ importers:
         specifier: ^5.0.1
         version: 5.0.1(@types/node@26.6.1)(vite@8.3.0(@types/node@26.6.1)(esbuild@0.28.2)(tsx@4.23.13))
 
-  apps/api:
+  backend/api:
     dependencies:
       '@platform/domain':
         specifier: workspace:*
-        version: link:../../packages/domain
+        version: link:../../shared/domain
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -240,56 +240,17 @@ importers:
         specifier: ^4.23.13
         version: 4.23.13
 
-  apps/console:
-    dependencies:
-      '@platform/client':
-        specifier: workspace:*
-        version: link:../../packages/client
-      '@platform/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
-      '@platform/i18n':
-        specifier: workspace:*
-        version: link:../../packages/i18n
-      '@platform/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-
-  apps/patient:
-    dependencies:
-      '@platform/client':
-        specifier: workspace:*
-        version: link:../../packages/client
-      '@platform/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
-      '@platform/i18n':
-        specifier: workspace:*
-        version: link:../../packages/i18n
-      '@platform/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-
-  apps/site:
-    dependencies:
-      '@platform/i18n':
-        specifier: workspace:*
-        version: link:../../packages/i18n
-      '@platform/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-
-  apps/workers:
+  backend/workers:
     dependencies:
       '@platform/domain':
         specifier: workspace:*
-        version: link:../../packages/domain
+        version: link:../../shared/domain
 
-  db:
+  database:
     dependencies:
       '@platform/domain':
         specifier: workspace:*
-        version: link:../packages/domain
+        version: link:../shared/domain
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -301,15 +262,54 @@ importers:
         specifier: ^4.23.13
         version: 4.23.13
 
-  packages/client: {}
+  frontend/console:
+    dependencies:
+      '@platform/client':
+        specifier: workspace:*
+        version: link:../../shared/client
+      '@platform/domain':
+        specifier: workspace:*
+        version: link:../../shared/domain
+      '@platform/i18n':
+        specifier: workspace:*
+        version: link:../../shared/i18n
+      '@platform/ui':
+        specifier: workspace:*
+        version: link:../../shared/ui
 
-  packages/config: {}
+  frontend/patient:
+    dependencies:
+      '@platform/client':
+        specifier: workspace:*
+        version: link:../../shared/client
+      '@platform/domain':
+        specifier: workspace:*
+        version: link:../../shared/domain
+      '@platform/i18n':
+        specifier: workspace:*
+        version: link:../../shared/i18n
+      '@platform/ui':
+        specifier: workspace:*
+        version: link:../../shared/ui
 
-  packages/domain: {}
+  frontend/site:
+    dependencies:
+      '@platform/i18n':
+        specifier: workspace:*
+        version: link:../../shared/i18n
+      '@platform/ui':
+        specifier: workspace:*
+        version: link:../../shared/ui
 
-  packages/i18n: {}
+  shared/client: {}
 
-  packages/ui: {}
+  shared/config: {}
+
+  shared/domain: {}
+
+  shared/i18n: {}
+
+  shared/ui: {}
 
 packages:
 

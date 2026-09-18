@@ -20,7 +20,7 @@ Last updated: end of step 5 (`feat/seed-demo`).
 | 2 | `feat/domain-queue` | merged — reducer, ETA, rate, rules, replay |
 | 3 | `feat/api-foundation` | merged — env, db, logger, middleware, errors, health |
 | ~~4~~ | ~~`feat/auth-guest`~~ | **deferred, do not build** — see `CLAUDE.md` §4.1 |
-| 5 | `feat/seed-demo` | merged — `db/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) |
+| 5 | `feat/seed-demo` | merged — `database/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) |
 | **6** | **`feat/queue-service`** | **next** — `appendEvent()`, queue routes, realtime rooms |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
@@ -59,7 +59,7 @@ afternoon.
 - **`pnpm dev:api` needs no Docker.** It reads `.env`, which points at Supabase.
 - **`pnpm test` does need Docker** (`docker compose up -d`). The suite drops and
   recreates schemas, so it must never touch a shared database; `DATABASE_URL_TEST`
-  stays on localhost and the guard in `db/scripts/lib/env.ts` refuses otherwise.
+  stays on localhost and the guard in `database/scripts/lib/env.ts` refuses otherwise.
 - Supabase project region is `ap-southeast-1` (Singapore), closest to Dhaka.
 
 ### Things learned the hard way, so they are not relearned
@@ -93,18 +93,19 @@ the storage work in steps 12–13.
 
 ## Open decisions
 
-Seven are questions raised while building, each implemented one way and flagged
-rather than settled silently. All of them need an owner's ruling.
+Six are open questions, each implemented one way and flagged rather than
+settled silently; all six need an owner's ruling. The seventh is recorded as
+settled because the answer changed the tree.
 
 1. **`FR-QUE-20` grace period.** "2 patients or 15 minutes, whichever is longer"
    is implemented as the longer of *two patients' time at the current rate* and
    fifteen minutes. Read instead as a count of calls it deadlocks: the absent
    patient is at the front, so nobody else can be called, so the count never
-   rises. See `graceWindowMinutes` in `packages/domain/src/queue/rules.ts`.
+   rises. See `graceWindowMinutes` in `shared/domain/src/queue/rules.ts`.
 2. **`EVT-BOOKING_CREATED`** appears in `APP_FLOW.md` §A4 but not in
    `DATABASE.md` §1 or `FR-QUE-03`. The queue is built as
    `seed + events => state` instead; see the header of
-   `packages/domain/src/queue/state.ts`.
+   `shared/domain/src/queue/state.ts`.
 3. **RLS is enabled in the migration that creates each table**, not deferred to
    `0014_rls.sql`. An enabled table with no policy denies all access, so this
    fails safe in the meantime; 0014 still adds the policies.
@@ -126,13 +127,13 @@ Raised while building the seeds (step 5):
    is the authority and is what `reset.ts` does. The comment cannot be edited —
    a shipped migration never is, and the checksum would stop `db:migrate`. A
    later migration could carry a corrected `COMMENT ON`.
-7. **Repo layout.** The owner has asked for `frontend/`, `backend/`,
-   `database/` top-level folders instead of the `apps/` + `packages/` + `db/`
-   layout that `BACKEND.md` §1 fixes. Agreed, with `shared/` for the packages
-   both sides import — `packages/domain` is imported unchanged by the API and
-   the console, and that shared import is the mechanism behind `FR-QUE-05`, so
-   it belongs to neither side. To be done on `chore/repo-layout`; `BACKEND.md`
-   §1 needs updating with it.
+7. ~~**Repo layout.**~~ **Settled and done** (`chore/repo-layout`). The tree is
+   now `frontend/` + `backend/` + `shared/` + `database/`, divided by where the
+   code runs. `shared/` exists because `shared/domain` is imported unchanged by
+   both the API and the console, and that import is the mechanism behind
+   `FR-QUE-05` — it belongs to neither side. `BACKEND.md` §1 was updated in the
+   same branch, and the layering rules now also forbid `frontend/` importing
+   `backend/` or `database/`.
 
 Two are the owner's and are not code:
 
@@ -173,12 +174,12 @@ Two are the owner's and are not code:
 - **`middleware/audit.ts` is not written.** `audit_log` is migration 0010 and
   the schema is at 0006, so it would have no table to write to. It lands with
   the migration.
-- **`apps/api` has no production build script.** Internal packages are consumed
+- **`backend/api` has no production build script.** Internal packages are consumed
   from TypeScript source, so a deployable build needs either emitted output from
-  `packages/domain` or a bundler. That is a dependency decision for the owner,
+  `shared/domain` or a bundler. That is a dependency decision for the owner,
   and it blocks the Render deploy at step 6.
 - **`e2e/` and Playwright do not exist yet.** They arrive with the first
   user-visible flow. The two-device queue test is the product's canary and is
   never skipped (`CLAUDE.md` §6).
-- **`packages/ui`, `packages/client`, `packages/i18n` are empty**, as are the
+- **`shared/ui`, `shared/client`, `shared/i18n` are empty**, as are the
   three Next.js apps. Steps 7–10.

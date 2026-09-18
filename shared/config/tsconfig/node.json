@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "@platform node",
+  "_comment": "Node 20 services and scripts: backend/api, backend/workers, database, and the shared packages.",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  }
+}

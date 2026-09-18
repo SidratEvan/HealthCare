@@ -1,14 +1,25 @@
 # Monorepo layout — BACKEND.md §1.
+#
+# frontend/  the three browser apps: the patient PWA, the staff consoles, the
+#            public site
+# backend/   the API and the worker process
+# shared/    code both sides import. `shared/domain` above all: the queue
+#            reducer lives there once and is imported unchanged by the API and
+#            by the console, which is the mechanism behind FR-QUE-05 — the two
+#            cannot disagree about a queue if they run the same function over
+#            the same log. It belongs to neither side, so it is in neither.
+# database/  migrations, seeds and schema scripts
 packages:
-  - "apps/*"
-  - "packages/*"
-  - "db"
+  - "frontend/*"
+  - "backend/*"
+  - "shared/*"
+  - "database"
 
 # Postinstall scripts are blocked unless listed here. Only packages whose
 # native binary we actually need are approved.
 #   unrs-resolver — the native module resolver behind
 #                   eslint-import-resolver-typescript, which the layering rule
-#                   uses to resolve imports to files (packages/config/eslint).
+#                   uses to resolve imports to files (shared/config/eslint).
 allowBuilds:
   esbuild: true
   unrs-resolver: true

@@ -26,21 +26,21 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
-          include: ['packages/*/src/**/*.{test,spec}.ts'],
+          include: ['shared/*/src/**/*.{test,spec}.ts'],
           environment: 'node',
           globals: false,
           restoreMocks: true,
-          // packages/config ships configuration and will never have tests.
+          // shared/config ships configuration and will never have tests.
           passWithNoTests: true,
         },
       },
       {
         test: {
           name: 'api',
-          include: ['apps/*/src/**/*.{test,spec}.ts'],
+          include: ['backend/*/src/**/*.{test,spec}.ts'],
           // Must run before any import: env.ts validates at module load.
-          setupFiles: ['apps/api/src/__tests__/support/env.setup.ts'],
-          globalSetup: ['db/tests/support/global-setup.ts'],
+          setupFiles: ['backend/api/src/__tests__/support/env.setup.ts'],
+          globalSetup: ['database/tests/support/global-setup.ts'],
           environment: 'node',
           globals: false,
           restoreMocks: true,
@@ -52,8 +52,8 @@ export default defineConfig({
       {
         test: {
           name: 'schema',
-          include: ['db/tests/**/*.test.ts'],
-          globalSetup: ['db/tests/support/global-setup.ts'],
+          include: ['database/tests/**/*.test.ts'],
+          globalSetup: ['database/tests/support/global-setup.ts'],
           environment: 'node',
           globals: false,
           restoreMocks: true,

@@ -28,7 +28,7 @@
 | Tests | Vitest (unit), Supertest (API), Playwright (E2E two-device queue) | |
 | Deploy | Render (API + workers), Supabase (DB), Vercel (web) | Matches existing experience |
 
-**Hard rule:** the queue reducer is **shared code** (`packages/domain`), imported unchanged by both the API and the console. The server never re-implements queue logic in SQL.
+**Hard rule:** the queue reducer is **shared code** (`shared/domain`), imported unchanged by both the API and the console. The server never re-implements queue logic in SQL.
 
 ---
 
@@ -36,30 +36,46 @@
 
 ```
 /
-├── apps/
-│   ├── patient/                 # Next.js PWA          → FRONTEND.md
-│   ├── console/                 # Next.js staff web    → FRONTEND.md
-│   ├── site/                    # Next.js marketing    → FRONTEND.md
-│   ├── api/                     # Express HTTP + Socket.IO   ← this document
-│   └── workers/                 # pg-boss job processors     ← this document
-├── packages/
-│   ├── domain/                  # shared types + queue reducer + ETA math
+├── frontend/                    # everything that runs in a browser → FRONTEND.md
+│   ├── patient/                 # Next.js PWA
+│   ├── console/                 # Next.js staff web
+│   └── site/                    # Next.js marketing
+├── backend/                     # everything that runs on a server   ← this document
+│   ├── api/                     # Express HTTP + Socket.IO
+│   └── workers/                 # pg-boss job processors
+├── shared/                      # imported by both sides
+│   ├── domain/                  # types + queue reducer + ETA math
 │   ├── client/                  # typed API + realtime client (used by web apps)
 │   ├── ui/                      # design system
 │   ├── i18n/                    # messages + formatters
 │   └── config/                  # eslint, tsconfig, tailwind preset
-├── db/                          # migrations, seeds, scripts → DATABASE.md
+├── database/                    # migrations, seeds, scripts → DATABASE.md
 └── docs/                        # PRD.md, APP_FLOW.md, FRONTEND.md, DATABASE.md, BACKEND.md
 ```
 
+Three top-level directories, divided by **where the code runs**, and a fourth
+for the schema.
+
+`shared/` is not a junk drawer — it is the part of this design that carries
+the most weight. `shared/domain` holds the queue reducer, and the API and the
+console import it *unchanged*. That single import is the whole mechanism
+behind `FR-QUE-05`: two programs running the same function over the same event
+log cannot disagree about what the queue looks like. It therefore belongs to
+neither the frontend nor the backend, and lives in neither.
+
+The boundaries are lint-enforced (`shared/config/eslint/layering.mjs`):
+`frontend/` may not import from `backend/` or `database/`, `backend/` may not
+import a frontend app, and `shared/domain` may import nothing at all. The two
+sides meet at the HTTP and realtime contracts and in `shared/` — nowhere else.
+
 ---
 
-## 2. `packages/domain` — the shared brain
+## 2. `shared/domain` — the shared brain
 
 This package has **no I/O**. Pure functions and types. Both the API and the console import it, which is what guarantees they can never disagree (`FR-QUE-05`).
 
 ```
-packages/domain/src/
+shared/domain/src/
 ├── index.ts                     # public exports
 ├── types/
 │   ├── ids.ts                   # branded UUID types (SessionId, BookingId…)
@@ -96,17 +112,17 @@ packages/domain/src/
 
 | Consumer | Uses |
 |---|---|
-| `apps/api` | reducer, eta, rules, schemas, types |
-| `apps/workers` | eta, rules, types |
-| `apps/console` | reducer, eta, state, schemas (optimistic UI, offline replay) |
-| `apps/patient` | eta (display only), types, schemas |
+| `backend/api` | reducer, eta, rules, schemas, types |
+| `backend/workers` | eta, rules, types |
+| `frontend/console` | reducer, eta, state, schemas (optimistic UI, offline replay) |
+| `frontend/patient` | eta (display only), types, schemas |
 
 ---
 
-## 3. `apps/api` — file by file
+## 3. `backend/api` — file by file
 
 ```
-apps/api/src/
+backend/api/src/
 ├── server.ts                    # boots express, http server, socket.io; graceful shutdown
 ├── app.ts                       # express app: middleware chain, route mounting
 ├── env.ts                       # zod-validated process.env (§10)
@@ -239,7 +255,7 @@ appendEvent({
 4. **Validate** — run `domain/queue/rules.ts` guards: cannot call next while one is in chamber unmarked; cannot no-show before grace; cannot reorder without a reason.
 5. **Serialise** — `SELECT … FOR UPDATE` on `sessions` row to prevent two counters calling simultaneously (`FR-QUE-53`).
 6. **Append** — insert into `queue_events` with the next `seq`, server timestamp authoritative.
-7. **Reduce** — `reducer(state, event)` from `packages/domain` → new state.
+7. **Reduce** — `reducer(state, event)` from `shared/domain` → new state.
 8. **Persist** — upsert `queue_state`; update `bookings.status` via trigger; update `sessions.avg_consult_seconds` on `PATIENT_DONE`.
 9. **Recalculate** — `eta.ts` produces ETAs for all waiting bookings (`FR-QUE-11`), ≤ 500 ms for 100 patients (`NFR-03`).
 10. **Broadcast** — `realtime/emit.ts` publishes `queue.updated` to `session:<id>` with `{ seq, state, etas, serverTs }` (≤ 2 s end-to-end, `NFR-01`).
@@ -414,10 +430,10 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 
 ---
 
-## 8. `apps/workers` — background jobs
+## 8. `backend/workers` — background jobs
 
 ```
-apps/workers/src/
+backend/workers/src/
 ├── index.ts                     # pg-boss subscriber registration
 ├── jobs/
 │   ├── notify.send.ts           # renders template, picks channel, calls adapter, records result
@@ -534,11 +550,11 @@ CI gates: typecheck, lint (layering rule), unit, API, one E2E smoke, and `db:ver
 
 | Piece | Where | Notes |
 |---|---|---|
-| `apps/api` | Render web service | health `/healthz`, readiness `/readyz`, autoscale on CPU |
-| `apps/workers` | Render background worker | separate service, same image |
+| `backend/api` | Render web service | health `/healthz`, readiness `/readyz`, autoscale on CPU |
+| `backend/workers` | Render background worker | separate service, same image |
 | Database | Supabase Postgres | daily backups, PITR on paid tier |
 | Storage | Supabase Storage | private buckets, signed URLs only |
-| `apps/patient` / `console` / `site` | Vercel | separate projects, same monorepo |
+| `frontend/patient` / `console` / `site` | Vercel | separate projects, same monorepo |
 | Migrations | CI step before API deploy | forward-only, never destructive in one release |
 
 **Rollout rule:** schema change → deploy migration → deploy API → deploy clients. Never reverse.
@@ -547,10 +563,10 @@ CI gates: typecheck, lint (layering rule), unit, API, one E2E smoke, and `db:ver
 
 ## 13. Build order for Claude Code
 
-1. `db/migrations` 0001–0006 + `packages/domain` (types, reducer, eta, rules) with unit tests. **Nothing else until the reducer is green.**
-2. `apps/api`: env, db, auth, guest, discovery, booking, queue service + queue routes, realtime.
-3. `apps/console`: reception console wired to queue endpoints, offline queue, optimistic reducer.
-4. `apps/patient`: booking flow, guest flow, live serial screen on the session channel.
+1. `db/migrations` 0001–0006 + `shared/domain` (types, reducer, eta, rules) with unit tests. **Nothing else until the reducer is green.**
+2. `backend/api`: env, db, auth, guest, discovery, booking, queue service + queue routes, realtime.
+3. `frontend/console`: reception console wired to queue endpoints, offline queue, optimistic reducer.
+4. `frontend/patient`: booking flow, guest flow, live serial screen on the session channel.
 5. **Checkpoint:** run the two-device Playwright test. If it passes, the product exists.
 6. Then: clinical, beds, emergency, referrals, lab, pharmacy, payments, admin, platform, gov — in that order.
 
