@@ -1,0 +1,13 @@
+{
+  "name": "@platform/workers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "pg-boss job processors: notifications, auto no-show, slot expiry, session materialisation, analytics refresh (BACKEND.md §8).",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@platform/domain": "workspace:*"
+  }
+}

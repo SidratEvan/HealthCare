@@ -1,0 +1,7 @@
+{
+  "extends": "@platform/config/tsconfig/node.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["scripts/**/*.ts", "seeds/**/*.ts", "tests/**/*.ts"]
+}

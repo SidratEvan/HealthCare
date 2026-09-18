@@ -1,0 +1,20 @@
+{
+  "name": "@platform/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Migrations, seeds and schema scripts (DATABASE.md \u00a77). Forward-only; a shipped migration is never edited.",
+  "scripts": {
+    "migrate": "tsx scripts/migrate.ts",
+    "verify": "tsx scripts/verify_schema.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@platform/domain": "workspace:*",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.13"
+  }
+}

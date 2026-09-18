@@ -1,0 +1,7 @@
+{
+  "extends": "@platform/config/tsconfig/next.json",
+  "compilerOptions": {
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

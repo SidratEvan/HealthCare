@@ -1,0 +1,9 @@
+{
+  "extends": "@platform/config/tsconfig/base.json",
+  "_comment": "Deliberately extends the base config, not the node one: this package has no access to Node types because it has no I/O (BACKEND.md §2).",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"]
+}

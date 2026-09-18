@@ -1,0 +1,115 @@
+# Continuous integration.
+#
+# BACKEND.md §11 fixes the gates: typecheck, lint (the layering rule), unit,
+# API, one E2E smoke, and db:verify. They are added to this file by the step
+# that makes each one meaningful, and none is ever removed:
+#
+#   step 1  feat/db-core            → Postgres service, schema suite, db:verify  ✓
+#   step 2  feat/domain-queue       → reducer and replay-determinism units
+#   step 3  feat/api-foundation     → Supertest auth-matrix suite              ✓
+#   step 7  feat/ui-tokens          → a11y checks, bn/en message-key parity (I18N-02)
+#   step 10 feat/patient-live-serial → the two-device queue E2E smoke, which is
+#                                      the product's canary and is never skipped
+#                                      or marked flaky (CLAUDE.md §6)
+
+name: CI
+
+on:
+  push:
+    branches: [main, mvp]
+  pull_request:
+    branches: [main, mvp]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Node 20 is the deployment runtime (BACKEND.md §0); CI matches production.
+  NODE_VERSION: "20"
+
+jobs:
+  verify:
+    name: typecheck · lint · format · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      # PostGIS rather than plain Postgres: 0001_extensions.sql installs postgis
+      # and earthdistance for the emergency geo search (DATABASE.md §6). Same
+      # image and version as docker-compose.yml, so a schema failure in CI can
+      # be reproduced locally exactly.
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: healthcare
+          POSTGRES_PASSWORD: healthcare
+          POSTGRES_DB: healthcare_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U healthcare -d healthcare_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://healthcare:healthcare@localhost:5432/healthcare_dev
+      DATABASE_URL_TEST: postgresql://healthcare:healthcare@localhost:5432/healthcare_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The pnpm version is pinned by the `packageManager` field in
+      # package.json, so corepack installs exactly what developers run.
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Includes the architectural boundaries: routes → controllers → services
+      # → repositories → db, the purity of packages/domain, and SQL confined to
+      # repositories (BACKEND.md §3, CLAUDE.md §7).
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format
+        run: pnpm format:check
+
+      # The service container creates only healthcare_dev; the schema suite
+      # needs a second, disposable database it can drop and rebuild. Locally
+      # docker-compose.yml creates both on first start.
+      - name: Create the test database
+        run: |
+          PGPASSWORD=healthcare psql \
+            -h localhost -U healthcare -d healthcare_dev \
+            -c 'CREATE DATABASE healthcare_test OWNER healthcare'
+
+      - name: Migrate
+        run: pnpm db:migrate
+
+      # DATABASE.md §0 invariants: RLS on every table, created_at/updated_at
+      # maintained, UTC timestamps, integer poisha, normalised phones, and the
+      # append-only guards on queue_events.
+      - name: Verify schema invariants
+        run: pnpm db:verify
+
+      # Three projects: the pure domain units, the Supertest auth matrix, and
+      # the schema suite that rebuilds healthcare_test from scratch to prove
+      # the migrations apply to a fresh database.
+      - name: Test
+        run: pnpm test
