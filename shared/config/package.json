@@ -3,16 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Shared TypeScript and ESLint configuration. The only place tooling settings are defined (BACKEND.md §1).",
+  "description": "Shared TypeScript, ESLint and Tailwind configuration. The only place tooling settings are defined (BACKEND.md §1, FRONTEND.md §10).",
   "exports": {
     "./eslint/base": "./eslint/base.mjs",
     "./eslint/layering": "./eslint/layering.mjs",
+    "./tailwind/preset": "./tailwind/preset.mjs",
     "./tsconfig/base.json": "./tsconfig/base.json",
     "./tsconfig/node.json": "./tsconfig/node.json",
     "./tsconfig/next.json": "./tsconfig/next.json"
   },
   "files": [
     "eslint",
-    "tsconfig"
+    "tsconfig",
+    "tailwind"
   ]
 }

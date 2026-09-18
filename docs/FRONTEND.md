@@ -165,13 +165,28 @@ Night-shift reception and ER staff need it. Dark mode inverts ground tokens to `
 
 | Pair | Ratio | Status |
 |---|---|---|
-| `--ink-primary` on `--bg-canvas` | 13.8:1 | AAA |
-| `--ink-muted` on `--bg-canvas` | 6.4:1 | AA |
-| `#FFFFFF` on `--brand-600` | 7.1:1 | AAA |
-| `#FFFFFF` on `--alert-600` | 5.6:1 | AA |
-| `--warn-700` on `--warn-100` | 7.9:1 | AAA |
+| `--ink-primary` on `--bg-canvas` | 15.11:1 | AAA |
+| `--ink-muted` on `--bg-canvas` | 6.54:1 | AA |
+| `#FFFFFF` on `--brand-600` | 7.97:1 | AAA |
+| `#FFFFFF` on `--alert-600` | 6.54:1 | AA |
+| `--warn-700` on `--warn-100` | 6.97:1 | AA |
 
-Any new pair must be verified before use (`FR-LOC-05`). No white text on `--brand-300`, no muted ink on tinted surfaces below 4.5:1.
+Ratios are computed from the §1.1 hex values by `contrastRatio()` in
+`shared/ui/src/a11y/contrast.ts`, and `contrast.test.ts` asserts every row.
+They are therefore descriptive of the palette: change a token and this table
+must change with it, or the suite fails.
+
+**`--warn-700` is AA, not AAA.** An earlier version of this table read 7.9:1
+AAA. The §1.1 value `#6B4A10` actually yields 6.97:1 — it misses AAA by three
+hundredths. `#63420D` produces exactly 7.9:1 and would make both sections true
+at once, which suggests that was the intended value; it is a brand-token change
+and so is left for the owner. Recorded in `docs/STATUS.md`. Caution text is
+legible either way, and the delay chip uses `--warn-600` (5.14:1, AA) in any
+case.
+
+Any new pair must be verified before use (`FR-LOC-05`) — call `meets()` rather
+than reasoning about it. No white text on `--brand-300` (1.74:1, clears
+nothing), no muted ink on tinted surfaces below 4.5:1.
 
 ---
 
