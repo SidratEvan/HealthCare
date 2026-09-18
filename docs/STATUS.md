@@ -22,7 +22,8 @@ Last updated: end of step 6 (`feat/queue-service`).
 | ~~4~~ | ~~`feat/auth-guest`~~ | **deferred, do not build** — see `CLAUDE.md` §4.1 |
 | 5 | `feat/seed-demo` | merged — `database/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) |
 | 6 | `feat/queue-service` | merged — `appendEvent()`, 13 queue routes, realtime |
-| **7** | **`feat/ui-tokens`** | **next** — `shared/ui`: tokens and primitives |
+| 7 | `feat/ui-tokens` | merged — tokens, contrast checks, seven primitives |
+| **8** | **`feat/console-reception`** | **next** — reception console, offline queue, optimistic reducer |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -37,7 +38,16 @@ tokens stays; no OTP flows, staff passwords or argon2id are to be written. The
 guest tracking link (`FR-GST-05`) is kept, because it is a capability token the
 demo depends on rather than a login.
 
-`pnpm test` reports 705 at the time of writing: 464 unit, 161 api, 80 schema.
+`pnpm test` reports 820 at the time of writing: 535 unit, 161 api, 80 schema,
+44 ui.
+
+**`ui` is a fourth vitest project**, on jsdom. It is separate from `unit` so a
+developer working on the queue reducer never pays for a DOM, and separate from
+`api` so it never needs a database. It asserts behaviour and accessibility —
+roles, labels, focus order, keyboard handling, an axe pass per component — not
+appearance: Tailwind classes are inert strings under jsdom, so the visual layer
+is proven from the token values instead, by `tokens.test.ts` and
+`contrast.test.ts`.
 
 **Socket.IO is wired** (`socket.io` 4.8.3, added with the owner's permission).
 `realtime/server.ts` is the only file that imports it; everything else
@@ -111,8 +121,8 @@ the storage work in steps 12–13.
 
 ## Open decisions
 
-Seven are open questions, each implemented one way and flagged rather than
-settled silently; all seven need an owner's ruling. One more is recorded as
+Eight are open questions, each implemented one way and flagged rather than
+settled silently; all eight need an owner's ruling. One more is recorded as
 settled because the answer changed the tree.
 
 1. **`FR-QUE-20` grace period.** "2 patients or 15 minutes, whichever is longer"
@@ -160,6 +170,16 @@ Raised while building the seeds (step 5):
    tokens on Anek Bangla — but the canvas's serif display carries the hero
    numeral well, and switching later is a token change, not a rewrite.
 
+11. **`--warn-700` is AA, not the AAA `FRONTEND.md` §1.3 claimed.** The table
+   said 7.9:1; the §1.1 hex `#6B4A10` actually yields 6.97:1, missing AAA by
+   three hundredths. §1.3 has been corrected to the computed values (three of
+   its five ratios were wrong). Notably `#63420D` produces *exactly* 7.9:1,
+   which suggests that was the intended token and the hex in §1.1 is simply
+   lighter than meant — but changing a brand colour is the owner's call, so the
+   documented hex stands and `contrast.test.ts` asserts the AA result plus a
+   deliberate "does not yet clear AAA" case that will fail the moment anyone
+   darkens it. Caution text is legible either way.
+
 Two are the owner's and are not code:
 
 8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
@@ -174,6 +194,25 @@ Two are the owner's and are not code:
 ---
 
 ## Known gaps, deliberate
+
+- **`OtpInput` has no caller.** It is named in step 7's component list and is
+  built, but every OTP *flow* is deferred to Supabase Auth (`CLAUDE.md` §4.1),
+  so nothing renders it yet. It holds no credential and calls no endpoint — it
+  is the input primitive, and Supabase's flow will need exactly this box.
+
+- **The signature components (`FRONTEND.md` §6) are not built.**
+  `<LiveSerialCard>`, `<FreshnessLine>`, `<QueueTable>`, `<BedTile>`,
+  `<CapacityMirror>` and `<DelaySheet>` each depend on a live data shape rather
+  than a visual one, so each lands with the screen that renders it, from step 8
+  onward. `<FreshnessLine>` is the one to build first: DoD §5.8 requires it
+  beneath every live figure.
+
+- **Tailwind is configured but never yet run.** The preset
+  (`shared/config/tailwind/preset.mjs`) maps every utility onto the CSS
+  variables and replaces the default palette rather than extending it, so
+  `bg-indigo-500` does not exist. Nothing compiles it until the first Next.js
+  app in step 8; until then the components' class names are strings that have
+  never been turned into CSS.
 
 - **No authentication is implemented, by decision** (`CLAUDE.md` §4.1). Under
   `DEMO_MODE=true` the console selects a hospital and role without a password,
@@ -214,5 +253,5 @@ Two are the owner's and are not code:
 - **`e2e/` and Playwright do not exist yet.** They arrive with the first
   user-visible flow. The two-device queue test is the product's canary and is
   never skipped (`CLAUDE.md` §6).
-- **`shared/ui`, `shared/client`, `shared/i18n` are empty**, as are the
+- **`shared/client` is empty**, as are the
   three Next.js apps. Steps 7–10.
