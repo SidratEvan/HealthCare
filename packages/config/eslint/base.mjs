@@ -14,7 +14,8 @@ import path from 'node:path';
 
 import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
-import importPlugin from 'eslint-plugin-import';
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
+import importX from 'eslint-plugin-import-x';
 import tseslint from 'typescript-eslint';
 
 /** Absolute repository root, independent of the directory eslint was run from. */
@@ -60,15 +61,18 @@ export const base = tseslint.config(
         tsconfigRootDir: REPO_ROOT,
       },
     },
-    plugins: { import: importPlugin },
+    plugins: { 'import-x': importX },
     settings: {
-      'import/resolver': {
-        typescript: {
+      // The resolver is what turns an import specifier into a file path, which
+      // is what the boundary rules in ./layering.mjs compare against. Without
+      // it they resolve nothing and silently enforce nothing.
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({
           alwaysTryTypes: true,
           noWarnOnMultipleProjects: true,
           project: ['tsconfig.json', '{apps,packages}/*/tsconfig.json', 'db/tsconfig.json'],
-        },
-      },
+        }),
+      ],
     },
     rules: {
       // --- CLAUDE.md §7: strict types -------------------------------------
@@ -79,6 +83,12 @@ export const base = tseslint.config(
       '@typescript-eslint/no-unsafe-return': 'error',
       '@typescript-eslint/no-unsafe-argument': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
+
+      // Off because it contradicts the rule above: it asks for `x!` wherever
+      // `x as T` narrows away null, and `x!` is banned. With both on, the only
+      // way to satisfy one is to violate the other. The intended answer to
+      // either complaint is an explicit check, not a shorter assertion.
+      '@typescript-eslint/non-nullable-type-assertion-style': 'off',
       '@typescript-eslint/ban-ts-comment': [
         'error',
         {
@@ -109,11 +119,11 @@ export const base = tseslint.config(
         'error',
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
       ],
-      'import/no-cycle': ['error', { maxDepth: Infinity, ignoreExternal: true }],
-      'import/no-self-import': 'error',
-      'import/no-useless-path-segments': ['error', { noUselessIndex: true }],
-      'import/no-duplicates': 'error',
-      'import/order': [
+      'import-x/no-cycle': ['error', { maxDepth: Infinity, ignoreExternal: true }],
+      'import-x/no-self-import': 'error',
+      'import-x/no-useless-path-segments': ['error', { noUselessIndex: true }],
+      'import-x/no-duplicates': 'error',
+      'import-x/order': [
         'error',
         {
           groups: [
