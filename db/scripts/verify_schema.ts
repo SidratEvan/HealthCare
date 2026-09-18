@@ -11,7 +11,7 @@
 
 import { Client } from 'pg';
 
-import { describe, requireDatabaseUrl } from './lib/env.js';
+import { PG_CONNECTION_OPTIONS, describe, requireDatabaseUrl } from './lib/env.js';
 import { verifySchema, type Violation } from './lib/verify.js';
 
 async function main(): Promise<void> {
@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   const { host, database } = describe(connectionString);
   console.log(`verifying ${database} on ${host}`);
 
-  const client = new Client({ connectionString });
+  const client = new Client({ connectionString, options: PG_CONNECTION_OPTIONS });
   await client.connect();
 
   let violations: Violation[];

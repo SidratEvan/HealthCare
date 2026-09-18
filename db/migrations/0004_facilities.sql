@@ -12,6 +12,12 @@
 -- to drift. Flagged for a DATABASE.md edit rather than resolved silently; the
 -- column is one line to add back if that call is wrong.
 
+-- The generated `geo` column below names `geography` and `ST_*`, which live in
+-- the `extensions` schema (0001). A generated column's expression is resolved
+-- when the column is created, so the path has to be right here and not left to
+-- the connecting role's default.
+SET LOCAL search_path = public, extensions;
+
 -- ===========================================================================
 -- hospitals — a facility: hospital, clinic, diagnostic centre or government
 -- ===========================================================================

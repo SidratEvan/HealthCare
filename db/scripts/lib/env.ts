@@ -13,6 +13,22 @@ import { resolve } from 'node:path';
 /** Absolute path of the repository root, from this file's location. */
 export const REPO_ROOT = resolve(import.meta.dirname, '../../..');
 
+/**
+ * Startup options every connection to this database must carry.
+ *
+ * PostGIS, pgcrypto and earthdistance live in the `extensions` schema (0001),
+ * which is not on the default search_path — so `ST_MakePoint`, `geography` and
+ * `gen_random_uuid` are unresolvable without this, and the emergency geo
+ * search (FR-PAT-43) would fail at runtime with "function does not exist"
+ * rather than at migration time.
+ *
+ * Set per connection rather than with `ALTER ROLE`, because the role a hosted
+ * database hands out is not necessarily one we can alter, and a schema whose
+ * correctness depends on a role grant is a schema that breaks on the next
+ * environment.
+ */
+export const PG_CONNECTION_OPTIONS = '-c search_path=public,extensions';
+
 /** Absolute path of the migrations directory. */
 export const MIGRATIONS_DIR = resolve(REPO_ROOT, 'db/migrations');
 
@@ -75,35 +91,72 @@ export function requireDatabaseUrl(variable = 'DATABASE_URL'): string {
   return url;
 }
 
+export interface TargetOptions {
+  /**
+   * True for an operation that destroys data — `db:reset`, or the schema
+   * rebuild the test suite performs. Forward-only migration is not
+   * destructive.
+   */
+  readonly destructive?: boolean;
+}
+
 /**
- * Refuses to run against anything that does not look like a development or
- * test database.
+ * Refuses to touch a database the caller has not explicitly opted into.
  *
- * `db:migrate` is forward-only and safe, but the scripts that follow it in
- * later steps are not: `db:reset` truncates and reseeds (DATABASE.md §7), and
- * a demo seed reaching a production database would put demonstration patients
- * in front of real staff. A production migration runs from CI against an
- * explicit target (BACKEND.md §12), never from a developer's shell.
+ * The decision is made on the **host**, not the database name. An earlier
+ * version treated a database called `postgres` as disposable, on the reasoning
+ * that it is the throwaway default of a local container — but every Supabase
+ * project's database is also called `postgres`, so that rule quietly
+ * authorised `db:migrate` and `db:reset` against any hosted project, including
+ * a live one, with no opt-in at all.
+ *
+ * So: a local host is free, and anything else needs saying out loud.
  */
-export function assertNotProduction(url: string): void {
-  if (process.env['ALLOW_REMOTE_DB'] === '1') return;
-
+export function assertSafeTarget(url: string, options: TargetOptions = {}): void {
   const { host, database } = describe(url);
-  const looksLocal = /^(localhost|127\.0\.0\.1|::1|db|postgres)$/.test(host);
-  const looksDisposable = /(_dev|_test)$|^postgres$/.test(database);
 
-  if (!looksLocal && !looksDisposable) {
+  if (isLocalHost(host)) return;
+
+  const remoteAllowed = process.env['ALLOW_REMOTE_DB'] === '1';
+  const destructiveAllowed = process.env['ALLOW_DESTRUCTIVE_DB'] === '1';
+
+  if (!remoteAllowed) {
     throw new Error(
       [
-        `Refusing to run against database "${database}" on host "${host}".`,
+        `Refusing to run against "${database}" on "${host}".`,
         '',
-        'These scripts target development and test databases only. Production',
-        'migrations run from CI against an explicit target (BACKEND.md §12).',
+        `"${host}" is not a local host, so this could be a database real`,
+        'patients depend on. Nothing about the database name proves otherwise —',
+        'a hosted Postgres is usually called "postgres" whether it is a scratch',
+        'project or a pilot hospital.',
         '',
-        'Set ALLOW_REMOTE_DB=1 if this really is what you meant.',
+        'If this is your own development project, run it with:',
+        '  ALLOW_REMOTE_DB=1 pnpm db:migrate',
+        '',
+        'Production migrations run from CI against an explicit target',
+        '(BACKEND.md §12), never from a developer shell.',
       ].join('\n'),
     );
   }
+
+  if (options.destructive === true && !destructiveAllowed) {
+    throw new Error(
+      [
+        `Refusing to DESTROY data in "${database}" on "${host}".`,
+        '',
+        'ALLOW_REMOTE_DB permits a forward-only migration, which adds to a',
+        'schema. This operation drops or truncates, and on a remote host that',
+        'is a separate decision.',
+        '',
+        'If you are certain:',
+        '  ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 pnpm db:reset',
+      ].join('\n'),
+    );
+  }
+}
+
+function isLocalHost(host: string): boolean {
+  return /^(localhost|127\.0\.0\.1|::1|\[::1\]|host\.docker\.internal|db)$/.test(host);
 }
 
 /**

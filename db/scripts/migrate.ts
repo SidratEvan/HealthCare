@@ -8,18 +8,24 @@
 
 import { Client } from 'pg';
 
-import { assertNotProduction, describe, requireDatabaseUrl } from './lib/env.js';
+import {
+  PG_CONNECTION_OPTIONS,
+  assertSafeTarget,
+  describe,
+  requireDatabaseUrl,
+} from './lib/env.js';
 import { applyMigrations } from './lib/migrations.js';
 
 async function main(): Promise<void> {
   const variable = process.argv.includes('--test') ? 'DATABASE_URL_TEST' : 'DATABASE_URL';
   const connectionString = requireDatabaseUrl(variable);
-  assertNotProduction(connectionString);
+  // Forward-only, so not destructive — but still a remote host needs opting into.
+  assertSafeTarget(connectionString);
 
   const { host, database } = describe(connectionString);
   console.log(`migrating ${database} on ${host}`);
 
-  const client = new Client({ connectionString });
+  const client = new Client({ connectionString, options: PG_CONNECTION_OPTIONS });
   await client.connect();
 
   try {
