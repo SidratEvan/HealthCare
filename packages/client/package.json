@@ -1,0 +1,17 @@
+{
+  "name": "@platform/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed API client, realtime session channel and the offline event queue used by the web apps (FRONTEND.md §11).",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

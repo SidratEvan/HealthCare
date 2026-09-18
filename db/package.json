@@ -1,0 +1,7 @@
+{
+  "name": "@platform/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Migrations, seeds and schema scripts (DATABASE.md §7). Forward-only; a shipped migration is never edited."
+}

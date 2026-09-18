@@ -1,0 +1,13 @@
+# Monorepo layout — BACKEND.md §1.
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "db"
+
+# Postinstall scripts are blocked unless listed here. Only packages whose
+# native binary we actually need are approved.
+#   unrs-resolver — the native module resolver behind
+#                   eslint-import-resolver-typescript, which the layering rule
+#                   uses to resolve imports to files (packages/config/eslint).
+allowBuilds:
+  unrs-resolver: true

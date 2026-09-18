@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "_comment": "Root-level tooling files only. Each workspace owns its own tsconfig and its own `typecheck` script.",
+  "extends": "@platform/config/tsconfig/node.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["*.config.ts"]
+}

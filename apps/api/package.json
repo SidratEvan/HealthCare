@@ -1,0 +1,13 @@
+{
+  "name": "@platform/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Express 5 HTTP API and Socket.IO realtime server — the queue service lives here (BACKEND.md §3, §4).",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@platform/domain": "workspace:*"
+  }
+}

@@ -1,0 +1,50 @@
+# Local development database.
+#
+# Production runs Supabase Postgres (BACKEND.md §0, §12); this file exists so
+# that `pnpm db:migrate`, `pnpm db:reset` and the repository tests have a
+# throwaway Postgres on a developer's machine with no cloud account.
+#
+#   docker compose up -d       start
+#   docker compose down        stop, keep data
+#   docker compose down -v     stop, destroy data (then pnpm db:reset)
+#
+# The image is PostGIS rather than plain Postgres because 0001_extensions.sql
+# installs postgis and earthdistance for the emergency geo search (DATABASE.md §6).
+
+name: healthcare
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: healthcare-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: healthcare
+      POSTGRES_PASSWORD: healthcare
+      POSTGRES_DB: healthcare_dev
+      # Deterministic collation, so ORDER BY on Bangla text is identical
+      # on a developer's machine and in CI.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/docker/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U healthcare -d healthcare_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Queue events are the product's hot write path; keeping the log on a
+    # tmpfs-free default and raising the connection ceiling avoids surprises
+    # when the console, api, workers and tests all connect at once.
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+      - -c
+      - log_statement=none
+
+volumes:
+  db-data:
+    name: healthcare-db-data
