@@ -11,6 +11,42 @@ A two-sided healthcare platform for Bangladesh: a Bangla-first patient PWA and a
 
 The product's entire value is that one thing: reception taps *next*, and every waiting patient's phone updates within two seconds. Everything else supports it.
 
+### 1.1 Which version this is
+
+**This repository is the pitch version.** `PRD.md` §4.1 calls it v0. It is the
+real product, built properly, but it is the first version of it — the one shown
+to hospital and clinic decision-makers to win an agreement, not the one serving
+real patients.
+
+What that means in practice:
+
+- **Everything runs on seeded demo data** (`FR-DEM-*`), and every demo row is
+  visibly labelled as demonstration data (`FR-DEM-07`).
+- **No real patient data, ever** (`FR-SEC-08`). Not in development, not in the
+  demo, not in a screenshot.
+- **Mock and log adapters are the correct implementation right now, not
+  placeholders to apologise for.** `SMS_PROVIDER=log` writes to the console and
+  the notifications table; `PAYMENT_PROVIDER=mock` always succeeds;
+  `TRAVEL_TIME_MODE=static` uses the built-in matrix. These are what the demo
+  runs on, and they are the values `DEMO_MODE=true` expects.
+- **Real credentials and real integrations come later** — after agreements with
+  hospitals or clinics. A live SMS aggregator, live bKash and Nagad keys, a
+  hospital's own HMS, the national shared health record: each arrives when
+  there is a signed counterparty to arrange it with, not before. The adapter
+  interfaces exist so that swap is a configuration change (`BACKEND.md` §0).
+- **Build to production standard anyway.** The strict types, the append-only
+  event log, the audit rows, RLS, the honest-degradation rules: none of that is
+  deferred because this is a pitch. The demo has to survive becoming the pilot,
+  and a hospital director who sees a real console is being shown something that
+  will still be true in six months.
+
+Do not add commercial content to this repository — pricing, what a module
+costs, subscription tiers, or the data terms offered to a hospital. Those are
+negotiated per agreement and live outside the repo. Product requirements that
+*handle* money stay (`FR-PAY-*`, `FR-SUP-04`, the fee breakdown in
+`FR-PAT-21`): the code has to charge, itemise and invoice. What it charges is
+not a code decision.
+
 ---
 
 ## 2. The five documents are the source of truth
