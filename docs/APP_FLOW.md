@@ -663,7 +663,7 @@ Hero: the live-rescue promise. Two primary CTAs:
 | হাসপাতালের জন্য | `BTN-C01-HOSPITAL` | `S-C-02` |
 
 ### `S-C-02` For hospitals
-Problem framing (waits, no-shows, referral leakage), the consoles with screenshots, the money argument, pricing tiers, and:
+Problem framing (waits, no-shows, referral leakage), the consoles with screenshots, and:
 
 | Control | ID | Wiring |
 |---|---|---|
@@ -671,7 +671,11 @@ Problem framing (waits, no-shows, referral leakage), the consoles with screensho
 | কনসোলে লগ ইন | `BTN-C02-LOGIN` | `console.[domain]` → `S-B-00` |
 | PDF ব্রোশিওর | `BTN-C02-PDF` | Download |
 
-### `S-C-03` For doctors · `S-C-04` Pricing · `S-C-05` About · `S-C-06` Contact · `S-C-07` Privacy · `S-C-08` Terms.
+### `S-C-03` For doctors · `S-C-04` About · `S-C-05` Contact · `S-C-06` Privacy · `S-C-07` Terms.
+
+There is no pricing page. Commercial terms are discussed with a hospital
+directly, not published — the site's job is to get a decision-maker to
+`BTN-C02-DEMO`.
 
 ---
 

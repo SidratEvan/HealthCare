@@ -79,7 +79,7 @@ The institutional side is the product. The public app is the distribution. Neith
 
 ### 1.3 Why now
 
-- Private facilities provide roughly two-thirds of care and hold the majority of registered beds, so there is a real commercial market that does not require waiting for government procurement.
+- Private facilities provide roughly two-thirds of care and hold the majority of registered beds, so a pilot can start without waiting for government procurement.
 - The government has already committed to digital health record infrastructure with open APIs, so the Platform can integrate rather than compete.
 - Smartphone penetration and mobile financial services (bKash, Nagad) make patient-side payment and notification viable.
 - No player owns live in-hospital execution.
@@ -584,10 +584,10 @@ This is the heart of the system. Specified tightly because everything else depen
 
 | Stage | Metric | Why |
 |---|---|---|
-| Prototype | Hospitals asking "when can we start?" after a demo; signed pilot LOIs | Demand signal |
+| Prototype | Hospitals asking "when can we start?" after a demo | Demand signal |
 | Pilot | Average wait time reduction; % sessions kept live; no-show rate change; reception calls per day; bed board update latency | Operational proof |
 | Pilot | Patients returning for a second booking | Product value |
-| Scale | Hospitals live; monthly active patients; emergency searches that convert to arrivals; revenue per hospital; referral leakage recovered | Business |
+| Scale | Hospitals live; monthly active patients; emergency searches that convert to arrivals; referral leakage recovered | Adoption |
 
 ---
 
@@ -621,13 +621,15 @@ This is the heart of the system. Specified tightly because everything else depen
 | # | Decision | Owner | Needed by |
 |---|---|---|---|
 | 1 | Product name and domain | Founders | Before pitch |
-| 2 | First paid module: queue-only vs full suite | Founders | Before pricing talks |
-| 3 | Pricing model: hospital subscription vs per-booking fee vs both | Founders | Pilot |
-| 4 | Legal entity in Bangladesh and contract signatory | Founders | First contract |
-| 5 | Data ownership terms offered to hospitals | Founders + legal | First contract |
-| 6 | Whether to pursue national record integration before or after private traction | Founders | v2 |
-| 7 | SMS aggregator and cost model | Tech | Pilot |
-| 8 | Hosting region and data residency | Tech | Pilot |
+| 2 | Legal entity in Bangladesh and contract signatory | Founders | First agreement |
+| 3 | Whether to pursue national record integration before or after private traction | Founders | v2 |
+| 4 | SMS aggregator | Tech | Pilot |
+| 5 | Hosting region and data residency | Tech | Pilot |
+
+> Commercial terms — what the Platform charges, which modules are sold
+> together, and what data terms are offered to a hospital — are deliberately
+> **not** recorded in this document set. They are negotiated per agreement and
+> live outside the repository.
 
 ---
 
