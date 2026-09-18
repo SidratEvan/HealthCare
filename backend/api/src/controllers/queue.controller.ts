@@ -412,7 +412,7 @@ function envelope(req: Request): { clientEventId: string | null; clientTs: strin
 }
 
 /** Who is acting, for `FR-QUE-04`. */
-function actorOf(req: Request): QueueActor {
+export function actorOf(req: Request): QueueActor {
   const principal = req.principal;
   if (principal === undefined) return { kind: 'system', job: 'anonymous' };
 

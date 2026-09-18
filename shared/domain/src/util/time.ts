@@ -61,6 +61,18 @@ export function differenceInMinutes(to: Timestamp, from: Timestamp): number {
   return Math.round((toEpochMs(to) - toEpochMs(from)) / MS_PER_MINUTE);
 }
 
+/**
+ * Whole hours between two instants, truncated toward zero.
+ *
+ * Used by the offline sync rule that forces a full re-pull past a day away
+ * (`SY-06`). Truncating rather than rounding matters there: a device 23.9
+ * hours behind is still inside the window, and rounding up would push it into
+ * a re-pull it does not need.
+ */
+export function differenceInHours(to: Timestamp, from: Timestamp): number {
+  return Math.trunc(differenceInMinutes(to, from) / 60);
+}
+
 /** The later of two instants. */
 export function maxTimestamp(a: Timestamp, b: Timestamp): Timestamp {
   return toEpochMs(a) >= toEpochMs(b) ? a : b;

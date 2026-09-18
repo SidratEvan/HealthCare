@@ -676,6 +676,139 @@ export async function listBookings(sessionId: string): Promise<bookingRepo.Booki
   return await bookingRepo.listForSession(sessionId);
 }
 
+/** One event from an offline batch, as the console queued it. */
+export interface BatchEntry {
+  readonly clientEventId: string;
+  readonly type: AppendEventInput['type'];
+  readonly payload: Record<string, unknown>;
+  readonly clientTs: string | null;
+}
+
+/** What became of one entry. */
+export type BatchOutcome =
+  | { readonly kind: 'accepted'; readonly clientEventId: string; readonly seq: number }
+  | {
+      readonly kind: 'conflict';
+      readonly clientEventId: string;
+      readonly reason: string;
+      readonly code: string;
+    };
+
+export interface BatchResult {
+  readonly outcomes: readonly BatchOutcome[];
+  readonly state: QueueState;
+  readonly etas: readonly Eta[];
+  readonly seq: number;
+  readonly serverTs: string;
+}
+
+/**
+ * Applies a whole offline batch under one lock (`SY-01`, `SY-03`).
+ *
+ * ## Why one lock rather than a loop over `appendEvent`
+ *
+ * A console that was offline for an hour comes back with a shift's worth of
+ * actions. Taking and releasing the session lock once per event would let
+ * another counter interleave between them — so a batch that was internally
+ * consistent when it was recorded could be applied into a queue that moved
+ * underneath it, halfway through. One lock for the batch means the whole
+ * replay sees one coherent queue.
+ *
+ * ## Why a rejected event does not fail the batch
+ *
+ * `SY-03`: the losing device gets a `conflict` entry and rolls *that row*
+ * back. Four of a receptionist's five actions are usually still valid — the
+ * one that lost is the one where another counter got there first. Failing the
+ * whole batch would throw away good work and leave her retyping it.
+ *
+ * So each entry is tried against the state as it stands after the previous
+ * one, and a guard rejection is recorded and stepped over rather than thrown.
+ * The events that did apply are committed; a conflict is information, not an
+ * error.
+ */
+export async function appendBatch(input: {
+  readonly sessionId: string;
+  readonly actor: QueueActor;
+  readonly entries: readonly BatchEntry[];
+}): Promise<BatchResult> {
+  return await withTransaction(async (trx) => {
+    const session = await lockSession(trx, input.sessionId);
+    let state = await loadState(trx, session);
+
+    const outcomes: BatchOutcome[] = [];
+    const applied: QueueEvent[] = [];
+
+    for (const entry of input.entries) {
+      // `SY-02`: a replayed batch is safe. An entry already in the log is
+      // reported as accepted with the sequence it originally got, because
+      // from the console's point of view it succeeded — which it did.
+      const already = await eventRepo.findByClientEventId(entry.clientEventId, trx);
+      if (already !== null) {
+        outcomes.push({
+          kind: 'accepted',
+          clientEventId: entry.clientEventId,
+          seq: already.seq,
+        });
+        continue;
+      }
+
+      try {
+        const result = await applyOne(trx, session, state, {
+          sessionId: input.sessionId,
+          type: entry.type,
+          payload: entry.payload,
+          actor: input.actor,
+          clientEventId: entry.clientEventId,
+          clientTs: entry.clientTs,
+        });
+
+        state = result.state;
+        applied.push(result.event);
+        outcomes.push({
+          kind: 'accepted',
+          clientEventId: entry.clientEventId,
+          seq: result.event.seq,
+        });
+      } catch (error) {
+        // A guard refusal is the expected outcome of a race, not a fault.
+        // Anything else — a dropped connection, a constraint violation — is a
+        // real failure and must abort the transaction rather than be
+        // mis-reported to the console as a conflict it could resolve.
+        if (!(error instanceof AppError) || error.code !== 'QUEUE_GUARD_FAILED') throw error;
+
+        outcomes.push({
+          kind: 'conflict',
+          clientEventId: entry.clientEventId,
+          reason: error.message,
+          code: typeof error.details?.['guard'] === 'string' ? error.details['guard'] : error.code,
+        });
+      }
+    }
+
+    // Nothing applied — every entry was a replay or a conflict. There is no
+    // new state to persist or broadcast, so report the queue as it stands.
+    if (applied.length === 0) {
+      const etas = computeEtas(state, nowTs());
+      return {
+        outcomes,
+        state,
+        etas,
+        seq: state.lastSeq,
+        serverTs: nowTs(),
+      };
+    }
+
+    const settled = await settle(trx, session, state, applied);
+    return {
+      outcomes,
+      state: settled.state,
+      etas: settled.etas,
+      seq: settled.seq,
+      serverTs: settled.serverTs,
+    };
+  });
+}
+
 /**
  * The events a client missed, for the resume handshake (`SY-01`).
  *
