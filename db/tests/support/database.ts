@@ -10,11 +10,14 @@
 
 import { Client } from 'pg';
 
-import { resolveTestDatabaseUrl } from '../../scripts/lib/env.js';
+import { PG_CONNECTION_OPTIONS, resolveTestDatabaseUrl } from '../../scripts/lib/env.js';
 
 /** Opens a client against the test database built by the global setup. */
 export async function connect(): Promise<Client> {
-  const client = new Client({ connectionString: resolveTestDatabaseUrl() });
+  const client = new Client({
+    connectionString: resolveTestDatabaseUrl(),
+    options: PG_CONNECTION_OPTIONS,
+  });
   await client.connect();
   return client;
 }

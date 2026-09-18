@@ -27,6 +27,37 @@ docker/       first-run init for the local Postgres container
 - **The demo and dev databases contain no real patient data, ever** (`FR-SEC-08`),
   and every demo row is visibly labelled as demonstration data (`FR-DEM-07`).
 
+## Extensions live in their own schema
+
+PostGIS, pgcrypto, uuid-ossp, cube and earthdistance are installed into an
+`extensions` schema, not into `public` (0001). That is Supabase's convention,
+and following it locally too means the container and the hosted database have
+the same layout — so a migration that applies cleanly on one applies cleanly on
+the other.
+
+The consequence is that **every connection must carry
+`-c search_path=public,extensions`**. `ST_MakePoint`, `geography` and
+`gen_random_uuid` are otherwise unresolvable, and the failure appears at
+runtime in the emergency geo search rather than at migration time. There is one
+definition of it, `PG_CONNECTION_OPTIONS` in `scripts/lib/env.ts`, used by
+every connection factory including the API pool.
+
+## Which databases these scripts will touch
+
+`assertSafeTarget` decides on the **host**, not the database name:
+
+- a local host is free
+- any other host needs `ALLOW_REMOTE_DB=1`
+- a destructive operation on a remote host also needs `ALLOW_DESTRUCTIVE_DB=1`
+
+The database name proves nothing, which is why it is not consulted: a hosted
+Postgres is called `postgres` whether it is a scratch project or a pilot
+hospital. So pointing the scripts at a Supabase project is deliberate:
+
+```bash
+ALLOW_REMOTE_DB=1 pnpm db:migrate
+```
+
 ## Local database
 
 ```bash

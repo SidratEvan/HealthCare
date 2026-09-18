@@ -12,14 +12,27 @@
 
 import { Client } from 'pg';
 
-import { resolveTestDatabaseUrl, describe as describeUrl } from '../../scripts/lib/env.js';
+import {
+  assertSafeTarget,
+  PG_CONNECTION_OPTIONS,
+  resolveTestDatabaseUrl,
+  describe as describeUrl,
+} from '../../scripts/lib/env.js';
 import { rebuildFromScratch } from '../../scripts/lib/migrations.js';
 
 export default async function setup(): Promise<void> {
   const connectionString = resolveTestDatabaseUrl();
   const { host, database } = describeUrl(connectionString);
 
-  const client = new Client({ connectionString, connectionTimeoutMillis: 5_000 });
+  // The suite drops and recreates the schema. On a remote host that needs an
+  // explicit decision, whatever the database is called.
+  assertSafeTarget(connectionString, { destructive: true });
+
+  const client = new Client({
+    connectionString,
+    connectionTimeoutMillis: 5_000,
+    options: PG_CONNECTION_OPTIONS,
+  });
 
   try {
     await client.connect();

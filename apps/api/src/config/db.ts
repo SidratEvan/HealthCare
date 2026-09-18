@@ -49,6 +49,11 @@ export const pool = new Pool({
   statement_timeout: 15_000,
   query_timeout: 15_000,
   application_name: 'healthcare-api',
+  // PostGIS, pgcrypto and earthdistance live in the `extensions` schema
+  // (migration 0001), which is not on the default search_path. Without this,
+  // `ST_MakePoint` and `geography` are unresolvable and the emergency geo
+  // search fails at runtime rather than at migration time (FR-PAT-43).
+  options: '-c search_path=public,extensions',
 });
 
 pool.on('error', (error) => {

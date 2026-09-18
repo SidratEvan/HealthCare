@@ -11,25 +11,47 @@
 
 -- ---------------------------------------------------------------------------
 -- Extensions
+--
+-- They go in their own `extensions` schema rather than in `public`.
+--
+-- That is Supabase's convention, and following it everywhere means the local
+-- container and the hosted database have the same layout — so a migration that
+-- applies cleanly on one applies cleanly on the other. PostGIS in `public`
+-- locally and in `extensions` on Supabase is exactly how a generated column
+-- that works on a developer's machine fails at deploy with "function
+-- st_setsrid(...) does not exist".
+--
+-- Every migration that names a type or function from one of these sets its own
+-- search_path, rather than relying on the connecting role's default — which
+-- would make the shape of the schema depend on how a role happens to be
+-- configured. See 0004, where the generated `geo` column needs it.
 -- ---------------------------------------------------------------------------
 
+-- Resolves against both schemas; new objects land in `public` because it comes
+-- first. SET LOCAL, so it lasts exactly as long as this migration's
+-- transaction.
+SET LOCAL search_path = public, extensions;
+
+CREATE SCHEMA IF NOT EXISTS extensions;
+GRANT USAGE ON SCHEMA extensions TO PUBLIC;
+
 -- gen_random_uuid(), digest(), crypt() — used for UUIDs and for hashing tokens.
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
 -- uuid-ossp is named in DATABASE.md §7. It is kept for uuid_nil() and for
 -- parity with the document; v7 generation below is our own, because no
 -- PostgreSQL 16 extension provides it.
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
 
 -- Geospatial. `hospitals` carries a geography(Point,4326) column with a GiST
 -- index; emergency search filters by radius and then ranks (DATABASE.md §6).
-CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA extensions;
 
 -- earthdistance (and its cube dependency) is named in DATABASE.md §7. PostGIS
 -- geography is what the ranking query uses; earthdistance remains available for
 -- the cheap bounding-box prefilter.
-CREATE EXTENSION IF NOT EXISTS cube;
-CREATE EXTENSION IF NOT EXISTS earthdistance;
+CREATE EXTENSION IF NOT EXISTS cube WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS earthdistance WITH SCHEMA extensions;
 
 -- ---------------------------------------------------------------------------
 -- DB-P9: IDs are UUID v7 — time-sortable, generated server-side
