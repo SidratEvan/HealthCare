@@ -7,9 +7,13 @@ document wins.
 
 ```
 migrations/   0001 … 0015, sequential, forward-only, one concern per file
-seeds/        seed_00 … seed_07 plus reset.ts — the demo database (FR-DEM-*)
-scripts/      rebuild_queue_state.ts, verify_schema.ts
+seeds/        the demo database (FR-DEM-*)
+  data/       the declared demo set — facilities, doctors, name pools
+  lib/        the machinery — runner, seeded RNG, batch insert, event log
+  seed_00 … seed_07, run.ts (order), seed.ts + reset.ts (commands), graph.ts
+scripts/      migrate.ts, verify_schema.ts
 docker/       first-run init for the local Postgres container
+tests/        the schema suite and the seed suite
 ```
 
 ## Rules
@@ -72,11 +76,66 @@ Two databases are created on first start: `healthcare_dev` for development and
 ```bash
 pnpm db:migrate        # apply pending migrations, in order
 pnpm db:verify         # assert the DATABASE.md §0 invariants
-pnpm test              # unit tests + the schema suite
+pnpm db:seed           # write the demo data into an empty database
+pnpm db:reset          # truncate every application table, then reseed
+pnpm test              # unit tests, the schema suite and the seed suite
 ```
 
-`pnpm db:seed` and `pnpm db:reset` arrive with step 5 (`feat/seed-demo`),
-together with `seeds/seed_00` … `seed_07`.
+Both refuse to run unless `DEMO_MODE=true`. Every row they write is labelled as
+demonstration data (`FR-DEM-07`), and a database that is not in demo mode is
+not a database to put it in (`FR-SEC-08`).
+
+## The seeds
+
+`seeds/` is the one description of demo data in this repository. `data/` holds
+the **declared demo set** — six facilities, forty doctors, the name pools
+patients are composed from — and CLAUDE.md §8 forbids inventing a facility,
+practitioner or clinical string outside it. `lib/` holds the machinery; the
+numbered modules write the rows; `run.ts` holds the order they run in.
+
+The schema suite builds its fixtures from the same declaration
+(`seeds/graph.ts`), so there is no second description to drift.
+
+### It derives, it does not invent
+
+`queue_state`, `bookings.status` and the projections on `sessions` are never
+written directly. The seeds append a real event log and replay it through the
+reducer in `@platform/domain`, then write whatever the reducer says (`DB-P1`).
+A seed that wrote a plausible-looking cache would produce a demo that disagrees
+with its own log the moment step 6 replays it.
+
+### A reset is a known state, not merely a plausible one
+
+Every random draw comes from one seeded generator (`DEMO_SEED` in
+`lib/random.ts`), so the same reset produces the same screen twice — which is
+what `FR-DEM-06` asks for and what the tests assert on. Changing that seed
+changes the whole demo.
+
+### Modules that cannot run yet say so
+
+`seed_05_beds` needs migration 0008 and `seed_06_ancillary` needs 0011. The
+runner checks each module's tables before calling it and skips with the
+migration name and the requirement left uncovered, rather than producing an
+empty ward board silently. `FR-DEM-04` and `FR-DEM-05` are therefore **not
+covered in this version**; `seed_04_history` runs but defers prescriptions and
+reports to migration 0007.
+
+### Why `db:reset` truncates rather than dropping the schema
+
+`DROP SCHEMA public CASCADE` on a Supabase project takes Supabase's own objects
+with it. DATABASE.md §7 says "truncate + reseed in one command", and that is
+what `reset.ts` does.
+
+`queue_events` refuses TRUNCATE by trigger (`DB-P1`), so the reset disables
+that one statement-level guard inside the same transaction as the truncate and
+re-arms it before committing — then asserts, in a separate statement, that it
+is armed. The row-level `trg_queue_events_no_mutate` is never touched, so no
+recorded fact can be altered even during a reset.
+
+Note that the comment in migration `0006_queue_events.sql` still says a reset
+"drops the schema". It predates Supabase and cannot be corrected in place: a
+shipped migration is never edited, and editing it would change its checksum and
+stop the next `db:migrate`.
 
 ## How the runner behaves
 
