@@ -209,6 +209,38 @@ export async function insertWalkin(
   return row.id;
 }
 
+/**
+ * Whether a patient or guest holds a booking in this session.
+ *
+ * Used by the socket handshake to decide who may listen to a queue. A booking
+ * id is checked first and on its own: a tracking link names exactly one
+ * booking (`FR-GST-05`), and a guest who later books elsewhere must not find
+ * that their old link now opens a different chamber.
+ */
+export async function existsForPrincipal(
+  sessionId: string,
+  who: {
+    readonly userId: string | null;
+    readonly guestId: string | null;
+    readonly bookingId: string | null;
+  },
+): Promise<boolean> {
+  const result = await sql<{ present: number }>`
+    SELECT 1 AS present
+      FROM bookings
+     WHERE session_id = ${sessionId}
+       AND deleted_at IS NULL
+       AND (
+         (${who.bookingId}::uuid IS NOT NULL AND id = ${who.bookingId}::uuid)
+         OR (${who.userId}::uuid IS NOT NULL AND booked_by_user_id = ${who.userId}::uuid)
+         OR (${who.guestId}::uuid IS NOT NULL AND booked_by_guest_id = ${who.guestId}::uuid)
+       )
+     LIMIT 1
+  `.execute(db);
+
+  return result.rows.length > 0;
+}
+
 /** The account or guest a booking belongs to, for the ownership check. */
 export async function ownerOf(
   bookingId: string,

@@ -21,7 +21,7 @@ Last updated: end of step 6 (`feat/queue-service`).
 | 3 | `feat/api-foundation` | merged — env, db, logger, middleware, errors, health |
 | ~~4~~ | ~~`feat/auth-guest`~~ | **deferred, do not build** — see `CLAUDE.md` §4.1 |
 | 5 | `feat/seed-demo` | merged — `database/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) |
-| 6 | `feat/queue-service` | merged — `appendEvent()`, 13 queue routes, realtime seam |
+| 6 | `feat/queue-service` | merged — `appendEvent()`, 13 queue routes, realtime |
 | **7** | **`feat/ui-tokens`** | **next** — `shared/ui`: tokens and primitives |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
@@ -37,7 +37,15 @@ tokens stays; no OTP flows, staff passwords or argon2id are to be written. The
 guest tracking link (`FR-GST-05`) is kept, because it is a capability token the
 demo depends on rather than a login.
 
-`pnpm test` reports 697 at the time of writing: 464 unit, 153 api, 80 schema.
+`pnpm test` reports 705 at the time of writing: 464 unit, 161 api, 80 schema.
+
+**Socket.IO is wired** (`socket.io` 4.8.3, added with the owner's permission).
+`realtime/server.ts` is the only file that imports it; everything else
+publishes through the one-method interface in `realtime/emit.ts`, which still
+records instead of sending until `attachRealtime` runs — so the queue tests
+need no port. The handshake reuses the HTTP `verifyToken`/`toPrincipal`, the
+resume-from-seq path is implemented (`SY-01`), and `realtime.test.ts` binds a
+real port and proves a subscribed client is told within the `NFR-01` budget.
 
 **Supabase holds the seeded demo data** as of the end of step 5: 6 hospitals,
 40 doctors, 200 patients, 1,181 bookings, 1,221 queue events, and one
@@ -151,15 +159,6 @@ Raised while building the seeds (step 5):
    as a fallback. The document stands until ruled otherwise, so step 7 builds
    tokens on Anek Bangla — but the canvas's serif display carries the hero
    numeral well, and switching later is a token change, not a rewrite.
-
-11. **Socket.IO is not installed.** `BACKEND.md` §0 fixes it as the realtime
-   transport, and step 6 built everything up to it: `realtime/rooms.ts` names
-   the rooms and the membership rules, `realtime/emit.ts` is the typed
-   publisher behind a one-method interface, and the queue service publishes
-   through it. The default emitter records instead of sending, which is what
-   the tests assert on. Adding the dependency needs the owner's yes
-   (CLAUDE.md §7); until then nothing is broadcast over a wire, and the socket
-   server plus the handshake in `realtime/auth.ts` are what remain of §6.
 
 Two are the owner's and are not code:
 

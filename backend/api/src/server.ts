@@ -8,8 +8,10 @@
  * broadcasting before the process exits, or the console's optimistic state and
  * the log disagree about whether a patient was called (FR-QUE-51).
  *
- * Socket.IO attaches to this same HTTP server in step 6, when there are queue
- * rooms to join (BACKEND.md §6).
+ * Socket.IO attaches to this same HTTP server (BACKEND.md §6). Its rooms are
+ * where `queue.updated` reaches a waiting patient's phone within the two
+ * seconds NFR-01 promises, so the socket server shutting down cleanly matters
+ * for the same reason the HTTP server does.
  */
 
 import { createServer, type Server } from 'node:http';
@@ -20,6 +22,9 @@ import { createApp } from './app.js';
 import { closeDatabase } from './config/db.js';
 import { logger } from './config/logger.js';
 import { env } from './env.js';
+import { attachRealtime } from './realtime/server.js';
+
+import type { Server as SocketServer } from 'socket.io';
 
 /**
  * How long an in-flight request has to finish before the process exits
@@ -32,6 +37,7 @@ const SHUTDOWN_GRACE_MS = 20_000;
 
 export function startServer(): Server {
   const server = createServer(createApp());
+  const io = attachRealtime(server);
 
   server.listen(env.PORT, () => {
     logger.info(
@@ -46,11 +52,11 @@ export function startServer(): Server {
     );
   });
 
-  installShutdownHandlers(server);
+  installShutdownHandlers(server, io);
   return server;
 }
 
-function installShutdownHandlers(server: Server): void {
+function installShutdownHandlers(server: Server, io: SocketServer): void {
   let shuttingDown = false;
 
   const shutdown = (signal: string): void => {
@@ -58,6 +64,12 @@ function installShutdownHandlers(server: Server): void {
     shuttingDown = true;
 
     logger.info({ signal }, 'shutting down');
+
+    // Tell every connected console and phone to reconnect elsewhere before the
+    // process goes. Without this they wait for a ping timeout — up to a
+    // minute of a queue that looks live and is not, which is worse than a
+    // visible disconnection (PRD.md §3.2).
+    void io.close();
 
     // Stop accepting new connections; in-flight requests keep their sockets.
     server.close(() => {
