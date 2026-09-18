@@ -357,7 +357,7 @@ Offline consoles: `id`, `device_id`, `staff_user_id`, `hospital_id`, `last_ack_s
 
 ## 3. Event payload contracts
 
-Stored in `queue_events.payload`. These shapes are shared with the client via `packages/domain` — the same TypeScript types validate both sides.
+Stored in `queue_events.payload`. These shapes are shared with the client via `shared/domain` — the same TypeScript types validate both sides.
 
 ```jsonc
 DOCTOR_ARRIVED      { "arrivedAt": "2026-09-17T11:12:00Z", "minutesLate": 12 }

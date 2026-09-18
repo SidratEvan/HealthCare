@@ -398,7 +398,7 @@ Patient app is comfortable density. Console is compact density: 56 px rows, 44 p
   /config           # eslint, tsconfig, tailwind preset
 ```
 
-`packages/ui` is the only place styling decisions exist. If a colour or radius appears in an app package, it is a bug.
+`shared/ui` is the only place styling decisions exist. If a colour or radius appears in an app package, it is a bug.
 
 ---
 
@@ -415,7 +415,7 @@ Every queue action follows one shape:
 5. On rejection (e.g. another counter already called that patient), roll the row back with an explanatory toast (`FR-QUE-53`).
 6. On network failure, leave state applied and increment the pending counter; retry with backoff.
 
-The queue reducer lives in `packages/domain` and is **the same code** the server uses to derive state, so client and server can never disagree about what an event means.
+The queue reducer lives in `shared/domain` and is **the same code** the server uses to derive state, so client and server can never disagree about what an event means.
 
 ### 11.2 Realtime subscription hook
 
@@ -482,7 +482,7 @@ A screen cannot merge until every line passes.
 
 ## 14. Handover notes for implementation
 
-1. Build `packages/ui` first: tokens, then Button/Input/Card/Chip/Sheet/Toast, then the signature components in §6. Nothing else starts until these exist, or the design will fragment.
+1. Build `shared/ui` first: tokens, then Button/Input/Card/Chip/Sheet/Toast, then the signature components in §6. Nothing else starts until these exist, or the design will fragment.
 2. Build `S-A-08 LiveSerial` and `S-B-02 Reception` next, together, on two devices. They are the product; everything else is supporting cast.
 3. Treat the existing design canvas as the visual reference for layout and tone, not as final markup — it was drawn to communicate, and production components are built to these specs.
 4. Every new screen starts by naming its four states before its happy path is coded.
