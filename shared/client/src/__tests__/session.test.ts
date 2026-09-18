@@ -58,41 +58,58 @@ describe('ApiClient', () => {
     return new ApiClient({ baseUrl: 'https://api.test', getToken: () => token, fetchImpl });
   }
 
+  /**
+   * A fetch double that keeps fetch's own signature.
+   *
+   * Declaring the parameters rather than casting is what lets the assertions
+   * below read `calls[0][1]` as a `RequestInit` — an argument-less `vi.fn()`
+   * infers a zero-length tuple and every inspection becomes a cast.
+   */
+  function fetchDouble(response: () => Promise<Response>) {
+    return vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => response());
+  }
+
+  /** The `RequestInit` a double was called with. */
+  function initOf(mock: ReturnType<typeof fetchDouble>): RequestInit {
+    return mock.mock.calls[0]?.[1] ?? {};
+  }
+
+  function headersOf(mock: ReturnType<typeof fetchDouble>): Record<string, string> {
+    return (initOf(mock).headers ?? {}) as Record<string, string>;
+  }
+
   it('unwraps the success envelope', async () => {
-    const fetchImpl = vi.fn(() => Promise.resolve(ok({ seq: 7 })));
+    const fetchImpl = fetchDouble(() => Promise.resolve(ok({ seq: 7 })));
     const result = await client(fetchImpl).get<{ seq: number }>('/x');
     expect(result).toEqual({ seq: 7 });
   });
 
   it('sends the bearer token when there is one, and omits it when there is not', async () => {
-    const fetchImpl = vi.fn(() => Promise.resolve(ok({})));
-    await client(fetchImpl as unknown as typeof fetch).get('/x');
-    const withToken = fetchImpl.mock.calls[0]?.[1] as RequestInit;
-    expect((withToken.headers as Record<string, string>)['authorization']).toBe('Bearer tok');
+    const fetchImpl = fetchDouble(() => Promise.resolve(ok({})));
+    await client(fetchImpl).get('/x');
+    expect(headersOf(fetchImpl)['authorization']).toBe('Bearer tok');
 
-    const anon = vi.fn(() => Promise.resolve(ok({})));
-    await client(anon as unknown as typeof fetch, null).get('/x');
-    const without = anon.mock.calls[0]?.[1] as RequestInit;
-    expect((without.headers as Record<string, string>)['authorization']).toBeUndefined();
+    const anon = fetchDouble(() => Promise.resolve(ok({})));
+    await client(anon, null).get('/x');
+    expect(headersOf(anon)['authorization']).toBeUndefined();
   });
 
   it('sends no body on a GET', async () => {
     // `exactOptionalPropertyTypes` aside, a GET with an explicit undefined body
     // is not the same as one without, and some runtimes care.
-    const fetchImpl = vi.fn(() => Promise.resolve(ok({})));
-    await client(fetchImpl as unknown as typeof fetch).get('/x');
-    expect((fetchImpl.mock.calls[0]?.[1] as RequestInit).body).toBeUndefined();
+    const fetchImpl = fetchDouble(() => Promise.resolve(ok({})));
+    await client(fetchImpl).get('/x');
+    expect(initOf(fetchImpl).body).toBeUndefined();
   });
 
   it('carries an idempotency key when given one', async () => {
-    const fetchImpl = vi.fn(() => Promise.resolve(ok({})));
-    await client(fetchImpl as unknown as typeof fetch).post('/x', { a: 1 }, 'key-1');
-    const init = fetchImpl.mock.calls[0]?.[1] as RequestInit;
-    expect((init.headers as Record<string, string>)['idempotency-key']).toBe('key-1');
+    const fetchImpl = fetchDouble(() => Promise.resolve(ok({})));
+    await client(fetchImpl).post('/x', { a: 1 }, 'key-1');
+    expect(headersOf(fetchImpl)['idempotency-key']).toBe('key-1');
   });
 
   it('throws ApiError with the stable code the UI maps to Bangla copy', async () => {
-    const fetchImpl = vi.fn(() =>
+    const fetchImpl = fetchDouble(() =>
       Promise.resolve(
         new Response(
           JSON.stringify({
@@ -104,8 +121,8 @@ describe('ApiClient', () => {
       ),
     );
 
-    await expect(client(fetchImpl as unknown as typeof fetch).get('/x')).rejects.toThrow(ApiError);
-    await expect(client(fetchImpl as unknown as typeof fetch).get('/x')).rejects.toMatchObject({
+    await expect(client(fetchImpl).get('/x')).rejects.toThrow(ApiError);
+    await expect(client(fetchImpl).get('/x')).rejects.toMatchObject({
       code: 'QUEUE_GUARD_FAILED',
       status: 422,
     });
@@ -114,9 +131,7 @@ describe('ApiClient', () => {
   it('throws NetworkError when the request never reached the server', async () => {
     // The distinction the whole offline design turns on: "the server said no"
     // rolls a row back, "there was no server" leaves it applied and queued.
-    const fetchImpl = vi.fn(() => Promise.reject(new Error('Failed to fetch')));
-    await expect(client(fetchImpl as unknown as typeof fetch).get('/x')).rejects.toThrow(
-      NetworkError,
-    );
+    const fetchImpl = fetchDouble(() => Promise.reject(new Error('Failed to fetch')));
+    await expect(client(fetchImpl).get('/x')).rejects.toThrow(NetworkError);
   });
 });

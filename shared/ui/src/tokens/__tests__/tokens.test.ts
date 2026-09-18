@@ -25,7 +25,19 @@ import {
   cssVar,
 } from '../index.js';
 
-const css = readFileSync(resolve(import.meta.dirname, '../tokens.css'), 'utf8');
+/**
+ * Both files, read together.
+ *
+ * `tokens.css` holds the raw custom properties; `styles.css` holds the
+ * `@theme` block, which owns radius and the type families because those names
+ * are Tailwind v4's own namespaces and mapping them to themselves would be
+ * circular. Scanning the pair keeps one assertion surface over what is, in
+ * effect, one declaration split across two files for a tooling reason.
+ */
+const tokensCss = readFileSync(resolve(import.meta.dirname, '../tokens.css'), 'utf8');
+const themeCss = readFileSync(resolve(import.meta.dirname, '../../styles.css'), 'utf8');
+const css = `${tokensCss}
+${themeCss}`;
 
 /** Reads `--name: value;` out of the stylesheet. */
 function declared(name: string): string | null {
@@ -47,7 +59,12 @@ describe('every colour token exists in both layers, with the same value', () => 
   it('defines nothing in CSS that TypeScript does not know about', () => {
     // The other direction: a colour added to the stylesheet alone would be
     // invisible to the contrast checks, which is how an unverified pair ships.
-    const names = [...css.matchAll(/--((?:bg|ink|brand|alert|warn|line)-[a-z0-9-]+):/g)]
+    //
+    // Scanned over `tokens.css` alone, because that is where every colour is
+    // declared — `styles.css` only maps them into Tailwind's namespace, and
+    // its type scale carries `--text-*--line-height` properties that a looser
+    // pattern reads as a colour called `line-height`.
+    const names = [...tokensCss.matchAll(/--((?:bg|ink|brand|alert|warn|line)-[a-z0-9-]+):/g)]
       .map((match) => match[1])
       .filter((name): name is string => name !== undefined);
 
@@ -78,6 +95,15 @@ describe('the other scales agree', () => {
 });
 
 describe('the rules that are easy to break quietly', () => {
+  it('clears Tailwind default palette and tracking, so the banned ones cannot be typed', () => {
+    // FRONTEND.md §0.2 bans an indigo primary — the default accent of every
+    // generated app — and TYP-02 bans letter-spacing on Bangla. Clearing both
+    // namespaces means `bg-indigo-500` and `tracking-wide` do not exist,
+    // rather than merely being discouraged.
+    expect(themeCss).toContain('--color-*: initial');
+    expect(themeCss).toContain('--tracking-*: initial');
+  });
+
   it('names no banned typeface anywhere in the token layer', () => {
     // FRONTEND.md §0.2: Inter, Roboto, Poppins and Montserrat are the faces
     // that mark an interface as generated. Kalpurush and SolaimanLipi read as

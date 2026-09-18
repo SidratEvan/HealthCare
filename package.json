@@ -12,6 +12,8 @@
     "build": "pnpm -r --if-present build",
     "dev": "pnpm -r --parallel --if-present dev",
     "dev:api": "pnpm --filter @platform/api dev",
+    "dev:console": "pnpm --filter @platform/console dev",
+    "dev:patient": "pnpm --filter @platform/patient dev",
     "typecheck": "pnpm -r --if-present typecheck",
     "db:migrate": "pnpm --filter @platform/database migrate",
     "db:seed": "pnpm --filter @platform/database seed",

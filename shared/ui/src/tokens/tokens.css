@@ -47,13 +47,11 @@
   --line-soft: #e2ded4;
   --line-hairline: #efebe2;
 
-  /* --- Radii — varied by size, never uniform (FRONTEND.md §3.2) ---------- *
-   * A single radius everywhere is a tell. Radius scales with the element.   */
-  --radius-xs: 8px; /* chips, badges, inline tags */
-  --radius-sm: 12px; /* inputs, small buttons, row actions */
-  --radius-md: 16px; /* cards, tiles, primary buttons */
-  --radius-lg: 22px; /* hero cards, bottom sheets */
-  --radius-pill: 999px; /* filter chips and avatars only */
+  /* --- Radii and type families ------------------------------------------ *
+   * Declared in `../styles.css` instead, inside `@theme`. Tailwind v4's own
+   * namespaces are `--radius-*` and `--font-*` — the same names — so defining
+   * them here as well would mean mapping a variable to itself. The theme
+   * block is therefore where they live, and it is still one definition.      */
 
   /* --- Elevation — surface + hairline, not heavy shadow (§3.3) ----------- *
    * Neutral-tinted always; never coloured, never two layers at once.        */
