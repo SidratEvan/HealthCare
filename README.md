@@ -58,15 +58,22 @@ docker compose up -d            # Postgres 16 + PostGIS on localhost:5432
 
 ```bash
 pnpm dev              # every app that has a dev server
+pnpm dev:api          # the API alone, with reload
 pnpm build
 pnpm typecheck
 pnpm lint             # includes the architectural boundaries
 pnpm format
-pnpm test             # unit + integration
+pnpm test             # unit + api + schema
 pnpm verify           # typecheck + lint + format + test, as CI runs them
+
+pnpm db:migrate       # apply pending migrations
+pnpm db:verify        # assert the DATABASE.md §0 invariants
 ```
 
-`pnpm db:migrate`, `pnpm db:seed`, `pnpm db:reset`, `pnpm db:verify` and
+The test suite runs as three projects: `unit` needs nothing, `api` and `schema`
+need `docker compose up -d`. Run one with `pnpm vitest run --project unit`.
+
+`pnpm db:seed`, `pnpm db:reset`, `pnpm dev:patient`, `pnpm dev:console` and
 `pnpm test:e2e` are wired up by the steps that introduce them (see
 [CLAUDE.md](CLAUDE.md) §4).
 

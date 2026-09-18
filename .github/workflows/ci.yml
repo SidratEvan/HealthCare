@@ -6,7 +6,7 @@
 #
 #   step 1  feat/db-core            → Postgres service, schema suite, db:verify  ✓
 #   step 2  feat/domain-queue       → reducer and replay-determinism units
-#   step 3  feat/api-foundation     → Supertest auth-matrix suite
+#   step 3  feat/api-foundation     → Supertest auth-matrix suite              ✓
 #   step 7  feat/ui-tokens          → a11y checks, bn/en message-key parity (I18N-02)
 #   step 10 feat/patient-live-serial → the two-device queue E2E smoke, which is
 #                                      the product's canary and is never skipped
@@ -108,7 +108,8 @@ jobs:
       - name: Verify schema invariants
         run: pnpm db:verify
 
-      # Unit tests, plus the schema suite, which rebuilds healthcare_test from
-      # scratch to prove the migrations apply to a fresh database.
+      # Three projects: the pure domain units, the Supertest auth matrix, and
+      # the schema suite that rebuilds healthcare_test from scratch to prove
+      # the migrations apply to a fresh database.
       - name: Test
         run: pnpm test

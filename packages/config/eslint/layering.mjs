@@ -162,7 +162,13 @@ export const layering = [
   // ---------------------------------------------------------------------------
   {
     files: ['apps/*/src/**/*.ts'],
-    ignores: ['apps/*/src/repositories/**', 'apps/*/src/config/db.ts'],
+    ignores: [
+      'apps/*/src/repositories/**',
+      // The db layer describing itself: the pool, and the table types that
+      // `Generated<>` and `ColumnType<>` come from.
+      'apps/*/src/config/db.ts',
+      'apps/*/src/config/schema.ts',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',

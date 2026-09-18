@@ -121,7 +121,11 @@ export const base = tseslint.config(
       ],
       'import-x/no-cycle': ['error', { maxDepth: Infinity, ignoreExternal: true }],
       'import-x/no-self-import': 'error',
-      'import-x/no-useless-path-segments': ['error', { noUselessIndex: true }],
+      // `noUselessIndex` is deliberately off. Under NodeNext there is no
+      // directory resolution, so `./routes/index.js` is not a useless
+      // segment — it is the only spelling Node can resolve, and the autofix
+      // for that option rewrites it to `./routes` and breaks the import.
+      'import-x/no-useless-path-segments': ['error', { noUselessIndex: false }],
       'import-x/no-duplicates': 'error',
       'import-x/order': [
         'error',
@@ -213,11 +217,37 @@ export const overrides = tseslint.config(
       '@typescript-eslint/no-non-null-assertion': 'off',
       'no-restricted-syntax': 'off',
       'no-console': 'off',
+
+      // Supertest types `response.body` as `any`, because an HTTP response
+      // genuinely is untyped until something asserts on it — which is what
+      // these tests are for. Scoped to tests so the rules keep their teeth in
+      // the code that handles real responses.
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
       // A repository test asserts on schema-level guarantees — the append-only
       // trigger on queue_events, RLS scoping, serial allocation under
       // concurrency (BACKEND.md §11) — and reaches the database directly to
       // do it. The layering rule still applies to everything that is not a test.
       'no-restricted-imports': 'off',
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Express middleware attaches to the request object. That is the framework's
+  // contract, not accidental mutation: `req.principal`, `req.requestId` and the
+  // parsed `req.body` are how one middleware hands its work to the next
+  // (BACKEND.md §3).
+  //
+  // Scoped to `middleware/` rather than switched off repo-wide, because
+  // `no-param-reassign` with `props` is worth keeping everywhere else — a
+  // service that mutates a state object passed into it would be a real bug in
+  // a codebase whose reducer is built on immutable state.
+  // ---------------------------------------------------------------------------
+  {
+    files: ['apps/*/src/middleware/**/*.ts'],
+    rules: {
+      'no-param-reassign': 'off',
     },
   },
 
