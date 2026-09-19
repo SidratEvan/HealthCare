@@ -16,7 +16,7 @@
  * online the whole time.
  */
 
-import { id, time } from '@platform/domain';
+import { clampConsultSeconds, id, time } from '@platform/domain';
 import type { Eta, QueueActor, QueueEvent, QueueState, Timestamp } from '@platform/domain';
 
 import { validationFailed } from '../errors/AppError.js';
@@ -71,7 +71,7 @@ export async function pushBatch(input: {
   const result: BatchResult = await queueService.appendBatch({
     sessionId: input.sessionId,
     actor: input.actor,
-    entries: ordered,
+    entries: ordered.map(withPlausiblePayload),
   });
 
   const accepted: { clientEventId: string; seq: number }[] = [];
@@ -165,6 +165,32 @@ export function requiresFullResync(
 
   const hours = time.differenceInHours(id<Timestamp>(now), id<Timestamp>(lastSyncedAt));
   return hours >= MAX_OFFLINE_HOURS;
+}
+
+/**
+ * Brings a client-supplied payload inside the bounds the schema enforces.
+ *
+ * This endpoint is the one place an arbitrary payload reaches the event log:
+ * the online queue routes measure a consultation server-side, while a replayed
+ * batch necessarily carries what the console measured hours earlier. A console
+ * left with a patient marked in-chamber overnight reports a fourteen-hour
+ * consultation, and `bookings_consult_seconds_plausible` refuses it — which
+ * arrived as a 500 rather than as anything a client could act on.
+ *
+ * Clamping rather than rejecting is deliberate. The event is a real thing that
+ * really happened; only the duration is implausible, and losing the whole
+ * action because a receptionist forgot to tap "done" before going home would
+ * be the worse failure. `clampConsultSeconds` is the domain's own bound, so
+ * the console and the server agree on what plausible means.
+ */
+function withPlausiblePayload(entry: BatchEntry): BatchEntry {
+  const measured = entry.payload['consultSeconds'];
+  if (typeof measured !== 'number') return entry;
+
+  return {
+    ...entry,
+    payload: { ...entry.payload, consultSeconds: clampConsultSeconds(measured) },
+  };
 }
 
 /**

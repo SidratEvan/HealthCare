@@ -22,6 +22,8 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
+    // Playwright owns `e2e/`; vitest must not try to collect those specs.
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
     projects: [
       {
         test: {

@@ -455,6 +455,37 @@ describe('the missed-events pull', () => {
   });
 });
 
+describe('an implausible measurement', () => {
+  it('clamps a consultation the console measured overnight, rather than failing', async () => {
+    // A receptionist who forgets to mark somebody done before going home
+    // leaves that row in the chamber. The next tap measures fourteen hours,
+    // which `bookings_consult_seconds_plausible` refuses outright — and the
+    // whole batch used to die with it.
+    const token = await receptionist();
+    const [one] = fixture.bookingIds;
+
+    const response = await request(app)
+      .post(`${BASE}/sync/events`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        sessionId: fixture.sessionId,
+        events: [
+          entry('DOCTOR_ARRIVED', { arrivedAt: minutesAgo(60), minutesLate: 0 }, minutesAgo(60)),
+          entry('PATIENT_CALLED', { bookingId: one, serial: 1 }, minutesAgo(59)),
+          entry('PATIENT_DONE', { bookingId: one, consultSeconds: 50_400 }, minutesAgo(1)),
+        ],
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.conflicts).toEqual([]);
+
+    // The action survives — it really happened — and only the duration is
+    // brought inside what a consultation can plausibly be.
+    const state = response.body.data.state as { rate: { samples: number[] } };
+    expect(state.rate.samples).toEqual([3600]);
+  });
+});
+
 describe('a whole offline shift', () => {
   it('replays five queued actions in order and leaves a coherent queue', async () => {
     // The scenario CLAUDE.md §6 names for e2e/offline-console.spec.ts, proven

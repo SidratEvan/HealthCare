@@ -26,9 +26,15 @@
  * arrive back on the session channel.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { nowServing, queueCounts, waitingQueue, type QueueEntry } from '@platform/domain';
+import {
+  clampConsultSeconds,
+  nowServing,
+  queueCounts,
+  waitingQueue,
+  type QueueEntry,
+} from '@platform/domain';
 import { formatNumber, t, type Locale } from '@platform/i18n';
 import { Button, Card, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
@@ -51,6 +57,17 @@ const NAV_ITEMS = [
 
 /** Console surfaces use Latin numerals for data-entry speed (`TYP-04`). */
 const CONSOLE_LOCALE: Locale = 'bn';
+
+/**
+ * The demo principal (CLAUDE.md §4.1).
+ *
+ * Declared at module scope so it is the same function on every render — the
+ * hook holds it in a ref, but a stable reference here keeps the intent obvious
+ * and costs nothing. Supabase Auth replaces this one function.
+ */
+function readToken(): string | null {
+  return globalThis.sessionStorage?.getItem('console.token') ?? null;
+}
 
 export function ReceptionConsole(): ReactNode {
   return (
@@ -84,7 +101,7 @@ function ConsoleBody(): ReactNode {
     sessionId: sessionId ?? '',
     apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
     socketUrl: process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:4000',
-    getToken: () => globalThis.sessionStorage?.getItem('console.token') ?? null,
+    getToken: readToken,
   });
 
   // A conflict is surfaced once, as a sentence. A receptionist mid-shift needs
@@ -359,16 +376,35 @@ function Notice({ children }: { readonly children: ReactNode }): ReactNode {
  * `FR-REC-11`: measured, never typed. A receptionist estimating the duration
  * would feed the rolling rate a number she guessed, and every ETA downstream
  * is built on it.
+ *
+ * Clamped, because the raw elapsed time is not always a consultation. A
+ * receptionist who forgets to mark somebody done before going home leaves that
+ * row "in chamber" overnight, and the next tap would otherwise report a
+ * fourteen-hour consultation — which poisons the rolling rate (`FR-QUE-12`)
+ * and is rejected outright by `bookings_consult_seconds_plausible`.
+ * `clampConsultSeconds` is the domain's own bound, so the console and the
+ * server agree on what a plausible consultation is.
  */
 function elapsedSeconds(entry: QueueEntry, now: Date): number {
   if (entry.calledAt === null) return 0;
-  return Math.max(0, Math.round((now.getTime() - new Date(entry.calledAt).getTime()) / 1000));
+  const elapsed = Math.round((now.getTime() - new Date(entry.calledAt).getTime()) / 1000);
+  return clampConsultSeconds(Math.max(0, elapsed));
 }
 
-/** The session this counter is driving, from the URL (`SEL-B02-SESSION`). */
+/**
+ * The session this counter is driving, from the URL (`SEL-B02-SESSION`).
+ *
+ * Read after mount rather than during render. The server has no `location`, so
+ * reading it while rendering makes the first client render disagree with the
+ * server's — React discards the tree and warns, and in a console that is a
+ * flash of "no chamber running" before the real screen appears.
+ */
 function useSessionId(): string | null {
-  return useMemo(() => {
-    if (typeof globalThis.location === 'undefined') return null;
-    return new URLSearchParams(globalThis.location.search).get('session');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSessionId(new URLSearchParams(globalThis.location.search).get('session'));
   }, []);
+
+  return sessionId;
 }

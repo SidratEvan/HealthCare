@@ -74,8 +74,22 @@ export function openSessionChannel(options: SessionChannelOptions): {
   };
 
   const socket = io(options.url, {
-    auth: () => ({ token: options.getToken() }),
+    auth: (cb: (data: Record<string, unknown>) => void) => {
+      cb({ token: options.getToken() });
+    },
     transports: ['websocket', 'polling'],
+
+    /**
+     * Each channel gets its own connection.
+     *
+     * `io(url)` otherwise caches a Manager per URL and hands the same one back
+     * to the next caller. Closing a channel closes that shared Manager, so the
+     * next `openSessionChannel` — after a session switch, or React's
+     * development double-mount — inherits a dead engine and never finishes its
+     * handshake. The browser reports it as "closed before the connection is
+     * established", which says nothing about the cause.
+     */
+    forceNew: true,
     // Socket.IO's own backoff. Capped at ten seconds for the same reason the
     // queue's retry is capped: a console must notice the network returning
     // within a few seconds, not a few minutes.

@@ -40,9 +40,11 @@ class SocketIoEmitter implements RealtimeEmitter {
  */
 export function attachRealtime(httpServer: HttpServer): SocketServer {
   const io = new SocketServer(httpServer, {
-    // The consoles and the patient PWA are served from a different origin
-    // (Vercel) than the API (Render), so the browser will preflight.
-    cors: { origin: env.WEB_BASE_URL, credentials: true },
+    // The consoles and the patient PWA are served from different origins than
+    // the API, so the browser preflights the handshake. An allowlist rather
+    // than a wildcard: `credentials: true` with `origin: '*'` would let any
+    // page on the internet open a session channel with a stolen token.
+    cors: { origin: [env.WEB_BASE_URL, env.CONSOLE_BASE_URL], credentials: true },
 
     // A reception console on hospital wifi and a patient on 3G both drop
     // often. Socket.IO's defaults assume a better network than this product
@@ -64,6 +66,6 @@ export function attachRealtime(httpServer: HttpServer): SocketServer {
   registerHandlers(io);
   setEmitter(new SocketIoEmitter(io));
 
-  logger.info({ corsOrigin: env.WEB_BASE_URL }, 'realtime attached');
+  logger.info({ corsOrigins: [env.WEB_BASE_URL, env.CONSOLE_BASE_URL] }, 'realtime attached');
   return io;
 }

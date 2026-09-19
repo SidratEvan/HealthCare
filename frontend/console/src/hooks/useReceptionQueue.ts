@@ -73,8 +73,25 @@ export interface ReceptionQueueOptions {
 }
 
 export function useReceptionQueue(options: ReceptionQueueOptions): ReceptionQueue {
-  const { sessionId, apiBaseUrl, socketUrl, getToken } = options;
-  const now = options.now ?? (() => new Date());
+  const { sessionId, apiBaseUrl, socketUrl } = options;
+
+  /**
+   * Callbacks live in refs, and never in a dependency array.
+   *
+   * A caller passing `getToken={() => …}` inline — which is the natural way to
+   * write it — creates a new function on every render. With that in the
+   * socket effect's dependencies the channel tears down and reopens on every
+   * render, and the connection never survives long enough to finish its
+   * handshake. The symptom is a console stuck on "loading" with the server
+   * reporting nothing at all, because nothing ever reached it.
+   */
+  const getTokenRef = useRef(options.getToken);
+  getTokenRef.current = options.getToken;
+  const getToken = useCallback(() => getTokenRef.current(), []);
+
+  const nowRef = useRef(options.now);
+  nowRef.current = options.now;
+  const now = useCallback(() => nowRef.current?.() ?? new Date(), []);
 
   const [snapshot, setSnapshot] = useState<SessionSnapshot>({
     state: null,
@@ -86,6 +103,21 @@ export function useReceptionQueue(options: ReceptionQueueOptions): ReceptionQueu
   const [pending, setPending] = useState<PendingEvent[]>([]);
   const [lastConflict, setLastConflict] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  /**
+   * What the browser itself says about the network.
+   *
+   * Tracked separately from the socket because the socket finds out far too
+   * late. A dropped wifi does not close an established WebSocket — the
+   * connection simply stops carrying anything, and Socket.IO only notices when
+   * its ping times out, up to a minute later. A console that says "সংযুক্ত"
+   * for a minute after the network died is telling a receptionist something
+   * false at exactly the moment it matters (`PRD.md` §3.2, `FR-OFF-01`).
+   *
+   * `navigator.onLine` is the earliest signal available and is authoritative
+   * in the direction that matters: when it says offline, it is.
+   */
+  const [browserOnline, setBrowserOnline] = useState(true);
 
   // The queue outlives any render. A memory store here rather than Dexie's:
   // the Dexie store is swapped in by the app shell once IndexedDB has opened,
@@ -124,6 +156,11 @@ export function useReceptionQueue(options: ReceptionQueueOptions): ReceptionQueu
 
   // --- the session channel -------------------------------------------------
   useEffect(() => {
+    // The session id arrives after mount (it is read from the URL), so the
+    // first render has none. Opening a channel for an empty session would be a
+    // connection the server refuses and the console then has to retry.
+    if (sessionId === '') return undefined;
+
     const channel = openSessionChannel({
       url: socketUrl,
       sessionId,
@@ -141,22 +178,31 @@ export function useReceptionQueue(options: ReceptionQueueOptions): ReceptionQueu
 
   // --- flush on reconnect --------------------------------------------------
   //
-  // The moment the socket says it is connected, whatever the console did while
-  // it was not gets sent. This is the "sync on reconnect" half of step 8's
-  // definition of done.
+  // The moment both the socket and the browser agree there is a network,
+  // whatever the console did while there was not gets sent. This is the "sync
+  // on reconnect" half of step 8's definition of done.
   useEffect(() => {
-    if (!snapshot.connected) return;
+    if (!snapshot.connected || !browserOnline) return;
     void flush();
-  }, [snapshot.connected, flush]);
+  }, [snapshot.connected, browserOnline, flush]);
 
   // --- and whenever the browser itself notices the network ------------------
   useEffect(() => {
+    setBrowserOnline(globalThis.navigator?.onLine ?? true);
+
     const onOnline = (): void => {
+      setBrowserOnline(true);
       void flush();
     };
+    const onOffline = (): void => {
+      setBrowserOnline(false);
+    };
+
     globalThis.addEventListener?.('online', onOnline);
+    globalThis.addEventListener?.('offline', onOffline);
     return () => {
       globalThis.removeEventListener?.('online', onOnline);
+      globalThis.removeEventListener?.('offline', onOffline);
     };
   }, [flush]);
 
@@ -203,9 +249,13 @@ export function useReceptionQueue(options: ReceptionQueueOptions): ReceptionQueu
     return continueReplay(snapshot.state, pending.map(toDomainEvent(snapshot.lastSeq)));
   }, [snapshot.state, snapshot.lastSeq, pending]);
 
+  // Both have to agree before the console claims it is connected. Either one
+  // saying otherwise is enough to say so on screen.
+  const connected = snapshot.connected && browserOnline;
+
   return {
     state,
-    connected: snapshot.connected,
+    connected,
     isStale: snapshot.lastServerTs === null,
     lastServerTs: snapshot.lastServerTs,
     pendingCount: pending.length,

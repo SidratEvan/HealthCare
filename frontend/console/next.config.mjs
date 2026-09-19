@@ -17,6 +17,11 @@ export default {
   // indexed and has no marketing surface.
   poweredByHeader: false,
 
+  // Next writes its own AGENTS.md and CLAUDE.md on first run. This repository
+  // already has one, at the root, and it is the operating contract — a second
+  // one inside a package would quietly compete with it (CLAUDE.md §2).
+  agentRules: false,
+
   /**
    * Resolve `./x.js` to `./x.ts`.
    *
