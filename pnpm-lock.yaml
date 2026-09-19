@@ -229,6 +229,9 @@ importers:
       '@platform/domain':
         specifier: workspace:*
         version: link:../../shared/domain
+      '@platform/i18n':
+        specifier: workspace:*
+        version: link:../../shared/i18n
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -281,6 +284,9 @@ importers:
       '@platform/domain':
         specifier: workspace:*
         version: link:../shared/domain
+      '@platform/i18n':
+        specifier: workspace:*
+        version: link:../shared/i18n
       pg:
         specifier: ^8.23.0
         version: 8.23.0

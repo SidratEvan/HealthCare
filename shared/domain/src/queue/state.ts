@@ -78,6 +78,19 @@ export interface QueueEntry {
     readonly markedAt: Timestamp;
     readonly graceUsedMinutes: number;
   } | null;
+  /**
+   * Set by BOOKING_CANCELLED (FR-PAT-23).
+   *
+   * The reason is carried here rather than only on the event because
+   * `bookings.cancelled_reason` is NOT NULL for a cancelled row, and the row
+   * is written from this state — a rebuild that replayed the log without it
+   * would fail `bookings_cancelled_has_reason`. It is also what the refund
+   * rule (FR-PAY-03) and the no-show loss figure (FR-ADM-03) read.
+   */
+  readonly cancelled: {
+    readonly cancelledAt: Timestamp;
+    readonly reason: string | null;
+  } | null;
   /** Set when reception moved this row for priority (FR-REC-15). */
   readonly priority: { readonly movedAt: Timestamp; readonly reason: string } | null;
 }
@@ -189,6 +202,7 @@ export function emptyState(seed: QueueSeed): QueueState {
     consultSeconds: null,
     late: null,
     noShow: null,
+    cancelled: null,
     priority: null,
   }));
 

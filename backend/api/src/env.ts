@@ -191,6 +191,23 @@ const schema = z.object({
 
   // --- Demo mode (FR-DEM-07) ----------------------------------------------
   DEMO_MODE: boolish.default(false),
+
+  /**
+   * How many reverse proxies sit in front of this process.
+   *
+   * Render terminates TLS and forwards the caller's address in
+   * `X-Forwarded-For`, so `req.ip` is the balancer's unless Express is told to
+   * trust one hop. It used to be derived from `NODE_ENV === 'production'`,
+   * which conflated two unrelated facts: a pitch deployment is behind a proxy
+   * *and* is not production — `DEMO_MODE` and `NODE_ENV=production` refuse to
+   * boot together, by design — so that derivation left the demo trusting no
+   * hops and every caller sharing one rate-limit bucket.
+   *
+   * Zero for a local process, one behind Render or Vercel. Never a large
+   * number: trusting more hops than exist lets a caller forge their own
+   * address by sending the header themselves.
+   */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(3).default(0),
 });
 
 export type Env = z.infer<typeof schema>;

@@ -52,8 +52,13 @@ test.beforeEach(async () => {
  * behaviour rather than about a sign-in screen that does not exist.
  */
 async function openConsole(page: Page): Promise<void> {
+  // The same store `ConsolePicker` writes, so a spec and a person reach the
+  // console the same way — one credential, one key (CLAUDE.md §4.1).
   await page.addInitScript((token: string) => {
-    window.sessionStorage.setItem('console.token', token);
+    window.sessionStorage.setItem(
+      'console.demo-session',
+      JSON.stringify({ token, hospitalId: 'e2e', staffName: 'E2E' }),
+    );
   }, demo.token);
 
   await page.goto(`/?session=${demo.sessionId}`);
@@ -79,7 +84,10 @@ test.describe('the reception console', () => {
     const pitch = await loadPitchSession();
 
     await page.addInitScript((token: string) => {
-      window.sessionStorage.setItem('console.token', token);
+      window.sessionStorage.setItem(
+        'console.demo-session',
+        JSON.stringify({ token, hospitalId: 'e2e', staffName: 'E2E' }),
+      );
     }, pitch.token);
     await page.goto(`/?session=${pitch.sessionId}`);
 

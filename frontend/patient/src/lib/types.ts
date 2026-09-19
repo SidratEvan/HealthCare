@@ -1,12 +1,19 @@
 /**
- * The shapes discovery returns.
+ * The shapes discovery and the live serial screen return.
  *
  * Declared here rather than imported from the API package: `frontend/` may not
  * import `backend/` (the layering rule in `shared/config/eslint`), and that
  * boundary is the point — the wire contract is what both sides agree on, and
  * writing it down twice is how a breaking change gets noticed at compile time
  * rather than in a browser.
+ *
+ * `QueueState` and `Eta` are the exception, and deliberately so: they come from
+ * `shared/domain`, which is neither frontend nor backend — it is the one
+ * definition of the queue that both sides run (`FR-QUE-05`). Re-declaring
+ * those here would be re-implementing the queue.
  */
+
+import type { Eta, QueueState } from '@platform/domain';
 
 export interface HospitalCard {
   readonly id: string;
@@ -67,4 +74,55 @@ export interface Availability {
   /** Null means unknown, which is not the same as zero (`FR-PAT-13`). */
   readonly expectedWaitMinutes: number | null;
   readonly asOf: string;
+}
+
+// ---------------------------------------------------------------------------
+// The live serial screen (`S-A-08`)
+// ---------------------------------------------------------------------------
+
+/** The booking behind the screen, with the chamber it belongs to. */
+export interface BookingDetail {
+  readonly id: string;
+  readonly sessionId: string;
+  readonly serial: number;
+  readonly status: string;
+  readonly patientName: string;
+  readonly feePoisha: number;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
+  readonly departmentCode: string;
+  readonly room: string | null;
+  readonly sessionDate: string;
+  readonly plannedStart: string;
+  readonly plannedEnd: string;
+  /** `hospital_settings.stale_threshold_minutes` (`FR-OFF-04`). */
+  readonly staleThresholdMinutes: number;
+  /**
+   * The hospital's recorded refund rule, shown before a cancellation
+   * (`FR-PAY-03`).
+   *
+   * An empty object means none is on file — which the cancel sheet says
+   * plainly rather than inventing one (`PRD.md` §3.2). The shape inside is the
+   * hospital's own and no document defines it yet.
+   */
+  readonly refundPolicy: Record<string, unknown>;
+}
+
+/** `GET /guest/link/:token` and `GET /bookings/:id`. */
+export interface BookingView {
+  readonly booking: BookingDetail;
+  readonly state: QueueState;
+  readonly etas: readonly Eta[];
+  /** The age of the figures, for `<FreshnessLine>` (`FR-PAT-35`). */
+  readonly freshAt: string;
+  readonly serverTs: string;
+}
+
+/** What the tracking link hands back, plus the token it exchanges for. */
+export interface TrackingLinkView extends BookingView {
+  readonly token: string;
+  readonly expiresInSeconds: number;
 }

@@ -355,6 +355,50 @@ describe('walk-ins and cancellations', () => {
     expect(activeQueue(next).map((entry) => entry.serial)).toEqual([1, 3]);
     expect(findEntry(next, bookingId(2))?.status).toBe('cancelled');
   });
+
+  it('BOOKING_CANCELLED keeps why, because the booking row may not be without it', () => {
+    const { state, log } = setup(3);
+
+    const next = reduce(
+      state,
+      log.next('BOOKING_CANCELLED', { bookingId: bookingId(2), reason: 'রোগী বাতিল করেছেন' }),
+    );
+
+    // `bookings_cancelled_has_reason` is a database constraint, and the row is
+    // written from this state — so losing the reason here is a failed
+    // transaction later, not a missing label.
+    expect(findEntry(next, bookingId(2))?.cancelled).toEqual({
+      cancelledAt: expect.any(String),
+      reason: 'রোগী বাতিল করেছেন',
+    });
+  });
+
+  it('a cancellation with no stated reason still records that it happened', () => {
+    const { state, log } = setup(3);
+
+    const next = reduce(
+      state,
+      log.next('BOOKING_CANCELLED', { bookingId: bookingId(2), reason: null }),
+    );
+
+    // A null reason is a fact about the event, not an absent cancellation: the
+    // service supplies the row's reason, and this is what tells it to.
+    expect(findEntry(next, bookingId(2))?.cancelled?.reason).toBeNull();
+    expect(findEntry(next, bookingId(2))?.cancelled?.cancelledAt).not.toBeUndefined();
+  });
+
+  it('a cancelled patient is no longer late', () => {
+    const { state, log } = setup(3);
+
+    const next = fold(state, [
+      log.next('PATIENT_LATE', { bookingId: bookingId(2), expectedMinutes: 20, reinsertAfter: 3 }),
+      log.next('BOOKING_CANCELLED', { bookingId: bookingId(2), reason: null }),
+    ]);
+
+    // Somebody who cancelled is not somebody the counter should still be
+    // holding a place for (`FR-QUE-21`).
+    expect(findEntry(next, bookingId(2))?.late).toBeNull();
+  });
 });
 
 describe('slot offers (FR-QUE-30)', () => {

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@platform/domain": "workspace:*",
+    "@platform/i18n": "workspace:*",
     "pg": "^8.23.0"
   },
   "devDependencies": {

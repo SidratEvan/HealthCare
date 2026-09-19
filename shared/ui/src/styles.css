@@ -31,6 +31,24 @@
 @import 'tailwindcss';
 @import './tokens/tokens.css';
 
+/*
+ * Scan this package's own components.
+ *
+ * Tailwind v4 detects sources from the directory of the stylesheet that
+ * imported it, and skips anything under `node_modules`. An app resolves this
+ * file through the workspace symlink `node_modules/@platform/ui`, so detection
+ * fell back to the app's own `src` — and every class used *only* inside a
+ * design-system component was silently dropped from the build.
+ *
+ * The symptom was not a missing stylesheet but a half-applied one: `bg-surface`
+ * worked because a screen happened to use it too, while `inset-x-0 bottom-0` on
+ * the bottom sheet did not, so the sheet rendered shrink-wrapped at its static
+ * position instead of across the foot of the screen. A component library whose
+ * classes depend on an application coincidentally using the same ones is not a
+ * component library, so this line is load-bearing.
+ */
+@source "./**/*.{ts,tsx}";
+
 @theme inline {
   /* --- Colour (§1.1) ---------------------------------------------------- */
   --color-*: initial;
@@ -116,10 +134,32 @@
   /* TYP-02: never applied to Bangla, so the utilities do not exist. */
   --tracking-*: initial;
 
-  /* --- Motion (§3.4) — explains a state change, never entertains -------- */
+  /* --- Motion (§3.4) — explains a state change, never entertains -------- *
+   * `--duration-*` and `--ease-*` are Tailwind's own namespaces, so these ARE
+   * the utilities `duration-quick` and `ease-sheet` resolve to. They read the
+   * same custom properties `tokens.css` defines, which is what makes
+   * `prefers-reduced-motion` zero every one of them at once.              */
+  --duration-instant: var(--motion-instant);
+  --duration-quick: var(--motion-quick);
+  --duration-sheet: var(--motion-sheet);
+  --duration-count: var(--motion-count);
+
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-count: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/*
+ * The minimum touch target (`FR-LOC-04`, `A11Y-07`, FRONTEND.md §5.1).
+ *
+ * Forty-four pixels, and it needs a definition: `min-h-touch` is not a
+ * Tailwind utility, so every `min-h-touch` in the codebase was being dropped —
+ * ten of them, across the buttons, chips and inputs a person taps on a phone.
+ * Declared here rather than as an arbitrary value at each call site so the
+ * floor is one number, and the same one `MIN_TOUCH_TARGET_PX` exports.
+ */
+@utility min-h-touch {
+  min-height: 44px;
 }
 
 /*

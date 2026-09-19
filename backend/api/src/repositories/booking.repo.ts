@@ -116,6 +116,114 @@ export async function findById(bookingId: string): Promise<BookingRow | null> {
   return row === undefined ? null : toBookingRow(row);
 }
 
+/**
+ * Everything `S-A-08` puts on screen beside the queue itself (`FR-PAT-30`).
+ *
+ * One read rather than four, because this is the first thing a patient's phone
+ * asks for after tapping a link in an SMS, often on a 3G connection in a
+ * corridor: four round trips is four chances to show a spinner.
+ *
+ * Names are Bangla-first. The English ones travel too, so the `en` locale is a
+ * setting rather than a second query (`I18N-01`).
+ */
+export interface BookingDetail {
+  readonly id: string;
+  readonly sessionId: string;
+  readonly serial: number;
+  readonly status: BookingStatus;
+  readonly patientName: string;
+  readonly feePoisha: number;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
+  readonly departmentCode: string;
+  readonly room: string | null;
+  readonly sessionDate: string;
+  readonly plannedStart: string;
+  readonly plannedEnd: string;
+  /** `hospital_settings.stale_threshold_minutes` (`FR-OFF-04`). */
+  readonly staleThresholdMinutes: number;
+  /** The hospital's own rule, as recorded. Empty means none is on file. */
+  readonly refundPolicy: Record<string, unknown>;
+}
+
+interface DetailQueryRow {
+  id: string;
+  session_id: string;
+  serial_number: number;
+  status: BookingStatus;
+  full_name: string;
+  fee_poisha: number;
+  hospital_id: string;
+  hospital_name_bn: string;
+  hospital_name_en: string;
+  doctor_name_bn: string;
+  doctor_name_en: string;
+  department_code: string;
+  room: string | null;
+  session_date: Date | string;
+  planned_start: Date;
+  planned_end: Date;
+  stale_threshold_minutes: number | null;
+  refund_policy: Record<string, unknown> | null;
+}
+
+/** The booking behind a live serial screen, with its chamber. */
+export async function findDetail(bookingId: string): Promise<BookingDetail | null> {
+  const result = await sql<DetailQueryRow>`
+    SELECT b.id, b.session_id, b.serial_number, b.status, b.fee_poisha,
+           p.full_name,
+           h.id   AS hospital_id,
+           h.name_bn AS hospital_name_bn,
+           h.name_en AS hospital_name_en,
+           d.full_name_bn AS doctor_name_bn,
+           d.full_name_en AS doctor_name_en,
+           dep.code  AS department_code,
+           s.room, s.session_date, s.planned_start, s.planned_end,
+           hs.stale_threshold_minutes,
+           hs.refund_policy
+      FROM bookings b
+      JOIN patients p    ON p.id = b.patient_id
+      JOIN sessions s    ON s.id = b.session_id
+      JOIN hospitals h   ON h.id = s.hospital_id
+      JOIN doctors d     ON d.id = s.doctor_id
+      JOIN departments dep ON dep.id = s.department_id
+      LEFT JOIN hospital_settings hs ON hs.hospital_id = h.id
+     WHERE b.id = ${bookingId} AND b.deleted_at IS NULL
+  `.execute(db);
+
+  const row = result.rows[0];
+  if (row === undefined) return null;
+
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    serial: row.serial_number,
+    status: row.status,
+    patientName: row.full_name,
+    feePoisha: row.fee_poisha,
+    hospitalId: row.hospital_id,
+    hospitalNameBn: row.hospital_name_bn,
+    hospitalNameEn: row.hospital_name_en,
+    doctorNameBn: row.doctor_name_bn,
+    doctorNameEn: row.doctor_name_en,
+    departmentCode: row.department_code,
+    room: row.room,
+    sessionDate:
+      row.session_date instanceof Date
+        ? (row.session_date.toISOString().slice(0, 10) ?? '')
+        : row.session_date,
+    plannedStart: row.planned_start.toISOString(),
+    plannedEnd: row.planned_end.toISOString(),
+    // The documented default, for a hospital whose settings row has not been
+    // written yet (`FR-OFF-04`).
+    staleThresholdMinutes: row.stale_threshold_minutes ?? 10,
+    refundPolicy: row.refund_policy ?? {},
+  };
+}
+
 /** One booking's settled state, exactly as the reducer computed it. */
 export interface BookingProjection {
   readonly bookingId: string;
@@ -124,6 +232,14 @@ export interface BookingProjection {
   readonly doneAt: string | null;
   readonly arrivedAt: string | null;
   readonly consultSeconds: number | null;
+  /**
+   * Why the booking was cancelled, when it was (`FR-PAT-23`).
+   *
+   * `bookings_cancelled_has_reason` makes this NOT NULL for a cancelled row,
+   * so a projection that omitted it would fail the transaction the moment a
+   * `BOOKING_CANCELLED` event was folded.
+   */
+  readonly cancelledReason: string | null;
 }
 
 /**
@@ -153,25 +269,32 @@ export async function saveProjections(
       ${p.calledAt}::timestamptz,
       ${p.doneAt}::timestamptz,
       ${p.arrivedAt}::timestamptz,
-      ${p.consultSeconds}::integer
+      ${p.consultSeconds}::integer,
+      ${p.cancelledReason}::text
     )`,
   );
 
+  // `COALESCE(v.cancelled_reason, b.cancelled_reason)` never clears a reason
+  // already on the row. The seeded history writes its own Bangla reasons while
+  // the events behind them carry none (`seed_04_history`), so an overwrite
+  // would blank them and then fail the constraint on the next replay.
   await sql`
     UPDATE bookings AS b
-       SET status          = v.status,
-           called_at       = v.called_at,
-           done_at         = v.done_at,
-           arrived_at      = v.arrived_at,
-           consult_seconds = v.consult_seconds
+       SET status           = v.status,
+           called_at        = v.called_at,
+           done_at          = v.done_at,
+           arrived_at       = v.arrived_at,
+           consult_seconds  = v.consult_seconds,
+           cancelled_reason = COALESCE(v.cancelled_reason, b.cancelled_reason)
       FROM (VALUES ${sql.join(values, sql`, `)})
-           AS v (id, status, called_at, done_at, arrived_at, consult_seconds)
+           AS v (id, status, called_at, done_at, arrived_at, consult_seconds, cancelled_reason)
      WHERE b.id = v.id
-       AND (b.status          IS DISTINCT FROM v.status
-         OR b.called_at       IS DISTINCT FROM v.called_at
-         OR b.done_at         IS DISTINCT FROM v.done_at
-         OR b.arrived_at      IS DISTINCT FROM v.arrived_at
-         OR b.consult_seconds IS DISTINCT FROM v.consult_seconds)
+       AND (b.status           IS DISTINCT FROM v.status
+         OR b.called_at        IS DISTINCT FROM v.called_at
+         OR b.done_at          IS DISTINCT FROM v.done_at
+         OR b.arrived_at       IS DISTINCT FROM v.arrived_at
+         OR b.consult_seconds  IS DISTINCT FROM v.consult_seconds
+         OR b.cancelled_reason IS DISTINCT FROM COALESCE(v.cancelled_reason, b.cancelled_reason))
   `.execute(trx);
 }
 

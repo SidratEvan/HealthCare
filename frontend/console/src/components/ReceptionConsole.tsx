@@ -35,12 +35,13 @@ import {
   waitingQueue,
   type QueueEntry,
 } from '@platform/domain';
-import { formatNumber, t, type Locale } from '@platform/i18n';
+import { formatClock, formatNumber, t, type Locale } from '@platform/i18n';
 import { Button, Card, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
 import { useReceptionQueue } from '@/hooks/useReceptionQueue';
+import { readDemoSession } from '@/lib/demo';
 
 import type { ReactNode } from 'react';
 
@@ -59,14 +60,28 @@ const NAV_ITEMS = [
 const CONSOLE_LOCALE: Locale = 'bn';
 
 /**
+ * Latin digits, and the AM/PM a receptionist reads fastest (`TYP-04`).
+ *
+ * These times used to be `plannedStart.slice(11, 16)` — the hour and minute cut
+ * straight out of the ISO string, which is UTC (`DB-P4`). A chamber running
+ * 18:00–21:00 in Dhaka therefore showed as 12:00–15:00 on the console, six
+ * hours out, on the one line of the screen that says when the session is.
+ */
+const CONSOLE_NUMERALS = 'latin' as const;
+
+/**
  * The demo principal (CLAUDE.md §4.1).
+ *
+ * Read from the one place `ConsolePicker` writes it. It used to read its own
+ * `console.token` key, which meant two stores for one credential and a console
+ * that could hold a stale token from before a hospital was switched.
  *
  * Declared at module scope so it is the same function on every render — the
  * hook holds it in a ref, but a stable reference here keeps the intent obvious
  * and costs nothing. Supabase Auth replaces this one function.
  */
 function readToken(): string | null {
-  return globalThis.sessionStorage?.getItem('console.token') ?? null;
+  return readDemoSession()?.token ?? null;
 }
 
 export function ReceptionConsole(): ReactNode {
@@ -228,13 +243,14 @@ function ConsoleBody(): ReactNode {
         {/* --- session bar (B1.2) ------------------------------------------ */}
         <header className="flex items-center gap-3 border-b border-line px-6 py-4">
           <div className="min-w-0 flex-1">
-            <p className="text-title-sm">
-              {state.plan.plannedStart.slice(11, 16)} – {state.plan.plannedEnd.slice(11, 16)}
+            <p className="text-title-sm tabular-nums">
+              {formatClock(state.plan.plannedStart, CONSOLE_NUMERALS)} –{' '}
+              {formatClock(state.plan.plannedEnd, CONSOLE_NUMERALS)}
             </p>
-            <p className="text-body-sm text-ink-muted">
+            <p className="text-body-sm text-ink-muted tabular-nums">
               {state.doctorArrivedAt === null
                 ? t('notStarted', locale)
-                : `${t('actualStart', locale)} ${state.doctorArrivedAt.slice(11, 16)}`}
+                : `${t('actualStart', locale)} ${formatClock(state.doctorArrivedAt, CONSOLE_NUMERALS)}`}
             </p>
           </div>
 

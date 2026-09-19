@@ -91,6 +91,35 @@ export const createBookingBody = z.object({
   intake: z.record(z.string(), z.unknown()).optional(),
 });
 
+/**
+ * `GET /guest/link/:token` (`FR-GST-05`).
+ *
+ * Thirty-two random bytes, base64url — 43 characters. Bounded on both sides so
+ * a path that could not possibly be a token is refused before it reaches a
+ * hash and a query, and restricted to the base64url alphabet so nothing else
+ * in a URL is mistaken for one.
+ */
+export const trackingLinkParams = z.object({
+  token: z
+    .string()
+    .trim()
+    .min(20)
+    .max(200)
+    .regex(/^[A-Za-z0-9_-]+$/, 'is not a tracking token'),
+});
+
+/**
+ * `POST /demo/token` (CLAUDE.md §4.1).
+ *
+ * The console's stand-in for `S-B-00` Staff login while authentication is
+ * deferred. A hospital and a role, and nothing else — there is no password to
+ * validate, which is the point.
+ */
+export const demoTokenBody = z.object({
+  hospitalId: uuid,
+  role: z.enum(['receptionist', 'doctor', 'hospital_admin']),
+});
+
 export type CreateBookingBody = z.infer<typeof createBookingBody>;
 export type GuestDetails = z.infer<typeof guestDetails>;
 export type PaymentMethodValue = z.infer<typeof paymentMethod>;

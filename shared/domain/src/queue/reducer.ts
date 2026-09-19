@@ -355,14 +355,22 @@ function reduceCancelled(
   state: QueueState,
   event: Extract<QueueEvent, { type: 'BOOKING_CANCELLED' }>,
 ): QueueState {
-  const { bookingId } = event.payload;
+  const { bookingId, reason } = event.payload;
   const entry = findEntry(state, bookingId);
   if (entry === null) return withAnomaly(state, event, 'UNKNOWN_BOOKING', bookingId);
 
   return advance(
     mapEntries(state, (current) =>
       current.bookingId === bookingId
-        ? { ...current, status: 'cancelled' satisfies BookingStatus, late: null }
+        ? {
+            ...current,
+            status: 'cancelled' satisfies BookingStatus,
+            late: null,
+            // Kept on the entry, not only on the event: the booking row is
+            // written from this state and `cancelled_reason` is NOT NULL for a
+            // cancelled row (DATABASE.md §2.3).
+            cancelled: { cancelledAt: event.serverTs, reason },
+          }
         : current,
     ),
     event,

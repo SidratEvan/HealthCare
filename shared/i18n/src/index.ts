@@ -24,6 +24,25 @@ export {
 } from './messages.js';
 
 export {
+  TEMPLATES,
+  TEMPLATE_KEYS,
+  placeholdersFor,
+  placeholdersIn,
+  render,
+  type TemplateChannel,
+  type TemplateDefinition,
+  type TemplateKey,
+} from './templates.js';
+
+export {
+  DAY_PERIODS,
+  DHAKA,
+  dayPeriod,
+  formatClock,
+  formatDateTime,
+} from './datetime.js';
+
+export {
   NUMERAL_STYLE_BY_SURFACE,
   formatMinutes,
   formatNumber,
