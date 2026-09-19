@@ -37,6 +37,7 @@ import {
   type SessionId,
 } from '@platform/domain';
 
+import { logger } from '../config/logger.js';
 import { env } from '../env.js';
 import { AppError, notFound, validationFailed } from '../errors/AppError.js';
 import * as bookingRepo from '../repositories/booking.repo.js';
@@ -44,6 +45,7 @@ import * as guestRepo from '../repositories/guest.repo.js';
 import * as sessionRepo from '../repositories/session.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
+import * as notifications from './notification.service.js';
 import * as queueService from './queue.service.js';
 
 import type { AppendEventResult } from './queue.service.js';
@@ -200,6 +202,17 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
   // this broadcast is what makes it arrive *now* for the ones that are online.
   await queueService.broadcastRoster(input.sessionId);
 
+  // `FR-PAT-22`: confirmation in the app *and* by SMS, carrying hospital,
+  // doctor, date, serial and the expected window.
+  //
+  // Queued after the booking transaction rather than inside it, unlike every
+  // queue event. The reason is the tracking link: it is derived from a row
+  // that has to exist first, and only its hash is stored (`FR-GST-05`), so
+  // this is the one moment the message can be composed at all. There is
+  // nothing to roll back by then — the booking is committed and the patient
+  // has their serial.
+  await queueBookingConfirmation(created.bookingId, input.sessionId, trackingUrl);
+
   return {
     bookingId: created.bookingId,
     serial: created.serial,
@@ -210,6 +223,34 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
     // recorded: `payments` is migration 0009.
     paid: input.method !== 'at_hospital',
   };
+}
+
+/**
+ * Writes and sends the confirmation.
+ *
+ * Failure here is logged and swallowed. A patient who has a serial and did not
+ * get a text is worse off than one who got both, but a booking that *reports*
+ * failure because an SMS gateway was down would have them book again and take
+ * a second serial — which is the worse outcome by some distance.
+ */
+async function queueBookingConfirmation(
+  bookingId: string,
+  sessionId: string,
+  trackingUrl: string | null,
+): Promise<void> {
+  try {
+    const batch = await withTransaction(
+      async (trx) =>
+        await notifications.queueFor(
+          trx,
+          sessionId,
+          notifications.planBookingConfirmed(bookingId, trackingUrl),
+        ),
+    );
+    await notifications.dispatch(batch);
+  } catch (error: unknown) {
+    logger.error({ err: error, sessionId }, 'booking confirmation could not be queued');
+  }
 }
 
 /**

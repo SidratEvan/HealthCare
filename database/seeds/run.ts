@@ -33,6 +33,7 @@ import {
   type SeedModule,
   type SeedSummary,
 } from './lib/runner.js';
+import { writeNotificationTemplates } from './lib/templates.js';
 import { seed01Hospitals } from './seed_01_hospitals.js';
 import { seed02DoctorsSessions } from './seed_02_doctors_sessions.js';
 import { seed03Patients } from './seed_03_patients.js';
@@ -83,6 +84,13 @@ export async function seedDemoData(client: Client, options: SeedOptions = {}): P
 
   log('  + seed_00_reference.sql: schema and enum pre-flight');
   await client.query(readFileSync(SEED_REFERENCE_SQL, 'utf8'));
+
+  // Platform reference data, not a hospital's: the message copy `FR-NOT-05`
+  // requires to live in a table rather than at a call site. It runs here
+  // rather than as a numbered module because it depends on no facility, no
+  // doctor and no patient — only on the schema.
+  const templates = await writeNotificationTemplates(client);
+  log(`  + notification_templates: ${String(templates.written)} row(s) (FR-NOT-04, FR-NOT-05)`);
 
   const results = await runModules(SEED_MODULES, { client, now, rng, log });
 

@@ -21,7 +21,12 @@ import { connect, withRollback } from './support/database.js';
 describe('migration files (DATABASE.md §7)', () => {
   const migrations = readMigrations();
 
-  it('covers 0001 to 0006, the scope of step 1', () => {
+  it('covers the migrations the build has reached, and no others', () => {
+    // 0001–0006 were step 1. 0010 arrived with step 11 (notifications), ahead
+    // of 0007–0009, because the build order reaches messaging before clinical
+    // records, beds and money — and nothing in 0010 depends on any of them.
+    // The runner applies whatever a database has not seen, in filename order,
+    // so a fresh build and an incrementally migrated one converge either way.
     expect(migrations.map((m) => m.version)).toEqual([
       '0001',
       '0002',
@@ -29,6 +34,7 @@ describe('migration files (DATABASE.md §7)', () => {
       '0004',
       '0005',
       '0006',
+      '0010',
     ]);
   });
 
