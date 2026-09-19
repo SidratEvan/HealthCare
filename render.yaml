@@ -32,7 +32,14 @@ services:
     # build output to produce — `tsx` runs them directly. That is a known
     # trade (docs/STATUS.md): fine for a pitch, and a bundler decision before a
     # pilot. `--frozen-lockfile` keeps a deploy reproducible.
-    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    # `npm i -g pnpm@…` rather than `corepack enable`, which fails on a build
+    # host two ways: it needs write access to Node's bin directory, and from
+    # corepack 0.20 it prompts before downloading a package manager it has not
+    # seen — a prompt nothing answers in a non-interactive build.
+    #
+    # The version is pinned to `packageManager` in the root package.json. They
+    # have to agree: pnpm refuses to run when they do not.
+    buildCommand: npm install -g pnpm@12.4.2 && pnpm install --frozen-lockfile
     startCommand: pnpm --filter @platform/api start
 
     healthCheckPath: /healthz
@@ -40,6 +47,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: '20'
+
+      # Belt and braces: if anything still reaches for corepack, do not let it
+      # stop on a confirmation prompt.
+      - key: COREPACK_ENABLE_DOWNLOAD_PROMPT
+        value: '0'
 
       # See the note above: a demo deployment is not production.
       - key: NODE_ENV
