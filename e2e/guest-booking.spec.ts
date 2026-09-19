@@ -3,12 +3,9 @@
  *
  * "Book with no account, open the SMS tracking link, see the live serial."
  *
- * Step 9's definition of done is the first two thirds of that: a guest books
- * end to end with mock payment, and the tracking link is issued and resolves.
- * The last third — *seeing the live serial* — needs `<LiveSerialCard>` and the
- * session channel on the patient side, which is step 10. This file asserts
- * everything that exists and is extended there rather than being left
- * unwritten until then.
+ * All three thirds now. Step 9 built the booking and the link; step 10 built
+ * the screen the link opens, so the last third — *seeing the live serial* —
+ * is asserted here rather than deferred.
  *
  * ## Why it runs against the real seeded demo
  *
@@ -19,7 +16,13 @@
 
 import { expect, test, type Page } from '@playwright/test';
 
-import { bookingBySerial, createConsoleSession, type ConsoleSession } from './support/console.js';
+import {
+  bookingBySerial,
+  createConsoleSession,
+  queueAction,
+  revokeTrackingLink,
+  type ConsoleSession,
+} from './support/console.js';
 
 const PATIENT = 'http://localhost:3000';
 
@@ -217,5 +220,122 @@ test.describe('the booking completes, end to end', () => {
     // the person can change what they are doing.
     await expect(page.getByText(/আগেই নেওয়া আছে/)).toBeVisible();
     await expect(page.getByTestId('booking-success')).toHaveCount(0);
+  });
+});
+
+test.describe('the SMS link opens the live serial (FR-GST-05)', () => {
+  /** Books, then follows the link the success screen shows. */
+  async function bookAndOpenLink(page: Page): Promise<void> {
+    await reachConfirm(page);
+
+    await page.getByLabel('রোগীর নাম').fill('রহিমা খাতুন');
+    await page.getByLabel('মোবাইল নম্বর').fill(guestPhone());
+    await page.getByLabel('বয়স').fill('34');
+    await page.getByTestId('confirm-booking').click();
+
+    await expect(page.getByTestId('booking-success')).toBeVisible();
+    await page.getByTestId('tracking-link').click();
+  }
+
+  test('shows the serial, the chamber and who is being seen now', async ({ page }) => {
+    await bookAndOpenLink(page);
+
+    // No login anywhere between the SMS and the number. That is the whole
+    // promise of the guest path (`FR-GST-01`).
+    await expect(page.getByTestId('live-serial')).toBeVisible();
+    await expect(page.getByText(/লগ ইন|sign in|log in/i)).toHaveCount(0);
+
+    // The chamber had three bookings, so this is serial four — in Bengali
+    // numerals, because this is a patient surface (`TYP-04`).
+    await expect(page.getByTestId('live-serial-number')).toHaveText('৪');
+    await expect(page.getByTestId('now-serving')).toHaveText('১');
+  });
+
+  test('carries the estimate and its freshness (FR-PAT-30, FR-PAT-35)', async ({ page }) => {
+    await bookAndOpenLink(page);
+
+    // A serial with no estimate beside it is a number somebody has to guess
+    // from; an estimate with no age is one they cannot check.
+    await expect(page.getByTestId('live-serial-eta')).toBeVisible();
+
+    const freshness = page.getByTestId('freshness');
+    await expect(freshness).toBeVisible();
+    await expect(freshness).toHaveAttribute('data-stale', 'false');
+  });
+
+  test('offers the late and cancel controls a guest is entitled to', async ({ page }) => {
+    await bookAndOpenLink(page);
+
+    // `APP_FLOW.md` A1.5: "identical screen, identical live updates, including
+    // the late, reschedule, and cancel controls". Guest is a shorter form, not
+    // a lesser path.
+    await expect(page.getByTestId('declare-late')).toBeVisible();
+    await expect(page.getByTestId('cancel-booking')).toBeVisible();
+  });
+
+  test('the patient can say they are running late (FR-PAT-33)', async ({ page }) => {
+    await bookAndOpenLink(page);
+
+    await page.getByTestId('declare-late').click();
+    await page.getByTestId('late-20').click();
+
+    // It lands, and the screen says so rather than leaving somebody unsure
+    // whether the hospital heard them.
+    await expect(page.getByTestId('live-serial-notice')).toBeVisible();
+    await expect(page.getByTestId('live-serial-failure')).toHaveCount(0);
+  });
+
+  test('cancelling names the consequence before it happens (GR-01, FR-PAY-03)', async ({
+    page,
+  }) => {
+    await bookAndOpenLink(page);
+
+    await page.getByTestId('cancel-booking').click();
+
+    // Never "are you sure": the sheet says the serial is released and somebody
+    // else may get it, and states the refund position before confirming.
+    await expect(page.getByText(/ছেড়ে দেওয়া হবে/)).toBeVisible();
+    await expect(page.getByTestId('refund-rule')).toBeVisible();
+
+    await page.getByTestId('cancel-confirm').click();
+    await expect(page.getByTestId('live-serial-notice')).toHaveText('সিরিয়াল বাতিল করা হয়েছে');
+  });
+
+  test('a revoked link says so instead of showing a stale number', async ({ page }) => {
+    await bookAndOpenLink(page);
+    await expect(page.getByTestId('live-serial')).toBeVisible();
+
+    // The URL carries the booking id beside the token, which is what makes a
+    // support conversation about "this link" possible at all.
+    const bookingId = new URL(page.url()).searchParams.get('b');
+    expect(bookingId).not.toBeNull();
+    await revokeTrackingLink(bookingId ?? '');
+
+    await page.reload();
+
+    // `FR-GST-05`: revocable. The screen states it rather than rendering a
+    // number nobody stands behind any more (`GR-03`, `PRD.md` §3.2).
+    await expect(page.getByTestId('live-serial-error')).toBeVisible();
+    await expect(page.getByText(/মেয়াদ শেষ/)).toBeVisible();
+  });
+
+  test('a link that names no token is refused (FR-GST-05)', async ({ page }) => {
+    await page.goto(`${PATIENT}/s`);
+
+    // A URL with the token stripped is not a way into somebody's queue.
+    await expect(page.getByTestId('live-serial-error')).toBeVisible();
+    await expect(page.getByTestId('live-serial')).toHaveCount(0);
+  });
+
+  test('the queue moves under the patient while they watch (FR-PAT-31)', async ({ page }) => {
+    await bookAndOpenLink(page);
+    await expect(page.getByTestId('now-serving')).toHaveText('১');
+
+    // The same fact the two-device spec proves across two devices, asserted
+    // here for the guest path specifically: the link's socket is subscribed
+    // and scoped, not merely open.
+    await queueAction(demo, `/sessions/${demo.sessionId}/next`);
+
+    await expect(page.getByTestId('now-serving')).toHaveText('২', { timeout: 2_000 });
   });
 });

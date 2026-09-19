@@ -79,3 +79,17 @@ export { cx, type ClassValue } from './components/cx.js';
 // `<FreshnessLine>` lands first because CLAUDE.md §5.8 requires it beneath
 // every live figure, so no screen can ship without it.
 export { FreshnessLine, type FreshnessLineProps } from './components/FreshnessLine.js';
+
+/**
+ * `<LiveSerialCard>` — the screen the whole product is for (§6.1). It lands
+ * with step 10, which is the two-device demo.
+ */
+export {
+  LiveSerialCard,
+  liveSerialTone,
+  type EtaConfidence,
+  type LiveSerialCardProps,
+  type LiveSerialFacts,
+  type LiveSerialLabels,
+  type LiveSerialTone,
+} from './components/LiveSerialCard.js';

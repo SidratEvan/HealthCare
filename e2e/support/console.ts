@@ -36,6 +36,9 @@ assertLocalDatabase();
 
 const DATABASE_URL = E2E_DATABASE_URL;
 
+/** The API the specs drive, matching `playwright.config.ts`. */
+const API_BASE = 'http://localhost:4000/api/v1';
+
 export interface ConsoleSession {
   readonly sessionId: string;
   readonly hospitalId: string;
@@ -312,4 +315,52 @@ export async function bookingBySerial(
     const row = result.rows[0];
     return row === undefined ? null : { id: row.id, source: row.source };
   });
+}
+
+/**
+ * Revokes a booking's tracking link (`FR-GST-05`).
+ *
+ * "The link is single-booking scoped, expires after the session ends plus a
+ * grace period, and is **revocable**." Revocation is one row, and this is what
+ * a hospital switching a link off would do — so a spec can prove the screen
+ * behind it stops rather than going on showing a number.
+ */
+export async function revokeTrackingLink(bookingId: string): Promise<void> {
+  await withClient(async (client) => {
+    await client.query('UPDATE guest_links SET revoked_at = now() WHERE booking_id = $1', [
+      bookingId,
+    ]);
+  });
+}
+
+/**
+ * Performs a queue action over the API, as a console would.
+ *
+ * Used where the console has no control for it yet. `BTN-B02-DELAY` and
+ * `MOD-B02-DELAY` are named in `APP_FLOW.md` B1.2 but were not built in step 8,
+ * so a spec that needs a declared delay — to prove the *patient* screen reacts
+ * to one (`FR-PAT-34`) — has to raise it the way that button eventually will.
+ *
+ * This goes through the real endpoint, with a real staff token, producing a
+ * real broadcast. It is not a shortcut around the server; it is a stand-in for
+ * one missing button.
+ */
+export async function queueAction(
+  session: ConsoleSession,
+  path: string,
+  body: Record<string, unknown> = {},
+): Promise<void> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${session.token}`,
+      'idempotency-key': crypto.randomUUID(),
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`${path} failed: ${String(response.status)} ${await response.text()}`);
+  }
 }

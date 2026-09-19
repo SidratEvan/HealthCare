@@ -15,6 +15,7 @@ import { Router } from 'express';
 
 import { bookingRoutes } from './booking.routes.js';
 import { discoveryRoutes } from './discovery.routes.js';
+import { guestRoutes } from './guest.routes.js';
 import { healthRoutes } from './health.routes.js';
 import { queueRoutes } from './queue.routes.js';
 import { syncRoutes } from './sync.routes.js';
@@ -37,6 +38,8 @@ export function buildApiRouter(): Router {
   // Public first: discovery is the only unauthenticated surface, and mounting
   // it ahead of the guarded routers keeps that visible at a glance.
   router.use(discoveryRoutes);
+  // Also public: the token in the path is the credential (`FR-GST-05`).
+  router.use(guestRoutes);
   router.use(bookingRoutes);
   router.use(queueRoutes);
   router.use(syncRoutes);

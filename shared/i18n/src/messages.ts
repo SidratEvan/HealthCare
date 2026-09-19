@@ -224,6 +224,97 @@ export const PATIENT = {
   viewLiveSerial: { bn: 'লাইভ সিরিয়াল দেখুন', en: 'See my live serial' },
   backHome: { bn: 'হোমে ফিরুন', en: 'Back to home' },
 
+  // --- Live serial (S-A-08, FR-PAT-30…37) -----------------------------------
+  //
+  // The screen the product is for. Every line here is written to be read once,
+  // at a glance, by somebody standing up in a corridor — so the sentences are
+  // short and every one of them says a thing that can be acted on.
+  liveSerialTitle: { bn: 'আপনার সিরিয়াল', en: 'Your serial' },
+  nowServing: { bn: 'এখন চলছে', en: 'Now serving' },
+  nobodyCalledYet: { bn: 'এখনো কাউকে ডাকা হয়নি', en: 'Nobody has been called yet' },
+  sessionProgress: { bn: 'সেশনের অগ্রগতি', en: 'Progress through the session' },
+  estimatedTime: { bn: 'আনুমানিক সময়', en: 'Estimated time' },
+
+  // FR-QUE-13: a time with a band, never false precision. `{time}` is the
+  // clock reading and `{band}` the half-width in minutes. No "আনুমানিক" here —
+  // the label beside it already says আনুমানিক সময়, and saying it twice reads
+  // like a string that was written without looking at the screen.
+  etaWithBand: { bn: '{time} · ±{band} মিনিট', en: '{time} · ±{band} min' },
+  etaUnknown: { bn: 'এখনো বলা যাচ্ছে না', en: 'Not known yet' },
+  countdown: { bn: 'আর বাকি প্রায় {minutes} মিনিট', en: 'About {minutes} min to go' },
+  patientsAhead: { bn: 'আপনার আগে {count} জন', en: '{count} ahead of you' },
+  youAreNext: { bn: 'আপনিই পরবর্তী', en: 'You are next' },
+
+  // --- Doctor status line (FR-PAT-30) ---------------------------------------
+  doctorNotArrived: { bn: 'ডাক্তার এখনো আসেননি', en: 'The doctor has not arrived yet' },
+  doctorArrivedAt: { bn: 'ডাক্তার এসেছেন {time}', en: 'The doctor arrived at {time}' },
+  doctorDelayed: { bn: '{minutes} মিনিট দেরি', en: '{minutes} min late' },
+  sessionPaused: { bn: 'চেম্বারে বিরতি চলছে', en: 'The chamber is on a break' },
+  sessionEnded: { bn: 'আজকের চেম্বার শেষ', en: "Today's chamber has finished" },
+
+  // --- Called takeover (EVT-PATIENT_CALLED) ---------------------------------
+  yourTurn: { bn: 'আপনার ডাক এসেছে', en: 'You have been called' },
+  goToRoom: { bn: '{room} নম্বর কক্ষে যান', en: 'Go to room {room}' },
+  goToChamber: { bn: 'ডাক্তারের কক্ষে যান', en: 'Go to the chamber' },
+  acknowledge: { bn: 'বুঝেছি', en: 'Got it' },
+
+  // --- Leave-home banner (BANNER-A08-LEAVE, FR-PAT-32) ----------------------
+  leaveNow: {
+    bn: 'এখন রওনা দিন। পৌঁছাতে প্রায় {minutes} মিনিট লাগবে।',
+    en: 'Leave now. It takes about {minutes} min to get there.',
+  },
+
+  // --- Queue preview (LIST-A08-QUEUE) ---------------------------------------
+  queuePreview: { bn: 'সিরিয়ালের অবস্থা', en: 'The queue' },
+  youMarker: { bn: 'আপনি', en: 'You' },
+  inChamber: { bn: 'চেম্বারে', en: 'In the chamber' },
+  waitingHere: { bn: 'অপেক্ষায়', en: 'Waiting' },
+  runningLate: { bn: 'দেরিতে', en: 'Late' },
+  seenAlready: { bn: 'দেখা হয়েছে', en: 'Seen' },
+
+  // --- I'm running late (BTN-A08-LATE, MOD-A08-LATE, FR-PAT-33) -------------
+  declareLate: { bn: 'আমি দেরি করছি', en: 'I am running late' },
+  lateQuestion: { bn: 'কত দেরি হবে?', en: 'How late will you be?' },
+  lateMinutes: { bn: '{minutes} মিনিট', en: '{minutes} min' },
+  lateSending: { bn: 'জানানো হচ্ছে…', en: 'Letting them know…' },
+  lateDone: {
+    bn: 'আপনাকে {count} জন পরে ডাকা হবে।',
+    en: 'You will be called after {count} more patients.',
+  },
+  lateFailed: {
+    bn: 'জানানো যায়নি। কাউন্টারে বলে দিন।',
+    en: 'That did not get through. Please tell the counter.',
+  },
+
+  // --- Cancel (BTN-A08-CANCEL, MOD-A08-CANCEL, GR-01, FR-PAY-03) ------------
+  cancelBooking: { bn: 'বাতিল করুন', en: 'Cancel my serial' },
+  cancelQuestion: { bn: 'সিরিয়াল বাতিল করবেন?', en: 'Cancel your serial?' },
+  // GR-01: the confirm names the consequence, never "are you sure".
+  cancelConsequence: {
+    bn: 'আপনার {serial} নম্বর সিরিয়াল ছেড়ে দেওয়া হবে এবং অন্য কাউকে দেওয়া হতে পারে।',
+    en: 'Serial {serial} will be released and may be given to somebody else.',
+  },
+  // FR-PAY-03: the refund rule is stated before confirming. When the hospital
+  // has recorded none, saying so is the honest answer — inventing a percentage
+  // would be worse than admitting the rule is not on file (`PRD.md` §3.2).
+  refundPolicyUnknown: {
+    bn: 'ফেরতের বিষয়টি হাসপাতাল জানাবে।',
+    en: 'The hospital will confirm anything owed back to you.',
+  },
+  cancelKeep: { bn: 'না, থাক', en: 'Keep my serial' },
+  cancelConfirm: { bn: 'হ্যাঁ, বাতিল করুন', en: 'Yes, cancel it' },
+  cancelled: { bn: 'সিরিয়াল বাতিল করা হয়েছে', en: 'Your serial has been cancelled' },
+  cancelFailed: { bn: 'বাতিল করা যায়নি', en: 'Could not cancel' },
+
+  // --- Live serial failures -------------------------------------------------
+  linkExpired: {
+    bn: 'এই লিংকের মেয়াদ শেষ। নতুন সিরিয়াল নিতে আবার শুরু করুন।',
+    en: 'This link has expired. Start again to book a new serial.',
+  },
+  serialNotFound: { bn: 'সিরিয়ালটি পাওয়া যায়নি', en: 'That serial could not be found' },
+  disconnected: { bn: 'সংযোগ নেই', en: 'No connection' },
+  reconnecting: { bn: 'আবার যুক্ত হচ্ছে…', en: 'Reconnecting…' },
+
   // --- Failures ------------------------------------------------------------
   alreadyBooked: {
     bn: 'এই ডাক্তারের কাছে আজ আপনার সিরিয়াল আগেই নেওয়া আছে।',

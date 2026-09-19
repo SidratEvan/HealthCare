@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: end of step 9 (`feat/patient-booking`).
+Last updated: end of step 10 (`feat/patient-live-serial`) — **the pitch demo milestone**.
 
 ---
 
@@ -25,17 +25,24 @@ Last updated: end of step 9 (`feat/patient-booking`).
 | 7 | `feat/ui-tokens` | merged — tokens, contrast checks, seven primitives |
 | 8 | `feat/console-reception` | merged — sync protocol, offline queue, the console, Playwright |
 | 9 | `feat/patient-booking` | merged — discovery, booking, guest booking, mock payment |
-| **10** | **`feat/patient-live-serial`** | **next** — `<LiveSerialCard>`, session channel, late/cancel. **The pitch demo milestone.** |
+| **10** | **`feat/patient-live-serial`** | **merged — the pitch demo works.** `<LiveSerialCard>`, the session channel on the patient side, late/cancel, and the two-device canary |
+| 11 | `feat/notifications` | **next** — templates, workers, SMS/push adapters |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
 
+**Step 10 is the milestone, and it passes.** A guest books, opens the SMS
+tracking link, and watches the queue move: reception taps *next* on one device
+and the patient's screen updates on another inside the two-second budget
+(`NFR-01`), proven by `e2e/two-device-queue.spec.ts` against a real socket, a
+real reducer and a real database write. That is the pitch (`PRD.md` §24 steps
+1–4). Steps 5–8 of the script — no-show recovery, prescriptions, emergency,
+the admin dashboard — are build steps 11 onward.
+
 **Step 9 is the first step a patient can see.** `frontend/patient` serves
 discovery and the four-stage booking flow in Bangla, and a guest books end to
 end against the mock payment provider without ever meeting a login wall
-(`FR-GST-01`). The tracking link it hands back (`FR-GST-05`) is minted but not
-yet *opened* by a screen — that is step 10, which is what turns it into the
-pitch demo.
+(`FR-GST-01`).
 
 **Step 8 is the first step with a screen.** Steps 5–7 are seeds and design
 tokens; nothing renders before `feat/console-reception`. Step 5 is the first
@@ -47,9 +54,22 @@ tokens stays; no OTP flows, staff passwords or argon2id are to be written. The
 guest tracking link (`FR-GST-05`) is kept, because it is a capability token the
 demo depends on rather than a login.
 
-`pnpm test` reports 1169: 847 unit, 205 api, 80 schema, 37 ui.
-`pnpm test:e2e` reports 15, in Chromium, against the real API and the seeded
-demo database — 10 in `guest-booking.spec.ts`, 5 in `offline-console.spec.ts`.
+`pnpm test` reports 1332.
+`pnpm test:e2e` reports 28, in Chromium, against the real API and the seeded
+demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
+5 in `offline-console.spec.ts`.
+
+### How to open the live serial screen
+
+There is no way to reach `S-A-08` except through a booking, and that is
+correct: the route in is the SMS tracking link (`FR-GST-05`), which is what
+`PRD.md` §24 step 1 demonstrates. Book on any session at
+`http://localhost:3000/book?specialty=CARD`, then tap **লাইভ সিরিয়াল দেখুন** on
+the success screen. The URL it opens is `/s?b=<bookingId>&t=<token>`.
+
+No `guest_links` row is seeded, deliberately: the token is only ever returned
+once, so seeding one would mean printing a live credential into the seed
+output, which CLAUDE.md §7 forbids.
 
 **`ui` is a fourth vitest project**, on jsdom. It is separate from `unit` so a
 developer working on the queue reducer never pays for a DOM, and separate from
@@ -132,6 +152,36 @@ afternoon.
   host unless `E2E_ALLOW_REMOTE_DATABASE=true`. `playwright.config.ts`,
   `globalSetup` and the fixtures all import that one value, so they cannot
   disagree again.
+- **`shared/ui` was never in the Tailwind build, and the symptom was not an
+  unstyled app.** Tailwind v4 detects sources from the directory of the
+  stylesheet that imported it and skips `node_modules`; an app resolves
+  `@platform/ui/styles.css` through the workspace symlink, so detection fell
+  back to the app's own `src`. Every class used *only* inside a design-system
+  component was dropped. Because apps happen to use many of the same classes,
+  the result was a **half-applied** stylesheet rather than a missing one —
+  `bg-surface` worked, `inset-x-0 bottom-0` did not, and the bottom sheet
+  rendered shrink-wrapped at its static position off the bottom of the
+  viewport. Fixed with `@source "./**/*.{ts,tsx}"` in `styles.css`. Any new
+  package that ships classes needs the same line.
+- **A Tailwind class that does not exist fails silently.** `min-h-touch` was
+  written in ten places across `shared/ui` and both apps and was never a
+  utility, so the 44 px minimum `FR-LOC-04` and `A11Y-07` require was simply
+  absent — buttons were 27 px tall. It is now an `@utility` in `styles.css`.
+  So were `duration-instant`, `duration-quick` and `duration-sheet`, which is
+  how `prefers-reduced-motion` was meant to zero every transition at once.
+  There is no build error for this; only looking at the rendered page finds it.
+- **`Intl.DateTimeFormat('bn-BD', { hour, minute })` produces `২:৫৫ PM`.**
+  Bengali digits with a Latin day period stuck on the end — exactly the
+  half-translated output `FRONTEND.md` §0.2 bans, and a direct violation of
+  `I18N-05`. Every clock time now goes through `formatClock` in
+  `@platform/i18n`, which picks the Bangla period word (সকাল / দুপুর / বিকাল /
+  সন্ধ্যা / রাত) and the numerals together. Nothing formats a time in a
+  component.
+- **Slicing an ISO string for a clock time shows UTC.** The console rendered
+  `plannedStart.slice(11, 16)`, so a chamber running 18:00–21:00 in Dhaka read
+  as 12:00–15:00 on the line that says when the session is. Timestamps are UTC
+  in the database (`DB-P4`) and are only ever wall-clock after a timezone
+  conversion.
 - **A shared test database means exact-count assertions must be scoped.**
   `seeds.test.ts` asserted `SELECT * FROM hospitals` had six rows; the graph
   fixture in `seeds/graph.ts` inserts a seventh, so the test passed or failed
@@ -255,6 +305,25 @@ Raised while building the seeds (step 5):
    deliberate "does not yet clear AAA" case that will fail the moment anyone
    darkens it. Caution text is legible either way.
 
+Raised while building the live serial screen (step 10):
+
+12. **`hospital_settings.refund_policy` has no defined shape.** `FR-PAY-03`
+   requires the refund rule to be stated before a cancellation is confirmed,
+   and `MOD-A08-CANCEL` states it — but the column is an untyped `jsonb`
+   defaulting to `{}`, no document says what goes in it, and the seeds write
+   nothing. So the sheet degrades honestly: when the object is empty it says
+   "ফেরতের বিষয়টি হাসপাতাল জানাবে" rather than inventing a percentage
+   (`PRD.md` §3.2). Deciding the shape is a product call, and step 18 needs it
+   answered because that is where a refund is actually paid.
+
+13. **Nothing reissues a freed serial.** Cancelling releases the number —
+   `bookings_session_serial_key` excludes cancelled rows — but `nextSerial`
+   still allocates `max + 1`, so the gap is never filled. `FR-QUE-30` gives the
+   slot to a standby patient through `offerFreedSlot`, which is not built;
+   until it is, a cancelled serial is simply skipped. That is the safe
+   behaviour for now — nobody should silently inherit somebody else's number —
+   and it needs deciding at step 15.
+
 Two are the owner's and are not code:
 
 8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
@@ -268,18 +337,31 @@ Two are the owner's and are not code:
 
 ---
 
-## Running the console
+## Running the pitch demo
+
+Two devices, or two browser windows, which is what `two-device-queue.spec.ts`
+automates.
 
 ```bash
 docker compose up -d                 # Postgres
 DATABASE_URL=…healthcare_dev pnpm db:reset
 pnpm dev:api                         # :4000
-pnpm dev:console                     # :3100
+pnpm dev:console                     # :3100  — reception
+pnpm dev:patient                     # :3000  — the patient
 ```
 
-Then open `http://localhost:3100/?session=<id>` with a staff token in
-`sessionStorage` under `console.token`. There is no login screen by design
-(CLAUDE.md §4.1) — `e2e/support/console.ts` shows how a principal is minted.
+1. **Patient**: `http://localhost:3000`, pick a specialty, pick the doctor and
+   the chamber, fill in name / phone / age, confirm. The success screen shows
+   the serial and **লাইভ সিরিয়াল দেখুন** — tap it.
+2. **Reception**: `http://localhost:3100/?session=<id>` with a staff token in
+   `sessionStorage` under `console.token`. There is no login screen by design
+   (CLAUDE.md §4.1); `e2e/support/console.ts` shows how a principal is minted.
+   Use the session the booking was made on.
+3. Tap **পরবর্তী রোগী ডাকুন**. The patient's "এখন চলছে" changes within two
+   seconds, the progress track advances, and the ETA moves.
+
+The patient screen also carries **আমি দেরি করছি** and **বাতিল করুন**, both of
+which write real events the console sees.
 
 **Next is pinned to `--webpack`.** The shared packages import with the `.js`
 extensions Node ESM requires; webpack resolves those through `extensionAlias`
@@ -295,17 +377,19 @@ Turbopack is substantially faster and this is the only thing holding it off.
   so nothing renders it yet. It holds no credential and calls no endpoint — it
   is the input primitive, and Supabase's flow will need exactly this box.
 
-- **Three signature components (`FRONTEND.md` §6) remain.** `<FreshnessLine>`
-  and `<QueueTable>` are built and rendering. `<LiveSerialCard>` is step 10;
-  `<BedTile>` and `<CapacityMirror>` are step 14; `<DelaySheet>` lands with the
-  delay flow it belongs to.
+- **Two signature components (`FRONTEND.md` §6) remain.** `<FreshnessLine>`,
+  `<QueueTable>` and `<LiveSerialCard>` are built and rendering. `<BedTile>`
+  and `<CapacityMirror>` are step 14; `<DelaySheet>` lands with the delay flow
+  it belongs to — see the next item.
 
 - **Tailwind is v4 and compiles in both apps.** The v3-style JS preset was
   replaced by `@theme inline` in `shared/ui/src/styles.css`, which maps every
   utility onto the token variables and clears Tailwind's own palette
-  (`--color-*: initial`), so `bg-indigo-500` does not exist. `--radius-*` and
-  `--font-*` sit in `@theme` rather than `tokens.css` because those are
-  Tailwind's own namespaces.
+  (`--color-*: initial`), so `bg-indigo-500` does not exist. `--radius-*`,
+  `--font-*` and `--duration-*` sit in `@theme` rather than `tokens.css`
+  because those are Tailwind's own namespaces, and `min-h-touch` is an
+  `@utility` because Tailwind has no such thing. The `@source` line at the top
+  is load-bearing — see the note under "things learned the hard way".
 
 - **No authentication is implemented, by decision** (`CLAUDE.md` §4.1). Under
   `DEMO_MODE=true` the console selects a hospital and role without a password,
@@ -328,6 +412,29 @@ Turbopack is substantially faster and this is the only thing holding it off.
   shows as scheduled with no events. That is honest — nothing was recorded —
   but it is a wart for a late demo. The pitch session itself is always built
   backwards from the current instant, so it is correctly mid-queue at any hour.
+- **Reschedule is not built, so `<DelaySheet>` is not either.** `BTN-A08-RESCHEDULE`
+  and `POST /bookings/:id/reschedule` need `S-A-07b` in reschedule mode, which
+  is its own flow; step 10's contents in `CLAUDE.md` §4 name late and cancel.
+  `FR-PAT-34`'s one-tap keep/reschedule/cancel therefore waits for it. What
+  *is* built is the patient's side of a declared delay: `session.delayed`
+  reaches the screen, the surface shifts to the warn family and the status line
+  states the minutes, which `two-device-queue.spec.ts` asserts. The button is
+  absent rather than present and dead.
+
+- **The console has no delay control.** `BTN-B02-DELAY` and `MOD-B02-DELAY` are
+  named in `APP_FLOW.md` B1.2 but were not built in step 8, so
+  `two-device-queue.spec.ts` raises the delay through `POST /sessions/:id/delay`
+  with a staff token — see `queueAction` in `e2e/support/console.ts`. The
+  endpoint and the broadcast are real; only the button is missing. Worth adding
+  before the pitch, since `PRD.md` §24 step 3 has a person tapping it.
+
+- **`rateLimit` keys on `req.path`, which makes it useless on a path
+  parameter.** The key is `${method}:${path}:${keyFor(req)}`, so
+  `/guest/link/:token` would get one bucket per token and never trigger.
+  Nothing relies on it there — a tracking token is 32 random bytes, so guessing
+  is not the threat — but the next parameterised route that wants a limit needs
+  `rateLimit` changed first.
+
 - **Notifications are not published from the queue service.** Step 11 of
   `BACKEND.md` §4.1 fires the called / delayed / two-away / slot-offered
   messages; that is build step 11. The seam is marked in `queue.service.ts` and
@@ -343,12 +450,11 @@ Turbopack is substantially faster and this is the only thing holding it off.
   from TypeScript source, so a deployable build needs either emitted output from
   `shared/domain` or a bundler. That is a dependency decision for the owner,
   and it blocks the Render deploy at step 6.
-- **Two of the five required Playwright specs exist** (`CLAUDE.md` §6):
-  `offline-console.spec.ts` and `guest-booking.spec.ts`. Still to write:
-  `two-device-queue.spec.ts` (step 10 — the product's canary, never skipped),
-  `no-show-recovery.spec.ts`, `emergency-burn.spec.ts`.
-  `guest-booking.spec.ts` asserts the booking and the issued tracking link but
-  not yet "open the SMS link, see the live serial"; that third of it is added
-  in step 10 rather than left unwritten.
+- **Three of the five required Playwright specs exist** (`CLAUDE.md` §6):
+  `two-device-queue.spec.ts` — the canary, five tests — plus
+  `guest-booking.spec.ts`, now complete including "open the SMS link, see the
+  live serial", and `offline-console.spec.ts`. Still to write:
+  `no-show-recovery.spec.ts` (its recovery figure is step 19) and
+  `emergency-burn.spec.ts` (step 15).
 - **`frontend/site` is still empty.** `shared/client`, `frontend/console` and
   `frontend/patient` are built.

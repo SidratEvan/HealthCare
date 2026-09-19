@@ -24,6 +24,14 @@ export {
 } from './messages.js';
 
 export {
+  DAY_PERIODS,
+  DHAKA,
+  dayPeriod,
+  formatClock,
+  formatDateTime,
+} from './datetime.js';
+
+export {
   NUMERAL_STYLE_BY_SURFACE,
   formatMinutes,
   formatNumber,
