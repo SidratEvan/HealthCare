@@ -138,6 +138,11 @@ knowing before you open a laptop in front of somebody.
 
 Two projects from the same repository. The difference is one setting.
 
+Vercel detects the pnpm workspace from `pnpm-workspace.yaml` at the repository
+root and installs there, then builds the app in its Root Directory. It needs no
+custom install or build command, and giving it one is a good way to break it —
+`vercel.json` in each app declares the framework and nothing else.
+
 ### 3.1 The patient app
 
 | Setting | Value |
