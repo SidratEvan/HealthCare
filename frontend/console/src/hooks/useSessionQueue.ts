@@ -48,7 +48,7 @@ import {
 
 import { createSyncTransport } from '@/lib/sync';
 
-export interface ReceptionQueue {
+export interface SessionQueue {
   /** What the screen renders: server state plus anything queued locally. */
   readonly state: QueueState | null;
   readonly connected: boolean;
@@ -63,7 +63,7 @@ export interface ReceptionQueue {
   readonly loading: boolean;
 }
 
-export interface ReceptionQueueOptions {
+export interface SessionQueueOptions {
   readonly sessionId: string;
   readonly apiBaseUrl: string;
   readonly socketUrl: string;
@@ -72,7 +72,7 @@ export interface ReceptionQueueOptions {
   readonly now?: () => Date;
 }
 
-export function useReceptionQueue(options: ReceptionQueueOptions): ReceptionQueue {
+export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
   const { sessionId, apiBaseUrl, socketUrl } = options;
 
   /**

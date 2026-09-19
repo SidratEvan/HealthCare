@@ -559,6 +559,21 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 ## B2. Doctor console — `S-B-05`
 
+> **Built in this version:** the session header, `BTN-B05-DELAY`, the patient
+> panel, `INP-B05-DX`, `INP-B05-ADVICE`, `SEL-B05-FOLLOWUP`, `BTN-B05-DRAFT` and
+> `BTN-B05-SIGN`.
+>
+> **Not built:** `TBL-B05-RX`, `BTN-B05-ADDRX` and the printing half of
+> `BTN-B05-SIGN` — prescribing is out of scope for this version (`PRD.md` §9).
+> `BTN-B05-SCAN` is build step 13 and `BTN-B05-TEST` is step 17. Each is absent
+> from the screen rather than shown disabled: a control that cannot work should
+> not be on a screen a doctor is learning.
+>
+> `BTN-B05-NEXT` is absent too, and deliberately: `BTN-B05-SIGN` already
+> finishes the patient and calls the next one, so a second control doing half of
+> that would give a doctor two ways to end a consultation and one of them would
+> lose the record.
+
 | Element | ID | Wiring |
 |---|---|---|
 | Session header | — | Seen / waiting / average duration / running late indicator |
@@ -573,9 +588,9 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 | Advice box | `INP-B05-ADVICE` | Printed in Bangla for the patient (`FR-DOC-07`) |
 | Follow-up | `SEL-B05-FOLLOWUP` | 7/14/30 days or date → schedules patient reminder (`FR-PAT-80`) |
 | খসড়া রাখুন | `BTN-B05-DRAFT` | Saves without finishing the consultation |
-| **ব্যবস্থাপত্র দিন ও পরবর্তী** | `BTN-B05-SIGN` | Signs prescription → writes record to patient wallet → prints → `EVT-PATIENT_DONE` + `EVT-PATIENT_CALLED` for the next patient (`FR-DOC-08`) |
+| **রেকর্ড দিন ও পরবর্তী** | `BTN-B05-SIGN` | Signs the visit → writes the record to the patient wallet → `EVT-PATIENT_DONE` + `EVT-PATIENT_CALLED` for the next patient (`FR-DOC-08`). Printing is part of the prescribing scope this version does not have |
 
-**Failure handling:** if the prescription fails to save, the consultation is **not** marked done, and the doctor sees a retry banner with the draft preserved locally.
+**Failure handling:** if the record fails to save, the consultation is **not** marked done, and the doctor sees a retry banner with the draft preserved on screen. The record is written first and the queue advances only on success, which is what makes that order observable rather than aspirational.
 
 ---
 

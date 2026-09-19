@@ -16,6 +16,15 @@ export interface DemoSession {
   readonly token: string;
   readonly hospitalId: string;
   readonly staffName: string;
+  /**
+   * Which console to open.
+   *
+   * `S-B-01` has always offered a role — `FR-ROLE-01` scopes every one of them
+   * to a hospital — but the choice was thrown away and everybody landed on
+   * reception. The doctor console (`S-B-05`) is a different screen for the same
+   * chamber, so the role has to survive the picker.
+   */
+  readonly role: string;
 }
 
 const STORAGE_KEY = 'console.demo-session';

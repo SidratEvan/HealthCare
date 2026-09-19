@@ -10,7 +10,7 @@
  * All of that already exists, framework-free, in `@platform/client` —
  * `openSessionChannel` owns the socket lifetime, the resume handshake and the
  * staleness rule, and is tested in plain Node. This hook is the React wrapper
- * over it, and the console's `useReceptionQueue` wraps the same object for the
+ * over it, and the console's `useSessionQueue` wraps the same object for the
  * same reason: there is one definition of how a client talks to a session, and
  * neither side gets its own.
  *
@@ -57,7 +57,7 @@ export function useSessionChannel(options: SessionChannelOptions): SessionChanne
    * creates a new function every render. With that in the effect's
    * dependencies the socket tears down and reopens on each one and never
    * finishes its handshake, which the console learned the expensive way
-   * (`useReceptionQueue`).
+   * (`useSessionQueue`).
    */
   const getTokenRef = useRef(options.getToken);
   getTokenRef.current = options.getToken;

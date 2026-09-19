@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { ConsolePicker } from '@/components/ConsolePicker';
+import { DoctorConsole } from '@/components/DoctorConsole';
 import { ReceptionConsole } from '@/components/ReceptionConsole';
 import { readDemoSession } from '@/lib/demo';
 
@@ -46,9 +47,17 @@ export default function Page(): ReactNode {
   // A chamber in the URL *and* a principal in storage is a console ready to
   // open. Either one missing means the picker, which is `S-B-01` standing in
   // for the login this version does not have (CLAUDE.md §4.1).
-  if (sessionId === null || readDemoSession() === null) {
+  const session = readDemoSession();
+  if (sessionId === null || session === null) {
     return <ConsolePicker onChosen={chosen} />;
   }
 
-  return <ReceptionConsole />;
+  // The role decides which console, because `S-B-02` and `S-B-05` are two
+  // screens onto the same chamber. Until now the picker offered a role and then
+  // opened reception whatever was chosen, which made the doctor button a lie.
+  //
+  // Unrecognised roles land on reception deliberately: `hospital_admin` is
+  // `S-B-10` and is build step 19, and a console that renders nothing would be
+  // worse than one that shows the queue.
+  return session.role === 'doctor' ? <DoctorConsole /> : <ReceptionConsole />;
 }

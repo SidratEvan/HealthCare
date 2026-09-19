@@ -22,11 +22,17 @@ describe('migration files (DATABASE.md §7)', () => {
   const migrations = readMigrations();
 
   it('covers the migrations the build has reached, and no others', () => {
-    // 0001–0006 were step 1. 0010 arrived with step 11 (notifications), ahead
-    // of 0007–0009, because the build order reaches messaging before clinical
+    // 0001–0006 were step 1. 0010 arrived with step 11 (notifications) ahead of
+    // 0007–0009, because the build order reaches messaging before clinical
     // records, beds and money — and nothing in 0010 depends on any of them.
+    // 0007 then landed with step 12, *behind* an already-applied 0010.
+    //
     // The runner applies whatever a database has not seen, in filename order,
-    // so a fresh build and an incrementally migrated one converge either way.
+    // so a fresh build and an incrementally migrated one converge either way:
+    // a new database runs 0007 before 0010, an existing one runs it after, and
+    // neither ordering matters because the dependency runs the other way —
+    // 0010 deliberately left `feedback` out *because* its foreign key needs
+    // `visits`, and 0007 creates both.
     expect(migrations.map((m) => m.version)).toEqual([
       '0001',
       '0002',
@@ -34,6 +40,7 @@ describe('migration files (DATABASE.md §7)', () => {
       '0004',
       '0005',
       '0006',
+      '0007',
       '0010',
     ]);
   });

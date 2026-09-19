@@ -160,6 +160,84 @@ export const CONSOLE = {
     en: 'No connection — this is queued to send.',
   },
 
+  // --- Doctor console (S-B-05, APP_FLOW.md B2) -----------------------------
+  doctorConsole: { bn: 'ডাক্তারের স্ক্রিন', en: 'Doctor console' },
+  receptionConsole: { bn: 'রিসেপশন', en: 'Reception' },
+
+  // The session header (FR-DOC-01): seen, waiting, average, running late.
+  runningLate: { bn: 'দেরিতে চলছে', en: 'Running late' },
+  onTime: { bn: 'সময়মতো চলছে', en: 'On time' },
+  sessionEarnings: { bn: 'আজকের আদায়', en: 'Collected today' },
+
+  // The patient panel (FR-DOC-03).
+  patientPanel: { bn: 'রোগীর তথ্য', en: 'Patient' },
+  years: { bn: 'বছর', en: 'years' },
+  sexMale: { bn: 'পুরুষ', en: 'Male' },
+  sexFemale: { bn: 'মহিলা', en: 'Female' },
+  sexOther: { bn: 'অন্য', en: 'Other' },
+  bloodGroup: { bn: 'রক্তের গ্রুপ', en: 'Blood group' },
+  chiefComplaint: { bn: 'যে কারণে এসেছেন', en: 'Reason for visit' },
+  symptomDuration: { bn: 'কত দিন ধরে', en: 'Duration' },
+  chronicConditions: { bn: 'দীর্ঘমেয়াদি রোগ', en: 'Chronic conditions' },
+  currentMedicines: { bn: 'বর্তমানে যে ওষুধ চলছে', en: 'Current medicines' },
+  allergies: { bn: 'অ্যালার্জি', en: 'Allergies' },
+  noneDeclared: { bn: 'কিছু জানানো হয়নি', en: 'None declared' },
+  intakeNotAsked: {
+    bn: 'রোগী আগে থেকে কোনো তথ্য দেননি। সরাসরি জিজ্ঞেস করুন।',
+    en: 'The patient answered nothing beforehand. Ask directly.',
+  },
+  pastVisits: { bn: 'আগের ভিজিট', en: 'Past visits' },
+  noPastVisits: { bn: 'এই রোগীর আগের কোনো রেকর্ড নেই', en: 'No earlier records for this patient' },
+  // `PRD.md` §3.2: absent is stated, never implied by a blank.
+  prescriptionsAbsent: {
+    bn: 'এই সংস্করণে ব্যবস্থাপত্র নেই',
+    en: 'Prescriptions are not part of this version',
+  },
+  reportsAbsent: {
+    bn: 'টেস্টের রিপোর্ট এখনো যুক্ত হয়নি',
+    en: 'Test reports are not connected yet',
+  },
+
+  // The note (INP-B05-DX, INP-B05-ADVICE, SEL-B05-FOLLOWUP).
+  visitNote: { bn: 'ভিজিটের রেকর্ড', en: 'Visit record' },
+  diagnosis: { bn: 'রোগ নির্ণয়', en: 'Diagnosis' },
+  diagnosisHint: { bn: 'যা বুঝলেন, সংক্ষেপে', en: 'What you concluded, briefly' },
+  adviceBn: { bn: 'রোগীর জন্য পরামর্শ (বাংলায়)', en: 'Advice for the patient (in Bangla)' },
+  adviceHint: {
+    bn: 'রোগী এটিই পড়বেন, তাই সহজ বাংলায় লিখুন',
+    en: 'The patient reads this, so write it in plain Bangla',
+  },
+  followUp: { bn: 'আবার কবে দেখাবেন', en: 'Follow-up' },
+  followUpNone: { bn: 'দরকার নেই', en: 'Not needed' },
+  followUpDays: { bn: '{days} দিন পর', en: 'In {days} days' },
+
+  saveDraft: { bn: 'খসড়া রাখুন', en: 'Save draft' },
+  draftSaved: { bn: 'খসড়া রাখা হয়েছে', en: 'Draft saved' },
+  signAndNext: { bn: 'রেকর্ড দিন ও পরবর্তী', en: 'Save record and next' },
+  signedAndCalled: {
+    bn: 'রেকর্ড জমা হয়েছে। সিরিয়াল {serial} ডাকা হয়েছে।',
+    en: 'Record saved. Serial {serial} called.',
+  },
+  signedNobodyLeft: {
+    bn: 'রেকর্ড জমা হয়েছে। আর কেউ অপেক্ষায় নেই।',
+    en: 'Record saved. Nobody left waiting.',
+  },
+  // APP_FLOW.md B2: "if the prescription fails to save, the consultation is
+  // **not** marked done… with the draft preserved locally".
+  visitSaveFailed: {
+    bn: 'রেকর্ড জমা হয়নি, তাই রোগী শেষ করা হয়নি। যা লিখেছেন তা রয়ে গেছে — আবার চেষ্টা করুন।',
+    en: 'The record did not save, so the consultation was not closed. What you wrote is still here — try again.',
+  },
+  needSomethingToSign: {
+    bn: 'রোগ নির্ণয়, পরামর্শ বা ফলো-আপ — অন্তত একটি লিখুন',
+    en: 'Write at least one of diagnosis, advice or follow-up',
+  },
+  nobodyToSee: {
+    bn: 'চেম্বারে কেউ নেই। রিসেপশন পরের রোগী ডাকলে এখানে দেখা যাবে।',
+    en: 'Nobody is in the chamber. The next patient appears here when reception calls them.',
+  },
+  waitingNext: { bn: 'এরপরে', en: 'Next' },
+
   // --- The four states every screen has (GR-03) ----------------------------
   loading: { bn: 'লোড হচ্ছে', en: 'Loading' },
   emptyQueue: { bn: 'এই চেম্বারে এখনো কোনো সিরিয়াল নেই', en: 'No serials in this chamber yet' },

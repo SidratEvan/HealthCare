@@ -48,12 +48,14 @@ import {
   type Timestamp,
 } from '@platform/domain';
 
-import { complaintsFor } from './data/reference.js';
+import { assessmentFor, complaintsFor, DEMO_FORMULARY } from './data/reference.js';
 import {
   bookingSource,
+  buildIntake,
   insertBookings,
   loadPatients,
   type BookingDraft,
+  type InsertedBooking,
   type PatientRow,
 } from './lib/bookings.js';
 import { appendEvents, writeProjections, type EventDraft } from './lib/events.js';
@@ -85,16 +87,26 @@ export const seed04History: SeedModule = {
   name: 'seed_04_history',
   title: 'five hundred completed past visits and their event logs',
   requirements: ['FR-DEM-03', 'FR-QUE-12', 'FR-ADM-03'],
-  writes: ['sessions', 'bookings', 'queue_events', 'queue_state'],
-  // Not a skip: `visits`, `prescriptions` and `reports` are 0007, and this
-  // module runs without them. Named so the runner prints what is missing.
-  deferred: ['FR-DEM-03 (prescriptions and reports — migration 0007)'],
+  writes: ['sessions', 'bookings', 'queue_events', 'queue_state', 'visits', 'medicines'],
+  // `visits` arrived with migration 0007, so the record half of `FR-DEM-03` is
+  // written now. Prescriptions are not deferred but **dropped**: the owner
+  // removed e-prescriptions from this version (`FR-DOC-04`), so there is no
+  // longer anything to wait for. Reports come with the lab at step 17.
+  deferred: ['FR-DEM-03 (reports — build step 17, feat/lab-pharmacy)'],
 
   async run({ client, now, rng, log }: SeedContext): Promise<SeedSummary> {
     const history = rng.stream('history');
     const seededChambers = await chambers(client);
     const patients = await loadPatients(client);
     const receptionists = await staffByRole(client, 'receptionist');
+
+    // `visits.created_by` is the staff account that signed the record. The
+    // roster gives one doctor account per facility, which is the right grain:
+    // the visit already names the doctor through `doctor_id`, and this column
+    // records who was at the keyboard (`DB-P3`).
+    const doctorAccounts = await staffByRole(client, 'doctor');
+
+    const formulary = await insertFormulary(client);
 
     const plans = choosePastSessions(history, seededChambers, now);
     const perSession = allocateVisits(plans.length, HISTORY_VISIT_TARGET);
@@ -130,6 +142,7 @@ export const seed04History: SeedModule = {
         serial: position + 1,
         ...bookingSource(history, outcome.patient),
         ...complaint(history, plan.chamber.departmentCode),
+        intake: buildIntake(history),
         cancelledReason: outcome.kind === 'cancelled' ? history.pick(CANCELLATION_REASONS) : null,
       }));
 
@@ -170,10 +183,28 @@ export const seed04History: SeedModule = {
         now,
       );
 
+      const written = await insertVisits(
+        client,
+        plan,
+        inserted,
+        outcomes,
+        history,
+        doctorAccounts.get(plan.chamber.hospitalSlug) ?? null,
+      );
+
+      // The count the log prints is the count the database holds, not the
+      // number this module intended to write. `FR-DEM-03` is a promise about
+      // rows.
+      if (written !== completed) {
+        throw new Error(
+          `Session ${sessionId}: ${String(completed)} consultations finished but ${String(written)} records were written.`,
+        );
+      }
+
       sessions += 1;
       bookings += inserted.length;
       events += appended.length;
-      visits += completed;
+      visits += written;
       noShows += extraNoShows;
       cancellations += extraCancellations;
     }
@@ -187,13 +218,18 @@ export const seed04History: SeedModule = {
     log(
       `      ${String(visits)} completed visits, ${String(noShows)} no-shows, ${String(cancellations)} cancellations across ${String(sessions)} past sessions`,
     );
-    log('      deferred to migration 0007: prescriptions, reports, visit records');
+    log(
+      `      ${String(visits)} signed visit records, ${String(formulary)} medicines in the formulary`,
+    );
+    log('      no prescriptions: FR-DOC-04 was dropped from this version; reports land at step 17');
 
     return {
       sessions,
       bookings,
       queue_events: events,
       queue_state: sessions,
+      visits,
+      medicines: formulary,
     };
   },
 };
@@ -514,4 +550,136 @@ async function insertPastSession(
   const row = rows[0];
   if (row === undefined) throw new Error('sessions insert returned no id.');
   return row.id;
+}
+
+/**
+ * The record each completed consultation left behind (`FR-DEM-03`, 0007).
+ *
+ * `FR-DEM-03` asks for "~500 historical visits with prescriptions and reports".
+ * The visits and their notes land here; prescriptions do not, because the owner
+ * dropped e-prescriptions from this version (`FR-DOC-04`), and reports arrive
+ * with the lab at step 17. So the history holds what this product can honestly
+ * produce today: a diagnosis, advice in Bangla, and sometimes a follow-up date.
+ *
+ * ## Why the note follows the complaint
+ *
+ * `assessmentFor` is keyed on the complaint the booking already carries, so a
+ * patient who came with knee pain has a knee assessment. Drawing the two
+ * independently would be cheaper and would produce records that fall apart the
+ * moment a hospital director reads one — which is exactly the screen they will
+ * read first.
+ *
+ * ## Why these are signed
+ *
+ * `signed_at` is what makes a visit a record rather than a draft
+ * (`BTN-B05-SIGN`). A past consultation that was never signed would be a
+ * half-finished note sitting in a chamber that closed months ago, and the
+ * wallet would correctly refuse to show it — leaving step 13 with an empty
+ * screen (CLAUDE.md §5.3).
+ */
+async function insertVisits(
+  client: Client,
+  plan: PastSession,
+  bookings: readonly InsertedBooking[],
+  outcomes: readonly Outcome[],
+  rng: Rng,
+  doctorStaffId: string | null,
+): Promise<number> {
+  const rows: unknown[][] = [];
+
+  for (const [index, outcome] of outcomes.entries()) {
+    if (outcome.kind !== 'done') continue;
+
+    const booking = bookings[index];
+    if (booking === undefined) {
+      throw new Error(`No booking for outcome ${String(index)}; the two lists must stay aligned.`);
+    }
+
+    const { diagnosisBn, adviceBn } = assessmentFor(booking.complaintEn);
+
+    // The consultation ended some time inside the session, so the record is
+    // dated when it was written rather than when the seed ran.
+    const seenAt = time.addMinutes(plan.plannedStart, rng.int(10, 170));
+
+    // About half carry a follow-up. Every patient being told to come back is a
+    // clinic with no discharges, and `FR-PAT-80` would then remind all 500.
+    const followUpDays = rng.chance(0.5) ? rng.pick([7, 14, 30, 90]) : null;
+
+    rows.push([
+      booking.id,
+      booking.patient.id,
+      plan.chamber.hospitalId,
+      plan.chamber.doctorId,
+      diagnosisBn,
+      adviceBn,
+      followUpDays === null ? null : dhakaDateOf(seenAt, followUpDays),
+      seenAt,
+      seenAt,
+      doctorStaffId,
+    ]);
+  }
+
+  if (rows.length === 0) return 0;
+
+  const inserted = await insertRows<{ id: string }>(
+    client,
+    'visits',
+    {
+      columns: [
+        'booking_id',
+        'patient_id',
+        'hospital_id',
+        'doctor_id',
+        'diagnosis_text',
+        'advice_text_bn',
+        'follow_up_date',
+        'signed_at',
+        'created_at',
+        'created_by',
+      ],
+    },
+    rows,
+  );
+
+  return inserted.length;
+}
+
+/** The Dhaka calendar date `days` after an instant, as `YYYY-MM-DD`. */
+function dhakaDateOf(at: Timestamp, days: number): string {
+  return time.toDhakaDate(time.addMinutes(at, days * 24 * 60));
+}
+
+/**
+ * The medicine formulary (`FR-DOC-05`, DATABASE.md §7's "formulary sample").
+ *
+ * `seed_00_reference.sql` says this lands "in the same branch as the
+ * e-prescription screen that needs autocomplete over it". That screen was
+ * dropped (`FR-DOC-04`), so nothing reads these rows in this version — but the
+ * table is real, the sample is small and declared (CLAUDE.md §8), and the
+ * alternative is a table that exists with nothing in it for whoever builds
+ * prescribing later.
+ *
+ * It lives in this module rather than in the SQL file because the data lives in
+ * `data/reference.ts`, and the precedent is already set there: reference data is
+ * written from TypeScript, where the row is written, so the list and the rows
+ * cannot drift.
+ */
+async function insertFormulary(client: Client): Promise<number> {
+  const rows = DEMO_FORMULARY.map((medicine) => [
+    medicine.generic,
+    medicine.brand,
+    medicine.manufacturer,
+    // Postgres array literal: the driver sends text[] as `{a,b}`.
+    `{${medicine.strengths.map((strength) => `"${strength}"`).join(',')}}`,
+    medicine.form,
+  ]);
+
+  const inserted = await insertRows<{ id: string }>(
+    client,
+    'medicines',
+    { columns: ['generic_name', 'brand_name', 'manufacturer', 'strengths', 'form'] },
+    rows,
+  );
+
+  return inserted.length;
 }
