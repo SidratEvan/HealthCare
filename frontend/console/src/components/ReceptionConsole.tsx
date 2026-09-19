@@ -12,7 +12,7 @@
  * ## `BTN-B02-NEXT` carries the product
  *
  * B1.3 is the single most-used control in the system, and every step of its
- * wiring is here or in `useReceptionQueue`:
+ * wiring is here or in `useSessionQueue`:
  *
  *   1. the label changes to "এই রোগী শেষ ও পরবর্তী" when somebody is still in
  *      the chamber, and performs both actions
@@ -40,7 +40,7 @@ import { Button, Card, FreshnessLine, ToastProvider, useToast } from '@platform/
 
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
-import { useReceptionQueue } from '@/hooks/useReceptionQueue';
+import { useSessionQueue } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 
 import type { ReactNode } from 'react';
@@ -112,7 +112,7 @@ function ConsoleBody(): ReactNode {
     };
   }, []);
 
-  const queue = useReceptionQueue({
+  const queue = useSessionQueue({
     sessionId: sessionId ?? '',
     apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
     socketUrl: process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:4000',

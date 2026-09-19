@@ -110,6 +110,7 @@ export {
 export * from './schemas/queue.schema.js';
 export * from './schemas/sync.schema.js';
 export * from './schemas/booking.schema.js';
+export * from './schemas/clinical.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';

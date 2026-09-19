@@ -54,6 +54,7 @@ import {
 import { complaintsFor, DEMO_LIVE } from './data/reference.js';
 import {
   bookingSource,
+  buildIntake,
   insertBookings,
   loadPatients,
   recountGuestBookings,
@@ -141,6 +142,7 @@ export const seed07DemoLive: SeedModule = {
         serial: index + 1,
         ...bookingSource(live, patient),
         ...complaint(live, session.departmentCode),
+        intake: buildIntake(live),
         cancelledReason: null,
       }));
 
@@ -168,6 +170,7 @@ export const seed07DemoLive: SeedModule = {
       serial: index + 1,
       ...bookingSource(live, patient),
       ...complaint(live, DEMO_LIVE.departmentCode),
+      intake: buildIntake(live),
       cancelledReason: null,
     }));
 
