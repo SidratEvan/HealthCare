@@ -103,9 +103,17 @@ const schema = z.object({
   // --- Runtime ------------------------------------------------------------
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: port.default(4000),
-  API_BASE_URL: httpUrl,
+  /**
+   * This API's own public address.
+   *
+   * Defaulted rather than required. Nothing reads it — it is here because
+   * BACKEND.md §10 lists it and a deployment will want it for links it does
+   * not yet generate — and a required variable with no consumer is one a
+   * deploy fails on for no benefit anybody can point at.
+   */
+  API_BASE_URL: httpUrl.default('http://localhost:4000'),
   /** The patient PWA. What a guest tracking link is built from (`FR-GST-05`). */
-  WEB_BASE_URL: httpUrl,
+  WEB_BASE_URL: httpUrl.default('http://localhost:3000'),
   /**
    * The staff console.
    *
@@ -128,8 +136,16 @@ const schema = z.object({
    * So the itemisation is real and the rate is configuration, defaulting to
    * zero. A demo therefore shows a breakdown that adds up and claims no price
    * nobody has agreed to.
+   *
+   * `nonnegative`, not `positive().or(literal(0))`. The union looked
+   * equivalent and was not: an environment variable arrives as a *string*, so
+   * `"0"` coerced to 0 failed `.positive()`, and then `z.literal(0)` was
+   * handed the string `"0"` and failed too, because a literal does not coerce.
+   * The default masked it — the value only parses when it is absent — so
+   * `PLATFORM_FEE_POISHA=0`, which is what `.env.example` and `render.yaml`
+   * both say to write, was the one setting that could not be set.
    */
-  PLATFORM_FEE_POISHA: positiveInt.or(z.literal(0)).default(0),
+  PLATFORM_FEE_POISHA: z.coerce.number().int().nonnegative().default(0),
 
   // --- Database (DATABASE.md) ---------------------------------------------
   DATABASE_URL: z.string().min(1),

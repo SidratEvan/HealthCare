@@ -194,3 +194,42 @@ describe('production', () => {
     expect(problemsOf({ ...PROD, SENTRY_DSN: '' })).toContain('SENTRY_DSN');
   });
 });
+
+/**
+ * Every value the shipped configuration actually tells somebody to write.
+ *
+ * `.env.example` and `render.yaml` are the two files a person copies from, so
+ * a value either of them contains has to parse. `PLATFORM_FEE_POISHA=0` did
+ * not, and nothing caught it because the schema's default masked the failure:
+ * the variable only parsed while it was absent, and both templates say to set
+ * it.
+ */
+describe('the shipped configuration parses', () => {
+  it('accepts a platform fee of zero, which is what both templates say', () => {
+    // An environment variable is a string. `positive().or(literal(0))` looked
+    // equivalent to `nonnegative()` and was not: "0" coerced to 0 failed
+    // `.positive()`, and `z.literal(0)` was then handed the string and failed
+    // too, because a literal does not coerce.
+    expect(loadEnv({ ...DEV, PLATFORM_FEE_POISHA: '0' }).PLATFORM_FEE_POISHA).toBe(0);
+  });
+
+  it('accepts a real fee', () => {
+    expect(loadEnv({ ...DEV, PLATFORM_FEE_POISHA: '2500' }).PLATFORM_FEE_POISHA).toBe(2500);
+  });
+
+  it('still refuses a negative fee', () => {
+    // Money is integer poisha (`DB-P5`), and a negative platform fee would pay
+    // the hospital out of the platform's pocket on every booking.
+    expect(() => loadEnv({ ...DEV, PLATFORM_FEE_POISHA: '-1' })).toThrow(EnvError);
+  });
+
+  it('boots without the base URLs a deployment fills in later', () => {
+    // `API_BASE_URL` has no consumer, and `WEB_BASE_URL` has a sensible local
+    // default. Requiring either meant a first deploy failed at boot on a
+    // variable nobody had a value for yet.
+    const { API_BASE_URL, ...withoutApiUrl } = DEV;
+    void API_BASE_URL;
+
+    expect(() => loadEnv(withoutApiUrl)).not.toThrow();
+  });
+});
