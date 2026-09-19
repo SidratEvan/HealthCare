@@ -247,3 +247,8 @@ function toSessionRow(row: SessionQueryRow): SessionRow {
     defaultConsultMinutes: row.default_consult_minutes,
   };
 }
+
+/** Changes how many serials a session offers. */
+export async function setCapacity(sessionId: string, capacity: number): Promise<void> {
+  await sql`UPDATE sessions SET capacity = ${capacity} WHERE id = ${sessionId}`.execute(db);
+}

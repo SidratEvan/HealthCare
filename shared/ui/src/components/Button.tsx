@@ -19,6 +19,12 @@
  * the API makes the silent version impossible to write.
  */
 
+'use client';
+
+// Interactive: it takes an `onClick` and renders a spinner, so it belongs on
+// the client. Marked here rather than in each app, because a design system
+// that makes its consumers work out which of its parts are interactive has
+// pushed its own problem outward.
 import { forwardRef } from 'react';
 
 import { cx } from './cx.js';

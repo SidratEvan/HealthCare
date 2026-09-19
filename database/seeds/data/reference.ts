@@ -47,30 +47,23 @@ export function isDeclaredDistrict(division: string, district: string): boolean 
 }
 
 /**
- * The eight specialties `FR-DEM-02` names, as department codes.
+ * The eight specialties `FR-DEM-02` names.
  *
- * The code is what `departments.code` carries and what a session is found by;
- * the names are the two scripts a department is displayed in.
+ * Re-exported from `@platform/domain` rather than listed again here. The code
+ * is what `departments.code` carries, what a discovery query filters on, and
+ * what a patient app puts in a URL — so a specialty the seeds knew about and
+ * the API did not would be a department nobody could search for.
  */
-export const SPECIALTIES = [
-  { code: 'CARD', nameEn: 'Cardiology', nameBn: 'কার্ডিওলজি' },
-  { code: 'MED', nameEn: 'Medicine', nameBn: 'মেডিসিন' },
-  { code: 'GYN', nameEn: 'Gynaecology', nameBn: 'গাইনী' },
-  { code: 'ORTHO', nameEn: 'Orthopaedics', nameBn: 'অর্থোপেডিক্স' },
-  { code: 'PAED', nameEn: 'Paediatrics', nameBn: 'শিশু' },
-  { code: 'NEURO', nameEn: 'Neurology', nameBn: 'নিউরোলজি' },
-  { code: 'ENT', nameEn: 'ENT', nameBn: 'নাক কান গলা' },
-  { code: 'DERM', nameEn: 'Dermatology', nameBn: 'চর্ম ও যৌন' },
-] as const;
+export {
+  SPECIALTIES,
+  specialtyOf as specialty,
+  type Specialty,
+  type SpecialtyCode,
+} from '@platform/domain';
 
-export type SpecialtyCode = (typeof SPECIALTIES)[number]['code'];
-
-/** Looks up a specialty by its department code. */
-export function specialty(code: SpecialtyCode): (typeof SPECIALTIES)[number] {
-  const found = SPECIALTIES.find((entry) => entry.code === code);
-  if (found === undefined) throw new Error(`Unknown specialty code: ${code}`);
-  return found;
-}
+// Re-exporting a type does not bring it into this module's own scope, and the
+// complaint table below is keyed by it.
+import type { SpecialtyCode } from '@platform/domain';
 
 /**
  * Chief complaints written into `bookings.intake` and `bookings.reason_text`.

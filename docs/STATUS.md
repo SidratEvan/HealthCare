@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: end of step 6 (`feat/queue-service`).
+Last updated: end of step 9 (`feat/patient-booking`).
 
 ---
 
@@ -24,10 +24,18 @@ Last updated: end of step 6 (`feat/queue-service`).
 | 6 | `feat/queue-service` | merged — `appendEvent()`, 13 queue routes, realtime |
 | 7 | `feat/ui-tokens` | merged — tokens, contrast checks, seven primitives |
 | 8 | `feat/console-reception` | merged — sync protocol, offline queue, the console, Playwright |
-| **9** | **`feat/patient-booking`** | **next** — discovery, booking, guest booking, mock payment |
+| 9 | `feat/patient-booking` | merged — discovery, booking, guest booking, mock payment |
+| **10** | **`feat/patient-live-serial`** | **next** — `<LiveSerialCard>`, session channel, late/cancel. **The pitch demo milestone.** |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
+
+**Step 9 is the first step a patient can see.** `frontend/patient` serves
+discovery and the four-stage booking flow in Bangla, and a guest books end to
+end against the mock payment provider without ever meeting a login wall
+(`FR-GST-01`). The tracking link it hands back (`FR-GST-05`) is minted but not
+yet *opened* by a screen — that is step 10, which is what turns it into the
+pitch demo.
 
 **Step 8 is the first step with a screen.** Steps 5–7 are seeds and design
 tokens; nothing renders before `feat/console-reception`. Step 5 is the first
@@ -39,9 +47,9 @@ tokens stays; no OTP flows, staff passwords or argon2id are to be written. The
 guest tracking link (`FR-GST-05`) is kept, because it is a capability token the
 demo depends on rather than a login.
 
-`pnpm test` reports 1025: 700 unit, 181 api, 80 schema, 64 ui.
-`pnpm test:e2e` reports 5, in Chromium, against the real API and the seeded
-demo database.
+`pnpm test` reports 1169: 847 unit, 205 api, 80 schema, 37 ui.
+`pnpm test:e2e` reports 15, in Chromium, against the real API and the seeded
+demo database — 10 in `guest-booking.spec.ts`, 5 in `offline-console.spec.ts`.
 
 **`ui` is a fourth vitest project**, on jsdom. It is separate from `unit` so a
 developer working on the queue reducer never pays for a DOM, and separate from
@@ -110,6 +118,26 @@ afternoon.
 - **Vitest loads `.env` into `process.env`.** The API test setup therefore
   assigns its environment outright rather than defaulting it, or the suite runs
   against whatever `.env` happens to say.
+- **So does anything that imports the API, and that caught Playwright too.**
+  `backend/api/src/env.ts` merges `.env` into `process.env` as an *import side
+  effect*. `e2e/support/console.ts` imports `signToken` from the API, and ESM
+  evaluates imports before the importing module's body — so its
+  `process.env['DATABASE_URL'] ?? localhost` line read a `DATABASE_URL` that
+  `.env` had already set to **Supabase**, while `globalSetup` and the app
+  servers stayed on the local container. The suite ran split across two
+  databases and every spec failed looking for a row that was seeded in the
+  other one. The E2E suite therefore no longer reads the ambient
+  `DATABASE_URL` at all: `e2e/support/database.ts` resolves `E2E_DATABASE_URL`
+  (defaulting to the container) and `assertLocalDatabase()` refuses a non-local
+  host unless `E2E_ALLOW_REMOTE_DATABASE=true`. `playwright.config.ts`,
+  `globalSetup` and the fixtures all import that one value, so they cannot
+  disagree again.
+- **A shared test database means exact-count assertions must be scoped.**
+  `seeds.test.ts` asserted `SELECT * FROM hospitals` had six rows; the graph
+  fixture in `seeds/graph.ts` inserts a seventh, so the test passed or failed
+  depending on which file vitest ran first. It now matches on the declared
+  names from `DEMO_FACILITIES`. Any new assertion about "how many" needs the
+  same scoping.
 
 ### Credentials
 
@@ -118,6 +146,27 @@ Supabase connection string and three generated dev secrets.
 
 `SUPABASE_SERVICE_ROLE_KEY` is deliberately **not** set: nothing needs it until
 the storage work in steps 12–13.
+
+---
+
+### Awaiting a ruling: E2E rows written to Supabase
+
+Because of the `.env` import-side-effect bug above, every `pnpm test:e2e` run
+before it was found created its fixture rows **on Supabase** rather than on the
+container: one session per test (`room = 'E2E'`), its bookings, and the queue
+events the specs appended. It is demo data throughout — no real patient data
+was involved (`FR-SEC-08`) — but `queue_events` is append-only, so those rows
+cannot be deleted; clearing them means a `pnpm db:reset` against Supabase,
+which is a destructive operation on the demo environment and needs the owner's
+say-so (`ALLOW_REMOTE_DB=1` plus `ALLOW_DESTRUCTIVE_DB=1`).
+
+The count is **not yet known**: reading it needs a TLS connection to the
+pooler, whose chain Node will not verify without Supabase's CA bundle, and
+disabling verification to count rows is not worth doing. The rows are
+identifiable by `sessions.room = 'E2E'`.
+
+The bug itself is fixed and cannot recur: the suite refuses any non-local
+database.
 
 ---
 
@@ -222,19 +271,17 @@ Turbopack is substantially faster and this is the only thing holding it off.
   so nothing renders it yet. It holds no credential and calls no endpoint — it
   is the input primitive, and Supabase's flow will need exactly this box.
 
-- **The signature components (`FRONTEND.md` §6) are not built.**
-  `<LiveSerialCard>`, `<FreshnessLine>`, `<QueueTable>`, `<BedTile>`,
-  `<CapacityMirror>` and `<DelaySheet>` each depend on a live data shape rather
-  than a visual one, so each lands with the screen that renders it, from step 8
-  onward. `<FreshnessLine>` is the one to build first: DoD §5.8 requires it
-  beneath every live figure.
+- **Three signature components (`FRONTEND.md` §6) remain.** `<FreshnessLine>`
+  and `<QueueTable>` are built and rendering. `<LiveSerialCard>` is step 10;
+  `<BedTile>` and `<CapacityMirror>` are step 14; `<DelaySheet>` lands with the
+  delay flow it belongs to.
 
-- **Tailwind is configured but never yet run.** The preset
-  (`shared/config/tailwind/preset.mjs`) maps every utility onto the CSS
-  variables and replaces the default palette rather than extending it, so
-  `bg-indigo-500` does not exist. Nothing compiles it until the first Next.js
-  app in step 8; until then the components' class names are strings that have
-  never been turned into CSS.
+- **Tailwind is v4 and compiles in both apps.** The v3-style JS preset was
+  replaced by `@theme inline` in `shared/ui/src/styles.css`, which maps every
+  utility onto the token variables and clears Tailwind's own palette
+  (`--color-*: initial`), so `bg-indigo-500` does not exist. `--radius-*` and
+  `--font-*` sit in `@theme` rather than `tokens.css` because those are
+  Tailwind's own namespaces.
 
 - **No authentication is implemented, by decision** (`CLAUDE.md` §4.1). Under
   `DEMO_MODE=true` the console selects a hospital and role without a password,
@@ -272,8 +319,12 @@ Turbopack is substantially faster and this is the only thing holding it off.
   from TypeScript source, so a deployable build needs either emitted output from
   `shared/domain` or a bundler. That is a dependency decision for the owner,
   and it blocks the Render deploy at step 6.
-- **`e2e/` and Playwright do not exist yet.** They arrive with the first
-  user-visible flow. The two-device queue test is the product's canary and is
-  never skipped (`CLAUDE.md` §6).
-- **`shared/client` is empty**, as are the
-  three Next.js apps. Steps 7–10.
+- **Two of the five required Playwright specs exist** (`CLAUDE.md` §6):
+  `offline-console.spec.ts` and `guest-booking.spec.ts`. Still to write:
+  `two-device-queue.spec.ts` (step 10 — the product's canary, never skipped),
+  `no-show-recovery.spec.ts`, `emergency-burn.spec.ts`.
+  `guest-booking.spec.ts` asserts the booking and the issued tracking link but
+  not yet "open the SMS link, see the live serial"; that third of it is added
+  in step 10 rather than left unwritten.
+- **`frontend/site` is still empty.** `shared/client`, `frontend/console` and
+  `frontend/patient` are built.

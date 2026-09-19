@@ -34,6 +34,13 @@ export const ERROR_CODES = {
     status: 409,
     message: 'This patient already has a booking with this doctor today.',
   },
+  /**
+   * Every serial is taken (`FR-PAT-25`).
+   *
+   * A refusal, not a failure: the patient is offered the standby list, so the
+   * response carries the capacity and what is taken rather than a bare "no".
+   */
+  SESSION_FULL: { status: 409, message: 'This chamber is fully booked.' },
 
   // --- Queue (FR-QUE-51, FR-QUE-53) ---------------------------------------
   QUEUE_CONFLICT: { status: 409, message: 'Another counter has already advanced this queue.' },

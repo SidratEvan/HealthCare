@@ -38,6 +38,7 @@
 import {
   clampConsultSeconds,
   id,
+  isSpecialtyCode,
   serial as asSerial,
   time,
   type BookingId,
@@ -50,7 +51,7 @@ import {
   type DhakaDate,
 } from '@platform/domain';
 
-import { complaintsFor, DEMO_LIVE, type SpecialtyCode } from './data/reference.js';
+import { complaintsFor, DEMO_LIVE } from './data/reference.js';
 import {
   bookingSource,
   insertBookings,
@@ -590,6 +591,14 @@ function seedFor(
 
 /** A declared chief complaint for this department (CLAUDE.md §8). */
 function complaint(rng: Rng, departmentCode: string): { complaintBn: string; complaintEn: string } {
-  const chosen = rng.pick(complaintsFor(departmentCode as SpecialtyCode));
+  // The code arrives as a plain string from a row, so it is narrowed here —
+  // the boundary where a database value becomes a domain one. An unknown code
+  // means the seed and the catalogue have drifted, which is worth failing on
+  // rather than silently seeding a booking with no reason for attending.
+  if (!isSpecialtyCode(departmentCode)) {
+    throw new Error(`"${departmentCode}" is not a specialty the product offers.`);
+  }
+
+  const chosen = rng.pick(complaintsFor(departmentCode));
   return { complaintBn: chosen.bn, complaintEn: chosen.en };
 }

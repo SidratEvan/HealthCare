@@ -14,6 +14,7 @@ export * from './types/ids.js';
 export * from './types/enums.js';
 export * from './types/events.js';
 export * from './types/entities.js';
+export * from './types/specialties.js';
 
 // --- The queue engine ------------------------------------------------------
 export {
@@ -108,6 +109,7 @@ export {
 // construct is an action the server will accept.
 export * from './schemas/queue.schema.js';
 export * from './schemas/sync.schema.js';
+export * from './schemas/booking.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';
