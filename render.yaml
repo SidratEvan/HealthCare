@@ -48,9 +48,10 @@ services:
       - key: LOG_LEVEL
         value: info
 
-      # Render provides the port; the app reads it.
-      - key: PORT
-        value: '4000'
+      # PORT is deliberately absent. Render injects it and expects the process
+      # to bind to whatever it was given; hardcoding one here would override
+      # that and leave the service listening where the load balancer is not
+      # looking. `env.ts` defaults it to 4000 for a local run.
 
       # --- Set these in the dashboard --------------------------------------
       #
