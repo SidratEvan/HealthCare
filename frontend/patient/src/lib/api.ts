@@ -8,9 +8,18 @@
 
 import { ApiClient } from '@platform/client';
 
-import type { Availability, DoctorCard, HospitalCard, SessionCard } from '@/lib/types';
+import type {
+  Availability,
+  DoctorCard,
+  HospitalCard,
+  SessionCard,
+  TrackingLinkView,
+} from '@/lib/types';
 
 const BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
+
+/** Where the socket connects. Same origin as the API, without the path. */
+export const SOCKET_URL = process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:4000';
 
 /** No token: every discovery surface is public, and booking is guest-first. */
 export const api = new ApiClient({ baseUrl: BASE, getToken: () => null });
@@ -79,6 +88,62 @@ export async function book(input: {
       guest: input.guest,
       ...(input.reason === undefined || input.reason === '' ? {} : { reason: input.reason }),
     },
+    input.idempotencyKey,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The live serial screen (`S-A-08`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Opens an SMS tracking link (`FR-GST-05`).
+ *
+ * Takes no token and returns one. The opaque token in the URL is the durable
+ * credential — it lasts until the chamber closes plus a day and the hospital
+ * can revoke it — and what comes back is a short-lived access token for the
+ * socket and for the two things a patient may do.
+ */
+export async function openTrackingLink(token: string): Promise<TrackingLinkView> {
+  return await api.get<TrackingLinkView>(`/guest/link/${encodeURIComponent(token)}`);
+}
+
+/**
+ * A client bound to one booking's access token.
+ *
+ * Built per call rather than held, because the token is exchanged again every
+ * quarter of an hour and a client holding a stale closure would keep
+ * presenting the expired one.
+ */
+function authed(token: string): ApiClient {
+  return new ApiClient({ baseUrl: BASE, getToken: () => token });
+}
+
+/** `POST /bookings/:id/late` — `MOD-A08-LATE` (`FR-PAT-33`). */
+export async function declareLate(input: {
+  readonly bookingId: string;
+  readonly token: string;
+  readonly expectedMinutes: number;
+  readonly idempotencyKey: string;
+  readonly clientEventId: string;
+}): Promise<void> {
+  await authed(input.token).post(
+    `/bookings/${input.bookingId}/late`,
+    { expectedMinutes: input.expectedMinutes, clientEventId: input.clientEventId },
+    input.idempotencyKey,
+  );
+}
+
+/** `POST /bookings/:id/cancel` — `MOD-A08-CANCEL` (`FR-PAT-23`). */
+export async function cancelBooking(input: {
+  readonly bookingId: string;
+  readonly token: string;
+  readonly idempotencyKey: string;
+  readonly clientEventId: string;
+}): Promise<void> {
+  await authed(input.token).post(
+    `/bookings/${input.bookingId}/cancel`,
+    { clientEventId: input.clientEventId },
     input.idempotencyKey,
   );
 }

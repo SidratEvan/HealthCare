@@ -152,6 +152,32 @@ html[lang='bn'] textarea {
   }
 }
 
+/* §6.1: the serial rolls when it changes — the product's one signature
+   movement. Short and vertical: it says "this number just became a different
+   number", which is the only thing a patient needs to read from it. */
+@keyframes serial-roll {
+  from {
+    transform: translateY(0.35em);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* §6.1: the live dot. It pulses while figures are arriving and is still when
+   they are not, so "is this live" is answerable without reading. */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 /* §5.7 / GR-02: the visible undo window draining left to right. */
 @keyframes toast-progress {
   from {
