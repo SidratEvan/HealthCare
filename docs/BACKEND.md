@@ -402,10 +402,19 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 
 ### 7.6 Clinical, lab, pharmacy
 
+> **Permission on the record endpoints is not a role.** `FR-DOC-10` is a
+> *relationship* — has this patient been in a chamber at this hospital, or did
+> they consent — so `clinical.routes` requires only authentication and
+> `clinical.service` decides. It is the one router in this API whose guard is
+> not visible in the route table; `clinical.routes.test.ts` carries the matrix
+> that a `requireRole` line would otherwise have documented. Every read that
+> passes writes an `audit_log` row and every refused read writes none
+> (`DB-P7`, `FR-SEC-03`).
+
 | Method | Path | Role |
 |---|---|---|
-| POST | `/visits` | doctor — creates visit + prescription, signs, emits `record.ready` |
-| GET | `/patients/:id/records` | patient (own) \| doctor (consent) |
+| POST | `/visits` | doctor — creates or updates the visit; `sign: true` signs it and advances the queue (`FR-DOC-08`). Prescriptions are out of scope for this version (`PRD.md` §9) |
+| GET | `/patients/:id/records?booking=` | patient (own) \| doctor (own sessions or consent). `booking` returns that booking's pre-visit intake alongside the history, so `S-B-05` opens in one request (`FR-DOC-03`, `NFR-04`) |
 | POST | `/consents` / `/consents/:id/revoke` | patient |
 | POST | `/consents/qr` | doctor — redeems a scanned QR (`FR-PAT-63`) |
 | POST | `/documents` | patient — paper upload |

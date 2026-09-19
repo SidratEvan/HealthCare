@@ -14,6 +14,7 @@
 import { Router } from 'express';
 
 import { bookingRoutes } from './booking.routes.js';
+import { clinicalRoutes } from './clinical.routes.js';
 import { demoRoutes } from './demo.routes.js';
 import { discoveryRoutes } from './discovery.routes.js';
 import { guestRoutes } from './guest.routes.js';
@@ -46,6 +47,9 @@ export function buildApiRouter(): Router {
   router.use(demoRoutes);
   router.use(bookingRoutes);
   router.use(queueRoutes);
+  // Records: the one router whose permission lives in the service rather than
+  // the route, because `FR-DOC-10` is a relationship and not a role.
+  router.use(clinicalRoutes);
   router.use(syncRoutes);
   return router;
 }

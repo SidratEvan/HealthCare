@@ -345,13 +345,26 @@ The highest-volume surface in the system. Optimise for keyboard and repetition.
 - `FR-DOC-01` Today's sessions with counts: seen, waiting, late, average duration.
 - `FR-DOC-02` One-tap delay declaration from the doctor's own phone, without calling reception.
 - `FR-DOC-03` On calling a patient, the screen opens with: pre-visit intake summary, chronic conditions, allergies, last visits, previous prescriptions, recent test results.
-- `FR-DOC-04` E-prescription: diagnosis field, medicine rows (name, strength, schedule, duration), free-text advice, follow-up date.
-- `FR-DOC-05` Medicine autocomplete over a local formulary (generic and brand names).
+- `FR-DOC-04` E-prescription: diagnosis field, medicine rows (name, strength, schedule, duration), free-text advice, follow-up date. **Not in this version** — see below.
+- `FR-DOC-05` Medicine autocomplete over a local formulary (generic and brand names). **Not in this version.**
 - `FR-DOC-06` Order tests directly into the diagnostics queue.
-- `FR-DOC-07` Patient-facing output prints and delivers in Bangla, including dosage instructions.
+- `FR-DOC-07` Patient-facing output prints and delivers in Bangla, including dosage instructions. **Not in this version.**
 - `FR-DOC-08` Sign and finish advances the queue (equivalent to reception's *done*).
 - `FR-DOC-09` Session earnings summary.
 - `FR-DOC-10` Doctor may only view records of patients in their own sessions, or with explicit patient consent.
+
+**Prescribing is out of scope for this version.** The owner removed it on
+2026-09-19, so `FR-DOC-04`, `FR-DOC-05` and `FR-DOC-07` are not built: there are
+no medicine rows, no formulary autocomplete and no printed output. They stay
+here because they remain requirements of the product, in the same way the
+deferred authentication requirements do (`CLAUDE.md` §4.1).
+
+What a consultation produces instead is a **visit record** — diagnosis, advice
+in Bangla, and a follow-up date. That is what `DATABASE.md` §2.4 calls a
+`visits` row, what `FR-DOC-08` signs, and what the health wallet reads. The
+`prescriptions`, `prescription_items` and `medicines` tables exist and are
+seeded with a sample formulary, so prescribing is a screen to build rather than
+a schema to design.
 
 ---
 
@@ -572,7 +585,7 @@ This is the heart of the system. Specified tightly because everything else depen
 3. Doctor declares a 30-minute delay; all waiting patients are notified; one reschedules in a tap.
 4. Reception calls next three times; the patient's position and ETA move in real time.
 5. A no-show is marked; the slot is offered to standby; acceptance appears; recovered revenue shows on the admin dashboard.
-6. Doctor writes an e-prescription; it lands in the patient's wallet; a lab report arrives minutes later.
+6. Doctor writes the visit record — diagnosis, advice in Bangla, follow-up — and signs; it lands in the patient's wallet and the next patient is called in the same tap; a lab report arrives minutes later. (Prescribing itself is out of scope for this version; see §9.)
 7. Emergency: a burn case searches nearby hospitals, sees which has a free burn bed with fresh data, taps "I'm on my way"; the emergency console shows the inbound alert.
 8. Close on the admin dashboard: waits down, no-show loss recovered, occupancy visible.
 
@@ -597,7 +610,7 @@ This is the heart of the system. Specified tightly because everything else depen
 |---|---|---|
 | P0 | Design system, demo seed, auth, roles | Roles can log into their own shells |
 | P1 | Sessions, bookings, **queue engine**, reception console, live serial | Two-device live demo works end to end |
-| P2 | Doctor app, e-prescription, health wallet | A visit produces a record the patient can open |
+| P2 | Doctor app, visit records, health wallet | A visit produces a record the patient can open |
 | P3 | Beds, emergency console, public emergency search | Capability + freshness ranked results |
 | P4 | Diagnostics, pharmacy, ambulance, blood | Reports reach wallets automatically |
 | P5 | Admin dashboard, national dashboard | Hospital sees loss and recovery in taka |

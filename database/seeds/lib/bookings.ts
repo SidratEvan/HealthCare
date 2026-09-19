@@ -8,6 +8,8 @@
  * thing, and they would drift.
  */
 
+import { DEMO_INTAKE } from '../data/reference.js';
+
 import { DEMO_MARKER } from './demo.js';
 import { insertRows } from './insert.js';
 
@@ -47,6 +49,48 @@ export async function loadPatients(client: Client): Promise<PatientRow[]> {
 /** How a booking was made, and who is recorded as having made it. */
 export type BookingSource = 'app' | 'guest_link' | 'counter' | 'phone' | 'walkin';
 
+/**
+ * What the patient answered before the visit (`bookings.intake`).
+ *
+ * `APP_FLOW.md` A4 lists the questions `MOD-A07-INTAKE` asks: duration, main
+ * symptom, chronic conditions, current medicines, allergies. The main symptom
+ * is `complaintBn`; these are the rest.
+ *
+ * Every field is a real answer or an empty list. An empty list means "the
+ * patient said none", which is a different and more useful thing for a doctor
+ * to read than a missing key — and `FR-DOC-03` puts allergies on the screen
+ * precisely so that *none declared* is stated rather than assumed.
+ */
+export interface IntakeAnswers {
+  readonly durationBn: string;
+  readonly conditionsBn: readonly string[];
+  readonly medicinesBn: readonly string[];
+  readonly allergiesBn: readonly string[];
+}
+
+/**
+ * Draws a plausible set of pre-visit answers.
+ *
+ * Most people have nothing chronic and no allergy, so the shape of the demo
+ * follows that: about a third carry a condition, a quarter an allergy. A demo
+ * where every patient is diabetic and allergic to penicillin would make the
+ * doctor's panel look impressive and teach a hospital director something false
+ * about their own caseload.
+ */
+export function buildIntake(rng: Rng): IntakeAnswers {
+  const conditions = rng.chance(0.35) ? [rng.pick(DEMO_INTAKE.conditions)] : [];
+
+  return {
+    durationBn: rng.pick(DEMO_INTAKE.durations),
+    conditionsBn: conditions,
+    // Somebody on treatment for a long-term condition is usually taking
+    // something for it, so this follows the conditions rather than being drawn
+    // independently.
+    medicinesBn: conditions.length > 0 && rng.chance(0.8) ? [rng.pick(DEMO_INTAKE.medicines)] : [],
+    allergiesBn: rng.chance(0.25) ? [rng.pick(DEMO_INTAKE.allergies)] : [],
+  };
+}
+
 export interface BookingDraft {
   readonly patient: PatientRow;
   readonly serial: number;
@@ -56,6 +100,15 @@ export interface BookingDraft {
   readonly bookedByGuestId: string | null;
   readonly complaintBn: string;
   readonly complaintEn: string;
+  /**
+   * The rest of the pre-visit answers (`FR-DOC-03`).
+   *
+   * The complaint is the main symptom; this is duration, chronic conditions,
+   * current medicines and allergies — the other four questions
+   * `MOD-A07-INTAKE` asks. The doctor's patient panel reads every one of them,
+   * so a booking without them gives that screen nothing to show.
+   */
+  readonly intake: IntakeAnswers;
   /** Set at insert, because `bookings_cancelled_has_reason` is a check. */
   readonly cancelledReason: string | null;
 }
@@ -128,6 +181,7 @@ export async function insertBookings(
       ...DEMO_MARKER,
       complaintBn: draft.complaintBn,
       complaintEn: draft.complaintEn,
+      ...draft.intake,
     }),
     draft.complaintBn,
     feePoisha,

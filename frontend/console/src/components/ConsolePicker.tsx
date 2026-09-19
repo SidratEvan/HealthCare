@@ -124,6 +124,7 @@ export function ConsolePicker({
           token: body.data.token,
           hospitalId: body.data.hospitalId,
           staffName: body.data.staffName,
+          role,
         });
 
         onChosen(sessionId);
@@ -244,10 +245,7 @@ function statusKey(status: string): ConsoleKey {
 
 function Shell({ children }: { readonly children: ReactNode }): ReactNode {
   return (
-    <main
-      className="mx-auto flex max-w-[720px] flex-col gap-6 p-8"
-      data-testid="console-picker"
-    >
+    <main className="mx-auto flex max-w-[720px] flex-col gap-6 p-8" data-testid="console-picker">
       <header className="flex flex-col gap-2">
         <h1 className="font-reading text-title-lg">{t('chooseConsole', LOCALE)}</h1>
 

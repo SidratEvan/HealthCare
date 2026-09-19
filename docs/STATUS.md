@@ -7,8 +7,8 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/app-shell` — the patient side is an app, and discovery
-asks for a hospital first (after step 11).
+Last updated: `feat/doctor-console` — step 12. A consultation now leaves a
+record behind.
 
 ---
 
@@ -28,7 +28,8 @@ asks for a hospital first (after step 11).
 | 9 | `feat/patient-booking` | merged — discovery, booking, guest booking, mock payment |
 | **10** | **`feat/patient-live-serial`** | **merged — the pitch demo works.** `<LiveSerialCard>`, the session channel on the patient side, late/cancel, and the two-device canary |
 | 11 | `feat/notifications` | merged — migration 0010, templates, the outbox, SMS/push adapters |
-| 12 | `feat/doctor-console` | **next** — doctor screen, visit records. **E-prescriptions dropped by the owner**; `FR-DOC-05` and `PRD.md` §24 step 6 need editing to match |
+| 12 | `feat/doctor-console` | merged — migration 0007, `S-B-05`, the visit record, `FR-DOC-10` + audit. **E-prescriptions dropped**; `PRD.md` §9/§24/§26 and `APP_FLOW.md` B2 edited to match |
+| 13 | `feat/wallet` | **next** — patient records, reports, QR consent. Migration 0007 already created `consents` and `patient_documents`, so this is screens rather than schema |
 
 Three unplanned branches after step 11:
 
@@ -79,10 +80,57 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 1514.
-`pnpm test:e2e` reports 40, in Chromium, against the real API and the seeded
+`pnpm test` reports 1614.
+`pnpm test:e2e` reports 47, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
-5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`.
+5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
+`doctor-console.spec.ts`.
+
+### Step 12 — the doctor console and the visit record
+
+**Migration 0007 landed behind 0010, and that is fine.** The runner applies
+whatever a database has not seen, in filename order, so a fresh build runs
+0007 before 0010 and an existing one runs it after. The dependency runs the
+other way: 0010 deliberately left `feedback` out *because* its foreign key
+needs `visits`, and 0007 creates both. 0007 also creates `medicines`,
+`prescriptions`, `prescription_items`, `test_orders`, `reports`,
+`patient_documents` and `consents` — the set `DATABASE.md` §7 names — so steps
+13 and 17 are screens rather than schema.
+
+**Prescribing is out of scope, not deferred.** The owner dropped it on
+2026-09-19 ("no need for e prescriptions"). `FR-DOC-04`, `FR-DOC-05` and
+`FR-DOC-07` are marked **not in this version** in `PRD.md` §9, `PRD.md` §24
+step 6 and §26 P2 are rewritten, and `APP_FLOW.md` B2 now says which of its
+controls exist. What a consultation produces is a visit record — diagnosis,
+Bangla advice, follow-up date — which is what the wallet reads at step 13.
+
+**`BTN-B05-SIGN` writes the record, then advances the queue.** In that order,
+because `APP_FLOW.md` B2 fixes the failure mode: if the record does not save,
+the consultation is not marked done and the draft stays on screen. The two are
+not one transaction — `callNext` owns its own lock and dispatches notifications
+after committing — so the window is *record committed, queue not yet advanced*,
+and a second tap recovers it because `upsertVisit` is idempotent on the booking
+and keeps the original `signed_at`. The recoverable order was chosen over the
+atomic one deliberately; the alternative loses a record.
+
+**Picking "doctor" in the console picker now opens the doctor console.** It
+always opened reception before, whatever was chosen, which made that button a
+lie. `DemoSession` carries the role; unrecognised roles land on reception,
+because `hospital_admin` is `S-B-10` at step 19 and a blank screen would be
+worse than a queue.
+
+**`useReceptionQueue` is now `useSessionQueue`**, because both consoles use it.
+Same socket, same reducer, same offline log — which is what makes `FR-QUE-53`
+hold: the doctor's *next* and reception's *next* serialise against each other
+only because both screens read the same state from the same place.
+
+**Demo data in the same branch.** 500 signed visit records, each with a
+diagnosis and Bangla advice *paired to the complaint the booking already
+carried* (`assessmentFor` in `seeds/data/reference.ts`), a ten-medicine
+formulary, and pre-visit intake — duration, chronic conditions, current
+medicines, allergies — on every seeded booking. `FR-DOC-03` puts all four on the
+doctor's screen, and the panel distinguishes *none declared* from *nobody asked*
+because those are different facts.
 
 ### The patient app is an app now (`feat/app-shell`)
 
@@ -492,6 +540,51 @@ Raised while building the app shell (`feat/app-shell`):
    cache that is not the current name. A stale shell after a deploy is fixed by
    bumping that string; forgetting to is how a deploy appears not to land.
 
+Raised while building the doctor console (step 12):
+
+23. **Nothing joins a console account to a `doctors` row, so `FR-DOC-10` is
+   enforced at hospital grain.** A doctor signs in as a `staff_users` row
+   carrying the `doctor` role; "their own sessions" is `sessions.doctor_id`,
+   which references `doctors`. `DATABASE.md` §2.2 gives `doctors.user_id` as
+   "the doctor's own login" — a reference to `users`, which the seeds leave null
+   because authentication is deferred (`CLAUDE.md` §4.1). So the individual
+   identity the requirement names cannot be checked.
+
+   What is enforced instead: a doctor-role account may read a record only if
+   that patient has been booked into a chamber **at their hospital**, or if a
+   live consent covers it. A consultant at Shapla cannot open the record of
+   somebody who has only ever attended Padma. It is weaker in one specific way —
+   a cardiologist at Shapla can read the record of a patient who saw the
+   orthopaedist there. Closing that needs a `staff_users ↔ doctors` link, which
+   is a schema decision and therefore the owner's. `treatedAtHospital` in
+   `clinical.repo.ts` carries the same explanation at the call site.
+
+24. **`MOD-A07-INTAKE` was never built.** `APP_FLOW.md` A4 specifies 4–6
+   pre-visit questions — duration, main symptom, chronic conditions, current
+   medicines, allergies — and step 9 collects only a reason. `FR-DOC-03` puts
+   all of them on the doctor's screen, so the seeds now write them and the panel
+   reads them, but **a booking made through the app today carries only the
+   complaint**. The doctor's screen says "the patient answered nothing
+   beforehand" for those, which is true and is the honest state — but the modal
+   is a real gap in step 9 and the panel gets materially better the day it
+   lands.
+
+25. **`FR-DOC-09` earnings are the chamber fee times patients seen.** The fee is
+   not in the queue state and should not be — the state is the event log reduced
+   and a fee is not an event — so the console fetches it once per session from
+   the roster, where `DB-P5` already copied it onto every booking. It is absent
+   rather than zero when the roster is empty. What it does *not* account for is
+   whether anybody actually paid; `payments` is step 18, and until then this is
+   "billed", not "collected". The label says আদায় (collected), which will need
+   revisiting at step 18.
+
+26. **`visits.follow_up_date` is checked against `created_at`, not `now()`.** A
+   check constraint cannot call `now()` and stay immutable, so
+   `visits_follow_up_not_past` compares the follow-up to the row's own creation
+   date in Dhaka. The effect is right for new rows and means a very old draft
+   could be signed with a follow-up that is now in the past. Nothing does that
+   today.
+
 Two are the owner's and are not code:
 
 8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
@@ -563,6 +656,15 @@ pnpm dev:patient                     # :3000  — the patient
 
 The patient's serial is also on **সিরিয়াল** in the bottom navigation and on the
 home screen's live strip, both of which read what this device booked.
+
+4. **The doctor's screen** (`S-B-05`): open a second console tab, pick the same
+   hospital and chamber but the **ডাক্তার** role. It opens on whoever is in the
+   chamber with their pre-visit answers and past visits. Type a diagnosis, tap
+   **রেকর্ড দিন ও পরবর্তী** — the record is filed and the next patient is called
+   in the same action (`FR-DOC-08`), which reception's tab sees immediately.
+
+That is `PRD.md` §24 step 6, minus the prescription the owner removed from this
+version.
 
 The patient screen also carries **আমি দেরি করছি** and **বাতিল করুন**, both of
 which write real events the console sees.

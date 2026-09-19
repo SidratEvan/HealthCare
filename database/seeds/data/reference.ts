@@ -131,3 +131,239 @@ export const DEMO_LIVE = {
    */
   capacity: 30,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Clinical demo content (`FR-DEM-03`, `FR-DEM-07`, CLAUDE.md §8)
+// ---------------------------------------------------------------------------
+//
+// CLAUDE.md §8: "Never invent clinical content… outside the seed file's declared
+// demo set." Everything below is that declared set — ordinary outpatient
+// findings and advice, paired with the complaint they follow from so that a
+// record a hospital director opens reads coherently rather than pairing chest
+// pain with knee advice. None of it belongs to a real person, none of it is a
+// statistic, and every row written from it also carries `demo: true`
+// (`FR-DEM-07`).
+//
+// It is deliberately conservative: nothing here names a drug dose, because this
+// version has no prescription (`FR-DOC-04` was dropped) and a demo should not
+// display dosing it cannot stand behind.
+
+/** What a doctor concluded, and what they advised, for one declared complaint. */
+export const DEMO_ASSESSMENTS: readonly {
+  /** Matches `DEMO_COMPLAINTS.en`, which is what pairs the two. */
+  readonly complaintEn: string;
+  readonly diagnosisBn: string;
+  readonly adviceBn: string;
+}[] = [
+  {
+    complaintEn: 'Chest pain',
+    diagnosisBn: 'বুকে ব্যথা — হৃদরোগ বাদ দেওয়ার জন্য পরীক্ষা প্রয়োজন',
+    adviceBn:
+      'ইসিজি ও রক্তের পরীক্ষা করান। ব্যথা বাড়লে বা শ্বাসকষ্ট হলে সঙ্গে সঙ্গে জরুরি বিভাগে আসুন।',
+  },
+  {
+    complaintEn: 'Hypertension follow-up',
+    diagnosisBn: 'উচ্চ রক্তচাপ — নিয়ন্ত্রণে আছে',
+    adviceBn:
+      'লবণ কমান, প্রতিদিন হাঁটুন, বাড়িতে রক্তচাপ মেপে লিখে রাখুন। তিন মাস পর আবার দেখাবেন।',
+  },
+  {
+    complaintEn: 'Fever and cough',
+    diagnosisBn: 'শ্বাসনালীর সংক্রমণ',
+    adviceBn: 'বিশ্রাম নিন, প্রচুর পানি পান করুন। তিন দিনে জ্বর না কমলে আবার দেখাবেন।',
+  },
+  {
+    complaintEn: 'Diabetes follow-up',
+    diagnosisBn: 'টাইপ-২ ডায়াবেটিস — ফলো-আপ',
+    adviceBn: 'খাবারের নিয়ম মেনে চলুন, প্রতিদিন হাঁটুন। তিন মাস পর HbA1c পরীক্ষা করে দেখাবেন।',
+  },
+  {
+    complaintEn: 'Weakness',
+    diagnosisBn: 'রক্তশূন্যতার সম্ভাবনা',
+    adviceBn: 'রক্তের পরীক্ষা করান। আয়রনযুক্ত খাবার খান।',
+  },
+  {
+    complaintEn: 'Antenatal check-up',
+    diagnosisBn: 'গর্ভাবস্থা — স্বাভাবিক',
+    adviceBn: 'নিয়মিত পরীক্ষা চালিয়ে যান। রক্তচাপ ও ওজন মেপে রাখুন। এক মাস পর আবার দেখাবেন।',
+  },
+  {
+    complaintEn: 'Lower abdominal pain',
+    diagnosisBn: 'তলপেটে ব্যথা — আল্ট্রাসনোগ্রাম প্রয়োজন',
+    adviceBn: 'আল্ট্রাসনোগ্রাম করে রিপোর্ট নিয়ে দেখাবেন।',
+  },
+  {
+    complaintEn: 'Knee pain',
+    diagnosisBn: 'হাঁটুর ক্ষয়জনিত ব্যথা',
+    adviceBn: 'ভারী কাজ ও সিঁড়ি এড়িয়ে চলুন। হাঁটুর ব্যায়াম নিয়মিত করুন।',
+  },
+  {
+    complaintEn: 'Back pain',
+    diagnosisBn: 'কোমরের পেশির ব্যথা',
+    adviceBn: 'ভারী ওজন তুলবেন না, শক্ত বিছানায় শোবেন। ব্যায়াম নিয়মিত করুন।',
+  },
+  {
+    complaintEn: "Child's fever",
+    diagnosisBn: 'শিশুর ভাইরাসজনিত জ্বর',
+    adviceBn: 'তরল খাবার বেশি দিন। জ্বর ১০২° ছাড়ালে বা খিঁচুনি হলে সঙ্গে সঙ্গে আসুন।',
+  },
+  {
+    complaintEn: 'Vaccination advice',
+    diagnosisBn: 'টিকার সময়সূচি পরামর্শ',
+    adviceBn: 'ইপিআই কার্ড অনুযায়ী পরের টিকা নিন। কার্ড সঙ্গে রাখবেন।',
+  },
+  {
+    complaintEn: 'Headache',
+    diagnosisBn: 'টেনশন হেডেক',
+    adviceBn: 'ঘুম নিয়মিত করুন, পর্দার সময় কমান। ব্যথা বাড়লে বা বমি হলে আবার দেখাবেন।',
+  },
+  {
+    complaintEn: 'Dizziness',
+    diagnosisBn: 'মাথা ঘোরা — কানের ভারসাম্যজনিত',
+    adviceBn: 'হঠাৎ উঠে দাঁড়াবেন না। উপসর্গ থাকলে দুই সপ্তাহ পর দেখাবেন।',
+  },
+  {
+    complaintEn: 'Sore throat',
+    diagnosisBn: 'গলার সংক্রমণ',
+    adviceBn: 'কুসুম গরম পানিতে লবণ দিয়ে কুলকুচি করুন। ঠান্ডা খাবার এড়িয়ে চলুন।',
+  },
+  {
+    complaintEn: 'Reduced hearing',
+    diagnosisBn: 'কানে কম শোনা — শ্রবণ পরীক্ষা প্রয়োজন',
+    adviceBn: 'অডিওমেট্রি পরীক্ষা করে রিপোর্ট নিয়ে দেখাবেন। কানে কিছু দেবেন না।',
+  },
+  {
+    complaintEn: 'Skin complaint',
+    diagnosisBn: 'অ্যালার্জিজনিত চর্মরোগ',
+    adviceBn: 'সাবান বদলে মৃদু সাবান ব্যবহার করুন। রোদ এড়িয়ে চলুন।',
+  },
+  {
+    complaintEn: 'Hair loss',
+    diagnosisBn: 'চুল পড়া — পুষ্টিজনিত সম্ভাবনা',
+    adviceBn: 'রক্তের পরীক্ষা করান। সুষম খাবার খান।',
+  },
+];
+
+/**
+ * The assessment that follows from a complaint.
+ *
+ * Throws rather than falling back: a complaint with no declared assessment means
+ * the two tables have drifted, and a visit record with an empty diagnosis is
+ * exactly the empty screen CLAUDE.md §5.3 forbids.
+ */
+export function assessmentFor(complaintEn: string): { diagnosisBn: string; adviceBn: string } {
+  const found = DEMO_ASSESSMENTS.find((entry) => entry.complaintEn === complaintEn);
+  if (found === undefined) {
+    throw new Error(`No declared assessment for complaint "${complaintEn}".`);
+  }
+  return { diagnosisBn: found.diagnosisBn, adviceBn: found.adviceBn };
+}
+
+/**
+ * Pre-visit intake answers (`FR-DOC-03`, `MOD-A07-INTAKE`).
+ *
+ * `APP_FLOW.md` A4 lists the questions: duration, main symptom, chronic
+ * conditions, current medicines, allergies. The main symptom is the complaint;
+ * these are the other three, plus the duration.
+ *
+ * `MOD-A07-INTAKE` itself is not built — step 9 collects only a reason — so
+ * today these reach the doctor's panel through the seeds alone. When the modal
+ * lands it writes the same keys.
+ */
+export const DEMO_INTAKE = {
+  durations: ['২ দিন', '১ সপ্তাহ', '২ সপ্তাহ', '১ মাস', '৬ মাস', '১ বছরের বেশি'],
+  /** Long-term conditions a doctor needs to know before advising anything. */
+  conditions: ['ডায়াবেটিস', 'উচ্চ রক্তচাপ', 'হাঁপানি', 'থাইরয়েড', 'হৃদরোগ', 'কিডনির সমস্যা'],
+  /** Generic names only — no doses, for the reason given at the top of this block. */
+  medicines: ['মেটফরমিন', 'অ্যামলোডিপিন', 'লেভোথাইরক্সিন', 'সালবিউটামল ইনহেলার', 'ওমিপ্রাজল'],
+  allergies: ['পেনিসিলিন', 'সালফা', 'অ্যাসপিরিন', 'ধুলা', 'চিংড়ি'],
+} as const;
+
+/**
+ * A sample formulary for the `medicines` table (`seed_00_reference.sql`'s
+ * "medicine formulary sample", DATABASE.md §7).
+ *
+ * Generic name, a common brand, and the strengths a pharmacy in Bangladesh
+ * actually stocks. It exists so `FR-DOC-05`'s autocomplete has something to
+ * search when that feature is built; nothing reads it in this version, because
+ * e-prescriptions were dropped. Manufacturers carry `(Demo)` for the same reason
+ * every facility name does (`FR-DEM-07`).
+ */
+export const DEMO_FORMULARY: readonly {
+  readonly generic: string;
+  readonly brand: string;
+  readonly manufacturer: string;
+  readonly strengths: readonly string[];
+  readonly form: string;
+}[] = [
+  {
+    generic: 'Paracetamol',
+    brand: 'Napa',
+    manufacturer: 'Beximco (Demo)',
+    strengths: ['500 mg', '665 mg'],
+    form: 'tablet',
+  },
+  {
+    generic: 'Omeprazole',
+    brand: 'Losectil',
+    manufacturer: 'Square (Demo)',
+    strengths: ['20 mg', '40 mg'],
+    form: 'capsule',
+  },
+  {
+    generic: 'Metformin',
+    brand: 'Comet',
+    manufacturer: 'Square (Demo)',
+    strengths: ['500 mg', '850 mg'],
+    form: 'tablet',
+  },
+  {
+    generic: 'Amlodipine',
+    brand: 'Amdocal',
+    manufacturer: 'Square (Demo)',
+    strengths: ['5 mg', '10 mg'],
+    form: 'tablet',
+  },
+  {
+    generic: 'Salbutamol',
+    brand: 'Sultolin',
+    manufacturer: 'Square (Demo)',
+    strengths: ['100 mcg'],
+    form: 'inhaler',
+  },
+  {
+    generic: 'Cetirizine',
+    brand: 'Alatrol',
+    manufacturer: 'Square (Demo)',
+    strengths: ['5 mg', '10 mg'],
+    form: 'tablet',
+  },
+  {
+    generic: 'Amoxicillin',
+    brand: 'Moxacil',
+    manufacturer: 'Square (Demo)',
+    strengths: ['250 mg', '500 mg'],
+    form: 'capsule',
+  },
+  {
+    generic: 'Levothyroxine',
+    brand: 'Thyrox',
+    manufacturer: 'Beximco (Demo)',
+    strengths: ['50 mcg', '100 mcg'],
+    form: 'tablet',
+  },
+  {
+    generic: 'Esomeprazole',
+    brand: 'Nexum',
+    manufacturer: 'Beximco (Demo)',
+    strengths: ['20 mg', '40 mg'],
+    form: 'capsule',
+  },
+  {
+    generic: 'Ibuprofen',
+    brand: 'Profen',
+    manufacturer: 'Beximco (Demo)',
+    strengths: ['400 mg'],
+    form: 'tablet',
+  },
+];

@@ -48,6 +48,17 @@ export interface ConsoleSession {
   /** The department code, which is what a specialty URL carries. */
   readonly departmentCode: string;
   readonly token: string;
+  /**
+   * The same chamber, seen by the doctor (`S-B-05`).
+   *
+   * A separate principal rather than the receptionist's with another role added:
+   * `visits.created_by` is a foreign key to `staff_users`, so the doctor console
+   * can only write a record as somebody who actually exists — and the two
+   * consoles being different people is the situation `FR-QUE-53` serialises.
+   */
+  readonly doctorToken: string;
+  /** The seeded doctor account at this hospital, for `visits.created_by`. */
+  readonly doctorStaffId: string;
   /** Booking ids by serial, so a spec can name "serial 7" and mean it. */
   readonly bookingsBySerial: ReadonlyMap<number, string>;
 }
@@ -153,6 +164,7 @@ export async function createConsoleSession(bookings = 8): Promise<ConsoleSession
     }
 
     const receptionistId = await receptionistAt(client, row.hospital_id);
+    const doctorStaffId = await staffAt(client, row.hospital_id, 'doctor');
 
     // Drive it to the state the pitch opens on. Written as events, not as
     // column updates: the queue is derived from the log and nothing else
@@ -188,6 +200,16 @@ export async function createConsoleSession(bookings = 8): Promise<ConsoleSession
       doctorId: row.doctor_id,
       departmentCode: row.department_code,
       receptionistId,
+      doctorStaffId,
+      doctorToken: await signToken({
+        kind: 'access',
+        claims: {
+          sub: doctorStaffId,
+          kind: 'staff',
+          hospitalId: row.hospital_id,
+          roles: ['doctor'],
+        },
+      }),
       // Under DEMO_MODE the console selects a hospital and a role without a
       // password (CLAUDE.md §4.1); this is that selection, made for it.
       token: await signToken({
@@ -269,17 +291,29 @@ async function appendEvent(
 }
 
 async function receptionistAt(client: Client, hospitalId: string): Promise<string> {
+  return await staffAt(client, hospitalId, 'receptionist');
+}
+
+/**
+ * A seeded staff account holding one role at one facility.
+ *
+ * Real rows, because `queue_events.actor_staff_id` and `visits.created_by` are
+ * both foreign keys: an invented id is refused by the database, which is the
+ * property that makes an unattributable action impossible rather than merely
+ * discouraged (`FR-QUE-04`).
+ */
+async function staffAt(client: Client, hospitalId: string, role: string): Promise<string> {
   const staff = await client.query<{ id: string }>(
     `SELECT su.id
        FROM staff_users su
        JOIN staff_roles sr ON sr.staff_user_id = su.id
-      WHERE su.hospital_id = $1 AND sr.role = 'receptionist' AND su.deleted_at IS NULL
+      WHERE su.hospital_id = $1 AND sr.role = $2::staff_role AND su.deleted_at IS NULL
       LIMIT 1`,
-    [hospitalId],
+    [hospitalId, role],
   );
 
   const id = staff.rows[0]?.id;
-  if (id === undefined) throw new Error(`No receptionist seeded at hospital ${hospitalId}.`);
+  if (id === undefined) throw new Error(`No ${role} seeded at hospital ${hospitalId}.`);
   return id;
 }
 
