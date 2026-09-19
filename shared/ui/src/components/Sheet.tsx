@@ -19,6 +19,10 @@
  * about button order survives twenty screens.
  */
 
+'use client';
+
+// Radix owns the focus trap and the escape handling, both of which are
+// browser behaviour.
 import * as Dialog from '@radix-ui/react-dialog';
 
 import { cx } from './cx.js';

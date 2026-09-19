@@ -21,6 +21,9 @@
  * failure mode that makes split OTP inputs infuriating on a real phone.
  */
 
+'use client';
+
+// Holds the six boxes' state and moves focus between them.
 import { useEffect, useRef, useState } from 'react';
 
 import { cx } from './cx.js';

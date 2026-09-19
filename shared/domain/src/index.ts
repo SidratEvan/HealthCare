@@ -14,6 +14,7 @@ export * from './types/ids.js';
 export * from './types/enums.js';
 export * from './types/events.js';
 export * from './types/entities.js';
+export * from './types/specialties.js';
 
 // --- The queue engine ------------------------------------------------------
 export {

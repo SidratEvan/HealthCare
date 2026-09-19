@@ -23,6 +23,10 @@
  * people mistype (§5.2).
  */
 
+'use client';
+
+// `useId` wires the label, the helper and the error to the field, which is
+// what makes any of it announceable — and a hook makes this a client module.
 import { forwardRef, useId } from 'react';
 
 import { cx } from './cx.js';
