@@ -90,14 +90,23 @@ jobs:
       - name: Format
         run: pnpm format:check
 
-      # The service container creates only healthcare_dev; the schema suite
-      # needs a second, disposable database it can drop and rebuild. Locally
-      # docker-compose.yml creates both on first start.
-      - name: Create the test database
+      # The service container creates only healthcare_dev. Two more disposable
+      # databases are needed — one per suite, because the API suite mutates the
+      # demo data while the schema suite asserts on exact counts of it.
+      #
+      # `buildTestDatabase` creates either if it is missing, so this step is
+      # not strictly required; it is here because a database the workflow
+      # creates explicitly is one a reader of the workflow knows about.
+      # Locally, docker-compose.yml creates all three on a container's *first*
+      # start — and only its first, which is why the runtime check exists at
+      # all: a volume predating a new database would otherwise fail the same
+      # way CI did.
+      - name: Create the test databases
         run: |
           PGPASSWORD=healthcare psql \
             -h localhost -U healthcare -d healthcare_dev \
-            -c 'CREATE DATABASE healthcare_test OWNER healthcare'
+            -c 'CREATE DATABASE healthcare_test OWNER healthcare' \
+            -c 'CREATE DATABASE healthcare_api_test OWNER healthcare'
 
       - name: Migrate
         run: pnpm db:migrate
