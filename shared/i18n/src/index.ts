@@ -11,6 +11,8 @@
  * asking. The message catalogue itself arrives with the first screens.
  */
 
+export { CONSOLE, format, t, type ConsoleKey, type Locale, type Message } from './messages.js';
+
 export {
   NUMERAL_STYLE_BY_SURFACE,
   formatMinutes,

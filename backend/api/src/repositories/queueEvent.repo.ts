@@ -124,10 +124,17 @@ export async function append(trx: Tx, draft: EventDraft): Promise<QueueEvent> {
  * after a dropped response gets the stored result rather than a second advance
  * of the queue (`FR-QUE-51`, `SY-02`).
  */
-export async function findByClientEventId(clientEventId: string): Promise<QueueEvent | null> {
+export async function findByClientEventId(
+  clientEventId: string,
+  trx?: Tx,
+): Promise<QueueEvent | null> {
+  // Reads through the transaction when given one. An offline batch checks each
+  // entry against the log as it stands *including the entries already applied
+  // in this batch* — without that, a batch containing the same key twice would
+  // append it twice, which is exactly what `SY-02` exists to prevent.
   const result = await sql<EventQueryRow>`
     SELECT ${EVENT_COLUMNS} FROM queue_events WHERE client_event_id = ${clientEventId}
-  `.execute(db);
+  `.execute(trx ?? db);
 
   const row = result.rows[0];
   return row === undefined ? null : toQueueEvent(row);

@@ -24,6 +24,7 @@ import express, { json, type Express } from 'express';
 
 import { isProduction } from './env.js';
 import { attachPrincipal } from './middleware/auth.js';
+import { cors } from './middleware/cors.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { attachGuestFromLink } from './middleware/guestAuth.js';
 import { idempotency } from './middleware/idempotency.js';
@@ -55,6 +56,12 @@ export function createApp(): Express {
   app.set('json spaces', 0);
 
   app.use(requestLog);
+
+  // Before the body parser and before auth: a preflight carries neither a body
+  // nor a token, and answering it is not something to do after deciding who
+  // the caller is.
+  app.use(cors);
+
   app.use(json({ limit: BODY_LIMIT }));
 
   app.use(attachPrincipal);

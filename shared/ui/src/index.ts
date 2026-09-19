@@ -73,3 +73,9 @@ export {
   type ToastTone,
 } from './components/Toast.js';
 export { cx, type ClassValue } from './components/cx.js';
+
+// --- Signature components (FRONTEND.md §6) ---------------------------------
+//
+// `<FreshnessLine>` lands first because CLAUDE.md §5.8 requires it beneath
+// every live figure, so no screen can ship without it.
+export { FreshnessLine, type FreshnessLineProps } from './components/FreshnessLine.js';

@@ -23,7 +23,8 @@ Last updated: end of step 6 (`feat/queue-service`).
 | 5 | `feat/seed-demo` | merged — `database/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) |
 | 6 | `feat/queue-service` | merged — `appendEvent()`, 13 queue routes, realtime |
 | 7 | `feat/ui-tokens` | merged — tokens, contrast checks, seven primitives |
-| **8** | **`feat/console-reception`** | **next** — reception console, offline queue, optimistic reducer |
+| 8 | `feat/console-reception` | merged — sync protocol, offline queue, the console, Playwright |
+| **9** | **`feat/patient-booking`** | **next** — discovery, booking, guest booking, mock payment |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -38,8 +39,9 @@ tokens stays; no OTP flows, staff passwords or argon2id are to be written. The
 guest tracking link (`FR-GST-05`) is kept, because it is a capability token the
 demo depends on rather than a login.
 
-`pnpm test` reports 820 at the time of writing: 535 unit, 161 api, 80 schema,
-44 ui.
+`pnpm test` reports 1025: 700 unit, 181 api, 80 schema, 64 ui.
+`pnpm test:e2e` reports 5, in Chromium, against the real API and the seeded
+demo database.
 
 **`ui` is a fourth vitest project**, on jsdom. It is separate from `unit` so a
 developer working on the queue reducer never pays for a DOM, and separate from
@@ -190,6 +192,26 @@ Two are the owner's and are not code:
    `sb_secret_…` key were pasted into a chat transcript. Nothing references the
    secret key yet, so rotating it is free; rotating the password means
    re-encoding `DATABASE_URL`.
+
+---
+
+## Running the console
+
+```bash
+docker compose up -d                 # Postgres
+DATABASE_URL=…healthcare_dev pnpm db:reset
+pnpm dev:api                         # :4000
+pnpm dev:console                     # :3100
+```
+
+Then open `http://localhost:3100/?session=<id>` with a staff token in
+`sessionStorage` under `console.token`. There is no login screen by design
+(CLAUDE.md §4.1) — `e2e/support/console.ts` shows how a principal is minted.
+
+**Next is pinned to `--webpack`.** The shared packages import with the `.js`
+extensions Node ESM requires; webpack resolves those through `extensionAlias`
+and Turbopack has no equivalent. Worth revisiting when it gains one —
+Turbopack is substantially faster and this is the only thing holding it off.
 
 ---
 

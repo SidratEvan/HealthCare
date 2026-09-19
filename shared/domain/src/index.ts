@@ -107,6 +107,7 @@ export {
 // from the same types the API validates with, so an action a console can
 // construct is an action the server will accept.
 export * from './schemas/queue.schema.js';
+export * from './schemas/sync.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';

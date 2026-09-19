@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "_comment": "The Playwright suite. Node resolution because these run under Playwright's own runner, plus the DOM lib because `page.addInitScript` bodies are evaluated in the browser and touch `window`.",
+  "extends": "@platform/config/tsconfig/node.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}

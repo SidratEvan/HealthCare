@@ -15,6 +15,7 @@ import { Router } from 'express';
 
 import { healthRoutes } from './health.routes.js';
 import { queueRoutes } from './queue.routes.js';
+import { syncRoutes } from './sync.routes.js';
 
 /** Version prefix for everything a client calls. */
 export const API_BASE_PATH = '/api/v1';
@@ -32,5 +33,6 @@ export const rootRoutes: Router = healthRoutes;
 export function buildApiRouter(): Router {
   const router = Router();
   router.use(queueRoutes);
+  router.use(syncRoutes);
   return router;
 }
