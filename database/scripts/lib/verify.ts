@@ -39,6 +39,27 @@ const INFRASTRUCTURE_TABLES = new Map<string, string>([
   ['spatial_ref_sys', 'created by the PostGIS extension; not ours to shape'],
 ]);
 
+/**
+ * Tables whose primary key is a natural one, with the reason.
+ *
+ * DB-P9 says IDs are UUID v7 and names one exception, `bookings.serial_number`.
+ * This is the second, and it is one DATABASE.md itself specifies: §2.7 gives
+ * `notification_templates` the primary key `key`. It is reference data — a
+ * call site asks for `queue.called` by name, in a channel, in a locale — and
+ * a surrogate id would mean every lookup went through a second index to find
+ * the row the key already identifies.
+ *
+ * Kept separate from `INFRASTRUCTURE_TABLES` because these tables are ours and
+ * every other invariant still applies to them: they keep their timestamps,
+ * their touch trigger and their RLS.
+ */
+const NATURAL_KEY_TABLES = new Map<string, string>([
+  [
+    'notification_templates',
+    'keyed by (key, channel, locale) — reference data, and the primary key DATABASE.md §2.7 specifies',
+  ],
+]);
+
 /** Runs every check and returns everything that is wrong. */
 export async function verifySchema(client: Client): Promise<Violation[]> {
   const violations: Violation[] = [];
@@ -271,7 +292,12 @@ async function checkPrimaryKeysAreUuid(
   const names = new Set(tables.map((t) => t.name));
 
   return rows
-    .filter((row) => names.has(row.table_name) && row.data_type !== 'uuid')
+    .filter(
+      (row) =>
+        names.has(row.table_name) &&
+        row.data_type !== 'uuid' &&
+        !NATURAL_KEY_TABLES.has(row.table_name),
+    )
     .map((row) => ({
       rule: 'DB-P9 uuid keys',
       subject: `${row.table_name}.${row.column_name}`,

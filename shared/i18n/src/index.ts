@@ -24,6 +24,17 @@ export {
 } from './messages.js';
 
 export {
+  TEMPLATES,
+  TEMPLATE_KEYS,
+  placeholdersFor,
+  placeholdersIn,
+  render,
+  type TemplateChannel,
+  type TemplateDefinition,
+  type TemplateKey,
+} from './templates.js';
+
+export {
   DAY_PERIODS,
   DHAKA,
   dayPeriod,

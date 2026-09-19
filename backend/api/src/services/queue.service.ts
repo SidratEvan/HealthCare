@@ -18,14 +18,20 @@
  * without touching the first, and the symptom appears as a queue that jumps
  * on one device and not the other.
  *
+ * ## Notifications are queued inside the lock and sent outside it
+ *
+ * Step 11 of §4.1 publishes the notification jobs. The rows go into
+ * `notifications` in this transaction — so a rolled-back event leaves no
+ * message behind — and `notification.service.dispatch` runs after the commit,
+ * where a slow SMS gateway cannot hold the session row every counter in the
+ * hospital is waiting on. Each of the three entry points below therefore ends
+ * the same way: commit, then dispatch, then return.
+ *
  * ## What this file deliberately does not do yet
  *
- * Step 11 of §4.1 publishes notification jobs, and step 12 writes `audit_log`.
- * Neither is built: notifications are build step 11, and `audit_log` is
- * migration 0010 against a schema that stops at 0006. Both are seams, marked
- * below — the events they would fire on are already identified by
- * `isMaterialEvent` in the domain, so wiring them in later adds a call and
- * changes no logic here.
+ * Step 12 of §4.1 writes `audit_log`. The table now exists (migration 0010)
+ * but `middleware/audit.ts` does not; the actor is already on every event row,
+ * so the log is attributable in the meantime (`FR-QUE-04`).
  */
 
 import {
@@ -73,6 +79,8 @@ import * as stateRepo from '../repositories/queueState.repo.js';
 import * as sessionRepo from '../repositories/session.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
+import * as notifications from './notification.service.js';
+
 /**
  * A session as the HTTP layer sees it, and a booking likewise.
  *
@@ -119,7 +127,7 @@ export async function appendEvent(input: AppendEventInput): Promise<AppendEventR
   const replayed = await findReplay(input.clientEventId ?? null);
   if (replayed !== null) return replayed;
 
-  return await withTransaction(async (trx) => {
+  const settled = await withTransaction(async (trx) => {
     // --- 5. Serialise ------------------------------------------------------
     const session = await lockSession(trx, input.sessionId);
 
@@ -129,9 +137,13 @@ export async function appendEvent(input: AppendEventInput): Promise<AppendEventR
     // --- 4, 6, 7. Validate, append, reduce ---------------------------------
     const applied = await applyOne(trx, session, before, input);
 
-    // --- 8, 9, 10. Persist, recalculate, broadcast -------------------------
+    // --- 8, 9, 10, 11. Persist, recalculate, broadcast, queue messages -----
     return await settle(trx, session, applied.state, [applied.event]);
   });
+
+  // Committed. Now, and only now, does anything leave the building.
+  await notifications.dispatch(settled.batch);
+  return settled.result;
 }
 
 /**
@@ -169,7 +181,7 @@ export async function callNext(input: {
     (await findReplay(derive(original, 'c'))) ?? (await findReplay(derive(original, 'd')));
   if (replayed !== null) return replayed;
 
-  return await withTransaction(async (trx) => {
+  const settled = await withTransaction(async (trx) => {
     const session = await lockSession(trx, input.sessionId);
     let state = await loadState(trx, session);
     const events: QueueEvent[] = [];
@@ -217,16 +229,22 @@ export async function callNext(input: {
     // is a state, and the console should render it rather than a failure.
     if (events.length === 0) {
       return {
-        state,
-        etas: computeEtas(state, nowTs()),
-        seq: state.lastSeq,
-        duplicate: false,
-        serverTs: nowTs(),
+        result: {
+          state,
+          etas: computeEtas(state, nowTs()),
+          seq: state.lastSeq,
+          duplicate: false,
+          serverTs: nowTs(),
+        },
+        batch: notifications.NOTHING,
       };
     }
 
     return await settle(trx, session, state, events);
   });
+
+  await notifications.dispatch(settled.batch);
+  return settled.result;
 }
 
 /**
@@ -277,7 +295,7 @@ async function settle(
   session: sessionRepo.SessionRow,
   state: QueueState,
   events: readonly QueueEvent[],
-): Promise<AppendEventResult> {
+): Promise<Settled> {
   const last = events[events.length - 1];
   if (last === undefined) throw new Error('settle() needs at least one event.');
 
@@ -296,22 +314,56 @@ async function settle(
   for (const event of events) {
     broadcastSpecific(session.id, state, event);
 
-    // --- 11. Notify --------------------------------------------------------
-    //
-    // Not built: notifications are build step 11. The events that would fire
-    // one are already identified by the domain, so this is a call to add and
-    // not a decision to make.
-    void isMaterialEvent(event.type);
-
     // --- 12. Audit ---------------------------------------------------------
     //
-    // Not built: `audit_log` is migration 0010 and the schema stops at 0006.
-    // The actor is already on the event row, so the log is attributable in the
-    // meantime (`FR-QUE-04`).
+    // Not built: `middleware/audit.ts` is unwritten, though `audit_log` now
+    // exists (migration 0010). The actor is already on the event row, so the
+    // log is attributable in the meantime (`FR-QUE-04`).
   }
 
+  // --- 11. Notify ----------------------------------------------------------
+  //
+  // Planned from the state, written into the outbox, and sent by the caller
+  // once this transaction has committed. `isMaterialEvent` is the domain's own
+  // answer to "is this worth telling somebody about", and the mapping from an
+  // event to a message lives in `notification.service` rather than here — this
+  // file's job is the queue, not the copy.
+  const material = events.filter((event) => isMaterialEvent(event.type));
+  const plan = [
+    ...material.flatMap((event) =>
+      notifications.planFor(state, event, { etaFor: (id) => etaTextFor(etas, id) }),
+    ),
+    // Who is two away now (`FR-NOT-03`). Whether they have already been told
+    // is settled against the outbox, not against `before`.
+    ...notifications.planTwoAway(state),
+  ];
+
+  const batch = await notifications.queueFor(trx, session.id, plan);
+
   // --- 13. Return ----------------------------------------------------------
-  return { state, etas, seq: last.seq, duplicate: false, serverTs: last.serverTs };
+  return {
+    result: { state, etas, seq: last.seq, duplicate: false, serverTs: last.serverTs },
+    batch,
+  };
+}
+
+/** What `settle` produces: the answer, and the messages waiting to go out. */
+interface Settled {
+  readonly result: AppendEventResult;
+  readonly batch: notifications.QueuedBatch;
+}
+
+/**
+ * A booking's estimate, as a message says it.
+ *
+ * Bangla numerals and a Bangla period word are the recipient's business, not
+ * this file's, so what travels is an ISO instant and the service formats it
+ * per locale (`FR-NOT-04`, `TYP-04`).
+ */
+function etaTextFor(etas: readonly Eta[], bookingId: string): string | null {
+  const eta = etas.find((candidate) => candidate.bookingId === bookingId);
+  if (eta === undefined || eta.confidence === 'unknown') return null;
+  return eta.etaAt;
 }
 
 /**
@@ -739,7 +791,7 @@ export async function appendBatch(input: {
   readonly actor: QueueActor;
   readonly entries: readonly BatchEntry[];
 }): Promise<BatchResult> {
-  return await withTransaction(async (trx) => {
+  const settled = await withTransaction(async (trx) => {
     const session = await lockSession(trx, input.sessionId);
     let state = await loadState(trx, session);
 
@@ -798,23 +850,29 @@ export async function appendBatch(input: {
     if (applied.length === 0) {
       const etas = computeEtas(state, nowTs());
       return {
-        outcomes,
-        state,
-        etas,
-        seq: state.lastSeq,
-        serverTs: nowTs(),
+        result: { outcomes, state, etas, seq: state.lastSeq, serverTs: nowTs() },
+        batch: notifications.NOTHING,
       };
     }
 
-    const settled = await settle(trx, session, state, applied);
+    const done = await settle(trx, session, state, applied);
     return {
-      outcomes,
-      state: settled.state,
-      etas: settled.etas,
-      seq: settled.seq,
-      serverTs: settled.serverTs,
+      result: {
+        outcomes,
+        state: done.result.state,
+        etas: done.result.etas,
+        seq: done.result.seq,
+        serverTs: done.result.serverTs,
+      },
+      batch: done.batch,
     };
   });
+
+  // A console replaying an offline shift can produce a shift's worth of
+  // messages at once. They go out after the batch has committed, in order,
+  // for the same reason a single event's do.
+  await notifications.dispatch(settled.batch);
+  return settled.result;
 }
 
 /**
