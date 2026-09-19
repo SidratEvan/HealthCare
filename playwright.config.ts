@@ -21,8 +21,11 @@
 
 import { defineConfig, devices } from '@playwright/test';
 
-/** The console. The patient app joins it at step 9. */
+import { E2E_DATABASE_URL } from './e2e/support/database.js';
+
+/** The three servers these specs drive. */
 const CONSOLE_URL = 'http://localhost:3100';
+const PATIENT_URL = 'http://localhost:3000';
 const API_URL = 'http://localhost:4000';
 
 /**
@@ -31,8 +34,12 @@ const API_URL = 'http://localhost:4000';
  * These specs write queue events and cannot clean up after themselves —
  * `queue_events` is append-only (`DB-P1`). Pointed at a shared database they
  * would leave a trail through somebody else's demo.
+ *
+ * Resolved in `e2e/support/database.ts` so that the servers started here and
+ * the fixtures the specs use cannot end up on different databases — which is
+ * exactly what happened while this was a second, independent copy of the URL.
  */
-const DATABASE_URL = 'postgresql://healthcare:healthcare@localhost:5432/healthcare_dev';
+const DATABASE_URL = E2E_DATABASE_URL;
 
 export default defineConfig({
   testDir: './e2e',
@@ -89,6 +96,16 @@ export default defineConfig({
     {
       command: 'pnpm dev:console',
       url: CONSOLE_URL,
+      reuseExistingServer: process.env['CI'] !== 'true',
+      timeout: 180_000,
+      env: {
+        NEXT_PUBLIC_API_URL: `${API_URL}/api/v1`,
+        NEXT_PUBLIC_SOCKET_URL: API_URL,
+      },
+    },
+    {
+      command: 'pnpm dev:patient',
+      url: PATIENT_URL,
       reuseExistingServer: process.env['CI'] !== 'true',
       timeout: 180_000,
       env: {
