@@ -22,7 +22,7 @@
 
 import express, { json, type Express } from 'express';
 
-import { isProduction } from './env.js';
+import { env } from './env.js';
 import { attachPrincipal } from './middleware/auth.js';
 import { cors } from './middleware/cors.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
@@ -46,7 +46,11 @@ export function createApp(): Express {
   // Render terminates TLS and forwards the caller's address in
   // `X-Forwarded-For`. Without this, `req.ip` is the balancer's address and
   // the OTP limit in FR-SEC-05 would be shared by every caller at once.
-  app.set('trust proxy', isProduction() ? 1 : false);
+  //
+  // Driven by its own variable rather than by `NODE_ENV`: being behind a proxy
+  // and being production are different facts, and the pitch deployment is the
+  // first that is one without the other.
+  app.set('trust proxy', env.TRUST_PROXY_HOPS === 0 ? false : env.TRUST_PROXY_HOPS);
 
   // Nothing in this API depends on the framework advertising itself.
   app.disable('x-powered-by');

@@ -41,6 +41,7 @@ import { Button, Card, FreshnessLine, ToastProvider, useToast } from '@platform/
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
 import { useReceptionQueue } from '@/hooks/useReceptionQueue';
+import { readDemoSession } from '@/lib/demo';
 
 import type { ReactNode } from 'react';
 
@@ -71,12 +72,16 @@ const CONSOLE_NUMERALS = 'latin' as const;
 /**
  * The demo principal (CLAUDE.md §4.1).
  *
+ * Read from the one place `ConsolePicker` writes it. It used to read its own
+ * `console.token` key, which meant two stores for one credential and a console
+ * that could hold a stale token from before a hospital was switched.
+ *
  * Declared at module scope so it is the same function on every render — the
  * hook holds it in a ref, but a stable reference here keeps the intent obvious
  * and costs nothing. Supabase Auth replaces this one function.
  */
 function readToken(): string | null {
-  return globalThis.sessionStorage?.getItem('console.token') ?? null;
+  return readDemoSession()?.token ?? null;
 }
 
 export function ReceptionConsole(): ReactNode {

@@ -82,8 +82,13 @@ async function bookAndGetTrackingLink(page: Page): Promise<string> {
 async function openConsole(context: BrowserContext): Promise<Page> {
   const page = await context.newPage();
 
+  // The same store `ConsolePicker` writes, so a spec and a person reach the
+  // console the same way — one credential, one key (CLAUDE.md §4.1).
   await page.addInitScript((token: string) => {
-    window.sessionStorage.setItem('console.token', token);
+    window.sessionStorage.setItem(
+      'console.demo-session',
+      JSON.stringify({ token, hospitalId: 'e2e', staffName: 'E2E' }),
+    );
   }, demo.token);
 
   await page.goto(`http://localhost:3100/?session=${demo.sessionId}`);

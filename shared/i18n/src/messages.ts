@@ -57,6 +57,34 @@ export const CONSOLE = {
   actualStart: { bn: 'শুরু হয়েছে', en: 'Started' },
   notStarted: { bn: 'এখনো শুরু হয়নি', en: 'Not started yet' },
 
+  // --- Demo sign-in (S-B-01, CLAUDE.md §4.1) -------------------------------
+  //
+  // Replaces `S-B-00` Staff login while authentication is deferred. The copy
+  // says plainly that this is a demonstration, because a console anybody can
+  // open must not be mistaken for one that checked who you are.
+  chooseConsole: { bn: 'কনসোল নির্বাচন করুন', en: 'Choose a console' },
+  chooseHospital: { bn: 'কোন হাসপাতাল?', en: 'Which hospital?' },
+  chooseRole: { bn: 'কোন দায়িত্বে?', en: 'Which role?' },
+  chooseChamber: { bn: 'কোন চেম্বার?', en: 'Which chamber?' },
+  roleReceptionist: { bn: 'রিসেপশন', en: 'Reception' },
+  roleDoctor: { bn: 'ডাক্তার', en: 'Doctor' },
+  roleHospitalAdmin: { bn: 'ব্যবস্থাপনা', en: 'Administration' },
+  demoSignIn: {
+    bn: 'এটি ডেমো — পাসওয়ার্ড ছাড়াই ঢোকা যায়। আসল সংস্করণে লগ ইন লাগবে।',
+    en: 'This is a demonstration — no password is needed. The real version requires a login.',
+  },
+  sessionRunning: { bn: 'চলছে', en: 'Running' },
+  sessionScheduled: { bn: 'শুরু হয়নি', en: 'Not started' },
+  sessionEnded: { bn: 'শেষ', en: 'Finished' },
+  waitingCount: { bn: '{count} জন অপেক্ষায়', en: '{count} waiting' },
+  openConsole: { bn: 'কনসোল খুলুন', en: 'Open the console' },
+  noConsoles: {
+    bn: 'আজ কোনো চেম্বার চলছে না। ডেমো তথ্য আবার তৈরি করুন।',
+    en: 'No chambers are running today. Rebuild the demo data.',
+  },
+  changeConsole: { bn: 'কনসোল বদলান', en: 'Change console' },
+  consoleLoadFailed: { bn: 'কনসোলের তালিকা আনা যায়নি', en: 'Could not load the consoles' },
+
   // --- Queue table (B1.4) --------------------------------------------------
   colSerial: { bn: 'সিরিয়াল', en: 'Serial' },
   colPatient: { bn: 'রোগী', en: 'Patient' },
