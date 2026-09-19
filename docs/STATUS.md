@@ -160,10 +160,34 @@ cannot be deleted; clearing them means a `pnpm db:reset` against Supabase,
 which is a destructive operation on the demo environment and needs the owner's
 say-so (`ALLOW_REMOTE_DB=1` plus `ALLOW_DESTRUCTIVE_DB=1`).
 
-The count is **not yet known**: reading it needs a TLS connection to the
-pooler, whose chain Node will not verify without Supabase's CA bundle, and
-disabling verification to count rows is not worth doing. The rows are
-identifiable by `sessions.room = 'E2E'`.
+**Measured, 2026-09-19:** 32 sessions (`room = 'E2E'`), 146 bookings and 64
+queue events, all created between 05:17 and 05:29 UTC — the three diagnostic
+runs during which the bug was found, and nothing older. Supabase then held 161
+sessions, 1,327 bookings and 1,285 queue events in total, so the stray rows are
+roughly a fifth of the sessions and a twentieth of the bookings.
+
+Connecting needs no TLS options: the URL carries no `sslmode`, and the repo's
+own connection factories pass nothing but the connection string, so a plain
+`new Client({ connectionString })` is how everything here already talks to
+Supabase.
+
+**Still not cleared.** Both routes are refused by this environment's sandbox:
+`pnpm db:reset` reads as a mass delete, and the scoped alternative — deleting
+only the E2E rows — has to lift `trg_queue_events_no_mutate` to remove the 64
+events, which reads as tampering with an append-only log. Both readings are
+fair; the operations are what they look like. The owner runs one of these:
+
+```bash
+# The supported path: truncate and reseed the demo (FR-DEM-06).
+ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 DEMO_MODE=true pnpm db:reset
+```
+
+A scoped delete is possible instead, but it must remove `queue_events` first
+(both `bookings → sessions` and `queue_events → sessions` are `RESTRICT`), and
+that means disabling the row guard inside the transaction and restoring it
+before commit — exactly what `seeds/reset.ts` does for the TRUNCATE guard.
+Given that the whole database is regenerable demo data, the reset is the
+simpler and better-tested of the two.
 
 The bug itself is fixed and cannot recur: the suite refuses any non-local
 database.
