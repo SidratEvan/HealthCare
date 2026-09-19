@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: end of step 10 (`feat/patient-live-serial`) — **the pitch demo milestone**.
+Last updated: end of step 11 (`feat/notifications`).
 
 ---
 
@@ -26,7 +26,8 @@ Last updated: end of step 10 (`feat/patient-live-serial`) — **the pitch demo m
 | 8 | `feat/console-reception` | merged — sync protocol, offline queue, the console, Playwright |
 | 9 | `feat/patient-booking` | merged — discovery, booking, guest booking, mock payment |
 | **10** | **`feat/patient-live-serial`** | **merged — the pitch demo works.** `<LiveSerialCard>`, the session channel on the patient side, late/cancel, and the two-device canary |
-| 11 | `feat/notifications` | **next** — templates, workers, SMS/push adapters |
+| 11 | `feat/notifications` | merged — migration 0010, templates, the outbox, SMS/push adapters |
+| 12 | `feat/doctor-console` | **next** — doctor screen, e-prescription, visit records |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -54,7 +55,14 @@ tokens stays; no OTP flows, staff passwords or argon2id are to be written. The
 guest tracking link (`FR-GST-05`) is kept, because it is a capability token the
 demo depends on rather than a login.
 
-`pnpm test` reports 1332.
+**Step 11 notifies from the queue, not from a cron.** A material event is
+turned into messages by `notification.service`, the rows are written inside the
+queue transaction and sent after it commits. `pg-boss` is deliberately not
+installed (see the open decisions): every message this version sends is caused
+by an event, so nothing needed a scheduler. The two jobs that genuinely do —
+the leave-home alert and send-retry — are noted under the deliberate gaps.
+
+`pnpm test` reports 1367.
 `pnpm test:e2e` reports 28, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`.
@@ -324,6 +332,19 @@ Raised while building the live serial screen (step 10):
    behaviour for now — nobody should silently inherit somebody else's number —
    and it needs deciding at step 15.
 
+Raised while building notifications (step 11):
+
+14. **What one SMS costs.** `POISHA_PER_SEGMENT` is 35 in `adapters/sms.ts`, a
+   placeholder until an aggregator quotes a rate. It is recorded per message so
+   `FR-NOT-06`'s delivery reporting has something to sum, and every figure the
+   admin dashboard shows at step 19 is built on it.
+
+15. **Quiet hours are 22:00–07:00 Dhaka**, chosen because no document names
+   them. Nothing is suppressed by them today — `FR-NOT-07` exempts queue events
+   and every message this version sends is one — so the first template outside
+   the `queue.*`, `booking.*` and `session.*` namespaces is when the hours
+   start mattering.
+
 Two are the owner's and are not code:
 
 8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
@@ -412,6 +433,28 @@ Turbopack is substantially faster and this is the only thing holding it off.
   shows as scheduled with no events. That is honest — nothing was recorded —
   but it is a wart for a late demo. The pitch session itself is always built
   backwards from the current instant, so it is correctly mid-queue at any hour.
+- **`pg-boss` is not installed, so there is no worker process.** Every message
+  step 11 sends is caused by an event, so it is raised from the event and needs
+  no scheduler — which is more accurate than a 60-second poll, not merely
+  cheaper. Two jobs in `BACKEND.md` §8 genuinely need a timer and are therefore
+  absent: `queue.leaveNow` (`FR-PAT-32` as a *notification*; the patient screen
+  already shows the banner) and `notify.retry` (the log provider never fails).
+  `backend/workers/src/index.ts` is still a stub. The outbox is built for this:
+  a failed send is a `queued` or `failed` row under a partial index, so adding
+  the worker is a subscriber, not a redesign.
+
+- **`notifications` has no `booking_id` column**, because DATABASE.md §2.7 does
+  not give it one. The booking travels in `params ->> 'bookingId'`, which is
+  what the delivery queries and the send-once dedupe match on. A column would
+  be better and needs a document change to justify.
+
+- **Push is recorded as skipped for everybody.** Web Push needs VAPID keys, a
+  service worker and a `device_tokens` row, and none of the three exists yet —
+  no screen asks for notification permission. So `FR-NOT-02` ("app users get
+  push + SMS; non-app users get SMS only") is already *correct* rather than
+  stubbed: today every patient is a non-app user, and the adapter says so with
+  `no_device_token` rather than pretending.
+
 - **Reschedule is not built, so `<DelaySheet>` is not either.** `BTN-A08-RESCHEDULE`
   and `POST /bookings/:id/reschedule` need `S-A-07b` in reschedule mode, which
   is its own flow; step 10's contents in `CLAUDE.md` §4 name late and cancel.
