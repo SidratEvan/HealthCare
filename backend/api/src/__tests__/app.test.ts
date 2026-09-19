@@ -75,7 +75,11 @@ describe('the error envelope', () => {
   });
 
   it('returns the shape for an unmatched path under the version prefix too', async () => {
-    const response = await request(app).post('/api/v1/bookings');
+    // Deliberately a path no step will ever mount. This test used to probe
+    // `/api/v1/bookings`, which step 9 turned into a real route — and it then
+    // asserted the 404 envelope against a 400 from a real endpoint, which is a
+    // different thing entirely.
+    const response = await request(app).post('/api/v1/no-such-resource');
 
     expect(response.status).toBe(404);
     expect(response.body.ok).toBe(false);

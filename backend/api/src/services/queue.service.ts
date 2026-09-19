@@ -810,6 +810,36 @@ export async function appendBatch(input: {
 }
 
 /**
+ * Sets a session's capacity.
+ *
+ * Exists for the tests, which need a chamber that is genuinely full to prove
+ * `FR-PAT-25` — and filling a forty-serial session one booking at a time would
+ * take forty round trips to assert one refusal. Not exposed by any route: the
+ * settings screen that will change capacity is a later step.
+ */
+export async function setCapacity(sessionId: string, capacity: number): Promise<void> {
+  await sessionRepo.setCapacity(sessionId, capacity);
+}
+
+/**
+ * Re-broadcasts a session's state after its roster changed.
+ *
+ * A booking is not a queue *event* — `queue_event_type` has no
+ * `BOOKING_CREATED`, and the queue is `seed + events => state`
+ * (`shared/domain/src/queue/state.ts`). So a new booking changes the seed
+ * rather than the log, and every console watching needs telling.
+ *
+ * Without this a reception console would not see an online booking until its
+ * next reload, which is exactly the "silently dropped" failure `FR-QUE-52`
+ * exists to prevent.
+ */
+export async function broadcastRoster(sessionId: string): Promise<void> {
+  const state = await getState(sessionId);
+  const etas = await getEtas(sessionId);
+  emit.queueUpdated(sessionId, { state, etas }, state.lastSeq, nowTs());
+}
+
+/**
  * The events a client missed, for the resume handshake (`SY-01`).
  *
  * A reconnecting socket says how far it got and receives what followed, in
