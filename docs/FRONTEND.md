@@ -63,6 +63,45 @@ The visual language is **clinical calm with Bengali warmth**: a warm off-white g
 
 Reference feel, not reference copying: the quiet authority of a well-made civic institution — signage, forms, and wayfinding done carefully — rather than a startup landing page.
 
+### 0.4 The design reference
+
+There is a design canvas for this product, and it is the visual reference the
+client work is built against:
+
+**https://claude.ai/code/artifact/b92af388-582a-4104-acc4-afd0f5557149**
+— *Hospital Platform — Patient App (Bangla)*
+
+Ten artboards, covering the whole product:
+
+| Patient, 390×900 | Staff, 1280×860 |
+|---|---|
+| `Main` — হোম | `Reception` — রিসেপশন কনসোল |
+| `Specialty` — বিশেষজ্ঞ → হাসপাতাল | `Doctor` — ডাক্তারের স্ক্রিন |
+| `Hospital` — হাসপাতালের ভেতরে | `Beds` — বেড বোর্ড |
+| `Serial` — লাইভ সিরিয়াল | `EmergencyConsole` — জরুরি বিভাগ কনসোল |
+| `Emergency` — জরুরি | `Admin` — ব্যবস্থাপনা ড্যাশবোর্ড |
+
+**How to use it.** It is a reference, not a specification. This document
+remains the authority: where the canvas and §1–§3 disagree, the tokens here
+win and the canvas is the thing that gets updated. The canvas is where to look
+for *composition* — how a screen is massed, what sits where, how much air a
+card gets, how the live serial is staged — which a token table cannot express.
+
+It already agrees with §1.1 exactly: `#F6F4EF` ground, `#14211C` ink, `#0C5C46`
+brand, `#7FD6A8` live, `#E8F0EC` tinted surface, `#B3261E` emergency, `#8A5A00`
+on `#F7EEDC` for lateness and delay, and the three neutral line weights. It
+also already does the things §0.2 bans nothing of and §2 insists on: Bengali
+numerals throughout, a freshness line at the foot of the live screen, inline
+stroke SVG rather than emoji, real `<button>` elements, 44 px minimum targets.
+
+**One divergence, unresolved.** The canvas sets body copy in **Hind Siliguri**
+and display in **Noto Serif Bengali** — a two-face pairing. §2.1 mandates a
+single superfamily, **Anek Bangla**, with Hind Siliguri only as a fallback, on
+the reasoning that one voice across both scripts is what makes a product look
+designed rather than assembled. Both are defensible and the canvas's serif
+display has real presence on the hero numeral. §2.1 stands until the owner
+rules; recorded in `docs/STATUS.md`.
+
 ---
 
 ## 1. Brand foundation
@@ -126,13 +165,28 @@ Night-shift reception and ER staff need it. Dark mode inverts ground tokens to `
 
 | Pair | Ratio | Status |
 |---|---|---|
-| `--ink-primary` on `--bg-canvas` | 13.8:1 | AAA |
-| `--ink-muted` on `--bg-canvas` | 6.4:1 | AA |
-| `#FFFFFF` on `--brand-600` | 7.1:1 | AAA |
-| `#FFFFFF` on `--alert-600` | 5.6:1 | AA |
-| `--warn-700` on `--warn-100` | 7.9:1 | AAA |
+| `--ink-primary` on `--bg-canvas` | 15.11:1 | AAA |
+| `--ink-muted` on `--bg-canvas` | 6.54:1 | AA |
+| `#FFFFFF` on `--brand-600` | 7.97:1 | AAA |
+| `#FFFFFF` on `--alert-600` | 6.54:1 | AA |
+| `--warn-700` on `--warn-100` | 6.97:1 | AA |
 
-Any new pair must be verified before use (`FR-LOC-05`). No white text on `--brand-300`, no muted ink on tinted surfaces below 4.5:1.
+Ratios are computed from the §1.1 hex values by `contrastRatio()` in
+`shared/ui/src/a11y/contrast.ts`, and `contrast.test.ts` asserts every row.
+They are therefore descriptive of the palette: change a token and this table
+must change with it, or the suite fails.
+
+**`--warn-700` is AA, not AAA.** An earlier version of this table read 7.9:1
+AAA. The §1.1 value `#6B4A10` actually yields 6.97:1 — it misses AAA by three
+hundredths. `#63420D` produces exactly 7.9:1 and would make both sections true
+at once, which suggests that was the intended value; it is a brand-token change
+and so is left for the owner. Recorded in `docs/STATUS.md`. Caution text is
+legible either way, and the delay chip uses `--warn-600` (5.14:1, AA) in any
+case.
+
+Any new pair must be verified before use (`FR-LOC-05`) — call `meets()` rather
+than reasoning about it. No white text on `--brand-300` (1.74:1, clears
+nothing), no muted ink on tinted surfaces below 4.5:1.
 
 ---
 

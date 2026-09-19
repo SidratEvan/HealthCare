@@ -101,6 +101,14 @@ export {
   type QueueSettings,
 } from './queue/rules.js';
 
+// --- Validation schemas ----------------------------------------------------
+//
+// Shared with the client (BACKEND.md §0): the console builds its offline queue
+// from the same types the API validates with, so an action a console can
+// construct is an action the server will accept.
+export * from './schemas/queue.schema.js';
+export * from './schemas/sync.schema.js';
+
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';
 export * as time from './util/time.js';

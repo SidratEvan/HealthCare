@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The shared brain: types, queue event log, reducer, ETA maths and validation schemas. No I/O (BACKEND.md §2).",
+  "description": "The shared brain: types, queue event log, reducer, ETA maths and validation schemas. No I/O (BACKEND.md \u00a72).",
   "sideEffects": false,
   "exports": {
     ".": {
@@ -13,5 +13,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   }
 }

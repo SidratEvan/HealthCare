@@ -1,0 +1,163 @@
+/*
+ * The token layer (FRONTEND.md §1-3).
+ *
+ * Every colour, radius, shadow and duration in this product is defined here
+ * and nowhere else. Tailwind's config references these variables; a component
+ * never sees a hex (FRONTEND.md §9, §10: "if a colour or radius appears in an
+ * app package, it is a bug").
+ *
+ * Values are copied from FRONTEND.md §1.1, §3.2, §3.3 and §3.4 exactly. The
+ * document is the authority; if these drift, fix the CSS, not the document.
+ */
+
+:root {
+  /* --- Ground — warm, never pure white (FRONTEND.md §1.1) ---------------- */
+  --bg-canvas: #f6f4ef; /* app background */
+  --bg-surface: #ffffff; /* cards, sheets */
+  --bg-sunken: #efebe2; /* wells, table headers, track fills */
+  --bg-inverse: #0e1a16; /* dark surfaces */
+
+  /* --- Ink --------------------------------------------------------------- */
+  --ink-primary: #14211c; /* body and headings */
+  --ink-secondary: #3e4b45; /* supporting text */
+  --ink-muted: #4f5a54; /* captions — still AA on canvas */
+  --ink-inverse: #f6f4ef;
+
+  /* --- Institutional green — the single brand colour --------------------- */
+  --brand-900: #06291f;
+  --brand-700: #08402f;
+  --brand-600: #0c5c46; /* primary actions, brand surfaces */
+  --brand-300: #7fd6a8; /* progress, live indicators on dark */
+  --brand-100: #e8f0ec; /* tinted surfaces */
+  --brand-border: #c9ddd3;
+
+  /* --- Emergency — reserved. Never for ordinary destructive UI ----------- */
+  --alert-700: #7a2018;
+  --alert-600: #b3261e;
+  --alert-100: #fbe9e7;
+
+  /* --- Caution — delays, staleness, late patients ------------------------ */
+  --warn-700: #6b4a10;
+  --warn-600: #8a5a00;
+  --warn-100: #f7eedc;
+  --warn-border: #e8d6b0;
+
+  /* --- Neutral lines ----------------------------------------------------- */
+  --line-strong: #d9d4c8;
+  --line-soft: #e2ded4;
+  --line-hairline: #efebe2;
+
+  /* --- Radii and type families ------------------------------------------ *
+   * Declared in `../styles.css` instead, inside `@theme`. Tailwind v4's own
+   * namespaces are `--radius-*` and `--font-*` — the same names — so defining
+   * them here as well would mean mapping a variable to itself. The theme
+   * block is therefore where they live, and it is still one definition.      */
+
+  /* --- Elevation — surface + hairline, not heavy shadow (§3.3) ----------- *
+   * Neutral-tinted always; never coloured, never two layers at once.        */
+  --elev-1: 0 1px 2px rgb(20 33 28 / 6%);
+  --elev-2: 0 8px 24px rgb(20 33 28 / 10%);
+  --elev-3: 0 16px 48px rgb(20 33 28 / 16%);
+
+  /* --- Motion (§3.4) — explains a change of state, never entertains ------ */
+  --motion-instant: 90ms;
+  --motion-quick: 160ms;
+  --motion-sheet: 260ms;
+  --motion-count: 400ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-count: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* --- Spacing (§3.1) — 4px base, deliberately small usable set ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-14: 56px;
+  --space-18: 72px;
+
+  /* Screen gutters differ by product (§3.1). */
+  --gutter-mobile: 20px;
+  --gutter-console: 24px;
+
+  /* --- Type (§2.1) ------------------------------------------------------- *
+   * One superfamily across both scripts. Hind Siliguri is the fallback       *
+   * because it is the most commonly installed quality Bangla face in the     *
+   * region; the system stack is last and is never the design.               */
+  --font-ui: 'Anek Bangla', 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
+  --font-reading: 'Tiro Bangla', 'Noto Serif Bengali', Georgia, serif;
+}
+
+/*
+ * TYP-01: Bengali needs more leading than Latin. Cramped Bangla is the most
+ * common amateur tell, so the floor is set on the element rather than left to
+ * each component to remember.
+ *
+ * TYP-02: no letter-spacing on Bangla, ever, and no uppercasing — the script
+ * has no case.
+ */
+:root {
+  --leading-body: 1.65;
+  --leading-display: 1.35;
+}
+
+html[lang='bn'] body,
+html[lang='bn'] input,
+html[lang='bn'] button,
+html[lang='bn'] textarea {
+  line-height: var(--leading-body);
+  letter-spacing: normal;
+  text-transform: none;
+  /* TYP-06: a Bangla conjunct must not break across lines. */
+  word-break: keep-all;
+}
+
+/*
+ * §3.4: respect the operating system. Reduced motion drops to opacity only —
+ * the state change still reads, the movement stops.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-instant: 0ms;
+    --motion-quick: 0ms;
+    --motion-sheet: 0ms;
+    --motion-count: 0ms;
+  }
+}
+
+/*
+ * Keyframes the components reference by name.
+ *
+ * Both are gated behind `motion-safe:` at the call site, so under
+ * `prefers-reduced-motion` neither runs and the state still reads — the OTP
+ * box goes red, the toast still waits out its ten seconds (§3.4).
+ */
+
+/* §5.3: a failed OTP shakes once and clears. Once, not a loop: it reports a
+   failure, it does not nag. */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+/* §5.7 / GR-02: the visible undo window draining left to right. */
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}

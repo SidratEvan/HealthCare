@@ -14,6 +14,8 @@
 import { Router } from 'express';
 
 import { healthRoutes } from './health.routes.js';
+import { queueRoutes } from './queue.routes.js';
+import { syncRoutes } from './sync.routes.js';
 
 /** Version prefix for everything a client calls. */
 export const API_BASE_PATH = '/api/v1';
@@ -24,11 +26,13 @@ export const rootRoutes: Router = healthRoutes;
 /**
  * The versioned API.
  *
- * Empty of endpoints until step 4. It is mounted now so that the middleware
- * chain, the error envelope and the 404 handler are exercised by tests before
- * any real endpoint depends on them.
+ * The queue router arrived with step 6 and is the first real one. Discovery,
+ * booking and the rest follow with their steps; each brings its own auth
+ * matrix tests.
  */
 export function buildApiRouter(): Router {
   const router = Router();
+  router.use(queueRoutes);
+  router.use(syncRoutes);
   return router;
 }

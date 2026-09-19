@@ -104,7 +104,17 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: port.default(4000),
   API_BASE_URL: httpUrl,
+  /** The patient PWA. What a guest tracking link is built from (`FR-GST-05`). */
   WEB_BASE_URL: httpUrl,
+  /**
+   * The staff console.
+   *
+   * A separate origin from the patient app, and always has been: they are two
+   * deployments (FRONTEND.md §10). Both have to be allowed through CORS and
+   * through the socket handshake, and a wildcard there would let any page on
+   * the internet open a session channel with a stolen token.
+   */
+  CONSOLE_BASE_URL: httpUrl.default('http://localhost:3100'),
 
   // --- Database (DATABASE.md) ---------------------------------------------
   DATABASE_URL: z.string().min(1),

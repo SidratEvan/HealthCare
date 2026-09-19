@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: end of step 5 (`feat/seed-demo`).
+Last updated: end of step 6 (`feat/queue-service`).
 
 ---
 
@@ -21,7 +21,10 @@ Last updated: end of step 5 (`feat/seed-demo`).
 | 3 | `feat/api-foundation` | merged — env, db, logger, middleware, errors, health |
 | ~~4~~ | ~~`feat/auth-guest`~~ | **deferred, do not build** — see `CLAUDE.md` §4.1 |
 | 5 | `feat/seed-demo` | merged — `database/seeds` 00–07 + `reset.ts` (`FR-DEM-*`) |
-| **6** | **`feat/queue-service`** | **next** — `appendEvent()`, queue routes, realtime rooms |
+| 6 | `feat/queue-service` | merged — `appendEvent()`, 13 queue routes, realtime |
+| 7 | `feat/ui-tokens` | merged — tokens, contrast checks, seven primitives |
+| 8 | `feat/console-reception` | merged — sync protocol, offline queue, the console, Playwright |
+| **9** | **`feat/patient-booking`** | **next** — discovery, booking, guest booking, mock payment |
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -36,7 +39,25 @@ tokens stays; no OTP flows, staff passwords or argon2id are to be written. The
 guest tracking link (`FR-GST-05`) is kept, because it is a capability token the
 demo depends on rather than a login.
 
-`pnpm test` reports 665 at the time of writing: 464 unit, 122 api, 79 schema.
+`pnpm test` reports 1025: 700 unit, 181 api, 80 schema, 64 ui.
+`pnpm test:e2e` reports 5, in Chromium, against the real API and the seeded
+demo database.
+
+**`ui` is a fourth vitest project**, on jsdom. It is separate from `unit` so a
+developer working on the queue reducer never pays for a DOM, and separate from
+`api` so it never needs a database. It asserts behaviour and accessibility —
+roles, labels, focus order, keyboard handling, an axe pass per component — not
+appearance: Tailwind classes are inert strings under jsdom, so the visual layer
+is proven from the token values instead, by `tokens.test.ts` and
+`contrast.test.ts`.
+
+**Socket.IO is wired** (`socket.io` 4.8.3, added with the owner's permission).
+`realtime/server.ts` is the only file that imports it; everything else
+publishes through the one-method interface in `realtime/emit.ts`, which still
+records instead of sending until `attachRealtime` runs — so the queue tests
+need no port. The handshake reuses the HTTP `verifyToken`/`toPrincipal`, the
+resume-from-seq path is implemented (`SY-01`), and `realtime.test.ts` binds a
+real port and proves a subscribed client is told within the `NFR-01` budget.
 
 **Supabase holds the seeded demo data** as of the end of step 5: 6 hospitals,
 40 doctors, 200 patients, 1,181 bookings, 1,221 queue events, and one
@@ -61,6 +82,15 @@ afternoon.
   recreates schemas, so it must never touch a shared database; `DATABASE_URL_TEST`
   stays on localhost and the guard in `database/scripts/lib/env.ts` refuses otherwise.
 - Supabase project region is `ap-southeast-1` (Singapore), closest to Dhaka.
+- **The container carries three databases**, and the two test ones are separate
+  on purpose: `healthcare_dev`, `healthcare_test` (schema suite) and
+  `healthcare_api_test` (API suite). Both test databases are seeded from
+  `database/seeds` by their global setup, so every test runs against real demo
+  data (CLAUDE.md §6) — but the API suite *mutates* it, appending to a log that
+  cannot be cleaned up, while the schema suite asserts on exact counts of the
+  seeded set. Sharing one made each suite's result depend on which vitest
+  started first. If your container predates this, recreate it:
+  `docker compose down -v && docker compose up -d`.
 
 ### Things learned the hard way, so they are not relearned
 
@@ -93,8 +123,8 @@ the storage work in steps 12–13.
 
 ## Open decisions
 
-Six are open questions, each implemented one way and flagged rather than
-settled silently; all six need an owner's ruling. The seventh is recorded as
+Eight are open questions, each implemented one way and flagged rather than
+settled silently; all eight need an owner's ruling. One more is recorded as
 settled because the answer changed the tree.
 
 1. **`FR-QUE-20` grace period.** "2 patients or 15 minutes, whichever is longer"
@@ -135,6 +165,23 @@ Raised while building the seeds (step 5):
    same branch, and the layering rules now also forbid `frontend/` importing
    `backend/` or `database/`.
 
+10. **Which typeface.** The design canvas (`FRONTEND.md` §0.4) pairs Hind
+   Siliguri for body with Noto Serif Bengali for display. `FRONTEND.md` §2.1
+   mandates one superfamily, Anek Bangla, self-hosted, with Hind Siliguri only
+   as a fallback. The document stands until ruled otherwise, so step 7 builds
+   tokens on Anek Bangla — but the canvas's serif display carries the hero
+   numeral well, and switching later is a token change, not a rewrite.
+
+11. **`--warn-700` is AA, not the AAA `FRONTEND.md` §1.3 claimed.** The table
+   said 7.9:1; the §1.1 hex `#6B4A10` actually yields 6.97:1, missing AAA by
+   three hundredths. §1.3 has been corrected to the computed values (three of
+   its five ratios were wrong). Notably `#63420D` produces *exactly* 7.9:1,
+   which suggests that was the intended token and the hex in §1.1 is simply
+   lighter than meant — but changing a brand colour is the owner's call, so the
+   documented hex stands and `contrast.test.ts` asserts the AA result plus a
+   deliberate "does not yet clear AAA" case that will fail the moment anyone
+   darkens it. Caution text is legible either way.
+
 Two are the owner's and are not code:
 
 8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
@@ -148,7 +195,46 @@ Two are the owner's and are not code:
 
 ---
 
+## Running the console
+
+```bash
+docker compose up -d                 # Postgres
+DATABASE_URL=…healthcare_dev pnpm db:reset
+pnpm dev:api                         # :4000
+pnpm dev:console                     # :3100
+```
+
+Then open `http://localhost:3100/?session=<id>` with a staff token in
+`sessionStorage` under `console.token`. There is no login screen by design
+(CLAUDE.md §4.1) — `e2e/support/console.ts` shows how a principal is minted.
+
+**Next is pinned to `--webpack`.** The shared packages import with the `.js`
+extensions Node ESM requires; webpack resolves those through `extensionAlias`
+and Turbopack has no equivalent. Worth revisiting when it gains one —
+Turbopack is substantially faster and this is the only thing holding it off.
+
+---
+
 ## Known gaps, deliberate
+
+- **`OtpInput` has no caller.** It is named in step 7's component list and is
+  built, but every OTP *flow* is deferred to Supabase Auth (`CLAUDE.md` §4.1),
+  so nothing renders it yet. It holds no credential and calls no endpoint — it
+  is the input primitive, and Supabase's flow will need exactly this box.
+
+- **The signature components (`FRONTEND.md` §6) are not built.**
+  `<LiveSerialCard>`, `<FreshnessLine>`, `<QueueTable>`, `<BedTile>`,
+  `<CapacityMirror>` and `<DelaySheet>` each depend on a live data shape rather
+  than a visual one, so each lands with the screen that renders it, from step 8
+  onward. `<FreshnessLine>` is the one to build first: DoD §5.8 requires it
+  beneath every live figure.
+
+- **Tailwind is configured but never yet run.** The preset
+  (`shared/config/tailwind/preset.mjs`) maps every utility onto the CSS
+  variables and replaces the default palette rather than extending it, so
+  `bg-indigo-500` does not exist. Nothing compiles it until the first Next.js
+  app in step 8; until then the components' class names are strings that have
+  never been turned into CSS.
 
 - **No authentication is implemented, by decision** (`CLAUDE.md` §4.1). Under
   `DEMO_MODE=true` the console selects a hospital and role without a password,
@@ -171,6 +257,14 @@ Two are the owner's and are not code:
   shows as scheduled with no events. That is honest — nothing was recorded —
   but it is a wart for a late demo. The pitch session itself is always built
   backwards from the current instant, so it is correctly mid-queue at any hour.
+- **Notifications are not published from the queue service.** Step 11 of
+  `BACKEND.md` §4.1 fires the called / delayed / two-away / slot-offered
+  messages; that is build step 11. The seam is marked in `queue.service.ts` and
+  the events that would fire one are already identified by `isMaterialEvent` in
+  the domain, so it is a call to add rather than a decision to make.
+- **`/sync/*` is not built** (`BACKEND.md` §5). The offline batch endpoints
+  belong with the console that fills the batch, in step 8. The domain already
+  has `applyBatch`, which returns the accepted/conflict split `SY-05` describes.
 - **`middleware/audit.ts` is not written.** `audit_log` is migration 0010 and
   the schema is at 0006, so it would have no table to write to. It lands with
   the migration.
@@ -181,5 +275,5 @@ Two are the owner's and are not code:
 - **`e2e/` and Playwright do not exist yet.** They arrive with the first
   user-visible flow. The two-device queue test is the product's canary and is
   never skipped (`CLAUDE.md` §6).
-- **`shared/ui`, `shared/client`, `shared/i18n` are empty**, as are the
+- **`shared/client` is empty**, as are the
   three Next.js apps. Steps 7–10.

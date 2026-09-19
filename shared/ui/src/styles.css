@@ -1,0 +1,142 @@
+/*
+ * The stylesheet every app imports (FRONTEND.md §9, §10).
+ *
+ * Three layers, in order:
+ *
+ *   1. Tailwind itself.
+ *   2. `tokens.css` — the raw custom properties, which are the design system.
+ *   3. `@theme inline` — the mapping that makes Tailwind's utilities resolve
+ *      to those properties and to nothing else.
+ *
+ * `inline` is the important word. It tells Tailwind to emit the utility
+ * referencing `var(--brand-600)` rather than copying the value, so there
+ * remains exactly one place a colour is defined (FRONTEND.md §10: "if a colour
+ * or radius appears in an app package, it is a bug"). Change `tokens.css` and
+ * every utility follows; nothing needs regenerating.
+ *
+ * ## The defaults are cleared, not extended
+ *
+ * `--color-*: initial` removes Tailwind's own palette. Leaving it in place
+ * would leave `bg-indigo-500` one keystroke away, and an indigo primary is the
+ * first item on the banned list (§0.2) because it is the default accent of
+ * every generated app. `--tracking-*: initial` does the same for letter
+ * spacing, which must never be applied to Bangla (`TYP-02`).
+ *
+ * One rule cannot be enforced here: `uppercase` and `capitalize` are not
+ * theme-driven in Tailwind v4, so they cannot be removed at configuration
+ * level the way the v3 `corePlugins` switch did. Bangla has no case, so they
+ * are meaningless on it; that one stays a review check (FRONTEND.md §13).
+ */
+
+@import 'tailwindcss';
+@import './tokens/tokens.css';
+
+@theme inline {
+  /* --- Colour (§1.1) ---------------------------------------------------- */
+  --color-*: initial;
+
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-white: #ffffff;
+
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-sunken: var(--bg-sunken);
+  --color-inverse: var(--bg-inverse);
+
+  --color-ink: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-inverse: var(--ink-inverse);
+
+  --color-brand-900: var(--brand-900);
+  --color-brand-700: var(--brand-700);
+  --color-brand-600: var(--brand-600);
+  --color-brand-300: var(--brand-300);
+  --color-brand-100: var(--brand-100);
+  --color-brand-border: var(--brand-border);
+
+  /* Reserved for emergency and genuine danger (§1.1 colour law). */
+  --color-alert-700: var(--alert-700);
+  --color-alert-600: var(--alert-600);
+  --color-alert-100: var(--alert-100);
+
+  /* Exactly three meanings: delay, staleness, late patient. */
+  --color-warn-700: var(--warn-700);
+  --color-warn-600: var(--warn-600);
+  --color-warn-100: var(--warn-100);
+  --color-warn-border: var(--warn-border);
+
+  --color-line-strong: var(--line-strong);
+  --color-line: var(--line-soft);
+  --color-line-hairline: var(--line-hairline);
+
+  /* --- Radii (§3.2) — scales with the element, never uniform ------------ *
+   * Declared here rather than in `tokens.css` because `--radius-*` is
+   * Tailwind's own namespace: these ARE the tokens, not a mapping onto them. */
+  --radius-*: initial;
+  --radius-xs: 8px; /* chips, badges, inline tags */
+  --radius-sm: 12px; /* inputs, small buttons, row actions */
+  --radius-md: 16px; /* cards, tiles, primary buttons */
+  --radius-lg: 22px; /* hero cards, bottom sheets */
+  --radius-pill: 999px; /* filter chips and avatars only */
+
+  /* --- Elevation (§3.3) — neutral-tinted, never coloured ---------------- */
+  --shadow-*: initial;
+  --shadow-1: var(--elev-1);
+  --shadow-2: var(--elev-2);
+  --shadow-3: var(--elev-3);
+
+  /* --- Type (§2.1, §2.3) ------------------------------------------------ *
+   * One superfamily across both scripts. Hind Siliguri is the fallback: the
+   * most commonly installed quality Bangla face in the region. The system
+   * stack is last and is never the design.                                   */
+  --font-ui: 'Anek Bangla', 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
+  --font-reading: 'Tiro Bangla', 'Noto Serif Bengali', Georgia, serif;
+
+  --text-display-xl: 56px;
+  --text-display-xl--line-height: 1.15;
+  --text-display-lg: 40px;
+  --text-display-lg--line-height: 1.2;
+  --text-title-lg: 24px;
+  --text-title-lg--line-height: 1.35;
+  --text-title-md: 20px;
+  --text-title-md--line-height: 1.4;
+  --text-title-sm: 17px;
+  --text-title-sm--line-height: 1.45;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 1.65;
+  --text-body-md: 15px;
+  --text-body-md--line-height: 1.65;
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 1.6;
+  --text-caption: 12px;
+  --text-caption--line-height: 1.55;
+
+  /* TYP-02: never applied to Bangla, so the utilities do not exist. */
+  --tracking-*: initial;
+
+  /* --- Motion (§3.4) — explains a state change, never entertains -------- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-count: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/*
+ * The app ground. Set here rather than in each app so the three of them cannot
+ * drift, and warm rather than white because that is most of why the palette
+ * reads as an institution (§0.3).
+ */
+@layer base {
+  html {
+    background: var(--bg-canvas);
+    color: var(--ink-primary);
+    font-family: var(--font-ui);
+  }
+
+  /* A11Y-02: a visible focus ring on everything interactive, always. */
+  :focus-visible {
+    outline: 2px solid var(--brand-600);
+    outline-offset: 2px;
+  }
+}

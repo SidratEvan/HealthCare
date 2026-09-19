@@ -74,6 +74,7 @@ export const base = tseslint.config(
             'tsconfig.json',
             '{frontend,backend,shared}/*/tsconfig.json',
             'database/tsconfig.json',
+            'e2e/tsconfig.json',
           ],
         }),
       ],

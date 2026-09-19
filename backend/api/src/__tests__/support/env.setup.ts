@@ -16,15 +16,21 @@
  *
  * So the test environment is decided here and nowhere else. The one thing a
  * developer may override is which test database to use, through
- * `DATABASE_URL_TEST`, which is the same variable the schema suite honours.
+ * `DATABASE_URL_API_TEST`.
  *
  * Every secret below is obviously fake and obviously test-only (FR-SEC-08).
  */
 
-/** Chosen by the schema suite's resolver, so both suites share one database. */
+/**
+ * The API suite's own database, not the schema suite's.
+ *
+ * This suite commits rows and appends to a log that cannot be cleaned up;
+ * the schema suite asserts on exact counts of the seeded demo set. One
+ * database between them would make both suites order-dependent.
+ */
 const testDatabaseUrl =
-  process.env['DATABASE_URL_TEST'] ??
-  'postgresql://healthcare:healthcare@localhost:5432/healthcare_test';
+  process.env['DATABASE_URL_API_TEST'] ??
+  'postgresql://healthcare:healthcare@localhost:5432/healthcare_api_test';
 
 if (!/_test(\?|$)/.test(testDatabaseUrl)) {
   throw new Error(

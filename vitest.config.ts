@@ -22,6 +22,8 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
+    // Playwright owns `e2e/`; vitest must not try to collect those specs.
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
     projects: [
       {
         test: {
@@ -35,12 +37,37 @@ export default defineConfig({
         },
       },
       {
+        // The design system's components, rendered (FRONTEND.md §5).
+        //
+        // Separate from `unit` because these need a DOM and that costs a
+        // second of startup — a developer working on the queue reducer should
+        // never pay for jsdom. Separate from `api` because they need no
+        // database.
+        //
+        // What is asserted here is behaviour and accessibility, not
+        // appearance: roles, labels, focus order, keyboard handling, and an
+        // axe pass. Tailwind classes are strings in this environment, so a
+        // colour cannot be checked from here — `tokens.test.ts` and
+        // `contrast.test.ts` cover the visual layer instead.
+        test: {
+          name: 'ui',
+          include: ['shared/ui/src/**/*.{test,spec}.tsx'],
+          environment: 'jsdom',
+          setupFiles: ['shared/ui/src/__tests__/setup.ts'],
+          globals: false,
+          restoreMocks: true,
+          passWithNoTests: true,
+        },
+      },
+      {
         test: {
           name: 'api',
           include: ['backend/*/src/**/*.{test,spec}.ts'],
           // Must run before any import: env.ts validates at module load.
           setupFiles: ['backend/api/src/__tests__/support/env.setup.ts'],
-          globalSetup: ['database/tests/support/global-setup.ts'],
+          // Its own database: this suite mutates the demo data, the schema
+          // suite asserts on exact counts of it.
+          globalSetup: ['database/tests/support/api-global-setup.ts'],
           environment: 'node',
           globals: false,
           restoreMocks: true,

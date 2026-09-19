@@ -1,7 +1,10 @@
 {
   "extends": "@platform/config/tsconfig/next.json",
   "compilerOptions": {
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": ["node"],
+    "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "_comment": "Browser package, so it extends the Next config — but its tests run in Node and read tokens.css from disk to prove the two token layers agree, which is why node types are pulled in here."
 }
