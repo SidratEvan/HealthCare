@@ -21,7 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { formatMinutes, formatSerial, formatTaka, tp } from '@platform/i18n';
+import { formatDateTime, formatMinutes, formatSerial, formatTaka, tp } from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine, Input } from '@platform/ui';
 
 import { useOnline } from '@/hooks/useOnline';
@@ -245,7 +245,7 @@ function SessionList({
                 <Card>
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-title-sm tabular-nums">{clock(session.plannedStart)}</p>
+                      <p className="text-title-sm tabular-nums">{formatDateTime(session.plannedStart, NUMERALS)}</p>
                       <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
                     </div>
 
@@ -364,7 +364,7 @@ function Confirm({
       <h1 className="font-reading text-title-lg">{tp('confirmTitle', LOCALE)}</h1>
 
       <Card>
-        <p className="text-title-sm tabular-nums">{clock(session.plannedStart)}</p>
+        <p className="text-title-sm tabular-nums">{formatDateTime(session.plannedStart, NUMERALS)}</p>
         <p className="text-body-sm text-ink-muted">{session.doctorNameBn}</p>
         <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
 
@@ -555,7 +555,7 @@ function Success({
         </p>
         <p className="mt-2 text-body-md">{session.doctorNameBn}</p>
         <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
-        <p className="text-body-sm text-ink-muted tabular-nums">{clock(session.plannedStart)}</p>
+        <p className="text-body-sm text-ink-muted tabular-nums">{formatDateTime(session.plannedStart, NUMERALS)}</p>
       </Card>
 
       <Card>
@@ -621,18 +621,3 @@ function Row({
   );
 }
 
-/**
- * The wall-clock time of an instant, in Asia/Dhaka.
- *
- * Timestamps are UTC in the database (`DB-P4`) and converted for display in
- * the client only — which is here.
- */
-function clock(iso: string): string {
-  return new Intl.DateTimeFormat('bn-BD', {
-    timeZone: 'Asia/Dhaka',
-    hour: 'numeric',
-    minute: '2-digit',
-    day: 'numeric',
-    month: 'short',
-  }).format(new Date(iso));
-}

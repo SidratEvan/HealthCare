@@ -236,8 +236,10 @@ export const PATIENT = {
   estimatedTime: { bn: 'আনুমানিক সময়', en: 'Estimated time' },
 
   // FR-QUE-13: a time with a band, never false precision. `{time}` is the
-  // clock reading and `{band}` the half-width in minutes.
-  etaWithBand: { bn: 'আনুমানিক {time} · ±{band} মিনিট', en: 'Around {time} · ±{band} min' },
+  // clock reading and `{band}` the half-width in minutes. No "আনুমানিক" here —
+  // the label beside it already says আনুমানিক সময়, and saying it twice reads
+  // like a string that was written without looking at the screen.
+  etaWithBand: { bn: '{time} · ±{band} মিনিট', en: '{time} · ±{band} min' },
   etaUnknown: { bn: 'এখনো বলা যাচ্ছে না', en: 'Not known yet' },
   countdown: { bn: 'আর বাকি প্রায় {minutes} মিনিট', en: 'About {minutes} min to go' },
   patientsAhead: { bn: 'আপনার আগে {count} জন', en: '{count} ahead of you' },

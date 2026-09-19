@@ -35,7 +35,7 @@ import {
   type QueueEntry,
   type QueueState,
 } from '@platform/domain';
-import { formatMinutes, formatSerial, tp } from '@platform/i18n';
+import { formatClock, formatMinutes, formatSerial, tp } from '@platform/i18n';
 import { Button, FreshnessLine, LiveSerialCard, Sheet, SheetActions } from '@platform/ui';
 
 import { useNow } from '@/hooks/useNow';
@@ -343,7 +343,7 @@ function statusLine(state: QueueState, called: boolean): string {
   }
   if (state.doctorArrivedAt === null) return tp('doctorNotArrived', LOCALE);
 
-  return tp('doctorArrivedAt', LOCALE).replace('{time}', clock(state.doctorArrivedAt));
+  return tp('doctorArrivedAt', LOCALE).replace('{time}', formatClock(state.doctorArrivedAt, NUMERALS));
 }
 
 /**
@@ -357,7 +357,7 @@ function etaText(eta: Eta | null): string | null {
   if (eta === null || eta.confidence === 'unknown') return null;
 
   return tp('etaWithBand', LOCALE)
-    .replace('{time}', clock(eta.etaAt))
+    .replace('{time}', formatClock(eta.etaAt, NUMERALS))
     .replace('{band}', formatMinutes(eta.bandMinutes, NUMERALS));
 }
 
@@ -616,16 +616,3 @@ function LiveSerialProblem({
   );
 }
 
-/**
- * The wall-clock reading of an instant, in Asia/Dhaka.
- *
- * Timestamps are UTC in the database (`DB-P4`) and converted for display in
- * the client only — which is here.
- */
-function clock(iso: string): string {
-  return new Intl.DateTimeFormat('bn-BD', {
-    timeZone: 'Asia/Dhaka',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(iso));
-}
