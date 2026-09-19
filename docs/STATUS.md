@@ -7,7 +7,8 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/deploy` — the demo is deployable (after step 11).
+Last updated: `feat/app-shell` — the patient side is an app, and discovery
+asks for a hospital first (after step 11).
 
 ---
 
@@ -29,8 +30,21 @@ Last updated: `chore/deploy` — the demo is deployable (after step 11).
 | 11 | `feat/notifications` | merged — migration 0010, templates, the outbox, SMS/push adapters |
 | 12 | `feat/doctor-console` | **next** — doctor screen, visit records. **E-prescriptions dropped by the owner**; `FR-DOC-05` and `PRD.md` §24 step 6 need editing to match |
 
-One unplanned branch after step 11: `chore/deploy` — the `S-B-01` console
-picker, `render.yaml`, Vercel configs and `docs/DEPLOY.md`.
+Three unplanned branches after step 11:
+
+- `chore/deploy` — the `S-B-01` console picker, `render.yaml`, Vercel configs
+  and `docs/DEPLOY.md`.
+- **`feat/app-shell`** — hospital-first discovery and the patient app shell.
+  Asked for directly by the owner: the booking flow went specialty → doctor,
+  and he wanted specialty → hospital → doctor, which is what `APP_FLOW.md`
+  always said. He also said the patient side "does not look anything like an
+  app", so the same branch adds `NAV-A`, the manifest and the service worker.
+  See below.
+- `fix/console-past-midnight` — two date bugs that only appear in the first six
+  hours of a Dhaka day. See *Things learned the hard way*.
+
+Both of the last two were unplanned, and neither is a build step: nothing in
+`CLAUDE.md` §4 is skipped or brought forward. Step 12 is still next.
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -65,10 +79,67 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 1367.
-`pnpm test:e2e` reports 28, in Chromium, against the real API and the seeded
+`pnpm test` reports 1514.
+`pnpm test:e2e` reports 40, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
-5 in `offline-console.spec.ts`.
+5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`.
+
+### The patient app is an app now (`feat/app-shell`)
+
+Two things the owner asked for directly, in one branch.
+
+**Discovery asks for a hospital first.** `APP_FLOW.md` titles `S-A-07`
+"Specialty results (**hospitals offering it**)" and the code asked for a doctor
+straight after the specialty. The flow is now specialty → hospital (`S-A-07`) →
+doctor (`S-A-05h`) → session → confirm, which is both what the document said and
+what he asked for. Two endpoints carry it:
+
+- `GET /hospitals?specialty=CARD` — only hospitals that offer the department,
+  each card carrying the doctor count for *that* department, how many chambers
+  are running now, and how many serials are still open today. Without a
+  `specialty` the doctor count is null, because a count across every department
+  answers a question nobody asked.
+- `GET /hospitals/:id/doctors?specialty=CARD` — new. What a hospital card opens
+  onto. Ordered by who is in a chamber now, then by who sits next; a doctor with
+  no upcoming chamber sorts last rather than being hidden.
+
+Both responses carry an `asOf` the server stamps, and both lists render
+`<FreshnessLine>`: "who is sitting now" is a live figure and `FR-PAT-14` does
+not let one on screen without its age.
+
+**The shell.** `NAV-A` (four tabs, labels always visible per `ICO-03`, safe-area
+inset), a web manifest, a service worker, and `S-A-02` Home composed to the
+canvas order — emergency, then care, then convenience. The service worker
+**never answers an API request from a cache**: a serial from a cache is a number
+with no age (`FR-OFF-03`). It caches the shell only, so the app opens on a bad
+connection and shows its own offline state rather than the browser's error page.
+
+**`S-A-09` My serials lists this device's bookings, not an account's**, and says
+so on screen. There are no accounts (`CLAUDE.md` §4.1), so a guest's identity is
+one tracking link per booking; `APP_FLOW.md` A1.5 already accepts that
+multi-device access for a guest is "only via the SMS link". `lib/bookings.ts`
+holds the records in `localStorage`, tokens included — the token is already in an
+SMS on the same phone, is scoped to one booking, and expires. When Supabase Auth
+lands, that file becomes a call to `GET /me/bookings`.
+
+**Six tabs lead to screens that are not built** — records (`S-A-12`, step 13),
+profile (`S-A-19`), beds (step 14), ambulance and blood (step 17), emergency
+(step 15). Each says what will be there and why it is not, rather than being
+hidden, greyed out, or a dead link. Hiding them would move the bar as the
+product grows and teach the wrong muscle memory.
+
+**The emergency screen carries `BTN-A10-999` and nothing else.** Triage is step
+15, but the red card is the most prominent control in the patient app and it
+leads here, so the screen offers the one emergency action this version can
+honestly perform: a real `tel:999` link, above the fold, with the conditions
+that mean *call first* named beside it. It does not rank hospitals, and it says
+that it does not.
+
+**A failed list no longer borrows the empty list's words.** The two discovery
+lists used to render "no hospital offers this department" when the request had
+simply failed. That is a statement about the world standing in for a statement
+about us, which `PRD.md` §3.2 forbids; there is now a distinct `failed` state
+with a retry (`Loadable<T>` in `frontend/patient/src/lib/types.ts`).
 
 ### How to open the live serial screen
 
@@ -193,6 +264,30 @@ afternoon.
   as 12:00–15:00 on the line that says when the session is. Timestamps are UTC
   in the database (`DB-P4`) and are only ever wall-clock after a timezone
   conversion.
+- **A date is Dhaka's or it is wrong, and the gap is six hours wide.**
+  Postgres `current_date` and `now() AT TIME ZONE 'Asia/Dhaka'` name different
+  days between 00:00 and 06:00 in Dhaka, and two separate bugs lived in that
+  window — found only because a session happened to run at 01:05 Dhaka.
+  - `GET /demo/consoles` filtered sessions on today's Dhaka date, so a chamber
+    that opened at 23:50 and was still running at 01:07 offered no console. It
+    hit the demo hardest: `FR-DEM-06` builds the pitch session by walking a
+    mid-queue log backwards from the present, so a reset in the small hours
+    files it under yesterday and the picker then listed nothing running. The
+    query now also accepts a session that is *running*, whatever date it
+    carries.
+  - Three fixtures — `e2e/support/console.ts`, `queueFixture.ts` and
+    `seeds/graph.ts` — inserted `session_date = current_date` (UTC) alongside a
+    `planned_start` of `now() - 30 minutes`. Every read that filters by day uses
+    `toDhakaDate`, so in that window the fixture wrote yesterday and the picker
+    asked for today. **The whole E2E suite failed, the canary included**, with
+    nothing wrong in the product: 7 passed of 28, every failure a sixty-second
+    timeout waiting for a session card the API had correctly excluded. A
+    timeout that names the browser and not the date is the worst symptom this
+    class of bug has.
+
+  If a session is not appearing and the hour is early in Dhaka, check the date
+  before anything else.
+
 - **A shared test database means exact-count assertions must be scoped.**
   `seeds.test.ts` asserted `SELECT * FROM hospitals` had six rows; the graph
   fixture in `seeds/graph.ts` inserts a seventh, so the test passed or failed
@@ -348,6 +443,55 @@ Raised while building notifications (step 11):
    the `queue.*`, `booking.*` and `session.*` namespaces is when the hours
    start mattering.
 
+Raised while building the app shell (`feat/app-shell`):
+
+16. **`S-A-07` is missing its filters and its search.** The document gives it
+   `CHIP-A07-NEAR`/`-WAIT`/`-FEE`/`-OPEN` and `INP-A07-SEARCH` (`FR-PAT-15`),
+   and the hospital card is specified to carry distance, travel time, live wait,
+   free beds and ICU as well. What is built is the list, the doctor count, who
+   is sitting now, serials open today, and freshness. Distance already works
+   when a position is passed (`?lat=&lng=`) but nothing asks for one, because
+   `S-A-01` location permission is not built. Beds and ICU need migration 0012,
+   which is step 14.
+
+17. **`S-A-05h` exists only as its ডাক্তার tab, inside the booking flow.** The
+   document gives it four tabs (ডাক্তার / বেড / টেস্ট / জরুরি), a header of
+   bed, ICU and ER-wait stats, and `BTN-A05H-DIRECTIONS` and `-CALL`. There is
+   no standalone hospital detail route; a hospital card goes straight to the
+   doctor list as a step of `/book`. The three other tabs are steps 14 and 17.
+   `S-A-06d` Doctor detail is likewise skipped — a doctor row goes straight to
+   the session picker, which the document allows as `BTN-A05H-BOOK-<doctorId>`'s
+   "fast path".
+
+18. **The area on Home is the string `ঢাকা`.** `MOD-A02-AREA` is an area picker
+   and there is no location flow, so the header states where the demo's
+   facilities actually are rather than leaving the line blank. It is true, and
+   it is not a picker.
+
+19. **`BTN-A02-SPEC-ALL`** (সব বিভাগ দেখুন → `S-A-07b` full specialty list) is
+   not built, because Home renders every seeded specialty and there is nothing
+   left to expand to. It matters the moment the specialty list outgrows one
+   screen.
+
+20. **`frontend/` has no vitest project**, so `lib/bookings.ts` — the
+   device-local booking store, which has real logic in its date bucketing and
+   its pruning — has no unit test. Its behaviour is covered end to end by
+   `app-shell.spec.ts` instead. Adding a fourth project pattern
+   (`frontend/*/src/**/*.test.ts`) is a config decision worth making
+   deliberately rather than in passing.
+
+21. **The PWA icons are SVG only.** `manifest.webmanifest` declares `any` and
+   `maskable` SVGs. Chrome on Android installs from those; some older Android
+   webviews want a raster 192 and 512, and iOS ignores the manifest icons
+   entirely in favour of `apple-touch-icon`, which is currently the same SVG.
+   Nobody has installed it on a real handset yet — that is the next thing to
+   check on a phone, not in a test.
+
+22. **The service worker's cache is versioned by hand** (`SHELL = 'shell-v1'` in
+   `public/sw.js`). Nothing bumps it automatically, and `activate` deletes every
+   cache that is not the current name. A stale shell after a deploy is fixed by
+   bumping that string; forgetting to is how a deploy appears not to land.
+
 Two are the owner's and are not code:
 
 8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
@@ -403,15 +547,22 @@ pnpm dev:console                     # :3100  — reception
 pnpm dev:patient                     # :3000  — the patient
 ```
 
-1. **Patient**: `http://localhost:3000`, pick a specialty, pick the doctor and
-   the chamber, fill in name / phone / age, confirm. The success screen shows
-   the serial and **লাইভ সিরিয়াল দেখুন** — tap it.
-2. **Reception**: `http://localhost:3100/?session=<id>` with a staff token in
-   `sessionStorage` under `console.token`. There is no login screen by design
-   (CLAUDE.md §4.1); `e2e/support/console.ts` shows how a principal is minted.
-   Use the session the booking was made on.
+1. **Patient**: `http://localhost:3000` — the home screen, with the emergency
+   card, the specialty grid and the bottom navigation. Tap a specialty, then
+   **the hospital**, then the doctor, then the chamber; fill in name / phone /
+   age and confirm. The success screen shows the serial and **লাইভ সিরিয়াল
+   দেখুন** — tap it.
+2. **Reception**: `http://localhost:3100`. The console picker (`S-B-01`) opens
+   first: choose the hospital, the chamber and the role, no password. There is
+   no login screen by design (CLAUDE.md §4.1) and the screen says so. Pick the
+   session the booking was made on. The token it mints is stored under
+   `console.demo-session`; `e2e/support/console.ts` shows how one is minted
+   without the UI.
 3. Tap **পরবর্তী রোগী ডাকুন**. The patient's "এখন চলছে" changes within two
    seconds, the progress track advances, and the ETA moves.
+
+The patient's serial is also on **সিরিয়াল** in the bottom navigation and on the
+home screen's live strip, both of which read what this device booked.
 
 The patient screen also carries **আমি দেরি করছি** and **বাতিল করুন**, both of
 which write real events the console sees.

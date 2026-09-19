@@ -49,8 +49,8 @@ import type {
   Availability,
   HospitalCard,
   HospitalDoctorCard,
+  Loadable,
   SessionCard,
-  StampedList,
 } from '@/lib/types';
 import type { ReactNode } from 'react';
 
@@ -74,9 +74,9 @@ export default function BookPage(): ReactNode {
   const [step, setStep] = useState<Step>('hospital');
   const online = useOnline();
 
-  const [places, setPlaces] = useState<StampedList<HospitalCard> | null>(null);
+  const [places, setPlaces] = useState<Loadable<HospitalCard>>({ state: 'loading' });
   const [place, setPlace] = useState<HospitalCard | null>(null);
-  const [doctors, setDoctors] = useState<StampedList<HospitalDoctorCard> | null>(null);
+  const [doctors, setDoctors] = useState<Loadable<HospitalDoctorCard>>({ state: 'loading' });
   const [doctor, setDoctor] = useState<HospitalDoctorCard | null>(null);
   const [sessions, setSessions] = useState<SessionCard[] | null>(null);
   const [session, setSession] = useState<SessionCard | null>(null);
@@ -92,22 +92,28 @@ export default function BookPage(): ReactNode {
 
   useEffect(() => {
     if (specialty === null) return;
+    setPlaces({ state: 'loading' });
     void hospitalsForSpecialty(specialty)
-      .then(setPlaces)
+      .then((list) => {
+        setPlaces({ state: 'ready', ...list });
+      })
       .catch(() => {
-        setPlaces({ items: [], asOf: new Date().toISOString() });
+        // Not an empty list: see `Loadable`.
+        setPlaces({ state: 'failed' });
       });
   }, [specialty]);
 
   const chooseHospital = useCallback(
     (chosen: HospitalCard) => {
       setPlace(chosen);
-      setDoctors(null);
+      setDoctors({ state: 'loading' });
       setStep('doctor');
       void doctorsAtHospital(chosen.id, specialty ?? 'MED')
-        .then(setDoctors)
+        .then((list) => {
+          setDoctors({ state: 'ready', ...list });
+        })
         .catch(() => {
-          setDoctors({ items: [], asOf: new Date().toISOString() });
+          setDoctors({ state: 'failed' });
         });
     },
     [specialty],
@@ -240,14 +246,16 @@ function HospitalList({
   hospitals,
   onChoose,
 }: {
-  readonly hospitals: StampedList<HospitalCard> | null;
+  readonly hospitals: Loadable<HospitalCard>;
   readonly onChoose: (hospital: HospitalCard) => void;
 }): ReactNode {
   const now = useNow();
 
-  // GR-03: loading and empty are designed states, not the absence of one.
-  if (hospitals === null)
+  // GR-03: all four are designed states, not the absence of one — and the
+  // failed one never borrows the empty one's words.
+  if (hospitals.state === 'loading')
     return <p className="text-body-md text-ink-muted">{tp('loading', LOCALE)}</p>;
+  if (hospitals.state === 'failed') return <LoadFailed />;
   if (hospitals.items.length === 0) {
     return <p className="text-body-md text-ink-muted">{tp('noHospitals', LOCALE)}</p>;
   }
@@ -335,7 +343,7 @@ function DoctorList({
   onBack,
 }: {
   readonly hospital: HospitalCard;
-  readonly doctors: StampedList<HospitalDoctorCard> | null;
+  readonly doctors: Loadable<HospitalDoctorCard>;
   readonly onChoose: (doctor: HospitalDoctorCard) => void;
   readonly onBack: () => void;
 }): ReactNode {
@@ -350,8 +358,10 @@ function DoctorList({
         <p className="text-body-sm text-ink-muted">{tp('chooseDoctor', LOCALE)}</p>
       </div>
 
-      {doctors === null ? (
+      {doctors.state === 'loading' ? (
         <p className="text-body-md text-ink-muted">{tp('loading', LOCALE)}</p>
+      ) : doctors.state === 'failed' ? (
+        <LoadFailed />
       ) : doctors.items.length === 0 ? (
         <p className="text-body-md text-ink-muted">{tp('noDoctorsHere', LOCALE)}</p>
       ) : (
@@ -418,6 +428,33 @@ function DoctorList({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * `GR-03`'s error state, for a list that could not be fetched.
+ *
+ * Reloads rather than re-running one fetch: this is a screen a person reached
+ * by tapping a specialty, so the whole screen is the retry, and a button that
+ * silently retried one request would leave the rest of the page in whatever
+ * state it was already in.
+ */
+function LoadFailed(): ReactNode {
+  return (
+    <div
+      role="status"
+      data-testid="load-failed"
+      className="flex flex-col gap-3 rounded-md border border-line bg-surface p-5"
+    >
+      <p className="text-body-md text-ink-secondary">{tp('listFailed', LOCALE)}</p>
+      <Button
+        onClick={() => {
+          globalThis.location.reload();
+        }}
+      >
+        {tp('tryAgain', LOCALE)}
+      </Button>
+    </div>
   );
 }
 

@@ -43,6 +43,19 @@ export interface StampedList<T> {
   readonly asOf: string;
 }
 
+/**
+ * A list that is loading, loaded, or could not be fetched.
+ *
+ * `GR-03` asks for four states and the third one is the reason this type exists:
+ * an empty array and a failed request render the same way unless they are
+ * different values, and "no hospital offers this department" is a very different
+ * thing to tell somebody than "we could not reach the server".
+ */
+export type Loadable<T> =
+  | { readonly state: 'loading' }
+  | { readonly state: 'failed' }
+  | ({ readonly state: 'ready' } & StampedList<T>);
+
 /** A doctor on `S-A-05h`'s ডাক্তার tab. */
 export interface HospitalDoctorCard {
   readonly id: string;

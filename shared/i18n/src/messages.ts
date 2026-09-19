@@ -190,6 +190,14 @@ export const PATIENT = {
   findDoctor: { bn: 'ডাক্তার খুঁজুন', en: 'Find a doctor' },
   findHospital: { bn: 'হাসপাতাল খুঁজুন', en: 'Find a hospital' },
   emergency: { bn: 'জরুরি', en: 'Emergency' },
+  // `BTN-A10-999` — "tel:999 immediately; always visible at top"
+  // (`APP_FLOW.md` A6). The one emergency action this version can honestly
+  // offer, so the red card on Home leads to something that works.
+  call999: { bn: '৯৯৯ এ কল করুন', en: 'Call 999' },
+  call999Line: {
+    bn: 'বুকে ব্যথা, প্রচণ্ড রক্তপাত, শ্বাস নিতে না পারা বা অচেতন হলে আগে ৯৯৯ এ কল করুন।',
+    en: 'Chest pain, heavy bleeding, trouble breathing or unconsciousness: call 999 first.',
+  },
   emergencyLine: {
     bn: 'কাছের হাসপাতালে জায়গা আছে কিনা এখনই দেখুন।',
     en: 'See which nearby hospital has room, right now.',
@@ -436,6 +444,15 @@ export const PATIENT = {
   },
   bookingFailed: { bn: 'সিরিয়াল নেওয়া যায়নি', en: 'Could not book' },
   tryAgain: { bn: 'আবার চেষ্টা করুন', en: 'Try again' },
+
+  // GR-03's third state, and it is not the same as the empty one. "No hospital
+  // offers this" is a statement about the world; a request that failed is a
+  // statement about us, and saying the first when the second is true is the
+  // dishonesty `PRD.md` §3.2 forbids.
+  listFailed: {
+    bn: 'তথ্য আনা যায়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।',
+    en: 'Could not load this. Check your connection and try again.',
+  },
   loading: { bn: 'লোড হচ্ছে', en: 'Loading' },
 
   minutesShort: { bn: 'মিনিট', en: 'min' },
