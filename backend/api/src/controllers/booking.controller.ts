@@ -8,10 +8,12 @@
  * wrong identity is not a thing to resolve by preference order.
  */
 
-import { createBookingBody } from '@platform/domain';
+import { cancelBookingBody, createBookingBody, idParams } from '@platform/domain';
 
 import { validationFailed } from '../errors/AppError.js';
 import * as booking from '../services/booking.service.js';
+
+import { actorOf, assertBookingScope } from './queue.controller.js';
 
 import type { Booker } from '../services/booking.service.js';
 import type { Request, Response } from 'express';
@@ -58,4 +60,54 @@ function bookerFrom(req: Request, body: ReturnType<typeof createBookingBody.pars
     ageYears: body.guest.ageYears,
     sex: body.guest.sex,
   };
+}
+
+/**
+ * `GET /bookings/:id` — the live serial screen's first paint (`S-A-08`).
+ *
+ * Owner or staff. A guest holding a tracking link has already been narrowed to
+ * one booking by `requireBookingScope` on the route, so what is checked here is
+ * the other half: that an *account holder* asking for a booking is asking for
+ * one of theirs. Without it, any signed-in patient could read any serial in the
+ * country by id.
+ */
+export async function getBooking(req: Request, res: Response): Promise<void> {
+  const { id } = idParams.parse(req.params);
+  await assertBookingScope(req);
+
+  res.json({ ok: true, data: await booking.bookingView(id) });
+}
+
+/**
+ * `POST /bookings/:id/cancel` (`FR-PAT-23`, `MOD-A08-CANCEL`).
+ *
+ * The same endpoint for a patient cancelling in the app and a receptionist
+ * cancelling at the counter, because it is the same fact. Which of them it was
+ * is recorded on the event's actor (`FR-QUE-04`) and decides the reason written
+ * against the row.
+ */
+export async function cancelBooking(req: Request, res: Response): Promise<void> {
+  const { id } = idParams.parse(req.params);
+  const body = cancelBookingBody.parse(req.body);
+
+  await assertBookingScope(req);
+
+  const result = await booking.cancelBooking({
+    bookingId: id,
+    actor: actorOf(req),
+    reason: body.reason,
+    clientEventId: body.clientEventId ?? null,
+    clientTs: body.clientTs ?? null,
+  });
+
+  res.json({
+    ok: true,
+    data: {
+      state: result.state,
+      etas: result.etas,
+      seq: result.seq,
+      duplicate: result.duplicate,
+      serverTs: result.serverTs,
+    },
+  });
 }

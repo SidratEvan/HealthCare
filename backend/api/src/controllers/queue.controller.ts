@@ -463,8 +463,14 @@ async function assertSessionScope(req: Request, sessionId: string): Promise<Sess
   return session;
 }
 
-/** The booking a `/bookings/:id/...` route is about, scope-checked. */
-async function assertBookingScope(
+/**
+ * The booking a `/bookings/:id/...` route is about, scope-checked.
+ *
+ * Exported because `booking.controller` asks the same question of the same
+ * route parameter (`GET /bookings/:id`, `POST /bookings/:id/cancel`), and two
+ * copies of an ownership rule is one copy that will eventually be the laxer.
+ */
+export async function assertBookingScope(
   req: Request,
 ): Promise<{ booking: BookingSummary; sessionId: string }> {
   const bookingId = param(req, 'id');

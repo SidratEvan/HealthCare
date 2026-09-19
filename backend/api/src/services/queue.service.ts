@@ -314,8 +314,15 @@ async function settle(
   return { state, etas, seq: last.seq, duplicate: false, serverTs: last.serverTs };
 }
 
-/** The stored result of an event already applied (`FR-QUE-51`, `SY-02`). */
-async function findReplay(clientEventId: string | null): Promise<AppendEventResult | null> {
+/**
+ * The stored result of an event already applied (`FR-QUE-51`, `SY-02`).
+ *
+ * Exported because a caller that guards on *current state* has to ask this
+ * first. `booking.service.cancelBooking` refuses a booking that is already
+ * cancelled — which is the right answer to a second attempt and the wrong one
+ * to a retry of the first, and only the client event id can tell them apart.
+ */
+export async function findReplay(clientEventId: string | null): Promise<AppendEventResult | null> {
   if (clientEventId === null) return null;
 
   const stored = await eventRepo.findByClientEventId(clientEventId);
@@ -477,6 +484,7 @@ async function persist(
       doneAt: entry.doneAt,
       arrivedAt: entry.arrivedAt,
       consultSeconds: entry.consultSeconds,
+      cancelledReason: entry.cancelled?.reason ?? null,
     })),
   );
 }

@@ -15,9 +15,11 @@
 
 import { Router } from 'express';
 
-import { createBookingBody } from '@platform/domain';
+import { cancelBookingBody, createBookingBody, idParams } from '@platform/domain';
 
 import * as booking from '../controllers/booking.controller.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requireBookingScope } from '../middleware/guestAuth.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { validate } from '../middleware/validate.js';
 
@@ -28,4 +30,38 @@ bookingRoutes.post(
   idempotency({ required: true }),
   validate({ body: createBookingBody }),
   booking.createBooking,
+);
+
+/**
+ * `GET /bookings/:id` — what `S-A-08` paints before its socket connects.
+ *
+ * `requireBookingScope('id')` is the tracking link's fence: a guest principal
+ * carries exactly one booking id (`FR-GST-05`), and a link for one booking must
+ * not read another, or a forwarded SMS becomes a way to walk a hospital's
+ * queue. It passes any non-guest through; the controller then checks ownership
+ * against the rows, which is the only place that answer lives.
+ */
+bookingRoutes.get(
+  '/bookings/:id',
+  requireAuth,
+  requireBookingScope('id'),
+  validate({ params: idParams }),
+  booking.getBooking,
+);
+
+/**
+ * `POST /bookings/:id/cancel` (`FR-PAT-23`).
+ *
+ * Idempotency required, like every write that changes a queue: a patient on a
+ * bad connection tapping "বাতিল করুন" twice must cancel once, and the console
+ * replaying an offline shift must not append a second cancellation to a
+ * booking that has already gone (`FR-QUE-51`).
+ */
+bookingRoutes.post(
+  '/bookings/:id/cancel',
+  requireAuth,
+  requireBookingScope('id'),
+  idempotency({ required: true }),
+  validate({ params: idParams, body: cancelBookingBody }),
+  booking.cancelBooking,
 );

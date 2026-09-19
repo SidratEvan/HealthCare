@@ -139,6 +139,23 @@ export const reorderBody = command({
   reason: z.string().trim().min(1).max(200),
 });
 
+/**
+ * `POST /bookings/:id/cancel` (`FR-PAT-23`, BACKEND.md §7.3).
+ *
+ * The reason is optional on the wire and never null on the row. `MOD-A08-CANCEL`
+ * is a confirm step, not a form — `APP_FLOW.md` A5 asks the patient nothing but
+ * "are you sure, and here is the refund rule" — so the app sends no reason and
+ * the service records who cancelled instead. Reception, which does have a
+ * reason, may send one.
+ *
+ * It matters that something is recorded either way: `bookings.cancelled_reason`
+ * is NOT NULL for a cancelled row, and both the refund rule (`FR-PAY-03`) and
+ * the no-show loss figure (`FR-ADM-03`) read it.
+ */
+export const cancelBookingBody = command({
+  reason: z.string().trim().min(1).max(200).nullable().default(null),
+});
+
 /** `POST /events/:id/undo` (`GR-02`). */
 export const undoBody = command({});
 

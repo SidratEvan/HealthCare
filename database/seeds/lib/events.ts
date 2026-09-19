@@ -195,25 +195,31 @@ export async function writeProjections(
     entry.doneAt,
     entry.arrivedAt,
     entry.consultSeconds,
+    entry.cancelled?.reason ?? null,
   ]);
 
   if (settled.length > 0) {
     const tuples = settled
       .map((_, index) => {
-        const base = index * 6;
-        return `($${String(base + 1)}::uuid, $${String(base + 2)}::booking_status, $${String(base + 3)}::timestamptz, $${String(base + 4)}::timestamptz, $${String(base + 5)}::timestamptz, $${String(base + 6)}::integer)`;
+        const base = index * 7;
+        return `($${String(base + 1)}::uuid, $${String(base + 2)}::booking_status, $${String(base + 3)}::timestamptz, $${String(base + 4)}::timestamptz, $${String(base + 5)}::timestamptz, $${String(base + 6)}::integer, $${String(base + 7)}::text)`;
       })
       .join(', ');
 
+    // The same COALESCE the API's `saveProjections` uses: `seed_04_history`
+    // writes its own Bangla reason on the row while the event behind it
+    // carries none, and overwriting that with null would fail
+    // `bookings_cancelled_has_reason`.
     await client.query(
       `UPDATE bookings AS b
-          SET status          = v.status,
-              called_at       = v.called_at,
-              done_at         = v.done_at,
-              arrived_at      = v.arrived_at,
-              consult_seconds = v.consult_seconds
+          SET status           = v.status,
+              called_at        = v.called_at,
+              done_at          = v.done_at,
+              arrived_at       = v.arrived_at,
+              consult_seconds  = v.consult_seconds,
+              cancelled_reason = COALESCE(v.cancelled_reason, b.cancelled_reason)
          FROM (VALUES ${tuples})
-              AS v (id, status, called_at, done_at, arrived_at, consult_seconds)
+              AS v (id, status, called_at, done_at, arrived_at, consult_seconds, cancelled_reason)
         WHERE b.id = v.id`,
       settled.flat(),
     );
