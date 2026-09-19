@@ -1,0 +1,97 @@
+# Render blueprint for the API (BACKEND.md §12: "Render (API + workers)").
+#
+# One service. The workers process is not deployed because it does not exist —
+# `pg-boss` is not installed and every message this version sends is raised
+# from the event that caused it (docs/STATUS.md). It arrives here when it does.
+#
+# ## This is a demonstration deployment, and the environment says so
+#
+# `NODE_ENV` is deliberately **not** `production`. That is not laziness: with
+# `DEMO_MODE=true`, `env.ts` refuses to boot under `NODE_ENV=production`, and
+# it is right to. Production means serving real patients, and this deployment
+# serves seeded demonstration data to hospital directors (CLAUDE.md §1.1).
+# When there is a signed pilot, `NODE_ENV=production` and `DEMO_MODE=false` go
+# together and the secrets below stop being generated ones.
+#
+# `TRUST_PROXY_HOPS=1` because Render terminates TLS and forwards the caller's
+# address in `X-Forwarded-For`. Without it every caller shares one rate-limit
+# bucket.
+
+services:
+  - type: web
+    name: healthcare-api
+    runtime: node
+    region: singapore # closest to Dhaka, and where the Supabase project lives
+    plan: free
+    branch: mvp
+
+    # Workspace packages are consumed from TypeScript source, so there is no
+    # build output to produce — `tsx` runs them directly. That is a known
+    # trade (docs/STATUS.md): fine for a pitch, and a bundler decision before a
+    # pilot. `--frozen-lockfile` keeps a deploy reproducible.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm --filter @platform/api start
+
+    healthCheckPath: /healthz
+
+    envVars:
+      - key: NODE_VERSION
+        value: '20'
+
+      # See the note above: a demo deployment is not production.
+      - key: NODE_ENV
+        value: development
+      - key: DEMO_MODE
+        value: 'true'
+      - key: TRUST_PROXY_HOPS
+        value: '1'
+      - key: LOG_LEVEL
+        value: info
+
+      # Render provides the port; the app reads it.
+      - key: PORT
+        value: '4000'
+
+      # --- Set these in the dashboard --------------------------------------
+      #
+      # DATABASE_URL must be Supabase's SESSION pooler (port 5432), not the
+      # transaction pooler on 6543 — transaction pooling does not carry the
+      # session-level search_path this schema needs, because the extensions
+      # live in their own schema. Percent-encode the password.
+      - key: DATABASE_URL
+        sync: false
+
+      # The two browser origins. These are the CORS allowlist and the socket
+      # handshake allowlist, and the tracking link in every booking SMS is
+      # built from WEB_BASE_URL — point it at the patient app or the links go
+      # to localhost.
+      - key: WEB_BASE_URL
+        sync: false
+      - key: CONSOLE_BASE_URL
+        sync: false
+      - key: API_BASE_URL
+        sync: false
+
+      # Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      # All three must differ from each other.
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: GUEST_LINK_SECRET
+        generateValue: true
+
+      # The adapters this version runs on, and the correct ones for it
+      # (CLAUDE.md §1.1). `log` writes an SMS to the log and the notifications
+      # table; `mock` approves every payment.
+      - key: SMS_PROVIDER
+        value: log
+      - key: PAYMENT_PROVIDER
+        value: mock
+      - key: TRAVEL_TIME_MODE
+        value: static
+
+      # FR-PAT-21 itemises a platform fee; what it charges is negotiated per
+      # agreement and is deliberately not in this repository.
+      - key: PLATFORM_FEE_POISHA
+        value: '0'

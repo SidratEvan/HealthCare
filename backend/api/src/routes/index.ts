@@ -14,6 +14,7 @@
 import { Router } from 'express';
 
 import { bookingRoutes } from './booking.routes.js';
+import { demoRoutes } from './demo.routes.js';
 import { discoveryRoutes } from './discovery.routes.js';
 import { guestRoutes } from './guest.routes.js';
 import { healthRoutes } from './health.routes.js';
@@ -40,6 +41,9 @@ export function buildApiRouter(): Router {
   router.use(discoveryRoutes);
   // Also public: the token in the path is the credential (`FR-GST-05`).
   router.use(guestRoutes);
+  // Public, and only while `DEMO_MODE` is on: how the console gets a
+  // principal without a password (CLAUDE.md §4.1).
+  router.use(demoRoutes);
   router.use(bookingRoutes);
   router.use(queueRoutes);
   router.use(syncRoutes);

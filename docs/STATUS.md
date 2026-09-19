@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: end of step 11 (`feat/notifications`).
+Last updated: `chore/deploy` — the demo is deployable (after step 11).
 
 ---
 
@@ -27,7 +27,10 @@ Last updated: end of step 11 (`feat/notifications`).
 | 9 | `feat/patient-booking` | merged — discovery, booking, guest booking, mock payment |
 | **10** | **`feat/patient-live-serial`** | **merged — the pitch demo works.** `<LiveSerialCard>`, the session channel on the patient side, late/cancel, and the two-device canary |
 | 11 | `feat/notifications` | merged — migration 0010, templates, the outbox, SMS/push adapters |
-| 12 | `feat/doctor-console` | **next** — doctor screen, e-prescription, visit records |
+| 12 | `feat/doctor-console` | **next** — doctor screen, visit records. **E-prescriptions dropped by the owner**; `FR-DOC-05` and `PRD.md` §24 step 6 need editing to match |
+
+One unplanned branch after step 11: `chore/deploy` — the `S-B-01` console
+picker, `render.yaml`, Vercel configs and `docs/DEPLOY.md`.
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -355,6 +358,35 @@ Two are the owner's and are not code:
    `sb_secret_…` key were pasted into a chat transcript. Nothing references the
    secret key yet, so rotating it is free; rotating the password means
    re-encoding `DATABASE_URL`.
+
+---
+
+## Deploying
+
+`docs/DEPLOY.md` is the runbook: Supabase, then Render, then two Vercel
+projects. Three things in it are the ones people get wrong, so they are worth
+repeating here:
+
+- **`NODE_ENV=development` on the deployed API, deliberately.** `env.ts`
+  refuses to boot with `DEMO_MODE=true` under `NODE_ENV=production`, and that
+  guard is right — production means real patients. A pitch demo is not
+  production. `TRUST_PROXY_HOPS=1` now carries the one thing `NODE_ENV` used to
+  control that matters behind a load balancer.
+- **`WEB_BASE_URL` is not cosmetic.** It is half the CORS allowlist *and* the
+  origin every booking's tracking link is built from. Wrong, and every SMS in
+  the demo points at localhost.
+- **Supabase's session pooler, port 5432**, with the password percent-encoded.
+
+**The console has a way in now.** `ConsolePicker` is `S-B-01` standing in for
+the login this version does not have (`CLAUDE.md` §4.1): pick a hospital, a
+chamber and a role, no password, and the screen says so. Before it, opening the
+console meant pasting a token into `sessionStorage` by hand — fine on the
+machine that built it, impossible to hand to anybody. `GET /demo/consoles` and
+`POST /demo/token` back it, both refused unless `DEMO_MODE` is on.
+
+The token now lives in one place, `console.demo-session`. It used to be written
+under that key and read from `console.token`, which was two stores for one
+credential.
 
 ---
 
