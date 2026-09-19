@@ -21,14 +21,37 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { formatDateTime, formatMinutes, formatSerial, formatTaka, tp } from '@platform/i18n';
+import {
+  formatDateTime,
+  formatMinutes,
+  formatNumber,
+  formatSerial,
+  formatTaka,
+  tp,
+} from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine, Input } from '@platform/ui';
 
+import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
+import { BackIcon, ChevronIcon, HospitalIcon } from '@/components/icons';
+import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
-import { availability, book, doctorSessions, specialtyDoctors } from '@/lib/api';
+import {
+  availability,
+  book,
+  doctorSessions,
+  doctorsAtHospital,
+  hospitalsForSpecialty,
+} from '@/lib/api';
+import { rememberBooking } from '@/lib/bookings';
 
 import type { BookingResponse } from '@/lib/api';
-import type { Availability, DoctorCard, SessionCard } from '@/lib/types';
+import type {
+  Availability,
+  HospitalCard,
+  HospitalDoctorCard,
+  SessionCard,
+  StampedList,
+} from '@/lib/types';
 import type { ReactNode } from 'react';
 
 const LOCALE = 'bn' as const;
@@ -36,15 +59,25 @@ const LOCALE = 'bn' as const;
 /** Patient surfaces use Bengali numerals, always (`TYP-04`). */
 const NUMERALS = 'bengali' as const;
 
-type Step = 'doctor' | 'session' | 'confirm' | 'done';
+/**
+ * The flow, in the order `APP_FLOW.md` A3–A4 specifies.
+ *
+ * `S-A-07` is titled "Specialty results — **hospitals offering it**", and the
+ * order is the point: a patient picks somewhere they can reach before they
+ * pick who they see. Doctors-first asked somebody in Dhaka to choose between
+ * forty cardiologists without knowing which was twenty minutes away.
+ */
+type Step = 'hospital' | 'doctor' | 'session' | 'confirm' | 'done';
 
 export default function BookPage(): ReactNode {
   const [specialty, setSpecialty] = useState<string | null>(null);
-  const [step, setStep] = useState<Step>('doctor');
+  const [step, setStep] = useState<Step>('hospital');
   const online = useOnline();
 
-  const [doctors, setDoctors] = useState<DoctorCard[] | null>(null);
-  const [doctor, setDoctor] = useState<DoctorCard | null>(null);
+  const [places, setPlaces] = useState<StampedList<HospitalCard> | null>(null);
+  const [place, setPlace] = useState<HospitalCard | null>(null);
+  const [doctors, setDoctors] = useState<StampedList<HospitalDoctorCard> | null>(null);
+  const [doctor, setDoctor] = useState<HospitalDoctorCard | null>(null);
   const [sessions, setSessions] = useState<SessionCard[] | null>(null);
   const [session, setSession] = useState<SessionCard | null>(null);
   const [slots, setSlots] = useState<Availability | null>(null);
@@ -59,14 +92,28 @@ export default function BookPage(): ReactNode {
 
   useEffect(() => {
     if (specialty === null) return;
-    void specialtyDoctors(specialty)
-      .then(setDoctors)
+    void hospitalsForSpecialty(specialty)
+      .then(setPlaces)
       .catch(() => {
-        setDoctors([]);
+        setPlaces({ items: [], asOf: new Date().toISOString() });
       });
   }, [specialty]);
 
-  const chooseDoctor = useCallback((chosen: DoctorCard) => {
+  const chooseHospital = useCallback(
+    (chosen: HospitalCard) => {
+      setPlace(chosen);
+      setDoctors(null);
+      setStep('doctor');
+      void doctorsAtHospital(chosen.id, specialty ?? 'MED')
+        .then(setDoctors)
+        .catch(() => {
+          setDoctors({ items: [], asOf: new Date().toISOString() });
+        });
+    },
+    [specialty],
+  );
+
+  const chooseDoctor = useCallback((chosen: HospitalDoctorCard) => {
     setDoctor(chosen);
     setSessions(null);
     setStep('session');
@@ -95,112 +142,321 @@ export default function BookPage(): ReactNode {
   }
 
   return (
-    <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5">
-      <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-        {tp('demoBanner', LOCALE)}
-      </p>
-
-      {/* GR-03: the fourth state. Announced, because a person who has just
-          lost signal is not necessarily looking at the top of the screen. */}
-      {online ? null : (
-        <p
-          role="status"
-          data-testid="offline-notice"
-          className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
-        >
-          {tp('offlineBooking', LOCALE)}
+    <>
+      <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5">
+        <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
+          {tp('demoBanner', LOCALE)}
         </p>
-      )}
 
-      {step === 'doctor' ? <DoctorList doctors={doctors} onChoose={chooseDoctor} /> : null}
+        {/* GR-03: the fourth state. Announced, because a person who has just
+          lost signal is not necessarily looking at the top of the screen. */}
+        {online ? null : (
+          <p
+            role="status"
+            data-testid="offline-notice"
+            className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
+          >
+            {tp('offlineBooking', LOCALE)}
+          </p>
+        )}
 
-      {step === 'session' && doctor !== null ? (
-        <SessionList doctor={doctor} sessions={sessions} onChoose={chooseSession} />
-      ) : null}
+        {step === 'hospital' ? <HospitalList hospitals={places} onChoose={chooseHospital} /> : null}
 
-      {step === 'confirm' && session !== null ? (
-        <Confirm
-          session={session}
-          slots={slots}
-          online={online}
-          failure={failure}
-          onFailure={setFailure}
-          onBooked={(result) => {
-            setBooking(result);
-            setStep('done');
-          }}
-        />
-      ) : null}
-    </main>
+        {step === 'doctor' && place !== null ? (
+          <DoctorList
+            hospital={place}
+            doctors={doctors}
+            onChoose={chooseDoctor}
+            onBack={() => {
+              setStep('hospital');
+            }}
+          />
+        ) : null}
+
+        {step === 'session' && doctor !== null ? (
+          <SessionList
+            doctor={doctor}
+            sessions={sessions}
+            onChoose={chooseSession}
+            onBack={() => {
+              setStep('doctor');
+            }}
+          />
+        ) : null}
+
+        {step === 'confirm' && session !== null ? (
+          <Confirm
+            session={session}
+            slots={slots}
+            online={online}
+            failure={failure}
+            onFailure={setFailure}
+            onBooked={(result) => {
+              setBooking(result);
+              setStep('done');
+
+              // `S-A-09` and the home screen's live strip both read this. A
+              // guest has no account for `GET /me/bookings` to list against
+              // (CLAUDE.md §4.1), so the device remembers what it booked — and
+              // the serials tab says as much rather than implying more.
+              if (result.trackingUrl !== null && doctor !== null) {
+                const token = new URL(result.trackingUrl).searchParams.get('t');
+                if (token !== null) {
+                  rememberBooking({
+                    bookingId: result.bookingId,
+                    serial: result.serial,
+                    sessionId: result.sessionId,
+                    doctorNameBn: doctor.nameBn,
+                    hospitalNameBn: place?.nameBn ?? '',
+                    plannedStart: session.plannedStart,
+                    url: `/s?b=${result.bookingId}&t=${encodeURIComponent(token)}`,
+                    token,
+                    savedAt: new Date().toISOString(),
+                  });
+                }
+              }
+            }}
+          />
+        ) : null}
+
+        <BottomNavSpacer />
+      </main>
+
+      <BottomNav />
+    </>
   );
 }
 
-/** `S-A-07` — doctors offering this specialty (`FR-PAT-11`, `FR-PAT-12`). */
-function DoctorList({
-  doctors,
+/**
+ * `S-A-07` — the hospitals offering this specialty.
+ *
+ * Each card carries what a person weighs when choosing where to go: how many
+ * doctors are here for their problem, whether anybody is sitting right now,
+ * and how many serials are still open today. `FR-PAT-14` requires a live
+ * figure to carry its freshness, and "sitting now" is one — it is stamped by
+ * the count beside it rather than presented as a standing fact.
+ */
+function HospitalList({
+  hospitals,
   onChoose,
 }: {
-  readonly doctors: DoctorCard[] | null;
-  readonly onChoose: (doctor: DoctorCard) => void;
+  readonly hospitals: StampedList<HospitalCard> | null;
+  readonly onChoose: (hospital: HospitalCard) => void;
 }): ReactNode {
+  const now = useNow();
+
   // GR-03: loading and empty are designed states, not the absence of one.
-  if (doctors === null)
+  if (hospitals === null)
     return <p className="text-body-md text-ink-muted">{tp('loading', LOCALE)}</p>;
-  if (doctors.length === 0) {
-    return <p className="text-body-md text-ink-muted">{tp('noResults', LOCALE)}</p>;
+  if (hospitals.items.length === 0) {
+    return <p className="text-body-md text-ink-muted">{tp('noHospitals', LOCALE)}</p>;
   }
 
   return (
     <section className="flex flex-col gap-3">
-      <h1 className="font-reading text-title-lg">{tp('findDoctor', LOCALE)}</h1>
+      <h1 className="font-reading text-title-lg">{tp('chooseHospitalFirst', LOCALE)}</h1>
+
+      {/* DoD §5.8 and FR-PAT-14: "who is sitting now" is a live figure, so the
+          list says how old it is rather than implying it is this instant. */}
+      <Freshness asOf={hospitals.asOf} now={now} />
 
       <ul className="flex flex-col gap-3">
-        {doctors.map((doctor) => {
-          const chamber = doctor.chambers[0];
-          return (
-            <li key={doctor.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onChoose(doctor);
-                }}
-                className="w-full text-left"
-                data-testid={`doctor-${doctor.id}`}
-              >
-                <Card>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-title-sm">{doctor.nameBn}</p>
-                      {doctor.degrees === null ? null : (
-                        <p className="text-body-sm text-ink-muted">{doctor.degrees}</p>
-                      )}
-                      {chamber === undefined ? null : (
-                        <p className="mt-1 text-body-sm text-ink-secondary">
-                          {chamber.hospitalNameBn}
-                        </p>
-                      )}
-                    </div>
+        {hospitals.items.map((hospital) => (
+          <li key={hospital.id}>
+            <button
+              type="button"
+              onClick={() => {
+                onChoose(hospital);
+              }}
+              className="w-full text-left"
+              data-testid={`hospital-${hospital.id}`}
+            >
+              <Card tone={hospital.sittingNow > 0 ? 'brand' : 'default'}>
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 text-brand-600">
+                    <HospitalIcon size={22} />
+                  </span>
 
-                    <div className="shrink-0 text-right">
-                      {/* FR-PAT-12: the verified badge is the reason a patient
-                          can trust this list at all (FR-SUP-02). */}
-                      {doctor.bmdcVerifiedAt === null ? null : (
-                        <Chip tone="positive">{tp('verified', LOCALE)}</Chip>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-title-sm">{hospital.nameBn}</p>
+                    <p className="text-body-sm text-ink-muted">
+                      {hospital.thana === null
+                        ? hospital.district
+                        : `${hospital.thana}, ${hospital.district}`}
+                    </p>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {hospital.doctorCount === null ? null : (
+                        <Chip tone="neutral">
+                          {tp('doctorsHere', LOCALE).replace(
+                            '{count}',
+                            formatNumber(hospital.doctorCount, NUMERALS),
+                          )}
+                        </Chip>
                       )}
-                      {chamber === undefined ? null : (
-                        <p className="mt-2 text-body-md font-semibold tabular-nums">
-                          {formatTaka(chamber.feePoisha, NUMERALS)}
-                        </p>
-                      )}
+
+                      {/* A11Y-03: the state is a sentence, not a colour. */}
+                      <Chip tone={hospital.sittingNow > 0 ? 'positive' : 'neutral'}>
+                        {hospital.sittingNow > 0
+                          ? tp('sittingNowCount', LOCALE).replace(
+                              '{count}',
+                              formatNumber(hospital.sittingNow, NUMERALS),
+                            )
+                          : tp('nobodySittingNow', LOCALE)}
+                      </Chip>
                     </div>
                   </div>
-                </Card>
-              </button>
-            </li>
-          );
-        })}
+
+                  <span className="mt-1 text-ink-muted">
+                    <ChevronIcon size={18} />
+                  </span>
+                </div>
+              </Card>
+            </button>
+          </li>
+        ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * `S-A-05h` — the doctors at the hospital that was chosen.
+ *
+ * Ordered by who is in a chamber now, then by who sits next. A doctor with no
+ * upcoming chamber is still listed, greyed by its own words rather than
+ * hidden: they work here, and somebody looking for them by name should find
+ * them rather than conclude the hospital has nobody.
+ */
+function DoctorList({
+  hospital,
+  doctors,
+  onChoose,
+  onBack,
+}: {
+  readonly hospital: HospitalCard;
+  readonly doctors: StampedList<HospitalDoctorCard> | null;
+  readonly onChoose: (doctor: HospitalDoctorCard) => void;
+  readonly onBack: () => void;
+}): ReactNode {
+  const now = useNow();
+
+  return (
+    <section className="flex flex-col gap-3">
+      <BackLink onBack={onBack} />
+
+      <div>
+        <h1 className="font-reading text-title-lg">{hospital.nameBn}</h1>
+        <p className="text-body-sm text-ink-muted">{tp('chooseDoctor', LOCALE)}</p>
+      </div>
+
+      {doctors === null ? (
+        <p className="text-body-md text-ink-muted">{tp('loading', LOCALE)}</p>
+      ) : doctors.items.length === 0 ? (
+        <p className="text-body-md text-ink-muted">{tp('noDoctorsHere', LOCALE)}</p>
+      ) : (
+        <>
+          {/* Who is in a chamber right now is the liveliest figure on the
+              screen, so it carries its age (`FR-PAT-14`). */}
+          <Freshness asOf={doctors.asOf} now={now} />
+
+          <ul className="flex flex-col gap-3">
+            {doctors.items.map((doctor) => (
+              <li key={doctor.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChoose(doctor);
+                  }}
+                  className="w-full text-left"
+                  data-testid={`doctor-${doctor.id}`}
+                >
+                  <Card tone={doctor.sittingNow ? 'brand' : 'default'}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-title-sm">{doctor.nameBn}</p>
+                        {doctor.degrees === null ? null : (
+                          <p className="text-body-sm text-ink-muted">{doctor.degrees}</p>
+                        )}
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {/* FR-PAT-13: in a chamber now, or the next time they
+                            sit — never a bare "available". */}
+                          <Chip tone={doctor.sittingNow ? 'positive' : 'neutral'}>
+                            {doctor.sittingNow
+                              ? tp('inChamberNow', LOCALE)
+                              : doctor.nextSessionAt === null
+                                ? tp('notSittingSoon', LOCALE)
+                                : tp('nextSitting', LOCALE).replace(
+                                    '{time}',
+                                    formatDateTime(doctor.nextSessionAt, NUMERALS),
+                                  )}
+                          </Chip>
+
+                          {doctor.openSerials === null ? null : (
+                            <Chip tone={doctor.openSerials > 0 ? 'neutral' : 'caution'}>
+                              {doctor.openSerials > 0
+                                ? tp('serialsLeft', LOCALE).replace(
+                                    '{count}',
+                                    formatNumber(doctor.openSerials, NUMERALS),
+                                  )
+                                : tp('sessionFull', LOCALE)}
+                            </Chip>
+                          )}
+                        </div>
+                      </div>
+
+                      <p className="shrink-0 text-body-md font-semibold tabular-nums">
+                        {formatTaka(doctor.feePoisha, NUMERALS)}
+                      </p>
+                    </div>
+                  </Card>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The one freshness line both discovery lists use.
+ *
+ * `FreshnessLine` takes its labels and its number formatting from the caller so
+ * that `shared/ui` never imports a locale; every patient surface passes the
+ * same four Bangla strings and Bengali numerals, so they are passed once here
+ * rather than twice at each call site.
+ */
+function Freshness({ asOf, now }: { readonly asOf: string; readonly now: Date }): ReactNode {
+  return (
+    <FreshnessLine
+      asOf={new Date(asOf)}
+      now={now}
+      labels={{
+        justNow: tp('updatedJustNow', LOCALE),
+        ago: tp('updatedAgo', LOCALE),
+        never: tp('updatedNever', LOCALE),
+        stale: tp('staleWarning', LOCALE),
+      }}
+      formatMinutes={(minutes) => formatMinutes(minutes, NUMERALS)}
+    />
+  );
+}
+
+/** `BTN-A07-BACK` — one step back, never a dead end. */
+function BackLink({ onBack }: { readonly onBack: () => void }): ReactNode {
+  return (
+    <button
+      type="button"
+      onClick={onBack}
+      data-testid="step-back"
+      className="flex min-h-touch items-center gap-1 self-start text-body-md text-ink-secondary"
+    >
+      <BackIcon size={18} />
+      {tp('back', LOCALE)}
+    </button>
   );
 }
 
@@ -209,22 +465,39 @@ function SessionList({
   doctor,
   sessions,
   onChoose,
+  onBack,
 }: {
-  readonly doctor: DoctorCard;
+  readonly doctor: HospitalDoctorCard;
   readonly sessions: SessionCard[] | null;
   readonly onChoose: (session: SessionCard) => void;
+  readonly onBack: () => void;
 }): ReactNode {
-  if (sessions === null)
-    return <p className="text-body-md text-ink-muted">{tp('loading', LOCALE)}</p>;
-  if (sessions.length === 0) {
-    return <p className="text-body-md text-ink-muted">{tp('noSessions', LOCALE)}</p>;
-  }
-
   return (
     <section className="flex flex-col gap-3">
+      <BackLink onBack={onBack} />
       <h1 className="font-reading text-title-lg">{tp('chooseTime', LOCALE)}</h1>
       <p className="text-body-sm text-ink-muted">{doctor.nameBn}</p>
 
+      {sessions === null ? (
+        <p className="text-body-md text-ink-muted">{tp('loading', LOCALE)}</p>
+      ) : sessions.length === 0 ? (
+        <p className="text-body-md text-ink-muted">{tp('noSessions', LOCALE)}</p>
+      ) : (
+        <SessionCards sessions={sessions} onChoose={onChoose} />
+      )}
+    </section>
+  );
+}
+
+function SessionCards({
+  sessions,
+  onChoose,
+}: {
+  readonly sessions: SessionCard[];
+  readonly onChoose: (session: SessionCard) => void;
+}): ReactNode {
+  return (
+    <>
       <ul className="flex flex-col gap-3">
         {sessions.map((session) => {
           const remaining =
@@ -245,7 +518,9 @@ function SessionList({
                 <Card>
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-title-sm tabular-nums">{formatDateTime(session.plannedStart, NUMERALS)}</p>
+                      <p className="text-title-sm tabular-nums">
+                        {formatDateTime(session.plannedStart, NUMERALS)}
+                      </p>
                       <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
                     </div>
 
@@ -267,7 +542,7 @@ function SessionList({
           );
         })}
       </ul>
-    </section>
+    </>
   );
 }
 
@@ -364,7 +639,9 @@ function Confirm({
       <h1 className="font-reading text-title-lg">{tp('confirmTitle', LOCALE)}</h1>
 
       <Card>
-        <p className="text-title-sm tabular-nums">{formatDateTime(session.plannedStart, NUMERALS)}</p>
+        <p className="text-title-sm tabular-nums">
+          {formatDateTime(session.plannedStart, NUMERALS)}
+        </p>
         <p className="text-body-sm text-ink-muted">{session.doctorNameBn}</p>
         <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
 
@@ -545,62 +822,70 @@ function Success({
   readonly session: SessionCard;
 }): ReactNode {
   return (
-    <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5" data-testid="booking-success">
-      <h1 className="font-reading text-title-lg">{tp('bookingDone', LOCALE)}</h1>
+    <>
+      <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5" data-testid="booking-success">
+        <h1 className="font-reading text-title-lg">{tp('bookingDone', LOCALE)}</h1>
 
-      <Card tone="brand" hero>
-        <p className="text-body-sm text-ink-secondary">{tp('yourSerial', LOCALE)}</p>
-        <p className="font-reading text-display-xl tabular-nums" data-testid="serial">
-          {formatSerial(booking.serial, NUMERALS)}
-        </p>
-        <p className="mt-2 text-body-md">{session.doctorNameBn}</p>
-        <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
-        <p className="text-body-sm text-ink-muted tabular-nums">{formatDateTime(session.plannedStart, NUMERALS)}</p>
-      </Card>
+        <Card tone="brand" hero>
+          <p className="text-body-sm text-ink-secondary">{tp('yourSerial', LOCALE)}</p>
+          <p className="font-reading text-display-xl tabular-nums" data-testid="serial">
+            {formatSerial(booking.serial, NUMERALS)}
+          </p>
+          <p className="mt-2 text-body-md">{session.doctorNameBn}</p>
+          <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
+          <p className="text-body-sm text-ink-muted tabular-nums">
+            {formatDateTime(session.plannedStart, NUMERALS)}
+          </p>
+        </Card>
 
-      <Card>
-        <dl className="flex flex-col gap-1 text-body-md">
-          <Row
-            label={tp('feeConsultation', LOCALE)}
-            value={formatTaka(booking.fee.consultationPoisha, NUMERALS)}
-          />
-          <Row
-            label={tp('feePlatform', LOCALE)}
-            value={formatTaka(booking.fee.platformFeePoisha, NUMERALS)}
-          />
-          <Row
-            label={tp('feeTotal', LOCALE)}
-            value={formatTaka(booking.fee.totalPoisha, NUMERALS)}
-            strong
-          />
-          <Row
-            label={tp('feeDueAtHospital', LOCALE)}
-            value={formatTaka(booking.fee.dueAtHospitalPoisha, NUMERALS)}
-          />
-        </dl>
-      </Card>
+        <Card>
+          <dl className="flex flex-col gap-1 text-body-md">
+            <Row
+              label={tp('feeConsultation', LOCALE)}
+              value={formatTaka(booking.fee.consultationPoisha, NUMERALS)}
+            />
+            <Row
+              label={tp('feePlatform', LOCALE)}
+              value={formatTaka(booking.fee.platformFeePoisha, NUMERALS)}
+            />
+            <Row
+              label={tp('feeTotal', LOCALE)}
+              value={formatTaka(booking.fee.totalPoisha, NUMERALS)}
+              strong
+            />
+            <Row
+              label={tp('feeDueAtHospital', LOCALE)}
+              value={formatTaka(booking.fee.dueAtHospitalPoisha, NUMERALS)}
+            />
+          </dl>
+        </Card>
 
-      {/* FR-GST-05: the SMS carries the tracking link. Shown here too, because
+        {/* FR-GST-05: the SMS carries the tracking link. Shown here too, because
           in a demo there is no SMS to open and the link is the point. */}
-      <p className="text-body-sm text-ink-secondary">{tp('smsSent', LOCALE)}</p>
+        <p className="text-body-sm text-ink-secondary">{tp('smsSent', LOCALE)}</p>
 
-      {booking.trackingUrl === null ? null : (
+        {booking.trackingUrl === null ? null : (
+          <a
+            href={booking.trackingUrl}
+            data-testid="tracking-link"
+            className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-semibold text-white"
+          >
+            {tp('viewLiveSerial', LOCALE)}
+          </a>
+        )}
+
         <a
-          href={booking.trackingUrl}
-          data-testid="tracking-link"
-          className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-semibold text-white"
+          href="/"
+          className="flex min-h-touch items-center justify-center rounded-md border border-line-strong bg-surface px-5 text-body-md"
         >
-          {tp('viewLiveSerial', LOCALE)}
+          {tp('backHome', LOCALE)}
         </a>
-      )}
 
-      <a
-        href="/"
-        className="flex min-h-touch items-center justify-center rounded-md border border-line-strong bg-surface px-5 text-body-md"
-      >
-        {tp('backHome', LOCALE)}
-      </a>
-    </main>
+        <BottomNavSpacer />
+      </main>
+
+      <BottomNav />
+    </>
   );
 }
 
@@ -620,4 +905,3 @@ function Row({
     </div>
   );
 }
-

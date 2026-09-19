@@ -23,20 +23,37 @@ import type { DoctorCard, HospitalCard, SessionCard } from '../repositories/disc
 /** How many days ahead the session picker offers (`S-A-07b`: next 7 days). */
 export const BOOKABLE_DAYS = 7;
 
+/**
+ * A list and when it was read.
+ *
+ * `S-A-07`'s cards carry live figures — how many chambers are running right
+ * now, how many serials are still open today — and `FR-PAT-14` requires a live
+ * figure to say how old it is. The read time belongs to the read, so it is
+ * stamped here rather than guessed from when a browser happened to render.
+ */
+export interface Stamped<T> {
+  readonly items: readonly T[];
+  readonly asOf: Timestamp;
+}
+
 export async function searchHospitals(query: {
+  readonly specialty?: string | undefined;
   readonly district?: string | undefined;
   readonly q?: string | undefined;
   readonly lat?: number | undefined;
   readonly lng?: number | undefined;
   readonly limit?: number | undefined;
-}): Promise<readonly HospitalCard[]> {
-  return await discoveryRepo.listHospitals({
+}): Promise<Stamped<HospitalCard>> {
+  const items = await discoveryRepo.listHospitals({
+    specialty: query.specialty,
     district: query.district,
     q: query.q,
     lat: query.lat,
     lng: query.lng,
     limit: query.limit ?? 50,
   });
+
+  return { items, asOf: time.fromDate(new Date()) };
 }
 
 export interface HospitalDetail {
@@ -107,6 +124,27 @@ export async function sessionsFor(input: {
     fromDate: today(),
     days: BOOKABLE_DAYS,
   });
+}
+
+/**
+ * The doctors at one hospital (`S-A-05h`).
+ *
+ * `S-A-07` lists hospitals offering a specialty and this is what a card there
+ * opens onto, so the specialty is carried through: a patient who asked for a
+ * cardiologist should not land on a list of every doctor in the building.
+ */
+export async function doctorsAt(
+  hospitalId: string,
+  specialty?: string,
+): Promise<Stamped<discoveryRepo.HospitalDoctorCard>> {
+  const hospital = await discoveryRepo.findHospital(hospitalId);
+  if (hospital === null) throw notFound('hospital');
+
+  const items = await discoveryRepo.doctorsAtHospital(hospitalId, specialty);
+
+  // `sittingNow` and `openSerials` are both live, so the list says when it was
+  // read (`FR-PAT-14`).
+  return { items, asOf: time.fromDate(new Date()) };
 }
 
 /** What `S-A-07b` shows on a session card. */

@@ -30,6 +30,14 @@ export const bdPhone = z
 // ---------------------------------------------------------------------------
 
 export const hospitalQuery = z.object({
+  /**
+   * A department code, e.g. `CARD`.
+   *
+   * `S-A-07` is "Specialty results — hospitals offering it", so this is the
+   * parameter that makes the hospital list an answer to "where can I see a
+   * cardiologist" rather than a directory.
+   */
+  specialty: z.string().trim().min(1).max(20).optional(),
   district: z.string().trim().min(1).max(60).optional(),
   q: z.string().trim().min(1).max(80).optional(),
   // Bangladesh sits within these bounds; the same check `hospitals` carries,

@@ -196,6 +196,88 @@ export const PATIENT = {
   },
   mySerials: { bn: 'আমার সিরিয়াল', en: 'My serials' },
 
+  // --- Bottom navigation (NAV-A, APP_FLOW.md S-A-02) ------------------------
+  navHome: { bn: 'হোম', en: 'Home' },
+  navSerials: { bn: 'সিরিয়াল', en: 'Serials' },
+  navRecords: { bn: 'রেকর্ড', en: 'Records' },
+  navProfile: { bn: 'প্রোফাইল', en: 'Profile' },
+
+  // --- Home (S-A-02) --------------------------------------------------------
+  seeADoctor: { bn: 'ডাক্তার দেখান', en: 'See a doctor' },
+  seeADoctorSub: { bn: 'কোন সমস্যার জন্য দেখাবেন?', en: 'What do you need to be seen for?' },
+  quickBed: { bn: 'বেড', en: 'Beds' },
+  quickAmbulance: { bn: 'অ্যাম্বুলেন্স', en: 'Ambulance' },
+  quickBlood: { bn: 'রক্ত', en: 'Blood' },
+  quickReport: { bn: 'রিপোর্ট', en: 'Reports' },
+  activeSerialTitle: { bn: 'আজকের সিরিয়াল চলছে', en: 'Your serial today' },
+  activeSerialMeta: { bn: '{doctor} · এখন চলছে {serving}', en: '{doctor} · now serving {serving}' },
+  doctorsHere: { bn: '{count} জন ডাক্তার', en: '{count} doctors' },
+
+  // --- Hospitals for a specialty (S-A-07) -----------------------------------
+  chooseHospitalFirst: { bn: 'কোথায় দেখাবেন?', en: 'Where would you like to be seen?' },
+  hospitalsOffering: { bn: '{specialty} আছে যেসব জায়গায়', en: 'Places offering {specialty}' },
+  sittingNowCount: { bn: '{count} জন এখন বসছেন', en: '{count} sitting now' },
+  nobodySittingNow: { bn: 'এখন কেউ বসছেন না', en: 'Nobody is sitting right now' },
+  serialsOpenToday: { bn: 'আজ {count}টি সিরিয়াল খালি', en: '{count} serials open today' },
+  noHospitals: {
+    bn: 'এই বিভাগে এখন কোনো হাসপাতাল পাওয়া যায়নি।',
+    en: 'No hospital offers this department right now.',
+  },
+
+  // --- Doctors at a hospital (S-A-05h) --------------------------------------
+  chooseDoctor: { bn: 'কোন ডাক্তার?', en: 'Which doctor?' },
+  inChamberNow: { bn: 'এখন চেম্বারে আছেন', en: 'In the chamber now' },
+  nextSitting: { bn: 'বসবেন {time}', en: 'Sitting at {time}' },
+  notSittingSoon: { bn: 'আগামী দিনে সময় নেই', en: 'No upcoming chamber' },
+  serialsLeft: { bn: '{count}টি সিরিয়াল বাকি', en: '{count} serials left' },
+  noDoctorsHere: {
+    bn: 'এই হাসপাতালে এই বিভাগে কেউ নেই।',
+    en: 'Nobody sits in this department here.',
+  },
+  bookHere: { bn: 'সিরিয়াল নিন', en: 'Book' },
+  back: { bn: 'পিছনে', en: 'Back' },
+
+  // --- My serials (S-A-09) --------------------------------------------------
+  serialsToday: { bn: 'আজ', en: 'Today' },
+  serialsUpcoming: { bn: 'আসছে', en: 'Upcoming' },
+  serialsPast: { bn: 'আগের', en: 'Past' },
+  noSerials: {
+    bn: 'এখনো কোনো সিরিয়াল নেই। ডাক্তার দেখাতে হোম থেকে শুরু করুন।',
+    en: 'No serials yet. Start from home to see a doctor.',
+  },
+  openSerial: { bn: 'লাইভ দেখুন', en: 'See it live' },
+  serialsOnThisDevice: {
+    bn: 'এই ফোনে নেওয়া সিরিয়াল। অ্যাকাউন্ট খুললে সব ফোনে দেখা যাবে।',
+    en: 'Serials booked on this phone. An account shows them on every device.',
+  },
+
+  // --- Tabs not built in this version --------------------------------------
+  comingSoon: { bn: 'শীঘ্রই আসছে', en: 'Coming soon' },
+  recordsComing: {
+    bn: 'ডাক্তার দেখানোর পর প্রেসক্রিপশন আর রিপোর্ট এখানে জমা হবে।',
+    en: 'Prescriptions and reports will collect here after a visit.',
+  },
+  profileComing: {
+    bn: 'অ্যাকাউন্ট আর প্রোফাইল এখনো তৈরি হয়নি। সিরিয়াল নিতে অ্যাকাউন্ট লাগে না।',
+    en: 'Accounts are not built yet. Booking a serial needs no account.',
+  },
+  bedsComing: {
+    bn: 'কোন হাসপাতালে কয়টি বেড আর আইসিইউ খালি, তা এখানে দেখা যাবে।',
+    en: 'Free beds and ICU capacity per hospital will show here.',
+  },
+  ambulanceComing: {
+    bn: 'কাছের অ্যাম্বুলেন্স ডাকা আর ভাড়া দেখা এখানে আসবে। এখন জরুরি প্রয়োজনে ৯৯৯ এ কল করুন।',
+    en: 'Calling a nearby ambulance and seeing the fare will come here. For now, call 999 in an emergency.',
+  },
+  bloodComing: {
+    bn: 'রক্তের গ্রুপ ধরে ব্লাড ব্যাংক আর ডোনার খোঁজা এখানে আসবে।',
+    en: 'Searching blood banks and donors by group will come here.',
+  },
+  emergencyComing: {
+    bn: 'জরুরি বিভাগ বেছে নেওয়া আর "আসছি" জানানো এখানে আসবে। এখনই দরকার হলে ৯৯৯ এ কল করুন।',
+    en: 'Emergency triage and telling an ER you are on the way will come here. If you need help now, call 999.',
+  },
+
   // --- Specialties and results (S-A-07) ------------------------------------
   chooseSpecialty: { bn: 'কোন বিভাগ?', en: 'Which department?' },
   doctorsAvailable: { bn: 'ডাক্তার পাওয়া যাচ্ছে', en: 'doctors available' },

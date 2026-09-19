@@ -52,7 +52,14 @@ function guestPhone(): string {
 async function reachConfirm(page: Page): Promise<void> {
   await page.goto(`${PATIENT}/book?specialty=${demo.departmentCode}`);
 
-  // S-A-07: the doctor list. The seeded chamber's doctor is in it.
+  // S-A-07: hospitals offering the specialty. A patient picks somewhere they
+  // can reach before they pick who they see, which is the order the document
+  // specifies and the order this walks.
+  const hospital = page.getByTestId(`hospital-${demo.hospitalId}`);
+  await expect(hospital).toBeVisible();
+  await hospital.click();
+
+  // S-A-05h: the doctors at that hospital. The seeded chamber's doctor is in it.
   const doctor = page.getByTestId(`doctor-${demo.doctorId}`);
   await expect(doctor).toBeVisible();
   await doctor.click();
@@ -69,8 +76,18 @@ test.describe('a guest books with no account (FR-GST-01)', () => {
 
     // "The app never shows a login wall; it shows a shorter form"
     // (APP_FLOW.md A1.5). Nothing on the way to a booking asks to sign in.
-    await expect(page.getByText(/লগ ইন|sign in|log in/i)).toHaveCount(0);
+    const wall = page.getByText(/লগ ইন|sign in|log in/i);
+
+    // S-A-07 is the first screen: the hospitals offering the specialty.
+    await expect(page.getByTestId(`hospital-${demo.hospitalId}`)).toBeVisible();
+    await expect(wall).toHaveCount(0);
+
+    // And still nothing one step in, at S-A-05h, which is where a naive
+    // implementation would put the gate — a doctor's name feels like the
+    // point where an app asks who is asking.
+    await page.getByTestId(`hospital-${demo.hospitalId}`).click();
     await expect(page.getByTestId(`doctor-${demo.doctorId}`)).toBeVisible();
+    await expect(wall).toHaveCount(0);
   });
 
   test('asks only for name, phone, age and sex (FR-GST-02)', async ({ page }) => {
