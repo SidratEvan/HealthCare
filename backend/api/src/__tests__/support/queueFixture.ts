@@ -89,7 +89,10 @@ export async function createQueueFixture(
        planned_start, planned_end, capacity, fee_poisha)
     VALUES (
       ${row.hospital_id}, ${row.doctor_id}, ${row.department_id}, 'TEST',
-      current_date, now() - interval '30 minutes', now() + interval '150 minutes',
+      -- Dhaka's date, not the server's: current_date is UTC and every read that
+      -- filters by day uses toDhakaDate, so the two disagree for the first six
+      -- hours of a Dhaka day.
+      (now() AT TIME ZONE 'Asia/Dhaka')::date, now() - interval '30 minutes', now() + interval '150 minutes',
       40, ${row.fee_poisha}
     )
     RETURNING id

@@ -184,7 +184,7 @@ export async function insertGraph(client: Client, seed = 1): Promise<Graph> {
     `INSERT INTO sessions
        (hospital_id, doctor_id, department_id, room, session_date,
         planned_start, planned_end, status, capacity, fee_poisha, created_by)
-     VALUES ($1, $2, $3, $4, current_date,
+     VALUES ($1, $2, $3, $4, (now() AT TIME ZONE 'Asia/Dhaka')::date,
              now(), now() + interval '3 hours', 'scheduled', 30, $5, $6)
      RETURNING id`,
     [hospital.id, doctorRow.id, departmentRow.id, chamber.room, feePoisha, staff.id],

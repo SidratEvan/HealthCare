@@ -40,7 +40,11 @@ export interface DemoConsoleRow {
 }
 
 /**
- * Every live facility with a staff account, and what it is running today.
+ * Every live facility with a staff account, and what it is running now.
+ *
+ * "Now" rather than "today": a session still running from the previous Dhaka
+ * day counts, because a receptionist whose chamber has not closed yet needs
+ * their console at one in the morning as much as at nine at night.
  *
  * Ordered so the chamber the pitch opens on comes first: a session already
  * mid-queue is the one that demonstrates the product, and making somebody hunt
@@ -89,9 +93,21 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
       JOIN doctors d       ON d.id = s.doctor_id
       JOIN departments dep ON dep.id = s.department_id
       LEFT JOIN bookings b ON b.session_id = s.id AND b.deleted_at IS NULL
-     WHERE s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
-       AND s.deleted_at IS NULL
+     WHERE s.deleted_at IS NULL
        AND s.room IS DISTINCT FROM 'E2E'
+       AND (
+         s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
+         -- A chamber that opened at half past eleven and is still going at one
+         -- in the morning belongs to the console somebody is standing at right
+         -- now, whatever date it is filed under. Filtering on the date alone
+         -- hid it, and hid it worst in the demo: FR-DEM-06 builds the pitch
+         -- session by walking a mid-queue log backwards from the present, so a
+         -- reset between midnight and about 01:20 Dhaka dates the one session
+         -- that demonstrates the product to yesterday and the picker then
+         -- offered nothing running.
+         OR (s.status = 'running'
+             AND s.session_date >= (now() AT TIME ZONE 'Asia/Dhaka')::date - 1)
+       )
      GROUP BY s.hospital_id, s.id, d.full_name_bn, d.full_name_en,
               dep.name_bn, s.room, s.status, s.planned_start, s.planned_end
      ORDER BY
@@ -119,18 +135,20 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
     byHospital.set(row.hospital_id, list);
   }
 
-  return hospitals.rows
-    .map((row) => ({
-      hospitalId: row.hospital_id,
-      nameBn: row.name_bn,
-      nameEn: row.name_en,
-      district: row.district,
-      roles: [...row.roles].sort(),
-      sessions: byHospital.get(row.hospital_id) ?? [],
-    }))
-    // A facility with nothing running today has no console worth opening.
-    .filter((hospital) => hospital.sessions.length > 0)
-    .sort((a, b) => runningFirst(b) - runningFirst(a));
+  return (
+    hospitals.rows
+      .map((row) => ({
+        hospitalId: row.hospital_id,
+        nameBn: row.name_bn,
+        nameEn: row.name_en,
+        district: row.district,
+        roles: [...row.roles].sort(),
+        sessions: byHospital.get(row.hospital_id) ?? [],
+      }))
+      // A facility with nothing running today has no console worth opening.
+      .filter((hospital) => hospital.sessions.length > 0)
+      .sort((a, b) => runningFirst(b) - runningFirst(a))
+  );
 }
 
 function runningFirst(hospital: { sessions: readonly DemoSessionRow[] }): number {

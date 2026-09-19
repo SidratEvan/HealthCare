@@ -13,10 +13,12 @@
  * and the token it mints names a real, seeded staff account.
  */
 
+import { sql } from 'kysely';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../app.js';
+import { db } from '../config/db.js';
 import { verifyToken } from '../config/jwt.js';
 import { resetEmitter } from '../realtime/emit.js';
 
@@ -49,6 +51,36 @@ describe('GET /demo/consoles', () => {
     // difference between a demo that lands and one that explains itself.
     const first = consoles[0];
     expect(first?.sessions[0]?.status).toBe('running');
+  });
+
+  it('still offers a chamber that opened before midnight (FR-DEM-06)', async () => {
+    // The demo's pitch session is built by walking a mid-queue log backwards
+    // from the present, so a reset in the small hours files it under
+    // *yesterday's* Dhaka date while the clock says today. Filtering the picker
+    // on today's date alone therefore hid the one session the whole demo exists
+    // to show — and only ever between midnight and about 01:20 Dhaka, which is
+    // the worst kind of bug to find by hand.
+    //
+    // It is not only a demo problem: a chamber that opened at half past eleven
+    // and is still going at one in the morning belongs to the console somebody
+    // is standing at.
+    const sessionId = await runningSinceYesterday();
+
+    try {
+      const response = await request(app).get(`${BASE}/demo/consoles`);
+      const offered = (response.body.data.consoles as { sessions: { id: string }[] }[])
+        .flatMap((entry) => entry.sessions)
+        .map((session) => session.id);
+
+      expect(offered).toContain(sessionId);
+    } finally {
+      // Put the shared view back. This row is a running chamber with no
+      // bookings, and leaving it behind would make it the first session the
+      // picker offers — which is what the sibling assertions about the pitch
+      // session read. A test that changes what the next one sees is the
+      // ordering dependency `queueFixture` exists to avoid (CLAUDE.md §6).
+      await releaseSession(sessionId);
+    }
   });
 
   it('offers only the roles this version has a console for', async () => {
@@ -189,3 +221,66 @@ describe('the door is shut when DEMO_MODE is off', () => {
     vi.restoreAllMocks();
   });
 });
+
+/**
+ * A chamber that opened late yesterday evening and has not closed yet.
+ *
+ * Built on a real seeded chamber like every other session in this suite
+ * (CLAUDE.md §6): what matters about this row is its date and its status, so
+ * everything else about it should be a doctor who actually exists.
+ *
+ * `sessions_running_has_started` means a running session has an `actual_start`
+ * — a console cannot claim a doctor is in the chamber if none ever arrived —
+ * so this sets one rather than working around the constraint.
+ */
+async function runningSinceYesterday(): Promise<string> {
+  const chamber = await sql<{
+    hospital_id: string;
+    doctor_id: string;
+    department_id: string;
+    fee_poisha: number;
+  }>`
+    SELECT dh.hospital_id, dh.doctor_id, dh.department_id, dh.fee_poisha
+      FROM doctor_hospitals dh
+      JOIN doctors d ON d.id = dh.doctor_id
+      JOIN hospitals h ON h.id = dh.hospital_id
+     WHERE dh.deleted_at IS NULL AND dh.is_active
+       AND h.is_live AND h.deleted_at IS NULL
+     ORDER BY d.bmdc_number
+     LIMIT 1
+  `.execute(db);
+
+  const row = chamber.rows[0];
+  if (row === undefined) {
+    throw new Error('No seeded chamber found. Has the global setup seeded the database?');
+  }
+
+  const session = await sql<{ id: string }>`
+    INSERT INTO sessions
+      (hospital_id, doctor_id, department_id, room, session_date,
+       planned_start, planned_end, actual_start, status, capacity, fee_poisha)
+    VALUES (
+      ${row.hospital_id}, ${row.doctor_id}, ${row.department_id}, 'LATE',
+      (now() AT TIME ZONE 'Asia/Dhaka')::date - 1,
+      now() - interval '90 minutes', now() + interval '90 minutes',
+      now() - interval '80 minutes', 'running', 20, ${row.fee_poisha}
+    )
+    RETURNING id
+  `.execute(db);
+
+  const id = session.rows[0]?.id;
+  if (id === undefined) throw new Error('session insert returned no id.');
+
+  return id;
+}
+
+/**
+ * Takes the late chamber back out of view.
+ *
+ * A soft delete rather than a `DELETE`: `deleted_at` is what every read in this
+ * repository already filters on, so this removes the row the same way the
+ * product would and needs no exception from the append-only rules.
+ */
+async function releaseSession(sessionId: string): Promise<void> {
+  await sql`UPDATE sessions SET deleted_at = now() WHERE id = ${sessionId}::uuid`.execute(db);
+}
