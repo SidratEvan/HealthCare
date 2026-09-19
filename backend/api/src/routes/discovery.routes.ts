@@ -23,6 +23,19 @@ export const discoveryRoutes: Router = Router();
 discoveryRoutes.get('/hospitals', validate({ query: hospitalQuery }), discovery.listHospitals);
 discoveryRoutes.get('/hospitals/:id', validate({ params: idParams }), discovery.getHospital);
 
+/**
+ * The doctors at one hospital (`S-A-05h`).
+ *
+ * `S-A-07` lists hospitals offering a specialty; this is what a card there
+ * opens. The pair is the documented order — a patient picks a place they can
+ * reach, then a person inside it.
+ */
+discoveryRoutes.get(
+  '/hospitals/:id/doctors',
+  validate({ params: idParams }),
+  discovery.getHospitalDoctors,
+);
+
 discoveryRoutes.get('/doctors', validate({ query: doctorQuery }), discovery.listDoctors);
 discoveryRoutes.get('/doctors/:id', validate({ params: idParams }), discovery.getDoctor);
 

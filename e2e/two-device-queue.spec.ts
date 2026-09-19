@@ -62,6 +62,8 @@ function guestPhone(): string {
 async function bookAndGetTrackingLink(page: Page): Promise<string> {
   await page.goto(`${PATIENT}/book?specialty=${demo.departmentCode}`);
 
+  // Hospital, then doctor, then chamber — `APP_FLOW.md` A3's order.
+  await page.getByTestId(`hospital-${demo.hospitalId}`).click();
   await page.getByTestId(`doctor-${demo.doctorId}`).click();
   await page.getByTestId(`session-${demo.sessionId}`).click();
 

@@ -25,6 +25,51 @@ export interface HospitalCard {
   readonly distanceKm: number | null;
   readonly capabilities: readonly string[];
   readonly capabilityAsOf: string | null;
+  /** Doctors here in the specialty asked for; null when none was (`S-A-07`). */
+  readonly doctorCount: number | null;
+  readonly sittingNow: number;
+  readonly openSerialsToday: number;
+}
+
+/**
+ * A list of live cards and when the server read them.
+ *
+ * `FR-PAT-14`: a live figure never appears without its age. Both `S-A-07` and
+ * `S-A-05h` carry counts that change through the day, so both lists are
+ * stamped and both render a `<FreshnessLine>`.
+ */
+export interface StampedList<T> {
+  readonly items: readonly T[];
+  readonly asOf: string;
+}
+
+/**
+ * A list that is loading, loaded, or could not be fetched.
+ *
+ * `GR-03` asks for four states and the third one is the reason this type exists:
+ * an empty array and a failed request render the same way unless they are
+ * different values, and "no hospital offers this department" is a very different
+ * thing to tell somebody than "we could not reach the server".
+ */
+export type Loadable<T> =
+  | { readonly state: 'loading' }
+  | { readonly state: 'failed' }
+  | ({ readonly state: 'ready' } & StampedList<T>);
+
+/** A doctor on `S-A-05h`'s ডাক্তার tab. */
+export interface HospitalDoctorCard {
+  readonly id: string;
+  readonly nameBn: string;
+  readonly nameEn: string;
+  readonly degrees: string | null;
+  readonly departmentCode: string;
+  readonly departmentNameBn: string;
+  readonly feePoisha: number;
+  readonly room: string | null;
+  readonly bmdcVerifiedAt: string | null;
+  readonly sittingNow: boolean;
+  readonly nextSessionAt: string | null;
+  readonly openSerials: number | null;
 }
 
 export interface DoctorChamber {
