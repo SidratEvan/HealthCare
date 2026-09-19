@@ -100,11 +100,21 @@ export async function createConsoleSession(bookings = 8): Promise<ConsoleSession
       throw new Error('No seeded chamber. Run `pnpm db:reset` before `pnpm test:e2e`.');
     }
 
+    /*
+     * The session date is Dhaka's, not the server's.
+     *
+     * `current_date` is UTC, and the session picker filters on
+     * `toDhakaDate(now)` (`discovery.service.today`). Between midnight and six
+     * in the morning in Dhaka the two disagree, so a session inserted here was
+     * filed under yesterday and never appeared in the picker — and every spec
+     * that books through the UI timed out waiting for a session card. The
+     * product was fine; the fixture was six hours ahead of it.
+     */
     const session = await client.query<{ id: string }>(
       `INSERT INTO sessions
          (hospital_id, doctor_id, department_id, room, session_date,
           planned_start, planned_end, capacity, fee_poisha)
-       VALUES ($1, $2, $3, 'E2E', current_date,
+       VALUES ($1, $2, $3, 'E2E', (now() AT TIME ZONE 'Asia/Dhaka')::date,
                now() - interval '30 minutes', now() + interval '150 minutes',
                40, $4)
        RETURNING id`,

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="স্বাস্থ্যসেবা">
+  <rect width="512" height="512" fill="#0C5C46"/>
+  <g fill="none" stroke="#F6F4EF" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M160 288h48l26-60 34 114 26-70h58"/>
+  </g>
+  <circle cx="352" cy="272" r="15" fill="#7FD6A8"/>
+</svg>

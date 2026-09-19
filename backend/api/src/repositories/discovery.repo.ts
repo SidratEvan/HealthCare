@@ -37,6 +37,17 @@ export interface HospitalCard {
   readonly capabilities: readonly string[];
   /** When a capability row was last confirmed — drives the freshness line. */
   readonly capabilityAsOf: string | null;
+  /**
+   * Doctors sitting here in the specialty that was asked for, and whether any
+   * of them is in a chamber right now (`S-A-07`'s card).
+   *
+   * Null when no specialty was named: a count of "doctors" across every
+   * department answers a question nobody asked.
+   */
+  readonly doctorCount: number | null;
+  readonly sittingNow: number;
+  /** Serials still unclaimed today across this hospital's chambers. */
+  readonly openSerialsToday: number;
 }
 
 export interface HospitalQuery {
@@ -44,6 +55,12 @@ export interface HospitalQuery {
   readonly q?: string | undefined;
   readonly lat?: number | undefined;
   readonly lng?: number | undefined;
+  /**
+   * A department code. `S-A-07` is "Specialty results — hospitals offering
+   * it", so this is what turns the hospital list into an answer to the
+   * question a patient actually has: where can I see a cardiologist.
+   */
+  readonly specialty?: string | undefined;
   readonly limit: number;
 }
 
@@ -73,6 +90,9 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
     distance_m: number | null;
     capabilities: string[] | null;
     capability_as_of: Date | null;
+    doctor_count: string | null;
+    sitting_now: string;
+    open_serials_today: string;
   }>`
     SELECT h.id, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
            h.thana, h.address_bn, h.lat, h.lng, h.phone, h.emergency_phone,
@@ -85,17 +105,58 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
               FROM capabilities c
              WHERE c.hospital_id = h.id AND c.is_available) AS capabilities,
            (SELECT max(c.updated_at) FROM capabilities c WHERE c.hospital_id = h.id)
-             AS capability_as_of
+             AS capability_as_of,
+
+           -- Doctors in the named specialty, and how many are in a chamber
+           -- now. Both are what a person choosing a hospital is weighing: is
+           -- anybody here for my problem, and are they in today.
+           CASE WHEN ${query.specialty ?? null}::text IS NULL THEN NULL ELSE (
+             SELECT count(DISTINCT dh.doctor_id)::text
+               FROM doctor_hospitals dh
+               JOIN departments dep ON dep.id = dh.department_id
+              WHERE dh.hospital_id = h.id AND dh.is_active AND dh.deleted_at IS NULL
+                AND dep.code = ${query.specialty ?? null}
+           ) END AS doctor_count,
+
+           (SELECT count(*)::text FROM sessions s
+             WHERE s.hospital_id = h.id AND s.status = 'running'
+               AND s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
+               AND s.deleted_at IS NULL) AS sitting_now,
+
+           (SELECT coalesce(sum(GREATEST(coalesce(s.capacity, 0) - (
+                     SELECT count(*) FROM bookings b
+                      WHERE b.session_id = s.id AND b.status <> 'cancelled'
+                        AND b.deleted_at IS NULL), 0)), 0)::text
+              FROM sessions s
+             WHERE s.hospital_id = h.id
+               AND s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
+               AND s.status IN ('scheduled', 'running')
+               AND s.deleted_at IS NULL) AS open_serials_today
       FROM hospitals h
      WHERE h.deleted_at IS NULL
        AND h.is_live
        AND (${query.district ?? null}::text IS NULL OR h.district = ${query.district ?? null})
+       -- S-A-07: only hospitals that actually offer the specialty.
+       AND (${query.specialty ?? null}::text IS NULL
+            OR EXISTS (SELECT 1
+                         FROM doctor_hospitals dh
+                         JOIN departments dep ON dep.id = dh.department_id
+                        WHERE dh.hospital_id = h.id AND dh.is_active
+                          AND dh.deleted_at IS NULL
+                          AND dep.code = ${query.specialty ?? null}))
        AND (
          ${query.q ?? null}::text IS NULL
          OR h.name_en ILIKE '%' || ${query.q ?? null} || '%'
          OR h.name_bn LIKE '%' || ${query.q ?? null} || '%'
        )
-     ORDER BY distance_m NULLS LAST, h.name_en
+     ORDER BY
+       -- Nearest first when a position was given: in an emergency, minutes
+       -- decide. Otherwise a chamber that is actually running beats one that
+       -- is not, because "can I be seen today" is the next question after
+       -- "who is near me" and the only one this list can answer.
+       distance_m NULLS LAST,
+       sitting_now DESC,
+       h.name_en
      LIMIT ${query.limit}
   `.execute(db);
 
@@ -116,6 +177,101 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
     distanceKm: row.distance_m === null ? null : Math.round(row.distance_m / 100) / 10,
     capabilities: row.capabilities ?? [],
     capabilityAsOf: row.capability_as_of?.toISOString() ?? null,
+    doctorCount: row.doctor_count === null ? null : Number(row.doctor_count),
+    sittingNow: Number(row.sitting_now),
+    openSerialsToday: Number(row.open_serials_today),
+  }));
+}
+
+/** One doctor on `S-A-05h`'s ডাক্তার tab. */
+export interface HospitalDoctorCard {
+  readonly id: string;
+  readonly nameBn: string;
+  readonly nameEn: string;
+  readonly degrees: string | null;
+  readonly departmentCode: string;
+  readonly departmentNameBn: string;
+  readonly feePoisha: number;
+  readonly room: string | null;
+  readonly bmdcVerifiedAt: string | null;
+  /** `FR-PAT-13`: in a chamber now, or the next time they sit. */
+  readonly sittingNow: boolean;
+  readonly nextSessionAt: string | null;
+  readonly openSerials: number | null;
+}
+
+/**
+ * The doctors sitting at one hospital (`S-A-05h`, the ডাক্তার tab).
+ *
+ * This is the screen `S-A-07` leads to, and the order of the two matters. A
+ * patient picks a place they can reach before they pick a person: building
+ * discovery the other way round asks somebody in Dhaka to choose between forty
+ * cardiologists without knowing which of them is twenty minutes away.
+ *
+ * Ordered by who is in a chamber now, then by who sits next. A doctor with no
+ * upcoming chamber sorts last rather than being hidden — they exist, and a
+ * patient looking for them should find them.
+ */
+export async function doctorsAtHospital(
+  hospitalId: string,
+  specialty?: string,
+): Promise<HospitalDoctorCard[]> {
+  const result = await sql<{
+    id: string;
+    name_bn: string;
+    name_en: string;
+    degrees: string | null;
+    department_code: string;
+    department_name_bn: string;
+    fee_poisha: number;
+    room: string | null;
+    bmdc_verified_at: Date | null;
+    sitting_now: boolean;
+    next_session_at: Date | null;
+    open_serials: string | null;
+  }>`
+    SELECT d.id, d.full_name_bn AS name_bn, d.full_name_en AS name_en, d.degrees,
+           dep.code AS department_code, dep.name_bn AS department_name_bn,
+           dh.fee_poisha, dh.room, d.bmdc_verified_at,
+           EXISTS (SELECT 1 FROM sessions s
+                    WHERE s.doctor_id = d.id AND s.hospital_id = ${hospitalId}::uuid
+                      AND s.status = 'running' AND s.deleted_at IS NULL) AS sitting_now,
+           (SELECT min(s.planned_start) FROM sessions s
+             WHERE s.doctor_id = d.id AND s.hospital_id = ${hospitalId}::uuid
+               AND s.status IN ('scheduled', 'running')
+               AND s.planned_end > now() AND s.deleted_at IS NULL) AS next_session_at,
+           (SELECT GREATEST(coalesce(s.capacity, 0) - (
+                     SELECT count(*) FROM bookings b
+                      WHERE b.session_id = s.id AND b.status <> 'cancelled'
+                        AND b.deleted_at IS NULL), 0)::text
+              FROM sessions s
+             WHERE s.doctor_id = d.id AND s.hospital_id = ${hospitalId}::uuid
+               AND s.status IN ('scheduled', 'running')
+               AND s.planned_end > now() AND s.deleted_at IS NULL
+             ORDER BY s.planned_start LIMIT 1) AS open_serials
+      FROM doctor_hospitals dh
+      JOIN doctors d       ON d.id = dh.doctor_id
+      JOIN departments dep ON dep.id = dh.department_id
+     WHERE dh.hospital_id = ${hospitalId}::uuid
+       AND dh.is_active AND dh.deleted_at IS NULL
+       AND d.deleted_at IS NULL
+       AND (${specialty ?? null}::text IS NULL OR dep.code = ${specialty ?? null})
+     ORDER BY sitting_now DESC, next_session_at NULLS LAST, d.full_name_en
+  `.execute(db);
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    nameBn: row.name_bn,
+    nameEn: row.name_en,
+    degrees: row.degrees,
+    departmentCode: row.department_code,
+    departmentNameBn: row.department_name_bn,
+    feePoisha: row.fee_poisha,
+    room: row.room,
+    bmdcVerifiedAt: row.bmdc_verified_at?.toISOString() ?? null,
+    sittingNow: row.sitting_now,
+    nextSessionAt: row.next_session_at?.toISOString() ?? null,
+    openSerials: row.open_serials === null ? null : Number(row.open_serials),
   }));
 }
 

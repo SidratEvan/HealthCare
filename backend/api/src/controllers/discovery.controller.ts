@@ -13,12 +13,24 @@ import type { Request, Response } from 'express';
 
 export async function listHospitals(req: Request, res: Response): Promise<void> {
   const query = hospitalQuery.parse(req.query);
-  res.json({ ok: true, data: { hospitals: await discovery.searchHospitals(query) } });
+  const { items, asOf } = await discovery.searchHospitals(query);
+
+  res.json({ ok: true, data: { hospitals: items, asOf } });
 }
 
 export async function getHospital(req: Request, res: Response): Promise<void> {
   const { id } = idParams.parse(req.params);
   res.json({ ok: true, data: await discovery.hospitalDetail(id) });
+}
+
+/** `GET /hospitals/:id/doctors` — `S-A-05h`'s ডাক্তার tab. */
+export async function getHospitalDoctors(req: Request, res: Response): Promise<void> {
+  const { id } = idParams.parse(req.params);
+  const specialty = typeof req.query['specialty'] === 'string' ? req.query['specialty'] : undefined;
+
+  const { items, asOf } = await discovery.doctorsAt(id, specialty);
+
+  res.json({ ok: true, data: { doctors: items, asOf } });
 }
 
 export async function listDoctors(req: Request, res: Response): Promise<void> {

@@ -135,6 +135,172 @@ describe('discovery is public, and carries nothing private', () => {
   });
 });
 
+/**
+ * `S-A-07` and `S-A-05h` — hospitals first, then the doctors inside one.
+ *
+ * `APP_FLOW.md` titles `S-A-07` "Specialty results (hospitals offering it)",
+ * and the order is the requirement rather than a preference: a patient picks
+ * somewhere they can reach before they pick a person. What these assert is that
+ * the list is an *answer to a question* — only places that offer the department,
+ * carrying the figures somebody weighs — and not a directory.
+ */
+describe('hospitals offering a specialty (S-A-07)', () => {
+  it('returns only hospitals that offer the department', async () => {
+    const response = await request(app).get(`${BASE}/hospitals?specialty=CARD`);
+    const hospitals = response.body.data.hospitals as { id: string; doctorCount: number }[];
+
+    expect(response.status).toBe(200);
+    expect(hospitals.length).toBeGreaterThan(0);
+
+    // A hospital in the list with no cardiologist in it would make the list a
+    // directory rather than an answer.
+    for (const hospital of hospitals) {
+      expect(hospital.doctorCount).toBeGreaterThan(0);
+    }
+  });
+
+  it('counts doctors only when a specialty was named', async () => {
+    const response = await request(app).get(`${BASE}/hospitals`);
+    const hospitals = response.body.data.hospitals as { doctorCount: number | null }[];
+
+    // "How many doctors" across every department answers a question nobody
+    // asked, so it is null rather than a number that reads as meaningful.
+    for (const hospital of hospitals) {
+      expect(hospital.doctorCount).toBeNull();
+    }
+  });
+
+  it('stamps the list, because who is sitting now is live (FR-PAT-14)', async () => {
+    const response = await request(app).get(`${BASE}/hospitals?specialty=CARD`);
+
+    // `<FreshnessLine>` renders from this. A count of chambers running right
+    // now is the liveliest figure on the screen and may not appear without its
+    // age (`FR-OFF-03`).
+    expect(Date.parse(response.body.data.asOf as string)).not.toBeNaN();
+
+    const hospitals = response.body.data.hospitals as {
+      sittingNow: number;
+      openSerialsToday: number;
+    }[];
+    for (const hospital of hospitals) {
+      expect(typeof hospital.sittingNow).toBe('number');
+      expect(hospital.openSerialsToday).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('puts a hospital with somebody in a chamber above one without', async () => {
+    const response = await request(app).get(`${BASE}/hospitals?specialty=CARD`);
+    const sitting = (response.body.data.hospitals as { sittingNow: number }[]).map(
+      (hospital) => hospital.sittingNow,
+    );
+
+    // No position was given, so "can I be seen today" is the only question the
+    // ordering can answer. Descending, therefore.
+    expect([...sitting].sort((a, b) => b - a)).toEqual(sitting);
+  });
+
+  it('says so plainly when no hospital offers it, rather than 404ing', async () => {
+    const response = await request(app).get(`${BASE}/hospitals?specialty=NOSUCHDEPT`);
+
+    // An empty answer is a real answer and `GR-03` gives it a designed state.
+    // A 404 would say the *route* was wrong.
+    expect(response.status).toBe(200);
+    expect(response.body.data.hospitals).toEqual([]);
+  });
+});
+
+describe('the doctors at one hospital (S-A-05h)', () => {
+  /** The hospital a `CARD` card on `S-A-07` would open. */
+  async function cardiologyHospitalId(): Promise<string> {
+    const list = await request(app).get(`${BASE}/hospitals?specialty=CARD`);
+    const id = (list.body.data.hospitals as { id: string }[])[0]?.id;
+    if (id === undefined) throw new Error('No seeded hospital offers CARD.');
+    return id;
+  }
+
+  it('lists them without a token, like the rest of discovery', async () => {
+    const response = await request(app).get(
+      `${BASE}/hospitals/${await cardiologyHospitalId()}/doctors`,
+    );
+
+    expect(response.status).toBe(200);
+    expect((response.body.data.doctors as unknown[]).length).toBeGreaterThan(0);
+  });
+
+  it('keeps the specialty the patient asked for', async () => {
+    const response = await request(app).get(
+      `${BASE}/hospitals/${await cardiologyHospitalId()}/doctors?specialty=CARD`,
+    );
+    const doctors = response.body.data.doctors as { departmentCode: string }[];
+
+    // Somebody who asked for a cardiologist should not land on a list of every
+    // doctor in the building.
+    expect(doctors.length).toBeGreaterThan(0);
+    for (const doctor of doctors) {
+      expect(doctor.departmentCode).toBe('CARD');
+    }
+  });
+
+  it('says whether each one is in a chamber now, or when they sit (FR-PAT-13)', async () => {
+    const response = await request(app).get(
+      `${BASE}/hospitals/${await cardiologyHospitalId()}/doctors?specialty=CARD`,
+    );
+    const doctors = response.body.data.doctors as {
+      sittingNow: boolean;
+      nextSessionAt: string | null;
+    }[];
+
+    for (const doctor of doctors) {
+      expect(typeof doctor.sittingNow).toBe('boolean');
+
+      // Null is a real answer — "no upcoming chamber" is not the same as "we
+      // do not know", and neither is the same as zero.
+      if (doctor.nextSessionAt !== null) {
+        expect(Date.parse(doctor.nextSessionAt)).not.toBeNaN();
+      }
+    }
+  });
+
+  it('puts whoever is sitting now first', async () => {
+    const response = await request(app).get(
+      `${BASE}/hospitals/${await cardiologyHospitalId()}/doctors?specialty=CARD`,
+    );
+    const sitting = (response.body.data.doctors as { sittingNow: boolean }[]).map((doctor) =>
+      doctor.sittingNow ? 1 : 0,
+    );
+
+    expect([...sitting].sort((a, b) => b - a)).toEqual(sitting);
+  });
+
+  it('stamps the list (FR-PAT-14)', async () => {
+    const response = await request(app).get(
+      `${BASE}/hospitals/${await cardiologyHospitalId()}/doctors?specialty=CARD`,
+    );
+
+    expect(Date.parse(response.body.data.asOf as string)).not.toBeNaN();
+  });
+
+  it('carries no patient or staff detail, like the rest of discovery', async () => {
+    const response = await request(app).get(
+      `${BASE}/hospitals/${await cardiologyHospitalId()}/doctors`,
+    );
+    const serialised = JSON.stringify(response.body);
+
+    expect(serialised).not.toContain('password');
+    expect(serialised).not.toContain('patient');
+  });
+
+  it('404s an unknown hospital rather than an empty doctor list', async () => {
+    const response = await request(app).get(
+      `${BASE}/hospitals/99999999-9999-7999-8999-999999999999/doctors`,
+    );
+
+    // An empty list would read as "this hospital has no doctors", which is a
+    // different and wrong statement.
+    expect(response.status).toBe(404);
+  });
+});
+
 describe('availability (S-A-07b)', () => {
   it('reports serials taken against capacity', async () => {
     const response = await request(app).get(`${BASE}/sessions/${fixture.sessionId}/availability`);

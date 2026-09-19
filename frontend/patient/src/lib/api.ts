@@ -12,7 +12,9 @@ import type {
   Availability,
   DoctorCard,
   HospitalCard,
+  HospitalDoctorCard,
   SessionCard,
+  StampedList,
   TrackingLinkView,
 } from '@/lib/types';
 
@@ -34,6 +36,30 @@ export async function specialtyDoctors(specialty: string): Promise<DoctorCard[]>
 export async function hospitals(): Promise<HospitalCard[]> {
   const data = await api.get<{ hospitals: HospitalCard[] }>('/hospitals');
   return data.hospitals;
+}
+
+/**
+ * `S-A-07` — the hospitals offering a specialty.
+ *
+ * The first screen of the booking flow, and the order matters: a patient picks
+ * a place they can reach, then a person inside it.
+ */
+export async function hospitalsForSpecialty(specialty: string): Promise<StampedList<HospitalCard>> {
+  const data = await api.get<{ hospitals: HospitalCard[]; asOf: string }>(
+    `/hospitals?specialty=${encodeURIComponent(specialty)}`,
+  );
+  return { items: data.hospitals, asOf: data.asOf };
+}
+
+/** `S-A-05h` — the doctors at one hospital, in the specialty asked for. */
+export async function doctorsAtHospital(
+  hospitalId: string,
+  specialty: string,
+): Promise<StampedList<HospitalDoctorCard>> {
+  const data = await api.get<{ doctors: HospitalDoctorCard[]; asOf: string }>(
+    `/hospitals/${hospitalId}/doctors?specialty=${encodeURIComponent(specialty)}`,
+  );
+  return { items: data.doctors, asOf: data.asOf };
 }
 
 export async function doctorSessions(doctorId: string): Promise<SessionCard[]> {
