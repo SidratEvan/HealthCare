@@ -7,6 +7,8 @@
  * translated into it (CLAUDE.md §11.5).
  */
 
+import { COLOUR } from '@platform/ui';
+
 import '@platform/ui/styles.css';
 
 import type { Metadata, Viewport } from 'next';
@@ -21,7 +23,10 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   // A11Y-06: 200% OS text scaling must not clip, so nothing is pinned here.
-  themeColor: '#F6F4EF',
+  // The one place a colour value is needed outside CSS — the browser chrome
+  // reads this from the manifest, not from a stylesheet. Read from the token
+  // module so it cannot drift from `--color-bg-canvas` (CLAUDE.md §7).
+  themeColor: COLOUR['bg-canvas'],
 };
 
 export default function RootLayout({ children }: { readonly children: ReactNode }): ReactNode {

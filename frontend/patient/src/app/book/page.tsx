@@ -22,8 +22,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { formatMinutes, formatSerial, formatTaka, tp } from '@platform/i18n';
-import { Button, Card, Chip, Input } from '@platform/ui';
+import { Button, Card, Chip, FreshnessLine, Input } from '@platform/ui';
 
+import { useOnline } from '@/hooks/useOnline';
 import { availability, book, doctorSessions, specialtyDoctors } from '@/lib/api';
 
 import type { BookingResponse } from '@/lib/api';
@@ -40,6 +41,7 @@ type Step = 'doctor' | 'session' | 'confirm' | 'done';
 export default function BookPage(): ReactNode {
   const [specialty, setSpecialty] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('doctor');
+  const online = useOnline();
 
   const [doctors, setDoctors] = useState<DoctorCard[] | null>(null);
   const [doctor, setDoctor] = useState<DoctorCard | null>(null);
@@ -98,6 +100,18 @@ export default function BookPage(): ReactNode {
         {tp('demoBanner', LOCALE)}
       </p>
 
+      {/* GR-03: the fourth state. Announced, because a person who has just
+          lost signal is not necessarily looking at the top of the screen. */}
+      {online ? null : (
+        <p
+          role="status"
+          data-testid="offline-notice"
+          className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
+        >
+          {tp('offlineBooking', LOCALE)}
+        </p>
+      )}
+
       {step === 'doctor' ? <DoctorList doctors={doctors} onChoose={chooseDoctor} /> : null}
 
       {step === 'session' && doctor !== null ? (
@@ -108,6 +122,7 @@ export default function BookPage(): ReactNode {
         <Confirm
           session={session}
           slots={slots}
+          online={online}
           failure={failure}
           onFailure={setFailure}
           onBooked={(result) => {
@@ -260,12 +275,14 @@ function SessionList({
 function Confirm({
   session,
   slots,
+  online,
   failure,
   onFailure,
   onBooked,
 }: {
   readonly session: SessionCard;
   readonly slots: Availability | null;
+  readonly online: boolean;
   readonly failure: string | null;
   readonly onFailure: (message: string | null) => void;
   readonly onBooked: (booking: BookingResponse) => void;
@@ -279,6 +296,18 @@ function Confirm({
   const [busy, setBusy] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
 
+  // The freshness caption has to age on screen without anything else
+  // happening — that is the whole point of it (`FR-OFF-03`).
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 1_000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
+
   /**
    * One key per confirm *attempt*, reused across retries of that attempt.
    *
@@ -289,7 +318,10 @@ function Confirm({
   const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const phoneValid = /^\+8801[3-9]\d{8}$/.test(phone);
-  const ready = name.trim().length >= 2 && phoneValid && Number(age) >= 0 && age !== '';
+  // Offline is part of readiness, not a separate guard: the button then
+  // carries "no connection" as its reason rather than silently doing nothing
+  // when tapped (`FRONTEND.md` §5.1).
+  const ready = online && name.trim().length >= 2 && phoneValid && Number(age) >= 0 && age !== '';
 
   const fee = useMemo(() => {
     // Shown from the session's own fee before the server answers, so a person
@@ -341,8 +373,22 @@ function Confirm({
           {tp('expectedWait', LOCALE)}:{' '}
           {slots?.expectedWaitMinutes == null
             ? tp('waitUnknown', LOCALE)
-            : `${formatMinutes(slots.expectedWaitMinutes, NUMERALS)} ${tp('feeTotal', LOCALE) === '' ? '' : ''}মিনিট`}
+            : `${formatMinutes(slots.expectedWaitMinutes, NUMERALS)} ${tp('minutesShort', LOCALE)}`}
         </p>
+
+        {/* DoD §5.8: the expected wait is a live figure, so it never appears
+            without saying how old it is. */}
+        <FreshnessLine
+          asOf={slots === null ? null : new Date(slots.asOf)}
+          now={now}
+          labels={{
+            justNow: tp('updatedJustNow', LOCALE),
+            ago: tp('updatedAgo', LOCALE),
+            never: tp('updatedNever', LOCALE),
+            stale: tp('staleWarning', LOCALE),
+          }}
+          formatMinutes={(minutes) => formatMinutes(minutes, NUMERALS)}
+        />
       </Card>
 
       {/* MOD-A07-GUEST: name, phone, age, sex. Nothing else is asked
@@ -477,7 +523,12 @@ function Confirm({
         onClick={() => {
           void confirm();
         }}
-        {...(ready ? {} : { disabled: true as const, disabledReason: tp('yourDetails', LOCALE) })}
+        {...(ready
+          ? {}
+          : {
+              disabled: true as const,
+              disabledReason: online ? tp('yourDetails', LOCALE) : tp('offline', LOCALE),
+            })}
       >
         {tp('confirmBooking', LOCALE)}
       </Button>

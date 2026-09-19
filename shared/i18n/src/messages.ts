@@ -237,6 +237,26 @@ export const PATIENT = {
   tryAgain: { bn: 'আবার চেষ্টা করুন', en: 'Try again' },
   loading: { bn: 'লোড হচ্ছে', en: 'Loading' },
 
+  minutesShort: { bn: 'মিনিট', en: 'min' },
+
+  // --- Freshness (FR-OFF-03, GR-05, DoD §5.8) -------------------------------
+  // A live figure never appears without saying how old it is, on this surface
+  // as much as on the console.
+  updatedJustNow: { bn: 'এইমাত্র হালনাগাদ', en: 'Updated just now' },
+  updatedAgo: { bn: 'হালনাগাদ {time} আগে', en: 'Updated {time} ago' },
+  updatedNever: { bn: 'এখনো হালনাগাদ হয়নি', en: 'Not updated yet' },
+  staleWarning: { bn: 'তথ্য পুরনো হতে পারে', en: 'This may be out of date' },
+
+  // --- Offline (GR-03) ------------------------------------------------------
+  // Booking takes a serial from a shared queue, so it cannot be completed
+  // without a network. Saying so is the honest state; letting the form look
+  // ready is not (`PRD.md` §3.2).
+  offline: { bn: 'ইন্টারনেট সংযোগ নেই', en: 'No internet connection' },
+  offlineBooking: {
+    bn: 'সিরিয়াল নিতে ইন্টারনেট লাগবে। সংযোগ ফিরলে আবার চেষ্টা করুন।',
+    en: 'Booking a serial needs a connection. Try again once you are back online.',
+  },
+
   demoBanner: {
     bn: 'এটি একটি ডেমো। সব তথ্য প্রদর্শনের জন্য তৈরি।',
     en: 'This is a demonstration. All data here is for display only.',
