@@ -12,6 +12,11 @@
  * somebody will try to press.
  */
 
+'use client';
+
+// `FilterChip` toggles, so this module crosses the boundary. `Chip` itself is
+// inert markup and would be fine on the server; splitting the file to save one
+// component's worth of bundle would cost more in indirection than it saves.
 import { cx } from './cx.js';
 
 import type { ReactNode } from 'react';

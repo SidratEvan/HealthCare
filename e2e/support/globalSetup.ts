@@ -14,17 +14,18 @@
 
 import { execFileSync } from 'node:child_process';
 
-const DATABASE_URL =
-  process.env['DATABASE_URL'] ?? 'postgresql://healthcare:healthcare@localhost:5432/healthcare_dev';
+import { E2E_DATABASE_URL, assertLocalDatabase } from './database.js';
 
 export default function globalSetup(): void {
   // The guard in `database/scripts/lib/env.ts` decides on the host, so a
   // remote target needs saying out loud. Nothing here opts into one: these
   // specs truncate and reseed, and that is not something to do to a shared
   // database by accident.
+  assertLocalDatabase();
+
   execFileSync('pnpm', ['db:reset'], {
     stdio: 'inherit',
     shell: true,
-    env: { ...process.env, DATABASE_URL, DEMO_MODE: 'true' },
+    env: { ...process.env, DATABASE_URL: E2E_DATABASE_URL, DEMO_MODE: 'true' },
   });
 }

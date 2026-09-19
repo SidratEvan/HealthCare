@@ -210,6 +210,93 @@ export async function insertWalkin(
 }
 
 /**
+ * Inserts a booking and returns its id.
+ *
+ * `serial_number` is decided by the caller under the session lock, not here —
+ * a repository writes rows and does not make the decision about who is next
+ * (BACKEND.md §3). The unique index on `(session_id, serial_number)` is the
+ * backstop if that lock is ever released too early.
+ */
+export async function insertBooking(
+  trx: Tx,
+  input: {
+    readonly sessionId: string;
+    readonly patientId: string;
+    readonly serial: number;
+    readonly source: string;
+    readonly feePoisha: number;
+    readonly bookedByUserId: string | null;
+    readonly bookedByGuestId: string | null;
+    readonly reasonText: string | null;
+    readonly intake: Record<string, unknown>;
+  },
+): Promise<string> {
+  const result = await sql<{ id: string }>`
+    INSERT INTO bookings
+      (session_id, patient_id, serial_number, source, fee_poisha,
+       booked_by_user_id, booked_by_guest_id, reason_text, intake)
+    VALUES (
+      ${input.sessionId}, ${input.patientId}, ${input.serial},
+      ${input.source}::booking_source, ${input.feePoisha},
+      ${input.bookedByUserId}, ${input.bookedByGuestId},
+      ${input.reasonText}, ${JSON.stringify(input.intake)}::jsonb
+    )
+    RETURNING id
+  `.execute(trx);
+
+  const id = result.rows[0]?.id;
+  if (id === undefined) throw new Error('bookings insert returned no id.');
+  return id;
+}
+
+/**
+ * A live booking for this patient with this doctor on this day (`FR-PAT-24`).
+ *
+ * The database enforces the same-*session* half as a unique index. This is the
+ * other half: a doctor may sit a morning and an evening chamber, and the same
+ * person booking both is the mistake the rule exists to prevent. It cannot be
+ * an index without denormalising `doctor_id` and `session_date` onto
+ * `bookings`, which DATABASE.md §2.3 does not define — so it is checked here,
+ * inside the same transaction that allocates the serial.
+ */
+export async function findSameDoctorSameDay(
+  trx: Tx,
+  input: {
+    readonly patientId: string;
+    readonly doctorId: string;
+    readonly sessionDate: string;
+  },
+): Promise<{ readonly id: string; readonly serial: number } | null> {
+  const result = await sql<{ id: string; serial_number: number }>`
+    SELECT b.id, b.serial_number
+      FROM bookings b
+      JOIN sessions s ON s.id = b.session_id
+     WHERE b.patient_id = ${input.patientId}
+       AND s.doctor_id = ${input.doctorId}
+       AND s.session_date = ${input.sessionDate}::date
+       AND b.status NOT IN ('cancelled', 'rescheduled')
+       AND b.deleted_at IS NULL
+     LIMIT 1
+  `.execute(trx);
+
+  const row = result.rows[0];
+  return row === undefined ? null : { id: row.id, serial: row.serial_number };
+}
+
+/** Whether this profile belongs to this account (`patients_one_owner`). */
+export async function patientBelongsTo(
+  trx: Tx,
+  patientId: string,
+  userId: string,
+): Promise<boolean> {
+  const result = await sql<{ present: number }>`
+    SELECT 1 AS present FROM patients
+     WHERE id = ${patientId} AND owner_user_id = ${userId} AND deleted_at IS NULL
+  `.execute(trx);
+  return result.rows.length > 0;
+}
+
+/**
  * Whether a patient or guest holds a booking in this session.
  *
  * Used by the socket handshake to decide who may listen to a queue. A booking

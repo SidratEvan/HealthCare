@@ -23,6 +23,9 @@
  * the action optional, making a bare toast the cheap thing to write.
  */
 
+'use client';
+
+// Holds the one live toast and its timer.
 import * as RadixToast from '@radix-ui/react-toast';
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 

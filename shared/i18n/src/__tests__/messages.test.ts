@@ -9,9 +9,23 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { CONSOLE, format, t, type Message } from '../messages.js';
+import { CONSOLE, PATIENT, format, t, tp, type Message } from '../messages.js';
 
-const entries = Object.entries(CONSOLE) as [string, Message][];
+/**
+ * Both catalogues, checked together.
+ *
+ * A rule that holds for the console and not for the patient app is worse than
+ * no rule: the patient surface is the one a stranger reads, in Bangla, on a
+ * phone — so it is the one where a Latin digit or an English fallback shows.
+ */
+const entries = [
+  ...(Object.entries(CONSOLE) as [string, Message][]).map(
+    ([key, message]) => [`console.${key}`, message] as [string, Message],
+  ),
+  ...(Object.entries(PATIENT) as [string, Message][]).map(
+    ([key, message]) => [`patient.${key}`, message] as [string, Message],
+  ),
+];
 
 describe('every key carries both languages', () => {
   it.each(entries)('%s', (_key, message) => {
@@ -20,8 +34,9 @@ describe('every key carries both languages', () => {
   });
 
   it('has something to check', () => {
-    // Guards against the suite passing because the catalogue is empty.
-    expect(entries.length).toBeGreaterThan(40);
+    // Guards against the suite passing because a catalogue is empty.
+    expect(Object.keys(CONSOLE).length).toBeGreaterThan(40);
+    expect(Object.keys(PATIENT).length).toBeGreaterThan(30);
   });
 });
 
@@ -68,5 +83,23 @@ describe('button labels are verbs (FRONTEND.md §5.1)', () => {
     // person guessing what pressing it will do.
     expect(t('callNext', 'bn')).toContain('ডাকুন');
     expect(t('retry', 'bn')).toContain('করুন');
+    expect(tp('confirmBooking', 'bn')).toContain('করুন');
+    expect(tp('findDoctor', 'bn')).toContain('খুঁজুন');
+  });
+});
+
+describe('the patient catalogue', () => {
+  it('reads both languages', () => {
+    expect(tp('yourSerial', 'bn')).toBe('আপনার সিরিয়াল');
+    expect(tp('yourSerial', 'en')).toBe('Your serial');
+  });
+
+  it('itemises the fee in words a person uses (FR-PAT-21)', () => {
+    // Four lines, each labelled: consultation, service fee, total, and what is
+    // still owed on arrival. A total with no breakdown is a number somebody
+    // has to take on trust.
+    for (const key of ['feeConsultation', 'feePlatform', 'feeTotal', 'feeDueAtHospital'] as const) {
+      expect(tp(key, 'bn').trim()).not.toBe('');
+    }
   });
 });

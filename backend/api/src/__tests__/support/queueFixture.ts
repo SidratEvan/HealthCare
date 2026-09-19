@@ -58,14 +58,24 @@ interface ChamberRow {
  * consultation rate and the fee is the fee that doctor actually charges — both
  * of which the ETA maths reads.
  */
-export async function createQueueFixture(bookings = 4): Promise<QueueFixture> {
+export async function createQueueFixture(
+  bookings = 4,
+  /**
+   * Which seeded chamber to build on.
+   *
+   * Zero unless a test needs two sessions with *different doctors* — which
+   * `FR-PAT-24` makes necessary, since the same patient may not book the same
+   * doctor twice on one day whatever session it is.
+   */
+  chamberOffset = 0,
+): Promise<QueueFixture> {
   const chamber = await sql<ChamberRow>`
     SELECT dh.hospital_id, dh.doctor_id, dh.department_id, dh.fee_poisha
       FROM doctor_hospitals dh
       JOIN doctors d ON d.id = dh.doctor_id
      WHERE dh.deleted_at IS NULL AND dh.is_active
      ORDER BY d.bmdc_number
-     LIMIT 1
+     LIMIT 1 OFFSET ${chamberOffset}
   `.execute(db);
 
   const row = chamber.rows[0];

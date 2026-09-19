@@ -30,6 +30,7 @@ import {
   doctor,
   facility,
 } from '../seeds/index.js';
+import { labelEn } from '../seeds/lib/demo.js';
 import { tableExists } from '../seeds/lib/insert.js';
 import { createRng } from '../seeds/lib/random.js';
 
@@ -79,8 +80,15 @@ describe('FR-DEM-01: six facilities, of the kinds the requirement names', () => 
     'writes exactly the declared demo set',
     async () => {
       await seeded(async (client) => {
+        // Scoped to the declared names rather than reading the whole table.
+        // This database is shared: the graph fixture in `seeds/graph.ts`
+        // inserts a facility of its own, so `SELECT * FROM hospitals` counts
+        // six or seven depending on which file vitest happened to run first.
+        // That is order-dependence, which is the flakiness CLAUDE.md §6 calls
+        // a bug — and it says nothing about whether the seed is correct.
         const { rows } = await client.query<{ kind: string; district: string; name_en: string }>(
-          'SELECT kind, district, name_en FROM hospitals ORDER BY name_en',
+          'SELECT kind, district, name_en FROM hospitals WHERE name_en = ANY($1) ORDER BY name_en',
+          [DEMO_FACILITIES.map((entry) => labelEn(entry.nameEn))],
         );
 
         expect(rows).toHaveLength(6);

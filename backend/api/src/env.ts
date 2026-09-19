@@ -116,6 +116,21 @@ const schema = z.object({
    */
   CONSOLE_BASE_URL: httpUrl.default('http://localhost:3100'),
 
+  /**
+   * The platform's share of a booking fee, in integer poisha (`DB-P5`).
+   *
+   * `FR-PAT-21` requires the fee to be shown as a breakdown — consultation,
+   * platform fee, total, and what is due at the hospital — so the code has to
+   * charge and itemise it. What it charges is not a code decision: CLAUDE.md
+   * §1.1 keeps pricing out of this repository entirely, because it is
+   * negotiated per agreement and lives outside it.
+   *
+   * So the itemisation is real and the rate is configuration, defaulting to
+   * zero. A demo therefore shows a breakdown that adds up and claims no price
+   * nobody has agreed to.
+   */
+  PLATFORM_FEE_POISHA: positiveInt.or(z.literal(0)).default(0),
+
   // --- Database (DATABASE.md) ---------------------------------------------
   DATABASE_URL: z.string().min(1),
   DATABASE_POOL_MAX: positiveInt.max(200).default(10),

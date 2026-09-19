@@ -26,13 +26,24 @@ import { Client } from 'pg';
 
 import { signToken } from '../../backend/api/src/config/jwt.js';
 
-const DATABASE_URL =
-  process.env['DATABASE_URL'] ?? 'postgresql://healthcare:healthcare@localhost:5432/healthcare_dev';
+import { E2E_DATABASE_URL, assertLocalDatabase } from './database.js';
+
+// Importing `signToken` pulls in the API's `env.ts`, which merges the
+// repository's `.env` into `process.env` as an import side effect. That is why
+// the connection URL comes from `database.ts` and not from `DATABASE_URL`:
+// see the note there.
+assertLocalDatabase();
+
+const DATABASE_URL = E2E_DATABASE_URL;
 
 export interface ConsoleSession {
   readonly sessionId: string;
   readonly hospitalId: string;
   readonly receptionistId: string;
+  /** The doctor this chamber belongs to — the patient app books them by id. */
+  readonly doctorId: string;
+  /** The department code, which is what a specialty URL carries. */
+  readonly departmentCode: string;
   readonly token: string;
   /** Booking ids by serial, so a spec can name "serial 7" and mean it. */
   readonly bookingsBySerial: ReadonlyMap<number, string>;
@@ -65,12 +76,18 @@ export async function createConsoleSession(bookings = 8): Promise<ConsoleSession
       hospital_id: string;
       doctor_id: string;
       department_id: string;
+      department_code: string;
       fee_poisha: number;
     }>(
-      `SELECT dh.hospital_id, dh.doctor_id, dh.department_id, dh.fee_poisha
+      `SELECT dh.hospital_id, dh.doctor_id, dh.department_id,
+              dep.code AS department_code, dh.fee_poisha
          FROM doctor_hospitals dh
          JOIN doctors d ON d.id = dh.doctor_id
+         JOIN departments dep ON dep.id = dh.department_id
+         JOIN hospitals h ON h.id = dh.hospital_id
         WHERE dh.deleted_at IS NULL AND dh.is_active
+          AND h.is_live AND h.deleted_at IS NULL
+          AND d.bmdc_verified_at IS NOT NULL
         ORDER BY d.bmdc_number
         LIMIT 1`,
     );
@@ -155,6 +172,8 @@ export async function createConsoleSession(bookings = 8): Promise<ConsoleSession
     return {
       sessionId,
       hospitalId: row.hospital_id,
+      doctorId: row.doctor_id,
+      departmentCode: row.department_code,
       receptionistId,
       // Under DEMO_MODE the console selects a hospital and a role without a
       // password (CLAUDE.md §4.1); this is that selection, made for it.
@@ -270,5 +289,27 @@ export async function eventTypes(sessionId: string): Promise<string[]> {
       [sessionId],
     );
     return result.rows.map((r) => r.type);
+  });
+}
+
+/**
+ * One booking on a session, by serial.
+ *
+ * Proves a screen's claim against the row behind it: a success page showing
+ * serial four and no booking at serial four is the failure worth catching.
+ */
+export async function bookingBySerial(
+  sessionId: string,
+  serial: number,
+): Promise<{ readonly id: string; readonly source: string } | null> {
+  return await withClient(async (client) => {
+    const result = await client.query<{ id: string; source: string }>(
+      `SELECT id, source::text AS source FROM bookings
+        WHERE session_id = $1 AND serial_number = $2 AND status <> 'cancelled'`,
+      [sessionId, serial],
+    );
+
+    const row = result.rows[0];
+    return row === undefined ? null : { id: row.id, source: row.source };
   });
 }
