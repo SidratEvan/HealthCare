@@ -160,6 +160,19 @@ export const CONSOLE = {
     en: 'No connection — this is queued to send.',
   },
 
+  /**
+   * Shown while a sleeping API is being woken (`S-B-01`).
+   *
+   * The demo API sleeps when nobody has used it, and the first request after
+   * that takes the best part of a minute. Saying so beats a skeleton that never
+   * resolves — a hospital director watching a blank screen concludes the product
+   * is broken, which is a worse outcome than being told to wait.
+   */
+  consoleWaking: {
+    bn: 'সার্ভার চালু হচ্ছে, একটু সময় লাগবে…',
+    en: 'Waking the server, this takes a moment…',
+  },
+
   // --- Doctor console (S-B-05, APP_FLOW.md B2) -----------------------------
   doctorConsole: { bn: 'ডাক্তারের স্ক্রিন', en: 'Doctor console' },
   receptionConsole: { bn: 'রিসেপশন', en: 'Reception' },

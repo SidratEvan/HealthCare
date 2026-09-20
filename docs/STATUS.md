@@ -80,11 +80,30 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 1614.
-`pnpm test:e2e` reports 47, in Chromium, against the real API and the seeded
+`pnpm test` reports 1616.
+`pnpm test:e2e` reports 50, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
-`doctor-console.spec.ts`.
+`doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`.
+
+### The demo API sleeps, and the console now says so
+
+Render's free tier spins the API down when nobody is using it, and the first
+request afterwards takes the better part of a minute. `fetch` has no timeout of
+its own, so `S-B-01` sat on its loading skeleton for as long as the page stayed
+open — the one `GR-03` state with no way out, because nothing ever rejected. It
+was seen on a phone opening the deployed console shortly after a deploy, which
+is precisely when the API is restarting.
+
+The picker now gives each attempt twelve seconds (`AbortSignal.timeout`), tries
+four times, says **সার্ভার চালু হচ্ছে** from the second attempt onward, and ends
+at an error with a retry rather than a skeleton. Four attempts is a product
+decision about a sleeping backend, not a test detail, which is why
+`console-cold-start.spec.ts` declares a longer budget instead of trimming it.
+
+Worth knowing when demonstrating: **open the console once a minute before
+showing anyone.** Nothing is broken if the first load is slow; it is the free
+tier waking.
 
 ### Step 12 — the doctor console and the visit record
 
