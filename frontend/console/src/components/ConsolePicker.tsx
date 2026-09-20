@@ -42,6 +42,27 @@ const NUMERALS = 'latin' as const;
 
 const API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 
+/**
+ * How long one attempt at reaching the API may take.
+ *
+ * `fetch` has no timeout of its own: a request to a host that accepts the
+ * connection and then never answers stays pending for as long as the page is
+ * open. That is exactly what a sleeping demo API does while it boots, and it is
+ * how this screen came to sit on its loading skeleton indefinitely — the one
+ * state `GR-03` has no way out of, because nothing ever rejects.
+ */
+const ATTEMPT_TIMEOUT_MS = 12_000;
+
+/**
+ * How many times to try before giving up.
+ *
+ * The demo API sleeps when idle and takes the better part of a minute to wake,
+ * so the first attempt failing is the *expected* case rather than the broken
+ * one. Giving up after one would make the console unopenable exactly when
+ * somebody is opening it for the first time — which is every demo.
+ */
+const ATTEMPTS = 4;
+
 /** The roles this version has a console for. Others are not offered. */
 const ROLE_LABEL: Record<string, ConsoleKey> = {
   receptionist: 'roleReceptionist',
@@ -75,28 +96,52 @@ export function ConsolePicker({
 }): ReactNode {
   const [consoles, setConsoles] = useState<DemoConsole[] | null>(null);
   const [failed, setFailed] = useState(false);
+  /** True once an attempt has timed out and another is running. */
+  const [waking, setWaking] = useState(false);
   const [hospital, setHospital] = useState<DemoConsole | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    void fetch(`${API}/demo/consoles`)
-      .then(async (response) => {
-        if (!response.ok) throw new Error(String(response.status));
-        return (await response.json()) as { data: { consoles: DemoConsole[] } };
-      })
-      .then((body) => {
+    async function load(): Promise<void> {
+      for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
         if (cancelled) return;
-        setConsoles(body.data.consoles);
-        // One facility is the common case in a demo; skipping a choice that
-        // has one answer is not a shortcut, it is one fewer tap before the
-        // thing being demonstrated.
-        setHospital(body.data.consoles[0] ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
+
+        // The second attempt onward means the first one timed out, which for
+        // this API almost always means it is waking rather than broken. Say
+        // that, instead of leaving a skeleton to be read as a hang.
+        if (attempt > 1) setWaking(true);
+
+        try {
+          const response = await fetch(`${API}/demo/consoles`, {
+            signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
+          });
+          if (!response.ok) throw new Error(String(response.status));
+
+          const body = (await response.json()) as { data: { consoles: DemoConsole[] } };
+          if (cancelled) return;
+
+          setConsoles(body.data.consoles);
+          // One facility is the common case in a demo; skipping a choice that
+          // has one answer is not a shortcut, it is one fewer tap before the
+          // thing being demonstrated.
+          setHospital(body.data.consoles[0] ?? null);
+          setWaking(false);
+          return;
+        } catch {
+          // Fall through to the next attempt. The last one is the only failure
+          // worth telling somebody about.
+        }
+      }
+
+      if (!cancelled) {
+        setWaking(false);
+        setFailed(true);
+      }
+    }
+
+    void load();
 
     return () => {
       cancelled = true;
@@ -140,9 +185,24 @@ export function ConsolePicker({
   if (failed) {
     return (
       <Shell>
-        <p className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700">
+        <p
+          role="alert"
+          data-testid="picker-failed"
+          className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
+        >
           {t('consoleLoadFailed', LOCALE)}
         </p>
+
+        {/* A dead end is not a state. Reloading is the whole retry, because the
+            screen has nothing else on it yet. */}
+        <Button
+          variant="secondary"
+          onClick={() => {
+            globalThis.location.reload();
+          }}
+        >
+          {t('retry', LOCALE)}
+        </Button>
       </Shell>
     );
   }
@@ -151,6 +211,16 @@ export function ConsolePicker({
     // `GR-03` loading: the shape of the answer, never a spinner over the page.
     return (
       <Shell>
+        {waking ? (
+          <p
+            role="status"
+            data-testid="picker-waking"
+            className="rounded-sm bg-warn-100 px-3 py-2 text-body-md text-warn-700"
+          >
+            {t('consoleWaking', LOCALE)}
+          </p>
+        ) : null}
+
         <div className="flex flex-col gap-3" aria-busy="true" data-testid="picker-loading">
           <div className="h-20 rounded-md bg-sunken" />
           <div className="h-20 rounded-md bg-sunken" />
