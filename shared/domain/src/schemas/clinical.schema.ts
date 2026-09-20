@@ -83,3 +83,57 @@ export const recordsQuery = z.object({
 });
 
 export type RecordsQuery = z.infer<typeof recordsQuery>;
+
+// ---------------------------------------------------------------------------
+// Consent (`FR-PAT-63`, `FR-PAT-64`, BACKEND.md §7.6)
+// ---------------------------------------------------------------------------
+
+/**
+ * How long a consent offer stays redeemable, in seconds.
+ *
+ * Short on purpose. The code is shown on a patient's screen in a chamber and
+ * read out or held up; it has no job once the doctor has typed it, and a code
+ * that stayed live for an hour would still be live in a photograph of that
+ * screen.
+ */
+export const CONSENT_OFFER_TTL_SECONDS = 180;
+
+/** What a patient is granting, and for how long (`consent_scope`). */
+export const consentScope = z.enum(['visit', 'hospital', 'doctor', 'full']);
+
+/**
+ * `POST /consents` — the patient grants a hospital access directly.
+ *
+ * Used where the patient is already identified to the server. The chamber-side
+ * path is `/consents/offer` + `/consents/redeem`, because there the doctor has
+ * no way to name the patient until the patient hands them something.
+ */
+export const createConsentBody = z.object({
+  hospitalId: uuid,
+  scope: consentScope.default('visit'),
+  idempotencyKey: uuid,
+});
+
+export type CreateConsentBody = z.infer<typeof createConsentBody>;
+
+/**
+ * `POST /consents/redeem` — a doctor turns the patient's code into access.
+ *
+ * `FR-PAT-63` describes this as scanning a QR, and the value here is what that
+ * QR would encode: a short-lived signed token naming one patient. It is not a
+ * six-digit code somebody reads aloud, and the length below says so — signing
+ * is what makes it unforgeable without a table of outstanding codes to keep and
+ * sweep, and the cost of that choice is that it is long.
+ *
+ * Until a QR encoder is installed the patient's screen offers it to copy and
+ * the console offers a field to paste it into, which is workable between two
+ * windows and clumsy on a phone. Scanning is the fix, and it changes
+ * `BTN-A12-QR` and `BTN-B05-SCAN` and nothing here.
+ */
+export const redeemConsentBody = z.object({
+  /** What the patient's screen is showing. Surrounding whitespace is forgiven. */
+  code: z.string().trim().min(16).max(1024),
+  idempotencyKey: uuid,
+});
+
+export type RedeemConsentBody = z.infer<typeof redeemConsentBody>;

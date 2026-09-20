@@ -15,6 +15,7 @@ import { Router } from 'express';
 
 import { bookingRoutes } from './booking.routes.js';
 import { clinicalRoutes } from './clinical.routes.js';
+import { consentRoutes } from './consent.routes.js';
 import { demoRoutes } from './demo.routes.js';
 import { discoveryRoutes } from './discovery.routes.js';
 import { guestRoutes } from './guest.routes.js';
@@ -50,6 +51,8 @@ export function buildApiRouter(): Router {
   // Records: the one router whose permission lives in the service rather than
   // the route, because `FR-DOC-10` is a relationship and not a role.
   router.use(clinicalRoutes);
+  // Consent is the patient's side of the same records (`FR-PAT-63`, `-64`).
+  router.use(consentRoutes);
   router.use(syncRoutes);
   return router;
 }
