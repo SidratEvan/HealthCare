@@ -3,11 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { EMERGENCY_PROBLEMS } from '../../types/enums.js';
 import { freshnessOf } from '../freshness.js';
 import {
+  freeBedsFor,
+  needFor,
   PROBLEM_CAPABILITY,
   rankCandidates,
   relevantFreeBeds,
   requiredCapability,
   stampsFor,
+  stampsForNeed,
   type CapacityFigures,
   type RankCandidate,
 } from '../ranking.js';
@@ -176,5 +179,38 @@ describe('the figures a result card stands on', () => {
   it('lets one never-confirmed figure make the whole card stale', () => {
     const unconfirmed: CapacityFigures = { ...padma, capabilityAsOf: null };
     expect(freshnessOf(stampsFor('burn', unconfirmed), NOW, 10).stale).toBe(true);
+  });
+});
+
+describe('a need the coordinator names (FR-EMG-07, the refer-out search)', () => {
+  const padma: CapacityFigures = {
+    bedTotal: 60,
+    bedFree: 7,
+    icuTotal: 8,
+    icuAsOf: minutesAgo(40),
+    bedsAsOf: minutesAgo(9),
+    capabilityAsOf: minutesAgo(2),
+    byKind: [
+      { kind: 'general', free: 5, asOf: minutesAgo(5) },
+      { kind: 'icu', free: 0, asOf: minutesAgo(40) },
+    ],
+  };
+
+  it('is the problem’s own need unless somebody says otherwise', () => {
+    expect(needFor('burn')).toEqual({ capability: 'burn_unit', bedKind: 'burn' });
+    expect(needFor(null)).toEqual({ capability: null, bedKind: null });
+  });
+
+  it('counts the kind of bed asked for — an ICU bed no problem maps to', () => {
+    expect(freeBedsFor({ capability: null, bedKind: 'icu' }, padma)).toBe(0);
+    expect(freeBedsFor({ capability: 'cardiac', bedKind: null }, padma)).toBe(7);
+  });
+
+  it('ranks on the age of what was asked for, so an ICU asked for is an ICU’s age', () => {
+    expect(stampsForNeed({ capability: null, bedKind: 'icu' }, padma)).toEqual([minutesAgo(40)]);
+    expect(stampsForNeed({ capability: 'cardiac', bedKind: 'icu' }, padma)).toEqual([
+      minutesAgo(2),
+      minutesAgo(40),
+    ]);
   });
 });

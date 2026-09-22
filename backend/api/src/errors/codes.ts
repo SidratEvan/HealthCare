@@ -71,6 +71,17 @@ export const ERROR_CODES = {
     message: 'That emergency case cannot do that from its current state.',
   },
 
+  // --- Referrals (FR-EMG-07..09) --------------------------------------------
+  //
+  // The same shape, for the same reason: a step the referral's state does not
+  // allow — accepting one the sender has withdrawn, referring a case another
+  // ER is already answering. A replay is answered as one, not refused
+  // (`referralAlreadyApplied`).
+  REFERRAL_TRANSITION_INVALID: {
+    status: 422,
+    message: 'That referral cannot do that from its current state.',
+  },
+
   // `FR-PAT-63`. Expired, forged and never-real share one code on purpose: a
   // caller guessing at consent codes must not learn which guess was closer.
   CONSENT_CODE_INVALID: { status: 400, message: 'That code has expired or is not valid.' },

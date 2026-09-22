@@ -24,6 +24,7 @@ import {
   caseState,
   erHospital,
   freshenPadma,
+  openErConsole,
   registerWalkIn,
   sendAlert,
   type ErHospital,
@@ -58,23 +59,6 @@ async function phoneAtFarmgate(browser: Browser): Promise<Page> {
     viewport: { width: 390, height: 844 },
   });
   return await context.newPage();
-}
-
-async function openErConsole(page: Page, er: ErHospital): Promise<void> {
-  await page.addInitScript(
-    ([token, hospitalId]) => {
-      sessionStorage.setItem(
-        'console.demo-session',
-        JSON.stringify({ token, hospitalId, staffName: 'ER (Demo)', role: 'emergency' }),
-      );
-    },
-    [er.erToken, er.hospitalId],
-  );
-  await page.goto(`${CONSOLE}/?view=er`);
-  await expect(page.getByTestId('er-console')).toBeVisible();
-  await expect(page.getByTestId('offline-block')).toHaveAttribute('data-connected', 'true', {
-    timeout: 15_000,
-  });
 }
 
 test.describe('the burn scenario (PRD.md §24 step 7)', () => {

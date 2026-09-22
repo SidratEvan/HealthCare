@@ -24,7 +24,8 @@ export const ROOMS = {
   admin: (hospitalId: string): string => `hospital:${hospitalId}:admin`,
   /** That patient's own devices. */
   patient: (patientId: string): string => `patient:${patientId}`,
-  referral: (referralId: string): string => `referral:${referralId}`,
+  // No room per referral: both ends hear `referral.*` in their own emergency
+  // room, which every ER console is already in (`emit.referralUpdated`).
 } as const;
 
 /** The events a session room carries (BACKEND.md §6). */

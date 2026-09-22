@@ -25,6 +25,7 @@ import {
   DEMO_LABEL_BN,
   DEMO_LABEL_EN,
   DEMO_LIVE,
+  DEMO_REFERRALS,
   DEMO_SEED,
   GUEST_COUNT,
   HISTORY_VISIT_TARGET,
@@ -797,8 +798,12 @@ describe('FR-EMG-03, FR-EMG-04 — the ERs open on real cases', () => {
       await seeded(async (client) => {
         const published = await loads(client);
         for (const declared of DEMO_FACILITIES) {
+          // In the ER or on the way; discharged, referred on and admitted
+          // cases have left the load.
           const open = DEMO_EMERGENCY_CASES.filter(
-            (entry) => entry.facility === declared.slug && entry.state !== 'discharged',
+            (entry) =>
+              entry.facility === declared.slug &&
+              (entry.state === 'arrived' || entry.state === 'acknowledged'),
           ).length;
           expect(published.get(labelEn(declared.nameEn)), declared.slug).toBe(open);
         }
@@ -849,7 +854,10 @@ describe('FR-EMG-03, FR-EMG-04 — the ERs open on real cases', () => {
              JOIN hospitals h ON h.id = e.hospital_id
             WHERE e.admit_requested_at IS NOT NULL AND e.closed_at IS NULL`,
         );
-        const declared = DEMO_EMERGENCY_CASES.filter((entry) => entry.handoff !== undefined);
+        // Still waiting for a bed; an admitted case's handoff is behind it.
+        const declared = DEMO_EMERGENCY_CASES.filter(
+          (entry) => entry.handoff !== undefined && entry.state === 'arrived',
+        );
         expect(rows).toHaveLength(declared.length);
         expect(rows.every((row) => row.has_kind)).toBe(true);
       });
@@ -871,6 +879,115 @@ describe('FR-EMG-03, FR-EMG-04 — the ERs open on real cases', () => {
     },
     SEED_TIMEOUT,
   );
+});
+
+describe('FR-EMG-07..09 — the referrals the ERs open on', () => {
+  interface SeededReferral {
+    from_slug: string;
+    to_slug: string;
+    state: string;
+    case_hospital_is_sender: boolean;
+    case_state: string;
+    summary_matches_case: boolean;
+    note: string | null;
+    arrived_case_state: string | null;
+  }
+
+  async function referrals(client: Client): Promise<SeededReferral[]> {
+    const slugOf = new Map(DEMO_FACILITIES.map((f) => [labelEn(f.nameEn), f.slug]));
+    const { rows } = await client.query<
+      Omit<SeededReferral, 'from_slug' | 'to_slug'> & { from_name: string; to_name: string }
+    >(
+      `SELECT fh.name_en AS from_name, th.name_en AS to_name, r.state::text AS state,
+              c.hospital_id = r.from_hospital_id AS case_hospital_is_sender,
+              c.state::text AS case_state,
+              r.summary ->> 'problem' = c.problem_type
+                AND r.summary ->> 'triage' IS NOT DISTINCT FROM c.triage::text
+                AND (r.summary ->> 'ageYears')::int IS NOT DISTINCT FROM c.patient_age_years
+                AND r.summary ->> 'sex' IS NOT DISTINCT FROM c.patient_sex::text
+                AS summary_matches_case,
+              r.summary ->> 'note' AS note,
+              ac.state::text AS arrived_case_state
+         FROM referrals r
+         JOIN hospitals fh ON fh.id = r.from_hospital_id
+         JOIN hospitals th ON th.id = r.to_hospital_id
+         JOIN emergency_cases c ON c.id = r.emergency_case_id
+         LEFT JOIN emergency_cases ac ON ac.id = r.arrived_case_id`,
+    );
+    return rows.map(({ from_name, to_name, ...row }) => ({
+      ...row,
+      from_slug: slugOf.get(from_name) ?? from_name,
+      to_slug: slugOf.get(to_name) ?? to_name,
+    }));
+  }
+
+  it(
+    'writes every declared referral, each from the case it names, saying what that case says',
+    async () => {
+      await seeded(async (client) => {
+        const seededReferrals = await referrals(client);
+        expect(seededReferrals).toHaveLength(DEMO_REFERRALS.length);
+        for (const row of seededReferrals) {
+          expect(row.case_hospital_is_sender).toBe(true);
+          expect(row.summary_matches_case).toBe(true);
+          // A note is a clinical summary in somebody's words (CLAUDE.md §8).
+          expect(row.note).toBeNull();
+        }
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it(
+    'holds the sender responsible until the arrival (the owner’s ruling, 2026-09-22)',
+    async () => {
+      await seeded(async (client) => {
+        for (const row of await referrals(client)) {
+          if (row.state === 'arrived') {
+            expect(row.case_state).toBe('referred');
+            expect(row.arrived_case_state).not.toBeNull();
+          } else {
+            // Waiting, accepted, or declined and to be tried elsewhere: still here.
+            expect(row.case_state).toBe('arrived');
+            expect(row.arrived_case_state).toBeNull();
+          }
+        }
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it('opens every console on something: an answer waiting, one on its way, a decline, an arrival', () => {
+    expect(new Set(DEMO_REFERRALS.map((entry) => entry.state))).toEqual(
+      new Set(['seen', 'accepted', 'declined', 'arrived']),
+    );
+    // Only between ERs within the refer-out search's reach: Karnaphuli, in
+    // Chattogram, is in none.
+    for (const entry of DEMO_REFERRALS) {
+      expect([entry.from, entry.to]).not.toContain('karnaphuli-general');
+      expect(entry.from).not.toBe(entry.to);
+    }
+  });
+
+  it('refers each case for something its own hospital does not have', () => {
+    for (const entry of DEMO_REFERRALS) {
+      if (entry.capability !== null) {
+        expect(facility(entry.from).capabilities, entry.caseKey).not.toContain(entry.capability);
+        expect(facility(entry.to).capabilities, entry.caseKey).toContain(entry.capability);
+      }
+      if (entry.bedKind !== null) {
+        const free = (slug: string): number =>
+          DEMO_WARDS.filter((ward) => ward.facility === slug && ward.kind === entry.bedKind).reduce(
+            (sum, ward) =>
+              sum + ward.beds - ward.occupied - ward.cleaning - ward.reserved - ward.outOfService,
+            0,
+          );
+        expect(free(entry.from), entry.caseKey).toBe(0);
+        // A referral that has been answered took a bed the receiver has.
+        if (entry.state !== 'declined') expect(free(entry.to), entry.caseKey).toBeGreaterThan(0);
+      }
+    }
+  });
 });
 
 describe('the runner reports what it could not do', () => {

@@ -23,6 +23,18 @@
  * looks at it (`FR-EMG-01`). A case read from the board on load does not ring:
  * the alarm is for arrival, and a console opened on three waiting alerts
  * shows them — loudly, as new — without sounding three times at once.
+ *
+ * `referral.incoming` rings the same way (`FR-EMG-09`): another ER has a
+ * person waiting on this one's answer. The first touch of the card is what
+ * tells the sender it was seen (`FR-EMG-08`) — a person looked, not a screen
+ * that happened to be open.
+ *
+ * ## Referrals ride the same outbox
+ *
+ * Sending, answering, withdrawing and recording an arrival are queued and
+ * applied at once with `applyLocalReferral`, as case actions are with
+ * `applyLocalCase`, and in the same order: a referral of a walk-in registered
+ * offline never reaches the server before the walk-in does.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -36,12 +48,17 @@ import {
 } from '@platform/client';
 import {
   applyLocalCase,
+  applyLocalReferral,
   loadOf,
+  sideOf,
   type BedKind,
   type EmergencyCaseView,
+  type EmergencyNeed,
   type EmergencyProblem,
   type LocalEmergencyChange,
   type PublicCapacity,
+  type ReferralParty,
+  type ReferralView,
   type Sex,
   type Timestamp,
   type TriageColor,
@@ -67,6 +84,21 @@ export type CaseCommand =
   | { readonly action: 'triage'; readonly triage: TriageColor }
   | { readonly action: 'handoff'; readonly bedKind: BedKind }
   | { readonly action: 'discharge' };
+
+/** `BTN-B07-REFER-SEND-<hospitalId>`: who, to where, asking for what. */
+export interface ReferInput {
+  readonly entry: EmergencyCaseView;
+  readonly to: ReferralParty;
+  readonly need: EmergencyNeed;
+  readonly note: string | null;
+}
+
+/** A step on a referral that already exists. `seen` is sent by `seenReferral`. */
+export type ReferralCommand =
+  | { readonly action: 'accept' }
+  | { readonly action: 'decline'; readonly reason: string }
+  | { readonly action: 'cancel' }
+  | { readonly action: 'arrive' };
 
 export interface EmergencyConsole {
   readonly board: ErBoardResponse | null;
@@ -99,6 +131,19 @@ export interface EmergencyConsole {
   readonly confirmCapabilities: (
     entries: readonly { readonly kind: string; readonly available: boolean }[],
   ) => Promise<void>;
+  /** Referrals this ER sent or was sent, with the outbox applied (`FR-EMG-07..09`). */
+  readonly referrals: readonly ReferralView[];
+  /** Referrals with a step still waiting to reach the server. */
+  readonly pendingReferralIds: ReadonlySet<string>;
+  /** Incoming referrals that rang and nobody has touched yet. */
+  readonly newReferralIds: ReadonlySet<string>;
+  /** The last referral whose person arrived here, for a one-time notice of their token. */
+  readonly lastArrival: ReferralView | null;
+  readonly clearArrival: () => void;
+  /** The first touch of an incoming referral: clears "new" and tells the sender. */
+  readonly seenReferral: (referralId: string) => void;
+  readonly refer: (input: ReferInput) => Promise<void>;
+  readonly referralStep: (referralId: string, command: ReferralCommand) => Promise<void>;
   readonly api: ReturnType<typeof erApi>;
 }
 
@@ -129,6 +174,9 @@ export function useEmergencyConsole(options: {
   const [lastRefusal, setLastRefusal] = useState<string | null>(null);
   const [lastCancelled, setLastCancelled] = useState<EmergencyCaseView | null>(null);
   const [newCaseIds, setNewCaseIds] = useState<ReadonlySet<string>>(new Set());
+  const [serverReferrals, setServerReferrals] = useState<readonly ReferralView[]>([]);
+  const [newReferralIds, setNewReferralIds] = useState<ReadonlySet<string>>(new Set());
+  const [lastArrival, setLastArrival] = useState<ReferralView | null>(null);
   const [alarmState, setAlarmState] = useState<AlarmState>('blocked');
   const [attempt, setAttempt] = useState(0);
 
@@ -146,6 +194,7 @@ export function useEmergencyConsole(options: {
       const next = await api.board(hospitalId);
       setBoard(next);
       setServerCases(next.cases);
+      setServerReferrals(next.referrals);
       setServerCapabilities(next.capabilities);
       setPublished(next.published);
       setLastServerTs(next.serverTs);
@@ -196,6 +245,11 @@ export function useEmergencyConsole(options: {
     });
   }, []);
 
+  // Referrals stay once closed: today's are the timeline the console shows.
+  const upsertReferral = useCallback((next: ReferralView) => {
+    setServerReferrals((current) => [next, ...current.filter((entry) => entry.id !== next.id)]);
+  }, []);
+
   useEffect(() => {
     const channel = openEmergencyChannel({
       url: SOCKET_URL,
@@ -229,12 +283,25 @@ export function useEmergencyConsole(options: {
         setPublished(next);
         setLastServerTs(serverTs);
       },
+      onReferral: (next, incoming, serverTs) => {
+        const side = sideOf(next, hospitalId);
+        if (side === null) return;
+        upsertReferral(next);
+        setLastServerTs(serverTs);
+        if (incoming && side === 'receiver') {
+          setNewReferralIds((previous) => new Set([...previous, next.id]));
+          alarm.ring();
+        }
+        if (side === 'receiver' && next.state === 'arrived' && next.arrivedTokenLabel !== null) {
+          setLastArrival(next);
+        }
+      },
     });
 
     return () => {
       channel.close();
     };
-  }, [getToken, hospitalId, flush, upsert, alarm]);
+  }, [getToken, hospitalId, flush, upsert, upsertReferral, alarm]);
 
   useEffect(() => {
     setBrowserOnline(globalThis.navigator?.onLine ?? true);
@@ -296,6 +363,8 @@ export function useEmergencyConsole(options: {
               caseId,
               change,
               provisional: null,
+              referralChange: null,
+              provisionalReferral: null,
             }
           : {
               method: 'PATCH',
@@ -304,6 +373,8 @@ export function useEmergencyConsole(options: {
               caseId,
               change,
               provisional: null,
+              referralChange: null,
+              provisionalReferral: null,
             },
       );
     },
@@ -346,6 +417,8 @@ export function useEmergencyConsole(options: {
           admitBedKind: null,
           admitRequestedAt: null,
         },
+        referralChange: null,
+        provisionalReferral: null,
       });
       await refreshPending();
       await flush();
@@ -362,9 +435,109 @@ export function useEmergencyConsole(options: {
         caseId: null,
         change: null,
         provisional: null,
+        referralChange: null,
+        provisionalReferral: null,
       });
     },
     [enqueue, hospitalId],
+  );
+
+  // --- referrals (FR-EMG-07..09) ---------------------------------------------
+
+  const refer = useCallback<EmergencyConsole['refer']>(
+    async ({ entry, to, need, note }) => {
+      const outbox = outboxRef.current;
+      if (outbox === null) return;
+
+      const clientEventId = crypto.randomUUID();
+      const at = new Date().toISOString() as Timestamp;
+      await outbox.enqueue({
+        clientEventId,
+        clientTs: at,
+        hospitalId,
+        method: 'POST',
+        path: '/referrals',
+        body: {
+          emergencyCaseId: entry.id,
+          toHospitalId: to.hospitalId,
+          requiredCapability: need.capability,
+          requiredBedKind: need.bedKind,
+          note,
+        },
+        caseId: entry.id,
+        change: null,
+        provisional: null,
+        referralChange: null,
+        // Drawn on the case's row until the server has it; its id is the
+        // clientEventId, which is also the referral's idempotency key.
+        provisionalReferral: {
+          id: clientEventId,
+          from: {
+            hospitalId,
+            nameBn: board?.hospitalNameBn ?? '',
+            nameEn: board?.hospitalNameEn ?? '',
+            phone: null,
+          },
+          to,
+          emergencyCaseId: entry.id,
+          fromTokenLabel: entry.tokenLabel,
+          arrivedCaseId: null,
+          arrivedTokenLabel: null,
+          requiredCapability: need.capability,
+          requiredBedKind: need.bedKind,
+          summary: {
+            problem: entry.problem,
+            triage: entry.triage,
+            ageYears: entry.ageYears,
+            sex: entry.sex,
+            note,
+          },
+          state: 'sent',
+          sentAt: at,
+          seenAt: null,
+          respondedAt: null,
+          arrivedAt: null,
+          closedAt: null,
+          declineReason: null,
+        },
+      });
+      await refreshPending();
+      await flush();
+    },
+    [hospitalId, board, refreshPending, flush],
+  );
+
+  const step = useCallback(
+    async (
+      referralId: string,
+      action: 'seen' | ReferralCommand['action'],
+      reason: string | null,
+    ) => {
+      const current = serverReferrals.find((entry) => entry.id === referralId);
+      const side = current === undefined ? null : sideOf(current, hospitalId);
+      if (side === null) return;
+      await enqueue({
+        method: 'POST',
+        path: `/referrals/${referralId}/${action}`,
+        body: reason === null ? {} : { reason },
+        caseId: null,
+        change: null,
+        provisional: null,
+        referralChange: {
+          change: { referralId, action, at: new Date().toISOString() as Timestamp, reason },
+          side,
+        },
+        provisionalReferral: null,
+      });
+    },
+    [serverReferrals, hospitalId, enqueue],
+  );
+
+  const referralStep = useCallback<EmergencyConsole['referralStep']>(
+    async (referralId, command) => {
+      await step(referralId, command.action, command.action === 'decline' ? command.reason : null);
+    },
+    [step],
   );
 
   // --- deriving --------------------------------------------------------------
@@ -396,6 +569,30 @@ export function useEmergencyConsole(options: {
     }
     return current;
   }, [serverCapabilities, pending]);
+
+  const referrals = useMemo(() => {
+    let current: ReferralView[] = [...serverReferrals];
+    for (const action of pending) {
+      if (action.provisionalReferral !== null) {
+        current = [action.provisionalReferral, ...current];
+      } else if (action.referralChange !== null) {
+        const { change, side } = action.referralChange;
+        current = current.map((entry) =>
+          entry.id === change.referralId ? applyLocalReferral(entry, change, side) : entry,
+        );
+      }
+    }
+    return current;
+  }, [serverReferrals, pending]);
+
+  const pendingReferralIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const action of pending) {
+      if (action.referralChange !== null) ids.add(action.referralChange.change.referralId);
+      if (action.provisionalReferral !== null) ids.add(action.provisionalReferral.id);
+    }
+    return ids;
+  }, [pending]);
 
   const pendingCaseIds = useMemo(() => {
     const ids = new Set<string>();
@@ -447,6 +644,32 @@ export function useEmergencyConsole(options: {
     command,
     walkIn,
     confirmCapabilities,
+    referrals,
+    pendingReferralIds,
+    newReferralIds,
+    lastArrival,
+    clearArrival: () => {
+      setLastArrival(null);
+    },
+    seenReferral: (referralId) => {
+      setNewReferralIds((previous) => {
+        if (!previous.has(referralId)) return previous;
+        const next = new Set(previous);
+        next.delete(referralId);
+        return next;
+      });
+      // "Seen" is said once, by the first touch, and only of one still unseen.
+      const current = referrals.find((entry) => entry.id === referralId);
+      if (
+        current?.state === 'sent' &&
+        sideOf(current, hospitalId) === 'receiver' &&
+        !pendingReferralIds.has(referralId)
+      ) {
+        void step(referralId, 'seen', null);
+      }
+    },
+    refer,
+    referralStep,
     api,
   };
 }

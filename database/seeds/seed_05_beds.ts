@@ -38,12 +38,17 @@
  * nearer Jamuna, is the answer to a burn case from Farmgate. So the cases are
  * written here too, after the beds, and two of them are already handed to the
  * ward (`FR-BED-07`).
+ *
+ * The referrals between those ERs (`data/referrals.ts`, `FR-EMG-07..09`) are
+ * written last, because each names the cases it joins — and 0017's composite
+ * keys hold every one to a case at the hospital it says.
  */
 
 import { time, type Timestamp } from '@platform/domain';
 
 import { DEMO_BED_REQUESTS, DEMO_HOLD_MINUTES, DEMO_WARDS, OOS_REASONS } from './data/beds.js';
 import { DEMO_EMERGENCY_CASES } from './data/emergency.js';
+import { DEMO_REFERRALS } from './data/referrals.js';
 import { DEMO_MARKER, demoPhone, labelBn, labelEn, taka } from './lib/demo.js';
 import { insertRows } from './lib/insert.js';
 import { facilityIds, staffByRole } from './lib/lookup.js';
@@ -91,8 +96,16 @@ interface BedEventRow {
 export const seed05Beds: SeedModule = {
   name: 'seed_05_beds',
   title: 'wards, beds, admissions, live occupancy and the ERs',
-  requirements: ['FR-DEM-04', 'FR-EMG-03', 'FR-EMG-04'],
-  writes: ['wards', 'beds', 'bed_events', 'admissions', 'bed_requests', 'emergency_cases'],
+  requirements: ['FR-DEM-04', 'FR-EMG-03', 'FR-EMG-04', 'FR-EMG-08', 'FR-EMG-09'],
+  writes: [
+    'wards',
+    'beds',
+    'bed_events',
+    'admissions',
+    'bed_requests',
+    'emergency_cases',
+    'referrals',
+  ],
 
   async run({ client, now, rng }: SeedContext): Promise<SeedSummary> {
     const beds = rng.stream('beds');
@@ -559,8 +572,9 @@ export const seed05Beds: SeedModule = {
       '',
     );
 
-    // --- The ERs --------------------------------------------------------------
-    const emergencyCases = await writeEmergencyCases(client, { facilities, erStaff, minutesAgo });
+    // --- The ERs, and the referrals between them ------------------------------
+    const caseIds = await writeEmergencyCases(client, { facilities, erStaff, minutesAgo });
+    const referrals = await writeReferrals(client, { facilities, erStaff, caseIds, minutesAgo });
 
     return {
       wards: insertedWards.length,
@@ -568,7 +582,8 @@ export const seed05Beds: SeedModule = {
       admissions: insertedAdmissions.length,
       bed_requests: insertedRequests.length,
       bed_events: events.length,
-      emergency_cases: emergencyCases,
+      emergency_cases: DEMO_EMERGENCY_CASES.length,
+      referrals,
     };
   },
 };
@@ -677,6 +692,8 @@ async function loadCandidates(client: Client, today: string, rng: Rng): Promise<
  *
  * Every state carries the stamps migration 0016's checks require of it, which
  * is the point of writing them out here rather than leaving them to defaults.
+ *
+ * Returns the id of every case that has a `key`, for the referrals to name.
  */
 async function writeEmergencyCases(
   client: Client,
@@ -685,7 +702,7 @@ async function writeEmergencyCases(
     readonly erStaff: ReadonlyMap<string, string>;
     readonly minutesAgo: (minutes: number) => Timestamp;
   },
-): Promise<number> {
+): Promise<ReadonlyMap<string, string>> {
   const { facilities, erStaff, minutesAgo } = context;
   const nextToken = new Map<string, number>();
   let phones = 0;
@@ -728,14 +745,16 @@ async function writeEmergencyCases(
       acknowledgedAt: null,
       arrivedAt: at,
       token: `ER-${String(token)}`,
+      // Seen and sent home, gone to the ER that took the referral, or placed
+      // by the ward: each closes after the stay the file declares.
       closedAt:
-        declared.state === 'discharged' ? time.addMinutes(at, declared.stayedMinutes ?? 60) : null,
+        declared.state === 'arrived' ? null : time.addMinutes(at, declared.stayedMinutes ?? 60),
       createdBy: required(erStaff, declared.facility, 'emergency staff'),
       createdAt: at,
     };
   });
 
-  await insertRows(
+  const inserted = await insertRows<{ id: string }>(
     client,
     'emergency_cases',
     {
@@ -778,10 +797,106 @@ async function writeEmergencyCases(
       row.createdBy,
       row.createdAt,
     ]),
-    '',
   );
 
-  return rows.length;
+  const byKey = new Map<string, string>();
+  rows.forEach((row, index) => {
+    const id = inserted[index]?.id;
+    if (id === undefined) throw new Error('An emergency case insert returned no id.');
+    if (row.declared.key !== undefined) byKey.set(row.declared.key, id);
+  });
+  return byKey;
+}
+
+/**
+ * Writes `data/referrals.ts` (`FR-EMG-07..09`).
+ *
+ * Every step of each timeline is stamped from the declared minutes, and each
+ * state carries exactly the stamps 0017 requires of it: an answer is seen, an
+ * arrival names the case the receiving ER opened, and only an open referral
+ * has no `closed_at`. The sending ER's coordinator sent it; the receiving
+ * ER's answered it.
+ *
+ * The summary is written from the case, as `POST /referrals` builds it: the
+ * problem, colour, age and sex the case holds, and no note.
+ */
+async function writeReferrals(
+  client: Client,
+  context: {
+    readonly facilities: ReadonlyMap<string, string>;
+    readonly erStaff: ReadonlyMap<string, string>;
+    readonly caseIds: ReadonlyMap<string, string>;
+    readonly minutesAgo: (minutes: number) => Timestamp;
+  },
+): Promise<number> {
+  const { facilities, erStaff, caseIds, minutesAgo } = context;
+  const stamp = (minutes: number | undefined): Timestamp | null =>
+    minutes === undefined ? null : minutesAgo(minutes);
+
+  const inserted = await insertRows<{ id: string }>(
+    client,
+    'referrals',
+    {
+      columns: [
+        'from_hospital_id',
+        'to_hospital_id',
+        'emergency_case_id',
+        'required_capability',
+        'required_bed_kind',
+        'state',
+        'sent_at',
+        'seen_at',
+        'responded_at',
+        'responded_by',
+        'arrived_at',
+        'arrived_case_id',
+        'decline_reason',
+        'closed_at',
+        'created_by',
+        'created_at',
+      ],
+    },
+    DEMO_REFERRALS.map((declared) => {
+      const closed = declared.state === 'declined' || declared.state === 'arrived';
+      return [
+        required(facilities, declared.from, 'facility'),
+        required(facilities, declared.to, 'facility'),
+        required(caseIds, declared.caseKey, 'referred case'),
+        declared.capability,
+        declared.bedKind,
+        declared.state,
+        minutesAgo(declared.sentMinutesAgo),
+        minutesAgo(declared.seenMinutesAgo),
+        stamp(declared.respondedMinutesAgo),
+        declared.state === 'seen' ? null : required(erStaff, declared.to, 'emergency staff'),
+        stamp(declared.arrivedMinutesAgo),
+        declared.arrivedCaseKey === undefined
+          ? null
+          : required(caseIds, declared.arrivedCaseKey, 'arrived case'),
+        declared.declineReason ?? null,
+        closed ? stamp(declared.arrivedMinutesAgo ?? declared.respondedMinutesAgo) : null,
+        required(erStaff, declared.from, 'emergency staff'),
+        minutesAgo(declared.sentMinutesAgo),
+      ];
+    }),
+  );
+
+  await client.query(
+    `UPDATE referrals r
+        SET summary = jsonb_build_object(
+              'problem', c.problem_type,
+              'triage', c.triage,
+              'ageYears', c.patient_age_years,
+              'sex', c.patient_sex,
+              'note', NULL
+            )
+       FROM emergency_cases c
+      WHERE c.id = r.emergency_case_id
+        AND r.id = ANY($1::uuid[])`,
+    [inserted.map((row) => row.id)],
+  );
+
+  return inserted.length;
 }
 
 /** Sets every bed's present in one statement. */

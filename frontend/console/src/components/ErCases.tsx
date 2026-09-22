@@ -10,9 +10,15 @@
  * is audited on the server (`DB-P7`).
  */
 
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 
-import { expectedArrival, type EmergencyCaseView, type TriageColor } from '@platform/domain';
+import {
+  expectedArrival,
+  isOpenReferral,
+  type EmergencyCaseView,
+  type ReferralView,
+  type TriageColor,
+} from '@platform/domain';
 import {
   bedKindName,
   format,
@@ -26,6 +32,7 @@ import {
 } from '@platform/i18n';
 import { Button, Chip, type ChipTone } from '@platform/ui';
 
+import { ReferralLine } from '@/components/ErReferrals';
 import { NUMERALS } from '@/lib/bedCopy';
 
 import type { CaseCommand } from '@/hooks/useEmergencyConsole';
@@ -51,8 +58,11 @@ export function TriageChip({
   );
 }
 
-/** "34 বছর · পুরুষ", or that nobody said. */
-export function whoLine(entry: EmergencyCaseView, locale: Locale): string {
+/** "34 বছর · পুরুষ", or that nobody said. A case, or a referral's summary of one. */
+export function whoLine(
+  entry: Pick<EmergencyCaseView, 'ageYears' | 'sex'>,
+  locale: Locale,
+): string {
   const sex =
     entry.sex === null
       ? null
@@ -257,6 +267,12 @@ export function InboundCard({
 // TBL-B07-TRIAGE
 // ---------------------------------------------------------------------------
 
+/**
+ * A case with a referral open is held (`cases.ts`): another ER is deciding
+ * about this person or getting ready for them, so it is not handed to the
+ * ward or sent home until the referral is withdrawn. The buttons say so rather
+ * than disappearing.
+ */
 export function TriageTable({
   cases,
   pendingCaseIds,
@@ -266,6 +282,10 @@ export function TriageTable({
   onAdmit,
   onDischarge,
   fetchPhone,
+  referralOf,
+  pendingReferralIds,
+  onRefer,
+  onCancelReferral,
 }: {
   readonly cases: readonly EmergencyCaseView[];
   readonly pendingCaseIds: ReadonlySet<string>;
@@ -275,7 +295,15 @@ export function TriageTable({
   readonly onAdmit: (entry: EmergencyCaseView) => void;
   readonly onDischarge: (entry: EmergencyCaseView) => void;
   readonly fetchPhone: (caseId: string) => Promise<string | null>;
+  /** The latest referral this ER sent for a case, if any (`FR-EMG-08`). */
+  readonly referralOf: (caseId: string) => ReferralView | null;
+  readonly pendingReferralIds: ReadonlySet<string>;
+  /** `BTN-B07-REFER`. */
+  readonly onRefer: (entry: EmergencyCaseView) => void;
+  /** `BTN-B07-REFER-CANCEL`. */
+  readonly onCancelReferral: (referral: ReferralView) => void;
 }): ReactNode {
+  const held = { disabled: true as const, disabledReason: t('erReferralHeld', locale) };
   return (
     <table className="w-full border-collapse font-ui text-body-sm" data-testid="er-triage">
       <thead>
@@ -293,89 +321,124 @@ export function TriageTable({
       <tbody>
         {cases.map((entry) => {
           const pending = pendingCaseIds.has(entry.id);
+          const referral = referralOf(entry.id);
+          const open = referral !== null && isOpenReferral(referral.state);
           return (
-            <tr
-              key={entry.id}
-              className="border-t border-line align-top"
-              data-testid={`er-row-${entry.id}`}
-              data-triage={entry.triage ?? 'none'}
-            >
-              <td className="px-2 py-3 tabular-nums text-ink" data-testid="er-token">
-                {entry.tokenLabel ?? t('erTokenPending', locale)}
-                {pending ? (
-                  <span className="block text-caption text-ink-muted">
-                    {t('bedPendingSync', locale)}
-                  </span>
-                ) : null}
-              </td>
-              <td className="px-2 py-3 text-ink">{problemName(entry.problem, locale)}</td>
-              <td className="px-2 py-3 text-ink-secondary">
-                {whoLine(entry, locale)}
-                <div>
-                  <CallButton
-                    entry={entry}
-                    locale={locale}
-                    connected={connected}
-                    fetchPhone={fetchPhone}
-                  />
-                </div>
-              </td>
-              <td className="px-2 py-3 tabular-nums text-ink-secondary">
-                {entry.arrivedAt === null ? '' : formatClock(entry.arrivedAt, NUMERALS)}
-              </td>
-              <td className="px-2 py-3">
-                <TriageChip triage={entry.triage} locale={locale} />
-                {/* BTN-B07-TRIAGE-<c>: one tap per colour. */}
-                <div className="mt-2 flex gap-1" role="group" aria-label={t('erColTriage', locale)}>
-                  {(['red', 'yellow', 'green'] as const).map((colour) => (
-                    <Button
-                      key={colour}
-                      size="sm"
-                      variant={entry.triage === colour ? 'primary' : 'secondary'}
-                      aria-pressed={entry.triage === colour}
-                      data-testid={`er-triage-${colour}-${entry.id}`}
-                      onClick={() => {
-                        onCommand(entry.id, { action: 'triage', triage: colour });
-                      }}
-                    >
-                      {triageName(colour, locale)}
-                    </Button>
-                  ))}
-                </div>
-              </td>
-              <td className="px-2 py-3">
-                <div className="flex flex-col items-start gap-1">
-                  {entry.admitBedKind === null ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      data-testid={`er-admit-${entry.id}`}
-                      onClick={() => {
-                        onAdmit(entry);
-                      }}
-                    >
-                      {t('erAdmit', locale)}
-                    </Button>
-                  ) : (
-                    <span className="text-caption text-brand-700" data-testid="er-handed-off">
-                      {format('erHandedOff', locale, {
-                        kind: bedKindName(entry.admitBedKind, locale),
-                      })}
+            <Fragment key={entry.id}>
+              <tr
+                className="border-t border-line align-top"
+                data-testid={`er-row-${entry.id}`}
+                data-triage={entry.triage ?? 'none'}
+              >
+                <td className="px-2 py-3 tabular-nums text-ink" data-testid="er-token">
+                  {entry.tokenLabel ?? t('erTokenPending', locale)}
+                  {pending ? (
+                    <span className="block text-caption text-ink-muted">
+                      {t('bedPendingSync', locale)}
                     </span>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="quiet"
-                    data-testid={`er-discharge-${entry.id}`}
-                    onClick={() => {
-                      onDischarge(entry);
-                    }}
+                  ) : null}
+                </td>
+                <td className="px-2 py-3 text-ink">{problemName(entry.problem, locale)}</td>
+                <td className="px-2 py-3 text-ink-secondary">
+                  {whoLine(entry, locale)}
+                  <div>
+                    <CallButton
+                      entry={entry}
+                      locale={locale}
+                      connected={connected}
+                      fetchPhone={fetchPhone}
+                    />
+                  </div>
+                </td>
+                <td className="px-2 py-3 tabular-nums text-ink-secondary">
+                  {entry.arrivedAt === null ? '' : formatClock(entry.arrivedAt, NUMERALS)}
+                </td>
+                <td className="px-2 py-3">
+                  <TriageChip triage={entry.triage} locale={locale} />
+                  {/* BTN-B07-TRIAGE-<c>: one tap per colour. */}
+                  <div
+                    className="mt-2 flex gap-1"
+                    role="group"
+                    aria-label={t('erColTriage', locale)}
                   >
-                    {t('erDischarge', locale)}
-                  </Button>
-                </div>
-              </td>
-            </tr>
+                    {(['red', 'yellow', 'green'] as const).map((colour) => (
+                      <Button
+                        key={colour}
+                        size="sm"
+                        variant={entry.triage === colour ? 'primary' : 'secondary'}
+                        aria-pressed={entry.triage === colour}
+                        data-testid={`er-triage-${colour}-${entry.id}`}
+                        onClick={() => {
+                          onCommand(entry.id, { action: 'triage', triage: colour });
+                        }}
+                      >
+                        {triageName(colour, locale)}
+                      </Button>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-2 py-3">
+                  <div className="flex flex-col items-start gap-1">
+                    {entry.admitBedKind === null ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        data-testid={`er-admit-${entry.id}`}
+                        {...(open ? held : {})}
+                        onClick={() => {
+                          onAdmit(entry);
+                        }}
+                      >
+                        {t('erAdmit', locale)}
+                      </Button>
+                    ) : (
+                      <span className="text-caption text-brand-700" data-testid="er-handed-off">
+                        {format('erHandedOff', locale, {
+                          kind: bedKindName(entry.admitBedKind, locale),
+                        })}
+                      </span>
+                    )}
+                    {open ? null : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        data-testid={`er-refer-${entry.id}`}
+                        onClick={() => {
+                          onRefer(entry);
+                        }}
+                      >
+                        {t('erRefer', locale)}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="quiet"
+                      data-testid={`er-discharge-${entry.id}`}
+                      {...(open ? held : {})}
+                      onClick={() => {
+                        onDischarge(entry);
+                      }}
+                    >
+                      {t('erDischarge', locale)}
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+              {/* Where this ER's referral of the person has got to (FR-EMG-08). A
+                withdrawn one is not news on the row; today's list keeps it. */}
+              {referral === null || referral.state === 'cancelled' ? null : (
+                <tr className="align-top">
+                  <td colSpan={6} className="px-2 pb-3">
+                    <ReferralLine
+                      referral={referral}
+                      pending={pendingReferralIds.has(referral.id)}
+                      locale={locale}
+                      onCancel={onCancelReferral}
+                    />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           );
         })}
       </tbody>

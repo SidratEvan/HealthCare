@@ -311,11 +311,12 @@ Consoles operate fully offline (`FR-OFF-01`). The protocol is deliberately small
 |---|---|---|
 | `session:<sessionId>` | patients with a booking (or guest link), reception console, doctor app | `queue.updated`, `session.delayed`, `session.ended`, `patient.called` (targeted) |
 | `hospital:<id>:beds` | ward board, ER console, admin | `bed.updated` (the beds an action changed, no patient identity), `capacity.updated` (the `v_public_hospital_capacity` row, read back after commit), `bedrequest.updated` (id and state only — the pending list is re-read through the audited endpoint), `emergency.handoff` (an ER case handed to the ward, or placed; id and state only) |
-| `hospital:<id>:emergency` | ER console | `emergency.inbound` (the case as the console lists it — never a phone number), `emergency.updated` (the case and the ER's load), `capabilities.updated`, `referral.incoming` (step 16). The console also hears the beds room's `capacity.updated` for its bed counters |
+| `hospital:<id>:emergency` | ER console | `emergency.inbound` (the case as the console lists it — never a phone number), `emergency.updated` (the case and the ER's load), `capabilities.updated`, `referral.incoming` (a referral another ER just sent this one — the console rings), `referral.updated` (a step of any referral this ER sent or was sent: seen, answered, withdrawn, arrived). The console also hears the beds room's `capacity.updated` for its bed counters |
 | `hospital:<id>:lab` | lab console | `test.ordered`, `test.updated` |
 | `hospital:<id>:admin` | admin dashboard | `metrics.tick` (throttled 30 s) |
 | `patient:<patientId>` | that patient's devices | `record.ready`, `booking.updated`, `offer.received`, `bedrequest.updated` |
-| `referral:<id>` | both hospitals | `referral.updated` |
+
+There is no room per referral. Both ends of a referral are ER consoles, already in their own `hospital:<id>:emergency` rooms, so `referral.updated` goes to both of those (step 16). A `referral:<id>` room would be one more subscription every console had to remember to make, and a forgotten one reaches nobody, silently.
 
 **Handshake:** JWT (staff/patient) or a guest-link token. A socket may only join rooms its principal is scoped to. **Resume:** client sends `lastSeq`; server replays missed events from `queue_events` before streaming live (`SY-01`).
 
@@ -391,18 +392,23 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/emergency/search?lat&lng&problem&from` | none | `fn_nearby_hospitals` for geography, `v_public_hospital_capacity` for figures, the travel-time adapter for minutes, ranked by `domain/emergency/ranking.ts` (`FR-PAT-43`, `FR-PAT-45`). Lists only facilities with an ER console. Every field optional; `from=<hospitalId>` searches from that ER and leaves it out — the refer-out suggestion (`FR-EMG-02`) |
+| GET | `/emergency/search?lat&lng&problem&from&capability&bedKind` | none | `fn_nearby_hospitals` for geography, `v_public_hospital_capacity` for figures, the travel-time adapter for minutes, ranked by `domain/emergency/ranking.ts` (`FR-PAT-43`, `FR-PAT-45`). Lists only facilities with an ER console. Every field optional; `from=<hospitalId>` searches from that ER and leaves it out — the decline's suggestion (`FR-EMG-02`) and the refer-out search (`FR-EMG-07`). `capability` and `bedKind` need `from`: the coordinator's named need replaces the problem's default, so "an ICU bed" can be searched for. The console keeps only ERs with the capability and a free bed (`referralCandidates`) and says how many it left out |
 | POST | `/emergency/inbound` | none | anonymous allowed (`FR-GST-03`). Idempotency-Key required; rate-limited per address (10 per 10 minutes). The ETA comes from the position, which is not stored. Emits `emergency.inbound`; returns a signed case token (`emergency_case` audience, 24 h) and `trackUrl` |
 | GET | `/emergency/track/:token` | the token | `S-A-10c`: state, hospital, ETA, decline reason. Names nobody |
 | POST | `/emergency/track/:token/cancel` | the token | `BTN-A10C-CANCEL`; emits `emergency.updated` |
-| GET | `/hospitals/:id/emergency` | emergency, admin | `S-B-07`: open cases (no phone numbers), load, capabilities, the published bed figures, the bed kinds a handoff can ask for |
+| GET | `/hospitals/:id/emergency` | emergency, admin | `S-B-07`: open cases (no phone numbers), load, capabilities, the published bed figures, the bed kinds a handoff can ask for, and the referrals this ER sent or was sent — every open one and today's closed ones, each with its timeline |
 | GET | `/emergency/cases/:id/contact` | emergency | the number a caller left; writes `audit_log` when there is one (`DB-P7`) |
 | POST | `/emergency/cases/:id/acknowledge` | emergency | patient sees "hospital ready"; `emergency.acknowledged` to a number if one was left |
 | POST | `/emergency/cases` | emergency | walk-in ER registration; `clientEventId` is the idempotency key |
 | PATCH | `/emergency/cases/:id` | emergency | `{action}`: `accept` (a token is given), `decline` (reason required; `emergency.declined`), `triage`, `handoff` (a bed kind the hospital has), `discharge`. Guarded by `canActOn`; a replay answers `duplicate: true` |
 | PUT | `/hospitals/:id/capabilities` | emergency, admin | confirms each listed row with this person and instant — re-sending an unchanged list renews its freshness; a kind the hospital never declared is refused (`FR-EMG-05`) |
-| POST | `/referrals` | emergency | send (`FR-EMG-08`) |
-| POST | `/referrals/:id/accept` \| `/decline` | emergency | reason required on decline |
+| POST | `/referrals` | emergency | send (`FR-EMG-08`): `{emergencyCaseId, toHospitalId, requiredCapability?, requiredBedKind?, note?}` — at least one of the two needs. Only a case in this ER (`arrived`), only one open referral per case, only to another facility with an ER console. The summary's problem, colour, age and sex are read from the case, not sent. `clientEventId` is the idempotency key; a replay answers `duplicate: true`. Emits `referral.incoming` to the receiver |
+| POST | `/referrals/:id/seen` | emergency, receiver | the first touch of the card in `LIST-B07-IN` — a person looked, not a list that loaded. Stamped once |
+| POST | `/referrals/:id/accept` \| `/decline` | emergency, receiver | reason required on decline. An answer nobody saw stamps `seen` with it |
+| POST | `/referrals/:id/cancel` | emergency, sender | `BTN-B07-REFER-CANCEL`: withdraw before arrival |
+| POST | `/referrals/:id/arrive` | emergency, receiver | `BTN-B07-IN-ARRIVED`, the handover (owner's ruling 2026-09-22): in one transaction, a case with a token at the receiving ER (the summary's facts, no phone), the sending case closed as `referred`, the referral `arrived` |
+
+Every referral step returns `{ referral, duplicate, serverTs }` and broadcasts `referral.updated` to both ERs after commit. A step belongs to one side — the other side's is `AUTH_FORBIDDEN_SCOPE` — and a step already taken is a replay. While a referral is open, `PATCH /emergency/cases/:id` refuses `handoff` and `discharge`, and the ward's admit refuses the case, with `details.guard = 'REFERRAL_OPEN'`.
 | GET | `/hospitals/:id/beds` | any staff role at the hospital | board data: wards, beds, the published row, stale threshold, Dhaka date. Writes the logged RELEASE of any lapsed hold first. No patient identity |
 | GET | `/beds/:id` | ward | the bed panel; names the occupant and writes `audit_log` when it does (`DB-P7`) |
 | POST | `/beds/:id/admit` \| `/discharge` \| `/transfer` \| `/reserve` \| `/oos` | ward | writes `bed_events`, emits `bed.updated` + `capacity.updated`. Admit takes a pending `bedRequestId`, the patient at the desk (name, phone, age, sex), or an `emergencyCaseId` **with** the patient at the desk — the stay is `source = 'er'` and the case closes as `admitted` |
@@ -544,6 +550,7 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `BED_TRANSITION_INVALID` | 422 | the bed's state does not allow that action (the shared `canApply` guard); `details.guard` names the rule |
 | `BED_CONFLICT` | 409 | another change got there first: the patient is already in a bed, or the request was already answered |
 | `EMERGENCY_TRANSITION_INVALID` | 422 | the case's state does not allow that action (`canActOn`); `details.guard` names the rule |
+| `REFERRAL_TRANSITION_INVALID` | 422 | the referral's state does not allow that step, or the case cannot be referred now (`canActOnReferral`, `canRefer`); `details.guard` names the rule |
 | `VALIDATION_FAILED` | 400 | zod details attached |
 
 Rule: an error never returns a raw SQL or provider message to a client.

@@ -14,6 +14,12 @@
  *   **জরুরি বিভাগে আছেন** — the triage list (`TBL-B07-TRIAGE`), red pinned to
  *   the top, then the untriaged, then yellow and green (`triageOrder`).
  *
+ * Between them, **অন্য হাসপাতাল পাঠাতে চায়** — referrals other ERs have sent
+ * this one (`LIST-B07-IN`, `FR-EMG-09`), which ring as an alert does. Each row
+ * of the triage list can be referred out (`BTN-B07-REFER`, `FR-EMG-07`) and
+ * shows where its referral has got to; the right column keeps today's
+ * referrals with their timelines (`FR-EMG-08`).
+ *
  * Above them, the ER's load (`FR-EMG-04`), counted from these very lists —
  * never a number somebody typed.
  *
@@ -33,11 +39,22 @@ import {
   isOnTheWay,
   triageOrder,
   type EmergencyCaseView,
+  type EmergencyNeed,
+  type EmergencyProblem,
+  type ReferralView,
 } from '@platform/domain';
 import { format, formatNumber, problemName, t, type Locale } from '@platform/i18n';
 import { Button, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
 import { InboundCard, TriageTable } from '@/components/ErCases';
+import {
+  IncomingReferrals,
+  ReferSheet,
+  ReferralCancelSheet,
+  ReferralDeclineSheet,
+  ReferralsToday,
+  latestReferralOf,
+} from '@/components/ErReferrals';
 import { AdmitSheet, DeclineSheet, DischargeSheet, WalkInSheet } from '@/components/ErSheets';
 import { CapabilityPanel, ErBeds } from '@/components/ErSidebar';
 import { OfflineBlock } from '@/components/OfflineBlock';
@@ -87,6 +104,9 @@ function ConsoleBody(): ReactNode {
   const [declining, setDeclining] = useState<EmergencyCaseView | null>(null);
   const [admitting, setAdmitting] = useState<EmergencyCaseView | null>(null);
   const [discharging, setDischarging] = useState<EmergencyCaseView | null>(null);
+  const [referring, setReferring] = useState<EmergencyCaseView | null>(null);
+  const [decliningReferral, setDecliningReferral] = useState<ReferralView | null>(null);
+  const [cancellingReferral, setCancellingReferral] = useState<ReferralView | null>(null);
 
   // Freshness lines age on screen with nothing else happening (`FR-OFF-03`).
   useEffect(() => {
@@ -126,7 +146,29 @@ function ConsoleBody(): ReactNode {
     [er.cases],
   );
 
+  // A referred person arrived: the token the desk now calls them by.
+  useEffect(() => {
+    if (er.lastArrival === null) return;
+    show({
+      title: format('erIncomingArrivedAs', locale, {
+        token: er.lastArrival.arrivedTokenLabel ?? '',
+      }),
+      tone: 'positive',
+    });
+    er.clearArrival();
+  }, [er, show, locale]);
+
   const fetchPhone = useCallback((caseId: string) => er.api.contact(caseId), [er.api]);
+  // Stable, so the refer sheet asks again only when the need changes.
+  const fetchReferResults = useCallback(
+    (problem: EmergencyProblem, need: EmergencyNeed) =>
+      er.api.suggestions(hospitalId, problem, need),
+    [er.api, hospitalId],
+  );
+  const referralOf = useCallback(
+    (caseId: string) => latestReferralOf(er.referrals, caseId, hospitalId),
+    [er.referrals, hospitalId],
+  );
 
   if (hospitalId === '') {
     return <Notice>{t('noSession', locale)}</Notice>;
@@ -313,6 +355,32 @@ function ConsoleBody(): ReactNode {
               )}
             </section>
 
+            {/* --- অন্য হাসপাতাল পাঠাতে চায় (LIST-B07-IN) -------------------- */}
+            <section
+              aria-labelledby="er-incoming-title"
+              className="flex flex-col gap-3"
+              data-testid="er-incoming"
+            >
+              <h2 id="er-incoming-title" className="text-title-md text-ink">
+                {t('erIncomingTitle', locale)}
+              </h2>
+              <IncomingReferrals
+                referrals={er.referrals}
+                hospitalId={hospitalId}
+                newIds={er.newReferralIds}
+                pendingIds={er.pendingReferralIds}
+                locale={locale}
+                onSeen={er.seenReferral}
+                onAccept={(referral) => {
+                  void er.referralStep(referral.id, { action: 'accept' });
+                }}
+                onDecline={setDecliningReferral}
+                onArrive={(referral) => {
+                  void er.referralStep(referral.id, { action: 'arrive' });
+                }}
+              />
+            </section>
+
             {/* --- জরুরি বিভাগে আছেন ----------------------------------------- */}
             <section aria-labelledby="er-triage-title" className="flex flex-col gap-3">
               <h2 id="er-triage-title" className="text-title-md text-ink">
@@ -335,6 +403,10 @@ function ConsoleBody(): ReactNode {
                   onAdmit={setAdmitting}
                   onDischarge={setDischarging}
                   fetchPhone={fetchPhone}
+                  referralOf={referralOf}
+                  pendingReferralIds={er.pendingReferralIds}
+                  onRefer={setReferring}
+                  onCancelReferral={setCancellingReferral}
                 />
               )}
             </section>
@@ -367,6 +439,7 @@ function ConsoleBody(): ReactNode {
               freshness={freshness}
               minutes={minutes}
             />
+            <ReferralsToday referrals={er.referrals} hospitalId={hospitalId} locale={locale} />
           </aside>
         </main>
       </div>
@@ -404,6 +477,35 @@ function ConsoleBody(): ReactNode {
         onClose={() => setDischarging(null)}
         onDischarge={(entry) => {
           void er.command(entry.id, { action: 'discharge' });
+        }}
+      />
+      <ReferSheet
+        entry={referring}
+        locale={locale}
+        connected={er.connected}
+        now={now}
+        freshness={freshness}
+        minutes={minutes}
+        fetchResults={fetchReferResults}
+        onSend={(input) => {
+          void er.refer(input);
+        }}
+        onClose={() => setReferring(null)}
+      />
+      <ReferralDeclineSheet
+        referral={decliningReferral}
+        locale={locale}
+        onClose={() => setDecliningReferral(null)}
+        onDecline={(referral, reason) => {
+          void er.referralStep(referral.id, { action: 'decline', reason });
+        }}
+      />
+      <ReferralCancelSheet
+        referral={cancellingReferral}
+        locale={locale}
+        onClose={() => setCancellingReferral(null)}
+        onCancel={(referral) => {
+          void er.referralStep(referral.id, { action: 'cancel' });
         }}
       />
     </div>

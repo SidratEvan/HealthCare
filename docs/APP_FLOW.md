@@ -719,16 +719,38 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 ## B4. Emergency console — `S-B-07`
 
-> **Built in this version** (step 15), opened from the picker's ER section at
-> `/?view=er`. Not built: `INP-B07-BLOOD` (`FR-EMG-06` — no table holds blood
-> stock yet; it arrives with step 17's blood work), `BTN-B07-REFER`'s sending
-> half, `BTN-B07-REFER-SEND` and `LIST-B07-IN` (step 16, referrals).
+> **Built in this version** (step 15; referrals step 16), opened from the
+> picker's ER section at `/?view=er`. Not built: `INP-B07-BLOOD` (`FR-EMG-06` —
+> no table holds blood stock yet; it arrives with step 17's blood work).
 >
 > - **Prepare / accept / decline.** প্রস্তুতি নিন acknowledges and the family is
 >   told (screen, and SMS if a number was left). গ্রহণ করুন means *the person is
 >   here*: they are given a token (`ER-<n>`) and join the triage list. ফিরিয়ে দিন
->   needs a reason and opens the refer-out search for that capability, ranked
->   from this hospital, each ER with its number to call — read-only until step 16.
+>   needs a reason and opens the other ERs for that capability, ranked from this
+>   hospital, each with its number to call. That list stays a suggestion, not a
+>   referral (owner's ruling, 2026-09-22): a decline is before arrival, the
+>   family chooses where to go, and nothing on the family's side follows a
+>   referral — so a referral of someone still on the road would prepare a
+>   hospital for a family nobody told.
+> - **Referrals are for someone in this ER** (`FR-EMG-07..09`). রেফার খুঁজুন on a
+>   triage row opens the refer-out search: what the case needs defaults from
+>   the problem (burn → burn unit and a burn bed) and the coordinator can name a
+>   capability, a kind of free bed, or both — "our ICU is full" is a bed. The
+>   list keeps ERs with that capability and a free bed, ranked as the family's
+>   search is (fresh before stale, then travel time), each with its freshness
+>   line, and says how many it left out and why. রেফার পাঠান sends the case's
+>   problem, colour, age and sex and an optional note; never a name or number.
+> - **The sender holds the person until the receiver says they arrived**
+>   (owner's ruling). The row shows where the referral has got to — sent, seen,
+>   accepted, declined with its reason — and ভর্তি করুন and ছেড়ে দিন say why they
+>   are held while it is open. রেফার প্রত্যাহার করুন withdraws it.
+> - **The receiving ER** hears a new referral ring and sees it in অন্য হাসপাতাল
+>   পাঠাতে চায় (`LIST-B07-IN`) as the emergency colour until answered. The first
+>   touch tells the sender it was seen. রাজি — পাঠাতে বলুন accepts; ফিরিয়ে দিন
+>   needs a reason; once accepted, এসে পৌঁছেছেন gives the person a token here and
+>   closes the case at the sending ER, both lists changing together.
+> - **Today's referrals**, in and out, each with its whole timeline, sit in the
+>   right column.
 > - **The alert** rings (Web Audio) and stays the emergency colour until
 >   answered; when the browser has muted sound, the console says so and offers
 >   the one tap that unmutes it.
@@ -744,8 +766,9 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 > - **Capability switches** publish their own row at once; সব ঠিক আছে — নিশ্চিত
 >   করুন re-sends the list to renew its age.
 > - **Offline** (`FR-OFF-01`): every action is queued, applied on screen, counted
->   in the offline block and sent in order on reconnect. New alerts cannot
->   arrive offline, and the console says so.
+>   in the offline block and sent in order on reconnect — referral steps
+>   included. New alerts and new referrals cannot arrive offline, and the
+>   refer-out search needs the connection; the console says so.
 
 | Element | ID | Wiring |
 |---|---|---|
@@ -761,9 +784,14 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 | Capability toggles | `SW-B07-<capability>` | Burn / cardiac / stroke / dialysis / NICU / trauma OT → publishes to the emergency network within seconds (`FR-EMG-05`) |
 | ICU/bed counters | — | Read from the bed board, not typed twice |
 | Blood stock | `INP-B07-BLOOD-<group>` | Availability level, not exact counts, if the hospital prefers (`FR-EMG-06`) |
-| রেফার খুঁজুন | `BTN-B07-REFER` | Search other hospitals by required capability + free bed, ranked by travel time, each with freshness (`FR-EMG-07`) |
+| রেফার খুঁজুন | `BTN-B07-REFER` | Search other hospitals by required capability + free bed, ranked by travel time, each with freshness (`FR-EMG-07`). On a triage row, not while a referral of the case is open |
 | রেফার পাঠান | `BTN-B07-REFER-SEND-<id>` | Sends patient summary → target console receives accept/decline → timeline recorded: sent → seen → accepted → arrived (`FR-EMG-08`) |
-| Incoming referrals | `LIST-B07-IN` | Accept / decline with reason (`FR-EMG-09`) |
+| রেফার প্রত্যাহার করুন | `BTN-B07-REFER-CANCEL` | Sender withdraws before arrival, behind a `GR-01` confirmation that names the receiving ER; not in the original table, needed because one open referral per case would otherwise leave an unanswered one stuck |
+| Incoming referrals | `LIST-B07-IN` | Accept / decline with reason (`FR-EMG-09`). The first touch stamps *seen* |
+| রাজি — পাঠাতে বলুন | `BTN-B07-IN-ACCEPT` | Accept → the sender's row says accepted; the person is still the sender's |
+| ফিরিয়ে দিন | `BTN-B07-IN-DECLINE` | Reason required (`GR-01`) → the sender's row shows it, and the case is theirs to refer elsewhere |
+| এসে পৌঁছেছেন | `BTN-B07-IN-ARRIVED` | The handover: a token here, the sending case closed as referred |
+| Today's referrals | — | In and out, each with its timeline (`FR-EMG-08`) |
 
 ---
 

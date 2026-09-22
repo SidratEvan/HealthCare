@@ -20,6 +20,12 @@
  * case (`alreadyApplied` in `shared/domain`). Either way, sending twice is
  * safe.
  *
+ * Referrals (`FR-EMG-07..09`) ride the same outbox, in the same order as
+ * everything else: a referral sent from a case must not reach the server
+ * before the walk-in that created the case. A send's `clientEventId` becomes
+ * the referral's `idempotency_key`; every later step is a replay when its
+ * outcome is already the referral's (`referralAlreadyApplied`).
+ *
  * ## What cannot happen offline
  *
  * An inbound alert cannot *arrive* offline — it comes over the socket — and
@@ -27,7 +33,13 @@
  * because that read is audited (`DB-P7`).
  */
 
-import type { EmergencyCaseView, LocalEmergencyChange } from '@platform/domain';
+import type {
+  EmergencyCaseView,
+  LocalEmergencyChange,
+  LocalReferralChange,
+  ReferralSide,
+  ReferralView,
+} from '@platform/domain';
 
 import {
   Outbox,
@@ -54,6 +66,13 @@ export interface PendingErAction extends OutboxEntry {
    * server gives it a token. Its id is the `clientEventId`.
    */
   readonly provisional: EmergencyCaseView | null;
+  /** A referral step, as the console applies it before the server answers. */
+  readonly referralChange: {
+    readonly change: LocalReferralChange;
+    readonly side: ReferralSide;
+  } | null;
+  /** A referral sent offline, as the console draws it until the server has it. */
+  readonly provisionalReferral: ReferralView | null;
 }
 
 export type ErActionStore = OutboxStore<PendingErAction>;

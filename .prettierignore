@@ -13,6 +13,13 @@ pnpm-lock.yaml
 docs/
 CLAUDE.md
 
-# Migrations are read as SQL, not as Prettier output.
-db/migrations/
-db/docker/
+# Migrations are read as SQL, not as Prettier output. (These said `db/` until
+# step 16 — a directory this repository has never had, so the rule matched
+# nothing. Prettier ships no SQL parser, which is why nothing broke.)
+database/migrations/
+database/docker/
+
+# Written by Next on every build, and the file itself says it should not be
+# edited. Formatting it means a diff that reappears the next time anyone runs
+# `pnpm dev`.
+next-env.d.ts

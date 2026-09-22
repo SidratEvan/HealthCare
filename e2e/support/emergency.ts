@@ -18,6 +18,7 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { expect, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
 import { signToken } from '../../backend/api/src/config/jwt.js';
@@ -27,6 +28,7 @@ import { E2E_DATABASE_URL, assertLocalDatabase } from './database.js';
 assertLocalDatabase();
 
 export const API = 'http://localhost:4000/api/v1';
+const CONSOLE = 'http://localhost:3100';
 
 /** Farmgate, Dhaka: Jamuna is nearer than Padma, Shapla nearest of all. */
 export const FARMGATE = { latitude: 23.758, longitude: 90.39 } as const;
@@ -87,6 +89,27 @@ export async function erHospital(nameEnPrefix: string): Promise<ErHospital> {
       erToken: await token(row.er_staff, 'emergency'),
       wardToken: await token(row.ward_staff, 'ward'),
     };
+  });
+}
+
+/**
+ * Opens an ER console the way the demo picker leaves it (CLAUDE.md §4.1), and
+ * waits for its socket: alerts and referrals only arrive over it.
+ */
+export async function openErConsole(page: Page, er: ErHospital): Promise<void> {
+  await page.addInitScript(
+    ([token, hospitalId]) => {
+      sessionStorage.setItem(
+        'console.demo-session',
+        JSON.stringify({ token, hospitalId, staffName: 'ER (Demo)', role: 'emergency' }),
+      );
+    },
+    [er.erToken, er.hospitalId],
+  );
+  await page.goto(`${CONSOLE}/?view=er`);
+  await expect(page.getByTestId('er-console')).toBeVisible();
+  await expect(page.getByTestId('offline-block')).toHaveAttribute('data-connected', 'true', {
+    timeout: 15_000,
   });
 }
 
@@ -201,5 +224,64 @@ export async function newestCaseAt(hospitalId: string): Promise<string | null> {
       [hospitalId],
     );
     return result.rows[0]?.id ?? null;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Referrals (FR-EMG-07..09)
+// ---------------------------------------------------------------------------
+
+/** A referral sent straight to the API — for specs about what the receiver does. */
+export async function sendReferral(
+  from: ErHospital,
+  caseId: string,
+  to: ErHospital,
+  need: {
+    readonly requiredCapability?: string | null;
+    readonly requiredBedKind?: string | null;
+  } = {
+    requiredCapability: 'cardiac',
+  },
+): Promise<string> {
+  const data = await call('POST', '/referrals', from.erToken, {
+    emergencyCaseId: caseId,
+    toHospitalId: to.hospitalId,
+    requiredCapability: null,
+    requiredBedKind: null,
+    ...need,
+  });
+  return (data['referral'] as { id: string }).id;
+}
+
+/** A step on a referral, as a console would send it. */
+export async function referralStep(
+  er: ErHospital,
+  referralId: string,
+  action: 'seen' | 'accept' | 'decline' | 'cancel' | 'arrive',
+  body: Record<string, unknown> = {},
+): Promise<void> {
+  await call('POST', `/referrals/${referralId}/${action}`, er.erToken, body);
+}
+
+/** The newest referral of a case, as the database has it. */
+export async function referralOf(caseId: string): Promise<{
+  readonly id: string;
+  readonly state: string;
+  readonly arrivedCaseId: string | null;
+} | null> {
+  return await withClient(async (client) => {
+    const result = await client.query<{
+      id: string;
+      state: string;
+      arrived_case_id: string | null;
+    }>(
+      `SELECT id, state::text AS state, arrived_case_id FROM referrals
+        WHERE emergency_case_id = $1 ORDER BY sent_at DESC LIMIT 1`,
+      [caseId],
+    );
+    const row = result.rows[0];
+    return row === undefined
+      ? null
+      : { id: row.id, state: row.state, arrivedCaseId: row.arrived_case_id };
   });
 }

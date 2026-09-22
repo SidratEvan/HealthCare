@@ -7,10 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/emergency` — step 15. A burn case from Farmgate is sent
-to the fresh Padma before the nearer, stale Jamuna, taps "I'm on my way", and
-Padma's ER console rings; when the coordinator prepares, the family's screen
-says the hospital is ready.
+Last updated: `feat/referrals` — step 16. Jamuna's ER, with no ICU of its own,
+finds Shapla's free ICU bed and refers a case there; Shapla sees the card,
+accepts, and the person stays Jamuna's until Shapla says they walked in — one
+tap that gives them a token at Shapla and closes Jamuna's case as referred.
 
 ---
 
@@ -34,9 +34,10 @@ says the hospital is ready.
 | 13 | `feat/wallet` | merged — `S-A-12`, the consent handshake (`BTN-A12-QR` → `BTN-B05-SCAN`), the access log and revoke. A pasted code stands in for the QR |
 | 14 | `feat/beds` | merged — migrations 0008 + 0012, `S-B-06` the ward board, `<CapacityMirror>`, `S-A-11` bed search and bed requests, the ward's half of `FR-OFF-01` |
 | 15 | `feat/emergency` | merged — migrations 0013 + 0016, `S-A-10`/`10b`/`10c`, `S-B-07` the ER console, the ward's ER half of `FR-BED-07`, `emergency-burn.spec.ts` |
-| 16 | `feat/referrals` | **next** — refer out / in with timeline. `referrals` already exists (0008); the decline sheet's read-only suggestion list is where sending begins |
+| 16 | `feat/referrals` | merged — migration 0017, the referral state machine, both halves of the ER console, `referral.spec.ts` |
+| 17 | `feat/lab-pharmacy` | **next** — test orders, report delivery, dispensing. Migration 0011 is what `seed_06_ancillary` and `INP-B07-BLOOD` are both waiting on |
 
-Three unplanned branches after step 11:
+Four unplanned branches after step 11:
 
 - `chore/deploy` — the `S-B-01` console picker, `render.yaml`, Vercel configs
   and `docs/DEPLOY.md`.
@@ -48,9 +49,12 @@ Three unplanned branches after step 11:
   See below.
 - `fix/console-past-midnight` — two date bugs that only appear in the first six
   hours of a Dhaka day. See *Things learned the hard way*.
+- `chore/format-clean` (after step 16) — `pnpm format:check` had been red for
+  several steps; this makes `pnpm verify` green and removes the two reasons it
+  went unnoticed. See *Things learned the hard way*.
 
-Both of the last two were unplanned, and neither is a build step: nothing in
-`CLAUDE.md` §4 is skipped or brought forward.
+None of these is a build step: nothing in `CLAUDE.md` §4 is skipped or brought
+forward.
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -85,12 +89,18 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 2430.
-`pnpm test:e2e` reports 73, in Chromium, against the real API and the seeded
+`pnpm test` reports 2599, in about ninety seconds.
+`pnpm test:e2e` reports 79, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
-`wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`.
+`wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
+6 in `referral.spec.ts`. The whole E2E run takes about ten minutes.
+
+`pnpm verify` — typecheck, lint, `format:check`, test — is clean, and so is
+`pnpm build`. `format:check` had been failing on five files since before step
+16; `chore/format-clean` fixed them and the two things that let it happen (see
+below).
 
 ### The demo API sleeps, and the console now says so
 
@@ -110,6 +120,104 @@ decision about a sleeping backend, not a test detail, which is why
 Worth knowing when demonstrating: **open the console once a minute before
 showing anyone.** Nothing is broken if the first load is slow; it is the free
 tier waking.
+
+### Step 16 — referrals, and who holds the person
+
+**The definition of done is two consoles, and the E2E runs them.**
+`referral.spec.ts` opens Jamuna's ER in one browser context and Shapla's in
+another: Jamuna registers a walk-in, taps রেফার খুঁজুন, names an ICU bed as
+the need, and the list keeps only the ERs that have one; রেফার পাঠান puts a
+card on Shapla's `LIST-B07-IN` inside the alert's five-second budget. Shapla's
+first touch stamps *seen* on Jamuna's row, রাজি — পাঠাতে বলুন accepts, and
+এসে পৌঁছেছেন moves the person: a token at Shapla, Jamuna's case closed as
+`referred`, both timelines agreeing. The rest of the spec: a decline arrives
+with its reason and the case is Jamuna's to try elsewhere; a withdrawal clears
+Shapla's card; an answer given offline is shown at once and sent on reconnect;
+the consoles open on the seeded referrals; and Karnaphuli, two hundred
+kilometres from any other ER, is told so rather than shown an empty list.
+
+**Who holds the person, on the owner's ruling (2026-09-22).** The sending ER
+keeps the case — on its triage list, counted in its load — until the receiving
+ER records the arrival. Somebody in an ambulance between two hospitals is
+still the sender's. That one act (`POST /referrals/:id/arrive`) does both
+things in one transaction: opens a case with a token at the receiver and
+closes the sender's as `referred`. While a referral is open the case is held —
+`handoff`, `discharge` and the ward's admit all refuse it with
+`details.guard = 'REFERRAL_OPEN'` — because a bay prepared for somebody who
+has been sent home is worse than a refusal.
+
+**A decline is not a referral.** `BTN-B07-DECLINE`'s suggestion list (step 15)
+stays read-only, which is the opposite of what the build plan expected. A
+decline happens *before* arrival: the family is still on the road, they choose
+where to go next, and nothing on the family's side follows a referral. Sending
+one would prepare a hospital for a family nobody told. Referrals are for
+somebody already in this ER, and the button that starts one is on the triage
+row (`BTN-B07-REFER`).
+
+**What a referral asks for.** 0008 made `required_capability` NOT NULL, which
+made "our ICU is full" impossible to send — and four of `FR-PAT-42`'s eight
+problems map to no capability at all. 0017 makes it nullable and adds
+`required_bed_kind`: a referral asks for a capability, a kind of free bed, or
+both, never neither. The need defaults from the problem and the coordinator
+can override it. The search then keeps only ERs with that capability *and* a
+free bed of that kind (`referralCandidates` in `shared/domain`), and says how
+many it left out and for which of the two reasons — an empty list that
+explains itself rather than a hospital that seems not to exist.
+
+**One state machine, two users, as cases and beds have.**
+`shared/domain/src/emergency/referrals.ts` is the API's guard and both
+consoles' optimistic update. Every step belongs to one side: the receiver
+sees, answers and records the arrival; the sender can only withdraw, and the
+other side's step is refused as `WRONG_SIDE` whatever the role. An answer
+given before anybody touched the card stamps `seen` with it, so the timeline
+never says a hospital accepted something it had not seen. A step already taken
+is a replay and is answered as one — which is what makes the offline outbox
+safe without an event log. **U:** one open referral per case, so two ERs are
+never preparing for one person.
+
+**Nothing in a referral names anybody.** The summary is the case's problem,
+colour, age and sex plus an optional note of at most 500 characters, and it is
+read from the case rather than sent by the client. A family's number stays
+with the ER it was given to; the arrival opens a case at the receiver with no
+phone at all, and the ward takes the name at the bed.
+
+**Demo data** (`FR-DEM-04`). Four referrals between the three Dhaka ERs, each
+for a gap the sender really has: Shapla has no burn unit (sent to Padma this
+morning, the whole timeline through arrival), Padma has no cath lab (Shapla
+declined, with its reason, and the case is still Padma's), Jamuna has no ICU
+(seen, unanswered — Shapla opens on it), and Jamuna's HDU is full (Shapla
+accepted; the person is on the way and still Jamuna's). No notes: a note is a
+clinical summary in a coordinator's words, and inventing one would be clinical
+content nobody declared.
+
+**How to show it.** Console → Jamuna Medical College → জরুরি বিভাগ খুলুন, and
+Shapla General's ER in a second window. Shapla opens with Jamuna's ICU ask
+waiting. On Jamuna's side, a triage row → রেফার খুঁজুন → আইসিইউ বেড → Shapla →
+রেফার পাঠান; Shapla's card appears and rings. Then রাজি — পাঠাতে বলুন, and
+এসে পৌঁছেছেন when the person is at the door — Jamuna's row closes and Shapla's
+triage list gains a token in the same moment.
+
+**Supabase has this** (2026-09-22, on the owner's say-so). It was five
+migrations behind, not one — 0008 and 0012 from step 14 had never been run
+either — so `ALLOW_REMOTE_DB=1 pnpm db:migrate` applied 0008, 0012, 0013, 0016
+and 0017 in one go, `db:verify` passed, and
+`ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 pnpm db:reset` rebuilt the demo data:
+the reset reported 170 beds, 26 emergency cases and 4 referrals among the rest.
+That is the database, checked directly; the deployed console and apps were not
+opened afterwards, and the API sleeps on Render's free tier, so give it a warm
+load before showing anyone. **A remote reset is the owner's to authorise, every
+time.**
+
+**Found by running the suite, not by writing it.** The api project's seventeen
+files share one mutated database (a test that goes through the API cannot be
+rolled back around), and vitest was running them in parallel workers. Step
+16's handover test asserts that Shapla's `er_active` moved by exactly one
+while step 15's file opens and closes cases at Shapla — so it failed about one
+run in three, on a number two higher than it should be. The api project now
+runs `maxWorkers: 1`, which removes the class rather than the instance; it
+costs about thirty seconds on `pnpm test`. `fileParallelism: false` would have
+done it too, but vitest applies that to the whole run and the unit, ui and
+schema suites need no such care.
 
 ### Step 15 — the emergency search, the ER console, and the family told
 
@@ -173,9 +281,8 @@ burn bed through a clean on the ward board. Then: console → Padma → জর�
 23.758, 90.39) → জরুরি অবস্থা → জরুরি → দগ্ধ → আমি রওনা দিচ্ছি → জানান ও রওনা
 দিন. The console rings; প্রস্তুতি নিন; the phone says হাসপাতাল প্রস্তুত.
 
-**Supabase does not have any of this yet.** It needs `pnpm db:migrate`
-(0013, 0016 — additive) and a reseed for the cases to exist; both touch the
-remote demo database, so both are the owner's to run.
+**Supabase has this**, as of the 2026-09-22 migrate and reseed described in
+the step 16 notes above.
 
 **Found by looking, not by the tests.** The E2E writes the demo session
 straight into `sessionStorage`, so it never used the picker — and
@@ -253,11 +360,10 @@ general bed at the desk; the mirror's general row drops by one, and a phone on
 phone → বেড অনুরোধ করুন → the ward's pending list → বেড রাখুন → a bed → a
 duration; the phone's status page counts down.
 
-**Supabase does not have any of this yet.** It needs `pnpm db:migrate`
-(0008, 0012 — additive) and then a reseed for the beds to exist, and the
-reseed is the destructive `db:reset`. Both touch the remote demo database, so
-both are the owner's to run (`ALLOW_REMOTE_DB=1`, plus
-`ALLOW_DESTRUCTIVE_DB=1` for the reset).
+**Supabase has this**, as of the 2026-09-22 migrate and reseed described in
+the step 16 notes above — 0008 and 0012 had sat unapplied since this step was
+built, which is why the deployed console had no ward board for two steps
+without anybody noticing.
 
 ### Step 13 — the wallet, and consent
 
@@ -485,6 +591,39 @@ afternoon.
 - **Vitest loads `.env` into `process.env`.** The API test setup therefore
   assigns its environment outright rather than defaulting it, or the suite runs
   against whatever `.env` happens to say.
+- **A migration written in a step is not a migration the demo has.** Nothing
+  applies migrations to Supabase but a person running `db:migrate` against it,
+  and the guard means that person has to mean it. 0008 and 0012 were written
+  in step 14 and were still unapplied when step 16 finished — so for two whole
+  steps the deployed console could not have shown a ward board, and every
+  local suite stayed green because they all run against the container. At the
+  end of a step, either migrate the remote or write down that it is behind.
+- **`pnpm test` is not the whole gate; `pnpm verify` is.** `format:check` sits
+  in `verify` and in CI, not in `test`, so a step that runs the Definition of
+  Done's three commands (`CLAUDE.md` §5.2) never sees it. It had been red for
+  several steps before `chore/format-clean`, on files belonging to no step in
+  particular — which is exactly how it stayed red. Run `pnpm verify` before
+  calling a branch done.
+- **`.prettierignore` said `db/migrations/`, a directory this repository has
+  never had.** The migrations live in `database/`. Nothing broke, because
+  Prettier ships no SQL parser and skipped them anyway — an ignore rule that
+  matches nothing is silent in both directions, so it went four months without
+  being noticed. Corrected on `chore/format-clean`.
+- **`next-env.d.ts` is generated, and each command writes it differently.**
+  `next dev` points it at `.next/dev/types`, `next build` at `.next/types`, so
+  while it was tracked it appeared as a modification in `git status` after
+  every dev run and every build, belonging to nobody and blocking
+  `format:check`. It is now in `.gitignore` and `.prettierignore`. Both apps
+  typecheck on a clean clone without it (tested with `.next` removed as well,
+  which is what CI sees — CI typechecks before anything builds).
+- **The api project's files cannot run in parallel, and the failure looks like
+  a bug in the newest step.** They share one database and go through the API,
+  so nothing can be rolled back around them; two files asserting on the same
+  hospital's counts interfere, and the one that is newer gets the blame. It is
+  `maxWorkers: 1` on that project in `vitest.config.ts` — not
+  `fileParallelism: false`, which vitest applies to the whole run. Any new api
+  test that reads a per-hospital total is safe because of that line; a test
+  that needs its own hospital is still the better shape.
 - **So does anything that imports the API, and that caught Playwright too.**
   `backend/api/src/env.ts` merges `.env` into `process.env` as an *import side
   effect*. `e2e/support/console.ts` imports `signToken` from the API, and ESM
@@ -581,45 +720,30 @@ reports at step 17. Step 13 built neither.
 
 ---
 
-### Awaiting a ruling: E2E rows written to Supabase
+### Settled: the E2E rows that had been written to Supabase
 
 Because of the `.env` import-side-effect bug above, every `pnpm test:e2e` run
 before it was found created its fixture rows **on Supabase** rather than on the
 container: one session per test (`room = 'E2E'`), its bookings, and the queue
-events the specs appended. It is demo data throughout — no real patient data
-was involved (`FR-SEC-08`) — but `queue_events` is append-only, so those rows
-cannot be deleted; clearing them means a `pnpm db:reset` against Supabase,
-which is a destructive operation on the demo environment and needs the owner's
-say-so (`ALLOW_REMOTE_DB=1` plus `ALLOW_DESTRUCTIVE_DB=1`).
+events the specs appended. It was demo data throughout — no real patient data
+was ever involved (`FR-SEC-08`) — but `queue_events` is append-only, so those
+rows could not be deleted one by one.
 
 **Measured, 2026-09-19:** 32 sessions (`room = 'E2E'`), 146 bookings and 64
 queue events, all created between 05:17 and 05:29 UTC — the three diagnostic
-runs during which the bug was found, and nothing older. Supabase then held 161
-sessions, 1,327 bookings and 1,285 queue events in total, so the stray rows are
-roughly a fifth of the sessions and a twentieth of the bookings.
+runs during which the bug was found, and nothing older.
 
-Connecting needs no TLS options: the URL carries no `sslmode`, and the repo's
-own connection factories pass nothing but the connection string, so a plain
-`new Client({ connectionString })` is how everything here already talks to
-Supabase.
-
-**Still not cleared.** Both routes are refused by this environment's sandbox:
-`pnpm db:reset` reads as a mass delete, and the scoped alternative — deleting
-only the E2E rows — has to lift `trg_queue_events_no_mutate` to remove the 64
-events, which reads as tampering with an append-only log. Both readings are
-fair; the operations are what they look like. The owner runs one of these:
+**Cleared, 2026-09-22.** The owner authorised the migrate and reseed described
+in the step 16 notes, and `pnpm db:reset` is the supported path (`FR-DEM-06`):
+it truncated the demo database and rebuilt it, so the stray rows went with
+everything else. The scoped alternative — deleting only the E2E rows, which
+needs `trg_queue_events_no_mutate` lifted inside the transaction — was never
+run and is not needed.
 
 ```bash
-# The supported path: truncate and reseed the demo (FR-DEM-06).
-ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 DEMO_MODE=true pnpm db:reset
+# What was run, and what any future remote reset looks like.
+ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 pnpm db:reset
 ```
-
-A scoped delete is possible instead, but it must remove `queue_events` first
-(both `bookings → sessions` and `queue_events → sessions` are `RESTRICT`), and
-that means disabling the row guard inside the transaction and restoring it
-before commit — exactly what `seeds/reset.ts` does for the TRUNCATE guard.
-Given that the whole database is regenerable demo data, the reset is the
-simpler and better-tested of the two.
 
 The bug itself is fixed and cannot recur: the suite refuses any non-local
 database.
@@ -630,8 +754,9 @@ database.
 
 Each is implemented one way and flagged rather than settled silently, and
 needs an owner's ruling. Number 7 is recorded as settled because the answer
-changed the tree; 8 and 9 are the owner's and are not code. They are grouped by
-the step that raised them, so the numbering is not contiguous in the file.
+changed the tree; 8 and 9 are settled too and are described at the end of this
+section — closed, and not to be raised. They are grouped by the step that
+raised them, so the numbering is not contiguous in the file.
 
 1. **`FR-QUE-20` grace period.** "2 patients or 15 minutes, whichever is longer"
    is implemented as the longer of *two patients' time at the current rate* and
@@ -939,7 +1064,8 @@ capability); these are the ones that were not:
 
 46. **`in_treatment` is never used.** Nothing in `APP_FLOW.md` B4 separates
    "being seen" from "here", so an accepted case is `arrived` until it is
-   admitted, discharged or (step 16) referred.
+   admitted, discharged or referred (step 16 closes a referred case; nothing
+   yet moves one to `in_treatment`).
 
 47. **Blood stock (`FR-EMG-06`, `INP-B07-BLOOD`) is not built.** No table in
    DATABASE.md holds a hospital's blood by group; 0011 (step 17) has donors and
@@ -950,16 +1076,42 @@ capability); these are the ones that were not:
    An emergency is over in hours; a token that outlived the night would make a
    stranger's alert readable from an old SMS.
 
-Two are the owner's and are not code:
+Raised while building referrals (step 16). The four the schema needed — the
+nullable capability with a bed kind beside it, `arrived_case_id`, who holds
+the person until arrival, and the decline list staying a suggestion — were put
+to the owner and ruled on (2026-09-22) before 0017 was written, and are
+recorded in the step 16 notes above. These are the ones that were not:
 
-8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
-   commercial strategy that `9697d43` removed from the working tree — deleting a
-   file does not remove it from history. Either make the repository private, or
-   rewrite history and force-push.
-9. **Rotate the Supabase credentials.** The database password and the
-   `sb_secret_…` key were pasted into a chat transcript. Nothing references the
-   secret key yet, so rotating it is free; rotating the password means
-   re-encoding `DATABASE_URL`.
+49. **A referral's note is capped at 500 characters and is the only free text
+   in it.** `FR-EMG-08` says "patient summary" and names no limit. Long enough
+   for "diabetic, on anticoagulants, family says two hours of chest pain",
+   short enough that nobody keeps a case file in it — a second hospital's
+   coordinator reads this on a busy screen. The seeds write no note at all.
+
+50. **Today's referrals only.** The ER console's right column shows the open
+   ones plus today's closed, on the Dhaka day the rest of the console uses.
+   Nothing in `APP_FLOW.md` B4 says how far back the list reaches, and an ER
+   coordinator's screen is about this shift; a referral from Tuesday belongs in
+   a report nobody has asked for yet.
+
+51. **A withdrawal needs no reason, a decline does.** `FR-EMG-09` requires the
+   reason on a decline (the sender must know whether to try elsewhere). The
+   sender's withdrawal tells the receiver only that it is off, behind a
+   `GR-01` confirmation naming the hospital — usually because the family went
+   somewhere else, which is not the receiver's business.
+
+52. **`BTN-B07-REFER-CANCEL` is not in `APP_FLOW.md`'s original table.** With
+   one open referral per case and no withdrawal, a receiving ER that never
+   answers would strand the case forever. The control is added to B4 rather
+   than the rule relaxed.
+
+Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
+be raised again**, in a session or in a report. They were repository
+visibility and credential rotation. The owner knows the facts and the
+trade-offs, has decided, and asked directly that neither be brought up again.
+They are recorded here as closed only so that a fresh session does not
+rediscover them and start the conversation over; nothing about either is
+outstanding, and nothing about either needs mentioning.
 
 ---
 

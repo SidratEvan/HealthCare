@@ -14,6 +14,13 @@ build/
 out/
 *.tsbuildinfo
 
+# Written by Next, and rewritten with a different path by each command that
+# writes it: `next dev` points it at `.next/dev/types`, `next build` at
+# `.next/types`. Tracked, it was a modification in `git status` after every
+# single dev run or build, belonging to nobody. `tsconfig.json` still includes
+# it, and both apps typecheck on a clean clone without it.
+next-env.d.ts
+
 # Test and coverage output
 coverage/
 playwright-report/
