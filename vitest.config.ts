@@ -68,6 +68,21 @@ export default defineConfig({
           // Its own database: this suite mutates the demo data, the schema
           // suite asserts on exact counts of it.
           globalSetup: ['database/tests/support/api-global-setup.ts'],
+          // One database, shared, and — unlike the schema suite — mutated for
+          // real: these tests go through the API, so a transaction cannot be
+          // rolled back around them. Files therefore interfere through
+          // anything counted per hospital: `emergency.routes.test.ts` opens
+          // and closes cases at Shapla General while
+          // `referral.routes.test.ts` asserts that one handover moved
+          // Shapla's `er_active` by exactly one. Running the files one at a
+          // time costs about thirty seconds on `pnpm test` and removes the
+          // whole class; hunting for fixtures that happen not to collide
+          // would leave it, and it fails once in several runs.
+          //
+          // One worker rather than `fileParallelism: false`, which vitest
+          // applies to the whole run — the unit, ui and schema suites need no
+          // such care and should keep their workers.
+          maxWorkers: 1,
           environment: 'node',
           globals: false,
           restoreMocks: true,

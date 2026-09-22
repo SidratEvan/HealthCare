@@ -23,6 +23,7 @@ import { emergencyRoutes } from './emergency.routes.js';
 import { guestRoutes } from './guest.routes.js';
 import { healthRoutes } from './health.routes.js';
 import { queueRoutes } from './queue.routes.js';
+import { referralRoutes } from './referral.routes.js';
 import { syncRoutes } from './sync.routes.js';
 
 /** Version prefix for everything a client calls. */
@@ -61,6 +62,8 @@ export function buildApiRouter(): Router {
   // Emergency (step 15). Search, "I'm on my way" and the family's status
   // page need nobody (`GR-08`); the ER console is the coordinator's.
   router.use(emergencyRoutes);
+  // Referrals between ERs (step 16): the coordinator's, at either end.
+  router.use(referralRoutes);
   router.use(syncRoutes);
   return router;
 }

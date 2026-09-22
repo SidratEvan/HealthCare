@@ -10,13 +10,17 @@
  *   `emergency.updated`     a case moved, with the ER's load (`FR-EMG-04`)
  *   `capabilities.updated`  another screen confirmed the switches (`FR-EMG-05`)
  *   `capacity.updated`      what the public is now shown about beds
+ *   `referral.incoming`     another ER asks this one to take somebody — rings
+ *   `referral.updated`      a step of a referral this ER sent or was sent
+ *                           (`FR-EMG-08`): seen, answered, withdrawn, arrived
  *
  * None carries a phone number: the number is read one case at a time, audited.
+ * A referral names nobody either — problem, colour, age, sex, a note.
  */
 
 import { io, type Socket } from 'socket.io-client';
 
-import type { EmergencyCaseView, PublicCapacity } from '@platform/domain';
+import type { EmergencyCaseView, PublicCapacity, ReferralView } from '@platform/domain';
 
 export interface CapabilityState {
   readonly kind: string;
@@ -32,6 +36,8 @@ export interface EmergencyChannelOptions {
   readonly onCase: (current: EmergencyCaseView, load: number, serverTs: string) => void;
   readonly onCapabilities: (capabilities: readonly CapabilityState[], serverTs: string) => void;
   readonly onCapacity: (published: PublicCapacity, serverTs: string) => void;
+  /** `incoming` is true for a referral this ER has just been sent. */
+  readonly onReferral: (referral: ReferralView, incoming: boolean, serverTs: string) => void;
 }
 
 export function openEmergencyChannel(options: EmergencyChannelOptions): {
@@ -81,6 +87,18 @@ export function openEmergencyChannel(options: EmergencyChannelOptions): {
   socket.on('capacity.updated', (message: { serverTs: string; data: PublicCapacity }) => {
     options.onCapacity(message.data, message.serverTs);
   });
+  socket.on(
+    'referral.incoming',
+    (message: { serverTs: string; data: { referral: ReferralView } }) => {
+      options.onReferral(message.data.referral, true, message.serverTs);
+    },
+  );
+  socket.on(
+    'referral.updated',
+    (message: { serverTs: string; data: { referral: ReferralView } }) => {
+      options.onReferral(message.data.referral, false, message.serverTs);
+    },
+  );
 
   return {
     close: () => {

@@ -114,6 +114,22 @@ export interface CapacityFigures {
 }
 
 /**
+ * What a case needs a facility to have: a capability, a kind of free bed, or
+ * both. From the problem for a family's search; chosen by the coordinator for
+ * a referral (`FR-EMG-07`), where "our ICU is full" is a bed kind and names no
+ * capability at all.
+ */
+export interface EmergencyNeed {
+  readonly capability: CapabilityKind | null;
+  readonly bedKind: BedKind | null;
+}
+
+/** The need a problem implies (`PROBLEM_CAPABILITY`, `PROBLEM_BED_KIND`). */
+export function needFor(problem: EmergencyProblem | null): EmergencyNeed {
+  return { capability: requiredCapability(problem), bedKind: relevantBedKind(problem) };
+}
+
+/**
  * Free beds that answer this problem: the relevant kind's, or the whole
  * hospital's. Null when there is no such figure — a hospital with no burn
  * ward has *no burn beds*, which a card says in words, not as a zero.
@@ -122,9 +138,13 @@ export function relevantFreeBeds(
   problem: EmergencyProblem | null,
   figures: CapacityFigures,
 ): number | null {
-  const kind = relevantBedKind(problem);
-  if (kind !== null) {
-    return figures.byKind.find((entry) => entry.kind === kind)?.free ?? null;
+  return freeBedsFor(needFor(problem), figures);
+}
+
+/** `relevantFreeBeds` for a need rather than a problem. */
+export function freeBedsFor(need: EmergencyNeed, figures: CapacityFigures): number | null {
+  if (need.bedKind !== null) {
+    return figures.byKind.find((entry) => entry.kind === need.bedKind)?.free ?? null;
   }
   return figures.bedTotal === 0 ? null : figures.bedFree;
 }
@@ -141,18 +161,24 @@ export function relevantFreeBeds(
  * without changing a bed, so counting it would turn a burn unit confirmed a
  * minute ago stale because of a ward nobody could touch. The card gives the
  * ICU figure its own freshness line instead — every number keeps its own age.
+ * A referral that *asks* for an ICU bed ranks on the ICU's figure, so there
+ * the ICU's age is the one that counts.
  */
 export function stampsFor(
   problem: EmergencyProblem | null,
   figures: CapacityFigures,
 ): (Timestamp | null)[] {
+  return stampsForNeed(needFor(problem), figures);
+}
+
+/** `stampsFor` for a need rather than a problem. */
+export function stampsForNeed(need: EmergencyNeed, figures: CapacityFigures): (Timestamp | null)[] {
   const stamps: (Timestamp | null)[] = [];
 
-  if (requiredCapability(problem) !== null) stamps.push(figures.capabilityAsOf);
+  if (need.capability !== null) stamps.push(figures.capabilityAsOf);
 
-  const kind = relevantBedKind(problem);
-  if (kind !== null) {
-    const entry = figures.byKind.find((candidate) => candidate.kind === kind);
+  if (need.bedKind !== null) {
+    const entry = figures.byKind.find((candidate) => candidate.kind === need.bedKind);
     if (entry !== undefined) stamps.push(entry.asOf);
   } else if (figures.bedTotal > 0) {
     stamps.push(figures.bedsAsOf);

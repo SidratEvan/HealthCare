@@ -18,8 +18,10 @@ import {
 import type {
   BedKind,
   EmergencyCaseView,
+  EmergencyNeed,
   EmergencyProblem,
   PublicCapacity,
+  ReferralView,
 } from '@platform/domain';
 
 import { API_BASE } from '@/lib/beds';
@@ -34,14 +36,20 @@ export interface ErBoardResponse {
   readonly capabilities: readonly CapabilityState[];
   readonly published: PublicCapacity | null;
   readonly bedKinds: readonly BedKind[];
+  /** Referrals this ER sent or was sent: open ones, and today's closed (`FR-EMG-07..09`). */
+  readonly referrals: readonly ReferralView[];
   readonly staleAfterMinutes: number;
   readonly serverTs: string;
 }
 
-/** One hospital the decline sheet suggests (`FR-EMG-02`, the refer-out search). */
+/**
+ * One ER the decline sheet suggests (`FR-EMG-02`), or the refer-out search
+ * lists (`FR-EMG-07`) — the same ranked search, from this hospital.
+ */
 export interface SuggestedHospital {
   readonly hospitalId: string;
   readonly nameBn: string;
+  readonly nameEn: string;
   readonly emergencyPhone: string | null;
   readonly distanceKm: number | null;
   readonly travelMinutes: number | null;
@@ -53,16 +61,21 @@ export interface SuggestedHospital {
     readonly ageMinutes: number | null;
     readonly stale: boolean;
   };
+  readonly staleAfterMinutes: number;
 }
 
 export function erApi(getToken: () => string | null): {
   readonly board: (hospitalId: string) => Promise<ErBoardResponse>;
   /** The number, read on purpose — the server audits this (`DB-P7`). */
   readonly contact: (caseId: string) => Promise<string | null>;
-  /** Other ERs ranked from this one, for a decline (`FR-EMG-02`). */
+  /**
+   * Other ERs ranked from this one: for a decline (`FR-EMG-02`), and for a
+   * referral, ranked on the need the coordinator names (`FR-EMG-07`).
+   */
   readonly suggestions: (
     hospitalId: string,
     problem: EmergencyProblem,
+    need?: EmergencyNeed,
   ) => Promise<readonly SuggestedHospital[]>;
 } {
   const client = new ApiClient({ baseUrl: API_BASE, getToken });
@@ -72,12 +85,14 @@ export function erApi(getToken: () => string | null): {
       await client.get<ErBoardResponse>(`/hospitals/${hospitalId}/emergency`),
     contact: async (caseId) =>
       (await client.get<{ phone: string | null }>(`/emergency/cases/${caseId}/contact`)).phone,
-    suggestions: async (hospitalId, problem) =>
-      (
-        await client.get<{ results: SuggestedHospital[] }>(
-          `/emergency/search?from=${encodeURIComponent(hospitalId)}&problem=${problem}`,
-        )
-      ).results,
+    suggestions: async (hospitalId, problem, need) => {
+      const query = new URLSearchParams({ from: hospitalId, problem });
+      if (need !== undefined && need.capability !== null) query.set('capability', need.capability);
+      if (need !== undefined && need.bedKind !== null) query.set('bedKind', need.bedKind);
+      return (
+        await client.get<{ results: SuggestedHospital[] }>(`/emergency/search?${query.toString()}`)
+      ).results;
+    },
   };
 }
 

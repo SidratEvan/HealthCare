@@ -101,6 +101,35 @@ describe('the lifecycle (APP_FLOW.md B4)', () => {
   });
 });
 
+describe('a referral holds the case (FR-EMG-07, the owner’s ruling of 2026-09-22)', () => {
+  const held = { openReferral: true, bedKind: 'general' as const };
+
+  it('refuses a handoff, a discharge or an admission while another ER is answering', () => {
+    expect(canActOn(arrived(), 'handoff', held)).toMatchObject({
+      ok: false,
+      code: 'REFERRAL_OPEN',
+    });
+    expect(canActOn(arrived(), 'discharge', held)).toMatchObject({
+      ok: false,
+      code: 'REFERRAL_OPEN',
+    });
+    expect(
+      canActOn(arrived({ admitBedKind: 'general', admitRequestedAt: at(-1) }), 'admit', held),
+    ).toMatchObject({ ok: false, code: 'REFERRAL_OPEN' });
+  });
+
+  it('still triages a held case — the person is still here', () => {
+    expect(canActOn(arrived(), 'triage', { openReferral: true, triage: 'red' }).ok).toBe(true);
+  });
+
+  it('closes the case as referred when the other ER records the arrival', () => {
+    const referred = applyLocalCase(arrived(), { caseId: 'case-1', action: 'refer', at: at(30) });
+    expect(referred).toMatchObject({ state: 'referred', closedAt: at(30) });
+    expect(alreadyApplied(referred, 'refer')).toBe(true);
+    expect(canActOn(inbound(), 'refer').ok).toBe(false);
+  });
+});
+
 describe('replays from an offline console (FR-OFF-01, SY-02)', () => {
   it('recognises an action whose outcome is already the case', () => {
     expect(alreadyApplied(inbound({ state: 'acknowledged' }), 'acknowledge')).toBe(true);

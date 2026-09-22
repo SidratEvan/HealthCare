@@ -173,17 +173,47 @@ export {
 
 export {
   compareCandidates,
+  freeBedsFor,
+  needFor,
   rankCandidates,
   relevantBedKind,
   relevantFreeBeds,
   requiredCapability,
   stampsFor,
+  stampsForNeed,
   EMERGENCY_SEARCH_RADIUS_METRES,
   PROBLEM_BED_KIND,
   PROBLEM_CAPABILITY,
   type CapacityFigures,
+  type EmergencyNeed,
   type RankCandidate,
 } from './emergency/ranking.js';
+
+export {
+  applyLocalReferral,
+  asksForSomething,
+  canActOnReferral,
+  canRefer,
+  defaultNeed,
+  incomingOrder,
+  isOpenReferral,
+  referralAlreadyApplied,
+  referralCandidates,
+  referralTimeline,
+  sideOf,
+  OPEN_REFERRAL_STATES,
+  REFERRAL_ACTIONS,
+  REFERRAL_NOTE_MAX,
+  type LocalReferralChange,
+  type ReferralAction,
+  type ReferralGuardCode,
+  type ReferralGuardResult,
+  type ReferralParty,
+  type ReferralSide,
+  type ReferralStep,
+  type ReferralSummary,
+  type ReferralView,
+} from './emergency/referrals.js';
 
 export {
   ageInMinutes,
@@ -204,6 +234,7 @@ export * from './schemas/booking.schema.js';
 export * from './schemas/clinical.schema.js';
 export * from './schemas/bed.schema.js';
 export * from './schemas/emergency.schema.js';
+export * from './schemas/referral.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';
