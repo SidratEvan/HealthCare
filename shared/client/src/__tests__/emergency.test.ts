@@ -29,6 +29,8 @@ function walkIn(): Omit<PendingErAction, 'attempts'> {
     caseId: null,
     change: null,
     provisional: null,
+    referralChange: null,
+    provisionalReferral: null,
   };
 }
 
@@ -48,6 +50,8 @@ function triage(caseId: string, n: number): Omit<PendingErAction, 'attempts'> {
       triage: 'red',
     },
     provisional: null,
+    referralChange: null,
+    provisionalReferral: null,
   };
 }
 
@@ -62,6 +66,25 @@ function capabilities(): Omit<PendingErAction, 'attempts'> {
     caseId: null,
     change: null,
     provisional: null,
+    referralChange: null,
+    provisionalReferral: null,
+  };
+}
+
+/** A referral of the walk-in, sent from the same offline shift (FR-EMG-08). */
+function refer(): Omit<PendingErAction, 'attempts'> {
+  return {
+    clientEventId: '00000000-0000-4000-8000-000000000030',
+    hospitalId: 'h1',
+    clientTs: '2026-09-21T10:00:30.000Z',
+    method: 'POST',
+    path: '/referrals',
+    body: { emergencyCaseId: WALK_IN, toHospitalId: 'h2', requiredCapability: 'burn_unit' },
+    caseId: WALK_IN,
+    change: null,
+    provisional: null,
+    referralChange: null,
+    provisionalReferral: null,
   };
 }
 
@@ -128,6 +151,26 @@ describe('ErOutbox', () => {
     ]);
     expect(outcome.accepted).toHaveLength(1);
     expect(await outbox.pending()).toEqual([]);
+  });
+
+  it('never sends a referral before the registration of the person it refers', async () => {
+    const outbox = await outboxWith(walkIn(), refer());
+    const sent: string[] = [];
+
+    // The registration does not arrive: the referral waits behind it rather
+    // than reaching the server about a case the server has never heard of.
+    const offline = await outbox.flush('h1', (entry) => {
+      sent.push(entry.path);
+      return Promise.resolve<SendOutcome>({ kind: 'unreachable' });
+    });
+    expect(offline.offline).toBe(true);
+    expect(sent).toEqual(['/emergency/cases']);
+
+    await outbox.flush('h1', (entry) => {
+      sent.push(entry.path);
+      return Promise.resolve<SendOutcome>({ kind: 'accepted' });
+    });
+    expect(sent).toEqual(['/emergency/cases', '/emergency/cases', '/referrals']);
   });
 
   it("flushes only this hospital's actions", async () => {

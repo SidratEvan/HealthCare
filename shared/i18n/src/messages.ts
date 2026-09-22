@@ -499,9 +499,11 @@ export const CONSOLE = {
   },
   erDeclineConfirm: { bn: 'ফিরিয়ে দিন ও জানান', en: 'Decline and tell them' },
   erSuggestTitle: { bn: 'কাছের অন্য জরুরি বিভাগ', en: 'Other emergency departments nearby' },
+  // A decline is before arrival, so it is not a referral: the family chooses,
+  // and these are the places to tell them about (the owner's ruling, 2026-09-22).
   erSuggestHint: {
-    bn: 'রোগী পাঠানোর (রেফার) ব্যবস্থা পরের ধাপে আসছে। এখন ফোন করে জানান।',
-    en: 'Sending a referral comes in a later step. For now, call them.',
+    bn: 'রেফার শুধু জরুরি বিভাগে আসা রোগীর জন্য। পরিবারকে এদের কথা বলুন, বা ফোন করে জানান।',
+    en: 'A referral is for someone already in your ER. Tell the family about these, or call ahead.',
   },
   erSuggestEmpty: {
     bn: 'কাছে এই চিকিৎসা আছে এমন অন্য জরুরি বিভাগ পাওয়া যায়নি।',
@@ -578,8 +580,8 @@ export const CONSOLE = {
 
   // Offline (FR-OFF-01).
   erOffline: {
-    bn: 'সংযোগ নেই — নতুন "আসছি" বার্তা এখন আসবে না। ত্রিয়াজ, নতুন রোগী আর সক্ষমতা চলবে, পরে পাঠানো হবে।',
-    en: 'No connection — new "on my way" alerts cannot arrive. Triage, walk-ins and capabilities keep working and are sent later.',
+    bn: 'সংযোগ নেই — নতুন "আসছি" বার্তা বা রেফার এখন আসবে না। ত্রিয়াজ, নতুন রোগী, সক্ষমতা আর রেফারের উত্তর চলবে, পরে পাঠানো হবে।',
+    en: 'No connection — new "on my way" alerts and referrals cannot arrive. Triage, walk-ins, capabilities and referral answers keep working and are sent later.',
   },
   erRefused: {
     bn: 'সার্ভার এই কাজটি নেয়নি — তালিকা হালনাগাদ করা হয়েছে।',
@@ -592,6 +594,125 @@ export const CONSOLE = {
     bn: 'পরিবার জানিয়েছে তাঁরা আসছেন না ({problem})।',
     en: 'The family says they are not coming ({problem}).',
   },
+
+  // --- Referrals (FR-EMG-07..09) --------------------------------------------
+  // BTN-B07-REFER: the refer-out search, from a triage row.
+  erRefer: { bn: 'রেফার খুঁজুন', en: 'Find a referral' },
+  erReferTitle: { bn: '{token} — কোথায় পাঠাবেন?', en: 'Where to refer {token}?' },
+  erReferNeed: { bn: 'কী দরকার', en: 'What is needed' },
+  erReferNeedHint: {
+    bn: 'সমস্যা থেকে ধরে নেওয়া — দরকার হলে বদলান।',
+    en: 'Filled in from the problem — change it if needed.',
+  },
+  erReferNeedMissing: {
+    bn: 'একটি সক্ষমতা বা বেডের ধরন বেছে নিন।',
+    en: 'Choose a capability or a kind of bed.',
+  },
+  erReferCapability: { bn: 'সক্ষমতা', en: 'Capability' },
+  erReferBedKind: { bn: 'খালি বেড', en: 'Free bed' },
+  erNeedBed: { bn: '{kind} বেড', en: '{kind} bed' },
+  // The emergency search's own order: fresh before stale, then nearest (FR-PAT-45).
+  erReferResults: {
+    bn: 'এই সক্ষমতা ও খালি বেড আছে এমন জরুরি বিভাগ — হালনাগাদ তথ্য আগে, তারপর কাছের',
+    en: 'ERs with the capability and a free bed — fresh figures first, then nearest',
+  },
+  erReferExcluded: { bn: 'তালিকায় নেই: {reasons}।', en: 'Left out: {reasons}.' },
+  erReferExcludedCapability: {
+    bn: '{count}টির এই সক্ষমতা নেই',
+    en: '{count} without the capability',
+  },
+  erReferExcludedBeds: { bn: '{count}টিতে খালি বেড নেই', en: '{count} without a free bed' },
+  erReferEmpty: {
+    bn: 'এই চাহিদা মেটাতে পারে এমন কোনো জরুরি বিভাগ কাছে পাওয়া যায়নি।',
+    en: 'No ER within reach can meet this need.',
+  },
+  erReferNeedsConnection: {
+    bn: 'অন্য হাসপাতাল খুঁজতে সংযোগ লাগবে।',
+    en: 'Searching other hospitals needs a connection.',
+  },
+  erReferFreeBeds: { bn: '{count}টি খালি', en: '{count} free' },
+  erReferTravel: { bn: 'আনুমানিক {minutes} মিনিট', en: 'About {minutes} min' },
+  // BTN-B07-REFER-SEND-<hospitalId> (FR-EMG-08).
+  erReferSend: { bn: 'রেফার পাঠান', en: 'Send referral' },
+  erReferNote: { bn: 'নোট (ঐচ্ছিক)', en: 'Note (optional)' },
+  erReferNoteHint: {
+    bn: 'নাম বা ফোন নম্বর লিখবেন না। সারাংশে সমস্যা, ত্রিয়াজ, বয়স ও লিঙ্গ নিজেই যাবে।',
+    en: 'Do not write a name or a number. The problem, triage, age and sex go with it.',
+  },
+  erReferConfirm: { bn: '{hospital}-এ পাঠান', en: 'Send to {hospital}' },
+  erReferConsequence: {
+    bn: '{hospital} রোগী পৌঁছানো নিশ্চিত না করা পর্যন্ত রোগী আপনাদের তালিকায় থাকবেন — ওয়ার্ডে পাঠানো বা ছেড়ে দেওয়া যাবে না।',
+    en: 'Until {hospital} confirms the arrival, the patient stays on your list — they cannot be handed to the ward or discharged.',
+  },
+
+  // The sending ER's triage row: where its referral has got to.
+  erReferralTo: { bn: '{hospital}-এ রেফার', en: 'Referred to {hospital}' },
+  erReferralDeclinedBy: {
+    bn: '{hospital} ফিরিয়ে দিয়েছে: {reason}',
+    en: '{hospital} declined: {reason}',
+  },
+  erReferralOnTheWay: {
+    bn: 'রাজি হয়েছে — {hospital} পৌঁছানো নিশ্চিত করা পর্যন্ত রোগী আপনাদের।',
+    en: 'Accepted — the patient is yours until {hospital} confirms they arrived.',
+  },
+  erReferralHeld: {
+    bn: 'রেফারের উত্তরের অপেক্ষায় — আগে রেফার প্রত্যাহার করুন।',
+    en: 'A referral is waiting — withdraw it first.',
+  },
+  // BTN-B07-REFER-CANCEL — GR-01: the consequence named.
+  erReferralCancel: { bn: 'রেফার প্রত্যাহার করুন', en: 'Withdraw the referral' },
+  erReferralCancelConfirm: {
+    bn: '{hospital}-এর রেফার প্রত্যাহার করবেন?',
+    en: 'Withdraw the referral to {hospital}?',
+  },
+  erReferralCancelConsequence: {
+    bn: '{hospital}-কে জানানো হবে যে রোগী আসছেন না। রোগী আপনাদের তালিকায় থাকবেন।',
+    en: '{hospital} will be told the patient is not coming. The patient stays on your list.',
+  },
+
+  // The timeline (FR-EMG-08): each step and when.
+  refStepSent: { bn: 'পাঠানো {time}', en: 'Sent {time}' },
+  refStepSeen: { bn: 'দেখেছে {time}', en: 'Seen {time}' },
+  refStepAccepted: { bn: 'রাজি {time}', en: 'Accepted {time}' },
+  refStepDeclined: { bn: 'ফিরিয়েছে {time}', en: 'Declined {time}' },
+  refStepArrived: { bn: 'পৌঁছেছেন {time}', en: 'Arrived {time}' },
+  refStepCancelled: { bn: 'প্রত্যাহার {time}', en: 'Withdrawn {time}' },
+
+  // LIST-B07-IN (FR-EMG-09).
+  erIncomingTitle: { bn: 'অন্য হাসপাতাল পাঠাতে চায়', en: 'Referred to us' },
+  erIncomingEmpty: {
+    bn: 'অন্য হাসপাতাল থেকে কোনো রেফার নেই',
+    en: 'No referrals from other hospitals',
+  },
+  erIncomingEmptyHint: {
+    bn: 'অন্য জরুরি বিভাগ রেফার পাঠালে এখানে শব্দসহ দেখাবে।',
+    en: 'When another ER sends a referral, it rings here.',
+  },
+  erIncomingFrom: { bn: '{hospital} থেকে', en: 'From {hospital}' },
+  erIncomingAsks: { bn: 'চাইছে: {need}', en: 'Asking for: {need}' },
+  erIncomingAccept: { bn: 'রাজি — পাঠাতে বলুন', en: 'Accept — ask them to send' },
+  erIncomingDecline: { bn: 'ফিরিয়ে দিন', en: 'Decline' },
+  erIncomingDeclineConsequence: {
+    bn: '{hospital}-কে কারণসহ জানানো হবে। রোগী তাঁদের কাছেই থাকবেন, অন্য জায়গায় চেষ্টা করবেন।',
+    en: '{hospital} will be told why. The patient stays with them, to try elsewhere.',
+  },
+  erIncomingAccepted: { bn: 'রাজি হয়েছেন — রোগী আসছেন', en: 'Accepted — on the way' },
+  // BTN-B07-IN-ARRIVED: the handover.
+  erIncomingArrived: { bn: 'এসে পৌঁছেছেন', en: 'They have arrived' },
+  erIncomingArrivedHint: {
+    bn: 'পৌঁছালে চাপুন — টোকেন দেওয়া হবে, আর রোগী {hospital}-এর তালিকা থেকে সরে যাবেন।',
+    en: 'Tap when they arrive — a token is given, and they leave {hospital}’s list.',
+  },
+  erIncomingArrivedAs: {
+    bn: '{token} হিসেবে জরুরি বিভাগে যোগ হয়েছে',
+    en: 'Added to the ER as {token}',
+  },
+
+  // Today's referrals, with their timelines.
+  erReferralsTodayTitle: { bn: 'আজকের রেফার', en: 'Today’s referrals' },
+  erReferralsTodayEmpty: { bn: 'আজ কোনো রেফার হয়নি', en: 'No referrals today' },
+  erReferralOut: { bn: 'পাঠানো → {hospital}', en: 'Sent → {hospital}' },
+  erReferralIn: { bn: '{hospital} → এখানে', en: '{hospital} → here' },
 
   // --- Demo mode (FR-DEM-07, CLAUDE.md §1.1) -------------------------------
   demoBanner: {
