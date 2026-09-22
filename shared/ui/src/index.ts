@@ -80,6 +80,14 @@ export { cx, type ClassValue } from './components/cx.js';
 // every live figure, so no screen can ship without it.
 export { FreshnessLine, type FreshnessLineProps } from './components/FreshnessLine.js';
 
+// The ward board's pair (§6.5, build step 14).
+export { BedTile, type BedTileProps, type BedTileState } from './components/BedTile.js';
+export {
+  CapacityMirror,
+  type CapacityMirrorProps,
+  type CapacityMirrorRow,
+} from './components/CapacityMirror.js';
+
 /**
  * `<LiveSerialCard>` — the screen the whole product is for (§6.1). It lands
  * with step 10, which is the two-device demo.

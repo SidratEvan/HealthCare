@@ -33,6 +33,11 @@ describe('migration files (DATABASE.md §7)', () => {
     // neither ordering matters because the dependency runs the other way —
     // 0010 deliberately left `feedback` out *because* its foreign key needs
     // `visits`, and 0007 creates both.
+    //
+    // 0008 and 0012 arrived with step 14, the bed board. 0012 holds one view,
+    // `v_public_hospital_capacity`, rather than every `v_*` DATABASE.md §7
+    // lists: the others read tables later steps create, and a shipped
+    // migration is never edited to add them.
     expect(migrations.map((m) => m.version)).toEqual([
       '0001',
       '0002',
@@ -41,7 +46,9 @@ describe('migration files (DATABASE.md §7)', () => {
       '0005',
       '0006',
       '0007',
+      '0008',
       '0010',
+      '0012',
     ]);
   });
 
@@ -149,6 +156,14 @@ describe('the applied database', () => {
         'queue_state',
         'standby_list',
         'slot_offers',
+        // 0008 beds, emergency, referrals
+        'wards',
+        'beds',
+        'bed_events',
+        'admissions',
+        'bed_requests',
+        'emergency_cases',
+        'referrals',
       ]) {
         expect(tables, `missing table ${expected}`).toContain(expected);
       }

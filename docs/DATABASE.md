@@ -284,20 +284,26 @@ Patient-uploaded paper records (`FR-PAT-62`): `id`, `patient_id`, `file_url`, `d
 ### 2.5 Beds, emergency, referrals
 
 #### `wards`
-`id`, `hospital_id`, `name_bn`, `name_en`, `floor`, `kind` bed_kind.
+`id`, `hospital_id`, `name_bn`, `name_en`, `floor` (smallint, 0 = ground), `kind` bed_kind.
+**U:** `(id, hospital_id)` — the target of `beds`' composite foreign key.
 
 #### `beds`
-`id`, `hospital_id`, `ward_id`, `label` (`301`), `kind` bed_kind, `state` bed_state, `nightly_poisha`, `last_cleaned_at`, `expected_discharge_date`, `current_admission_id`.
+`id`, `hospital_id`, `ward_id`, `label` (`301`), `kind` bed_kind, `state` bed_state, `nightly_poisha`, `last_cleaned_at`, `expected_discharge_date`, `current_admission_id`, `reserved_until`, `oos_reason`, `state_changed_at`.
 **IX:** `(hospital_id, kind, state)` — powers public bed counts.
+`(ward_id, hospital_id)` references `wards (id, hospital_id)`, so a bed cannot be filed under another hospital's ward. CHECKs make each state say what it must: occupied ⇔ `current_admission_id`, reserved ⇔ `reserved_until`, out of service ⇔ a non-blank `oos_reason`; a discharge forecast only on an occupied bed.
+`reserved_until` and `oos_reason` exist because `BTN-B06-RESERVE` ("hold with expiry") and `BTN-B06-OOS` ("with reason") need them somewhere a query can read — the public view counts a lapsed hold as free. `state_changed_at` drives the cleaning timer and "occupied for N days".
 
 #### `bed_events`
-Append-only like the queue: `id`, `bed_id`, `type` (`ADMIT`,`DISCHARGE`,`TRANSFER`,`RESERVE`,`RELEASE`,`CLEAN_START`,`CLEAN_DONE`,`OOS`,`RESTORE`), `admission_id`, `actor_staff_id`, `payload`, `server_ts`.
+Append-only like the queue: `id`, `hospital_id`, `bed_id`, `type` (`ADMIT`,`DISCHARGE`,`TRANSFER`,`RESERVE`,`RELEASE`,`CLEAN_START`,`CLEAN_DONE`,`OOS`,`RESTORE`), `from_state`, `to_state`, `admission_id`, `bed_request_id`, `actor_staff_id`, `payload`, `client_event_id` **U** (partial), `client_ts`, `server_ts`.
+`beds.state` is the present and this is how it got there; both are written in one transaction with the bed locked. `hospital_id` serves the freshness read (DB-P8); `from_state`/`to_state` let a CHECK refuse an event whose type and outcome disagree; `client_event_id` makes an offline replay a no-op (SY-02). `actor_staff_id` is null only on a `RELEASE` of a lapsed hold. Guarded by `trg_bed_events_no_mutate` and `trg_bed_events_no_truncate`, as `queue_events` is.
 
 #### `admissions`
-`id`, `patient_id`, `hospital_id`, `bed_id`, `admitted_at`, `discharged_at`, `expected_discharge_date`, `source` (`er`,`opd`,`app_request`,`referral`), `emergency_case_id` nullable.
+`id`, `patient_id`, `hospital_id`, `bed_id`, `admitted_at`, `discharged_at`, `expected_discharge_date`, `source` (`er`,`opd`,`app_request`,`referral`), `emergency_case_id` nullable, `bed_request_id` nullable.
+**U:** one open admission per bed, and one per patient.
 
 #### `bed_requests` (`FR-PAT-52`)
-`id`, `patient_id`, `hospital_id`, `bed_kind`, `requested_by_user_id`/`guest_id`, `note`, `state` (`requested`,`held`,`confirmed`,`declined`,`expired`), `hold_expires_at`, `responded_by`, `responded_at`.
+`id`, `patient_id`, `hospital_id`, `bed_kind`, `requested_by_user_id`/`guest_id`, `note`, `expected_arrival_at`, `state` (`requested`,`held`,`confirmed`,`declined`,`expired`), `bed_id`, `hold_expires_at`, `responded_by`, `responded_at`, `idempotency_key` **U**.
+A hold is a real bed: `held` requires `bed_id` and `hold_expires_at`, and the bed is `reserved` until then — otherwise the public count would not know about the promise. `confirmed` means admitted. **U:** one open request per patient per hospital; one hold per bed.
 
 #### `emergency_cases`
 `id`, `hospital_id`, `patient_id` nullable (anonymous allowed, `FR-GST-03`), `contact_phone` nullable, `problem_type`, `state` emergency_state, `triage` triage_color, `inbound_eta_minutes`, `inbound_at`, `acknowledged_at`, `arrived_at`, `token_label`, `notes`.
@@ -381,7 +387,7 @@ ACTION_UNDONE       { "undoneEventId": "…" }
 
 | Object | Type | Purpose |
 |---|---|---|
-| `v_public_hospital_capacity` | view | Per hospital: free beds by kind, ICU free, ER load, capability flags, `as_of` — the only source the public API reads (`FR-PAT-14`) |
+| `v_public_hospital_capacity` | view | Per hospital: free beds by kind with nightly price range and each kind's `asOf`, bed and ICU totals, active ER cases, capability flags — the only source the public API reads (`FR-PAT-14`). "Free" includes a reserved bed whose hold has lapsed; a bed out of service is in neither the free count nor the total. Freshness is two stamps, not one `as_of`: `beds_as_of` (the **oldest** kind's latest `bed_events.server_ts`, null if any kind was never confirmed) and `capability_as_of` — confirmed by different people at different times. Migration 0012. |
 | `v_doctor_live_status` | view | Per doctor today: in chamber / expected / not sitting, with current serial |
 | `v_admin_daily` | materialised view | Daily aggregates per hospital for the dashboard; refreshed every 5 min |
 | `v_no_show_loss` | view | No-show count × fee, and recovered value from `slot_offers` (`FR-ADM-03`) |
@@ -444,7 +450,9 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0009_money.sql                 -- payments, subscriptions, invoices, counter_shifts
     0010_messaging_audit.sql       -- notification_templates, notifications, device_tokens, feedback, audit_log, sync_cursors
     0011_ancillary.sql             -- ambulances, ambulance_requests, blood_donors, blood_requests, pharmacy_stock
-    0012_views.sql                 -- all v_* views
+    0012_views.sql                 -- v_public_hospital_capacity (step 14). Later views each get
+                                   -- their own migration with the step that reads them: a shipped
+                                   -- migration is never edited, and v_admin_daily needs 0009
     0013_functions.sql             -- fn_* functions and remaining triggers
     0014_rls.sql                   -- enable RLS + all policies
     0015_indexes.sql               -- non-PK indexes gathered in one place

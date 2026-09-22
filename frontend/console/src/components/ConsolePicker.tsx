@@ -67,6 +67,7 @@ const ATTEMPTS = 4;
 const ROLE_LABEL: Record<string, ConsoleKey> = {
   receptionist: 'roleReceptionist',
   doctor: 'roleDoctor',
+  ward: 'roleWard',
   hospital_admin: 'roleHospitalAdmin',
 };
 
@@ -88,11 +89,20 @@ interface DemoConsole {
   readonly sessions: readonly DemoSessionCard[];
 }
 
+/**
+ * What the picker opened: a chamber, or a hospital's ward board.
+ *
+ * The ward is the one console that belongs to a hospital rather than to a
+ * chamber (`S-B-06`), so it is chosen beside the chambers rather than on one.
+ */
+export type ConsoleChoice =
+  { readonly kind: 'chamber'; readonly sessionId: string } | { readonly kind: 'ward' };
+
 export function ConsolePicker({
   onChosen,
 }: {
-  /** Called with the session to open, once a principal is in place. */
-  readonly onChosen: (sessionId: string) => void;
+  /** Called with what to open, once a principal is in place. */
+  readonly onChosen: (choice: ConsoleChoice) => void;
 }): ReactNode {
   const [consoles, setConsoles] = useState<DemoConsole[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -150,7 +160,7 @@ export function ConsolePicker({
 
   /** Takes a principal for this hospital and role, then opens the chamber. */
   const open = useCallback(
-    async (hospitalId: string, role: string, sessionId: string) => {
+    async (hospitalId: string, role: string, choice: ConsoleChoice) => {
       setBusy(true);
       try {
         const response = await fetch(`${API}/demo/token`, {
@@ -172,7 +182,7 @@ export function ConsolePicker({
           role,
         });
 
-        onChosen(sessionId);
+        onChosen(choice);
       } catch {
         setFailed(true);
       } finally {
@@ -262,6 +272,26 @@ export function ConsolePicker({
         </ul>
       </section>
 
+      {/* `S-B-06` belongs to the hospital, not to a chamber, so it is offered
+          once per hospital rather than on every chamber card. */}
+      {hospital?.roles.includes('ward') === true ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-title-sm">{t('wardBoardSection', LOCALE)}</h2>
+          <div>
+            <Button
+              variant="secondary"
+              loading={busy}
+              data-testid={`open-ward-${hospital.hospitalId}`}
+              onClick={() => {
+                void open(hospital.hospitalId, 'ward', { kind: 'ward' });
+              }}
+            >
+              {t('openWardBoard', LOCALE)}
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
       {hospital === null ? null : (
         <section className="flex flex-col gap-3">
           <h2 className="text-title-sm">{t('chooseChamber', LOCALE)}</h2>
@@ -282,20 +312,25 @@ export function ConsolePicker({
                   </CardMeta>
 
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {hospital.roles.map((role) => (
-                      <Button
-                        key={role}
-                        variant={role === 'receptionist' ? 'primary' : 'secondary'}
-                        size="sm"
-                        loading={busy}
-                        data-testid={`open-${role}-${session.id}`}
-                        onClick={() => {
-                          void open(hospital.hospitalId, role, session.id);
-                        }}
-                      >
-                        {t(ROLE_LABEL[role] ?? 'roleReceptionist', LOCALE)}
-                      </Button>
-                    ))}
+                    {hospital.roles
+                      .filter((role) => role !== 'ward')
+                      .map((role) => (
+                        <Button
+                          key={role}
+                          variant={role === 'receptionist' ? 'primary' : 'secondary'}
+                          size="sm"
+                          loading={busy}
+                          data-testid={`open-${role}-${session.id}`}
+                          onClick={() => {
+                            void open(hospital.hospitalId, role, {
+                              kind: 'chamber',
+                              sessionId: session.id,
+                            });
+                          }}
+                        >
+                          {t(ROLE_LABEL[role] ?? 'roleReceptionist', LOCALE)}
+                        </Button>
+                      ))}
                   </div>
                 </Card>
               </li>

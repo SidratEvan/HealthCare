@@ -408,6 +408,23 @@ Ranking: capability match → travel time → ER load → free beds. Stale facil
 
 ### `S-A-11` Bed search (`FR-PAT-50`–`53`)
 
+> **Built in this version** (step 14): the chips, the results and
+> `MOD-A11-REQUEST`, and the request status at `/beds/request?t=…`.
+>
+> - Each result shows free of total for the chosen kind, the nightly price (a
+>   range when wards differ), and that kind's own freshness; past the stale
+>   threshold it adds "call the hospital before you go". Fresh-and-free ranks
+>   above stale-and-free, and a hospital with none free stays listed, last.
+> - The list re-reads every thirty seconds while visible. There is no public
+>   realtime room (BACKEND.md §6), and every number says how old it is.
+> - The request needs name, phone, age and sex, like a guest booking; the OTP
+>   `FR-GST-03` asks for is deferred with authentication (`CLAUDE.md` §4.1).
+>   The sheet says a request is not a hold before it is sent.
+> - The status link is a signed token this phone keeps (there is no SMS until
+>   the hospital answers). A hold counts down in minutes and reads "expired"
+>   the moment it runs out. `FR-PAT-53` (family profiles) needs accounts and is
+>   not built.
+
 | Element | ID | Wiring |
 |---|---|---|
 | Bed type chips | `CHIP-A11-<type>` | সাধারণ / কেবিন / এইচডিইউ / আইসিইউ / সিসিইউ / এনআইসিইউ / বার্ন |
@@ -618,6 +635,34 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 ---
 
 ## B3. Ward / bed board — `S-B-06`
+
+> **Built in this version** (step 14): every control below. Opened from the
+> picker's ward section at `/?view=ward` — the ward belongs to a hospital, not
+> a chamber.
+>
+> - **Tiles name no patient.** Opening an occupied bed's panel shows who is in
+>   it and writes `audit_log` (`DB-P7`); so does reading `LIST-B06-PENDING`.
+> - **`BTN-B06-DISCHARGE`'s "timer → then free" is a person, not a clock.** The
+>   cleaning tile shows how long it has been cleaning; `পরিষ্কার শেষ করুন`
+>   frees it. A bed that freed itself would be a free bed nobody looked at.
+> - **Admit** takes a pending request, or the person at the desk by name, phone,
+>   age and sex (an existing record with the same name and phone is reused).
+>   There is no free-text patient search: a ward that could look anyone up by
+>   phone would read records of people who never came here (DATABASE.md §5).
+> - **"Two taps at most"** (`FR-BED-02`) is counted from the open panel: a hold
+>   is one tap on its length; discharge and transfer are the action and the
+>   `GR-01` confirmation.
+> - **`BTN-B06-RESERVE`'s "expiry auto-releases"** needs no timer: a lapsed hold
+>   counts as free to the public at once, and the logged `RELEASE` (by nobody)
+>   is written the next time the board or the pending list is read.
+> - **`LIST-B06-PENDING`** carries app requests only; the ER half arrives with
+>   `BTN-B07-ADMIT` at step 15. Hold reserves a real bed of the kind asked for.
+> - **Offline** (`FR-OFF-01`): every bed change is queued, shown with a clock on
+>   its tile, and sent in order on reconnect; the mirror shows the difference
+>   between the board and what the public still sees. The patient's name and
+>   the pending list need the connection — both are audited reads.
+> - `SEL-B06-EXPDIS` feeds a staff-only "likely free tomorrow" card; the
+>   forecast is never published.
 
 | Element | ID | Wiring |
 |---|---|---|

@@ -9,6 +9,8 @@
 
 import { z } from 'zod';
 
+import { BED_KINDS } from '../types/enums.js';
+
 /** A UUID as it arrives on the wire, before it is branded. */
 const uuid = z.string().uuid();
 
@@ -44,6 +46,13 @@ export const hospitalQuery = z.object({
   // because a coordinate outside them produces a confident wrong distance.
   lat: z.coerce.number().min(20).max(27).optional(),
   lng: z.coerce.number().min(87.5).max(93).optional(),
+  /**
+   * `S-A-11`'s chip (`CHIP-A11-<type>`): only hospitals that have beds of
+   * this kind at all. Whether any are free is the answer, not the filter —
+   * a hospital with none free is still where the family should know not to
+   * drive.
+   */
+  bedKind: z.enum(BED_KINDS).optional(),
   limit: z.coerce.number().int().positive().max(100).default(50),
 });
 
@@ -125,7 +134,7 @@ export const trackingLinkParams = z.object({
  */
 export const demoTokenBody = z.object({
   hospitalId: uuid,
-  role: z.enum(['receptionist', 'doctor', 'hospital_admin']),
+  role: z.enum(['receptionist', 'doctor', 'ward', 'hospital_admin']),
 });
 
 export type CreateBookingBody = z.infer<typeof createBookingBody>;

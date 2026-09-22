@@ -44,6 +44,8 @@ export const TEMPLATE_KEYS = [
   'queue.no_show',
   'queue.cancelled',
   'session.ended',
+  'bed.request_held',
+  'bed.request_declined',
 ] as const;
 
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
@@ -207,6 +209,47 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
     version: 1,
     bn: 'আজকের চেম্বার শেষ হয়েছে',
     en: "Today's chamber has finished",
+  },
+
+  // --- A bed request answered (FR-PAT-52, BACKEND.md §8) ---------------------
+  //
+  // BACKEND.md §8 names one key, `bed.request_result`. A hold and a decline
+  // say different things and a family acts on each differently — drive now,
+  // or look elsewhere — so they are two keys rather than one body with the
+  // outcome passed in as a parameter, which would put copy outside this file.
+  //
+  // The hold names its deadline, because a hold the family does not know is
+  // running out is a bed they lose without being told why. The decline says
+  // what to do next. Neither claims the hospital is full: a ward can decline
+  // for reasons other than an empty bed count, and saying "none free" would be
+  // a statement about availability the ward did not make.
+  {
+    key: 'bed.request_held',
+    channel: 'sms',
+    version: 1,
+    bn: '{hospital}-এ {kind} বেড {time} পর্যন্ত আপনার জন্য রাখা আছে। {link}',
+    en: '{hospital}: a {kind} bed is held for you until {time}. {link}',
+  },
+  {
+    key: 'bed.request_held',
+    channel: 'push',
+    version: 1,
+    bn: '{hospital}-এ {kind} বেড {time} পর্যন্ত রাখা আছে',
+    en: '{hospital}: {kind} bed held until {time}',
+  },
+  {
+    key: 'bed.request_declined',
+    channel: 'sms',
+    version: 1,
+    bn: '{hospital} এখন {kind} বেড দিতে পারছে না। অন্য হাসপাতাল দেখুন: {link}',
+    en: '{hospital} cannot offer a {kind} bed right now. Other hospitals: {link}',
+  },
+  {
+    key: 'bed.request_declined',
+    channel: 'push',
+    version: 1,
+    bn: '{hospital} এখন {kind} বেড দিতে পারছে না',
+    en: '{hospital} cannot offer a {kind} bed right now',
   },
 ];
 

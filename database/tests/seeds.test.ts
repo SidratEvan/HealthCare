@@ -16,8 +16,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ACCOUNT_COUNT,
+  DEMO_BED_REQUESTS,
   DEMO_DOCTORS,
   DEMO_FACILITIES,
+  DEMO_WARDS,
   DEMO_LABEL_BN,
   DEMO_LABEL_EN,
   DEMO_LIVE,
@@ -576,15 +578,208 @@ describe('FR-SEC-08: no real patient data, ever', () => {
   );
 });
 
+describe('FR-DEM-04 — bed inventory across wards with live occupancy', () => {
+  /** The public row for one declared facility. */
+  async function publicRow(
+    client: Client,
+    slug: string,
+  ): Promise<{
+    bed_total: number;
+    icu_total: number | null;
+    icu_free: number | null;
+    by_kind: { kind: string; free: number; asOf: string | null }[];
+  }> {
+    const { rows } = await client.query<{
+      bed_total: number;
+      icu_total: number | null;
+      icu_free: number | null;
+      by_kind: { kind: string; free: number; asOf: string | null }[];
+    }>(
+      `SELECT v.bed_total, v.icu_total, v.icu_free, v.by_kind
+         FROM v_public_hospital_capacity v
+         JOIN hospitals h ON h.id = v.hospital_id
+        WHERE h.name_en = $1`,
+      [labelEn(facility(slug).nameEn)],
+    );
+    const row = rows[0];
+    if (row === undefined) throw new Error(`No capacity row for ${slug}`);
+    return row;
+  }
+
+  it('puts ICU wards at exactly the three facilities marked hasIcu, and burn units at the two with a burn capability', () => {
+    const icu = new Set(DEMO_WARDS.filter((ward) => ward.kind === 'icu').map((w) => w.facility));
+    const burn = new Set(DEMO_WARDS.filter((ward) => ward.kind === 'burn').map((w) => w.facility));
+
+    expect([...icu].sort()).toEqual(
+      DEMO_FACILITIES.filter((f) => f.hasIcu)
+        .map((f) => f.slug)
+        .sort(),
+    );
+    expect(icu.size).toBe(3);
+    expect([...burn].sort()).toEqual(
+      DEMO_FACILITIES.filter((f) => f.capabilities.includes('burn_unit'))
+        .map((f) => f.slug)
+        .sort(),
+    );
+    expect(burn.size).toBe(2);
+  });
+
+  it(
+    'writes every declared ward and bed, each ward name labelled as demo',
+    async () => {
+      await seeded(async (client) => {
+        const declaredBeds = DEMO_WARDS.reduce((sum, ward) => sum + ward.beds, 0);
+        expect(await count(client, 'SELECT count(*)::text AS n FROM wards')).toBe(
+          DEMO_WARDS.length,
+        );
+        expect(await count(client, 'SELECT count(*)::text AS n FROM beds')).toBe(declaredBeds);
+        expect(
+          await count(
+            client,
+            'SELECT count(*)::text AS n FROM wards WHERE name_bn NOT LIKE $1 OR name_en NOT LIKE $2',
+            [`%${DEMO_LABEL_BN}%`, `%${DEMO_LABEL_EN}%`],
+          ),
+        ).toBe(0);
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it(
+    'agrees with itself: every bed ends its history in the state it is in',
+    async () => {
+      await seeded(async (client) => {
+        const disagreeing = await count(
+          client,
+          `SELECT count(*)::text AS n
+             FROM beds b
+             LEFT JOIN LATERAL (
+               SELECT e.to_state FROM bed_events e
+                WHERE e.bed_id = b.id ORDER BY e.server_ts DESC, e.id DESC LIMIT 1
+             ) last ON true
+            WHERE last.to_state IS DISTINCT FROM b.state`,
+        );
+        expect(disagreeing).toBe(0);
+
+        // An occupied bed names an open admission that names it back.
+        const orphaned = await count(
+          client,
+          `SELECT count(*)::text AS n
+             FROM beds b
+             LEFT JOIN admissions a ON a.id = b.current_admission_id
+            WHERE b.state = 'occupied'
+              AND (a.id IS NULL OR a.bed_id <> b.id OR a.discharged_at IS NOT NULL)`,
+        );
+        expect(orphaned).toBe(0);
+
+        const declaredOccupied = DEMO_WARDS.reduce((sum, ward) => sum + ward.occupied, 0);
+        expect(
+          await count(client, `SELECT count(*)::text AS n FROM beds WHERE state = 'occupied'`),
+        ).toBe(declaredOccupied);
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it(
+    'says "no inpatient beds" for the diagnostic centre and the clinic',
+    async () => {
+      await seeded(async (client) => {
+        for (const slug of ['meghna-diagnostic', 'buriganga-clinic']) {
+          const row = await publicRow(client, slug);
+          expect(row.bed_total).toBe(0);
+          expect(row.by_kind).toEqual([]);
+          expect(row.icu_total).toBeNull();
+        }
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it(
+    'stages the burn scenario: Padma has one fresh free burn bed, Jamuna two stale ones (PRD.md §24 step 7)',
+    async () => {
+      await seeded(async (client) => {
+        const ageMinutes = (asOf: string | null): number =>
+          asOf === null ? Number.POSITIVE_INFINITY : (Date.now() - Date.parse(asOf)) / 60_000;
+
+        const padma = (await publicRow(client, 'padma-specialised')).by_kind.find(
+          (entry) => entry.kind === 'burn',
+        );
+        const jamuna = (await publicRow(client, 'jamuna-medical-college')).by_kind.find(
+          (entry) => entry.kind === 'burn',
+        );
+
+        expect(padma?.free).toBe(1);
+        expect(jamuna?.free).toBe(2);
+        // Measured against when the suite seeded, so only the ordering and the
+        // gap are asserted: Padma minutes old, Jamuna hours.
+        expect(ageMinutes(padma?.asOf ?? null)).toBeLessThan(ageMinutes(jamuna?.asOf ?? null));
+        expect(ageMinutes(jamuna?.asOf ?? null) - ageMinutes(padma?.asOf ?? null)).toBeGreaterThan(
+          180,
+        );
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it(
+    "reports Padma's ICU as full, not unknown",
+    async () => {
+      await seeded(async (client) => {
+        const padma = await publicRow(client, 'padma-specialised');
+        expect(padma.icu_total).toBe(8);
+        expect(padma.icu_free).toBe(0);
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it(
+    'opens the pending list on the declared requests, the held one holding a real bed',
+    async () => {
+      await seeded(async (client) => {
+        expect(
+          await count(
+            client,
+            `SELECT count(*)::text AS n FROM bed_requests WHERE state IN ('requested', 'held')`,
+          ),
+        ).toBe(DEMO_BED_REQUESTS.length);
+
+        const mismatched = await count(
+          client,
+          `SELECT count(*)::text AS n
+             FROM bed_requests r
+             JOIN beds b ON b.id = r.bed_id
+            WHERE r.state = 'held'
+              AND (b.state <> 'reserved' OR b.reserved_until IS DISTINCT FROM r.hold_expires_at)`,
+        );
+        expect(mismatched).toBe(0);
+
+        // A family asking for a bed is never somebody already lying in one.
+        const alreadyIn = await count(
+          client,
+          `SELECT count(*)::text AS n
+             FROM bed_requests r
+             JOIN admissions a ON a.patient_id = r.patient_id AND a.discharged_at IS NULL`,
+        );
+        expect(alreadyIn).toBe(0);
+      });
+    },
+    SEED_TIMEOUT,
+  );
+});
+
 describe('the runner reports what it could not do', () => {
   it('declares which migration each unbuildable module is waiting for', () => {
-    // FR-DEM-04 and FR-DEM-05 are not covered in this version. The modules
-    // exist and say so; the runner checks their tables before calling them and
-    // skips with the migration named, rather than producing an empty ward
-    // board silently. Asserted on the declarations and the live schema, since
-    // the seed run itself happened in global setup.
+    // FR-DEM-05 is not covered in this version. The module exists and says
+    // so; the runner checks its tables before calling it and skips with the
+    // migration named, rather than producing an empty screen silently.
+    // Asserted on the declarations and the live schema, since the seed run
+    // itself happened in global setup. `seed_05_beds` left this list at step
+    // 14, when migration 0008 gave it tables to write.
     const pending = SEED_MODULES.filter((module) => module.pendingMigration !== undefined);
-    expect(pending.map((module) => module.name)).toEqual(['seed_05_beds', 'seed_06_ancillary']);
+    expect(pending.map((module) => module.name)).toEqual(['seed_06_ancillary']);
 
     for (const module of pending) {
       expect(module.pendingMigration).toMatch(/^00\d\d_/);

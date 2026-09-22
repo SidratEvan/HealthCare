@@ -11,9 +11,16 @@
  *     know" are different answers and a patient deserves the true one.
  */
 
-import { projectedEnd, time, type Timestamp } from '@platform/domain';
+import {
+  projectedEnd,
+  time,
+  type BedKind,
+  type PublicCapacity,
+  type Timestamp,
+} from '@platform/domain';
 
 import { notFound } from '../errors/AppError.js';
+import * as bedRepo from '../repositories/bed.repo.js';
 import * as discoveryRepo from '../repositories/discovery.repo.js';
 
 import * as queueService from './queue.service.js';
@@ -36,15 +43,27 @@ export interface Stamped<T> {
   readonly asOf: Timestamp;
 }
 
+/**
+ * A hospital card with its published bed figures (`FR-PAT-14`).
+ *
+ * `beds` comes from `v_public_hospital_capacity` and nowhere else (DATABASE.md
+ * §5). It carries its own `asOf` per kind and for the total, because a bed
+ * count is confirmed by a ward at one time and a chamber is running at
+ * another, and one stamp on the card would be the age of one of them only.
+ * Null only if the view has no row, which a live hospital always has.
+ */
+export type HospitalListing = HospitalCard & { readonly beds: PublicCapacity | null };
+
 export async function searchHospitals(query: {
   readonly specialty?: string | undefined;
   readonly district?: string | undefined;
   readonly q?: string | undefined;
   readonly lat?: number | undefined;
   readonly lng?: number | undefined;
+  readonly bedKind?: BedKind | undefined;
   readonly limit?: number | undefined;
-}): Promise<Stamped<HospitalCard>> {
-  const items = await discoveryRepo.listHospitals({
+}): Promise<Stamped<HospitalListing>> {
+  const cards = await discoveryRepo.listHospitals({
     specialty: query.specialty,
     district: query.district,
     q: query.q,
@@ -53,32 +72,38 @@ export async function searchHospitals(query: {
     limit: query.limit ?? 50,
   });
 
-  return { items, asOf: time.fromDate(new Date()) };
+  // `CHIP-A11-<type>`: hospitals that have that kind of bed at all. A
+  // hospital whose ICU is full stays in the list — "full" is the answer a
+  // family needs, and dropping it would read as "there is no ICU there".
+  const withKind =
+    query.bedKind === undefined ? null : await bedRepo.hospitalsWithKind(query.bedKind);
+  const shown = withKind === null ? cards : cards.filter((card) => withKind.has(card.id));
+
+  const capacity = await bedRepo.publicCapacity(shown.map((card) => card.id));
+
+  return {
+    items: shown.map((card) => ({ ...card, beds: capacity.get(card.id) ?? null })),
+    asOf: time.fromDate(new Date()),
+  };
 }
 
 export interface HospitalDetail {
   readonly hospital: HospitalCard;
   readonly departments: readonly discoveryRepo.DepartmentRow[];
-  /**
-   * Bed figures are absent, not zero.
-   *
-   * `v_public_hospital_capacity` is migration 0012 and the schema stops at
-   * 0006. Reporting zero free beds would be a number a patient could act on
-   * and that nothing supports — `FR-OFF-05` forbids exactly that, so the field
-   * is null and a client renders nothing rather than a false reassurance.
-   */
-  readonly beds: null;
+  /** The published bed figures (`FR-PAT-14`, `TAB-A05H-BED`). */
+  readonly beds: PublicCapacity | null;
 }
 
 export async function hospitalDetail(hospitalId: string): Promise<HospitalDetail> {
   const hospital = await discoveryRepo.findHospital(hospitalId);
   if (hospital === null) throw notFound('hospital');
 
-  return {
-    hospital,
-    departments: await discoveryRepo.listDepartments(hospitalId),
-    beds: null,
-  };
+  const [departments, capacity] = await Promise.all([
+    discoveryRepo.listDepartments(hospitalId),
+    bedRepo.publicCapacity([hospitalId]),
+  ]);
+
+  return { hospital, departments, beds: capacity.get(hospitalId) ?? null };
 }
 
 export async function searchDoctors(query: {

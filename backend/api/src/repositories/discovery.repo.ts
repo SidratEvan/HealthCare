@@ -7,11 +7,11 @@
  * phone number and no login. What a stranger can read is exactly what a
  * stranger is meant to read.
  *
- * `v_public_hospital_capacity` (migration 0012) is what BACKEND.md names for
- * live capacity. It does not exist yet — the schema stops at 0006 — so bed
- * figures are absent rather than invented, and every response says when it was
- * last confirmed so a client can render `<FreshnessLine>` over it
- * (`FR-OFF-03`, `FR-PAT-14`).
+ * Bed figures are not read here. They come from `v_public_hospital_capacity`
+ * (migration 0012) through `bed.repo.publicCapacity`, which is the only source
+ * the public API reads them from (DATABASE.md §5), and `discovery.service`
+ * joins the two. Every response says when it was last confirmed so a client
+ * can render `<FreshnessLine>` over it (`FR-OFF-03`, `FR-PAT-14`).
  */
 
 import { sql } from 'kysely';

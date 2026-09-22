@@ -23,6 +23,8 @@ export {
   type PatientKey,
 } from './messages.js';
 
+export { BED_KIND_NAMES, bedKindName, type BedKindName } from './beds.js';
+
 export {
   TEMPLATES,
   TEMPLATE_KEYS,
@@ -34,13 +36,7 @@ export {
   type TemplateKey,
 } from './templates.js';
 
-export {
-  DAY_PERIODS,
-  DHAKA,
-  dayPeriod,
-  formatClock,
-  formatDateTime,
-} from './datetime.js';
+export { DAY_PERIODS, DHAKA, dayPeriod, formatClock, formatDateTime } from './datetime.js';
 
 export {
   NUMERAL_STYLE_BY_SURFACE,

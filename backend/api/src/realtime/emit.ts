@@ -21,7 +21,7 @@
  * care what is on the other side.
  */
 
-import type { Eta, QueueState } from '@platform/domain';
+import type { BedView, Eta, PublicCapacity, QueueState } from '@platform/domain';
 
 import { logger } from '../config/logger.js';
 
@@ -173,6 +173,67 @@ export function patientCalled(
   emitter().emit(ROOMS.patient(patientId), 'patient.called', {
     type: 'patient.called',
     seq,
+    serverTs,
+    data,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The bed board (`hospital:<id>:beds`, BACKEND.md §6)
+// ---------------------------------------------------------------------------
+
+/**
+ * `bed.updated` — the beds one action changed, as the board shows them.
+ *
+ * A transfer changes two, so the payload is a list. It carries no patient
+ * identity: the room is every staff console at the hospital, and a name on a
+ * broadcast is a name read by everyone listening (`DB-P7`).
+ */
+export function bedUpdated(
+  hospitalId: string,
+  data: { readonly beds: readonly BedView[] },
+  serverTs: string,
+): void {
+  emitter().emit(ROOMS.beds(hospitalId), 'bed.updated', {
+    type: 'bed.updated',
+    serverTs,
+    data,
+  });
+}
+
+/**
+ * `capacity.updated` — what the public is now being shown (`FR-BED-05`).
+ *
+ * Read back from `v_public_hospital_capacity` after the change committed, not
+ * computed from it, so `<CapacityMirror>` shows the published figure and not
+ * the console's own opinion of what it should be (`FR-BED-06`).
+ */
+export function capacityUpdated(
+  hospitalId: string,
+  capacity: PublicCapacity,
+  serverTs: string,
+): void {
+  emitter().emit(ROOMS.beds(hospitalId), 'capacity.updated', {
+    type: 'capacity.updated',
+    serverTs,
+    data: capacity,
+  });
+}
+
+/**
+ * `bedrequest.updated` — a request arrived or was answered (`FR-BED-07`).
+ *
+ * Only the id and the state. The pending list is re-read on this, through the
+ * endpoint that audits the read, rather than receiving a patient's name over
+ * a broadcast.
+ */
+export function bedRequestUpdated(
+  hospitalId: string,
+  data: { readonly requestId: string; readonly state: string },
+  serverTs: string,
+): void {
+  emitter().emit(ROOMS.beds(hospitalId), 'bedrequest.updated', {
+    type: 'bedrequest.updated',
     serverTs,
     data,
   });

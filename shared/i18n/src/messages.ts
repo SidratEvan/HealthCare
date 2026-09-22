@@ -283,6 +283,172 @@ export const CONSOLE = {
   retry: { bn: 'আবার চেষ্টা করুন', en: 'Try again' },
   noSession: { bn: 'আজ কোনো চেম্বার চলছে না', en: 'No chamber is running today' },
 
+  // --- The ward board (S-B-06, APP_FLOW.md B3) -----------------------------
+  roleWard: { bn: 'ওয়ার্ড', en: 'Ward' },
+  wardBoardSection: { bn: 'ওয়ার্ড ও বেড বোর্ড', en: 'Ward and bed board' },
+  openWardBoard: { bn: 'বেড বোর্ড খুলুন', en: 'Open the bed board' },
+  wardBoardTitle: { bn: 'বেড বোর্ড', en: 'Bed board' },
+  allWards: { bn: 'সব ওয়ার্ড', en: 'All wards' },
+  floorN: { bn: 'তলা {floor}', en: 'Floor {floor}' },
+  noWards: { bn: 'এই হাসপাতালে কোনো ওয়ার্ড নেই', en: 'This hospital has no wards' },
+  noWardsHint: {
+    bn: 'বেড যোগ করতে ব্যবস্থাপনার সঙ্গে যোগাযোগ করুন।',
+    en: 'Ask administration to add wards and beds.',
+  },
+  chooseBed: { bn: 'একটি বেড বেছে নিন', en: 'Choose a bed' },
+  closePanel: { bn: 'বন্ধ করুন', en: 'Close' },
+  chooseBedHint: {
+    bn: 'বেডে চাপ দিলে এখানে তার অবস্থা ও কাজগুলো আসবে।',
+    en: 'Tap a bed to see its state and what can be done with it.',
+  },
+
+  bedStateFree: { bn: 'খালি', en: 'Free' },
+  bedStateOccupied: { bn: 'ভর্তি', en: 'Occupied' },
+  bedStateCleaning: { bn: 'পরিষ্কার হচ্ছে', en: 'Being cleaned' },
+  bedStateReserved: { bn: 'সংরক্ষিত', en: 'Reserved' },
+  bedStateOos: { bn: 'সেবার বাইরে', en: 'Out of service' },
+  bedDaysIn: { bn: '{days} দিন', en: '{days} days' },
+  bedUntil: { bn: '{time} পর্যন্ত', en: 'until {time}' },
+  bedCleaningFor: { bn: '{minutes} মিনিট ধরে', en: 'for {minutes} min' },
+  bedHeldForRequest: { bn: 'অনুরোধের জন্য রাখা', en: 'Held for a request' },
+  bedPendingSync: { bn: 'সার্ভারে পাঠানো বাকি', en: 'Not yet sent to the server' },
+  bedSinceToday: { bn: 'আজ থেকে', en: 'Since today' },
+  factNightly: { bn: 'প্রতি রাতের ভাড়া', en: 'Nightly' },
+  factSince: { bn: 'এই অবস্থায় আছে', en: 'In this state since' },
+  factLastCleaned: { bn: 'শেষ পরিষ্কার', en: 'Last cleaned' },
+  factHeldUntil: { bn: 'রাখা আছে', en: 'Held' },
+
+  occupant: { bn: 'রোগী', en: 'Patient' },
+  occupantAdmitted: { bn: 'ভর্তি {time}', en: 'Admitted {time}' },
+  occupantOffline: {
+    bn: 'সংযোগ ফিরলে রোগীর নাম দেখা যাবে।',
+    en: "The patient's name will show when the connection returns.",
+  },
+  occupantViewLogged: {
+    bn: 'এই দেখাটি রোগীর রেকর্ডে লেখা থাকবে।',
+    en: 'This view is recorded in the patient’s access log.',
+  },
+  ageYears: { bn: '{age} বছর', en: '{age} yrs' },
+
+  admit: { bn: 'ভর্তি করুন', en: 'Admit' },
+  admitHeading: { bn: 'কাকে ভর্তি করবেন?', en: 'Who is being admitted?' },
+  admitName: { bn: 'নাম', en: 'Name' },
+  admitPhone: { bn: 'মোবাইল নম্বর', en: 'Mobile number' },
+  admitAge: { bn: 'বয়স', en: 'Age' },
+  admitSex: { bn: 'লিঙ্গ', en: 'Sex' },
+  admitFromRequest: { bn: 'অপেক্ষমাণ অনুরোধ থেকে', en: 'From a waiting request' },
+  admitConfirm: { bn: 'ভর্তি নিশ্চিত করুন', en: 'Confirm admission' },
+  admitNameError: { bn: 'রোগীর পুরো নাম লিখুন', en: "Write the patient's full name" },
+  admitPhoneError: {
+    bn: 'মোবাইল নম্বরটি ঠিক নেই, যেমন 01712345678',
+    en: 'That mobile number is not right, e.g. 01712345678',
+  },
+  admitAgeError: { bn: 'বয়স বছরে লিখুন', en: 'Give the age in years' },
+  admitSexError: { bn: 'লিঙ্গ বেছে নিন', en: 'Choose the sex' },
+  admitDeskHint: {
+    bn: 'একই নাম ও নম্বরের রোগী আগে থাকলে সেই রেকর্ডেই ভর্তি হবে।',
+    en: 'A patient already on record with this name and number is admitted on that record.',
+  },
+  admitHeldRequest: {
+    bn: 'এই বেডটি {name}-এর জন্য রাখা আছে।',
+    en: 'This bed is held for {name}.',
+  },
+
+  discharge: { bn: 'ছাড়পত্র দিন', en: 'Discharge' },
+  dischargeConsequence: {
+    bn: 'ছাড়পত্র দিলে {bed} পরিষ্কারের তালিকায় যাবে। পরিষ্কার শেষ না হওয়া পর্যন্ত খালি দেখাবে না।',
+    en: '{bed} goes for cleaning. It will not show as free until the cleaning is done.',
+  },
+  transfer: { bn: 'স্থানান্তর করুন', en: 'Transfer' },
+  transferChoose: { bn: 'কোন বেডে নেবেন?', en: 'Move to which bed?' },
+  transferConfirm: { bn: '{from} থেকে {to}-এ নিন', en: 'Move from {from} to {to}' },
+  transferConsequence: {
+    bn: '{from} পরিষ্কারের তালিকায় যাবে, রোগী {to}-এ থাকবেন।',
+    en: '{from} goes for cleaning; the patient moves to {to}.',
+  },
+  noFreeBed: { bn: 'এখন কোনো খালি বেড নেই', en: 'No free bed right now' },
+  reserve: { bn: 'সংরক্ষিত রাখুন', en: 'Hold this bed' },
+  holdFor: { bn: '{minutes} মিনিট', en: '{minutes} min' },
+  release: { bn: 'সংরক্ষণ তুলে নিন', en: 'Release the hold' },
+  cleanStart: { bn: 'পরিষ্কারে পাঠান', en: 'Send for cleaning' },
+  cleanDone: { bn: 'পরিষ্কার শেষ করুন', en: 'Mark cleaned' },
+  outOfService: { bn: 'সেবার বাইরে রাখুন', en: 'Take out of service' },
+  outOfServiceReason: { bn: 'কারণ লিখুন', en: 'Give a reason' },
+  restore: { bn: 'সেবায় ফেরান', en: 'Return to service' },
+  expectedDischarge: { bn: 'সম্ভাব্য ছুটি', en: 'Expected discharge' },
+  expectedDischargeUnset: { bn: 'ঠিক হয়নি', en: 'Not set' },
+  saveForecast: { bn: 'তারিখ রাখুন', en: 'Save date' },
+  goBack: { bn: 'ফিরে যান', en: 'Back' },
+  bedActionRefused: {
+    bn: 'বোর্ড বদলে গেছে, তাই কাজটি হয়নি। বেডের এখনকার অবস্থা দেখুন।',
+    en: 'The board changed, so that did not happen. Check the bed as it is now.',
+  },
+  bedActionQueued: {
+    bn: 'সংযোগ নেই — কাজটি রাখা হলো, সংযোগ ফিরলে পাঠানো হবে।',
+    en: 'Offline — saved, and it will be sent when the connection returns.',
+  },
+  patientAlreadyAdmitted: {
+    bn: 'এই রোগী আগে থেকেই অন্য একটি বেডে ভর্তি আছেন।',
+    en: 'This patient is already in another bed.',
+  },
+
+  // `<CapacityMirror>` (FR-BED-06): what a family's phone is showing.
+  mirrorTitle: { bn: 'অ্যাপে দেখাচ্ছে', en: 'Showing in the app' },
+  mirrorSubtitle: {
+    bn: 'রোগী ও জরুরি বিভাগ এখন এই সংখ্যাগুলো দেখছেন।',
+    en: 'What patients and emergency services are being shown right now.',
+  },
+  mirrorFreeOfTotal: { bn: '{free}/{total} খালি', en: '{free} of {total} free' },
+  mirrorMismatch: {
+    bn: 'বোর্ডে {board} খালি — অ্যাপ এখনো আগের সংখ্যা দেখাচ্ছে।',
+    en: 'The board says {board} free — the app still shows the earlier number.',
+  },
+  mirrorEmpty: {
+    bn: 'এই হাসপাতালের কোনো বেড অ্যাপে দেখানো হয় না।',
+    en: 'No beds from this hospital are shown in the app.',
+  },
+  neverConfirmed: { bn: 'কখনো নিশ্চিত করা হয়নি', en: 'Never confirmed' },
+
+  // FR-BED-04: staff only, and it says so.
+  forecastTitle: { bn: 'আগামীকাল সম্ভাব্য খালি', en: 'Likely free tomorrow' },
+  forecastStaffOnly: {
+    bn: 'শুধু কর্মীদের জন্য — অ্যাপে দেখানো হয় না।',
+    en: 'Staff only — never shown in the app.',
+  },
+  forecastRow: { bn: 'এখন {now} · কাল {tomorrow}', en: '{now} now · {tomorrow} tomorrow' },
+  forecastBlind: {
+    bn: '{count}টি ভর্তি বেডের ছুটির তারিখ ঠিক হয়নি।',
+    en: '{count} occupied beds have no expected discharge.',
+  },
+
+  // LIST-B06-PENDING (FR-BED-07).
+  pendingTitle: { bn: 'ভর্তির অপেক্ষায়', en: 'Waiting for admission' },
+  pendingEmpty: { bn: 'কোনো অনুরোধ অপেক্ষায় নেই', en: 'No requests waiting' },
+  pendingEmptyHint: {
+    bn: 'অ্যাপ থেকে বেডের অনুরোধ এলে এখানে দেখাবে।',
+    en: 'Bed requests from the app appear here.',
+  },
+  pendingNeedsConnection: {
+    bn: 'অনুরোধ দেখতে ও উত্তর দিতে সংযোগ লাগবে।',
+    en: 'Requests need a connection to see and answer.',
+  },
+  pendingFromApp: { bn: 'অ্যাপ থেকে', en: 'From the app' },
+  pendingArrives: { bn: '{time}-এ পৌঁছাবেন', en: 'Arriving {time}' },
+  pendingHeld: { bn: '{bed} রাখা আছে {time} পর্যন্ত', en: '{bed} held until {time}' },
+  pendingHold: { bn: 'বেড রাখুন', en: 'Hold a bed' },
+  pendingHoldChoose: { bn: 'কোন {kind} বেড রাখবেন?', en: 'Hold which {kind} bed?' },
+  pendingNoBedOfKind: { bn: 'এই ধরনের কোনো খালি বেড নেই', en: 'No free bed of this kind' },
+  pendingDecline: { bn: 'ফিরিয়ে দিন', en: 'Decline' },
+  pendingDeclineConsequence: {
+    bn: '{name}-কে এসএমএসে জানানো হবে যে এখন বেড দেওয়া যাচ্ছে না।',
+    en: '{name} will be told by SMS that a bed cannot be offered now.',
+  },
+  pendingAnswered: { bn: 'উত্তর পাঠানো হয়েছে', en: 'Answer sent' },
+  pendingAnswerFailed: {
+    bn: 'উত্তর পাঠানো যায়নি। আবার চেষ্টা করুন।',
+    en: 'The answer could not be sent. Please try again.',
+  },
+
   // --- Demo mode (FR-DEM-07, CLAUDE.md §1.1) -------------------------------
   demoBanner: {
     bn: 'এটি একটি ডেমো। সব তথ্য প্রদর্শনের জন্য তৈরি।',
@@ -461,10 +627,93 @@ export const PATIENT = {
     bn: 'অ্যাকাউন্ট আর প্রোফাইল এখনো তৈরি হয়নি। সিরিয়াল নিতে অ্যাকাউন্ট লাগে না।',
     en: 'Accounts are not built yet. Booking a serial needs no account.',
   },
-  bedsComing: {
-    bn: 'কোন হাসপাতালে কয়টি বেড আর আইসিইউ খালি, তা এখানে দেখা যাবে।',
-    en: 'Free beds and ICU capacity per hospital will show here.',
+  // --- Bed search (S-A-11, FR-PAT-50..52) -----------------------------------
+  bedsTitle: { bn: 'বেড খুঁজুন', en: 'Find a bed' },
+  bedsChooseKind: { bn: 'কোন ধরনের বেড লাগবে?', en: 'What kind of bed?' },
+  bedsFree: { bn: '{free}টি খালি', en: '{free} free' },
+  bedsNoneFree: { bn: 'এখন খালি নেই', en: 'None free now' },
+  bedsOfTotal: { bn: 'মোট {total}টি', en: 'of {total}' },
+  bedsNightly: { bn: 'প্রতি রাত {price}', en: '{price} a night' },
+  bedsNightlyRange: { bn: 'প্রতি রাত {min}–{max}', en: '{min}–{max} a night' },
+  bedsNoHospitals: {
+    bn: 'তালিকার কোনো হাসপাতালে এই ধরনের বেড নেই।',
+    en: 'No listed hospital has this kind of bed.',
   },
+  bedsNoHospitalsHint: {
+    bn: 'অন্য ধরন বেছে দেখুন, অথবা জরুরি অবস্থায় ৯৯৯-এ কল করুন।',
+    en: 'Try another kind, or call 999 in an emergency.',
+  },
+  bedsHowItWorks: {
+    bn: 'সংখ্যাগুলো হাসপাতালের ওয়ার্ড থেকে আসে, আর প্রতিটির পাশে লেখা থাকে কখন শেষবার নিশ্চিত করা হয়েছে।',
+    en: 'These numbers come from each ward, and each says when it was last confirmed.',
+  },
+  bedsStaleCaution: {
+    bn: 'এই সংখ্যা অনেকক্ষণ নিশ্চিত হয়নি — যাওয়ার আগে হাসপাতালে ফোন করুন।',
+    en: 'This has not been confirmed for a while — call the hospital before you go.',
+  },
+  bedsOfflineCached: {
+    bn: 'ইন্টারনেট নেই — শেষবার পাওয়া সংখ্যা দেখানো হচ্ছে, এখন বদলে থাকতে পারে।',
+    en: 'No internet — showing the last numbers received; they may have changed.',
+  },
+
+  requestBed: { bn: 'বেড অনুরোধ করুন', en: 'Request a bed' },
+  requestTitle: { bn: '{hospital}-এ {kind} বেড', en: '{kind} bed at {hospital}' },
+  requestNotAHold: {
+    bn: 'অনুরোধ মানে বেড রাখা নয়। হাসপাতাল বেড রাখলে এসএমএসে জানানো হবে।',
+    en: 'A request does not reserve a bed. You will be told by SMS if the hospital holds one.',
+  },
+  requestArrival: { bn: 'কখন পৌঁছাবেন?', en: 'When will you arrive?' },
+  requestArrivalIn: { bn: '{minutes} মিনিটের মধ্যে', en: 'Within {minutes} min' },
+  requestNote: { bn: 'রোগীর অবস্থা (ইচ্ছা হলে লিখুন)', en: 'Condition (optional)' },
+  requestSend: { bn: 'অনুরোধ পাঠান', en: 'Send the request' },
+  requestMobileHelper: {
+    bn: 'হাসপাতালের উত্তর এই নম্বরে এসএমএসে যাবে।',
+    en: "The hospital's answer is sent to this number by SMS.",
+  },
+  requestFillAll: {
+    bn: 'রোগীর নাম, মোবাইল নম্বর, বয়স ও লিঙ্গ দিন।',
+    en: "Give the patient's name, mobile number, age and sex.",
+  },
+  yourRequests: { bn: 'আপনার অনুরোধ', en: 'Your requests' },
+  requestFailed: { bn: 'অনুরোধ পাঠানো যায়নি', en: 'The request could not be sent' },
+  requestKindNotHere: {
+    bn: 'এই হাসপাতালে এই ধরনের বেড নেই।',
+    en: 'This hospital does not have this kind of bed.',
+  },
+  requestStatus: { bn: 'বেডের অনুরোধ', en: 'Bed request' },
+  requestStateRequested: { bn: 'অনুরোধ পাঠানো হয়েছে', en: 'Request sent' },
+  requestStateHeld: {
+    bn: 'গৃহীত — আপনার জন্য বেড রাখা আছে',
+    en: 'Accepted — a bed is held for you',
+  },
+  requestStateConfirmed: { bn: 'নিশ্চিত — ভর্তি হয়েছেন', en: 'Confirmed — admitted' },
+  requestStateDeclined: {
+    bn: 'এই হাসপাতাল এখন বেড দিতে পারছে না',
+    en: 'This hospital cannot offer a bed right now',
+  },
+  requestStateExpired: {
+    bn: 'রাখার সময় শেষ, বেডটি ছেড়ে দেওয়া হয়েছে',
+    en: 'The hold ran out and the bed was released',
+  },
+  requestWaitingExplainer: {
+    bn: 'হাসপাতাল উত্তর দিলে এখানে ও এসএমএসে জানানো হবে।',
+    en: 'You will see the answer here and by SMS.',
+  },
+  requestHeldUntil: { bn: '{time} পর্যন্ত রাখা', en: 'Held until {time}' },
+  requestHoldLeft: { bn: 'আর {minutes} মিনিট', en: '{minutes} min left' },
+  requestCallHospital: { bn: 'হাসপাতালে কল করুন', en: 'Call the hospital' },
+  requestSeeOthers: { bn: 'অন্য হাসপাতাল দেখুন', en: 'See other hospitals' },
+  requestLinkInvalid: {
+    bn: 'এই লিংকটি আর কাজ করছে না।',
+    en: 'This link no longer works.',
+  },
+  requestCheckedAt: { bn: 'দেখা হয়েছে {time}', en: 'Checked {time}' },
+
+  // --- Beds on a hospital card (FR-PAT-14) ----------------------------------
+  cardBedsFree: { bn: 'খালি বেড {free}', en: '{free} beds free' },
+  cardIcu: { bn: 'আইসিইউ {free}/{total}', en: 'ICU {free}/{total}' },
+  cardNoIcu: { bn: 'আইসিইউ নেই', en: 'No ICU' },
+  cardNoBeds: { bn: 'ভর্তির ব্যবস্থা নেই', en: 'No inpatient beds' },
   ambulanceComing: {
     bn: 'কাছের অ্যাম্বুলেন্স ডাকা আর ভাড়া দেখা এখানে আসবে। এখন জরুরি প্রয়োজনে ৯৯৯ এ কল করুন।',
     en: 'Calling a nearby ambulance and seeing the fare will come here. For now, call 999 in an emergency.',

@@ -101,15 +101,23 @@ describe('discovery is public, and carries nothing private', () => {
     expect([...distances].sort((a, b) => a - b)).toEqual(distances);
   });
 
-  it('reports bed figures as absent rather than zero (FR-OFF-05)', async () => {
+  it('publishes bed figures from the capacity view, each with its age (FR-PAT-14, FR-OFF-03)', async () => {
     const list = await request(app).get(`${BASE}/hospitals`);
     const id = list.body.data.hospitals[0].id;
 
     const response = await request(app).get(`${BASE}/hospitals/${id}`);
 
-    // `v_public_hospital_capacity` is migration 0012. Zero free beds is a
-    // number a patient could act on and that nothing supports.
-    expect(response.body.data.beds).toBeNull();
+    // Until step 14 this was null: `v_public_hospital_capacity` did not
+    // exist, and zero free beds is a number a patient could act on that
+    // nothing supported. The view now exists, so the figure is published —
+    // and every kind carries the age of its last confirmation, so a count
+    // nobody has touched for hours says so (`FR-OFF-05`).
+    const beds = response.body.data.beds as {
+      bedTotal: number;
+      byKind: { asOf: string | null }[];
+    };
+    expect(beds).not.toBeNull();
+    for (const kind of beds.byKind) expect(kind).toHaveProperty('asOf');
     expect(response.body.data.departments.length).toBeGreaterThan(0);
   });
 
