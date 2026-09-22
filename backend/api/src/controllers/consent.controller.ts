@@ -22,7 +22,7 @@ export async function offerConsent(req: Request, res: Response): Promise<void> {
   res.json({ ok: true, data: await consent.offerConsent({ principal, patientId: id }) });
 }
 
-/** `POST /consents/redeem` — `BTN-B05-SCAN`, the doctor's side. */
+/** `POST /consents/qr` — `BTN-B05-SCAN`, the doctor's side. */
 export async function redeemConsent(req: Request, res: Response): Promise<void> {
   const body = redeemConsentBody.parse(req.body);
   const principal = req.principal;

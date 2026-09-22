@@ -7,8 +7,9 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/doctor-console` — step 12. A consultation now leaves a
-record behind.
+Last updated: `feat/wallet` — step 13. The record a consultation leaves
+behind now reaches the patient's phone, and the patient decides who else sees
+it.
 
 ---
 
@@ -29,7 +30,8 @@ record behind.
 | **10** | **`feat/patient-live-serial`** | **merged — the pitch demo works.** `<LiveSerialCard>`, the session channel on the patient side, late/cancel, and the two-device canary |
 | 11 | `feat/notifications` | merged — migration 0010, templates, the outbox, SMS/push adapters |
 | 12 | `feat/doctor-console` | merged — migration 0007, `S-B-05`, the visit record, `FR-DOC-10` + audit. **E-prescriptions dropped**; `PRD.md` §9/§24/§26 and `APP_FLOW.md` B2 edited to match |
-| 13 | `feat/wallet` | **next** — patient records, reports, QR consent. Migration 0007 already created `consents` and `patient_documents`, so this is screens rather than schema |
+| 13 | `feat/wallet` | merged — `S-A-12`, the consent handshake (`BTN-A12-QR` → `BTN-B05-SCAN`), the access log and revoke. A pasted code stands in for the QR |
+| 14 | `feat/beds` | **next** — ward board, bed events, public capacity. Needs migration 0008 |
 
 Three unplanned branches after step 11:
 
@@ -45,7 +47,7 @@ Three unplanned branches after step 11:
   hours of a Dhaka day. See *Things learned the hard way*.
 
 Both of the last two were unplanned, and neither is a build step: nothing in
-`CLAUDE.md` §4 is skipped or brought forward. Step 12 is still next.
+`CLAUDE.md` §4 is skipped or brought forward.
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -80,11 +82,12 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 1616.
-`pnpm test:e2e` reports 50, in Chromium, against the real API and the seeded
+`pnpm test` reports 1715.
+`pnpm test:e2e` reports 58, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
-`doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`.
+`doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
+`wallet.spec.ts`.
 
 ### The demo API sleeps, and the console now says so
 
@@ -104,6 +107,53 @@ decision about a sleeping backend, not a test detail, which is why
 Worth knowing when demonstrating: **open the console once a minute before
 showing anyone.** Nothing is broken if the first load is slow; it is the free
 tier waking.
+
+### Step 13 — the wallet, and consent
+
+**The wallet is this device's, like the serials tab.** There are no accounts
+(`CLAUDE.md` §4.1), so `S-A-12` opens every tracking link the phone holds and
+shows the signed record each one carries (`FR-GST-08`). A link has four
+outcomes — a record, booked-but-not-seen, expired, no answer — and each is
+counted and said separately. A failed request is never shown as "no records".
+When Supabase Auth lands, the page becomes one call to
+`GET /patients/:id/records`, which already exists and already refuses
+everybody it should.
+
+**Consent is a handshake.** The phone asks for a code (`BTN-A12-QR`), states
+the scope and the grant's length *before* showing it, and the doctor console
+redeems it (`BTN-B05-SCAN`, `POST /consents/qr`). Redeeming writes the
+`consents` row and its `audit_log` row together; opening the history writes
+another. The patient's access log (`BTN-A12-ACCESS`) lists each hospital with
+its state as a word, a revoke on the live ones, and every staff read.
+Revocation is a timestamp (`DB-P2`).
+
+**The code is pasted, not scanned** — see open decision 28. Between two
+windows on one laptop it copies and pastes; between two phones it does not
+travel, which is the one place the demo is weaker than the requirement.
+
+**A guest can speak for their own booking's patient, under `DEMO_MODE` only**
+— open decision 27. Without it nothing on the patient side can offer consent
+or read an access log, because nothing on the patient side has an account.
+
+**The route is `/consents/qr`, as `BACKEND.md` §7.6 names it.** The first
+commit on this branch served it at `/consents/redeem`; the document wins
+(`CLAUDE.md` §2), so it was renamed. §7.6 had no row for minting the code or
+for the access log, and now has both.
+
+**The console card clears when the patient changes.** It is keyed on the
+booking in the chamber, so a consented history is never on screen when the
+next person walks in — a wrong allergy history is worse than none.
+
+**No consent or audit rows are seeded.** Every seeded patient is unreachable
+from a phone (no `guest_links` are seeded, for the reason under *How to open
+the live serial screen*), so seeded grants would appear on no screen. The
+wallet fills during the demo itself: book, let the doctor sign, and the record
+is there (`PRD.md` §24 step 6).
+
+**How to show it.** Book on the phone, sign on the doctor console, open রেকর্ড.
+Then কোড দেখান, copy it into the doctor console's code field, and রেকর্ড
+খুলুন. Back on the phone, কে দেখেছে shows the hospital and the reads, and
+অনুমতি বন্ধ করুন ends it.
 
 ### Step 12 — the doctor console and the visit record
 
@@ -189,9 +239,9 @@ holds the records in `localStorage`, tokens included — the token is already in
 SMS on the same phone, is scoped to one booking, and expires. When Supabase Auth
 lands, that file becomes a call to `GET /me/bookings`.
 
-**Six tabs lead to screens that are not built** — records (`S-A-12`, step 13),
-profile (`S-A-19`), beds (step 14), ambulance and blood (step 17), emergency
-(step 15). Each says what will be there and why it is not, rather than being
+**Five tabs lead to screens that are not built** — profile (`S-A-19`), beds
+(step 14), ambulance and blood (step 17), emergency (step 15). Records was the
+sixth until step 13. Each says what will be there and why it is not, rather than being
 hidden, greyed out, or a dead link. Hiding them would move the bar as the
 product grows and teach the wrong muscle memory.
 
@@ -368,7 +418,8 @@ afternoon.
 Supabase connection string and three generated dev secrets.
 
 `SUPABASE_SERVICE_ROLE_KEY` is deliberately **not** set: nothing needs it until
-the storage work in steps 12–13.
+something uploads a file — `BTN-A12-UPLOAD` (paper records) or the lab's
+reports at step 17. Step 13 built neither.
 
 ---
 
@@ -603,6 +654,33 @@ Raised while building the doctor console (step 12):
    date in Dhaka. The effect is right for new rows and means a very old draft
    could be signed with a follow-up that is now in the past. Nothing does that
    today.
+
+Raised while building the wallet (step 13):
+
+27. **A guest may offer consent, read the access log and revoke — under
+   `DEMO_MODE` only**, for the patient their own booking names
+   (`assertSpeaksFor` in `consent.service`). It is the same kind of affordance
+   as the console picker (`CLAUDE.md` §4.1) and is gated the same way, but it is
+   a real escalation: a tracking link otherwise reaches one booking's record,
+   and consent gives a hospital standing access to the whole history. With
+   `DEMO_MODE` off a guest is refused all three, which a test pins. Needs the
+   owner's yes or no; if no, the consent half of the wallet is unreachable in
+   this version.
+
+28. **`FR-PAT-63` says QR, and the build shows a code.** Drawing a QR needs an
+   encoder (e.g. `qrcode`) and scanning one needs a camera pipeline
+   (`BarcodeDetector` is native on Android Chrome but not on desktop Chrome, so
+   a fallback such as `@zxing/browser` would be needed). Both are new
+   dependencies (`CLAUDE.md` §7). The capability is identical and only
+   `BTN-A12-QR` and `BTN-B05-SCAN` would change. The code is a signed token, hundreds
+   of characters long, which is why it cannot be read aloud and why a QR is the
+   real fix.
+
+29. **Durations nobody documented.** A code lives three minutes
+   (`CONSENT_OFFER_TTL_SECONDS`) and a grant twenty-four hours
+   (`CONSENT_TTL_HOURS`). A grant is always hospital-scoped, never
+   doctor-scoped, for the same reason as decision 23: nothing joins a console
+   account to a `doctors` row.
 
 Two are the owner's and are not code:
 

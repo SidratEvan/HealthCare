@@ -6,7 +6,7 @@
  * relationship; here it is ownership, and a role cannot express "this is my own
  * record" either.
  *
- * `POST /consents/redeem` is the one exception in spirit: it is doctors only,
+ * `POST /consents/qr` is the one exception in spirit: it is doctors only,
  * and the service says so first thing. It is not a `requireRole` line because
  * the refusal has to sit beside the code verification — a caller learning that
  * their *role* was wrong before their *code* was checked would learn something
@@ -44,7 +44,7 @@ consentRoutes.post(
 
 /** `BTN-B05-SCAN` — the doctor turns the patient's code into access. */
 consentRoutes.post(
-  '/consents/redeem',
+  '/consents/qr',
   requireAuth,
   write,
   validate({ body: redeemConsentBody }),

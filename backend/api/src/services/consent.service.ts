@@ -109,7 +109,7 @@ export interface RedeemedConsent {
 }
 
 /**
- * `POST /consents/redeem` — the doctor's side of the handshake.
+ * `POST /consents/qr` — the doctor's side of the handshake.
  *
  * Writes the grant and the audit row in one transaction. They are the same
  * fact: somebody was given access to a record, and a system that could record

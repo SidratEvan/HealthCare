@@ -105,7 +105,7 @@ export const consentScope = z.enum(['visit', 'hospital', 'doctor', 'full']);
  * `POST /consents` — the patient grants a hospital access directly.
  *
  * Used where the patient is already identified to the server. The chamber-side
- * path is `/consents/offer` + `/consents/redeem`, because there the doctor has
+ * path is `/patients/:id/consent-offer` + `/consents/qr`, because there the doctor has
  * no way to name the patient until the patient hands them something.
  */
 export const createConsentBody = z.object({
@@ -117,7 +117,7 @@ export const createConsentBody = z.object({
 export type CreateConsentBody = z.infer<typeof createConsentBody>;
 
 /**
- * `POST /consents/redeem` — a doctor turns the patient's code into access.
+ * `POST /consents/qr` — a doctor turns the patient's code into access.
  *
  * `FR-PAT-63` describes this as scanning a QR, and the value here is what that
  * QR would encode: a short-lived signed token naming one patient. It is not a

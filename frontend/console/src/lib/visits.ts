@@ -130,7 +130,7 @@ export interface RedeemedConsent {
 }
 
 /**
- * `POST /consents/redeem` — `BTN-B05-SCAN` (`FR-PAT-63`).
+ * `POST /consents/qr` — `BTN-B05-SCAN` (`FR-PAT-63`).
  *
  * Writes the grant and its audit row; the records are a separate read, which
  * is itself audited, so the patient's log shows both the handover and the look.
@@ -142,7 +142,7 @@ export async function redeemConsent(input: {
 }): Promise<RedeemedConsent> {
   const key = crypto.randomUUID();
 
-  return await call<RedeemedConsent>(`${input.apiBaseUrl}/consents/redeem`, input.token, {
+  return await call<RedeemedConsent>(`${input.apiBaseUrl}/consents/qr`, input.token, {
     method: 'POST',
     headers: { 'idempotency-key': key },
     body: JSON.stringify({ code: input.code.trim(), idempotencyKey: key }),

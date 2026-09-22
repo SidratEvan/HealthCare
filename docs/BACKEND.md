@@ -338,7 +338,7 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/staff/2fa` | partial | `{code}` → tokens | |
 | POST | `/guest/start` | none | `{phone, name}` → `{needsOtp, guestToken?}` | returning guest skips OTP (`FR-GST-12`) |
 | POST | `/guest/verify` | none | `{phone, code}` → `{guestToken}` | creates no account (`FR-GST-04`) |
-| GET | `/guest/link/:token` | link | → `{booking, session, queueState, etas}` | powers the SMS tracking link (`FR-GST-05`) |
+| GET | `/guest/link/:token` | link | → `{booking, session, queueState, etas, record}` | powers the SMS tracking link (`FR-GST-05`); `record` is that booking's signed visit once there is one, else null (`FR-GST-08`) |
 | POST | `/guest/claim` | user | `{phone}` → `{claimable: […]}` then `{confirm:true}` | (`FR-GST-09`) |
 
 ### 7.2 Discovery (public, no auth)
@@ -415,8 +415,17 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 |---|---|---|
 | POST | `/visits` | doctor — creates or updates the visit; `sign: true` signs it and advances the queue (`FR-DOC-08`). Prescriptions are out of scope for this version (`PRD.md` §9) |
 | GET | `/patients/:id/records?booking=` | patient (own) \| doctor (own sessions or consent). `booking` returns that booking's pre-visit intake alongside the history, so `S-B-05` opens in one request (`FR-DOC-03`, `NFR-04`) |
+| POST | `/patients/:id/consent-offer` | patient (own) — mints the short-lived signed code `BTN-A12-QR` shows, with the grant's length (`FR-PAT-63`). Returns `{code, expiresInSeconds, grantHours}` |
 | POST | `/consents` / `/consents/:id/revoke` | patient |
-| POST | `/consents/qr` | doctor — redeems a scanned QR (`FR-PAT-63`) |
+| POST | `/consents/qr` | doctor — redeems the patient's code: writes the `consents` row and its `audit_log` row together (`FR-PAT-63`, `FR-SEC-03`). The code is pasted until a QR encoder and scanner are agreed; the endpoint is the same either way |
+| GET | `/patients/:id/access` | patient (own) — `BTN-A12-ACCESS`: the grants made and every staff read, with name, hospital and time (`FR-PAT-64`) |
+
+> **Under `DEMO_MODE` only, a guest speaks for the patient their own booking
+> names** on the offer, the access log and a revoke (`CLAUDE.md` §4.1). This
+> version has no accounts, so without it the consent handshake is unreachable
+> from the patient side. With `DEMO_MODE` off a guest is refused all three, and
+> when accounts exist the branch is deleted (`assertSpeaksFor` in
+> `consent.service`).
 | POST | `/documents` | patient — paper upload |
 | POST | `/test-orders` | doctor \| patient booking |
 | PATCH | `/test-orders/:id/state` | lab |

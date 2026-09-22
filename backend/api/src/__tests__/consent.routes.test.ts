@@ -109,7 +109,7 @@ async function offer(token?: string, patientId: string = ownedPatientId): Promis
 
 async function redeem(code: string, token?: string): Promise<request.Response> {
   return await request(app)
-    .post(`${BASE}/consents/redeem`)
+    .post(`${BASE}/consents/qr`)
     .set('authorization', `Bearer ${token ?? (await doctor())}`)
     .set('idempotency-key', crypto.randomUUID())
     .send({ code, idempotencyKey: crypto.randomUUID() });
@@ -388,7 +388,9 @@ describe('a guest holding a booking link, in the demo (CLAUDE.md §4.1)', () => 
   });
 
   /** What `GET /guest/link/:token` exchanges a tracking link for. */
-  async function linkHolder(bookingId: string | null = String(fixture.bookingIds[0])): Promise<string> {
+  async function linkHolder(
+    bookingId: string | null = String(fixture.bookingIds[0]),
+  ): Promise<string> {
     return await signToken({
       kind: 'access',
       claims: {
