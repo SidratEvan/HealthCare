@@ -45,6 +45,10 @@ export const ERROR_CODES = {
   // --- Queue (FR-QUE-51, FR-QUE-53) ---------------------------------------
   QUEUE_CONFLICT: { status: 409, message: 'Another counter has already advanced this queue.' },
   QUEUE_GUARD_FAILED: { status: 422, message: 'That queue action is not allowed yet.' },
+
+  // `FR-PAT-63`. Expired, forged and never-real share one code on purpose: a
+  // caller guessing at consent codes must not learn which guess was closer.
+  CONSENT_CODE_INVALID: { status: 400, message: 'That code has expired or is not valid.' },
   /**
    * Not a failure. An offline console re-sending a batch gets the stored
    * result back, which is what makes replay safe (SY-02) — so it carries a

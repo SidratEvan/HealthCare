@@ -131,6 +131,12 @@ export interface BookingDetail {
   readonly sessionId: string;
   readonly serial: number;
   readonly status: BookingStatus;
+  /**
+   * Whom the booking is for. The wallet needs it to name the patient a consent
+   * offer or an access-log read is about (`FR-PAT-63`, `FR-PAT-64`); the holder
+   * of the booking's link already sees the name, and this is only its key.
+   */
+  readonly patientId: string;
   readonly patientName: string;
   readonly feePoisha: number;
   readonly hospitalId: string;
@@ -154,6 +160,7 @@ interface DetailQueryRow {
   session_id: string;
   serial_number: number;
   status: BookingStatus;
+  patient_id: string;
   full_name: string;
   fee_poisha: number;
   hospital_id: string;
@@ -174,7 +181,7 @@ interface DetailQueryRow {
 export async function findDetail(bookingId: string): Promise<BookingDetail | null> {
   const result = await sql<DetailQueryRow>`
     SELECT b.id, b.session_id, b.serial_number, b.status, b.fee_poisha,
-           p.full_name,
+           b.patient_id, p.full_name,
            h.id   AS hospital_id,
            h.name_bn AS hospital_name_bn,
            h.name_en AS hospital_name_en,
@@ -202,6 +209,7 @@ export async function findDetail(bookingId: string): Promise<BookingDetail | nul
     sessionId: row.session_id,
     serial: row.serial_number,
     status: row.status,
+    patientId: row.patient_id,
     patientName: row.full_name,
     feePoisha: row.fee_poisha,
     hospitalId: row.hospital_id,

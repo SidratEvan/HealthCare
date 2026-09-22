@@ -61,6 +61,22 @@ interface Envelope<T> {
   readonly data: T;
 }
 
+/**
+ * A refused or failed request, with the API's own error code when it sent one.
+ *
+ * The code is what lets a screen say *why*: `CONSENT_CODE_INVALID` asks the
+ * doctor for a new code, while a 500 or a dropped connection is worth a retry.
+ */
+export class RequestFailed extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+  ) {
+    super(`${String(status)} ${code ?? 'no code'}`);
+    this.name = 'RequestFailed';
+  }
+}
+
 async function call<T>(url: string, token: string | null, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -71,7 +87,12 @@ async function call<T>(url: string, token: string | null, init?: RequestInit): P
     },
   });
 
-  if (!response.ok) throw new Error(`${String(response.status)} ${url}`);
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: { code?: string };
+    } | null;
+    throw new RequestFailed(response.status, body?.error?.code ?? null);
+  }
 
   const body = (await response.json()) as Envelope<T>;
   return body.data;
@@ -82,17 +103,50 @@ async function call<T>(url: string, token: string | null, init?: RequestInit): P
  *
  * One request rather than three, because `NFR-04` assumes a connection where
  * each round trip is felt and the doctor is waiting with a patient in the room.
+ *
+ * Without a booking there is no intake to read, which is the consented case:
+ * a patient who handed over a code is not necessarily on this chamber's roster.
  */
 export async function fetchRecords(input: {
   readonly apiBaseUrl: string;
   readonly token: string | null;
   readonly patientId: string;
-  readonly bookingId: string;
+  readonly bookingId?: string;
 }): Promise<PatientRecords> {
+  const query =
+    input.bookingId === undefined ? '' : `?booking=${encodeURIComponent(input.bookingId)}`;
+
   return await call<PatientRecords>(
-    `${input.apiBaseUrl}/patients/${input.patientId}/records?booking=${encodeURIComponent(input.bookingId)}`,
+    `${input.apiBaseUrl}/patients/${input.patientId}/records${query}`,
     input.token,
   );
+}
+
+export interface RedeemedConsent {
+  readonly consentId: string;
+  readonly patientId: string;
+  readonly patientName: string;
+  readonly expiresAt: string;
+}
+
+/**
+ * `POST /consents/qr` — `BTN-B05-SCAN` (`FR-PAT-63`).
+ *
+ * Writes the grant and its audit row; the records are a separate read, which
+ * is itself audited, so the patient's log shows both the handover and the look.
+ */
+export async function redeemConsent(input: {
+  readonly apiBaseUrl: string;
+  readonly token: string | null;
+  readonly code: string;
+}): Promise<RedeemedConsent> {
+  const key = crypto.randomUUID();
+
+  return await call<RedeemedConsent>(`${input.apiBaseUrl}/consents/qr`, input.token, {
+    method: 'POST',
+    headers: { 'idempotency-key': key },
+    body: JSON.stringify({ code: input.code.trim(), idempotencyKey: key }),
+  });
 }
 
 export interface SaveVisitResult {

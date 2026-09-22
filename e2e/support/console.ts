@@ -408,3 +408,70 @@ export async function queueAction(
     throw new Error(`${path} failed: ${String(response.status)} ${await response.text()}`);
   }
 }
+
+/**
+ * Files a visit record as `BTN-B05-SIGN` does, through `POST /visits`.
+ *
+ * For specs about what happens *after* a doctor signs — the wallet — rather
+ * than about signing, which `doctor-console.spec.ts` drives through the screen.
+ * A real endpoint and the doctor's own token, so the record, the audit row and
+ * the queue advance are the product's, not the fixture's.
+ */
+export async function signVisit(
+  session: ConsoleSession,
+  bookingId: string,
+  record: { readonly diagnosisText: string; readonly adviceTextBn: string },
+): Promise<void> {
+  const key = crypto.randomUUID();
+
+  const response = await fetch(`${API_BASE}/visits`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${session.doctorToken}`,
+      'idempotency-key': key,
+    },
+    body: JSON.stringify({ bookingId, ...record, sign: true, idempotencyKey: key }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`/visits failed: ${String(response.status)} ${await response.text()}`);
+  }
+}
+
+/**
+ * The consent trail for the patient a booking is for (`FR-PAT-64`, `FR-SEC-03`).
+ *
+ * What step 13's definition of done asks of the database: a grant written, a
+ * revocation that is a timestamp rather than a delete, and an audit row for
+ * every staff read.
+ */
+export async function consentTrail(bookingId: string): Promise<{
+  readonly grants: number;
+  readonly revoked: number;
+  readonly staffReads: number;
+}> {
+  return await withClient(async (client) => {
+    const result = await client.query<{ grants: string; revoked: string; staff_reads: string }>(
+      `SELECT
+         (SELECT count(*) FROM consents c WHERE c.patient_id = b.patient_id)::text AS grants,
+         (SELECT count(*) FROM consents c
+           WHERE c.patient_id = b.patient_id AND c.revoked_at IS NOT NULL)::text AS revoked,
+         (SELECT count(*) FROM audit_log a
+           WHERE a.patient_id = b.patient_id AND a.action = 'RECORD_VIEW'
+             AND a.actor_staff_id IS NOT NULL)::text AS staff_reads
+         FROM bookings b
+        WHERE b.id = $1`,
+      [bookingId],
+    );
+
+    const row = result.rows[0];
+    if (row === undefined) throw new Error(`no booking ${bookingId}`);
+
+    return {
+      grants: Number(row.grants),
+      revoked: Number(row.revoked),
+      staffReads: Number(row.staff_reads),
+    };
+  });
+}
