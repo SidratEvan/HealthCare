@@ -104,7 +104,9 @@ describe('what it shows (FR-PAT-30)', () => {
     expect(screen.getByTestId('live-serial-number')).toHaveTextContent('১৮');
     expect(screen.getByTestId('now-serving')).toHaveTextContent('৬');
     expect(screen.getByTestId('live-serial-eta')).toHaveTextContent('আনুমানিক ৬:০৫');
-    expect(screen.getByTestId('live-serial-countdown')).toHaveTextContent('আর বাকি প্রায় ৪০ মিনিট');
+    expect(screen.getByTestId('live-serial-countdown')).toHaveTextContent(
+      'আর বাকি প্রায় ৪০ মিনিট',
+    );
   });
 
   it('renders the numerals it was given and converts nothing (I18N-04)', () => {
@@ -154,7 +156,7 @@ describe('the six states (§6.1)', () => {
     expect(screen.getByTestId('live-serial')).toHaveAttribute('data-tone', 'waiting');
   });
 
-  it("is doctor-not-arrived before the chamber opens", () => {
+  it('is doctor-not-arrived before the chamber opens', () => {
     render(<LiveSerialCard {...card({ doctorArrived: false })} />);
     expect(screen.getByTestId('live-serial')).toHaveAttribute('data-tone', 'not-arrived');
   });

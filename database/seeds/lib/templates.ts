@@ -39,8 +39,20 @@ export async function writeNotificationTemplates(client: Client): Promise<Templa
   // is (key, channel, locale), because one event reads differently in Bangla
   // and English and differently again as an SMS or a push.
   const rows = TEMPLATES.flatMap((template) => [
-    { key: template.key, channel: template.channel, locale: 'bn', body: template.bn, version: template.version },
-    { key: template.key, channel: template.channel, locale: 'en', body: template.en, version: template.version },
+    {
+      key: template.key,
+      channel: template.channel,
+      locale: 'bn',
+      body: template.bn,
+      version: template.version,
+    },
+    {
+      key: template.key,
+      channel: template.channel,
+      locale: 'en',
+      body: template.en,
+      version: template.version,
+    },
   ]);
 
   if (rows.length === 0) return { written: 0 };

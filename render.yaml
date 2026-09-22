@@ -46,20 +46,20 @@ services:
 
     envVars:
       - key: NODE_VERSION
-        value: '20'
+        value: "20"
 
       # Belt and braces: if anything still reaches for corepack, do not let it
       # stop on a confirmation prompt.
       - key: COREPACK_ENABLE_DOWNLOAD_PROMPT
-        value: '0'
+        value: "0"
 
       # See the note above: a demo deployment is not production.
       - key: NODE_ENV
         value: development
       - key: DEMO_MODE
-        value: 'true'
+        value: "true"
       - key: TRUST_PROXY_HOPS
-        value: '1'
+        value: "1"
       - key: LOG_LEVEL
         value: info
 
@@ -110,4 +110,4 @@ services:
       # FR-PAT-21 itemises a platform fee; what it charges is negotiated per
       # agreement and is deliberately not in this repository.
       - key: PLATFORM_FEE_POISHA
-        value: '0'
+        value: "0"
