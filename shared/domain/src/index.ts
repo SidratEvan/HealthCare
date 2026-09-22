@@ -154,3 +154,4 @@ export * from './schemas/bed.schema.js';
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';
 export * as time from './util/time.js';
+export { BD_MOBILE, normaliseBdMobile } from './util/phone.js';

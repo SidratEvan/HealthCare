@@ -7,9 +7,11 @@
  */
 
 import { ApiClient } from '@platform/client';
+import type { BedKind } from '@platform/domain';
 
 import type {
   AccessLog,
+  BedRequestView,
   Availability,
   ConsentOffer,
   DoctorCard,
@@ -214,4 +216,62 @@ export async function revokeConsent(input: {
   readonly idempotencyKey: string;
 }): Promise<void> {
   await authed(input.token).post(`/consents/${input.consentId}/revoke`, {}, input.idempotencyKey);
+}
+
+// ---------------------------------------------------------------------------
+// Beds (`S-A-11`, FR-PAT-50..52)
+// ---------------------------------------------------------------------------
+
+/** Hospitals that have beds of `kind`, each with its published figures. */
+export async function hospitalsWithBeds(kind: BedKind): Promise<StampedList<HospitalCard>> {
+  const data = await api.get<{ hospitals: HospitalCard[]; asOf: string }>(
+    `/hospitals?bedKind=${encodeURIComponent(kind)}`,
+  );
+  return { items: data.hospitals, asOf: data.asOf };
+}
+
+export interface BedRequestCreated {
+  readonly request: BedRequestView;
+  /** The status link's token. Returned once; this phone keeps it. */
+  readonly token: string;
+  readonly trackUrl: string;
+  readonly duplicate: boolean;
+}
+
+/**
+ * `POST /bed-requests` — `MOD-A11-REQUEST`.
+ *
+ * The idempotency key is made once per send attempt and reused across its
+ * retries, as the booking's is, so a double tap on a bad connection files one
+ * request, not two.
+ */
+export async function requestBed(input: {
+  readonly hospitalId: string;
+  readonly bedKind: BedKind;
+  readonly patient: {
+    readonly name: string;
+    readonly phone: string;
+    readonly ageYears: number;
+    readonly sex: 'male' | 'female' | 'other';
+  };
+  readonly expectedArrivalAt: string | null;
+  readonly note: string | null;
+  readonly idempotencyKey: string;
+}): Promise<BedRequestCreated> {
+  return await api.post<BedRequestCreated>(
+    '/bed-requests',
+    {
+      hospitalId: input.hospitalId,
+      bedKind: input.bedKind,
+      patient: input.patient,
+      expectedArrivalAt: input.expectedArrivalAt,
+      note: input.note,
+    },
+    input.idempotencyKey,
+  );
+}
+
+/** `GET /bed-requests/track/:token` — the token is the credential. */
+export async function trackBedRequest(token: string): Promise<BedRequestView> {
+  return await api.get<BedRequestView>(`/bed-requests/track/${encodeURIComponent(token)}`);
 }

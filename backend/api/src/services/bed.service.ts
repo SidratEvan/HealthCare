@@ -89,6 +89,8 @@ export interface BedActionResult {
 /** `GET /hospitals/:id/beds` — everything `S-B-06` draws. */
 export interface BedBoard {
   readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
   readonly wards: readonly WardView[];
   readonly beds: readonly BedView[];
   readonly published: PublicCapacity | null;
@@ -106,16 +108,20 @@ export async function board(hospitalId: string): Promise<BedBoard> {
   // ended it.
   await releaseLapsedHolds(hospitalId);
 
-  const [wards, beds, published, staleAfterMinutes] = await Promise.all([
+  const [names, wards, beds, published, staleAfterMinutes] = await Promise.all([
+    bedRepo.hospitalNames(hospitalId),
     bedRepo.listWards(hospitalId),
     bedRepo.listBeds(hospitalId),
     publishedFor(hospitalId),
     bedRepo.staleThresholdMinutes(hospitalId),
   ]);
+  if (names === null) throw notFound('hospital');
 
   const serverTs = new Date().toISOString();
   return {
     hospitalId,
+    hospitalNameBn: names.nameBn,
+    hospitalNameEn: names.nameEn,
     wards,
     beds: beds.map(toView),
     published,

@@ -732,3 +732,14 @@ export async function hospitalExists(hospitalId: string): Promise<boolean> {
   `.execute(db);
   return result.rows.length > 0;
 }
+
+/** The hospital's names, for the board's header. */
+export async function hospitalNames(
+  hospitalId: string,
+): Promise<{ readonly nameBn: string; readonly nameEn: string } | null> {
+  const result = await sql<{ name_bn: string; name_en: string }>`
+    SELECT name_bn, name_en FROM hospitals WHERE id = ${hospitalId}::uuid AND deleted_at IS NULL
+  `.execute(db);
+  const row = result.rows[0];
+  return row === undefined ? null : { nameBn: row.name_bn, nameEn: row.name_en };
+}
