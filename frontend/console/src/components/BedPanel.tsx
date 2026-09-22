@@ -572,7 +572,7 @@ function AdmitForm({
                 variant={fromEr?.caseId === handoff.caseId ? 'primary' : 'secondary'}
                 size="sm"
                 aria-pressed={fromEr?.caseId === handoff.caseId}
-                data-testid={`admit-handoff-${handoff.caseId}`}
+                data-testid={`admit-er-${handoff.caseId}`}
                 onClick={() => {
                   const chosen = fromEr?.caseId === handoff.caseId ? null : handoff;
                   setFromEr(chosen);
