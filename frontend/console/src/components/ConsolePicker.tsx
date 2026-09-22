@@ -68,6 +68,7 @@ const ROLE_LABEL: Record<string, ConsoleKey> = {
   receptionist: 'roleReceptionist',
   doctor: 'roleDoctor',
   ward: 'roleWard',
+  emergency: 'roleEmergency',
   hospital_admin: 'roleHospitalAdmin',
 };
 
@@ -96,7 +97,9 @@ interface DemoConsole {
  * chamber (`S-B-06`), so it is chosen beside the chambers rather than on one.
  */
 export type ConsoleChoice =
-  { readonly kind: 'chamber'; readonly sessionId: string } | { readonly kind: 'ward' };
+  | { readonly kind: 'chamber'; readonly sessionId: string }
+  | { readonly kind: 'ward' }
+  | { readonly kind: 'emergency' };
 
 export function ConsolePicker({
   onChosen,
@@ -292,6 +295,25 @@ export function ConsolePicker({
         </section>
       ) : null}
 
+      {/* `S-B-07` is the hospital's too (step 15). */}
+      {hospital?.roles.includes('emergency') === true ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-title-sm">{t('erSection', LOCALE)}</h2>
+          <div>
+            <Button
+              variant="secondary"
+              loading={busy}
+              data-testid={`open-er-${hospital.hospitalId}`}
+              onClick={() => {
+                void open(hospital.hospitalId, 'emergency', { kind: 'emergency' });
+              }}
+            >
+              {t('openEr', LOCALE)}
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
       {hospital === null ? null : (
         <section className="flex flex-col gap-3">
           <h2 className="text-title-sm">{t('chooseChamber', LOCALE)}</h2>
@@ -313,7 +335,9 @@ export function ConsolePicker({
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     {hospital.roles
-                      .filter((role) => role !== 'ward')
+                      // The ward board and the ER belong to the hospital, not to a
+                      // chamber, and are offered once above.
+                      .filter((role) => role !== 'ward' && role !== 'emergency')
                       .map((role) => (
                         <Button
                           key={role}

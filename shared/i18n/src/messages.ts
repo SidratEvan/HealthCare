@@ -585,6 +585,13 @@ export const CONSOLE = {
     bn: 'সার্ভার এই কাজটি নেয়নি — তালিকা হালনাগাদ করা হয়েছে।',
     en: 'The server did not accept that — the list has been updated.',
   },
+  erColActions: { bn: 'কাজ', en: 'Actions' },
+  erDistanceKm: { bn: '{km} কিমি', en: '{km} km' },
+  // BTN-A10C-CANCEL reaches the ER: the family is not coming.
+  erFamilyCancelled: {
+    bn: 'পরিবার জানিয়েছে তাঁরা আসছেন না ({problem})।',
+    en: 'The family says they are not coming ({problem}).',
+  },
 
   // --- Demo mode (FR-DEM-07, CLAUDE.md §1.1) -------------------------------
   demoBanner: {
