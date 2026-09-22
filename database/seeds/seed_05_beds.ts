@@ -29,12 +29,22 @@
  * alternative (a second population of inpatients) would contradict the count
  * `FR-DEM-03` states. Nobody holds two beds: `admissions_one_per_patient_key`
  * refuses it.
+ *
+ * ## The ERs, because they share the ward's migration and its scenario
+ *
+ * `emergency_cases` is 0008's table as much as `beds` is, and the emergency
+ * scenario (`PRD.md` §24 step 7) is staged across both: the burn beds here and
+ * the ER load in `data/emergency.ts` are the two halves of why Padma, not the
+ * nearer Jamuna, is the answer to a burn case from Farmgate. So the cases are
+ * written here too, after the beds, and two of them are already handed to the
+ * ward (`FR-BED-07`).
  */
 
 import { time, type Timestamp } from '@platform/domain';
 
 import { DEMO_BED_REQUESTS, DEMO_HOLD_MINUTES, DEMO_WARDS, OOS_REASONS } from './data/beds.js';
-import { DEMO_MARKER, labelBn, labelEn, taka } from './lib/demo.js';
+import { DEMO_EMERGENCY_CASES } from './data/emergency.js';
+import { DEMO_MARKER, demoPhone, labelBn, labelEn, taka } from './lib/demo.js';
 import { insertRows } from './lib/insert.js';
 import { facilityIds, staffByRole } from './lib/lookup.js';
 
@@ -80,14 +90,15 @@ interface BedEventRow {
 
 export const seed05Beds: SeedModule = {
   name: 'seed_05_beds',
-  title: 'wards, beds, admissions and live occupancy',
-  requirements: ['FR-DEM-04'],
-  writes: ['wards', 'beds', 'bed_events', 'admissions', 'bed_requests'],
+  title: 'wards, beds, admissions, live occupancy and the ERs',
+  requirements: ['FR-DEM-04', 'FR-EMG-03', 'FR-EMG-04'],
+  writes: ['wards', 'beds', 'bed_events', 'admissions', 'bed_requests', 'emergency_cases'],
 
   async run({ client, now, rng }: SeedContext): Promise<SeedSummary> {
     const beds = rng.stream('beds');
     const facilities = await facilityIds(client);
     const wardStaff = await staffByRole(client, 'ward');
+    const erStaff = await staffByRole(client, 'emergency');
     const minutesAgo = (minutes: number): Timestamp => time.addMinutes(now, -minutes);
 
     // --- Wards ---------------------------------------------------------------
@@ -548,12 +559,16 @@ export const seed05Beds: SeedModule = {
       '',
     );
 
+    // --- The ERs --------------------------------------------------------------
+    const emergencyCases = await writeEmergencyCases(client, { facilities, erStaff, minutesAgo });
+
     return {
       wards: insertedWards.length,
       beds: insertedBeds.length,
       admissions: insertedAdmissions.length,
       bed_requests: insertedRequests.length,
       bed_events: events.length,
+      emergency_cases: emergencyCases,
     };
   },
 };
@@ -650,6 +665,123 @@ async function loadCandidates(client: Client, today: string, rng: Rng): Promise<
     ...rng.shuffle(rows.filter((row) => !row.busy_today)).map(toCandidate),
     ...rng.shuffle(rows.filter((row) => row.busy_today)).map(toCandidate),
   ];
+}
+
+/**
+ * Writes `data/emergency.ts` (`FR-EMG-03`, `FR-EMG-04`).
+ *
+ * Tokens are numbered per ER in arrival order, oldest first, the way a desk
+ * numbers the day's arrivals — so the discharged cases hold the low numbers
+ * and the person who walked in four minutes ago the highest. A case still on
+ * its way has no token: one is given at the door.
+ *
+ * Every state carries the stamps migration 0016's checks require of it, which
+ * is the point of writing them out here rather than leaving them to defaults.
+ */
+async function writeEmergencyCases(
+  client: Client,
+  context: {
+    readonly facilities: ReadonlyMap<string, string>;
+    readonly erStaff: ReadonlyMap<string, string>;
+    readonly minutesAgo: (minutes: number) => Timestamp;
+  },
+): Promise<number> {
+  const { facilities, erStaff, minutesAgo } = context;
+  const nextToken = new Map<string, number>();
+  let phones = 0;
+
+  const oldestFirst = [...DEMO_EMERGENCY_CASES].sort((a, b) => b.minutesAgo - a.minutesAgo);
+
+  const rows = oldestFirst.map((declared) => {
+    const hospitalId = required(facilities, declared.facility, 'facility');
+    const at = minutesAgo(declared.minutesAgo);
+    const phone = declared.phone ? demoPhone('emergency', (phones += 1)) : null;
+
+    if (declared.state === 'acknowledged') {
+      return {
+        hospitalId,
+        phone,
+        declared,
+        state: 'acknowledged',
+        etaMinutes: declared.etaMinutes ?? null,
+        inboundAt: at,
+        acknowledgedAt: time.addMinutes(at, 1),
+        arrivedAt: null,
+        token: null,
+        closedAt: null,
+        // Nobody on the staff created an alert a family sent.
+        createdBy: null,
+        createdAt: at,
+      };
+    }
+
+    const token = (nextToken.get(declared.facility) ?? 0) + 1;
+    nextToken.set(declared.facility, token);
+
+    return {
+      hospitalId,
+      phone,
+      declared,
+      state: declared.state,
+      etaMinutes: null,
+      inboundAt: null,
+      acknowledgedAt: null,
+      arrivedAt: at,
+      token: `ER-${String(token)}`,
+      closedAt:
+        declared.state === 'discharged' ? time.addMinutes(at, declared.stayedMinutes ?? 60) : null,
+      createdBy: required(erStaff, declared.facility, 'emergency staff'),
+      createdAt: at,
+    };
+  });
+
+  await insertRows(
+    client,
+    'emergency_cases',
+    {
+      columns: [
+        'hospital_id',
+        'contact_phone',
+        'problem_type',
+        'state',
+        'triage',
+        'inbound_eta_minutes',
+        'inbound_at',
+        'acknowledged_at',
+        'arrived_at',
+        'token_label',
+        'patient_age_years',
+        'patient_sex',
+        'closed_at',
+        'admit_bed_kind',
+        'admit_requested_at',
+        'created_by',
+        'created_at',
+      ],
+    },
+    rows.map((row) => [
+      row.hospitalId,
+      row.phone,
+      row.declared.problem,
+      row.state,
+      row.declared.triage,
+      row.etaMinutes,
+      row.inboundAt,
+      row.acknowledgedAt,
+      row.arrivedAt,
+      row.token,
+      row.declared.ageYears,
+      row.declared.sex,
+      row.closedAt,
+      row.declared.handoff?.kind ?? null,
+      row.declared.handoff === undefined ? null : minutesAgo(row.declared.handoff.minutesAgo),
+      row.createdBy,
+      row.createdAt,
+    ]),
+    '',
+  );
+
+  return rows.length;
 }
 
 /** Sets every bed's present in one statement. */

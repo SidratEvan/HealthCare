@@ -59,7 +59,8 @@ export function isLabelled(value: string): boolean {
 }
 
 /** The kinds of person the demo phone block is divided between. */
-export type PhoneKind = 'patient' | 'guest' | 'staff' | 'donor' | 'standby' | 'fixture';
+export type PhoneKind =
+  'patient' | 'guest' | 'staff' | 'donor' | 'standby' | 'emergency' | 'fixture';
 
 const PHONE_PREFIX: Record<PhoneKind, string> = {
   patient: '31',
@@ -70,6 +71,9 @@ const PHONE_PREFIX: Record<PhoneKind, string> = {
   staff: '33',
   donor: '34',
   standby: '35',
+  // Somebody who left a number with an ER (`emergency_cases.contact_phone`).
+  // Not a patient profile: the person at the other end is usually anonymous.
+  emergency: '36',
   // The minimal graph the schema tests build (`database/seeds/graph.ts`). Its own
   // block, so a fixture row and a seeded row can never share a number even
   // when both exist in one database.
