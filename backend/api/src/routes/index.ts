@@ -13,6 +13,7 @@
 
 import { Router } from 'express';
 
+import { bedRoutes } from './bed.routes.js';
 import { bookingRoutes } from './booking.routes.js';
 import { clinicalRoutes } from './clinical.routes.js';
 import { consentRoutes } from './consent.routes.js';
@@ -53,6 +54,9 @@ export function buildApiRouter(): Router {
   router.use(clinicalRoutes);
   // Consent is the patient's side of the same records (`FR-PAT-63`, `-64`).
   router.use(consentRoutes);
+  // The bed board (step 14). `POST /bed-requests` and its tracking read are
+  // public, like a guest booking; everything else is the ward's.
+  router.use(bedRoutes);
   router.use(syncRoutes);
   return router;
 }

@@ -39,10 +39,11 @@ import * as demoRepo from '../repositories/demo.repo.js';
  * Roles the demo console offers, in the order they are shown.
  *
  * Reception first, and not alphabetically: it is the console the pitch is
- * about, the one with a screen built, and the primary action on every chamber
- * card. Sorting these by name put it last behind two that do less.
+ * about and the primary action on every chamber card. The ward follows the
+ * two chamber roles because it is the one console that opens on a hospital
+ * rather than a chamber (`S-B-06`, build step 14).
  */
-const OFFERED: readonly StaffRole[] = ['receptionist', 'doctor', 'hospital_admin'];
+const OFFERED: readonly StaffRole[] = ['receptionist', 'doctor', 'ward', 'hospital_admin'];
 
 /** Refuses unless this deployment is a demo. */
 function assertDemoMode(): void {
@@ -78,9 +79,8 @@ export async function listConsoles(): Promise<readonly DemoConsole[]> {
     nameBn: row.nameBn,
     nameEn: row.nameEn,
     district: row.district,
-    // Filtered to what exists, and ordered by `OFFERED` rather than by name.
-    // Offering "ward" before the ward board is built would be a door onto an
-    // empty room (build step 14).
+    // Filtered to what exists, and ordered by `OFFERED` rather than by name:
+    // a clinic with no ward staff offers no ward board (`data/people.ts`).
     roles: OFFERED.filter((role) => row.roles.includes(role)),
     sessions: row.sessions,
   }));

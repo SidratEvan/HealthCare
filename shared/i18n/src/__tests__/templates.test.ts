@@ -9,13 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  TEMPLATES,
-  TEMPLATE_KEYS,
-  placeholdersFor,
-  placeholdersIn,
-  render,
-} from '../templates.js';
+import { TEMPLATES, TEMPLATE_KEYS, placeholdersFor, placeholdersIn, render } from '../templates.js';
 
 /**
  * One UCS-2 SMS segment.
@@ -93,8 +87,19 @@ describe('placeholders', () => {
     // without it is a notice they cannot match to their own booking.
     for (const key of TEMPLATE_KEYS) {
       if (key === 'queue.doctor_arrived') continue;
+      // A bed request has no serial; its messages name the hospital and the
+      // bed instead, which the next test holds them to.
+      if (key.startsWith('bed.')) continue;
       expect(placeholdersFor(key), `${key} never says which serial`).toContain('serial');
     }
+  });
+
+  it('names the hospital and the kind of bed in every answer to a bed request', () => {
+    for (const key of TEMPLATE_KEYS.filter((candidate) => candidate.startsWith('bed.'))) {
+      expect(placeholdersFor(key)).toEqual(expect.arrayContaining(['hospital', 'kind']));
+    }
+    // A hold that does not say when it runs out is a bed lost without warning.
+    expect(placeholdersFor('bed.request_held')).toContain('time');
   });
 });
 
