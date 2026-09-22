@@ -29,6 +29,7 @@
  */
 
 import {
+  canActOn,
   canApply,
   canForecastDischarge,
   canReceiveTransfer,
@@ -52,12 +53,15 @@ import { AppError, forbiddenScope, notFound, validationFailed } from '../errors/
 import * as emit from '../realtime/emit.js';
 import * as bedRepo from '../repositories/bed.repo.js';
 import * as clinicalRepo from '../repositories/clinical.repo.js';
+import * as emergencyRepo from '../repositories/emergency.repo.js';
 import * as guestRepo from '../repositories/guest.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
+import * as emergency from './emergency.service.js';
 import * as notifications from './notification.service.js';
 
 import type { BedRow, BedRequestRow, BedRequestState } from '../repositories/bed.repo.js';
+import type { CaseRow } from '../repositories/emergency.repo.js';
 
 /** The staff member acting, and the hospital they act for (`FR-ROLE-01`). */
 export interface WardActor {
@@ -164,16 +168,23 @@ export async function panel(bedId: string, actor: WardActor): Promise<BedPanel> 
 // The actions (BACKEND.md §7.5)
 // ---------------------------------------------------------------------------
 
-/** Who is being admitted: a pending request, or the person at the desk. */
+/** The person at the ward desk, as the desk typed them. */
+interface AtDesk {
+  readonly name: string;
+  readonly phone: string;
+  readonly ageYears: number;
+  readonly sex: 'male' | 'female' | 'other';
+}
+
+/**
+ * Who is being admitted: a pending request, the person at the desk, or a case
+ * the ER handed over — who is also at the desk, and gives their name there
+ * (`BTN-B07-ADMIT`, `FR-BED-07`).
+ */
 export type AdmitWho =
   | { readonly kind: 'request'; readonly bedRequestId: string }
-  | {
-      readonly kind: 'patient';
-      readonly name: string;
-      readonly phone: string;
-      readonly ageYears: number;
-      readonly sex: 'male' | 'female' | 'other';
-    };
+  | ({ readonly kind: 'patient' } & AtDesk)
+  | ({ readonly kind: 'emergency'; readonly emergencyCaseId: string } & AtDesk);
 
 /** `POST /beds/:id/admit` (`BTN-B06-ADMIT`). */
 export async function admit(
@@ -185,26 +196,40 @@ export async function admit(
   actor: WardActor,
 ): Promise<BedActionResult> {
   return await run([input.bedId], input, actor, async (trx, [bed]) => {
+    const who = input.who;
     const request =
-      input.who.kind === 'request'
-        ? await pendingRequest(trx, input.who.bedRequestId, actor)
-        : null;
+      who.kind === 'request' ? await pendingRequest(trx, who.bedRequestId, actor) : null;
+    const emergencyCase =
+      who.kind === 'emergency' ? await handedOffCase(trx, who.emergencyCaseId, actor) : null;
 
     const patientId =
-      input.who.kind === 'request'
-        ? (request?.patientId ?? '')
-        : await patientAtDesk(trx, input.who);
+      who.kind === 'request' ? (request?.patientId ?? '') : await patientAtDesk(trx, who);
 
     await admitInto(trx, {
       bed: required(bed),
       patientId,
       request,
+      emergencyCaseId: emergencyCase?.id ?? null,
       expectedDischargeDate: input.expectedDischargeDate,
       actor,
       envelope: input,
     });
 
-    return { bedIds: [required(bed).id], requests: request === null ? [] : [request.id] };
+    // The case leaves the ER's list and the ward's: it is a stay now, and it
+    // names the person it has become.
+    if (emergencyCase !== null) {
+      await emergencyRepo.writeCase(trx, emergencyCase.id, {
+        state: 'admitted',
+        closed: true,
+        patientId,
+      });
+    }
+
+    return {
+      bedIds: [required(bed).id],
+      requests: request === null ? [] : [request.id],
+      cases: emergencyCase === null ? [] : [emergencyCase.id],
+    };
   });
 }
 
@@ -510,16 +535,55 @@ export async function trackRequest(token: string): Promise<RequestView> {
   return await requestView(requestId);
 }
 
+/**
+ * One case the ER handed to the ward (`BTN-B07-ADMIT`) — the ER half of
+ * `LIST-B06-PENDING` (`FR-BED-07`). Names nobody: the ward takes the name at
+ * the bed, so this half of the list is not an identifying read.
+ */
+export interface PendingHandoff {
+  readonly caseId: string;
+  readonly tokenLabel: string | null;
+  readonly problem: string;
+  readonly triage: string | null;
+  readonly ageYears: number | null;
+  readonly sex: string | null;
+  readonly bedKind: BedKind;
+  readonly requestedAt: string;
+}
+
 /** `GET /hospitals/:id/bed-requests` — `LIST-B06-PENDING`. **Identifying**: audited. */
 export async function pending(
   hospitalId: string,
   actor: WardActor,
-): Promise<{ readonly requests: readonly bedRepo.PendingRequest[]; readonly serverTs: string }> {
+): Promise<{
+  readonly requests: readonly bedRepo.PendingRequest[];
+  readonly handoffs: readonly PendingHandoff[];
+  readonly serverTs: string;
+}> {
   // A lapsed hold leaves the pending list when it lapses, not when somebody
   // next opens the board.
   await releaseLapsedHolds(hospitalId);
 
-  const requests = await bedRepo.pendingRequests(hospitalId);
+  const [requests, cases] = await Promise.all([
+    bedRepo.pendingRequests(hospitalId),
+    emergencyRepo.handoffs(hospitalId),
+  ]);
+  const handoffs = cases.flatMap((entry): PendingHandoff[] =>
+    entry.admitBedKind === null || entry.admitRequestedAt === null
+      ? []
+      : [
+          {
+            caseId: entry.id,
+            tokenLabel: entry.tokenLabel,
+            problem: entry.problem,
+            triage: entry.triage,
+            ageYears: entry.ageYears,
+            sex: entry.sex,
+            bedKind: entry.admitBedKind,
+            requestedAt: entry.admitRequestedAt,
+          },
+        ],
+  );
 
   for (const request of requests) {
     await clinicalRepo.recordRecordView({
@@ -533,7 +597,7 @@ export async function pending(
     });
   }
 
-  return { requests, serverTs: new Date().toISOString() };
+  return { requests, handoffs, serverTs: new Date().toISOString() };
 }
 
 export type RespondInput =
@@ -614,6 +678,7 @@ export async function respond(
           bed,
           patientId: current.patientId,
           request: current,
+          emergencyCaseId: null,
           expectedDischargeDate: null,
           actor,
           envelope: input,
@@ -664,6 +729,8 @@ export async function respond(
 interface Changed {
   readonly bedIds: readonly string[];
   readonly requests: readonly string[];
+  /** ER cases this action placed, so the ER console sees them leave (`FR-BED-07`). */
+  readonly cases?: readonly string[];
   readonly batch?: notifications.QueuedBatch;
 }
 
@@ -721,7 +788,9 @@ async function run(
 
   // --- 5. Publish, after commit ----------------------------------------------
   if (changed.batch !== undefined) await notifications.dispatch(changed.batch);
-  return await publish(actor.hospitalId, changed.bedIds, changed.requests);
+  const result = await publish(actor.hospitalId, changed.bedIds, changed.requests);
+  for (const caseId of changed.cases ?? []) await emergency.publishCase(caseId);
+  return result;
 }
 
 /** An action that is nothing but a state change on one bed. */
@@ -753,12 +822,15 @@ async function admitInto(
     readonly bed: BedRow;
     readonly patientId: string;
     readonly request: BedRequestRow | null;
+    /** A case the ER handed over; the stay's source is then the ER. */
+    readonly emergencyCaseId: string | null;
     readonly expectedDischargeDate: string | null;
     readonly actor: WardActor;
     readonly envelope: Envelope;
   },
 ): Promise<void> {
   const { bed, request, actor } = input;
+  const source = input.emergencyCaseId !== null ? 'er' : request === null ? 'opd' : 'app_request';
 
   guard(bed, 'admit', { bedRequestId: request?.id ?? null });
 
@@ -783,8 +855,9 @@ async function admitInto(
     patientId: input.patientId,
     hospitalId: bed.hospitalId,
     bedId: bed.id,
-    source: request === null ? 'opd' : 'app_request',
+    source,
     bedRequestId: request?.id ?? null,
+    emergencyCaseId: input.emergencyCaseId,
     expectedDischargeDate: input.expectedDischargeDate,
     createdBy: actor.staffUserId,
   });
@@ -792,7 +865,7 @@ async function admitInto(
   await record(trx, bed, 'admit', actor, input.envelope, {
     admissionId,
     bedRequestId: request?.id ?? null,
-    payload: { source: request === null ? 'opd' : 'app_request' },
+    payload: { source },
   });
 
   await bedRepo.writeBed(trx, bed.id, {
@@ -813,10 +886,7 @@ async function admitInto(
 }
 
 /** The person at the ward desk, found or registered (`FR-GST-13`). */
-async function patientAtDesk(
-  trx: Tx,
-  who: Extract<AdmitWho, { kind: 'patient' }>,
-): Promise<string> {
+async function patientAtDesk(trx: Tx, who: AtDesk): Promise<string> {
   const guestId = await guestRepo.findOrCreateIdentity(trx, {
     phone: who.phone,
     displayName: who.name,
@@ -828,6 +898,26 @@ async function patientAtDesk(
     sex: who.sex,
     phone: who.phone,
   });
+}
+
+/**
+ * A case the ER at this hospital handed to the ward and nobody has placed yet,
+ * locked. The guard is the ER's own (`canActOn(…, 'admit')`), so the ward
+ * cannot admit a case the ER never handed over or has since discharged.
+ */
+async function handedOffCase(trx: Tx, caseId: string, actor: WardActor): Promise<CaseRow> {
+  const found = await emergencyRepo.lockCase(trx, caseId);
+  if (found === null) throw notFound('emergency case');
+  if (found.hospitalId !== actor.hospitalId) throw forbiddenScope({ reason: 'wrong_hospital' });
+
+  const verdict = canActOn(found, 'admit');
+  if (!verdict.ok) {
+    throw new AppError('EMERGENCY_TRANSITION_INVALID', {
+      message: verdict.detail,
+      details: { guard: verdict.code, state: found.state },
+    });
+  }
+  return found;
 }
 
 /** A request still waiting for this hospital's answer, locked. */

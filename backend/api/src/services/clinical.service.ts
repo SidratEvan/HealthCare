@@ -35,14 +35,13 @@
  * over the atomic one deliberately; the alternative loses a record.
  */
 
-import type { CreateVisitBody, QueueActor  } from '@platform/domain';
+import type { CreateVisitBody, QueueActor } from '@platform/domain';
 
 import { forbiddenScope, guardFailed, notFound } from '../errors/AppError.js';
 import * as clinicalRepo from '../repositories/clinical.repo.js';
 import { withTransaction } from '../repositories/transaction.js';
 
 import * as queueService from './queue.service.js';
-
 
 import type { Principal } from '../types/express.js';
 
@@ -154,18 +153,19 @@ export async function saveVisit(input: {
     );
   }
 
-  const visit = await withTransaction(async (trx) =>
-    await clinicalRepo.upsertVisit(trx, {
-      bookingId: booking.bookingId,
-      patientId: booking.patientId,
-      hospitalId: booking.hospitalId,
-      doctorId: booking.doctorId,
-      diagnosisText: blankToNull(body.diagnosisText),
-      adviceTextBn: blankToNull(body.adviceTextBn),
-      followUpDate: body.followUpDate ?? null,
-      sign: body.sign,
-      staffUserId: input.principal.id,
-    }),
+  const visit = await withTransaction(
+    async (trx) =>
+      await clinicalRepo.upsertVisit(trx, {
+        bookingId: booking.bookingId,
+        patientId: booking.patientId,
+        hospitalId: booking.hospitalId,
+        doctorId: booking.doctorId,
+        diagnosisText: blankToNull(body.diagnosisText),
+        adviceTextBn: blankToNull(body.adviceTextBn),
+        followUpDate: body.followUpDate ?? null,
+        sign: body.sign,
+        staffUserId: input.principal.id,
+      }),
   );
 
   if (!body.sign) {

@@ -61,9 +61,9 @@ async function queued(): Promise<
   }));
 }
 
-async function keysFor(templateKey: string): Promise<
-  { state: string; error: string | null; body: string }[]
-> {
+async function keysFor(
+  templateKey: string,
+): Promise<{ state: string; error: string | null; body: string }[]> {
   const rows = await notificationRepo.listForSession(fixture.sessionId);
   return rows
     .filter((row) => row.templateKey === templateKey)
@@ -417,15 +417,15 @@ describe('quiet hours (FR-NOT-07)', () => {
   it('suppresses a non-urgent message at three in the morning', () => {
     // Nothing in this version sends one; the first follow-up reminder will,
     // and it must not wake anybody.
-    expect(notifications.withinQuietHours('care.followup', new Date('2026-09-18T21:00:00.000Z'))).toBe(
-      true,
-    );
+    expect(
+      notifications.withinQuietHours('care.followup', new Date('2026-09-18T21:00:00.000Z')),
+    ).toBe(true);
   });
 
   it('lets a non-urgent message through in the afternoon', () => {
-    expect(notifications.withinQuietHours('care.followup', new Date('2026-09-18T09:00:00.000Z'))).toBe(
-      false,
-    );
+    expect(
+      notifications.withinQuietHours('care.followup', new Date('2026-09-18T09:00:00.000Z')),
+    ).toBe(false);
   });
 });
 

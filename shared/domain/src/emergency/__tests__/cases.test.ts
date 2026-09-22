@@ -30,7 +30,7 @@ function inbound(overrides: Partial<EmergencyCaseView> = {}): EmergencyCaseView 
     tokenLabel: null,
     ageYears: null,
     sex: null,
-    contactPhone: null,
+    hasPhone: false,
     inboundAt: at(-5),
     inboundEtaMinutes: 20,
     acknowledgedAt: null,

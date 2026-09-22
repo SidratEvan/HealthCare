@@ -461,3 +461,61 @@ export async function bedRequestRecipient(
     smsBudgetMonthly: row.sms_budget_monthly,
   };
 }
+
+/** Who an emergency case's answer goes to (`APP_FLOW.md` D2: "Emergency acknowledged"). */
+export interface EmergencyRecipient {
+  readonly recipient: Recipient;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  /** `hospital_settings.sms_budget_monthly`; null means no cap (`FR-NOT-06`). */
+  readonly smsBudgetMonthly: number | null;
+}
+
+/**
+ * The number somebody left with an inbound alert.
+ *
+ * Usually nobody's record: an emergency needs nothing of a person
+ * (`FR-GST-03`), so the recipient is often a phone number and no row at all —
+ * which `notifications_one_recipient` allows. When the case has since been
+ * admitted and names a patient, the message is addressed to them.
+ */
+export async function emergencyRecipient(
+  trx: Tx,
+  caseId: string,
+): Promise<EmergencyRecipient | null> {
+  const result = await sql<{
+    patient_id: string | null;
+    contact_phone: string | null;
+    hospital_id: string;
+    name_bn: string;
+    name_en: string;
+    sms_budget_monthly: number | null;
+  }>`
+    SELECT ec.patient_id, ec.contact_phone, h.id AS hospital_id, h.name_bn, h.name_en,
+           s.sms_budget_monthly
+      FROM emergency_cases ec
+      JOIN hospitals h ON h.id = ec.hospital_id
+      LEFT JOIN hospital_settings s ON s.hospital_id = ec.hospital_id
+     WHERE ec.id = ${caseId}::uuid
+  `.execute(trx);
+
+  const row = result.rows[0];
+  if (row === undefined) return null;
+
+  return {
+    recipient: {
+      patientId: row.patient_id,
+      guestId: null,
+      userId: null,
+      phone: row.contact_phone,
+      // Nobody chose a language: an alert carries no profile. Bangla is the
+      // product (`FR-LOC-01`).
+      locale: 'bn',
+    },
+    hospitalId: row.hospital_id,
+    hospitalNameBn: row.name_bn,
+    hospitalNameEn: row.name_en,
+    smsBudgetMonthly: row.sms_budget_monthly,
+  };
+}

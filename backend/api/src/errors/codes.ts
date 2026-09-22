@@ -58,6 +58,19 @@ export const ERROR_CODES = {
   },
   BED_CONFLICT: { status: 409, message: 'Another change to this bed or patient got there first.' },
 
+  // --- Emergency (FR-EMG-01..04) -------------------------------------------
+  //
+  // One code, a 422: an action the case's state does not allow, which the
+  // same request will meet however often it is sent — accepting a case the
+  // family has called off, triaging somebody who has not arrived. The races
+  // two ER consoles can run end in the state the other already wrote, and an
+  // action whose outcome is already the case is answered as a replay, not a
+  // conflict (`alreadyApplied` in `shared/domain`).
+  EMERGENCY_TRANSITION_INVALID: {
+    status: 422,
+    message: 'That emergency case cannot do that from its current state.',
+  },
+
   // `FR-PAT-63`. Expired, forged and never-real share one code on purpose: a
   // caller guessing at consent codes must not learn which guess was closer.
   CONSENT_CODE_INVALID: { status: 400, message: 'That code has expired or is not valid.' },

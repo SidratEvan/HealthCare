@@ -40,7 +40,13 @@ export async function admit(req: Request, res: Response): Promise<void> {
   const who: beds.AdmitWho =
     body.bedRequestId !== null
       ? { kind: 'request', bedRequestId: body.bedRequestId }
-      : { kind: 'patient', ...requiredPatient(body.patient) };
+      : body.emergencyCaseId !== null
+        ? {
+            kind: 'emergency',
+            emergencyCaseId: body.emergencyCaseId,
+            ...requiredPatient(body.patient),
+          }
+        : { kind: 'patient', ...requiredPatient(body.patient) };
 
   send(
     res,

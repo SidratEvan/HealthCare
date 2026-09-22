@@ -21,7 +21,6 @@ import { signToken } from '../../config/jwt.js';
 
 import { staffIdFor } from './queueFixture.js';
 
-
 export interface BedFixture {
   readonly hospitalId: string;
   readonly wardId: string;

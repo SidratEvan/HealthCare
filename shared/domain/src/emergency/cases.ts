@@ -81,7 +81,13 @@ export const EMERGENCY_ACTIONS = [
 ] as const;
 export type EmergencyAction = (typeof EMERGENCY_ACTIONS)[number];
 
-/** A case as the ER console shows it. `contactPhone` is staff-only. */
+/**
+ * A case as the ER console shows it.
+ *
+ * Carries whether somebody left a number, never the number: the list and every
+ * broadcast of it name nobody (`DB-P7`). The number is read one case at a
+ * time, when the coordinator taps to call, and that read is audited.
+ */
 export interface EmergencyCaseView {
   readonly id: string;
   readonly hospitalId: string;
@@ -91,7 +97,7 @@ export interface EmergencyCaseView {
   readonly tokenLabel: string | null;
   readonly ageYears: number | null;
   readonly sex: Sex | null;
-  readonly contactPhone: string | null;
+  readonly hasPhone: boolean;
   readonly inboundAt: Timestamp | null;
   readonly inboundEtaMinutes: number | null;
   readonly acknowledgedAt: Timestamp | null;

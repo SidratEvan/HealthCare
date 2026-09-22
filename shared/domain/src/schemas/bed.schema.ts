@@ -51,15 +51,26 @@ export const bedKind = z.enum(BED_KINDS);
  * up by phone would be reading records of people who have never been to this
  * hospital (DATABASE.md §5), so the desk types what it already knows and the
  * server finds the match.
+ *
+ * `emergencyCaseId` places a case the ER handed over (`BTN-B07-ADMIT`,
+ * `FR-BED-07`). It comes *with* a `patient`: an ER case is usually anonymous
+ * until now, and a stay needs somebody's name — the ward takes it at the bed,
+ * as it would for anybody at the desk.
  */
 export const admitBedBody = command({
   bedRequestId: uuid.nullable().default(null),
+  emergencyCaseId: uuid.nullable().default(null),
   patient: guestDetails.nullable().default(null),
   expectedDischargeDate: dhakaDate.nullable().default(null),
-}).refine((body) => (body.bedRequestId === null) !== (body.patient === null), {
-  message: 'Admit either a pending request or a named patient, not both and not neither.',
-  path: ['bedRequestId'],
-});
+})
+  .refine((body) => (body.bedRequestId === null) !== (body.patient === null), {
+    message: 'Admit either a pending request or a named patient, not both and not neither.',
+    path: ['bedRequestId'],
+  })
+  .refine((body) => body.emergencyCaseId === null || body.patient !== null, {
+    message: 'An ER case is admitted with the name the ward takes at the bed.',
+    path: ['patient'],
+  });
 
 export const dischargeBedBody = command({});
 

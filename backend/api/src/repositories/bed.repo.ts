@@ -269,9 +269,7 @@ export async function appendEvent(
  * refused because the bed is no longer free — which it is not, because of the
  * very admit being replayed.
  */
-export async function findReplay(
-  clientEventId: string,
-): Promise<{
+export async function findReplay(clientEventId: string): Promise<{
   readonly bedId: string;
   readonly hospitalId: string;
   readonly serverTs: string;
@@ -324,16 +322,20 @@ export async function insertAdmission(
     readonly bedId: string;
     readonly source: AdmissionSource;
     readonly bedRequestId: string | null;
+    /** The ER case this stay came from (`BTN-B07-ADMIT`); requires `source = 'er'`. */
+    readonly emergencyCaseId: string | null;
     readonly expectedDischargeDate: string | null;
     readonly createdBy: string;
   },
 ): Promise<string> {
   const result = await sql<{ id: string }>`
     INSERT INTO admissions
-      (patient_id, hospital_id, bed_id, source, bed_request_id, expected_discharge_date, created_by)
+      (patient_id, hospital_id, bed_id, source, bed_request_id, emergency_case_id,
+       expected_discharge_date, created_by)
     VALUES (
       ${input.patientId}::uuid, ${input.hospitalId}::uuid, ${input.bedId}::uuid, ${input.source},
-      ${input.bedRequestId}::uuid, ${input.expectedDischargeDate}::date, ${input.createdBy}::uuid
+      ${input.bedRequestId}::uuid, ${input.emergencyCaseId}::uuid,
+      ${input.expectedDischargeDate}::date, ${input.createdBy}::uuid
     )
     RETURNING id
   `.execute(trx);

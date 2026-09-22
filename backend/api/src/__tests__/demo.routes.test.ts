@@ -88,13 +88,24 @@ describe('GET /demo/consoles', () => {
     const consoles = response.body.data.consoles as { roles: string[] }[];
 
     for (const entry of consoles) {
-      // `lab`, `pharmacy` and `emergency` are seeded as staff roles but have
-      // no screen until steps 15 and 17. A door onto an empty room is worse
-      // than no door. `ward` joined at step 14, with the bed board.
+      // `lab` and `pharmacy` are seeded as staff roles but have no screen
+      // until step 17. A door onto an empty room is worse than no door.
+      // `ward` joined at step 14 with the bed board, `emergency` at step 15
+      // with the ER console.
       for (const role of entry.roles) {
-        expect(['receptionist', 'doctor', 'ward', 'hospital_admin']).toContain(role);
+        expect(['receptionist', 'doctor', 'ward', 'emergency', 'hospital_admin']).toContain(role);
       }
     }
+  });
+
+  it('offers the ER console wherever an emergency coordinator works (S-B-07)', async () => {
+    const response = await request(app).get(`${BASE}/demo/consoles`);
+    const consoles = response.body.data.consoles as { roles: string[] }[];
+
+    // The four facilities with a full roster (`database/seeds/data/people.ts`).
+    expect(
+      consoles.filter((entry) => entry.roles.includes('emergency')).length,
+    ).toBeGreaterThanOrEqual(4);
   });
 
   it('offers the ward board wherever a ward is staffed (S-B-06)', async () => {

@@ -83,11 +83,7 @@ export function formatClock(iso: string, style: NumeralStyle, timeZone: string =
  * The day and month lead, because the thing a person is checking is *which
  * day* — the time only matters once the date is right.
  */
-export function formatDateTime(
-  iso: string,
-  style: NumeralStyle,
-  timeZone: string = DHAKA,
-): string {
+export function formatDateTime(iso: string, style: NumeralStyle, timeZone: string = DHAKA): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return '';
 
