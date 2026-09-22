@@ -42,7 +42,8 @@ CREATE TYPE queue_event_type  AS ENUM (
 CREATE TYPE bed_kind          AS ENUM ('general','cabin','hdu','icu','ccu','nicu','isolation','burn');
 CREATE TYPE bed_state         AS ENUM ('free','occupied','cleaning','reserved','out_of_service');
 CREATE TYPE triage_color      AS ENUM ('red','yellow','green');
-CREATE TYPE emergency_state   AS ENUM ('inbound','acknowledged','arrived','in_treatment','admitted','discharged','referred','cancelled');
+CREATE TYPE emergency_state   AS ENUM ('inbound','acknowledged','arrived','in_treatment','admitted','discharged','referred','declined','cancelled');
+-- 'declined' added by migration 0016 (step 15): the ER said no, with a reason (FR-EMG-02).
 CREATE TYPE referral_state    AS ENUM ('sent','seen','accepted','declined','arrived','cancelled');
 CREATE TYPE test_state        AS ENUM ('ordered','sample_collected','processing','report_ready','delivered','cancelled');
 CREATE TYPE payment_method    AS ENUM ('bkash','nagad','card','cash','at_hospital');
@@ -307,6 +308,8 @@ A hold is a real bed: `held` requires `bed_id` and `hold_expires_at`, and the be
 
 #### `emergency_cases`
 `id`, `hospital_id`, `patient_id` nullable (anonymous allowed, `FR-GST-03`), `contact_phone` nullable, `problem_type`, `state` emergency_state, `triage` triage_color, `inbound_eta_minutes`, `inbound_at`, `acknowledged_at`, `arrived_at`, `token_label`, `notes`.
+Added by migration 0016 (step 15, owner's ruling 2026-09-21): `patient_age_years` and `patient_sex` (`FR-PAT-46`: "age/sex if known" of somebody with no profile), `decline_reason` (present if and only if `declined`, `FR-EMG-02`), `closed_at` (null exactly while the case counts towards `FR-EMG-04`'s load), `admit_bed_kind` + `admit_requested_at` (the ER-to-ward handoff, `BTN-B07-ADMIT`, `FR-BED-07`), and `idempotency_key` **U** (a retried alert or a replayed offline walk-in finds the case it made).
+Checks make each state carry its stamps: an alert says when it was sent, an acknowledged one when, a person in the ER when they arrived and by what token; triage and handoff only after arrival; a decline or cancel only before it (after arrival, leaving is a referral). **U:** a token among one hospital's open cases. The caller's position is used for the ETA and never stored. `admissions.emergency_case_id` is unique, and a case-linked stay must be `source = 'er'`.
 
 #### `referrals`
 `id`, `from_hospital_id`, `to_hospital_id`, `emergency_case_id` nullable, `patient_id` nullable, `required_capability` capability_kind, `summary` jsonb, `state` referral_state, `sent_at`, `seen_at`, `responded_at`, `arrived_at`, `decline_reason`.
@@ -395,7 +398,7 @@ ACTION_UNDONE       { "undoneEventId": "…" }
 | `fn_rebuild_queue_state(session_id)` | function | Replays `queue_events` → writes `queue_state` (`DB-P1`) |
 | `fn_next_serial(session_id)` | function | Allocates the next serial atomically |
 | `fn_recalc_etas(session_id)` | function | Returns `[{bookingId, etaAt, bandMinutes}]` (`FR-QUE-11`) |
-| `fn_nearby_hospitals(lat,lng,capability,radius)` | function | Emergency ranking (`FR-PAT-43`) |
+| `fn_nearby_hospitals(lat,lng,capability,radius)` | function | The radius filter half of emergency search (`FR-PAT-43`): live facilities within the radius, nearest first, with distance and whether the capability is available now. It filters on geography only — capability is a ranking key, not a filter — and the ranking itself is `shared/domain/src/emergency/ranking.ts`. Migration 0013 |
 | `trg_queue_events_no_mutate` | trigger | Blocks UPDATE/DELETE on the event log |
 | `trg_touch_updated_at` | trigger | Maintains `updated_at` everywhere |
 | `trg_booking_status_from_events` | trigger | Keeps `bookings.status` consistent with the latest event |
@@ -453,9 +456,12 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0012_views.sql                 -- v_public_hospital_capacity (step 14). Later views each get
                                    -- their own migration with the step that reads them: a shipped
                                    -- migration is never edited, and v_admin_daily needs 0009
-    0013_functions.sql             -- fn_* functions and remaining triggers
+    0013_functions.sql             -- fn_nearby_hospitals (step 15). Later fn_* each arrive with the
+                                   -- step that calls them, as views do after 0012
     0014_rls.sql                   -- enable RLS + all policies
     0015_indexes.sql               -- non-PK indexes gathered in one place
+    0016_emergency_intake.sql      -- step 15: emergency_cases columns and 'declined' (§2.5). Numbered
+                                   -- past 0014/0015, which keep their numbers and land later
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities (FR-DEM-01)

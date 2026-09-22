@@ -94,8 +94,9 @@ shared/domain/src/
 │   ├── board.ts                 # the bed state machine: canApply, applyLocal (FR-BED-01..02)
 │   └── capacity.ts              # the public tally, tomorrow's forecast, mirror check (FR-BED-04..06)
 ├── emergency/
-│   ├── ranking.ts               # capability → travel time → load → beds (FR-PAT-43)
-│   └── freshness.ts             # staleness thresholds and labels (FR-OFF-03..04)
+│   ├── cases.ts                 # the ER case state machine: canActOn, applyLocalCase, triage order (FR-EMG-01..04)
+│   ├── ranking.ts               # capability → fresh before stale → travel time → load → beds (FR-PAT-43, FR-PAT-45)
+│   └── freshness.ts             # a result is as old as its oldest ranked figure (FR-OFF-03..04)
 ├── schemas/
 │   ├── auth.schema.ts           # zod
 │   ├── booking.schema.ts
@@ -222,7 +223,7 @@ backend/api/src/
 │   │   ├── bkash.ts
 │   │   ├── nagad.ts
 │   │   └── mock.ts              # v0 demo: always succeeds
-│   ├── maps/traveltime.ts       # static matrix in v0, routing API later
+│   ├── traveltime.ts            # static estimate in v0 (TRAVEL_TIME_MODE), routing API later
 │   └── bmdc/verify.ts           # manual-assisted verification hook
 ├── jobs/
 │   └── publish.ts               # typed job publishers (workers consume)
@@ -309,8 +310,8 @@ Consoles operate fully offline (`FR-OFF-01`). The protocol is deliberately small
 | Room | Who joins | Events emitted |
 |---|---|---|
 | `session:<sessionId>` | patients with a booking (or guest link), reception console, doctor app | `queue.updated`, `session.delayed`, `session.ended`, `patient.called` (targeted) |
-| `hospital:<id>:beds` | ward board, ER console, admin | `bed.updated` (the beds an action changed, no patient identity), `capacity.updated` (the `v_public_hospital_capacity` row, read back after commit), `bedrequest.updated` (id and state only — the pending list is re-read through the audited endpoint) |
-| `hospital:<id>:emergency` | ER console | `emergency.inbound`, `emergency.updated`, `referral.incoming` |
+| `hospital:<id>:beds` | ward board, ER console, admin | `bed.updated` (the beds an action changed, no patient identity), `capacity.updated` (the `v_public_hospital_capacity` row, read back after commit), `bedrequest.updated` (id and state only — the pending list is re-read through the audited endpoint), `emergency.handoff` (an ER case handed to the ward, or placed; id and state only) |
+| `hospital:<id>:emergency` | ER console | `emergency.inbound` (the case as the console lists it — never a phone number), `emergency.updated` (the case and the ER's load), `capabilities.updated`, `referral.incoming` (step 16). The console also hears the beds room's `capacity.updated` for its bed counters |
 | `hospital:<id>:lab` | lab console | `test.ordered`, `test.updated` |
 | `hospital:<id>:admin` | admin dashboard | `metrics.tick` (throttled 30 s) |
 | `patient:<patientId>` | that patient's devices | `record.ready`, `booking.updated`, `offer.received`, `bedrequest.updated` |
@@ -390,20 +391,24 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/emergency/search?lat&lng&problem` | none | ranked by `domain/emergency/ranking.ts` (`FR-PAT-43`) |
-| POST | `/emergency/inbound` | none \| guest | anonymous allowed; emits `emergency.inbound` (`FR-GST-03`) |
-| POST | `/emergency/cases/:id/acknowledge` | emergency | patient sees "hospital ready" |
-| POST | `/emergency/cases` | emergency | walk-in ER registration |
-| PATCH | `/emergency/cases/:id` | emergency | triage, state |
-| PUT | `/hospitals/:id/capabilities` | emergency, admin | publishes to network (`FR-EMG-05`) |
+| GET | `/emergency/search?lat&lng&problem&from` | none | `fn_nearby_hospitals` for geography, `v_public_hospital_capacity` for figures, the travel-time adapter for minutes, ranked by `domain/emergency/ranking.ts` (`FR-PAT-43`, `FR-PAT-45`). Lists only facilities with an ER console. Every field optional; `from=<hospitalId>` searches from that ER and leaves it out — the refer-out suggestion (`FR-EMG-02`) |
+| POST | `/emergency/inbound` | none | anonymous allowed (`FR-GST-03`). Idempotency-Key required; rate-limited per address (10 per 10 minutes). The ETA comes from the position, which is not stored. Emits `emergency.inbound`; returns a signed case token (`emergency_case` audience, 24 h) and `trackUrl` |
+| GET | `/emergency/track/:token` | the token | `S-A-10c`: state, hospital, ETA, decline reason. Names nobody |
+| POST | `/emergency/track/:token/cancel` | the token | `BTN-A10C-CANCEL`; emits `emergency.updated` |
+| GET | `/hospitals/:id/emergency` | emergency, admin | `S-B-07`: open cases (no phone numbers), load, capabilities, the published bed figures, the bed kinds a handoff can ask for |
+| GET | `/emergency/cases/:id/contact` | emergency | the number a caller left; writes `audit_log` when there is one (`DB-P7`) |
+| POST | `/emergency/cases/:id/acknowledge` | emergency | patient sees "hospital ready"; `emergency.acknowledged` to a number if one was left |
+| POST | `/emergency/cases` | emergency | walk-in ER registration; `clientEventId` is the idempotency key |
+| PATCH | `/emergency/cases/:id` | emergency | `{action}`: `accept` (a token is given), `decline` (reason required; `emergency.declined`), `triage`, `handoff` (a bed kind the hospital has), `discharge`. Guarded by `canActOn`; a replay answers `duplicate: true` |
+| PUT | `/hospitals/:id/capabilities` | emergency, admin | confirms each listed row with this person and instant — re-sending an unchanged list renews its freshness; a kind the hospital never declared is refused (`FR-EMG-05`) |
 | POST | `/referrals` | emergency | send (`FR-EMG-08`) |
 | POST | `/referrals/:id/accept` \| `/decline` | emergency | reason required on decline |
 | GET | `/hospitals/:id/beds` | any staff role at the hospital | board data: wards, beds, the published row, stale threshold, Dhaka date. Writes the logged RELEASE of any lapsed hold first. No patient identity |
 | GET | `/beds/:id` | ward | the bed panel; names the occupant and writes `audit_log` when it does (`DB-P7`) |
-| POST | `/beds/:id/admit` \| `/discharge` \| `/transfer` \| `/reserve` \| `/oos` | ward | writes `bed_events`, emits `bed.updated` + `capacity.updated`. Admit takes a pending `bedRequestId` or the patient at the desk (name, phone, age, sex) |
+| POST | `/beds/:id/admit` \| `/discharge` \| `/transfer` \| `/reserve` \| `/oos` | ward | writes `bed_events`, emits `bed.updated` + `capacity.updated`. Admit takes a pending `bedRequestId`, the patient at the desk (name, phone, age, sex), or an `emergencyCaseId` **with** the patient at the desk — the stay is `source = 'er'` and the case closes as `admitted` |
 | POST | `/beds/:id/release` \| `/restore` \| `/clean-start` \| `/clean-done` | ward | the rest of the state machine: without `clean-done` a discharged bed could never be free again. `release` refuses a bed held for a request — answer the request instead |
 | POST | `/beds/:id/expected-discharge` | ward | `SEL-B06-EXPDIS` (`FR-BED-04`); not an event, idempotent by nature |
-| GET | `/hospitals/:id/bed-requests` | ward | `LIST-B06-PENDING`; audited per request shown |
+| GET | `/hospitals/:id/bed-requests` | ward | `LIST-B06-PENDING`; audited per request shown. `handoffs` is the ER half (`FR-BED-07`): token, problem, colour, age, sex, bed kind — names nobody, so not audited |
 | POST | `/bed-requests` | none (guest details in the body, as `POST /bookings`) | (`FR-PAT-52`); returns a signed status token (`bed_request` audience), idempotent on the key and on one open request per patient per hospital |
 | GET | `/bed-requests/track/:token` | the token | the family's status; a lapsed hold reads `expired` at once |
 | POST | `/bed-requests/:id/respond` | ward | `hold` (reserves a real bed of the kind asked for), `confirm` (admits), `decline`; hold and decline send `bed.request_held` / `bed.request_declined` |
@@ -510,6 +515,8 @@ backend/workers/src/
 | Report ready | `lab.report_ready` | push |
 | Bed request held | `bed.request_held` | push + SMS — names the hospital, the kind of bed and when the hold runs out; exempt from quiet hours, because a hold is measured in minutes |
 | Bed request declined | `bed.request_declined` | push + SMS — says what to do next, and never claims the hospital is full |
+| ER acknowledged an alert | `emergency.acknowledged` | push + SMS, only when a number was left — names the hospital, never the problem; exempt from quiet hours and from the SMS budget |
+| ER declined an alert | `emergency.declined` | as above, linking to `S-A-10c`, where the reason is |
 | Follow-up due | `care.followup` | push |
 
 All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` picks one at send time.
@@ -536,6 +543,7 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `CAPACITY_STALE` | 200 + flag | data returned but marked stale |
 | `BED_TRANSITION_INVALID` | 422 | the bed's state does not allow that action (the shared `canApply` guard); `details.guard` names the rule |
 | `BED_CONFLICT` | 409 | another change got there first: the patient is already in a bed, or the request was already answered |
+| `EMERGENCY_TRANSITION_INVALID` | 422 | the case's state does not allow that action (`canActOn`); `details.guard` names the rule |
 | `VALIDATION_FAILED` | 400 | zod details attached |
 
 Rule: an error never returns a raw SQL or provider message to a client.

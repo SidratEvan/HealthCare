@@ -365,11 +365,47 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 
 ## A6. Emergency
 
+> **Built in this version** (step 15): `S-A-10`, `S-A-10b` and `S-A-10c`, every
+> control below except the ambulance flow behind `BTN-A10-AMB` (step 17; the
+> button leads to the screen that says so).
+>
+> - **The critical/urgent split (`FR-PAT-41`)** had no control here; the owner
+>   ruled (2026-09-21) two, under the call: `BTN-A10-CRITICAL` জীবন ঝুঁকিতে →
+>   `S-A-10b?mode=critical`, which shows the call again, **one** result — the
+>   top of the ranking — and the problem chips to narrow it; `BTN-A10-URGENT`
+>   জরুরি opens the chips, each → `S-A-10b?problem=<type>`, the full ranked list.
+>   `S-A-10` uses no client JavaScript (links and a native `<details>`), so a
+>   tap before hydration is never swallowed.
+> - **Problem → capability** (owner's ruling): দগ্ধ → burn unit (and burn beds
+>   are the ones counted), দুর্ঘটনা → trauma OT, হৃদরোগ → cardiac, স্ট্রোক →
+>   stroke; শিশু, প্রসূতি, শ্বাসকষ্ট, অন্যান্য need only an ER. Only facilities
+>   with an ER console are listed — "I'm on my way" must ring somebody.
+> - **Position** is the browser's own prompt. Refused or absent, the list is
+>   ranked without distance and says so; nothing about a position is stored.
+> - **The card** shows capability, distance, an estimated travel time labelled
+>   আনুমানিক, ER load (counted, `FR-EMG-04` — ER wait in minutes is not measured,
+>   so the load is shown instead), free beds of the relevant kind, ICU, and
+>   freshness. The ranking and the stale badge use the figures the ranking
+>   stands on (capability and the relevant beds); the ICU line carries its own age.
+>   The first card is the answer and is headed "best placed now", never
+>   "nearest": a nearer stale hospital can rank below it (`FR-PAT-45`).
+> - **`BTN-A10-ONWAY`** opens a sheet with phone, age and sex, all optional; a
+>   blank send works. On failure the card says the hospital could not be told
+>   and keeps directions and the call.
+> - **`S-A-10c`** is live by a five-second look while the answer can change
+>   (no public socket, `docs/STATUS.md` decision 35), not a channel. States:
+>   waiting, হাসপাতাল প্রস্তুত, received, **declined** (with the ER's reason and
+>   অন্য হাসপাতাল দেখুন), called off.
+> - **Offline**: the last list seen for the same problem, with its age, and the
+>   call; "I'm on my way" is not offered.
+
 ### `S-A-10` Emergency triage (no auth, `FR-PAT-40`)
 
 | Element | ID | Wiring |
 |---|---|---|
 | ৯৯৯ এ কল করুন | `BTN-A10-999` | `tel:999` immediately; always visible at top |
+| জীবন ঝুঁকিতে | `BTN-A10-CRITICAL` | → `S-A-10b?mode=critical`: the call and one answer, no browsing (`FR-PAT-41`) |
+| জরুরি | `BTN-A10-URGENT` | Opens the problem chips (`FR-PAT-41`) |
 | Critical warning text | — | Names the conditions that mean "call first" |
 | Problem chips | `CHIP-A10-<type>` | দগ্ধ / দুর্ঘটনা / হৃদরোগ / স্ট্রোক / শ্বাসকষ্ট / শিশু / প্রসূতি / অন্যান্য. Selecting one → loads `S-A-10b` results filtered by required capability |
 | অ্যাম্বুলেন্স | `BTN-A10-AMB` | → `S-A-16` with urgency pre-set |
@@ -655,8 +691,10 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 > - **`BTN-B06-RESERVE`'s "expiry auto-releases"** needs no timer: a lapsed hold
 >   counts as free to the public at once, and the logged `RELEASE` (by nobody)
 >   is written the next time the board or the pending list is read.
-> - **`LIST-B06-PENDING`** carries app requests only; the ER half arrives with
->   `BTN-B07-ADMIT` at step 15. Hold reserves a real bed of the kind asked for.
+> - **`LIST-B06-PENDING`** carries app requests and, since step 15, the ER's
+>   handoffs (`BTN-B07-ADMIT`) by token and problem. Choosing a bed for one opens
+>   that bed's admit form with the case chosen, age and sex filled in from the ER,
+>   and the name and phone taken there. Hold reserves a real bed of the kind asked for.
 > - **Offline** (`FR-OFF-01`): every bed change is queued, shown with a clock on
 >   its tile, and sent in order on reconnect; the mirror shows the difference
 >   between the board and what the public still sees. The patient's name and
@@ -681,6 +719,34 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 ## B4. Emergency console — `S-B-07`
 
+> **Built in this version** (step 15), opened from the picker's ER section at
+> `/?view=er`. Not built: `INP-B07-BLOOD` (`FR-EMG-06` — no table holds blood
+> stock yet; it arrives with step 17's blood work), `BTN-B07-REFER`'s sending
+> half, `BTN-B07-REFER-SEND` and `LIST-B07-IN` (step 16, referrals).
+>
+> - **Prepare / accept / decline.** প্রস্তুতি নিন acknowledges and the family is
+>   told (screen, and SMS if a number was left). গ্রহণ করুন means *the person is
+>   here*: they are given a token (`ER-<n>`) and join the triage list. ফিরিয়ে দিন
+>   needs a reason and opens the refer-out search for that capability, ranked
+>   from this hospital, each ER with its number to call — read-only until step 16.
+> - **The alert** rings (Web Audio) and stays the emergency colour until
+>   answered; when the browser has muted sound, the console says so and offers
+>   the one tap that unmutes it.
+> - **Names nobody.** A caller's number is fetched when ফোন করুন is tapped, and
+>   that read writes `audit_log` (`DB-P7`).
+> - **Two controls this table did not list**, both needed by what it does list:
+>   `BTN-B07-WALKIN` নতুন রোগী যোগ করুন (walk-in registration, BACKEND.md §7.5's
+>   `POST /emergency/cases` — the triage list needs a way in besides the app),
+>   and `BTN-B07-DISCHARGE` ছেড়ে দিন (seen and sent home, behind a `GR-01`
+>   confirmation — without it `FR-EMG-04`'s load could only grow).
+> - **Triage order**: red, then the untriaged, then yellow, then green; longest
+>   waiting first within each.
+> - **Capability switches** publish their own row at once; সব ঠিক আছে — নিশ্চিত
+>   করুন re-sends the list to renew its age.
+> - **Offline** (`FR-OFF-01`): every action is queued, applied on screen, counted
+>   in the offline block and sent in order on reconnect. New alerts cannot
+>   arrive offline, and the console says so.
+
 | Element | ID | Wiring |
 |---|---|---|
 | Inbound alert card | `CARD-B07-<caseId>` | Audible + visual alert on arrival (`FR-EMG-01`) |
@@ -690,6 +756,8 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 | Triage list | `TBL-B07-TRIAGE` | Token, patient, complaint, arrival, colour (red/yellow/green), actions |
 | Colour set | `BTN-B07-TRIAGE-<c>` | Sets triage category; red rows pin to top |
 | ভর্তি করুন | `BTN-B07-ADMIT` | Hands off to ward board with the case attached |
+| নতুন রোগী যোগ করুন | `BTN-B07-WALKIN` | Walk-in registration: problem (required), triage, age, sex, phone → a token and a row on the triage list |
+| ছেড়ে দিন | `BTN-B07-DISCHARGE` | Confirm → the case closes and leaves the load (`FR-EMG-04`) |
 | Capability toggles | `SW-B07-<capability>` | Burn / cardiac / stroke / dialysis / NICU / trauma OT → publishes to the emergency network within seconds (`FR-EMG-05`) |
 | ICU/bed counters | — | Read from the bed board, not typed twice |
 | Blood stock | `INP-B07-BLOOD-<group>` | Availability level, not exact counts, if the hospital prefers (`FR-EMG-06`) |
