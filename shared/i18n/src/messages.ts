@@ -866,10 +866,6 @@ export const PATIENT = {
     bn: 'রক্তের গ্রুপ ধরে ব্লাড ব্যাংক আর ডোনার খোঁজা এখানে আসবে।',
     en: 'Searching blood banks and donors by group will come here.',
   },
-  emergencyComing: {
-    bn: 'জরুরি বিভাগ বেছে নেওয়া আর "আসছি" জানানো এখানে আসবে। এখনই দরকার হলে ৯৯৯ এ কল করুন।',
-    en: 'Emergency triage and telling an ER you are on the way will come here. If you need help now, call 999.',
-  },
 
   // --- Emergency (S-A-10, S-A-10b, S-A-10c; FR-PAT-40..47) ------------------
   //
@@ -902,10 +898,17 @@ export const PATIENT = {
 
   // S-A-10b results (FR-PAT-43, FR-PAT-44).
   emergencyResultsFor: { bn: '{problem} — কাছের হাসপাতাল', en: '{problem} — nearby hospitals' },
-  emergencyNearestTitle: { bn: 'সবচেয়ে কাছের জরুরি বিভাগ', en: 'Nearest emergency department' },
+  emergencyNearestTitle: { bn: 'কাছের জরুরি বিভাগ', en: 'Emergency departments nearby' },
+  // Not "nearest": the first result is ranked, and a nearer hospital whose
+  // data is stale can sit below it (FR-PAT-45). The heading claims only what
+  // the ranking decided.
   emergencyNearestCapable: {
-    bn: '{problem} চিকিৎসা আছে এমন সবচেয়ে কাছের',
-    en: 'Nearest that can treat {problem}',
+    bn: '{problem} চিকিৎসার জন্য এখন সবচেয়ে উপযুক্ত',
+    en: 'Best placed to treat {problem} now',
+  },
+  emergencyBestNow: {
+    bn: 'এখন সবচেয়ে উপযুক্ত জরুরি বিভাগ',
+    en: 'Best placed emergency department now',
   },
   emergencyOtherHospitals: { bn: 'অন্যান্য হাসপাতাল', en: 'Other hospitals' },
   emergencyCapable: { bn: 'চিকিৎসা আছে', en: 'Can treat' },

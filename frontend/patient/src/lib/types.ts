@@ -13,7 +13,14 @@
  * those here would be re-implementing the queue.
  */
 
-import type { BedKind, Eta, PublicCapacity, QueueState } from '@platform/domain';
+import type {
+  BedKind,
+  EmergencyProblem,
+  EmergencyState,
+  Eta,
+  PublicCapacity,
+  QueueState,
+} from '@platform/domain';
 
 export interface HospitalCard {
   readonly id: string;
@@ -254,4 +261,76 @@ export interface BedRequestView {
   readonly respondedAt: string | null;
   readonly createdAt: string;
   readonly serverTs: string;
+}
+
+// ---------------------------------------------------------------------------
+// Emergency (`S-A-10b`, `S-A-10c`; BACKEND.md §7.5)
+// ---------------------------------------------------------------------------
+
+/** One result card (`CARD-A10-<hospitalId>`, `FR-PAT-44`). */
+export interface EmergencyResult {
+  readonly hospitalId: string;
+  readonly nameBn: string;
+  readonly nameEn: string;
+  readonly addressBn: string | null;
+  readonly lat: number | null;
+  readonly lng: number | null;
+  readonly emergencyPhone: string | null;
+  readonly distanceKm: number | null;
+  /** An estimate; null without a position. */
+  readonly travelMinutes: number | null;
+  /** Null when the problem needs no particular capability. */
+  readonly hasCapability: boolean | null;
+  readonly erLoad: number;
+  /** Free beds of `bedKind`, or of every kind when that is null. */
+  readonly freeBeds: number | null;
+  readonly bedKind: BedKind | null;
+  readonly icuTotal: number | null;
+  readonly icuFree: number | null;
+  /** The ICU figure's own age: shown, not ranked on. */
+  readonly icuAsOf: string | null;
+  readonly freshness: {
+    readonly asOf: string | null;
+    readonly ageMinutes: number | null;
+    readonly stale: boolean;
+  };
+  readonly staleAfterMinutes: number;
+}
+
+export interface EmergencySearchResult {
+  readonly problem: EmergencyProblem | null;
+  readonly requiredCapability: string | null;
+  readonly origin: 'position' | 'hospital' | 'none';
+  readonly results: readonly EmergencyResult[];
+  readonly serverTs: string;
+}
+
+/** The family's view of the alert they sent (`S-A-10c`). */
+export interface EmergencyCaseStatus {
+  readonly id: string;
+  readonly state: EmergencyState;
+  readonly problem: EmergencyProblem;
+  readonly inboundAt: string | null;
+  readonly inboundEtaMinutes: number | null;
+  readonly acknowledgedAt: string | null;
+  readonly arrivedAt: string | null;
+  readonly closedAt: string | null;
+  readonly declineReason: string | null;
+  readonly hospital: {
+    readonly id: string;
+    readonly nameBn: string;
+    readonly nameEn: string;
+    readonly addressBn: string | null;
+    readonly lat: number | null;
+    readonly lng: number | null;
+    readonly emergencyPhone: string | null;
+  };
+  readonly serverTs: string;
+}
+
+export interface InboundResult {
+  readonly case: EmergencyCaseStatus;
+  readonly token: string;
+  readonly trackUrl: string;
+  readonly duplicate: boolean;
 }
