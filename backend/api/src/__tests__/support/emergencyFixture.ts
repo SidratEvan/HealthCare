@@ -126,14 +126,13 @@ export async function auditedReadsOf(caseId: string): Promise<number> {
 }
 
 /**
- * The oldest stamp among the figures a burn result card at this hospital
- * stands on: capability, burn beds, ICU (`stampsFor` in `shared/domain`).
+ * The oldest stamp among the figures a burn result is ranked on: capability
+ * and burn beds (`stampsFor` in `shared/domain`).
  */
 export async function oldestBurnCardStamp(hospitalId: string): Promise<number> {
   const result = await sql<{ oldest: Date | null }>`
     SELECT LEAST(
              v.capability_as_of,
-             v.icu_as_of,
              (SELECT (k ->> 'asOf')::timestamptz FROM jsonb_array_elements(v.by_kind) k
                WHERE k ->> 'kind' = 'burn')
            ) AS oldest

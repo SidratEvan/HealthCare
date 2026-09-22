@@ -73,8 +73,11 @@ export function Sheet({
       {trigger !== undefined ? <Dialog.Trigger asChild>{trigger}</Dialog.Trigger> : null}
 
       <Dialog.Portal>
-        {/* §5.6: backdrop is 40% ink, not black — the ground stays warm. */}
-        <Dialog.Overlay className="fixed inset-0 bg-ink/40" />
+        {/* §5.6: backdrop is 40% ink, not black — the ground stays warm.
+            Above everything fixed on the page, the patient app's bottom
+            navigation (`z-40`) included: a sheet that slid under the nav hid
+            its own primary button behind it. */}
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40" />
 
         <Dialog.Content
           onPointerDownOutside={(event) => {
@@ -84,10 +87,12 @@ export function Sheet({
             if (!dismissible) event.preventDefault();
           }}
           className={cx(
-            'fixed bg-surface shadow-2 focus:outline-none',
+            'fixed z-50 bg-surface shadow-2 focus:outline-none',
             variant === 'sheet'
               ? // Rises from the bottom, rounded on the top corners only.
-                'inset-x-0 bottom-0 rounded-t-lg p-5 motion-safe:duration-sheet motion-safe:ease-sheet'
+                // A tall sheet on a short phone scrolls rather than pushing its
+                // action off the screen.
+                'inset-x-0 bottom-0 max-h-[90dvh] overflow-y-auto rounded-t-lg p-5 motion-safe:duration-sheet motion-safe:ease-sheet'
               : 'left-1/2 top-1/2 w-full max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-lg p-6',
           )}
         >

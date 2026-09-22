@@ -115,7 +115,9 @@ export interface EmergencyResult {
   /** Null when the facility has no ICU — which is not a full one. */
   readonly icuTotal: number | null;
   readonly icuFree: number | null;
-  /** The age of the oldest figure on the card (`FR-PAT-45`). */
+  /** The ICU figure's own age. It is shown, not ranked on (`stampsFor`). */
+  readonly icuAsOf: Timestamp | null;
+  /** The age of the figures the result is ranked on (`FR-PAT-45`). */
   readonly freshness: Freshness;
   readonly staleAfterMinutes: number;
 }
@@ -208,6 +210,7 @@ export async function search(query: {
       bedKind: relevantBedKind(problem),
       icuTotal: beds?.icuTotal ?? null,
       icuFree: beds?.icuFree ?? null,
+      icuAsOf: beds?.icuAsOf ?? null,
       freshness: freshnessOf(stampsFor(problem, cardFigures), at, threshold),
       staleAfterMinutes: threshold,
     };

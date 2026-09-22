@@ -130,11 +130,17 @@ export function relevantFreeBeds(
 }
 
 /**
- * The stamps of every figure a result card shows, for `freshnessOf`.
+ * The stamps of the figures a result is *ranked on*, for `freshnessOf`.
  *
- * The capability flag when one is required; the relevant bed count; the ICU
- * count when the facility has an ICU. A figure the card does not show — a
- * capability nobody asked about — does not age the card.
+ * The capability flag when one is required, and the relevant bed count. These
+ * decide the order, so their age decides whether `FR-PAT-45` de-ranks the
+ * result.
+ *
+ * The ICU count is shown on every card (`FR-PAT-44`) but decides nothing, and
+ * it is deliberately not here: a full ICU has no action that renews its stamp
+ * without changing a bed, so counting it would turn a burn unit confirmed a
+ * minute ago stale because of a ward nobody could touch. The card gives the
+ * ICU figure its own freshness line instead — every number keeps its own age.
  */
 export function stampsFor(
   problem: EmergencyProblem | null,
@@ -151,8 +157,6 @@ export function stampsFor(
   } else if (figures.bedTotal > 0) {
     stamps.push(figures.bedsAsOf);
   }
-
-  if (figures.icuTotal !== null) stamps.push(figures.icuAsOf);
 
   return stamps;
 }

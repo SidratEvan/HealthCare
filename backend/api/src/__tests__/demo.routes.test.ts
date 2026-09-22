@@ -190,6 +190,24 @@ describe('POST /demo/token', () => {
     expect(verified.claims.sub).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  it('mints a token for every role the picker offers, the ER included (S-B-07)', async () => {
+    // The picker's list and this route's schema are two lists of one thing.
+    // Step 15 added the ER to the first and, until this test, not the second:
+    // the picker offered "জরুরি বিভাগ খুলুন" and the route refused it.
+    const response = await request(app).get(`${BASE}/demo/consoles`);
+    const consoles = response.body.data.consoles as { hospitalId: string; roles: string[] }[];
+
+    for (const entry of consoles) {
+      for (const role of entry.roles) {
+        const minted = await request(app)
+          .post(`${BASE}/demo/token`)
+          .send({ hospitalId: entry.hospitalId, role });
+        expect(minted.status, `${role} at ${entry.hospitalId}`).toBe(200);
+      }
+    }
+    expect(consoles.some((entry) => entry.roles.includes('emergency'))).toBe(true);
+  });
+
   it('refuses a role this version has no console for', async () => {
     const { hospitalId } = await anyHospital();
 

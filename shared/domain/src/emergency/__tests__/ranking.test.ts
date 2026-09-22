@@ -155,8 +155,8 @@ describe('the figures a result card stands on', () => {
     expect(relevantFreeBeds('burn', shapla)).toBeNull();
   });
 
-  it('ages a burn card by its capability, its burn beds and its ICU — not the rest of the hospital', () => {
-    expect(stampsFor('burn', padma)).toEqual([minutesAgo(2), minutesAgo(4), minutesAgo(3)]);
+  it('ranks a burn card on its capability and its burn beds — not the rest of the hospital', () => {
+    expect(stampsFor('burn', padma)).toEqual([minutesAgo(2), minutesAgo(4)]);
     // Nine minutes old overall, but the burn card shows none of those figures.
     expect(freshnessOf(stampsFor('burn', padma), NOW, 10)).toMatchObject({
       ageMinutes: 4,
@@ -164,8 +164,13 @@ describe('the figures a result card stands on', () => {
     });
   });
 
-  it('ages a card with no capability required by the hospital total and the ICU', () => {
-    expect(stampsFor('other', padma)).toEqual([minutesAgo(9), minutesAgo(3)]);
+  it('ranks a card with no capability required on the hospital total', () => {
+    expect(stampsFor('other', padma)).toEqual([minutesAgo(9)]);
+  });
+
+  it('never lets a full ICU nobody can touch turn a fresh burn unit stale', () => {
+    const oldIcu: CapacityFigures = { ...padma, icuAsOf: minutesAgo(300) };
+    expect(freshnessOf(stampsFor('burn', oldIcu), NOW, 10).stale).toBe(false);
   });
 
   it('lets one never-confirmed figure make the whole card stale', () => {
