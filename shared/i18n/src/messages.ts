@@ -425,8 +425,8 @@ export const CONSOLE = {
   pendingTitle: { bn: 'ভর্তির অপেক্ষায়', en: 'Waiting for admission' },
   pendingEmpty: { bn: 'কোনো অনুরোধ অপেক্ষায় নেই', en: 'No requests waiting' },
   pendingEmptyHint: {
-    bn: 'অ্যাপ থেকে বেডের অনুরোধ এলে এখানে দেখাবে।',
-    en: 'Bed requests from the app appear here.',
+    bn: 'অ্যাপ বা জরুরি বিভাগ থেকে বেডের অনুরোধ এলে এখানে দেখাবে।',
+    en: 'Bed requests from the app or the emergency department appear here.',
   },
   pendingNeedsConnection: {
     bn: 'অনুরোধ দেখতে ও উত্তর দিতে সংযোগ লাগবে।',
@@ -447,6 +447,143 @@ export const CONSOLE = {
   pendingAnswerFailed: {
     bn: 'উত্তর পাঠানো যায়নি। আবার চেষ্টা করুন।',
     en: 'The answer could not be sent. Please try again.',
+  },
+
+  // LIST-B06-PENDING's ER half (FR-BED-07, BTN-B07-ADMIT).
+  pendingFromEr: { bn: 'জরুরি বিভাগ থেকে', en: 'From the emergency department' },
+  pendingErFor: { bn: '{kind} বেড চাই', en: 'Needs a {kind} bed' },
+  pendingErSince: { bn: '{time} থেকে অপেক্ষায়', en: 'Waiting since {time}' },
+  pendingErAdmit: { bn: 'বেডে ভর্তি করুন', en: 'Admit to a bed' },
+  pendingErNameHint: {
+    bn: 'জরুরি বিভাগ নাম নেয়নি। বেডে দেওয়ার সময় নাম ও ফোন নিন।',
+    en: 'The ER did not take a name. Take the name and phone at the bed.',
+  },
+
+  // --- The ER console (S-B-07, APP_FLOW.md B4) -----------------------------
+  roleEmergency: { bn: 'জরুরি বিভাগ', en: 'Emergency' },
+  erSection: { bn: 'জরুরি বিভাগ', en: 'Emergency department' },
+  openEr: { bn: 'জরুরি বিভাগ খুলুন', en: 'Open the emergency console' },
+  erTitle: { bn: 'জরুরি বিভাগ', en: 'Emergency department' },
+  // FR-EMG-04: counted from cases, and it says so.
+  erLoad: { bn: 'এখন {count} জন', en: '{count} now' },
+  erLoadHint: {
+    bn: 'আসছেন ও জরুরি বিভাগে আছেন — গুনে বের করা, হাতে লেখা নয়।',
+    en: 'On the way and in the ER — counted, never typed.',
+  },
+
+  // CARD-B07-<caseId> (FR-EMG-01).
+  erInboundTitle: { bn: 'আসছেন', en: 'On the way' },
+  erInboundEmpty: { bn: 'কেউ আসছেন বলে জানাননি', en: 'Nobody has said they are coming' },
+  erInboundEmptyHint: {
+    bn: 'অ্যাপে কেউ "আমি রওনা দিচ্ছি" চাপলে এখানে শব্দসহ দেখাবে।',
+    en: 'When someone taps "I am on my way" in the app, it rings here.',
+  },
+  erNewAlert: { bn: 'নতুন', en: 'New' },
+  erArrivesAt: { bn: 'আনুমানিক {time}-এ পৌঁছাবেন', en: 'Expected about {time}' },
+  erNoEta: { bn: 'কখন পৌঁছাবেন জানা নেই', en: 'Arrival time unknown' },
+  erAgeSex: { bn: '{age} বছর · {sex}', en: '{age} yrs · {sex}' },
+  erNoDetails: { bn: 'বয়স ও লিঙ্গ জানানো হয়নি', en: 'Age and sex not given' },
+  erPrepare: { bn: 'প্রস্তুতি নিন', en: 'Get ready' },
+  erPrepared: { bn: 'প্রস্তুত — পরিবারকে জানানো হয়েছে', en: 'Ready — the family has been told' },
+  erAccept: { bn: 'গ্রহণ করুন', en: 'Accept' },
+  erAcceptHint: {
+    bn: 'রোগী পৌঁছালে গ্রহণ করুন — টোকেন দেওয়া হবে।',
+    en: 'Accept when they arrive — a token is given.',
+  },
+  erDecline: { bn: 'ফিরিয়ে দিন', en: 'Decline' },
+  erDeclineTitle: { bn: 'কেন নিতে পারছেন না?', en: 'Why can you not take them?' },
+  erDeclineReasonLabel: { bn: 'কারণ', en: 'Reason' },
+  erDeclineConsequence: {
+    bn: 'পরিবার জানবে আপনারা নিতে পারছেন না, আর অন্য হাসপাতাল খুঁজতে বলা হবে।',
+    en: 'The family will be told you cannot take them, and to look elsewhere.',
+  },
+  erDeclineConfirm: { bn: 'ফিরিয়ে দিন ও জানান', en: 'Decline and tell them' },
+  erSuggestTitle: { bn: 'কাছের অন্য জরুরি বিভাগ', en: 'Other emergency departments nearby' },
+  erSuggestHint: {
+    bn: 'রোগী পাঠানোর (রেফার) ব্যবস্থা পরের ধাপে আসছে। এখন ফোন করে জানান।',
+    en: 'Sending a referral comes in a later step. For now, call them.',
+  },
+  erSuggestEmpty: {
+    bn: 'কাছে এই চিকিৎসা আছে এমন অন্য জরুরি বিভাগ পাওয়া যায়নি।',
+    en: 'No other emergency department nearby can treat this.',
+  },
+  erCall: { bn: 'ফোন করুন', en: 'Call' },
+  erNoPhone: { bn: 'নম্বর দেননি', en: 'No number left' },
+  erCallFailed: {
+    bn: 'নম্বর আনা যায়নি — সংযোগ লাগবে।',
+    en: 'Could not get the number — this needs a connection.',
+  },
+
+  // TBL-B07-TRIAGE (FR-EMG-03).
+  erTriageTitle: { bn: 'জরুরি বিভাগে আছেন', en: 'In the ER' },
+  erTriageEmpty: { bn: 'জরুরি বিভাগে এখন কেউ নেই', en: 'Nobody is in the ER' },
+  erTriageEmptyHint: {
+    bn: 'কেউ এলে "নতুন রোগী যোগ করুন" চাপুন, বা আসছেন তালিকা থেকে গ্রহণ করুন।',
+    en: 'Tap "Add a patient" when someone walks in, or accept an arrival.',
+  },
+  erColToken: { bn: 'টোকেন', en: 'Token' },
+  erColPatient: { bn: 'রোগী', en: 'Patient' },
+  erColProblem: { bn: 'সমস্যা', en: 'Problem' },
+  erColArrived: { bn: 'এসেছেন', en: 'Arrived' },
+  erColTriage: { bn: 'ত্রিয়াজ', en: 'Triage' },
+  erUntriaged: { bn: 'ত্রিয়াজ হয়নি', en: 'Not triaged' },
+  erSetTriage: { bn: '{colour} করুন', en: 'Mark {colour}' },
+  erTokenPending: { bn: 'টোকেন আসছে', en: 'Token pending' },
+  erAdmit: { bn: 'ভর্তি করুন', en: 'Admit' },
+  erAdmitTitle: { bn: 'কোন ধরনের বেডে?', en: 'Which kind of bed?' },
+  erAdmitHint: {
+    bn: 'ওয়ার্ড বোর্ডের অপেক্ষার তালিকায় যাবে। ওয়ার্ড বেড দেবে।',
+    en: 'It goes on the ward board’s waiting list. The ward gives the bed.',
+  },
+  erHandedOff: { bn: 'ওয়ার্ডে পাঠানো — {kind} বেড', en: 'With the ward — {kind} bed' },
+  erDischarge: { bn: 'ছেড়ে দিন', en: 'Discharge' },
+  erDischargeConfirm: {
+    bn: '{token}-কে জরুরি বিভাগ থেকে ছেড়ে দেবেন?',
+    en: 'Discharge {token} from the ER?',
+  },
+
+  // Walk-in registration (POST /emergency/cases).
+  erWalkIn: { bn: 'নতুন রোগী যোগ করুন', en: 'Add a patient' },
+  erWalkInTitle: { bn: 'যিনি সরাসরি এসেছেন', en: 'Someone who walked in' },
+  erWalkInProblem: { bn: 'কী হয়েছে?', en: 'What happened?' },
+  erWalkInTriage: { bn: 'ত্রিয়াজ (পরেও দেওয়া যায়)', en: 'Triage (can be set later)' },
+  erWalkInPhone: { bn: 'ফোন (ঐচ্ছিক)', en: 'Phone (optional)' },
+  erWalkInAge: { bn: 'বয়স (ঐচ্ছিক)', en: 'Age (optional)' },
+  erWalkInSave: { bn: 'যোগ করুন', en: 'Add' },
+
+  // SW-B07-<capability> (FR-EMG-05).
+  erCapabilitiesTitle: { bn: 'আমরা এখন কী নিতে পারি', en: 'What we can take now' },
+  erCapabilitiesHint: {
+    bn: 'এখানে যা চালু, রোগীরা অ্যাপে তাই দেখেন।',
+    en: 'What is switched on here is what patients see in the app.',
+  },
+  erCapabilitiesConfirm: { bn: 'সব ঠিক আছে — নিশ্চিত করুন', en: 'All correct — confirm' },
+  erCapabilityOn: { bn: 'চালু', en: 'On' },
+  erCapabilityOff: { bn: 'বন্ধ', en: 'Off' },
+  erCapabilitiesNone: {
+    bn: 'এই হাসপাতালের কোনো সক্ষমতা ঘোষণা করা নেই।',
+    en: 'This hospital has declared no capabilities.',
+  },
+
+  // "ICU/bed counters — read from the bed board, not typed twice."
+  erBedsTitle: { bn: 'বেড (বেড বোর্ড থেকে)', en: 'Beds (from the bed board)' },
+
+  // The alarm (CARD-B07: "audible + visual alert on arrival").
+  erSoundOn: { bn: 'শব্দ চালু', en: 'Sound on' },
+  erSoundEnable: { bn: 'সতর্কসংকেতের শব্দ চালু করুন', en: 'Turn on the alert sound' },
+  erSoundBlocked: {
+    bn: 'ব্রাউজার শব্দ বন্ধ রেখেছে। একবার চাপলে চালু হবে।',
+    en: 'The browser has muted the alert. Tap once to turn it on.',
+  },
+
+  // Offline (FR-OFF-01).
+  erOffline: {
+    bn: 'সংযোগ নেই — নতুন "আসছি" বার্তা এখন আসবে না। ত্রিয়াজ, নতুন রোগী আর সক্ষমতা চলবে, পরে পাঠানো হবে।',
+    en: 'No connection — new "on my way" alerts cannot arrive. Triage, walk-ins and capabilities keep working and are sent later.',
+  },
+  erRefused: {
+    bn: 'সার্ভার এই কাজটি নেয়নি — তালিকা হালনাগাদ করা হয়েছে।',
+    en: 'The server did not accept that — the list has been updated.',
   },
 
   // --- Demo mode (FR-DEM-07, CLAUDE.md §1.1) -------------------------------
@@ -725,6 +862,116 @@ export const PATIENT = {
   emergencyComing: {
     bn: 'জরুরি বিভাগ বেছে নেওয়া আর "আসছি" জানানো এখানে আসবে। এখনই দরকার হলে ৯৯৯ এ কল করুন।',
     en: 'Emergency triage and telling an ER you are on the way will come here. If you need help now, call 999.',
+  },
+
+  // --- Emergency (S-A-10, S-A-10b, S-A-10c; FR-PAT-40..47) ------------------
+  //
+  // Written for P6: panicked, one-handed, possibly in a moving car. One
+  // question per screen, the biggest control first, and nothing asked that
+  // the emergency does not need (`FR-GST-03`).
+  emergencyTitle: { bn: 'জরুরি অবস্থা', en: 'Emergency' },
+  // FR-PAT-41: the entry splits critical and urgent (owner's ruling,
+  // 2026-09-21: two buttons under the call).
+  emergencyCritical: { bn: 'জীবন ঝুঁকিতে', en: 'Life in danger' },
+  emergencyCriticalLine: {
+    bn: 'সবচেয়ে কাছের জরুরি বিভাগ, এখনই।',
+    en: 'The nearest emergency department, now.',
+  },
+  emergencyUrgent: { bn: 'জরুরি', en: 'Urgent' },
+  emergencyUrgentLine: {
+    bn: 'কী হয়েছে বলুন — চিকিৎসা আছে এমন হাসপাতাল দেখাব।',
+    en: 'Say what happened — we show hospitals that can treat it.',
+  },
+  emergencyWhatHappened: { bn: 'কী হয়েছে?', en: 'What happened?' },
+  emergencyAmbulance: { bn: 'অ্যাম্বুলেন্স ডাকুন', en: 'Call an ambulance' },
+
+  // Where the phone is. The browser asks; nothing is stored.
+  emergencyLocating: { bn: 'আপনার অবস্থান দেখা হচ্ছে', en: 'Finding where you are' },
+  emergencyNoLocation: {
+    bn: 'অবস্থান জানা যায়নি, তাই দূরত্ব ও সময় দেখানো যাচ্ছে না। হাসপাতালগুলো চিকিৎসা আর ভিড় অনুযায়ী সাজানো।',
+    en: 'Your location is unknown, so distance and time cannot be shown. Hospitals are ordered by treatment and how busy they are.',
+  },
+  emergencyTryLocation: { bn: 'অবস্থান দিন', en: 'Share location' },
+
+  // S-A-10b results (FR-PAT-43, FR-PAT-44).
+  emergencyResultsFor: { bn: '{problem} — কাছের হাসপাতাল', en: '{problem} — nearby hospitals' },
+  emergencyNearestTitle: { bn: 'সবচেয়ে কাছের জরুরি বিভাগ', en: 'Nearest emergency department' },
+  emergencyNearestCapable: {
+    bn: '{problem} চিকিৎসা আছে এমন সবচেয়ে কাছের',
+    en: 'Nearest that can treat {problem}',
+  },
+  emergencyOtherHospitals: { bn: 'অন্যান্য হাসপাতাল', en: 'Other hospitals' },
+  emergencyCapable: { bn: 'চিকিৎসা আছে', en: 'Can treat' },
+  emergencyNotCapable: { bn: 'চিকিৎসা নেই', en: 'Cannot treat' },
+  emergencyDistance: { bn: '{km} কিমি', en: '{km} km' },
+  emergencyTravel: { bn: 'আনুমানিক {minutes} মিনিট', en: 'About {minutes} min' },
+  emergencyLoad: { bn: 'জরুরি বিভাগে এখন {count} জন', en: '{count} in the ER now' },
+  emergencyFreeBeds: { bn: 'খালি বেড {free}', en: '{free} beds free' },
+  emergencyFreeKind: { bn: '{kind} বেড খালি {free}', en: '{free} {kind} beds free' },
+  emergencyNoKind: { bn: '{kind} বেড নেই', en: 'No {kind} beds' },
+  emergencyNoBeds: { bn: 'ভর্তির ব্যবস্থা নেই', en: 'No inpatient beds' },
+  emergencyStale: { bn: 'তথ্য {time} মিনিট পুরোনো', en: 'Data {time} minutes old' },
+  emergencyNeverConfirmed: {
+    bn: 'তথ্য কখনো নিশ্চিত করা হয়নি',
+    en: 'Never confirmed',
+  },
+  emergencyNoResults: {
+    bn: 'কাছাকাছি কোনো জরুরি বিভাগ পাওয়া যায়নি। এখনই ৯৯৯ এ কল করুন।',
+    en: 'No emergency department found nearby. Call 999 now.',
+  },
+  emergencyOnWay: { bn: 'আমি রওনা দিচ্ছি', en: 'I am on my way' },
+  emergencyDirections: { bn: 'দিকনির্দেশ', en: 'Directions' },
+  emergencyCallEr: { bn: 'কল করুন', en: 'Call' },
+  emergencyOffline: {
+    bn: 'ইন্টারনেট নেই। নিচে শেষবার দেখা তালিকা — এখনই ৯৯৯ বা হাসপাতালে সরাসরি কল করুন।',
+    en: 'No internet. Below is the list as last seen — call 999 or the hospital directly now.',
+  },
+  emergencyOfflineNoList: {
+    bn: 'ইন্টারনেট নেই। এখনই ৯৯৯ এ কল করুন।',
+    en: 'No internet. Call 999 now.',
+  },
+
+  // BTN-A10-ONWAY: nothing is required (APP_FLOW.md A1.4).
+  onWayTitle: { bn: '{hospital}-কে জানাব', en: 'We will tell {hospital}' },
+  onWayOptional: {
+    bn: 'নিচের কিছু না দিলেও হাসপাতালকে জানানো হবে।',
+    en: 'The hospital is told even if you leave all of this blank.',
+  },
+  onWayPhone: { bn: 'ফোন নম্বর — হাসপাতাল ফোন করতে পারবে', en: 'Phone — so the hospital can call' },
+  onWayAge: { bn: 'রোগীর বয়স', en: 'Patient’s age' },
+  onWaySend: { bn: 'জানান ও রওনা দিন', en: 'Tell them and go' },
+  onWayNotifying: { bn: 'জানানো হচ্ছে', en: 'Telling them' },
+  onWayNotified: { bn: 'জানানো হয়েছে', en: 'They have been told' },
+  onWayFailed: {
+    bn: 'হাসপাতালকে জানানো যায়নি। রওনা দিন আর ফোন করে জানান।',
+    en: 'The hospital could not be told. Go, and call them on the way.',
+  },
+
+  // S-A-10c On the way.
+  onWayScreenTitle: { bn: 'পথে আছেন', en: 'On the way' },
+  onWayWaiting: { bn: 'হাসপাতালের উত্তরের অপেক্ষায়', en: 'Waiting for the hospital' },
+  onWayReady: { bn: 'হাসপাতাল প্রস্তুত', en: 'The hospital is ready' },
+  onWayReadyLine: {
+    bn: '{hospital} জরুরি বিভাগ আপনার জন্য প্রস্তুত।',
+    en: '{hospital} emergency department is ready for you.',
+  },
+  onWayDeclined: { bn: 'হাসপাতাল এখন নিতে পারছে না', en: 'The hospital cannot take you now' },
+  onWayDeclinedReason: { bn: 'কারণ: {reason}', en: 'Reason: {reason}' },
+  onWayFindAnother: { bn: 'অন্য হাসপাতাল দেখুন', en: 'See other hospitals' },
+  onWayCancelled: { bn: 'যাত্রা বাতিল করা হয়েছে', en: 'You called this off' },
+  onWayArrived: { bn: 'জরুরি বিভাগ আপনাকে গ্রহণ করেছে', en: 'The ER has received you' },
+  onWayEta: { bn: 'আনুমানিক {minutes} মিনিটে পৌঁছাবেন', en: 'About {minutes} minutes away' },
+  onWayNavigate: { bn: 'নেভিগেশন খুলুন', en: 'Open navigation' },
+  onWayCallEr: { bn: 'জরুরি বিভাগে কল করুন', en: 'Call the ER' },
+  onWayCancel: { bn: 'যাচ্ছি না — বাতিল করুন', en: 'Not coming — call it off' },
+  onWayCancelConfirm: {
+    bn: 'বাতিল করলে হাসপাতাল আপনার জন্য প্রস্তুতি বন্ধ করবে।',
+    en: 'If you call this off, the hospital stops getting ready for you.',
+  },
+  onWayKeep: { bn: 'না, যাচ্ছি', en: 'No, I am going' },
+  onWayLinkExpired: {
+    bn: 'এই লিংকের মেয়াদ শেষ। দরকার হলে আবার জরুরি অবস্থা থেকে শুরু করুন।',
+    en: 'This link has expired. Start again from Emergency if you need to.',
   },
 
   // --- Specialties and results (S-A-07) ------------------------------------
