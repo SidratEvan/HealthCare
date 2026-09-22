@@ -35,14 +35,13 @@
 import {
   alreadyApplied,
   canActOn,
+  freeBedsFor,
   freshnessOf,
   isOpen,
+  needFor,
   nextTokenLabel,
   rankCandidates,
-  relevantBedKind,
-  relevantFreeBeds,
-  requiredCapability,
-  stampsFor,
+  stampsForNeed,
   time,
   EMERGENCY_SEARCH_RADIUS_METRES,
   type BedKind,
@@ -51,9 +50,11 @@ import {
   type EmergencyAction,
   type EmergencyActionContext,
   type EmergencyCaseView,
+  type EmergencyNeed,
   type EmergencyProblem,
   type Freshness,
   type PublicCapacity,
+  type ReferralView,
   type Sex,
   type Timestamp,
   type TriageColor,
@@ -67,6 +68,7 @@ import * as emit from '../realtime/emit.js';
 import * as bedRepo from '../repositories/bed.repo.js';
 import * as clinicalRepo from '../repositories/clinical.repo.js';
 import * as emergencyRepo from '../repositories/emergency.repo.js';
+import * as referralRepo from '../repositories/referral.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import * as notifications from './notification.service.js';
@@ -125,6 +127,8 @@ export interface EmergencyResult {
 export interface EmergencySearch {
   readonly problem: EmergencyProblem | null;
   readonly requiredCapability: CapabilityKind | null;
+  /** The kind of free bed the results are counted and ranked on; null means any. */
+  readonly bedKind: BedKind | null;
   /** Where distances were measured from. `none`: ranked without travel time. */
   readonly origin: 'position' | 'hospital' | 'none';
   readonly radiusKm: number;
@@ -139,9 +143,18 @@ export async function search(query: {
   readonly lng?: number | undefined;
   readonly problem?: EmergencyProblem | undefined;
   readonly from?: string | undefined;
+  readonly capability?: CapabilityKind | undefined;
+  readonly bedKind?: BedKind | undefined;
 }): Promise<EmergencySearch> {
   const problem = query.problem ?? null;
-  const capability = requiredCapability(problem);
+  // What the results are ranked on: the problem's own need, unless the
+  // refer-out search names one (`FR-EMG-07`) — "an ICU bed" is a need no
+  // problem maps to. Naming either half replaces the default whole.
+  const need: EmergencyNeed =
+    query.capability === undefined && query.bedKind === undefined
+      ? needFor(problem)
+      : { capability: query.capability ?? null, bedKind: query.bedKind ?? null };
+  const capability = need.capability;
   const everyEr = await emergencyRepo.erHospitals();
 
   // Where the distances are measured from: the phone, or — for a refer-out
@@ -206,12 +219,12 @@ export async function search(query: {
       travelMinutes: place === null ? null : travelTime().minutesFor(place.distanceMetres, at),
       hasCapability,
       erLoad: er?.erActive ?? 0,
-      freeBeds: relevantFreeBeds(problem, cardFigures),
-      bedKind: relevantBedKind(problem),
+      freeBeds: freeBedsFor(need, cardFigures),
+      bedKind: need.bedKind,
       icuTotal: beds?.icuTotal ?? null,
       icuFree: beds?.icuFree ?? null,
       icuAsOf: beds?.icuAsOf ?? null,
-      freshness: freshnessOf(stampsFor(problem, cardFigures), at, threshold),
+      freshness: freshnessOf(stampsForNeed(need, cardFigures), at, threshold),
       staleAfterMinutes: threshold,
     };
   });
@@ -226,6 +239,7 @@ export async function search(query: {
   return {
     problem,
     requiredCapability: capability,
+    bedKind: need.bedKind,
     origin: query.from !== undefined ? 'hospital' : origin === null ? 'none' : 'position',
     radiusKm: EMERGENCY_SEARCH_RADIUS_METRES / 1000,
     travelTime: travelTime().name,
@@ -366,6 +380,11 @@ export interface ErBoard {
   readonly published: PublicCapacity | null;
   /** The kinds of bed `BTN-B07-ADMIT` can ask the ward for. */
   readonly bedKinds: readonly BedKind[];
+  /**
+   * Referrals this ER sent or was sent (`FR-EMG-07..09`): every open one, and
+   * today's closed ones with their timelines. Names nobody.
+   */
+  readonly referrals: readonly ReferralView[];
   readonly staleAfterMinutes: number;
   readonly serverTs: string;
 }
@@ -374,13 +393,15 @@ export async function board(hospitalId: string): Promise<ErBoard> {
   const names = await bedRepo.hospitalNames(hospitalId);
   if (names === null) throw notFound('hospital');
 
-  const [cases, capabilities, published, bedKinds, staleAfterMinutes] = await Promise.all([
-    emergencyRepo.openCases(hospitalId),
-    emergencyRepo.capabilitiesOf(hospitalId),
-    bedRepo.publicCapacity([hospitalId]),
-    emergencyRepo.bedKindsAt(hospitalId),
-    bedRepo.staleThresholdMinutes(hospitalId),
-  ]);
+  const [cases, capabilities, published, bedKinds, referrals, staleAfterMinutes] =
+    await Promise.all([
+      emergencyRepo.openCases(hospitalId),
+      emergencyRepo.capabilitiesOf(hospitalId),
+      bedRepo.publicCapacity([hospitalId]),
+      emergencyRepo.bedKindsAt(hospitalId),
+      referralRepo.referralsAt(hospitalId, today()),
+      bedRepo.staleThresholdMinutes(hospitalId),
+    ]);
 
   return {
     hospitalId,
@@ -391,6 +412,7 @@ export async function board(hospitalId: string): Promise<ErBoard> {
     capabilities,
     published: published.get(hospitalId) ?? null,
     bedKinds,
+    referrals,
     staleAfterMinutes,
     serverTs: now(),
   };
@@ -641,7 +663,13 @@ async function act(
     if (current === null) throw notFound('emergency case');
     if (actor !== null) assertScope(current, actor);
 
-    const verdict = canActOn(current, action, context);
+    // A case another ER is answering a referral of is held (`cases.ts`): it
+    // is not handed to the ward or sent home until the referral is withdrawn.
+    const held =
+      action === 'handoff' || action === 'discharge'
+        ? (await referralRepo.openReferralOf(trx, caseId)) !== null
+        : false;
+    const verdict = canActOn(current, action, { ...context, openReferral: held });
     if (!verdict.ok) {
       if (alreadyApplied(current, action, context)) {
         return { batch: notifications.NOTHING, duplicate: true };

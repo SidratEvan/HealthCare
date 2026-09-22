@@ -21,7 +21,14 @@
  * care what is on the other side.
  */
 
-import type { BedView, EmergencyCaseView, Eta, PublicCapacity, QueueState } from '@platform/domain';
+import type {
+  BedView,
+  EmergencyCaseView,
+  Eta,
+  PublicCapacity,
+  QueueState,
+  ReferralView,
+} from '@platform/domain';
 
 import { logger } from '../config/logger.js';
 
@@ -319,4 +326,51 @@ export function emergencyHandoff(
     serverTs,
     data,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Referrals between ERs (`FR-EMG-07..09`, BACKEND.md §6)
+// ---------------------------------------------------------------------------
+
+/**
+ * `referral.incoming` — another ER is asking this one to take somebody
+ * (`FR-EMG-09`, `LIST-B07-IN`). The receiving console rings on this.
+ *
+ * Into the receiving hospital's emergency room. The referral names nobody —
+ * problem, colour, age, sex, a note — so a broadcast of it is not an
+ * identifying read (`DB-P7`).
+ */
+export function referralIncoming(
+  hospitalId: string,
+  data: { readonly referral: ReferralView },
+  serverTs: string,
+): void {
+  emitter().emit(ROOMS.emergency(hospitalId), 'referral.incoming', {
+    type: 'referral.incoming',
+    serverTs,
+    data,
+  });
+}
+
+/**
+ * `referral.updated` — a step of the timeline (`FR-EMG-08`): seen, accepted,
+ * declined, withdrawn, arrived.
+ *
+ * Into the emergency room of each hospital named. Both ends' consoles already
+ * listen there, so a room per referral would be one more subscription every
+ * console had to remember to make — and a forgotten one reaches nobody,
+ * silently.
+ */
+export function referralUpdated(
+  hospitalIds: readonly string[],
+  data: { readonly referral: ReferralView },
+  serverTs: string,
+): void {
+  for (const hospitalId of new Set(hospitalIds)) {
+    emitter().emit(ROOMS.emergency(hospitalId), 'referral.updated', {
+      type: 'referral.updated',
+      serverTs,
+      data,
+    });
+  }
 }

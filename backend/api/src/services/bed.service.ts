@@ -55,6 +55,7 @@ import * as bedRepo from '../repositories/bed.repo.js';
 import * as clinicalRepo from '../repositories/clinical.repo.js';
 import * as emergencyRepo from '../repositories/emergency.repo.js';
 import * as guestRepo from '../repositories/guest.repo.js';
+import * as referralRepo from '../repositories/referral.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import * as emergency from './emergency.service.js';
@@ -903,14 +904,18 @@ async function patientAtDesk(trx: Tx, who: AtDesk): Promise<string> {
 /**
  * A case the ER at this hospital handed to the ward and nobody has placed yet,
  * locked. The guard is the ER's own (`canActOn(…, 'admit')`), so the ward
- * cannot admit a case the ER never handed over or has since discharged.
+ * cannot admit a case the ER never handed over, has since discharged, or is
+ * waiting on another ER to take.
  */
 async function handedOffCase(trx: Tx, caseId: string, actor: WardActor): Promise<CaseRow> {
   const found = await emergencyRepo.lockCase(trx, caseId);
   if (found === null) throw notFound('emergency case');
   if (found.hospitalId !== actor.hospitalId) throw forbiddenScope({ reason: 'wrong_hospital' });
 
-  const verdict = canActOn(found, 'admit');
+  // Not while another ER is answering a referral of the case (`cases.ts`).
+  const verdict = canActOn(found, 'admit', {
+    openReferral: (await referralRepo.openReferralOf(trx, caseId)) !== null,
+  });
   if (!verdict.ok) {
     throw new AppError('EMERGENCY_TRANSITION_INVALID', {
       message: verdict.detail,
