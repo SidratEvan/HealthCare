@@ -131,6 +131,8 @@ export interface BookingDetail {
   readonly sessionId: string;
   readonly serial: number;
   readonly status: string;
+  /** Whom the booking is for — what a consent offer names (`FR-PAT-63`). */
+  readonly patientId: string;
   readonly patientName: string;
   readonly feePoisha: number;
   readonly hospitalId: string;
@@ -166,8 +168,63 @@ export interface BookingView {
   readonly serverTs: string;
 }
 
+/** One consultation, as `S-A-12`'s timeline shows it. */
+export interface VisitRecord {
+  readonly id: string;
+  readonly bookingId: string;
+  readonly diagnosisText: string | null;
+  readonly adviceTextBn: string | null;
+  readonly followUpDate: string | null;
+  readonly signedAt: string | null;
+  readonly doctorNameBn: string;
+  readonly departmentNameBn: string;
+  readonly hospitalNameBn: string;
+  readonly serial: number;
+  readonly visitedAt: string;
+}
+
 /** What the tracking link hands back, plus the token it exchanges for. */
 export interface TrackingLinkView extends BookingView {
   readonly token: string;
   readonly expiresInSeconds: number;
+  /**
+   * The signed record for this booking, once the doctor has written one.
+   *
+   * `FR-GST-08`: records are "downloadable from the tracking link for a limited
+   * period". Null before the visit, which is most of the link's life.
+   */
+  readonly record: VisitRecord | null;
+}
+
+/** `BTN-A12-QR` — what the doctor types in, and how long it lasts. */
+export interface ConsentOffer {
+  readonly code: string;
+  readonly expiresInSeconds: number;
+  /** How long the hospital may look once the doctor enters it. */
+  readonly grantHours: number;
+}
+
+/** One grant a patient has made (`FR-PAT-64`). */
+export interface ConsentGrant {
+  readonly id: string;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly scope: string;
+  readonly grantedAt: string;
+  readonly expiresAt: string | null;
+  readonly revokedAt: string | null;
+  readonly grantedVia: string;
+}
+
+/** One staff read of the record (`FR-SEC-03`). */
+export interface AccessView {
+  readonly at: string;
+  readonly hospitalNameBn: string | null;
+  readonly staffName: string | null;
+}
+
+/** `BTN-A12-ACCESS` — the grants, and who looked. */
+export interface AccessLog {
+  readonly consents: readonly ConsentGrant[];
+  readonly views: readonly AccessView[];
 }

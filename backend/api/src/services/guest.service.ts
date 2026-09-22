@@ -31,11 +31,13 @@ import { createHash } from 'node:crypto';
 
 import { signToken } from '../config/jwt.js';
 import { AppError } from '../errors/AppError.js';
+import * as clinicalRepo from '../repositories/clinical.repo.js';
 import * as guestRepo from '../repositories/guest.repo.js';
 
 import * as bookingService from './booking.service.js';
 
 import type { BookingView } from './booking.service.js';
+import type { VisitRecord } from '../repositories/clinical.repo.js';
 
 /** What the screen behind a tracking link is given. */
 export interface TrackingLinkView extends BookingView {
@@ -50,6 +52,20 @@ export interface TrackingLinkView extends BookingView {
   readonly token: string;
   /** Seconds until that token needs exchanging again. */
   readonly expiresInSeconds: number;
+  /**
+   * The signed visit record for this booking, once there is one (`FR-GST-08`).
+   *
+   * "Records created for a guest are… downloadable from the tracking link for
+   * a limited period", and `APP_FLOW.md` A1.5 says the same. Null before the
+   * doctor signs, which is most of the link's life.
+   *
+   * This is the *booking's* outcome and not the patient's history. The
+   * distinction is the whole reason `GET /patients/:id/records` still refuses a
+   * guest: one is what this link was for, the other is everything the person
+   * has ever been seen for, and an SMS that gets forwarded to relatives must
+   * not carry the second.
+   */
+  readonly record: VisitRecord | null;
 }
 
 /**
@@ -81,6 +97,7 @@ export async function openTrackingLink(token: string): Promise<TrackingLinkView>
 
   return {
     ...view,
+    record: await clinicalRepo.findVisitForBooking(link.bookingId),
     token: await signToken({
       kind: 'access',
       // `bookingId` is what scopes it: `requireBookingScope` refuses this

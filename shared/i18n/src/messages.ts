@@ -251,6 +251,31 @@ export const CONSOLE = {
   },
   waitingNext: { bn: 'এরপরে', en: 'Next' },
 
+  // BTN-B05-SCAN (FR-PAT-63). A code rather than a camera for now — see
+  // `consent.service` for why — so the control says where the code comes from.
+  scanTitle: {
+    bn: 'রোগীর কোড দিয়ে আগের রেকর্ড খুলুন',
+    en: 'Open earlier records with the patient’s code',
+  },
+  scanHint: {
+    bn: 'রোগীর ফোনে: রেকর্ড → কোড দেখান। কোডটি এখানে দিন।',
+    en: 'On the patient’s phone: Records → Show code. Paste it here.',
+  },
+  consentCode: { bn: 'রোগীর কোড', en: 'Patient’s code' },
+  openRecords: { bn: 'রেকর্ড খুলুন', en: 'Open records' },
+  needCode: { bn: 'আগে রোগীর কোডটি দিন', en: 'Enter the patient’s code first' },
+  // One sentence for expired, mistyped and forged: the API does not say which,
+  // on purpose, and the remedy is the same.
+  codeInvalid: {
+    bn: 'কোডটি কাজ করছে না — মেয়াদ শেষ বা ভুল। রোগীকে নতুন কোড দেখাতে বলুন।',
+    en: 'That code does not work — expired or mistyped. Ask the patient for a new one.',
+  },
+  consentGranted: {
+    bn: '{name} রেকর্ড দেখার অনুমতি দিয়েছেন, {time} পর্যন্ত',
+    en: '{name} has given access until {time}',
+  },
+  closeRecords: { bn: 'বন্ধ করুন', en: 'Close' },
+
   // --- The four states every screen has (GR-03) ----------------------------
   loading: { bn: 'লোড হচ্ছে', en: 'Loading' },
   emptyQueue: { bn: 'এই চেম্বারে এখনো কোনো সিরিয়াল নেই', en: 'No serials in this chamber yet' },
@@ -350,12 +375,88 @@ export const PATIENT = {
     en: 'Serials booked on this phone. An account shows them on every device.',
   },
 
+  // --- S-A-12 health wallet (FR-PAT-60..65) --------------------------------
+  noRecordsYet: {
+    bn: 'এখনো কোনো রেকর্ড নেই। ডাক্তার দেখানোর পর এখানে জমা হবে।',
+    en: 'No records yet. They collect here after a visit.',
+  },
+  recordsAfterVisit: {
+    bn: '{count}টি সিরিয়াল নেওয়া আছে। ডাক্তার দেখানোর পর রেকর্ড এখানে আসবে।',
+    en: '{count} booked. The record appears here after the visit.',
+  },
+  recordsPending: {
+    bn: 'আরও {count}টি সিরিয়াল আছে, এখনো দেখানো হয়নি।',
+    en: '{count} more booked, not yet seen.',
+  },
+  followUpOn: { bn: 'আবার দেখাবেন {date}', en: 'Follow up on {date}' },
+  recordsExpiredLinks: {
+    bn: '{count}টি পুরোনো সিরিয়ালের লিংকের মেয়াদ শেষ, তাই সেগুলোর রেকর্ড এই ফোন থেকে আর খোলা যাচ্ছে না।',
+    en: 'The links for {count} older serials have expired, so their records no longer open from this phone.',
+  },
+  recordsPartlyFailed: {
+    bn: '{count}টি রেকর্ড আনা যায়নি।',
+    en: '{count} records could not be loaded.',
+  },
+  recordsOffline: {
+    bn: 'ইন্টারনেট সংযোগ নেই। রেকর্ড খুলতে সংযোগ লাগবে।',
+    en: 'No internet connection. Records need a connection to open.',
+  },
+
+  // BTN-A12-QR and BTN-A12-ACCESS (FR-PAT-63, FR-PAT-64).
+  walletShare: { bn: 'ডাক্তারকে আগের রেকর্ড দেখান', en: 'Let a doctor see your records' },
+  walletPatient: { bn: 'রোগী: {name}', en: 'Patient: {name}' },
+  showCode: { bn: 'কোড দেখান', en: 'Show code' },
+  whoLooked: { bn: 'কে দেখেছে', en: 'Who has looked' },
+  consentCodeTitle: { bn: 'ডাক্তারকে এই কোডটি দিন', en: 'Give the doctor this code' },
+  // "Shows consent scope and expiry" (APP_FLOW.md S-A-12), before anything is
+  // handed over. The hours come from the server, never from this sentence.
+  consentScope: {
+    bn: 'ডাক্তার কোডটি দিলে তাঁর হাসপাতাল {hours} ঘণ্টা আপনার আগের রেকর্ড দেখতে পারবে। "কে দেখেছে" থেকে যেকোনো সময় বন্ধ করতে পারবেন।',
+    en: 'Once the doctor enters it, their hospital can read your earlier records for {hours} hours. You can stop that any time from "Who has looked".',
+  },
+  consentCodeExpiresIn: {
+    bn: 'কোডটি আর {seconds} সেকেন্ড কাজ করবে',
+    en: 'This code works for {seconds} more seconds',
+  },
+  consentCodeExpired: {
+    bn: 'কোডের মেয়াদ শেষ। নতুন কোড নিন।',
+    en: 'This code has expired. Get a new one.',
+  },
+  newCode: { bn: 'নতুন কোড', en: 'New code' },
+  copyCode: { bn: 'কোড কপি করুন', en: 'Copy code' },
+  copied: { bn: 'কপি হয়েছে', en: 'Copied' },
+  close: { bn: 'বন্ধ করুন', en: 'Close' },
+
+  grantsTitle: { bn: 'যে হাসপাতালকে অনুমতি দিয়েছেন', en: 'Hospitals you have given access' },
+  noGrants: {
+    bn: 'কোনো হাসপাতালকে রেকর্ড দেখার অনুমতি দেওয়া হয়নি।',
+    en: 'You have not given any hospital access to your records.',
+  },
+  grantLive: { bn: 'চালু', en: 'Open' },
+  grantLiveUntil: { bn: '{time} পর্যন্ত চালু', en: 'Open until {time}' },
+  grantRevoked: { bn: 'বন্ধ করা হয়েছে', en: 'Stopped' },
+  grantExpired: { bn: 'মেয়াদ শেষ', en: 'Expired' },
+  revokeGrant: { bn: 'অনুমতি বন্ধ করুন', en: 'Stop access' },
+  revokeFailed: { bn: 'বন্ধ করা যায়নি। আবার চেষ্টা করুন।', en: 'Could not stop it. Try again.' },
+  viewsTitle: { bn: 'যাঁরা রেকর্ড দেখেছেন', en: 'Who has read your records' },
+  noViews: {
+    bn: 'এখনো কোনো হাসপাতালের কেউ আপনার রেকর্ড দেখেননি।',
+    en: 'Nobody at a hospital has read your records yet.',
+  },
+  hospitalStaff: { bn: 'হাসপাতালের কর্মী', en: 'Hospital staff' },
+  recordsOnThisDevice: {
+    bn: 'এই ফোনে নেওয়া সিরিয়ালের রেকর্ড। অ্যাকাউন্ট খুললে সব এক জায়গায় থাকবে।',
+    en: 'Records from serials booked on this phone. An account keeps them in one place.',
+  },
+  // `PRD.md` §3.2: an empty Reports tab would be a claim about the patient's
+  // health. This is a claim about the build, which is the true one.
+  walletAbsent: {
+    bn: 'টেস্টের রিপোর্ট, ব্যবস্থাপত্র, পুরোনো কাগজ যোগ করা আর পিডিএফ ডাউনলোড — এগুলো এখনো তৈরি হয়নি।',
+    en: 'Test reports, prescriptions, adding old paper records and PDF download are not built yet.',
+  },
+
   // --- Tabs not built in this version --------------------------------------
   comingSoon: { bn: 'শীঘ্রই আসছে', en: 'Coming soon' },
-  recordsComing: {
-    bn: 'ডাক্তার দেখানোর পর প্রেসক্রিপশন আর রিপোর্ট এখানে জমা হবে।',
-    en: 'Prescriptions and reports will collect here after a visit.',
-  },
   profileComing: {
     bn: 'অ্যাকাউন্ট আর প্রোফাইল এখনো তৈরি হয়নি। সিরিয়াল নিতে অ্যাকাউন্ট লাগে না।',
     en: 'Accounts are not built yet. Booking a serial needs no account.',

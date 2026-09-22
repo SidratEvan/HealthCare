@@ -25,9 +25,9 @@
  * `SEL-B05-FOLLOWUP`, `BTN-B05-DRAFT` and `BTN-B05-SIGN` — a visit record,
  * which is what the wallet reads and what step 13 is built on.
  *
- * `BTN-B05-SCAN` (the wallet QR) is step 13 and `BTN-B05-TEST` is step 17. Both
- * are absent rather than disabled: a control that cannot work should not be on
- * a screen a doctor is learning.
+ * `BTN-B05-SCAN` is here as a pasted code rather than a camera — see
+ * `ConsentScan`. `BTN-B05-TEST` is step 17 and is absent rather than disabled:
+ * a control that cannot work should not be on a screen a doctor is learning.
  *
  * ## The failure that is spelled out in the document
  *
@@ -44,6 +44,7 @@ import type { QueueEntry } from '@platform/domain';
 import { formatClock, formatNumber, formatTaka, t, type Locale } from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine, Input, ToastProvider, useToast } from '@platform/ui';
 
+import { ConsentScan } from '@/components/ConsentScan';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { PatientPanel } from '@/components/PatientPanel';
 import { useSessionQueue } from '@/hooks/useSessionQueue';
@@ -230,6 +231,10 @@ function DoctorBody(): ReactNode {
           ) : (
             <PatientPanel entry={serving} />
           )}
+
+          {/* Keyed on who is in the chamber, so a consented history never
+              outlives the patient it belongs to. */}
+          <ConsentScan key={servingBookingId ?? 'nobody'} />
 
           <UpNext waiting={waiting} />
         </div>

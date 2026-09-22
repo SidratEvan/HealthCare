@@ -88,36 +88,55 @@ async function callFirstPatient(): Promise<void> {
 }
 
 /**
- * A facility this patient has never been booked into, with a doctor on staff.
+ * A patient, and a facility that has never treated them.
  *
- * Asked of the database rather than assumed. The seeded history books 200
- * patients across six facilities, so "another hospital" is usually one they
- * *have* attended — picking one blindly would make this test pass for the wrong
- * reason on one run and fail on the next.
+ * Both are asked of the database together, and that pairing is the point. The
+ * seeded history books 200 patients across six facilities, and this suite's own
+ * fixtures book more on every test — so a *fixed* patient eventually has been
+ * treated everywhere and the question `FR-DOC-10` answers stops existing for
+ * them. Picking the patient and the stranger in one query means the pair is
+ * always one the rule can actually be tested on.
+ *
+ * Throws rather than skipping. If no such pair exists the suite is no longer
+ * testing the requirement, and saying so is better than passing quietly.
  */
-async function hospitalStrangerTo(patientId: string): Promise<string> {
-  const result = await sql<{ id: string }>`
-    SELECT h.id
-      FROM hospitals h
-     WHERE h.deleted_at IS NULL
+async function patientAndStrangerHospital(): Promise<{
+  patientId: string;
+  hospitalId: string;
+}> {
+  const result = await sql<{ patient_id: string; hospital_id: string }>`
+    SELECT p.id AS patient_id, h.id AS hospital_id
+      FROM patients p
+      CROSS JOIN hospitals h
+     WHERE p.deleted_at IS NULL
+       AND h.deleted_at IS NULL
        AND EXISTS (SELECT 1 FROM staff_roles sr
                     WHERE sr.hospital_id = h.id AND sr.role = 'doctor'
                       AND sr.deleted_at IS NULL)
        AND NOT EXISTS (
          SELECT 1 FROM bookings b
            JOIN sessions s ON s.id = b.session_id
-          WHERE b.patient_id = ${patientId}::uuid
+          WHERE b.patient_id = p.id
             AND s.hospital_id = h.id
             AND b.deleted_at IS NULL
        )
+       AND NOT EXISTS (
+         SELECT 1 FROM consents c
+          WHERE c.patient_id = p.id
+            AND c.hospital_id = h.id
+            AND c.revoked_at IS NULL
+            AND c.deleted_at IS NULL
+       )
+     ORDER BY p.created_at
      LIMIT 1
   `.execute(db);
 
-  const id = result.rows[0]?.id;
-  if (id === undefined) {
-    throw new Error(`Every seeded facility has treated ${patientId}; FR-DOC-10 is untestable.`);
+  const row = result.rows[0];
+  if (row === undefined) {
+    throw new Error('No patient/facility pair without a relationship; FR-DOC-10 is untestable.');
   }
-  return id;
+
+  return { patientId: row.patient_id, hospitalId: row.hospital_id };
 }
 
 async function auditRowsFor(patientId: string): Promise<number> {
@@ -152,11 +171,11 @@ describe('who may read a record (FR-DOC-10)', () => {
   });
 
   it('refuses a doctor at a hospital the patient has never attended', async () => {
-    const elsewhere = await hospitalStrangerTo(String(fixture.patientIds[0]));
-    const token = await staff(['doctor'], elsewhere, await staffIdFor(elsewhere, 'doctor'));
+    const { patientId, hospitalId } = await patientAndStrangerHospital();
+    const token = await staff(['doctor'], hospitalId, await staffIdFor(hospitalId, 'doctor'));
 
     const response = await request(app)
-      .get(`${BASE}/patients/${String(fixture.patientIds[0])}/records`)
+      .get(`${BASE}/patients/${patientId}/records`)
       .set('authorization', `Bearer ${token}`);
 
     // No treatment relationship and no consent. A consultant at one facility
@@ -268,6 +287,44 @@ describe('the patient panel (S-B-05, FR-DOC-03)', () => {
       .set('authorization', `Bearer ${await staff(['doctor'])}`);
 
     expect(response.body.data.intake).toBeNull();
+  });
+
+  it('reads a seeded history that carries follow-up dates', async () => {
+    // A regression, and a real one: `follow_up_date` is a `date` column, and the
+    // driver may hand it back as a string rather than a `Date`. The conversion
+    // assumed a `Date`, so the wallet threw a 500 for any patient whose history
+    // included a follow-up — intermittently, because it depended on which
+    // patient was read. The seeded history sets one on about half of its 500
+    // visits, which is why this test goes looking for such a patient.
+    const withFollowUp = await sql<{ patient_id: string; hospital_id: string }>`
+      SELECT v.patient_id, v.hospital_id
+        FROM visits v
+       WHERE v.follow_up_date IS NOT NULL
+         AND v.signed_at IS NOT NULL
+         AND v.deleted_at IS NULL
+       ORDER BY v.created_at
+       LIMIT 1
+    `.execute(db);
+
+    const row = withFollowUp.rows[0];
+    if (row === undefined) throw new Error('The seed should write visits with follow-up dates.');
+
+    const response = await request(app)
+      .get(`${BASE}/patients/${row.patient_id}/records`)
+      .set(
+        'authorization',
+        `Bearer ${await staff(['doctor'], row.hospital_id, await staffIdFor(row.hospital_id, 'doctor'))}`,
+      );
+
+    expect(response.status).toBe(200);
+
+    const dated = (response.body.data.visits as { followUpDate: string | null }[]).find(
+      (visit) => visit.followUpDate !== null,
+    );
+
+    // `YYYY-MM-DD`, not an instant: a follow-up is a day on a calendar in
+    // Dhaka, and turning it into a timestamp would move it west of UTC.
+    expect(dated?.followUpDate).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   });
 
   it('names what this version cannot show rather than omitting it', async () => {

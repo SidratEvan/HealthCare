@@ -21,10 +21,12 @@
 
 import { jwtVerify, SignJWT, type JWTPayload } from 'jose';
 
+import { CONSENT_OFFER_TTL_SECONDS } from '@platform/domain';
+
 import { env } from '../env.js';
 
 /** Which secret a token is signed with, and therefore what it may authorise. */
-export type TokenKind = 'access' | 'refresh' | 'guest';
+export type TokenKind = 'access' | 'refresh' | 'guest' | 'consent';
 
 const ISSUER = 'healthcare-api';
 
@@ -34,12 +36,28 @@ const SECRETS: Record<TokenKind, Uint8Array> = {
   access: encoder.encode(env.JWT_ACCESS_SECRET),
   refresh: encoder.encode(env.JWT_REFRESH_SECRET),
   guest: encoder.encode(env.GUEST_LINK_SECRET),
+
+  /**
+   * A consent offer reuses the guest-link secret, and is separated from it by
+   * **audience** rather than by key (`FR-PAT-63`).
+   *
+   * A fourth secret would be a fourth environment variable, and an API that
+   * will not boot without one it has never been given is a worse failure than
+   * the one this avoids: the deployed demo would stop the moment this shipped.
+   *
+   * The separation is real either way, because the audience is signed. A
+   * tracking link presented as a consent code fails `jwtVerify`'s audience
+   * check, and so does a consent code presented as a tracking link or as a
+   * bearer token — `attachPrincipal` only ever verifies against `access`.
+   */
+  consent: encoder.encode(env.GUEST_LINK_SECRET),
 };
 
 const AUDIENCES: Record<TokenKind, string> = {
   access: 'access',
   refresh: 'refresh',
   guest: 'guest-link',
+  consent: 'consent-offer',
 };
 
 /**
@@ -77,6 +95,11 @@ function defaultLifetime(kind: TokenKind): string {
       return env.JWT_REFRESH_TTL;
     case 'guest':
       return `${String(env.GUEST_LINK_TTL_DAYS)}d`;
+    case 'consent':
+      // Minutes, not days. The code is shown on a screen in a chamber and is
+      // finished the moment the doctor has typed it; one that stayed live for
+      // an hour would still be live in a photograph of that screen.
+      return `${String(CONSENT_OFFER_TTL_SECONDS)}s`;
   }
 }
 

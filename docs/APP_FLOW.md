@@ -417,6 +417,23 @@ Ranking: capability match → travel time → ER load → free beds. Stale facil
 
 ### `S-A-12` Health wallet (`FR-PAT-60`–`65`)
 
+> **Built in this version:** `TAB-A12-TL` as the whole screen, `CARD-A12-<recordId>`
+> opened out in place (no detail view, no PDF), `BTN-A12-QR` as a copyable code
+> with its scope and the grant's length stated first, and `BTN-A12-ACCESS` with
+> revoke.
+>
+> The timeline is **this device's**: there are no accounts (`CLAUDE.md` §4.1),
+> so it is assembled from the tracking links the phone holds, each of which
+> carries its booking's record (`FR-GST-08`). A link that has expired is said to
+> have expired, and a request that failed is an error with a retry — neither is
+> folded into "no records".
+>
+> **Not built:** `TAB-A12-REP` (the lab, step 17), `TAB-A12-RX` (prescribing is
+> out of scope, `PRD.md` §9), `BTN-A12-UPLOAD` (needs Supabase Storage) and
+> `BTN-A12-EXPORT` (needs a PDF writer). None is rendered as an empty tab; the
+> screen names them in one line instead, because an empty *Reports* tab would
+> tell a patient they have no reports.
+
 | Element | ID | Wiring |
 |---|---|---|
 | Tab: টাইমলাইন | `TAB-A12-TL` | Visits, prescriptions, reports, chronologically |
@@ -565,9 +582,15 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 >
 > **Not built:** `TBL-B05-RX`, `BTN-B05-ADDRX` and the printing half of
 > `BTN-B05-SIGN` — prescribing is out of scope for this version (`PRD.md` §9).
-> `BTN-B05-SCAN` is build step 13 and `BTN-B05-TEST` is step 17. Each is absent
-> from the screen rather than shown disabled: a control that cannot work should
-> not be on a screen a doctor is learning.
+> `BTN-B05-TEST` is step 17 and is absent from the screen rather than shown
+> disabled: a control that cannot work should not be on a screen a doctor is
+> learning.
+>
+> `BTN-B05-SCAN` is built as a **pasted code, not a camera**: the doctor enters
+> the code `BTN-A12-QR` shows, and the patient's earlier visits open beneath
+> the patient panel. The card clears when the next patient is called, so a
+> consented history is never read as the next person's. A QR encoder and
+> scanner are dependencies not yet agreed; the endpoint does not change.
 >
 > `BTN-B05-NEXT` is absent too, and deliberately: `BTN-B05-SIGN` already
 > finishes the patient and calls the next one, so a second control doing half of

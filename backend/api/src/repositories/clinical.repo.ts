@@ -192,7 +192,7 @@ export async function findVisits(patientId: string, limit = 20): Promise<VisitRe
     booking_id: string;
     diagnosis_text: string | null;
     advice_text_bn: string | null;
-    follow_up_date: Date | null;
+    follow_up_date: Date | string | null;
     signed_at: Date | null;
     doctor_name_bn: string;
     department_name_bn: string;
@@ -427,6 +427,257 @@ export async function recordRecordView(entry: {
 }
 
 // ---------------------------------------------------------------------------
+// Consent (`FR-PAT-63`, `FR-PAT-64`)
+// ---------------------------------------------------------------------------
+
+/** A grant as the patient sees it on `BTN-A12-ACCESS`. */
+export interface ConsentRow {
+  readonly id: string;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly scope: string;
+  readonly grantedAt: string;
+  readonly expiresAt: string | null;
+  readonly revokedAt: string | null;
+  readonly grantedVia: string;
+}
+
+/**
+ * Writes a grant, or extends the one already there.
+ *
+ * A patient handing the same hospital a second code has not granted twice —
+ * they have said yes again, which should move the expiry rather than leave two
+ * rows for one relationship. The partial unique index this leans on cannot be
+ * expressed with `ON CONFLICT`, so the update is explicit and scoped to a live
+ * grant of the same scope.
+ */
+export async function grantConsent(
+  trx: Tx,
+  input: {
+    readonly patientId: string;
+    readonly hospitalId: string;
+    readonly doctorId: string | null;
+    readonly scope: string;
+    readonly expiresAt: string | null;
+    readonly grantedVia: string;
+    readonly staffUserId: string | null;
+  },
+): Promise<{ id: string; reused: boolean }> {
+  const existing = await sql<{ id: string }>`
+    SELECT id FROM consents
+     WHERE patient_id = ${input.patientId}::uuid
+       AND hospital_id = ${input.hospitalId}::uuid
+       AND scope = ${input.scope}::consent_scope
+       AND revoked_at IS NULL
+       AND deleted_at IS NULL
+       AND (expires_at IS NULL OR expires_at > now())
+     LIMIT 1
+  `.execute(trx);
+
+  const found = existing.rows[0];
+  if (found !== undefined) {
+    await sql`
+      UPDATE consents
+         SET expires_at = ${input.expiresAt}::timestamptz
+       WHERE id = ${found.id}::uuid
+    `.execute(trx);
+
+    return { id: found.id, reused: true };
+  }
+
+  const inserted = await sql<{ id: string }>`
+    INSERT INTO consents
+      (patient_id, hospital_id, doctor_id, scope, expires_at, granted_via, created_by)
+    VALUES (
+      ${input.patientId}::uuid, ${input.hospitalId}::uuid, ${input.doctorId}::uuid,
+      ${input.scope}::consent_scope, ${input.expiresAt}::timestamptz,
+      ${input.grantedVia}, ${input.staffUserId}::uuid
+    )
+    RETURNING id
+  `.execute(trx);
+
+  const row = inserted.rows[0];
+  if (row === undefined) throw new Error('consent insert returned no row.');
+
+  return { id: row.id, reused: false };
+}
+
+/**
+ * Revokes a grant (`FR-PAT-64`: "explicit and revocable per hospital").
+ *
+ * A timestamp, never a delete (`DB-P2`). An audit asked six months from now
+ * has to be able to answer what was permitted *at the time of a read*, and a
+ * deleted row cannot answer that.
+ *
+ * Returns false when the grant is not this patient's, which the service turns
+ * into a 404 rather than a 403 — telling a caller that a consent id exists but
+ * belongs to somebody else is itself a disclosure.
+ */
+export async function revokeConsent(consentId: string, patientId: string): Promise<boolean> {
+  const result = await sql<{ id: string }>`
+    UPDATE consents
+       SET revoked_at = now()
+     WHERE id = ${consentId}::uuid
+       AND patient_id = ${patientId}::uuid
+       AND revoked_at IS NULL
+       AND deleted_at IS NULL
+    RETURNING id
+  `.execute(db);
+
+  return result.rows.length > 0;
+}
+
+/** The profile an account holds as its own (`patients.is_primary`). */
+export async function findPrimaryPatient(userId: string): Promise<string | null> {
+  const result = await sql<{ id: string }>`
+    SELECT id FROM patients
+     WHERE owner_user_id = ${userId}::uuid AND deleted_at IS NULL
+     ORDER BY is_primary DESC, created_at
+     LIMIT 1
+  `.execute(db);
+
+  return result.rows[0]?.id ?? null;
+}
+
+/** Which patient a grant belongs to, so ownership can be checked before it is touched. */
+export async function findConsentPatient(consentId: string): Promise<string | null> {
+  const result = await sql<{ patient_id: string }>`
+    SELECT patient_id FROM consents
+     WHERE id = ${consentId}::uuid AND deleted_at IS NULL
+  `.execute(db);
+
+  return result.rows[0]?.patient_id ?? null;
+}
+
+/** Every grant this patient has made, live or not, newest first. */
+export async function listConsents(patientId: string): Promise<ConsentRow[]> {
+  const result = await sql<{
+    id: string;
+    hospital_id: string;
+    hospital_name_bn: string;
+    scope: string;
+    granted_at: Date;
+    expires_at: Date | null;
+    revoked_at: Date | null;
+    granted_via: string;
+  }>`
+    SELECT c.id, c.hospital_id, h.name_bn AS hospital_name_bn,
+           c.scope::text AS scope, c.granted_at, c.expires_at, c.revoked_at, c.granted_via
+      FROM consents c
+      JOIN hospitals h ON h.id = c.hospital_id
+     WHERE c.patient_id = ${patientId}::uuid AND c.deleted_at IS NULL
+     ORDER BY c.granted_at DESC
+  `.execute(db);
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    hospitalId: row.hospital_id,
+    hospitalNameBn: row.hospital_name_bn,
+    scope: row.scope,
+    grantedAt: row.granted_at.toISOString(),
+    expiresAt: row.expires_at?.toISOString() ?? null,
+    revokedAt: row.revoked_at?.toISOString() ?? null,
+    grantedVia: row.granted_via,
+  }));
+}
+
+/** One line of `BTN-A12-ACCESS`: who opened this record, and when. */
+export interface AccessEntry {
+  readonly at: string;
+  readonly hospitalNameBn: string | null;
+  readonly staffName: string | null;
+  readonly action: string;
+}
+
+/**
+ * Who has read this patient's records (`FR-PAT-64`, `FR-SEC-03`).
+ *
+ * "The patient can see who viewed their records and when." This is the read
+ * that makes that sentence true, and it is why `DB-P7` writes a row on every
+ * patient-identifying access rather than on some of them: a log with gaps
+ * would answer the question wrongly while looking complete.
+ */
+export async function listAccessLog(patientId: string, limit = 50): Promise<AccessEntry[]> {
+  const result = await sql<{
+    created_at: Date;
+    hospital_name_bn: string | null;
+    staff_name: string | null;
+    action: string;
+  }>`
+    SELECT a.created_at, h.name_bn AS hospital_name_bn,
+           su.full_name AS staff_name, a.action
+      FROM audit_log a
+      LEFT JOIN hospitals h    ON h.id = a.hospital_id
+      LEFT JOIN staff_users su ON su.id = a.actor_staff_id
+     WHERE a.patient_id = ${patientId}::uuid
+       AND a.action = 'RECORD_VIEW'
+       -- The patient's own reads are not "who viewed my records"; showing them
+       -- their own visits back would bury the answer they came for.
+       AND a.actor_staff_id IS NOT NULL
+     ORDER BY a.created_at DESC
+     LIMIT ${limit}
+  `.execute(db);
+
+  return result.rows.map((row) => ({
+    at: row.created_at.toISOString(),
+    hospitalNameBn: row.hospital_name_bn,
+    staffName: row.staff_name,
+    action: row.action,
+  }));
+}
+
+/** The signed record for one booking, for the tracking link (`FR-GST-08`). */
+export async function findVisitForBooking(bookingId: string): Promise<VisitRecord | null> {
+  const result = await sql<{
+    id: string;
+    booking_id: string;
+    diagnosis_text: string | null;
+    advice_text_bn: string | null;
+    follow_up_date: Date | string | null;
+    signed_at: Date | null;
+    doctor_name_bn: string;
+    department_name_bn: string;
+    hospital_name_bn: string;
+    serial_number: number;
+    visited_at: Date;
+  }>`
+    SELECT v.id, v.booking_id, v.diagnosis_text, v.advice_text_bn,
+           v.follow_up_date, v.signed_at,
+           d.full_name_bn AS doctor_name_bn,
+           dep.name_bn    AS department_name_bn,
+           h.name_bn      AS hospital_name_bn,
+           b.serial_number,
+           coalesce(v.signed_at, v.created_at) AS visited_at
+      FROM visits v
+      JOIN bookings b      ON b.id = v.booking_id
+      JOIN sessions sess   ON sess.id = b.session_id
+      JOIN departments dep ON dep.id = sess.department_id
+      JOIN doctors d       ON d.id = v.doctor_id
+      JOIN hospitals h     ON h.id = v.hospital_id
+     WHERE v.booking_id = ${bookingId}::uuid
+       AND v.deleted_at IS NULL
+       AND v.signed_at IS NOT NULL
+  `.execute(db);
+
+  const row = result.rows[0];
+  if (row === undefined) return null;
+
+  return {
+    id: row.id,
+    bookingId: row.booking_id,
+    diagnosisText: row.diagnosis_text,
+    adviceTextBn: row.advice_text_bn,
+    followUpDate: row.follow_up_date === null ? null : toDateOnly(row.follow_up_date),
+    signedAt: row.signed_at?.toISOString() ?? null,
+    doctorNameBn: row.doctor_name_bn,
+    departmentNameBn: row.department_name_bn,
+    hospitalNameBn: row.hospital_name_bn,
+    serial: row.serial_number,
+    visitedAt: row.visited_at.toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
 
 function asText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null;
@@ -440,11 +691,25 @@ function asList(value: unknown): readonly string[] {
 /**
  * A `date` column as `YYYY-MM-DD`.
  *
- * `pg` hands back a `Date` at local midnight for a date column, so
- * `toISOString()` can land on the previous day west of UTC. The date parts are
- * read directly instead — the value has no timezone to convert.
+ * Two shapes arrive here and both have to be handled.
+ *
+ * `pg` may hand back a `Date` at **local** midnight for a `date` column, so
+ * `toISOString()` on it can land on the previous day west of UTC. The parts are
+ * read directly instead, because the value has no timezone to convert.
+ *
+ * It may equally hand back the raw `YYYY-MM-DD` string, depending on which type
+ * parsers are installed in the process. Assuming the `Date` was a real bug:
+ * `value.getFullYear is not a function` threw a 500 out of the wallet for any
+ * patient whose history happened to include a follow-up date, and it only
+ * showed up intermittently because it depended on which patient was read.
  */
-function toDateOnly(value: Date): string {
+function toDateOnly(value: Date | string): string {
+  if (typeof value === 'string') {
+    // Already a calendar date. Slice rather than parse: turning it into a
+    // `Date` would reintroduce exactly the timezone shift this avoids.
+    return value.slice(0, 10);
+  }
+
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, '0');
   const day = String(value.getDate()).padStart(2, '0');

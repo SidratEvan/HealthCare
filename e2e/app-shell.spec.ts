@@ -106,10 +106,11 @@ test.describe('NAV-A the bottom navigation', () => {
   });
 
   test('a tab this version does not have says what will be there', async ({ page }) => {
-    await page.goto(`${PATIENT}/records`);
+    await page.goto(`${PATIENT}/profile`);
 
-    // Records is `S-A-12`, build step 13. Greying it out would say "broken";
-    // hiding it would move the bar as the product grows.
+    // Profile is `S-A-19`, which needs the accounts `CLAUDE.md` §4.1 defers.
+    // Greying it out would say "broken"; hiding it would move the bar as the
+    // product grows. (Records was this test's subject until step 13 built it.)
     const explanation = page.getByTestId('not-built');
     await expect(explanation).toBeVisible();
     await expect(explanation).toContainText('শীঘ্রই আসছে');
