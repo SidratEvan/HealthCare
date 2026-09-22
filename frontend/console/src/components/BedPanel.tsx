@@ -42,6 +42,7 @@ import {
   formatDateTime,
   formatNumber,
   formatTaka,
+  problemName,
   t,
   type Locale,
 } from '@platform/i18n';
@@ -50,7 +51,7 @@ import { Button, Chip, Input } from '@platform/ui';
 import { NUMERALS, shownState, stateLabel } from '@/lib/bedCopy';
 
 import type { BedBoard } from '@/hooks/useBedBoard';
-import type { PanelResponse, PendingRequest } from '@/lib/beds';
+import type { PanelResponse, PendingHandoff, PendingRequest } from '@/lib/beds';
 
 type Mode = 'view' | 'admit' | 'discharge' | 'transfer' | 'oos';
 
@@ -60,6 +61,13 @@ export interface BedPanelProps {
   readonly wardNames: ReadonlyMap<string, string>;
   readonly beds: readonly BedView[];
   readonly requests: readonly PendingRequest[] | null;
+  /** Cases the ER handed over (`BTN-B07-ADMIT`, `FR-BED-07`). */
+  readonly handoffs: readonly PendingHandoff[] | null;
+  /**
+   * Opens the panel straight into the admit form with this ER case chosen —
+   * what `LIST-B06-PENDING`'s "বেডে ভর্তি করুন" does after a bed is picked.
+   */
+  readonly admitCaseId?: string | null;
   readonly locale: Locale;
   readonly now: Date;
   readonly today: DhakaDate;
@@ -73,7 +81,9 @@ export interface BedPanelProps {
 
 export function BedPanel(props: BedPanelProps): ReactNode {
   const { bed, locale, now, connected, board, onClose } = props;
-  const [mode, setMode] = useState<Mode>('view');
+  const [mode, setMode] = useState<Mode>(
+    props.admitCaseId === undefined || props.admitCaseId === null ? 'view' : 'admit',
+  );
   const state = shownState(bed, now);
   const at = now.toISOString() as Timestamp;
 
@@ -303,11 +313,13 @@ export function BedPanel(props: BedPanelProps): ReactNode {
           locale={locale}
           connected={connected}
           requests={(props.requests ?? []).filter((request) => request.state === 'requested')}
+          handoffs={props.handoffs ?? []}
+          initialHandoffId={props.admitCaseId ?? null}
           onCancel={() => setMode('view')}
-          onAdmitDesk={(patient, expectedDischargeDate) =>
+          onAdmitDesk={(patient, expectedDischargeDate, emergencyCaseId) =>
             act(
               'admit',
-              { patient, expectedDischargeDate },
+              { patient, expectedDischargeDate, emergencyCaseId },
               { action: 'admit', bedRequestId: null },
             )
           }
@@ -497,6 +509,8 @@ function AdmitForm({
   locale,
   connected,
   requests,
+  handoffs,
+  initialHandoffId,
   onCancel,
   onAdmitDesk,
   onAdmitRequest,
@@ -505,17 +519,28 @@ function AdmitForm({
   readonly locale: Locale;
   readonly connected: boolean;
   readonly requests: readonly PendingRequest[];
+  readonly handoffs: readonly PendingHandoff[];
+  readonly initialHandoffId: string | null;
   readonly onCancel: () => void;
   readonly onAdmitDesk: (
     patient: { name: string; phone: string; ageYears: number; sex: 'male' | 'female' | 'other' },
     expectedDischargeDate: string | null,
+    emergencyCaseId: string | null,
   ) => Promise<void>;
   readonly onAdmitRequest: (requestId: string) => Promise<void>;
 }): ReactNode {
+  const initial = handoffs.find((handoff) => handoff.caseId === initialHandoffId) ?? null;
+
+  // An ER case is admitted through this same form: the ER took no name, so
+  // the ward takes it here (`BTN-B07-ADMIT`, `FR-BED-07`). Choosing one fills
+  // in what the ER did record — age and sex — and nothing it did not.
+  const [fromEr, setFromEr] = useState<PendingHandoff | null>(initial);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [age, setAge] = useState('');
-  const [sex, setSex] = useState<'male' | 'female' | 'other' | null>(null);
+  const [age, setAge] = useState(
+    initial?.ageYears === null || initial === null ? '' : String(initial.ageYears),
+  );
+  const [sex, setSex] = useState<'male' | 'female' | 'other' | null>(initial?.sex ?? null);
   const [tried, setTried] = useState(false);
 
   const phoneStored = normaliseBdMobile(phone);
@@ -537,7 +562,40 @@ function AdmitForm({
     <div className="flex flex-col gap-4" data-testid="admit-form">
       <h3 className="font-ui text-title-sm text-ink">{t('admitHeading', locale)}</h3>
 
-      {ordered.length > 0 && connected ? (
+      {handoffs.length > 0 ? (
+        <section className="flex flex-col gap-2" data-testid="admit-from-er">
+          <p className="font-ui text-caption text-ink-muted">{t('pendingFromEr', locale)}</p>
+          <div className="flex flex-wrap gap-2">
+            {handoffs.map((handoff) => (
+              <Button
+                key={handoff.caseId}
+                variant={fromEr?.caseId === handoff.caseId ? 'primary' : 'secondary'}
+                size="sm"
+                aria-pressed={fromEr?.caseId === handoff.caseId}
+                data-testid={`admit-er-${handoff.caseId}`}
+                onClick={() => {
+                  const chosen = fromEr?.caseId === handoff.caseId ? null : handoff;
+                  setFromEr(chosen);
+                  if (chosen !== null) {
+                    setAge(chosen.ageYears === null ? '' : String(chosen.ageYears));
+                    setSex(chosen.sex);
+                  }
+                }}
+              >
+                {handoff.tokenLabel ?? ''} · {problemName(handoff.problem, locale)} ·{' '}
+                {bedKindName(handoff.bedKind, locale)}
+              </Button>
+            ))}
+          </div>
+          {fromEr === null ? null : (
+            <p className="font-ui text-caption text-ink-secondary">
+              {t('pendingErNameHint', locale)}
+            </p>
+          )}
+        </section>
+      ) : null}
+
+      {ordered.length > 0 && connected && fromEr === null ? (
         <section className="flex flex-col gap-2">
           <p className="font-ui text-caption text-ink-muted">{t('admitFromRequest', locale)}</p>
           {ordered.map((request) => (
@@ -563,7 +621,11 @@ function AdmitForm({
           event.preventDefault();
           setTried(true);
           if (!valid || phoneStored === null || ageYears === null || sex === null) return;
-          void onAdmitDesk({ name: name.trim(), phone: phoneStored, ageYears, sex }, null);
+          void onAdmitDesk(
+            { name: name.trim(), phone: phoneStored, ageYears, sex },
+            null,
+            fromEr?.caseId ?? null,
+          );
         }}
       >
         <Input

@@ -21,7 +21,7 @@
  * care what is on the other side.
  */
 
-import type { BedView, Eta, PublicCapacity, QueueState } from '@platform/domain';
+import type { BedView, EmergencyCaseView, Eta, PublicCapacity, QueueState } from '@platform/domain';
 
 import { logger } from '../config/logger.js';
 
@@ -234,6 +234,88 @@ export function bedRequestUpdated(
 ): void {
   emitter().emit(ROOMS.beds(hospitalId), 'bedrequest.updated', {
     type: 'bedrequest.updated',
+    serverTs,
+    data,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The ER console (`hospital:<id>:emergency`, BACKEND.md §6)
+// ---------------------------------------------------------------------------
+
+/**
+ * `emergency.inbound` — "I'm on my way" has arrived (`FR-EMG-01`, `FR-PAT-46`).
+ *
+ * The console rings on this. It carries the case as the console lists it —
+ * the problem, the ETA, an age and sex if given, whether a number was left —
+ * and never the number itself: the room is every staff console at the
+ * hospital, and the number is read one case at a time, audited (`DB-P7`).
+ */
+export function emergencyInbound(
+  hospitalId: string,
+  data: { readonly case: EmergencyCaseView },
+  serverTs: string,
+): void {
+  emitter().emit(ROOMS.emergency(hospitalId), 'emergency.inbound', {
+    type: 'emergency.inbound',
+    serverTs,
+    data,
+  });
+}
+
+/** `emergency.updated` — a case moved: prepared, accepted, triaged, declined, called off. */
+export function emergencyUpdated(
+  hospitalId: string,
+  data: { readonly case: EmergencyCaseView; readonly load: number },
+  serverTs: string,
+): void {
+  emitter().emit(ROOMS.emergency(hospitalId), 'emergency.updated', {
+    type: 'emergency.updated',
+    serverTs,
+    data,
+  });
+}
+
+/**
+ * `capabilities.updated` — the coordinator confirmed the list (`FR-EMG-05`).
+ *
+ * Into the emergency room so a second ER screen shows the same switches. The
+ * public reads the view on every search, so a family sees the change on
+ * their next search without any broadcast.
+ */
+export function capabilitiesUpdated(
+  hospitalId: string,
+  data: {
+    readonly capabilities: readonly {
+      readonly kind: string;
+      readonly available: boolean;
+      readonly updatedAt: string;
+    }[];
+  },
+  serverTs: string,
+): void {
+  emitter().emit(ROOMS.emergency(hospitalId), 'capabilities.updated', {
+    type: 'capabilities.updated',
+    serverTs,
+    data,
+  });
+}
+
+/**
+ * `emergency.handoff` — the ER handed a case to the ward, or the ward placed
+ * it (`BTN-B07-ADMIT`, `FR-BED-07`).
+ *
+ * Into the *beds* room: the ward board is who has to act on it. Like
+ * `bedrequest.updated`, only the id and the state — the pending list is
+ * re-read on this.
+ */
+export function emergencyHandoff(
+  hospitalId: string,
+  data: { readonly caseId: string; readonly state: string },
+  serverTs: string,
+): void {
+  emitter().emit(ROOMS.beds(hospitalId), 'emergency.handoff', {
+    type: 'emergency.handoff',
     serverTs,
     data,
   });

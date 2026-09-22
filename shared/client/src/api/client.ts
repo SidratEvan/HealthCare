@@ -66,6 +66,16 @@ export class ApiClient {
     return await this.send<T>('POST', path, body, idempotencyKey);
   }
 
+  /** `PATCH /emergency/cases/:id` — "triage, state" (BACKEND.md §7.5). */
+  async patch<T>(path: string, body: unknown, idempotencyKey?: string): Promise<T> {
+    return await this.send<T>('PATCH', path, body, idempotencyKey);
+  }
+
+  /** `PUT /hospitals/:id/capabilities` (`FR-EMG-05`). */
+  async put<T>(path: string, body: unknown, idempotencyKey?: string): Promise<T> {
+    return await this.send<T>('PUT', path, body, idempotencyKey);
+  }
+
   private async send<T>(
     method: string,
     path: string,

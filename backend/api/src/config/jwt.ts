@@ -26,7 +26,8 @@ import { CONSENT_OFFER_TTL_SECONDS } from '@platform/domain';
 import { env } from '../env.js';
 
 /** Which secret a token is signed with, and therefore what it may authorise. */
-export type TokenKind = 'access' | 'refresh' | 'guest' | 'consent' | 'bed_request';
+export type TokenKind =
+  'access' | 'refresh' | 'guest' | 'consent' | 'bed_request' | 'emergency_case';
 
 const ISSUER = 'healthcare-api';
 
@@ -56,6 +57,10 @@ const SECRETS: Record<TokenKind, Uint8Array> = {
   // guest-link secret, a different signed audience. A status link cannot be
   // replayed as a tracking link, a consent code or a bearer token.
   bed_request: encoder.encode(env.GUEST_LINK_SECRET),
+
+  // And for the family's view of an emergency alert they sent (`S-A-10c`):
+  // scoped to one case, useless as anything else.
+  emergency_case: encoder.encode(env.GUEST_LINK_SECRET),
 };
 
 const AUDIENCES: Record<TokenKind, string> = {
@@ -64,6 +69,7 @@ const AUDIENCES: Record<TokenKind, string> = {
   guest: 'guest-link',
   consent: 'consent-offer',
   bed_request: 'bed-request',
+  emergency_case: 'emergency-case',
 };
 
 /**
@@ -86,6 +92,8 @@ export interface TokenClaims extends JWTPayload {
   bookingId?: string;
   /** Present for a bed request's status link: the one request it may see. */
   bedRequestId?: string;
+  /** Present for an emergency alert's status link: the one case it may see. */
+  emergencyCaseId?: string;
 }
 
 export interface SignOptions {
@@ -113,6 +121,11 @@ function defaultLifetime(kind: TokenKind): string {
       // the family keeps the SMS, and "your request was declined" is worth
       // being able to read the next morning.
       return `${String(env.GUEST_LINK_TTL_DAYS)}d`;
+    case 'emergency_case':
+      // A day. An emergency is over in hours, and the link is only for
+      // following one journey to one ER — a case token that outlived the
+      // night would be a stranger's alert readable from an old SMS.
+      return '24h';
   }
 }
 

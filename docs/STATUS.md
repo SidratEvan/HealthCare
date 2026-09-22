@@ -7,9 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/beds` — step 14. A ward keeps its beds true on a board,
-and the number a family sees on their phone is the one the ward's own screen
-says the app is showing.
+Last updated: `feat/emergency` — step 15. A burn case from Farmgate is sent
+to the fresh Padma before the nearer, stale Jamuna, taps "I'm on my way", and
+Padma's ER console rings; when the coordinator prepares, the family's screen
+says the hospital is ready.
 
 ---
 
@@ -32,7 +33,8 @@ says the app is showing.
 | 12 | `feat/doctor-console` | merged — migration 0007, `S-B-05`, the visit record, `FR-DOC-10` + audit. **E-prescriptions dropped**; `PRD.md` §9/§24/§26 and `APP_FLOW.md` B2 edited to match |
 | 13 | `feat/wallet` | merged — `S-A-12`, the consent handshake (`BTN-A12-QR` → `BTN-B05-SCAN`), the access log and revoke. A pasted code stands in for the QR |
 | 14 | `feat/beds` | merged — migrations 0008 + 0012, `S-B-06` the ward board, `<CapacityMirror>`, `S-A-11` bed search and bed requests, the ward's half of `FR-OFF-01` |
-| 15 | `feat/emergency` | **next** — triage, search ranking, inbound alerts, ER console. `emergency_cases` already exists (0008) |
+| 15 | `feat/emergency` | merged — migrations 0013 + 0016, `S-A-10`/`10b`/`10c`, `S-B-07` the ER console, the ward's ER half of `FR-BED-07`, `emergency-burn.spec.ts` |
+| 16 | `feat/referrals` | **next** — refer out / in with timeline. `referrals` already exists (0008); the decline sheet's read-only suggestion list is where sending begins |
 
 Three unplanned branches after step 11:
 
@@ -83,12 +85,12 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 2073.
-`pnpm test:e2e` reports 66, in Chromium, against the real API and the seeded
+`pnpm test` reports 2430.
+`pnpm test:e2e` reports 73, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
-`wallet.spec.ts`, 8 in `ward-board.spec.ts`.
+`wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`.
 
 ### The demo API sleeps, and the console now says so
 
@@ -108,6 +110,81 @@ decision about a sleeping backend, not a test detail, which is why
 Worth knowing when demonstrating: **open the console once a minute before
 showing anyone.** Nothing is broken if the first load is slow; it is the free
 tier waking.
+
+### Step 15 — the emergency search, the ER console, and the family told
+
+**The definition of done is the pitch, and the E2E runs it.**
+`emergency-burn.spec.ts` stands a phone at Farmgate and opens Padma's ER
+console in another context: জরুরি → দগ্ধ ranks Padma first (fresh) above
+Jamuna (nearer, stale, labelled with its age) and Shapla (no burn unit, and
+saying so); "I'm on my way" rings the console inside five seconds; প্রস্তুতি
+নিন turns the family's screen to হাসপাতাল প্রস্তুত; গ্রহণ করুন gives a token.
+The rest of the spec: a decline reaches the family with its reason; the family
+calls off and the ER hears; critical gives one answer; a phone with no location
+is still answered; the ER hands a case to the ward and the ward admits it; the
+ER works offline. The API suite (`emergency.routes.test.ts`, 32) proves the same
+ranking with the clock set just after Padma's own stamps, so it cannot depend
+on how long the suite has been running.
+
+**Schema, on the owner's ruling (2026-09-21).** 0013 holds one function,
+`fn_nearby_hospitals` — geography only; the order is `shared/domain`. 0016
+gives `emergency_cases` what the documents needed and 0008 had nowhere to put:
+age and sex of an anonymous caller, a `declined` state with its reason, the
+ER→ward handoff (`admit_bed_kind`, `admit_requested_at`), `closed_at`, and an
+idempotency key. 0016 is numbered past 0014/0015, which keep their names.
+
+**One state machine, two users**, as beds have: `shared/domain/src/emergency/
+cases.ts` is the API's guard and the console's optimistic update. Accept means
+*the person is here* (a token is given); prepare is "we are ready". A decline or
+a cancel happens only before arrival — after it, leaving is a referral. An
+action whose outcome is already the case is a replay and is answered as one,
+which is how the offline outbox is safe without an event log.
+
+**The ranking** is capability, then fresh before stale (inside the capability
+tier), then travel time, load, free beds. Its freshness uses only the figures
+it ranks on: the capability and the relevant bed count. **The ICU was in it and
+came out** — a full ICU has no action that renews its stamp, so it turned a burn
+unit confirmed a minute ago stale ten minutes after any reset. The card shows
+the ICU with its own freshness line instead. The first card is headed "best
+placed now", never "nearest": the nearer hospital can be the stale one.
+
+**Identity.** The ER's list and every broadcast carry `hasPhone`, never the
+number. ফোন করুন fetches it one case at a time and that read writes
+`audit_log`. The ward's ER half of the pending list names nobody either; the
+ward takes the name at the bed. The caller's position is used for one ETA and
+never stored.
+
+**The family's side is polled, not a socket**: `S-A-10c` looks every five
+seconds while the answer can change (decision 35 again). A number left with the
+alert gets `emergency.acknowledged` / `emergency.declined`, which name the
+hospital and never the problem.
+
+**Demo data** (`FR-EMG-03`, `-04`, `FR-DEM-04`). 23 cases across the four ERs
+with a coordinator: Jamuna busiest (8 open, one family already on the way and
+acknowledged), Shapla 4, Padma 3, Karnaphuli 2, plus discharged cases earlier
+today. Two are already handed to the ward (Shapla CCU, Jamuna burn), so the
+pending list opens with its ER half. No clinical notes.
+
+**How to show it.** Freshness decays: Padma's burn beds and capabilities are
+fresh for ten minutes after a reset. Before the scenario, reset — or open
+Padma's ER console and tap **সব ঠিক আছে — নিশ্চিত করুন**, and tap Padma's free
+burn bed through a clean on the ward board. Then: console → Padma → জরুরি বিভাগ
+খুলুন. Phone (location allowed, or Chrome's sensors set to Farmgate
+23.758, 90.39) → জরুরি অবস্থা → জরুরি → দগ্ধ → আমি রওনা দিচ্ছি → জানান ও রওনা
+দিন. The console rings; প্রস্তুতি নিন; the phone says হাসপাতাল প্রস্তুত.
+
+**Supabase does not have any of this yet.** It needs `pnpm db:migrate`
+(0013, 0016 — additive) and a reseed for the cases to exist; both touch the
+remote demo database, so both are the owner's to run.
+
+**Found by looking, not by the tests.** The E2E writes the demo session
+straight into `sessionStorage`, so it never used the picker — and
+`POST /demo/token`'s schema still listed the four step-14 roles. The picker
+offered "জরুরি বিভাগ খুলুন" and the route refused it. Fixed, and
+`demo.routes.test.ts` now mints a token for every role the picker offers. The
+same look found the shared `<Sheet>` sliding *under* the patient app's bottom
+navigation (`z-40`), hiding its own primary button — step 14's bed-request
+sheet had the same defect unseen. Fixed once, in `shared/ui`.
 
 ### Step 14 — the ward board, and what the public is shown
 
@@ -313,18 +390,15 @@ holds the records in `localStorage`, tokens included — the token is already in
 SMS on the same phone, is scoped to one booking, and expires. When Supabase Auth
 lands, that file becomes a call to `GET /me/bookings`.
 
-**Four tabs lead to screens that are not built** — profile (`S-A-19`), ambulance
-and blood (step 17), emergency (step 15). Records was the fifth until step 13,
-and beds the sixth until step 14. Each says what will be there and why it is not, rather than being
+**Three tabs lead to screens that are not built** — profile (`S-A-19`), ambulance
+and blood (step 17). Records was one until step 13, beds until step 14 and
+emergency until step 15. Each says what will be there and why it is not, rather than being
 hidden, greyed out, or a dead link. Hiding them would move the bar as the
 product grows and teach the wrong muscle memory.
 
-**The emergency screen carries `BTN-A10-999` and nothing else.** Triage is step
-15, but the red card is the most prominent control in the patient app and it
-leads here, so the screen offers the one emergency action this version can
-honestly perform: a real `tel:999` link, above the fold, with the conditions
-that mean *call first* named beside it. It does not rank hospitals, and it says
-that it does not.
+**The emergency screen is `S-A-10` since step 15** (see step 15 above). The
+999 call is still its first control, as it was when that was all the screen
+could honestly offer.
 
 **A failed list no longer borrows the empty list's words.** The two discovery
 lists used to render "no hospital offers this department" when the request had
@@ -479,6 +553,16 @@ afternoon.
   If a session is not appearing and the hour is early in Dhaka, check the date
   before anything else.
 
+- **`next dev` compiles a route on its first visit, and that is not the
+  product's latency.** Five or six seconds per page on this machine. A spec
+  whose first visit to a route happens inside an expectation spends its
+  ten-second budget on webpack: `ward-board.spec.ts` failed twice in step 15
+  waiting 10.8 s for `/beds/request`, 6 s of it the document compiling, with
+  the page one frame from rendering. `e2e/support/globalSetup.ts` now visits
+  every route once before any spec runs (Playwright starts `webServer` before
+  `globalSetup`, confirmed in its 1.63 source). **A new page belongs in its
+  `ROUTES` list.**
+
 - **A shared test database means exact-count assertions must be scoped.**
   `seeds.test.ts` asserted `SELECT * FROM hospitals` had six rows; the graph
   fixture in `seeds/graph.ts` inserts a seventh, so the test passed or failed
@@ -620,8 +704,11 @@ Raised while building the live serial screen (step 10):
    still allocates `max + 1`, so the gap is never filled. `FR-QUE-30` gives the
    slot to a standby patient through `offerFreedSlot`, which is not built;
    until it is, a cancelled serial is simply skipped. That is the safe
-   behaviour for now — nobody should silently inherit somebody else's number —
-   and it needs deciding at step 15.
+   behaviour for now — nobody should silently inherit somebody else's number.
+   This said "needs deciding at step 15"; step 15 is the emergency console and
+   has nothing to do with slot offers. It belongs with `offerFreedSlot` and the
+   no-show recovery flow (`FR-QUE-30`, `no-show-recovery.spec.ts`), whose
+   figure is step 19.
 
 Raised while building notifications (step 11):
 
@@ -809,6 +896,59 @@ Raised while building the bed board (step 14):
    pass a bare number into `updatedAgo`, so they read "হালনাগাদ ৩ আগে". The live
    serial screen and every step-14 screen append মিনিট. Out of this step's
    scope; a one-line `fix/` branch each.
+
+Raised while building the emergency console (step 15). The first three were
+ruled on before building (schema, the critical/urgent split, problem →
+capability); these are the ones that were not:
+
+39. **Travel time is an estimate on placeholder constants.** `TRAVEL_TIME_MODE=
+   static` is straight-line distance × 1.4, at 12 km/h in Dhaka's peaks (07–10,
+   16–21), 18 km/h between, 28 km/h at night (`adapters/traveltime.ts`). None
+   is measured; like `POISHA_PER_SEGMENT`, replacing them changes estimates,
+   not code. The patient app labels every figure আনুমানিক. From Farmgate at
+   16:44 Dhaka, Padma reads "আনুমানিক ৮৮ মিনিট" — plausible for Uttara at rush
+   hour, but a number nobody checked.
+
+40. **The search radius is 50 km** (`EMERGENCY_SEARCH_RADIUS_METRES`): Dhaka
+   and its ring. No document names one.
+
+41. **"ER wait" is shown as the ER's load, not minutes.** `FR-PAT-44` and
+   `CARD-A10` ask for emergency wait; nothing measures one, so the card says
+   how many people the ER has now (`FR-EMG-04`'s counter) rather than invent a
+   wait.
+
+42. **Only facilities with an ER console are listed.** Buriganga Clinic has an
+   emergency phone but no emergency coordinator, so it does not appear — "I'm
+   on my way" there would ring nobody while telling the family it had.
+
+43. **Emergency SMS ignore the monthly SMS budget**, as they already ignore
+   quiet hours (`FR-NOT-07`): "this hospital cannot take you" is not a message
+   to save one SMS on. Found alongside it and not changed:
+   `smsSentThisMonth` only counts messages tied to a booking, so step 14's bed
+   answers were never counted against the budget either.
+
+44. **"I'm on my way" is rate-limited to ten per address per ten minutes.**
+   An anonymous route that rings an ER invites pranks; the number is a guess.
+   The same limiter is keyed on `req.path`, which is fine here (no path
+   parameter) but see the known gap about it.
+
+45. **An ER admission needs a phone number at the ward desk.** The ward's
+   admit form requires one (it finds or creates the guest identity by it), so
+   an unconscious patient with nobody's number cannot be admitted through it.
+   The ER's own case needs nothing; the stay does. A real gap for a real ER.
+
+46. **`in_treatment` is never used.** Nothing in `APP_FLOW.md` B4 separates
+   "being seen" from "here", so an accepted case is `arrived` until it is
+   admitted, discharged or (step 16) referred.
+
+47. **Blood stock (`FR-EMG-06`, `INP-B07-BLOOD`) is not built.** No table in
+   DATABASE.md holds a hospital's blood by group; 0011 (step 17) has donors and
+   requests. The ER console's blood input belongs with that step, and needs a
+   table (or a column set) that the documents do not yet name.
+
+48. **A family's case link lives 24 hours** (`emergency_case` token audience).
+   An emergency is over in hours; a token that outlived the night would make a
+   stranger's alert readable from an old SMS.
 
 Two are the owner's and are not code:
 
@@ -1002,11 +1142,20 @@ Turbopack is substantially faster and this is the only thing holding it off.
   from TypeScript source, so a deployable build needs either emitted output from
   `shared/domain` or a bundler. That is a dependency decision for the owner,
   and it blocks the Render deploy at step 6.
-- **Three of the five required Playwright specs exist** (`CLAUDE.md` §6):
+- **Four of the five required Playwright specs exist** (`CLAUDE.md` §6):
   `two-device-queue.spec.ts` — the canary, five tests — plus
   `guest-booking.spec.ts`, now complete including "open the SMS link, see the
-  live serial", and `offline-console.spec.ts`. Still to write:
-  `no-show-recovery.spec.ts` (its recovery figure is step 19) and
-  `emergency-burn.spec.ts` (step 15).
+  live serial", `offline-console.spec.ts`, and `emergency-burn.spec.ts`
+  (step 15). Still to write: `no-show-recovery.spec.ts` (its recovery figure is
+  step 19).
+- **Five files fail `prettier --check` on `mvp`, and none is step 15's**:
+  `database/seeds/lib/templates.ts`,
+  `shared/ui/src/components/__tests__/liveSerial.test.tsx`, `render.yaml`, and
+  both apps' `next-env.d.ts` (which `next dev` rewrites). `pnpm lint` and
+  `pnpm test` pass; `pnpm verify` runs `format:check` and stops on them. A
+  `chore/` branch — and `next-env.d.ts` probably belongs in `.prettierignore`.
+- **`<EmergencyEntry>` does not preload on pointer-down** (FRONTEND.md §6.3).
+  The results screen asks for location and searches on arrival; preloading
+  would need the position first, which is the slow part.
 - **`frontend/site` is still empty.** `shared/client`, `frontend/console` and
   `frontend/patient` are built.

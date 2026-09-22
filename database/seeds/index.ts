@@ -19,6 +19,8 @@ export type { Graph } from './graph.js';
 
 export { DEMO_FACILITIES, facility } from './data/hospitals.js';
 export { DEMO_BED_REQUESTS, DEMO_WARDS } from './data/beds.js';
+export { DEMO_EMERGENCY_CASES } from './data/emergency.js';
+export type { DemoEmergencyCase } from './data/emergency.js';
 export { DEMO_DOCTORS, doctor } from './data/doctors.js';
 export { DEMO_LIVE, SPECIALTIES } from './data/reference.js';
 

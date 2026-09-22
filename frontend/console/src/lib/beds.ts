@@ -14,7 +14,15 @@ import {
   type BedSendOutcome,
   type PendingBedAction,
 } from '@platform/client';
-import type { BedKind, BedView, DhakaDate, PublicCapacity, WardView } from '@platform/domain';
+import type {
+  BedKind,
+  BedView,
+  DhakaDate,
+  EmergencyProblem,
+  PublicCapacity,
+  TriageColor,
+  WardView,
+} from '@platform/domain';
 
 export const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 export const SOCKET_URL = process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:4000';
@@ -63,10 +71,29 @@ export interface PendingRequest {
   readonly expectedArrivalAt: string | null;
 }
 
+/**
+ * One case the ER handed to the ward (`BTN-B07-ADMIT`) — the ER half of
+ * `LIST-B06-PENDING` (`FR-BED-07`). Names nobody; the ward takes the name at
+ * the bed.
+ */
+export interface PendingHandoff {
+  readonly caseId: string;
+  readonly tokenLabel: string | null;
+  readonly problem: EmergencyProblem;
+  readonly triage: TriageColor | null;
+  readonly ageYears: number | null;
+  readonly sex: 'male' | 'female' | 'other' | null;
+  readonly bedKind: BedKind;
+  readonly requestedAt: string;
+}
+
 export function bedApi(getToken: () => string | null): {
   readonly board: (hospitalId: string) => Promise<BoardResponse>;
   readonly panel: (bedId: string) => Promise<PanelResponse>;
-  readonly pending: (hospitalId: string) => Promise<readonly PendingRequest[]>;
+  readonly pending: (hospitalId: string) => Promise<{
+    readonly requests: readonly PendingRequest[];
+    readonly handoffs: readonly PendingHandoff[];
+  }>;
   readonly respond: (requestId: string, body: Record<string, unknown>) => Promise<void>;
 } {
   const client = new ApiClient({ baseUrl: API_BASE, getToken });
@@ -75,8 +102,9 @@ export function bedApi(getToken: () => string | null): {
     board: async (hospitalId) => await client.get<BoardResponse>(`/hospitals/${hospitalId}/beds`),
     panel: async (bedId) => await client.get<PanelResponse>(`/beds/${bedId}`),
     pending: async (hospitalId) =>
-      (await client.get<{ requests: PendingRequest[] }>(`/hospitals/${hospitalId}/bed-requests`))
-        .requests,
+      await client.get<{ requests: PendingRequest[]; handoffs: PendingHandoff[] }>(
+        `/hospitals/${hospitalId}/bed-requests`,
+      ),
     respond: async (requestId, body) => {
       const clientEventId = crypto.randomUUID();
       await client.post(

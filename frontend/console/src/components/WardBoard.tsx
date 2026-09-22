@@ -86,6 +86,9 @@ function BoardBody(): ReactNode {
   // A ward id, or 'all' for every ward on one screen.
   const [ward, setWard] = useState<string>('all');
   const [selectedBedId, setSelectedBedId] = useState<string | null>(null);
+  // An ER case the ward chose a bed for from the pending list: the panel
+  // opens on that bed's admit form with the case already chosen.
+  const [admitCaseId, setAdmitCaseId] = useState<string | null>(null);
 
   // The freshness lines and the cleaning timers age on screen with nothing
   // else happening — that is what they are for (`FR-OFF-03`).
@@ -305,6 +308,7 @@ function BoardBody(): ReactNode {
                               pendingLabel={t('bedPendingSync', locale)}
                               onSelect={() => {
                                 setSelectedBedId(bed.id === selectedBedId ? null : bed.id);
+                                setAdmitCaseId(null);
                               }}
                             />
                           ))}
@@ -326,12 +330,14 @@ function BoardBody(): ReactNode {
               </div>
             ) : (
               <BedPanel
-                key={selectedBed.id}
+                key={`${selectedBed.id}:${admitCaseId ?? ''}`}
                 bed={selectedBed}
                 wardName={wardNames.get(selectedBed.wardId) ?? ''}
                 wardNames={wardNames}
                 beds={board.beds}
                 requests={board.requests}
+                handoffs={board.handoffs}
+                admitCaseId={admitCaseId}
                 locale={locale}
                 now={now}
                 today={loaded.today}
@@ -340,6 +346,7 @@ function BoardBody(): ReactNode {
                 board={board}
                 onClose={() => {
                   setSelectedBedId(null);
+                  setAdmitCaseId(null);
                 }}
                 onProblem={onProblem}
               />
@@ -393,6 +400,11 @@ function BoardBody(): ReactNode {
 
             <PendingAdmissions
               requests={board.requests}
+              handoffs={board.handoffs}
+              onAdmitHandoff={(caseId, bedId) => {
+                setSelectedBedId(bedId);
+                setAdmitCaseId(caseId);
+              }}
               failed={board.requestsFailed}
               connected={board.connected}
               beds={board.beds}

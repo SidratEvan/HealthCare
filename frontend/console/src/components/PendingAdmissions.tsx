@@ -4,8 +4,10 @@
  * `LIST-B06-PENDING` — "from ER and from app bed requests; accept → admit
  * flow; decline → notifies patient" (`APP_FLOW.md` B3, `FR-BED-07`).
  *
- * Only the app half exists in this version; the ER hands off to the ward at
- * build step 15 (`BTN-B07-ADMIT`). Each request can be:
+ * Two halves. **From the ER** (step 15, `BTN-B07-ADMIT`): a case the ER
+ * handed over, named by its token and problem — the ER took no name, so
+ * choosing a bed opens that bed's admit form with the case chosen, and the
+ * ward takes the name there. **From the app**: each request can be:
  *
  *   - **held** — a real bed of the kind asked for is reserved for a set time,
  *     and the family is told by SMS when it runs out;
@@ -28,17 +30,23 @@ import {
   formatClock,
   formatNumber,
   formatPhone,
+  problemName,
   t,
+  triageName,
   type Locale,
 } from '@platform/i18n';
 import { Button, Chip } from '@platform/ui';
 
 import { NUMERALS } from '@/lib/bedCopy';
 
-import type { PendingRequest } from '@/lib/beds';
+import type { PendingHandoff, PendingRequest } from '@/lib/beds';
 
 export interface PendingAdmissionsProps {
   readonly requests: readonly PendingRequest[] | null;
+  /** The ER half (`FR-BED-07`). */
+  readonly handoffs: readonly PendingHandoff[] | null;
+  /** A bed was chosen for an ER case: open that bed's admit form with it. */
+  readonly onAdmitHandoff: (caseId: string, bedId: string) => void;
   readonly failed: boolean;
   readonly connected: boolean;
   readonly beds: readonly BedView[];
@@ -68,13 +76,23 @@ export function PendingAdmissions(props: PendingAdmissionsProps): ReactNode {
         </p>
       ) : null}
 
+      {(props.handoffs ?? []).length === 0 ? null : (
+        <ul className="flex flex-col gap-3" data-testid="pending-handoffs">
+          {(props.handoffs ?? []).map((handoff) => (
+            <li key={handoff.caseId}>
+              <HandoffCard {...props} handoff={handoff} />
+            </li>
+          ))}
+        </ul>
+      )}
+
       {requests === null ? (
         props.failed ? (
           <p className="font-ui text-body-sm text-ink-secondary">{t('loadFailed', locale)}</p>
         ) : (
           <div className="h-16 rounded-sm bg-sunken" aria-busy="true" />
         )
-      ) : requests.length === 0 ? (
+      ) : requests.length === 0 && (props.handoffs ?? []).length === 0 ? (
         <div>
           <p className="font-ui text-body-sm text-ink-secondary" data-testid="pending-empty">
             {t('pendingEmpty', locale)}
@@ -92,6 +110,84 @@ export function PendingAdmissions(props: PendingAdmissionsProps): ReactNode {
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * One case from the ER (`BTN-B07-ADMIT`). Names nobody: its token, its
+ * problem, its colour, the kind of bed the ER asked for and since when.
+ */
+function HandoffCard({
+  handoff,
+  beds,
+  locale,
+  now,
+  onAdmitHandoff,
+}: PendingAdmissionsProps & { readonly handoff: PendingHandoff }): ReactNode {
+  const [choosing, setChoosing] = useState(false);
+  const at = now.toISOString() as Timestamp;
+
+  // Free beds of the kind the ER asked for first, then any other free bed:
+  // the ward decides, and a CCU patient in an HDU bed tonight is its call.
+  const admittable = beds
+    .filter((bed) => canApply(bed, 'admit', at, { bedRequestId: null }).ok)
+    .sort((a, b) => Number(b.kind === handoff.bedKind) - Number(a.kind === handoff.bedKind));
+
+  return (
+    <article
+      className="flex flex-col gap-2 rounded-sm border border-alert-600 bg-alert-100 p-3 font-ui"
+      data-testid={`handoff-${handoff.caseId}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-body-md tabular-nums text-ink">
+            {handoff.tokenLabel ?? ''} · {problemName(handoff.problem, locale)}
+          </p>
+          <p className="text-caption tabular-nums text-ink-muted">
+            {handoff.ageYears === null
+              ? ''
+              : format('ageYears', locale, { age: formatNumber(handoff.ageYears, NUMERALS) })}
+            {handoff.triage === null ? '' : ` · ${triageName(handoff.triage, locale)}`}
+          </p>
+        </div>
+        <Chip tone="alert">
+          {format('pendingErFor', locale, { kind: bedKindName(handoff.bedKind, locale) })}
+        </Chip>
+      </div>
+      <p className="text-caption text-ink-secondary">
+        {t('pendingFromEr', locale)} ·{' '}
+        {format('pendingErSince', locale, { time: formatClock(handoff.requestedAt, NUMERALS) })}
+      </p>
+
+      {choosing ? (
+        <BedChoice
+          beds={admittable}
+          prompt={t('transferChoose', locale)}
+          empty={t('noFreeBed', locale)}
+          locale={locale}
+          testPrefix={`handoff-bed-${handoff.caseId}`}
+          onChoose={(bed) => {
+            setChoosing(false);
+            onAdmitHandoff(handoff.caseId, bed.id);
+          }}
+          onCancel={() => {
+            setChoosing(false);
+          }}
+        />
+      ) : (
+        <div>
+          <Button
+            size="sm"
+            data-testid={`admit-handoff-${handoff.caseId}`}
+            onClick={() => {
+              setChoosing(true);
+            }}
+          >
+            {t('pendingErAdmit', locale)}
+          </Button>
+        </div>
+      )}
+    </article>
   );
 }
 

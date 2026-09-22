@@ -32,7 +32,32 @@ export {
   type PendingBedAction,
 } from './offline/beds.js';
 
+export {
+  Outbox,
+  createMemoryOutboxStore,
+  type FlushOutcome as OutboxFlushOutcome,
+  type OutboxEntry,
+  type OutboxStore,
+  type SendOutcome,
+} from './offline/outbox.js';
+
+export {
+  ErOutbox,
+  createMemoryErStore,
+  type ErActionStore,
+  type ErFlushOutcome,
+  type ErSendOutcome,
+  type ErSender,
+  type PendingErAction,
+} from './offline/emergency.js';
+
 export { openHospitalChannel, type HospitalChannelOptions } from './realtime/hospital.js';
+
+export {
+  openEmergencyChannel,
+  type CapabilityState,
+  type EmergencyChannelOptions,
+} from './realtime/emergency.js';
 
 export {
   ApiClient,

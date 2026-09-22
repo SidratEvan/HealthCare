@@ -38,6 +38,14 @@ describe('migration files (DATABASE.md §7)', () => {
     // `v_public_hospital_capacity`, rather than every `v_*` DATABASE.md §7
     // lists: the others read tables later steps create, and a shipped
     // migration is never edited to add them.
+    //
+    // 0013 and 0016 arrived with step 15, the emergency console. 0013 holds one
+    // function, `fn_nearby_hospitals`, on the same reasoning as 0012. 0016 adds
+    // what `emergency_cases` could not yet say — the owner's ruling of
+    // 2026-09-21 — and is numbered past 0014 (RLS policies) and 0015 (indexes)
+    // because those two keep the numbers DATABASE.md §7 gives them and will
+    // land later. Nothing in either depends on 0016, so the runner's filename
+    // order converges the same way it did for 0007 behind 0010.
     expect(migrations.map((m) => m.version)).toEqual([
       '0001',
       '0002',
@@ -49,6 +57,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0008',
       '0010',
       '0012',
+      '0013',
+      '0016',
     ]);
   });
 
