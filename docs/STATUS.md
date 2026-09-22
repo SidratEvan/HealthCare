@@ -197,9 +197,16 @@ waiting. On Jamuna's side, a triage row → রেফার খুঁজুন �
 এসে পৌঁছেছেন when the person is at the door — Jamuna's row closes and Shapla's
 triage list gains a token in the same moment.
 
-**Supabase does not have any of this yet.** It needs `pnpm db:migrate` (0017 —
-additive) and a reseed for the referrals to exist. Both touch the remote demo
-database, so both are the owner's to run.
+**Supabase has this** (2026-09-22, on the owner's say-so). It was five
+migrations behind, not one — 0008 and 0012 from step 14 had never been run
+either — so `ALLOW_REMOTE_DB=1 pnpm db:migrate` applied 0008, 0012, 0013, 0016
+and 0017 in one go, `db:verify` passed, and
+`ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 pnpm db:reset` rebuilt the demo data:
+the reset reported 170 beds, 26 emergency cases and 4 referrals among the rest.
+That is the database, checked directly; the deployed console and apps were not
+opened afterwards, and the API sleeps on Render's free tier, so give it a warm
+load before showing anyone. **A remote reset is the owner's to authorise, every
+time.**
 
 **Found by running the suite, not by writing it.** The api project's seventeen
 files share one mutated database (a test that goes through the API cannot be
@@ -274,9 +281,8 @@ burn bed through a clean on the ward board. Then: console → Padma → জর�
 23.758, 90.39) → জরুরি অবস্থা → জরুরি → দগ্ধ → আমি রওনা দিচ্ছি → জানান ও রওনা
 দিন. The console rings; প্রস্তুতি নিন; the phone says হাসপাতাল প্রস্তুত.
 
-**Supabase does not have any of this yet.** It needs `pnpm db:migrate`
-(0013, 0016 — additive) and a reseed for the cases to exist; both touch the
-remote demo database, so both are the owner's to run.
+**Supabase has this**, as of the 2026-09-22 migrate and reseed described in
+the step 16 notes above.
 
 **Found by looking, not by the tests.** The E2E writes the demo session
 straight into `sessionStorage`, so it never used the picker — and
@@ -354,11 +360,10 @@ general bed at the desk; the mirror's general row drops by one, and a phone on
 phone → বেড অনুরোধ করুন → the ward's pending list → বেড রাখুন → a bed → a
 duration; the phone's status page counts down.
 
-**Supabase does not have any of this yet.** It needs `pnpm db:migrate`
-(0008, 0012 — additive) and then a reseed for the beds to exist, and the
-reseed is the destructive `db:reset`. Both touch the remote demo database, so
-both are the owner's to run (`ALLOW_REMOTE_DB=1`, plus
-`ALLOW_DESTRUCTIVE_DB=1` for the reset).
+**Supabase has this**, as of the 2026-09-22 migrate and reseed described in
+the step 16 notes above — 0008 and 0012 had sat unapplied since this step was
+built, which is why the deployed console had no ward board for two steps
+without anybody noticing.
 
 ### Step 13 — the wallet, and consent
 
@@ -586,6 +591,13 @@ afternoon.
 - **Vitest loads `.env` into `process.env`.** The API test setup therefore
   assigns its environment outright rather than defaulting it, or the suite runs
   against whatever `.env` happens to say.
+- **A migration written in a step is not a migration the demo has.** Nothing
+  applies migrations to Supabase but a person running `db:migrate` against it,
+  and the guard means that person has to mean it. 0008 and 0012 were written
+  in step 14 and were still unapplied when step 16 finished — so for two whole
+  steps the deployed console could not have shown a ward board, and every
+  local suite stayed green because they all run against the container. At the
+  end of a step, either migrate the remote or write down that it is behind.
 - **`pnpm test` is not the whole gate; `pnpm verify` is.** `format:check` sits
   in `verify` and in CI, not in `test`, so a step that runs the Definition of
   Done's three commands (`CLAUDE.md` §5.2) never sees it. It had been red for
@@ -708,45 +720,30 @@ reports at step 17. Step 13 built neither.
 
 ---
 
-### Awaiting a ruling: E2E rows written to Supabase
+### Settled: the E2E rows that had been written to Supabase
 
 Because of the `.env` import-side-effect bug above, every `pnpm test:e2e` run
 before it was found created its fixture rows **on Supabase** rather than on the
 container: one session per test (`room = 'E2E'`), its bookings, and the queue
-events the specs appended. It is demo data throughout — no real patient data
-was involved (`FR-SEC-08`) — but `queue_events` is append-only, so those rows
-cannot be deleted; clearing them means a `pnpm db:reset` against Supabase,
-which is a destructive operation on the demo environment and needs the owner's
-say-so (`ALLOW_REMOTE_DB=1` plus `ALLOW_DESTRUCTIVE_DB=1`).
+events the specs appended. It was demo data throughout — no real patient data
+was ever involved (`FR-SEC-08`) — but `queue_events` is append-only, so those
+rows could not be deleted one by one.
 
 **Measured, 2026-09-19:** 32 sessions (`room = 'E2E'`), 146 bookings and 64
 queue events, all created between 05:17 and 05:29 UTC — the three diagnostic
-runs during which the bug was found, and nothing older. Supabase then held 161
-sessions, 1,327 bookings and 1,285 queue events in total, so the stray rows are
-roughly a fifth of the sessions and a twentieth of the bookings.
+runs during which the bug was found, and nothing older.
 
-Connecting needs no TLS options: the URL carries no `sslmode`, and the repo's
-own connection factories pass nothing but the connection string, so a plain
-`new Client({ connectionString })` is how everything here already talks to
-Supabase.
-
-**Still not cleared.** Both routes are refused by this environment's sandbox:
-`pnpm db:reset` reads as a mass delete, and the scoped alternative — deleting
-only the E2E rows — has to lift `trg_queue_events_no_mutate` to remove the 64
-events, which reads as tampering with an append-only log. Both readings are
-fair; the operations are what they look like. The owner runs one of these:
+**Cleared, 2026-09-22.** The owner authorised the migrate and reseed described
+in the step 16 notes, and `pnpm db:reset` is the supported path (`FR-DEM-06`):
+it truncated the demo database and rebuilt it, so the stray rows went with
+everything else. The scoped alternative — deleting only the E2E rows, which
+needs `trg_queue_events_no_mutate` lifted inside the transaction — was never
+run and is not needed.
 
 ```bash
-# The supported path: truncate and reseed the demo (FR-DEM-06).
-ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 DEMO_MODE=true pnpm db:reset
+# What was run, and what any future remote reset looks like.
+ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 pnpm db:reset
 ```
-
-A scoped delete is possible instead, but it must remove `queue_events` first
-(both `bookings → sessions` and `queue_events → sessions` are `RESTRICT`), and
-that means disabling the row guard inside the transaction and restoring it
-before commit — exactly what `seeds/reset.ts` does for the TRUNCATE guard.
-Given that the whole database is regenerable demo data, the reset is the
-simpler and better-tested of the two.
 
 The bug itself is fixed and cannot recur: the suite refuses any non-local
 database.
