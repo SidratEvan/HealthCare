@@ -31,6 +31,14 @@
  * Two cases are already handed to the ward (`BTN-B07-ADMIT`) so that the ward
  * board's pending list opens with its ER half as well as its app half
  * (`FR-BED-07`).
+ *
+ * ## The cases a referral names
+ *
+ * `data/referrals.ts` refers some of these on (`FR-EMG-07..09`), by `key`.
+ * Two cases exist *because* of a referral that finished earlier today: a burn
+ * that walked into Shapla, which has no burn unit, left for Padma (`referred`),
+ * and Padma opened a case for the same person on arrival and has since put
+ * them in its burn ward (`admitted`). Neither counts towards a load now.
  */
 
 import type { BedKind, EmergencyProblem, TriageColor } from '@platform/domain';
@@ -38,12 +46,16 @@ import type { BedKind, EmergencyProblem, TriageColor } from '@platform/domain';
 export interface DemoEmergencyCase {
   /** Facility slug from `hospitals.ts`. */
   readonly facility: string;
+  /** How `data/referrals.ts` names this case. Only cases a referral names have one. */
+  readonly key?: string;
   readonly problem: EmergencyProblem;
   /**
    * `arrived`: in the ER now. `discharged`: seen and sent home earlier today.
-   * `acknowledged`: on the way, and the ER has said it is ready.
+   * `acknowledged`: on the way, and the ER has said it is ready. `referred`:
+   * left for the ER that took the referral. `admitted`: placed by the ward
+   * (needs `handoff`). The last three close after `stayedMinutes`.
    */
-  readonly state: 'arrived' | 'discharged' | 'acknowledged';
+  readonly state: 'arrived' | 'discharged' | 'acknowledged' | 'referred' | 'admitted';
   /** Null means nobody has triaged them yet — which is not green. */
   readonly triage: TriageColor | null;
   readonly ageYears: number | null;
@@ -52,7 +64,7 @@ export interface DemoEmergencyCase {
   readonly phone: boolean;
   /** Arrival, or for an inbound case the alert, this long before the reset. */
   readonly minutesAgo: number;
-  /** For a discharged case: how long they were in the ER. */
+  /** For a closed case: how long they were in the ER before it closed. */
   readonly stayedMinutes?: number;
   /** For an inbound case: the ETA the family's phone estimated. */
   readonly etaMinutes?: number;
@@ -85,6 +97,20 @@ export const DEMO_EMERGENCY_CASES: readonly DemoEmergencyCase[] = [
     phone: true,
     minutesAgo: 240,
     stayedMinutes: 110,
+  }),
+  // Walked in with burns; Shapla has no burn unit. Referred to Padma, and
+  // left when Padma recorded the arrival (`data/referrals.ts`).
+  entry({
+    facility: 'shapla-general',
+    key: 'shapla-burn',
+    problem: 'burn',
+    state: 'referred',
+    triage: 'red',
+    ageYears: 24,
+    sex: 'male',
+    phone: true,
+    minutesAgo: 170,
+    stayedMinutes: 60,
   }),
   entry({
     facility: 'shapla-general',
@@ -139,6 +165,34 @@ export const DEMO_EMERGENCY_CASES: readonly DemoEmergencyCase[] = [
     phone: true,
     minutesAgo: 180,
     stayedMinutes: 60,
+  }),
+  // The same person as `shapla-burn`, as Padma opened the case on arrival;
+  // placed in Padma's burn ward since.
+  entry({
+    facility: 'padma-specialised',
+    key: 'padma-burn-from-shapla',
+    problem: 'burn',
+    state: 'admitted',
+    triage: 'red',
+    ageYears: 24,
+    sex: 'male',
+    phone: false,
+    minutesAgo: 110,
+    stayedMinutes: 20,
+    handoff: { kind: 'burn', minutesAgo: 100 },
+  }),
+  // Needs a cath lab, which Padma does not have. Shapla declined; Padma's
+  // coordinator has the case, and the decline, on the triage list.
+  entry({
+    facility: 'padma-specialised',
+    key: 'padma-cardiac',
+    problem: 'cardiac',
+    state: 'arrived',
+    triage: 'red',
+    ageYears: 55,
+    sex: 'male',
+    phone: true,
+    minutesAgo: 40,
   }),
   entry({
     facility: 'padma-specialised',
@@ -238,8 +292,10 @@ export const DEMO_EMERGENCY_CASES: readonly DemoEmergencyCase[] = [
     minutesAgo: 50,
     handoff: { kind: 'burn', minutesAgo: 15 },
   }),
+  // Jamuna's HDU is full; Shapla has accepted, and the person is on the way.
   entry({
     facility: 'jamuna-medical-college',
+    key: 'jamuna-accident',
     problem: 'accident',
     state: 'arrived',
     triage: 'red',
@@ -248,8 +304,10 @@ export const DEMO_EMERGENCY_CASES: readonly DemoEmergencyCase[] = [
     phone: false,
     minutesAgo: 40,
   }),
+  // Jamuna has no ICU; Shapla has seen the referral and not yet answered.
   entry({
     facility: 'jamuna-medical-college',
+    key: 'jamuna-breathing',
     problem: 'breathing',
     state: 'arrived',
     triage: 'yellow',
