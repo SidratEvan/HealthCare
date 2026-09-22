@@ -163,7 +163,7 @@ inpatient beds", not "0 free". ICU at exactly Shapla, Padma and Karnaphuli
 pending requests (one held, at Shapla's cabins). Staged for the emergency
 scenario: Padma's ICU full, one fresh free burn bed at Padma, two free burn beds
 at Jamuna that nobody has confirmed for hours. The commit that added the seed
-(`f178e8c`) says 180 beds; 170 is the count.
+(`6626c87`) says 180 beds; 170 is the count.
 
 **Freshness decays, and that is the point.** A kind's stamp is its newest bed
 event. With the default ten-minute threshold, every ward turns amber ten minutes
