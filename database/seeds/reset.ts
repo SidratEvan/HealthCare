@@ -23,9 +23,12 @@
  * (DB-P1). It exists because TRUNCATE bypasses row triggers entirely, so
  * without it the one table that settles disputes could be emptied by accident.
  *
+ * `trg_bed_events_no_truncate` (migration 0008) guards the bed history the same
+ * way, because DATABASE.md §2.5 makes it "append-only like the queue".
+ *
  * This command therefore does something it has to do **visibly**: it disables
- * that one trigger, inside the same transaction as the truncate, and re-enables
- * it before committing. Three things make that narrow rather than a loophole:
+ * those triggers, inside the same transaction as the truncate, and re-enables
+ * them before committing. Three things make that narrow rather than a loophole:
  *
  *   1. `ALTER TABLE … DISABLE TRIGGER` is transactional, so any failure rolls
  *      the guard back into place along with everything else.
@@ -49,8 +52,19 @@ import { assertDemoMode } from './lib/demo-mode.js';
 import { one } from './lib/insert.js';
 import { seedDemoData } from './run.js';
 
-/** The append-only log's TRUNCATE guard (migration 0006). */
-const TRUNCATE_GUARD = 'trg_queue_events_no_truncate';
+/**
+ * The append-only logs' TRUNCATE guards: the queue's (migration 0006) and the
+ * bed history's (0008, "append-only like the queue" — DATABASE.md §2.5).
+ */
+interface TruncateGuard {
+  readonly table: string;
+  readonly trigger: string;
+}
+
+const TRUNCATE_GUARDS: readonly TruncateGuard[] = [
+  { table: 'queue_events', trigger: 'trg_queue_events_no_truncate' },
+  { table: 'bed_events', trigger: 'trg_bed_events_no_truncate' },
+];
 
 /**
  * Tables a reset must never touch.
@@ -87,10 +101,14 @@ async function main(): Promise<void> {
       throw new Error('No application tables found. Run `pnpm db:migrate` before `pnpm db:reset`.');
     }
 
-    await truncate(client, tables);
+    // Only the guards whose table this database has: a reset of a schema that
+    // has not reached 0008 must not fail looking for `bed_events`.
+    const guards = TRUNCATE_GUARDS.filter((guard) => tables.includes(guard.table));
+
+    await truncate(client, tables, guards);
     console.log(`  - truncated ${String(tables.length)} tables, identities restarted`);
 
-    await assertGuardArmed(client);
+    for (const guard of guards) await assertGuardArmed(client, guard);
 
     const { totals, now } = await seedDemoData(client, {
       log: (message) => {
@@ -144,7 +162,7 @@ async function truncatableTables(client: Client): Promise<string[]> {
 }
 
 /**
- * One transaction: disarm the log's TRUNCATE guard, empty everything, rearm.
+ * One transaction: disarm the logs' TRUNCATE guards, empty everything, rearm.
  *
  * `CASCADE` because the tables reference each other and PostgreSQL requires
  * every table in a foreign-key graph to be truncated together. `RESTART
@@ -153,17 +171,26 @@ async function truncatableTables(client: Client): Promise<string[]> {
  * last reset makes every event id in a screenshot different from the one
  * before.
  */
-async function truncate(client: Client, tables: readonly string[]): Promise<void> {
+async function truncate(
+  client: Client,
+  tables: readonly string[],
+  guards: readonly TruncateGuard[],
+): Promise<void> {
   const list = tables.map((name) => `public."${name}"`).join(', ');
 
   await client.query('BEGIN');
   try {
-    // Narrow and temporary: only the statement-level TRUNCATE guard, and only
-    // for the duration of this transaction. `trg_queue_events_no_mutate` — the
-    // row-level UPDATE/DELETE guard — is untouched and stays armed.
-    await client.query(`ALTER TABLE queue_events DISABLE TRIGGER ${TRUNCATE_GUARD}`);
+    // Narrow and temporary: only the statement-level TRUNCATE guards, and only
+    // for the duration of this transaction. The row-level UPDATE/DELETE guards
+    // — `trg_queue_events_no_mutate`, `trg_bed_events_no_mutate` — are
+    // untouched and stay armed.
+    for (const guard of guards) {
+      await client.query(`ALTER TABLE ${guard.table} DISABLE TRIGGER ${guard.trigger}`);
+    }
     await client.query(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
-    await client.query(`ALTER TABLE queue_events ENABLE TRIGGER ${TRUNCATE_GUARD}`);
+    for (const guard of guards) {
+      await client.query(`ALTER TABLE ${guard.table} ENABLE TRIGGER ${guard.trigger}`);
+    }
     await client.query('COMMIT');
   } catch (error) {
     // The ALTER is transactional too, so the guard goes back with everything
@@ -181,24 +208,24 @@ async function truncate(client: Client, tables: readonly string[]): Promise<void
  * that finished with the append-only log unprotected would be worse than a
  * reset that failed, so this is checked rather than assumed.
  */
-async function assertGuardArmed(client: Client): Promise<void> {
+async function assertGuardArmed(client: Client, guard: TruncateGuard): Promise<void> {
   const row = await one<{ tgenabled: string }>(
     client,
     `SELECT t.tgenabled
        FROM pg_trigger t
        JOIN pg_class c ON c.oid = t.tgrelid
-      WHERE c.relname = 'queue_events' AND t.tgname = $1`,
-    [TRUNCATE_GUARD],
+      WHERE c.relname = $1 AND t.tgname = $2`,
+    [guard.table, guard.trigger],
   );
 
   if (row.tgenabled !== 'O') {
     throw new Error(
       [
-        `${TRUNCATE_GUARD} is "${row.tgenabled}", not "O": the append-only log is`,
-        'not protected against TRUNCATE (DB-P1).',
+        `${guard.trigger} is "${row.tgenabled}", not "O": the append-only log`,
+        `${guard.table} is not protected against TRUNCATE (DB-P1).`,
         '',
         'Re-arm it before using this database:',
-        `  ALTER TABLE queue_events ENABLE TRIGGER ${TRUNCATE_GUARD};`,
+        `  ALTER TABLE ${guard.table} ENABLE TRIGGER ${guard.trigger};`,
       ].join('\n'),
     );
   }

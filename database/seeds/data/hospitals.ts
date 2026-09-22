@@ -57,9 +57,9 @@ export interface DemoFacility {
   /** Published to the emergency network (`FR-EMG-05`). */
   readonly capabilities: readonly CapabilityKind[];
   /**
-   * ICU wards this facility will hold once `wards`/`beds` exist (migration
-   * 0008). Recorded here so `FR-DEM-04` — two burn units, three with ICU — is
-   * one description rather than two, and `seed_05_beds` reads it when it can.
+   * Whether this facility has an ICU. `FR-DEM-04` asks for exactly three, and
+   * `data/beds.ts` declares an ICU ward for each of them and for no other —
+   * `seeds.test.ts` holds the two descriptions to each other.
    */
   readonly hasIcu: boolean;
   /** Roughly how large, which is what sets bed counts and session capacity. */
@@ -226,7 +226,11 @@ export const DEMO_FACILITIES: readonly DemoFacility[] = [
     emergencyPhone: '+880267610999',
     departments: ['MED', 'GYN', 'PAED'],
     capabilities: ['ambulance'],
-    hasIcu: true,
+    // Outpatient only: the clinic roster has no ward staff (`data/people.ts`),
+    // so it has no beds at all. `FR-DEM-04` names three facilities with an ICU,
+    // and the two large Dhaka hospitals and Chattogram are those three (owner's
+    // ruling, 2026-09-21).
+    hasIcu: false,
     size: 'small',
     numeralStyle: 'bengali',
   },

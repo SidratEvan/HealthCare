@@ -6,7 +6,8 @@
  * DATABASE.md §0 that can be verified mechanically, because each one is a rule
  * that is easy to keep and easy to forget on the twentieth table:
  *
- *   DB-P1  queue_events is append-only, enforced by trigger
+ *   DB-P1  queue_events is append-only, enforced by trigger — and so is
+ *          bed_events, which DATABASE.md §2.5 makes "append-only like the queue"
  *   DB-P3  every table carries created_at and updated_at, and maintains them
  *   DB-P4  all timestamps are timestamptz — never a naive timestamp
  *   DB-P5  money is integer poisha — never a float
@@ -167,7 +168,10 @@ async function checkTouchTriggers(
     JOIN pg_proc p ON p.oid = t.tgfoid
     WHERE n.nspname = 'public'
       AND NOT t.tgisinternal
-      AND p.proname IN ('fn_touch_updated_at', 'fn_queue_events_no_mutate')
+      -- The two append-only guards count: one sets updated_at on the single
+      -- update it permits, the other permits none, so the column can never
+      -- go stale on either.
+      AND p.proname IN ('fn_touch_updated_at', 'fn_queue_events_no_mutate', 'fn_bed_events_no_mutate')
   `);
 
   const maintained = new Set(rows.map((row) => row.table_name));
@@ -306,31 +310,56 @@ async function checkPrimaryKeysAreUuid(
 }
 
 /**
- * DB-P1: queue_events is append-only.
+ * The append-only logs, and the guards each must carry.
+ *
+ * `queue_events` is DB-P1 itself. `bed_events` is "append-only like the
+ * queue" (DATABASE.md §2.5): the public freshness stamp and every occupancy
+ * figure are read from it, so an edited bed history is an edited claim about
+ * what a hospital could take.
+ */
+const APPEND_ONLY_LOGS: readonly { table: string; guards: readonly string[]; why: string }[] = [
+  {
+    table: 'queue_events',
+    guards: ['fn_queue_events_no_mutate', 'fn_queue_events_no_truncate'],
+    why: 'The queue is derived from this log and disputes are settled by replaying it; it must not be editable (DB-P1, FR-QUE-05).',
+  },
+  {
+    table: 'bed_events',
+    guards: ['fn_bed_events_no_mutate', 'fn_bed_events_no_truncate'],
+    why: 'Bed freshness and occupancy are read from this history; it must not be editable (DATABASE.md §2.5, FR-OFF-03).',
+  },
+];
+
+/**
+ * DB-P1: the event logs are append-only.
  *
  * Checked by asserting the guards exist rather than by attempting a write,
  * because `db:verify` runs against a developer's database and must not touch
  * a row. The schema tests do attempt the writes.
  */
 async function checkAppendOnlyLog(client: Client): Promise<Violation[]> {
-  const { rows } = await client.query<{ proname: string }>(`
-    SELECT p.proname
-    FROM pg_trigger t
-    JOIN pg_class c ON c.oid = t.tgrelid
-    JOIN pg_proc p ON p.oid = t.tgfoid
-    WHERE c.relname = 'queue_events' AND NOT t.tgisinternal
-  `);
-
-  const guards = new Set(rows.map((row) => row.proname));
   const violations: Violation[] = [];
 
-  for (const guard of ['fn_queue_events_no_mutate', 'fn_queue_events_no_truncate']) {
-    if (!guards.has(guard)) {
-      violations.push({
-        rule: 'DB-P1 append-only event log',
-        subject: 'queue_events',
-        detail: `Missing the ${guard} trigger. The queue is derived from this log and disputes are settled by replaying it; it must not be editable (DB-P1, FR-QUE-05).`,
-      });
+  for (const log of APPEND_ONLY_LOGS) {
+    const { rows } = await client.query<{ proname: string }>(
+      `SELECT p.proname
+         FROM pg_trigger t
+         JOIN pg_class c ON c.oid = t.tgrelid
+         JOIN pg_proc p ON p.oid = t.tgfoid
+        WHERE c.relname = $1 AND NOT t.tgisinternal`,
+      [log.table],
+    );
+
+    const guards = new Set(rows.map((row) => row.proname));
+
+    for (const guard of log.guards) {
+      if (!guards.has(guard)) {
+        violations.push({
+          rule: 'DB-P1 append-only event log',
+          subject: log.table,
+          detail: `Missing the ${guard} trigger. ${log.why}`,
+        });
+      }
     }
   }
 
