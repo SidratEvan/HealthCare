@@ -215,8 +215,8 @@ function Field({ label, value }: { readonly label: string; readonly value: strin
   );
 }
 
-/** `FR-DOC-03`'s "last visits", newest first. */
-function PastVisits({ records }: { readonly records: PatientRecords }): ReactNode {
+/** `FR-DOC-03`'s "last visits", newest first. Also what a consent code opens. */
+export function PastVisits({ records }: { readonly records: PatientRecords }): ReactNode {
   return (
     <section className="flex flex-col gap-2 border-t border-line pt-4">
       <h3 className="text-body-sm font-semibold">{t('pastVisits', LOCALE)}</h3>
@@ -257,7 +257,7 @@ function PastVisits({ records }: { readonly records: PatientRecords }): ReactNod
  * doctor this patient has never been prescribed anything — which is a clinical
  * statement the product cannot support (`PRD.md` §3.2, `FR-OFF-05`).
  */
-function Absent({ records }: { readonly records: PatientRecords }): ReactNode {
+export function Absent({ records }: { readonly records: PatientRecords }): ReactNode {
   if (records.absent.length === 0) return null;
 
   return (

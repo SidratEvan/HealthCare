@@ -9,7 +9,9 @@
 import { ApiClient } from '@platform/client';
 
 import type {
+  AccessLog,
   Availability,
+  ConsentOffer,
   DoctorCard,
   HospitalCard,
   HospitalDoctorCard,
@@ -172,4 +174,44 @@ export async function cancelBooking(input: {
     { clientEventId: input.clientEventId },
     input.idempotencyKey,
   );
+}
+
+// ---------------------------------------------------------------------------
+// The health wallet (`S-A-12`, `FR-PAT-63`, `FR-PAT-64`)
+//
+// Each call takes the access token a tracking link was exchanged for. There
+// are no accounts in this version (`CLAUDE.md` §4.1), so the only thing that
+// can speak for a patient on this device is a link to one of their bookings —
+// and the API accepts that only while `DEMO_MODE` is on.
+// ---------------------------------------------------------------------------
+
+/** `POST /patients/:id/consent-offer` — `BTN-A12-QR`. */
+export async function offerConsent(input: {
+  readonly patientId: string;
+  readonly token: string;
+}): Promise<ConsentOffer> {
+  // A fresh key per tap: every offer is a new code, and a retried request
+  // returning the previous one would be correct anyway.
+  return await authed(input.token).post<ConsentOffer>(
+    `/patients/${input.patientId}/consent-offer`,
+    {},
+    crypto.randomUUID(),
+  );
+}
+
+/** `GET /patients/:id/access` — `BTN-A12-ACCESS`. */
+export async function accessLog(input: {
+  readonly patientId: string;
+  readonly token: string;
+}): Promise<AccessLog> {
+  return await authed(input.token).get<AccessLog>(`/patients/${input.patientId}/access`);
+}
+
+/** `POST /consents/:id/revoke` — `FR-PAT-64`, the half that makes it consent. */
+export async function revokeConsent(input: {
+  readonly consentId: string;
+  readonly token: string;
+  readonly idempotencyKey: string;
+}): Promise<void> {
+  await authed(input.token).post(`/consents/${input.consentId}/revoke`, {}, input.idempotencyKey);
 }

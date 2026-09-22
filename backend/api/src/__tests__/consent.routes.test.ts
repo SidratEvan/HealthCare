@@ -20,7 +20,7 @@
 
 import { sql } from 'kysely';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { StaffRole } from '@platform/domain';
 
@@ -173,6 +173,10 @@ describe('offering consent (BTN-A12-QR)', () => {
 
     // Minutes, not hours. The code is shown on a screen in a chamber.
     expect(response.body.data.expiresInSeconds).toBeLessThanOrEqual(600);
+
+    // `BTN-A12-QR` states the grant's length before the patient hands it over,
+    // so the server has to say what it will be.
+    expect(response.body.data.grantHours).toBeGreaterThan(0);
   });
 
   it('refuses to mint an offer for somebody else', async () => {
@@ -367,5 +371,119 @@ describe('the patient can see and undo it (FR-PAT-64)', () => {
   it('refuses an anonymous caller the access log', async () => {
     const response = await request(app).get(`${BASE}/patients/${ownedPatientId}/access`);
     expect(response.status).toBe(401);
+  });
+});
+
+/**
+ * The demo path (`CLAUDE.md` §4.1): a guest speaks for the patient their own
+ * booking names, and only while `DEMO_MODE` is on.
+ *
+ * This version has no accounts, so without it the wallet could not offer a
+ * code or show an access log to anybody. Every test here is about the edges of
+ * that grant, because the grant itself is the easy part.
+ */
+describe('a guest holding a booking link, in the demo (CLAUDE.md §4.1)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** What `GET /guest/link/:token` exchanges a tracking link for. */
+  async function linkHolder(bookingId: string | null = String(fixture.bookingIds[0])): Promise<string> {
+    return await signToken({
+      kind: 'access',
+      claims: {
+        sub: '22222222-2222-7222-8222-333333333333',
+        kind: 'guest',
+        ...(bookingId === null ? {} : { bookingId }),
+      },
+    });
+  }
+
+  /** The patient the fixture's first booking is for. */
+  function bookedPatient(): string {
+    return String(fixture.patientIds[0]);
+  }
+
+  it('offers a code for the patient the booking is for, and a doctor can redeem it', async () => {
+    const code = await offer(await linkHolder(), bookedPatient());
+    const response = await redeem(code);
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.patientId).toBe(bookedPatient());
+  });
+
+  it('refuses to offer for anybody the booking is not for', async () => {
+    // The booking is the proof of subject. Without this check a link to any
+    // booking would be a key to every record in the database.
+    const response = await request(app)
+      .post(`${BASE}/patients/${ownedPatientId}/consent-offer`)
+      .set('authorization', `Bearer ${await linkHolder()}`)
+      .set('idempotency-key', crypto.randomUUID())
+      .send({});
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.details.reason).toBe('booking_patient');
+  });
+
+  it('refuses a guest token that names no booking', async () => {
+    const response = await request(app)
+      .post(`${BASE}/patients/${bookedPatient()}/consent-offer`)
+      .set('authorization', `Bearer ${await linkHolder(null)}`)
+      .set('idempotency-key', crypto.randomUUID())
+      .send({});
+
+    expect(response.status).toBe(403);
+  });
+
+  it('sees the grant and who looked, and can revoke it', async () => {
+    const holder = await linkHolder();
+    const granted = await redeem(await offer(holder, bookedPatient()));
+    const consentId = granted.body.data.consentId as string;
+
+    const access = await request(app)
+      .get(`${BASE}/patients/${bookedPatient()}/access`)
+      .set('authorization', `Bearer ${holder}`);
+
+    expect(access.status).toBe(200);
+    const ids = (access.body.data.consents as { id: string }[]).map((row) => row.id);
+    expect(ids).toContain(consentId);
+
+    const revoke = await request(app)
+      .post(`${BASE}/consents/${consentId}/revoke`)
+      .set('authorization', `Bearer ${holder}`)
+      .set('idempotency-key', crypto.randomUUID())
+      .send({});
+
+    expect(revoke.status).toBe(200);
+  });
+
+  it('cannot read the access log of a patient the booking is not for', async () => {
+    const response = await request(app)
+      .get(`${BASE}/patients/${ownedPatientId}/access`)
+      .set('authorization', `Bearer ${await linkHolder()}`);
+
+    expect(response.status).toBe(403);
+  });
+
+  it('is refused all of it when DEMO_MODE is off', async () => {
+    const env = await import('../env.js');
+    vi.spyOn(env, 'env', 'get').mockReturnValue({ ...env.env, DEMO_MODE: false });
+
+    const holder = await linkHolder();
+
+    const offered = await request(app)
+      .post(`${BASE}/patients/${bookedPatient()}/consent-offer`)
+      .set('authorization', `Bearer ${holder}`)
+      .set('idempotency-key', crypto.randomUUID())
+      .send({});
+
+    const access = await request(app)
+      .get(`${BASE}/patients/${bookedPatient()}/access`)
+      .set('authorization', `Bearer ${holder}`);
+
+    // On a real deployment a forwarded SMS must not carry the power to hand a
+    // hospital somebody's history, so both are the same refusal as before.
+    expect(offered.status).toBe(403);
+    expect(access.status).toBe(403);
   });
 });

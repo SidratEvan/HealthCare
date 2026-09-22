@@ -1,15 +1,14 @@
 /**
  * Consent controllers (BACKEND.md §3, §7.6).
  *
- * Thin, like every controller here. The one thing worth noticing is that
- * `offerConsent` takes the patient from `req.principal` and never from the
- * body: an endpoint that minted an offer for a patient id supplied by the
- * caller would be a way to grant yourself access to a stranger's record.
+ * Thin, like every controller here. Who may speak for a patient — including
+ * the demo-only guest branch — is decided once, in `consent.service`, so the
+ * offer, the access log and a revocation cannot drift apart.
  */
 
 import { createConsentBody, idParams, redeemConsentBody } from '@platform/domain';
 
-import { authRequired, forbiddenScope } from '../errors/AppError.js';
+import { authRequired } from '../errors/AppError.js';
 import * as consent from '../services/consent.service.js';
 
 import type { Request, Response } from 'express';
@@ -20,11 +19,7 @@ export async function offerConsent(req: Request, res: Response): Promise<void> {
   const principal = req.principal;
   if (principal === undefined) throw authRequired();
 
-  // Only the patient themselves. Checked here rather than in the service
-  // because there is nothing else to decide: the offer names its subject.
-  if (principal.kind !== 'patient') throw forbiddenScope({ reason: 'patient_only' });
-
-  res.json({ ok: true, data: await consent.offerConsent(id, principal.id) });
+  res.json({ ok: true, data: await consent.offerConsent({ principal, patientId: id }) });
 }
 
 /** `POST /consents/redeem` — `BTN-B05-SCAN`, the doctor's side. */
