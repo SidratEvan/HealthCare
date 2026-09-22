@@ -90,6 +90,9 @@ shared/domain/src/
 │   ├── rate.ts                  # rolling consultation-rate maths (FR-QUE-12)
 │   ├── rules.ts                 # grace periods, late re-insertion k, priority rules (FR-QUE-20..22)
 │   └── replay.ts                # events[] => state (used by rebuild + tests)
+├── beds/
+│   ├── board.ts                 # the bed state machine: canApply, applyLocal (FR-BED-01..02)
+│   └── capacity.ts              # the public tally, tomorrow's forecast, mirror check (FR-BED-04..06)
 ├── emergency/
 │   ├── ranking.ts               # capability → travel time → load → beds (FR-PAT-43)
 │   └── freshness.ts             # staleness thresholds and labels (FR-OFF-03..04)
@@ -306,7 +309,7 @@ Consoles operate fully offline (`FR-OFF-01`). The protocol is deliberately small
 | Room | Who joins | Events emitted |
 |---|---|---|
 | `session:<sessionId>` | patients with a booking (or guest link), reception console, doctor app | `queue.updated`, `session.delayed`, `session.ended`, `patient.called` (targeted) |
-| `hospital:<id>:beds` | ward board, ER console, admin | `bed.updated`, `capacity.updated` |
+| `hospital:<id>:beds` | ward board, ER console, admin | `bed.updated` (the beds an action changed, no patient identity), `capacity.updated` (the `v_public_hospital_capacity` row, read back after commit), `bedrequest.updated` (id and state only — the pending list is re-read through the audited endpoint) |
 | `hospital:<id>:emergency` | ER console | `emergency.inbound`, `emergency.updated`, `referral.incoming` |
 | `hospital:<id>:lab` | lab console | `test.ordered`, `test.updated` |
 | `hospital:<id>:admin` | admin dashboard | `metrics.tick` (throttled 30 s) |
@@ -345,7 +348,7 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 
 | Method | Path | Result |
 |---|---|---|
-| GET | `/hospitals?lat&lng&district&q` | list + live capacity from `v_public_hospital_capacity` |
+| GET | `/hospitals?lat&lng&district&q&bedKind` | list + live capacity from `v_public_hospital_capacity`; `bedKind` keeps hospitals that have that kind of bed, full or not (`S-A-11`) |
 | GET | `/hospitals/:id` | detail + departments + capabilities + beds summary |
 | GET | `/doctors?specialty&hospitalId&q&availableToday` | list + live status |
 | GET | `/doctors/:id` | detail + upcoming sessions |
@@ -395,10 +398,19 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | PUT | `/hospitals/:id/capabilities` | emergency, admin | publishes to network (`FR-EMG-05`) |
 | POST | `/referrals` | emergency | send (`FR-EMG-08`) |
 | POST | `/referrals/:id/accept` \| `/decline` | emergency | reason required on decline |
-| GET | `/hospitals/:id/beds` | staff | board data |
-| POST | `/beds/:id/admit` \| `/discharge` \| `/transfer` \| `/reserve` \| `/oos` | ward | writes `bed_events`, emits `capacity.updated` |
-| POST | `/bed-requests` | user \| guest | (`FR-PAT-52`) |
-| POST | `/bed-requests/:id/respond` | ward | hold / confirm / decline |
+| GET | `/hospitals/:id/beds` | any staff role at the hospital | board data: wards, beds, the published row, stale threshold, Dhaka date. Writes the logged RELEASE of any lapsed hold first. No patient identity |
+| GET | `/beds/:id` | ward | the bed panel; names the occupant and writes `audit_log` when it does (`DB-P7`) |
+| POST | `/beds/:id/admit` \| `/discharge` \| `/transfer` \| `/reserve` \| `/oos` | ward | writes `bed_events`, emits `bed.updated` + `capacity.updated`. Admit takes a pending `bedRequestId` or the patient at the desk (name, phone, age, sex) |
+| POST | `/beds/:id/release` \| `/restore` \| `/clean-start` \| `/clean-done` | ward | the rest of the state machine: without `clean-done` a discharged bed could never be free again. `release` refuses a bed held for a request — answer the request instead |
+| POST | `/beds/:id/expected-discharge` | ward | `SEL-B06-EXPDIS` (`FR-BED-04`); not an event, idempotent by nature |
+| GET | `/hospitals/:id/bed-requests` | ward | `LIST-B06-PENDING`; audited per request shown |
+| POST | `/bed-requests` | none (guest details in the body, as `POST /bookings`) | (`FR-PAT-52`); returns a signed status token (`bed_request` audience), idempotent on the key and on one open request per patient per hospital |
+| GET | `/bed-requests/track/:token` | the token | the family's status; a lapsed hold reads `expired` at once |
+| POST | `/bed-requests/:id/respond` | ward | `hold` (reserves a real bed of the kind asked for), `confirm` (admits), `decline`; hold and decline send `bed.request_held` / `bed.request_declined` |
+
+Bed writes return `{ beds, published, duplicate, serverTs }`: the beds as they now stand and the view's row read back after commit, so a console can reconcile without waiting for the broadcast. A replayed `clientEventId` returns the same shape with `duplicate: true` (SY-02). A lapsed hold on a bed about to be acted on is released first, by nobody, so every decision is taken against the bed's real state.
+
+The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty seconds while visible rather than joining a room: the board room is staff-only, and this version has no anonymous socket.
 
 ### 7.6 Clinical, lab, pharmacy
 
@@ -496,7 +508,8 @@ backend/workers/src/
 | `PATIENT_NO_SHOW` | `queue.no_show` | SMS |
 | `SLOT_OFFERED` | `queue.slot_offer` | push + SMS |
 | Report ready | `lab.report_ready` | push |
-| Bed request answered | `bed.request_result` | push + SMS |
+| Bed request held | `bed.request_held` | push + SMS — names the hospital, the kind of bed and when the hold runs out; exempt from quiet hours, because a hold is measured in minutes |
+| Bed request declined | `bed.request_declined` | push + SMS — says what to do next, and never claims the hospital is full |
 | Follow-up due | `care.followup` | push |
 
 All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` picks one at send time.
@@ -521,6 +534,8 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `PAYMENT_FAILED` | 402 | provider declined |
 | `CONSENT_REQUIRED` | 403 | doctor lacks record consent |
 | `CAPACITY_STALE` | 200 + flag | data returned but marked stale |
+| `BED_TRANSITION_INVALID` | 422 | the bed's state does not allow that action (the shared `canApply` guard); `details.guard` names the rule |
+| `BED_CONFLICT` | 409 | another change got there first: the patient is already in a bed, or the request was already answered |
 | `VALIDATION_FAILED` | 400 | zod details attached |
 
 Rule: an error never returns a raw SQL or provider message to a client.
