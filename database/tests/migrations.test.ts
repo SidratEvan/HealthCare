@@ -46,6 +46,9 @@ describe('migration files (DATABASE.md §7)', () => {
     // because those two keep the numbers DATABASE.md §7 gives them and will
     // land later. Nothing in either depends on 0016, so the runner's filename
     // order converges the same way it did for 0007 behind 0010.
+    //
+    // 0017 arrived with step 16, referrals — what `referrals` could not yet
+    // say, on the owner's ruling of 2026-09-22.
     expect(migrations.map((m) => m.version)).toEqual([
       '0001',
       '0002',
@@ -59,6 +62,7 @@ describe('migration files (DATABASE.md §7)', () => {
       '0012',
       '0013',
       '0016',
+      '0017',
     ]);
   });
 

@@ -20,11 +20,22 @@
  *   arrived ─triage→ arrived                      (BTN-B07-TRIAGE-<c>, any number of times)
  *      ├─handoff→ arrived, waiting for a bed      (BTN-B07-ADMIT)
  *      │             └─admit→ admitted            (the ward places them, S-B-06)
- *      └─discharge→ discharged                    (seen and sent home)
+ *      ├─discharge→ discharged                    (seen and sent home)
+ *      └─refer→ referred                          (arrived at the ER that took the referral)
  *
- * A walk-in starts at `arrived`. `in_treatment` and `referred` exist in the
- * enum; nothing in this version moves a case into them — referral is step 16,
- * and nothing in `APP_FLOW.md` B4 separates "being seen" from "here".
+ * A walk-in starts at `arrived`. `in_treatment` exists in the enum and nothing
+ * moves a case into it: nothing in `APP_FLOW.md` B4 separates "being seen"
+ * from "here".
+ *
+ * ## A referral holds the case
+ *
+ * While a referral is open (`referrals.ts`) another ER is deciding about this
+ * person, or preparing for them. Handing them to the ward, discharging them
+ * and the ward admitting them are refused until the referral is withdrawn —
+ * a hospital getting a bay ready for somebody already sent home is the
+ * failure this prevents. `refer` itself is not the sending ER's tap: it is
+ * what the receiving ER's arrival does to the sending ER's case (the owner's
+ * ruling, 2026-09-22 — the sender is responsible until the handover).
  *
  * ## "Accept" means the person is here
  *
@@ -78,6 +89,7 @@ export const EMERGENCY_ACTIONS = [
   'handoff',
   'discharge',
   'admit',
+  'refer',
 ] as const;
 export type EmergencyAction = (typeof EMERGENCY_ACTIONS)[number];
 
@@ -108,7 +120,8 @@ export interface EmergencyCaseView {
   readonly admitRequestedAt: Timestamp | null;
 }
 
-export type EmergencyGuardCode = 'WRONG_STATE' | 'REASON_REQUIRED' | 'NOT_HANDED_OFF';
+export type EmergencyGuardCode =
+  'WRONG_STATE' | 'REASON_REQUIRED' | 'NOT_HANDED_OFF' | 'REFERRAL_OPEN';
 
 export type EmergencyGuardResult =
   | { readonly ok: true }
@@ -125,6 +138,8 @@ export interface EmergencyActionContext {
   readonly reason?: string | null;
   readonly triage?: TriageColor | null;
   readonly bedKind?: BedKind | null;
+  /** True while a referral of this case is sent, seen or accepted. */
+  readonly openReferral?: boolean;
 }
 
 export function isOpen(state: EmergencyState): boolean {
@@ -179,19 +194,33 @@ export function canActOn(
         : deny('WRONG_STATE', 'Only somebody in the ER can be triaged.');
 
     case 'handoff':
-      return isInEr(state)
-        ? ALLOWED
-        : deny('WRONG_STATE', 'Only somebody in the ER can be handed to the ward.');
+      if (!isInEr(state)) {
+        return deny('WRONG_STATE', 'Only somebody in the ER can be handed to the ward.');
+      }
+      return heldByReferral(context);
 
     case 'discharge':
-      return isInEr(state) ? ALLOWED : deny('WRONG_STATE', `A ${state} case cannot be discharged.`);
+      if (!isInEr(state)) return deny('WRONG_STATE', `A ${state} case cannot be discharged.`);
+      return heldByReferral(context);
 
     case 'admit':
       if (!isInEr(state)) return deny('WRONG_STATE', `A ${state} case cannot be admitted.`);
-      return current.admitRequestedAt === null
-        ? deny('NOT_HANDED_OFF', 'The ER has not handed this case to the ward.')
-        : ALLOWED;
+      if (current.admitRequestedAt === null) {
+        return deny('NOT_HANDED_OFF', 'The ER has not handed this case to the ward.');
+      }
+      return heldByReferral(context);
+
+    case 'refer':
+      return isInEr(state)
+        ? ALLOWED
+        : deny('WRONG_STATE', `A ${state} case cannot leave for another ER.`);
   }
+}
+
+function heldByReferral(context: EmergencyActionContext): EmergencyGuardResult {
+  return context.openReferral === true
+    ? deny('REFERRAL_OPEN', 'Another ER is answering a referral of this case. Withdraw it first.')
+    : ALLOWED;
 }
 
 /**
@@ -220,6 +249,8 @@ export function alreadyApplied(
       return current.state === 'discharged';
     case 'admit':
       return current.state === 'admitted';
+    case 'refer':
+      return current.state === 'referred';
   }
 }
 
@@ -279,6 +310,8 @@ export function applyLocalCase(
       return { ...current, state: 'discharged', closedAt: change.at };
     case 'admit':
       return { ...current, state: 'admitted', closedAt: change.at };
+    case 'refer':
+      return { ...current, state: 'referred', closedAt: change.at };
   }
 }
 

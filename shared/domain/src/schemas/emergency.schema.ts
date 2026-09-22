@@ -46,7 +46,13 @@ const longitude = z.coerce.number().min(88).max(93);
  * saying so.
  *
  * `from` searches from a hospital's own coordinates and leaves that hospital
- * out: the ER console's refer-out suggestion after a decline (`FR-EMG-02`).
+ * out: the ER console's refer-out suggestion after a decline (`FR-EMG-02`),
+ * and the refer-out search itself (`FR-EMG-07`).
+ *
+ * `capability` and `bedKind` are the refer-out search's, and need `from`: a
+ * coordinator says what the case needs — "an ICU bed" is a need no problem
+ * maps to — and the results are ranked on that instead of on the problem's
+ * default. A family's search never sends them.
  */
 export const emergencySearchQuery = z
   .object({
@@ -54,6 +60,8 @@ export const emergencySearchQuery = z
     lng: longitude.optional(),
     problem: emergencyProblem.optional(),
     from: uuid.optional(),
+    capability: capabilityKind.optional(),
+    bedKind: z.enum(BED_KINDS).optional(),
   })
   .refine((query) => (query.lat === undefined) === (query.lng === undefined), {
     message: 'Give both lat and lng, or neither.',
@@ -62,7 +70,15 @@ export const emergencySearchQuery = z
   .refine((query) => query.from === undefined || query.lat === undefined, {
     message: 'Search from a hospital or from a position, not both.',
     path: ['from'],
-  });
+  })
+  .refine(
+    (query) =>
+      query.from !== undefined || (query.capability === undefined && query.bedKind === undefined),
+    {
+      message: 'capability and bedKind belong to the refer-out search, which needs from.',
+      path: ['capability'],
+    },
+  );
 
 /**
  * `POST /emergency/inbound` — `BTN-A10-ONWAY`, "I'm on my way" (`FR-PAT-46`).
