@@ -37,7 +37,7 @@ tap that gives them a token at Shapla and closes Jamuna's case as referred.
 | 16 | `feat/referrals` | merged — migration 0017, the referral state machine, both halves of the ER console, `referral.spec.ts` |
 | 17 | `feat/lab-pharmacy` | **next** — test orders, report delivery, dispensing. Migration 0011 is what `seed_06_ancillary` and `INP-B07-BLOOD` are both waiting on |
 
-Three unplanned branches after step 11:
+Four unplanned branches after step 11:
 
 - `chore/deploy` — the `S-B-01` console picker, `render.yaml`, Vercel configs
   and `docs/DEPLOY.md`.
@@ -49,9 +49,12 @@ Three unplanned branches after step 11:
   See below.
 - `fix/console-past-midnight` — two date bugs that only appear in the first six
   hours of a Dhaka day. See *Things learned the hard way*.
+- `chore/format-clean` (after step 16) — `pnpm format:check` had been red for
+  several steps; this makes `pnpm verify` green and removes the two reasons it
+  went unnoticed. See *Things learned the hard way*.
 
-Both of the last two were unplanned, and neither is a build step: nothing in
-`CLAUDE.md` §4 is skipped or brought forward.
+None of these is a build step: nothing in `CLAUDE.md` §4 is skipped or brought
+forward.
 
 Three unplanned branches also merged after step 3, all recorded in `git log`:
 `chore/remove-commercial-strategy`, `chore/supabase-compat`, `fix/api-env-file`.
@@ -94,12 +97,10 @@ demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`. The whole E2E run takes about ten minutes.
 
-`pnpm format:check` fails on five files, and has since before step 16 —
-`database/seeds/lib/templates.ts`, both generated `next-env.d.ts`,
-`render.yaml` and `shared/ui/src/components/__tests__/liveSerial.test.tsx`.
-None belong to the step that is being worked on when it is noticed, which is
-why it keeps being left; `pnpm format` fixes it and belongs in a `chore/`
-branch of its own. `pnpm verify` runs it, `pnpm test` does not.
+`pnpm verify` — typecheck, lint, `format:check`, test — is clean, and so is
+`pnpm build`. `format:check` had been failing on five files since before step
+16; `chore/format-clean` fixed them and the two things that let it happen (see
+below).
 
 ### The demo API sleeps, and the console now says so
 
@@ -585,6 +586,24 @@ afternoon.
 - **Vitest loads `.env` into `process.env`.** The API test setup therefore
   assigns its environment outright rather than defaulting it, or the suite runs
   against whatever `.env` happens to say.
+- **`pnpm test` is not the whole gate; `pnpm verify` is.** `format:check` sits
+  in `verify` and in CI, not in `test`, so a step that runs the Definition of
+  Done's three commands (`CLAUDE.md` §5.2) never sees it. It had been red for
+  several steps before `chore/format-clean`, on files belonging to no step in
+  particular — which is exactly how it stayed red. Run `pnpm verify` before
+  calling a branch done.
+- **`.prettierignore` said `db/migrations/`, a directory this repository has
+  never had.** The migrations live in `database/`. Nothing broke, because
+  Prettier ships no SQL parser and skipped them anyway — an ignore rule that
+  matches nothing is silent in both directions, so it went four months without
+  being noticed. Corrected on `chore/format-clean`.
+- **`next-env.d.ts` is generated, and each command writes it differently.**
+  `next dev` points it at `.next/dev/types`, `next build` at `.next/types`, so
+  while it was tracked it appeared as a modification in `git status` after
+  every dev run and every build, belonging to nobody and blocking
+  `format:check`. It is now in `.gitignore` and `.prettierignore`. Both apps
+  typecheck on a clean clone without it (tested with `.next` removed as well,
+  which is what CI sees — CI typechecks before anything builds).
 - **The api project's files cannot run in parallel, and the failure looks like
   a bug in the newest step.** They share one database and go through the API,
   so nothing can be rolled back around them; two files asserting on the same
