@@ -41,9 +41,16 @@ import * as demoRepo from '../repositories/demo.repo.js';
  * Reception first, and not alphabetically: it is the console the pitch is
  * about and the primary action on every chamber card. The ward follows the
  * two chamber roles because it is the one console that opens on a hospital
- * rather than a chamber (`S-B-06`, build step 14).
+ * rather than a chamber (`S-B-06`, build step 14). The ER console opens on a
+ * hospital too (`S-B-07`, build step 15), and follows the ward.
  */
-const OFFERED: readonly StaffRole[] = ['receptionist', 'doctor', 'ward', 'hospital_admin'];
+const OFFERED: readonly StaffRole[] = [
+  'receptionist',
+  'doctor',
+  'ward',
+  'emergency',
+  'hospital_admin',
+];
 
 /** Refuses unless this deployment is a demo. */
 function assertDemoMode(): void {

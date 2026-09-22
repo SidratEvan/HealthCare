@@ -462,6 +462,88 @@ export async function queueBedRequestAnswer(
   };
 }
 
+/**
+ * Writes the ER's answer to an inbound alert into the outbox (`APP_FLOW.md`
+ * D2: "Emergency acknowledged → `S-A-10c`").
+ *
+ * Only when somebody left a number — nothing about an emergency requires one
+ * (`FR-GST-03`), and a case with no number writes a `skipped` row saying so,
+ * which is the honest record of "we could not tell them".
+ *
+ * **Not subject to the monthly SMS cap.** `FR-NOT-06`'s cap is a cost control,
+ * and "this hospital cannot take you" is not a message to save thirty-five
+ * poisha on; `FR-NOT-07` already puts emergencies above quiet hours for the
+ * same reason. Recorded in `docs/STATUS.md` as awaiting the owner's word.
+ */
+export async function queueEmergencyAnswer(
+  trx: Tx,
+  input: {
+    readonly caseId: string;
+    readonly outcome: 'acknowledged' | 'declined';
+    readonly link: string;
+  },
+  at: Date = new Date(),
+): Promise<QueuedBatch> {
+  const target = await notificationRepo.emergencyRecipient(trx, input.caseId);
+  if (target === null) return NOTHING;
+
+  const templateKey: TemplateKey =
+    input.outcome === 'acknowledged' ? 'emergency.acknowledged' : 'emergency.declined';
+  const templates = await templateIndex();
+
+  const { recipient } = target;
+  const locale: Locale = recipient.locale === 'en' ? 'en' : 'bn';
+  const params: Record<string, string> = {
+    // Correlation, not copy: which case this message answered.
+    emergencyCaseId: input.caseId,
+    hospital: locale === 'bn' ? target.hospitalNameBn : target.hospitalNameEn,
+    link: input.link,
+  };
+
+  const tokens = await notificationRepo.deviceTokensFor(recipient);
+  const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
+
+  const rows: notificationRepo.QueuedNotification[] = [];
+  for (const channel of channels) {
+    const body = templates.get(`${templateKey}|${channel}|${locale}`);
+    if (body === undefined) continue;
+    rows.push({
+      recipient,
+      channel,
+      templateKey,
+      params,
+      body: render(body, params),
+      skipped: suppression({
+        channel,
+        phone: recipient.phone,
+        templateKey,
+        at,
+        budgetLeft: Number.POSITIVE_INFINITY,
+      }),
+    });
+  }
+
+  const ids = await notificationRepo.queueAll(trx, rows);
+
+  return {
+    ids,
+    messages: ids.flatMap((id, index) => {
+      const row = rows[index];
+      if (row?.skipped !== null) return [];
+      return [
+        {
+          id,
+          channel: row.channel,
+          to: row.channel === 'sms' ? recipient.phone : null,
+          body: row.body,
+          templateKey,
+          recipient,
+        },
+      ];
+    }),
+  };
+}
+
 function isBedKindName(kind: string): kind is BedKindName {
   return Object.hasOwn(BED_KIND_NAMES, kind);
 }

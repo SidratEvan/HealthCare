@@ -130,21 +130,23 @@ test.describe('NAV-A the bottom navigation', () => {
 });
 
 test.describe('what this version does not have yet, honestly', () => {
-  test('the emergency card still offers the one call that works (BTN-A10-999)', async ({
+  test('the emergency card opens triage, with 999 first (S-A-10, BTN-A10-999, FR-PAT-41)', async ({
     page,
   }) => {
     await page.goto(PATIENT);
     await page.getByTestId('emergency-card').click();
 
-    // Triage is build step 15, but the red card is the most prominent control
-    // in the app and leads here. `tel:999` needs nothing this version lacks, so
-    // the screen would be dishonest without it.
+    // The call is first and needs nothing — no login, no phone number (`GR-08`).
     const call = page.getByTestId('call-999');
     await expect(call).toBeVisible();
     await expect(call).toHaveAttribute('href', 'tel:999');
 
-    // And it says what is not built, rather than implying triage exists.
-    await expect(page.getByTestId('not-built')).toBeVisible();
+    // Then the split: critical goes straight to the nearest ER, urgent asks
+    // what happened (step 15; the owner's ruling of 2026-09-21).
+    await expect(page.getByTestId('emergency-critical')).toBeVisible();
+    await page.getByTestId('emergency-urgent').click();
+    await expect(page.getByTestId('problem-burn')).toBeVisible();
+    await expect(page.getByTestId('not-built')).toHaveCount(0);
   });
 
   test('a failed list says so instead of claiming nothing exists (GR-03)', async ({ page }) => {

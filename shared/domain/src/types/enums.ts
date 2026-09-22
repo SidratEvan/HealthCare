@@ -111,9 +111,32 @@ export const EMERGENCY_STATES = [
   'admitted',
   'discharged',
   'referred',
+  // Migration 0016: the ER said no, and said why (`FR-EMG-02`). Not
+  // `cancelled`, which is the family turning back — a different fact, and one
+  // the family is told differently.
+  'declined',
   'cancelled',
 ] as const;
 export type EmergencyState = (typeof EMERGENCY_STATES)[number];
+
+/**
+ * `FR-PAT-42`'s problem types, in the order `CHIP-A10-<type>` lists them.
+ *
+ * A `text` column with a CHECK (`emergency_cases_problem_allowed`, migration
+ * 0008), not a PostgreSQL enum — so it is deliberately absent from
+ * `DATABASE_ENUMS` below, like `LOCALES`.
+ */
+export const EMERGENCY_PROBLEMS = [
+  'burn',
+  'accident',
+  'cardiac',
+  'stroke',
+  'breathing',
+  'child',
+  'obstetric',
+  'other',
+] as const;
+export type EmergencyProblem = (typeof EMERGENCY_PROBLEMS)[number];
 
 export const REFERRAL_STATES = [
   'sent',

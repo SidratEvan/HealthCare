@@ -26,6 +26,18 @@ export {
 export { BED_KIND_NAMES, bedKindName, type BedKindName } from './beds.js';
 
 export {
+  CAPABILITY_NAMES,
+  EMERGENCY_PROBLEM_NAMES,
+  TRIAGE_NAMES,
+  capabilityName,
+  problemName,
+  triageName,
+  type CapabilityName,
+  type EmergencyProblemName,
+  type TriageName,
+} from './emergency.js';
+
+export {
   TEMPLATES,
   TEMPLATE_KEYS,
   placeholdersFor,

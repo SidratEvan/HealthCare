@@ -409,7 +409,12 @@ export async function recordRecordView(entry: {
   readonly staffUserId: string | null;
   readonly userId: string | null;
   readonly hospitalId: string | null;
-  readonly patientId: string;
+  /**
+   * Null when what was read identifies somebody who has no patient record —
+   * the number an anonymous emergency caller left (`DB-P7`). The read is
+   * still logged; there is simply no record to hang it on.
+   */
+  readonly patientId: string | null;
   readonly subjectTable: string;
   readonly subjectId: string | null;
   readonly meta: Record<string, unknown>;

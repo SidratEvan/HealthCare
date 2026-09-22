@@ -14,10 +14,12 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { rosterFor } from '../seeds/data/people.js';
 import {
   ACCOUNT_COUNT,
   DEMO_BED_REQUESTS,
   DEMO_DOCTORS,
+  DEMO_EMERGENCY_CASES,
   DEMO_FACILITIES,
   DEMO_WARDS,
   DEMO_LABEL_BN,
@@ -764,6 +766,107 @@ describe('FR-DEM-04 — bed inventory across wards with live occupancy', () => {
              JOIN admissions a ON a.patient_id = r.patient_id AND a.discharged_at IS NULL`,
         );
         expect(alreadyIn).toBe(0);
+      });
+    },
+    SEED_TIMEOUT,
+  );
+});
+
+describe('FR-EMG-03, FR-EMG-04 — the ERs open on real cases', () => {
+  /** Open cases per declared facility, from the public view. */
+  async function loads(client: Client): Promise<Map<string, number>> {
+    const { rows } = await client.query<{ name_en: string; er_active: number }>(
+      `SELECT h.name_en, v.er_active
+         FROM v_public_hospital_capacity v
+         JOIN hospitals h ON h.id = v.hospital_id`,
+    );
+    return new Map(rows.map((row) => [row.name_en, row.er_active]));
+  }
+
+  it('declares cases only where an emergency coordinator works', () => {
+    const withEr = new Set(DEMO_EMERGENCY_CASES.map((declared) => declared.facility));
+    const staffed = DEMO_FACILITIES.filter((f) =>
+      rosterFor(f.kind).some((entry) => entry.role === 'emergency'),
+    );
+    expect([...withEr].sort()).toEqual(staffed.map((f) => f.slug).sort());
+  });
+
+  it(
+    'publishes each ER load as the open cases the file declares',
+    async () => {
+      await seeded(async (client) => {
+        const published = await loads(client);
+        for (const declared of DEMO_FACILITIES) {
+          const open = DEMO_EMERGENCY_CASES.filter(
+            (entry) => entry.facility === declared.slug && entry.state !== 'discharged',
+          ).length;
+          expect(published.get(labelEn(declared.nameEn)), declared.slug).toBe(open);
+        }
+        // The emergency scenario leans on the order: Jamuna busiest, Padma less so.
+        const jamuna = published.get(labelEn(facility('jamuna-medical-college').nameEn)) ?? 0;
+        const padma = published.get(labelEn(facility('padma-specialised').nameEn)) ?? 0;
+        expect(jamuna).toBeGreaterThan(padma);
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it(
+    'numbers tokens per ER without repeating one among open cases',
+    async () => {
+      await seeded(async (client) => {
+        const repeated = await count(
+          client,
+          `SELECT count(*)::text AS n FROM (
+             SELECT hospital_id, token_label FROM emergency_cases
+              WHERE closed_at IS NULL AND token_label IS NOT NULL
+              GROUP BY 1, 2 HAVING count(*) > 1) d`,
+        );
+        expect(repeated).toBe(0);
+
+        // Nobody on the way has a token yet; everybody in the ER has one.
+        expect(
+          await count(
+            client,
+            `SELECT count(*)::text AS n FROM emergency_cases
+              WHERE (state = 'acknowledged') = (token_label IS NOT NULL)`,
+          ),
+        ).toBe(0);
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it(
+    'hands two cases to the ward, each for a kind of bed that ward has',
+    async () => {
+      await seeded(async (client) => {
+        const { rows } = await client.query<{ facility: string; kind: string; has_kind: boolean }>(
+          `SELECT h.name_en AS facility, e.admit_bed_kind::text AS kind,
+                  EXISTS (SELECT 1 FROM beds b
+                           WHERE b.hospital_id = e.hospital_id AND b.kind = e.admit_bed_kind) AS has_kind
+             FROM emergency_cases e
+             JOIN hospitals h ON h.id = e.hospital_id
+            WHERE e.admit_requested_at IS NOT NULL AND e.closed_at IS NULL`,
+        );
+        const declared = DEMO_EMERGENCY_CASES.filter((entry) => entry.handoff !== undefined);
+        expect(rows).toHaveLength(declared.length);
+        expect(rows.every((row) => row.has_kind)).toBe(true);
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it(
+    'writes no clinical note on any demo case (CLAUDE.md §8)',
+    async () => {
+      await seeded(async (client) => {
+        expect(
+          await count(
+            client,
+            'SELECT count(*)::text AS n FROM emergency_cases WHERE notes IS NOT NULL',
+          ),
+        ).toBe(0);
       });
     },
     SEED_TIMEOUT,

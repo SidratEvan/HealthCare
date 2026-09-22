@@ -7,7 +7,7 @@
  */
 
 import { ApiClient } from '@platform/client';
-import type { BedKind } from '@platform/domain';
+import type { BedKind, EmergencyProblem } from '@platform/domain';
 
 import type {
   AccessLog,
@@ -15,8 +15,11 @@ import type {
   Availability,
   ConsentOffer,
   DoctorCard,
+  EmergencyCaseStatus,
+  EmergencySearchResult,
   HospitalCard,
   HospitalDoctorCard,
+  InboundResult,
   SessionCard,
   StampedList,
   TrackingLinkView,
@@ -274,4 +277,59 @@ export async function requestBed(input: {
 /** `GET /bed-requests/track/:token` — the token is the credential. */
 export async function trackBedRequest(token: string): Promise<BedRequestView> {
   return await api.get<BedRequestView>(`/bed-requests/track/${encodeURIComponent(token)}`);
+}
+
+// ---------------------------------------------------------------------------
+// Emergency (`S-A-10b`, `S-A-10c`) — public; nothing is asked of anybody
+// ---------------------------------------------------------------------------
+
+/** `GET /emergency/search` — ranked (`FR-PAT-43`). Every field may be missing. */
+export async function emergencySearch(query: {
+  readonly problem: EmergencyProblem | null;
+  readonly position: { readonly lat: number; readonly lng: number } | null;
+}): Promise<EmergencySearchResult> {
+  const params = new URLSearchParams();
+  if (query.problem !== null) params.set('problem', query.problem);
+  if (query.position !== null) {
+    params.set('lat', String(query.position.lat));
+    params.set('lng', String(query.position.lng));
+  }
+  const encoded = params.toString();
+  const suffix = encoded === '' ? '' : `?${encoded}`;
+  return await api.get<EmergencySearchResult>(`/emergency/search${suffix}`);
+}
+
+/**
+ * `POST /emergency/inbound` — "I'm on my way" (`FR-PAT-46`).
+ *
+ * The key is made once, when the sheet opens, and reused for every retry of
+ * the same alert: a phone on one bar of signal that sends it three times has
+ * told the ER once.
+ */
+export async function sendInbound(
+  body: {
+    readonly hospitalId: string;
+    readonly problem: EmergencyProblem;
+    readonly lat: number | null;
+    readonly lng: number | null;
+    readonly phone: string | null;
+    readonly ageYears: number | null;
+    readonly sex: 'male' | 'female' | 'other' | null;
+  },
+  idempotencyKey: string,
+): Promise<InboundResult> {
+  return await api.post<InboundResult>('/emergency/inbound', body, idempotencyKey);
+}
+
+/** `GET /emergency/track/:token` — the token is the credential. */
+export async function trackEmergency(token: string): Promise<EmergencyCaseStatus> {
+  return await api.get<EmergencyCaseStatus>(`/emergency/track/${encodeURIComponent(token)}`);
+}
+
+/** `POST /emergency/track/:token/cancel` — `BTN-A10C-CANCEL`. */
+export async function cancelEmergency(token: string): Promise<EmergencyCaseStatus> {
+  return await api.post<EmergencyCaseStatus>(
+    `/emergency/track/${encodeURIComponent(token)}/cancel`,
+    {},
+  );
 }

@@ -140,6 +140,59 @@ export {
   type PublicCapacity,
 } from './beds/capacity.js';
 
+// --- Emergency -------------------------------------------------------------
+//
+// The case state machine, shared the way the bed board is: the API guards with
+// it and the ER console applies it before the server answers (`FR-EMG-01..04`).
+// Ranking and freshness are the product's rules for `S-A-10b` (`FR-PAT-43`,
+// `FR-PAT-45`), used by the search and by the refer-out suggestion alike.
+export {
+  alreadyApplied,
+  applyLocalCase,
+  canActOn,
+  expectedArrival,
+  inboundOrder,
+  isInEr,
+  isOnTheWay,
+  isOpen,
+  loadOf,
+  nextTokenLabel,
+  tokenLabel,
+  triageOrder,
+  EMERGENCY_ACTIONS,
+  IN_ER_STATES,
+  ON_THE_WAY_STATES,
+  OPEN_EMERGENCY_STATES,
+  type EmergencyAction,
+  type EmergencyActionContext,
+  type EmergencyCaseView,
+  type EmergencyGuardCode,
+  type EmergencyGuardResult,
+  type LocalEmergencyChange,
+} from './emergency/cases.js';
+
+export {
+  compareCandidates,
+  rankCandidates,
+  relevantBedKind,
+  relevantFreeBeds,
+  requiredCapability,
+  stampsFor,
+  EMERGENCY_SEARCH_RADIUS_METRES,
+  PROBLEM_BED_KIND,
+  PROBLEM_CAPABILITY,
+  type CapacityFigures,
+  type RankCandidate,
+} from './emergency/ranking.js';
+
+export {
+  ageInMinutes,
+  freshnessOf,
+  oldestStamp,
+  DEFAULT_STALE_THRESHOLD_MINUTES,
+  type Freshness,
+} from './emergency/freshness.js';
+
 // --- Validation schemas ----------------------------------------------------
 //
 // Shared with the client (BACKEND.md §0): the console builds its offline queue
@@ -150,6 +203,7 @@ export * from './schemas/sync.schema.js';
 export * from './schemas/booking.schema.js';
 export * from './schemas/clinical.schema.js';
 export * from './schemas/bed.schema.js';
+export * from './schemas/emergency.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';

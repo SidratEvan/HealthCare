@@ -45,7 +45,14 @@ import {
   type PublicCapacity,
 } from '@platform/domain';
 
-import { SOCKET_URL, bedApi, bedSender, type BoardResponse, type PendingRequest } from '@/lib/beds';
+import {
+  SOCKET_URL,
+  bedApi,
+  bedSender,
+  type BoardResponse,
+  type PendingHandoff,
+  type PendingRequest,
+} from '@/lib/beds';
 
 export interface BedBoard {
   readonly board: BoardResponse | null;
@@ -65,6 +72,8 @@ export interface BedBoard {
   readonly lastRefusal: string | null;
   readonly clearRefusal: () => void;
   readonly requests: readonly PendingRequest[] | null;
+  /** The ER half of the pending list (`BTN-B07-ADMIT`, `FR-BED-07`). */
+  readonly handoffs: readonly PendingHandoff[] | null;
   readonly requestsFailed: boolean;
   /** Takes a bed action: queued, applied, sent. */
   readonly act: (input: {
@@ -104,6 +113,7 @@ export function useBedBoard(options: {
   const [pending, setPending] = useState<PendingBedAction[]>([]);
   const [lastRefusal, setLastRefusal] = useState<string | null>(null);
   const [requests, setRequests] = useState<readonly PendingRequest[] | null>(null);
+  const [handoffs, setHandoffs] = useState<readonly PendingHandoff[] | null>(null);
   const [requestsFailed, setRequestsFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -131,7 +141,9 @@ export function useBedBoard(options: {
 
   const loadRequests = useCallback(async () => {
     try {
-      setRequests(await api.pending(hospitalId));
+      const pending = await api.pending(hospitalId);
+      setRequests(pending.requests);
+      setHandoffs(pending.handoffs);
       setRequestsFailed(false);
     } catch {
       setRequestsFailed(true);
@@ -200,6 +212,9 @@ export function useBedBoard(options: {
         setLastServerTs(serverTs);
       },
       onRequest: () => {
+        void loadRequests();
+      },
+      onHandoff: () => {
         void loadRequests();
       },
     });
@@ -302,6 +317,7 @@ export function useBedBoard(options: {
       setLastRefusal(null);
     },
     requests,
+    handoffs,
     requestsFailed,
     act,
     respond,

@@ -8,6 +8,7 @@
  *   `bed.updated`         the beds an action changed, as they now stand
  *   `capacity.updated`    what the public view now publishes (`FR-BED-06`)
  *   `bedrequest.updated`  a request arrived or was answered (`FR-BED-07`)
+ *   `emergency.handoff`   the ER handed a case to the ward, or it was placed
  *
  * None of them carries a patient's name; the pending list is re-read through
  * the endpoint that audits the read.
@@ -24,6 +25,8 @@ export interface HospitalChannelOptions {
   readonly onBeds: (beds: readonly BedView[], serverTs: string) => void;
   readonly onCapacity: (published: PublicCapacity, serverTs: string) => void;
   readonly onRequest: (requestId: string, state: string) => void;
+  /** The ER half of the pending list changed (`BTN-B07-ADMIT`). Re-read it. */
+  readonly onHandoff?: (caseId: string, state: string) => void;
 }
 
 export function openHospitalChannel(options: HospitalChannelOptions): {
@@ -61,6 +64,9 @@ export function openHospitalChannel(options: HospitalChannelOptions): {
   });
   socket.on('bedrequest.updated', (message: { data: { requestId: string; state: string } }) => {
     options.onRequest(message.data.requestId, message.data.state);
+  });
+  socket.on('emergency.handoff', (message: { data: { caseId: string; state: string } }) => {
+    options.onHandoff?.(message.data.caseId, message.data.state);
   });
 
   return {

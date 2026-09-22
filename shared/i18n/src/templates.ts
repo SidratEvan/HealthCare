@@ -46,6 +46,8 @@ export const TEMPLATE_KEYS = [
   'session.ended',
   'bed.request_held',
   'bed.request_declined',
+  'emergency.acknowledged',
+  'emergency.declined',
 ] as const;
 
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
@@ -250,6 +252,45 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
     version: 1,
     bn: '{hospital} এখন {kind} বেড দিতে পারছে না',
     en: '{hospital} cannot offer a {kind} bed right now',
+  },
+
+  // `APP_FLOW.md` D2 routes "Emergency acknowledged" to `S-A-10c`, so a family
+  // who left a number with "I'm on my way" is told when the ER is ready — and,
+  // because it matters more, when the ER cannot take them. Sent only when a
+  // number was left; nothing about an emergency requires one (`FR-GST-03`).
+  //
+  // Neither names the problem or the patient: a text on a shared family phone
+  // should not announce a burn. The decline does not give the ER's reason
+  // either — that is on the status page the link opens, where there is room
+  // for it — and never claims the hospital is "full", because an ER declines
+  // for reasons other than beds.
+  {
+    key: 'emergency.acknowledged',
+    channel: 'sms',
+    version: 1,
+    bn: '{hospital} জরুরি বিভাগ আপনার জন্য প্রস্তুত। {link}',
+    en: '{hospital} emergency department is ready for you. {link}',
+  },
+  {
+    key: 'emergency.acknowledged',
+    channel: 'push',
+    version: 1,
+    bn: '{hospital} জরুরি বিভাগ আপনার জন্য প্রস্তুত',
+    en: '{hospital} emergency department is ready for you',
+  },
+  {
+    key: 'emergency.declined',
+    channel: 'sms',
+    version: 1,
+    bn: '{hospital} এখন আপনাকে নিতে পারছে না। অন্য হাসপাতাল দেখুন: {link}',
+    en: '{hospital} cannot take you right now. Other hospitals: {link}',
+  },
+  {
+    key: 'emergency.declined',
+    channel: 'push',
+    version: 1,
+    bn: '{hospital} এখন আপনাকে নিতে পারছে না — অন্য হাসপাতাল দেখুন',
+    en: '{hospital} cannot take you right now — see other hospitals',
   },
 ];
 

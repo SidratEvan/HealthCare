@@ -19,6 +19,7 @@ import { clinicalRoutes } from './clinical.routes.js';
 import { consentRoutes } from './consent.routes.js';
 import { demoRoutes } from './demo.routes.js';
 import { discoveryRoutes } from './discovery.routes.js';
+import { emergencyRoutes } from './emergency.routes.js';
 import { guestRoutes } from './guest.routes.js';
 import { healthRoutes } from './health.routes.js';
 import { queueRoutes } from './queue.routes.js';
@@ -57,6 +58,9 @@ export function buildApiRouter(): Router {
   // The bed board (step 14). `POST /bed-requests` and its tracking read are
   // public, like a guest booking; everything else is the ward's.
   router.use(bedRoutes);
+  // Emergency (step 15). Search, "I'm on my way" and the family's status
+  // page need nobody (`GR-08`); the ER console is the coordinator's.
+  router.use(emergencyRoutes);
   router.use(syncRoutes);
   return router;
 }

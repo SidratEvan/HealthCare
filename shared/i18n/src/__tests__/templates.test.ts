@@ -88,8 +88,9 @@ describe('placeholders', () => {
     for (const key of TEMPLATE_KEYS) {
       if (key === 'queue.doctor_arrived') continue;
       // A bed request has no serial; its messages name the hospital and the
-      // bed instead, which the next test holds them to.
-      if (key.startsWith('bed.')) continue;
+      // bed instead, which the next test holds them to. Nor does an
+      // emergency: those name the hospital and link to the case.
+      if (key.startsWith('bed.') || key.startsWith('emergency.')) continue;
       expect(placeholdersFor(key), `${key} never says which serial`).toContain('serial');
     }
   });
@@ -100,6 +101,21 @@ describe('placeholders', () => {
     }
     // A hold that does not say when it runs out is a bed lost without warning.
     expect(placeholdersFor('bed.request_held')).toContain('time');
+  });
+
+  it('names the hospital in every emergency message, and links the SMS to the case', () => {
+    for (const key of TEMPLATE_KEYS.filter((candidate) => candidate.startsWith('emergency.'))) {
+      expect(placeholdersFor(key)).toContain('hospital');
+      const sms = TEMPLATES.find((template) => template.key === key && template.channel === 'sms');
+      expect(sms === undefined ? [] : placeholdersIn(sms.bn), key).toContain('link');
+    }
+  });
+
+  it('never says what the emergency was — a family phone is shared', () => {
+    for (const template of TEMPLATES.filter((entry) => entry.key.startsWith('emergency.'))) {
+      expect(placeholdersIn(template.bn)).not.toContain('problem');
+      expect(template.bn).not.toMatch(/দগ্ধ|হৃদরোগ|স্ট্রোক|দুর্ঘটনা/);
+    }
   });
 });
 
