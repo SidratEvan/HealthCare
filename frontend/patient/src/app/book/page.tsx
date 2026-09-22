@@ -32,6 +32,7 @@ import {
 import { Button, Card, Chip, FreshnessLine, Input } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
+import { HospitalBeds } from '@/components/HospitalBeds';
 import { BackIcon, ChevronIcon, HospitalIcon } from '@/components/icons';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
@@ -313,6 +314,9 @@ function HospitalList({
                           : tp('nobodySittingNow', LOCALE)}
                       </Chip>
                     </div>
+
+                    {/* FR-PAT-14: free beds and ICU, with their own age. */}
+                    <HospitalBeds beds={hospital.beds} now={now} />
                   </div>
 
                   <span className="mt-1 text-ink-muted">

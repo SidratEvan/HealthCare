@@ -26,7 +26,7 @@ import { CONSENT_OFFER_TTL_SECONDS } from '@platform/domain';
 import { env } from '../env.js';
 
 /** Which secret a token is signed with, and therefore what it may authorise. */
-export type TokenKind = 'access' | 'refresh' | 'guest' | 'consent';
+export type TokenKind = 'access' | 'refresh' | 'guest' | 'consent' | 'bed_request';
 
 const ISSUER = 'healthcare-api';
 
@@ -51,6 +51,11 @@ const SECRETS: Record<TokenKind, Uint8Array> = {
    * bearer token — `attachPrincipal` only ever verifies against `access`.
    */
   consent: encoder.encode(env.GUEST_LINK_SECRET),
+
+  // The same arrangement for a bed request's status link (`FR-PAT-52`): the
+  // guest-link secret, a different signed audience. A status link cannot be
+  // replayed as a tracking link, a consent code or a bearer token.
+  bed_request: encoder.encode(env.GUEST_LINK_SECRET),
 };
 
 const AUDIENCES: Record<TokenKind, string> = {
@@ -58,6 +63,7 @@ const AUDIENCES: Record<TokenKind, string> = {
   refresh: 'refresh',
   guest: 'guest-link',
   consent: 'consent-offer',
+  bed_request: 'bed-request',
 };
 
 /**
@@ -78,6 +84,8 @@ export interface TokenClaims extends JWTPayload {
   roles?: readonly string[];
   /** Present for a guest tracking link: the one booking it may see. */
   bookingId?: string;
+  /** Present for a bed request's status link: the one request it may see. */
+  bedRequestId?: string;
 }
 
 export interface SignOptions {
@@ -100,6 +108,11 @@ function defaultLifetime(kind: TokenKind): string {
       // finished the moment the doctor has typed it; one that stayed live for
       // an hour would still be live in a photograph of that screen.
       return `${String(CONSENT_OFFER_TTL_SECONDS)}s`;
+    case 'bed_request':
+      // As long as a guest tracking link. A request is answered in hours, but
+      // the family keeps the SMS, and "your request was declined" is worth
+      // being able to read the next morning.
+      return `${String(env.GUEST_LINK_TTL_DAYS)}d`;
   }
 }
 

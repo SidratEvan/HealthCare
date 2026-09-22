@@ -30,18 +30,16 @@
  * can still be explained by the row that produced it.
  */
 
+import { twoAwayBookings, waitingQueue, type QueueEvent, type QueueState } from '@platform/domain';
 import {
-  twoAwayBookings,
-  waitingQueue,
-  type QueueEvent,
-  type QueueState,
-} from '@platform/domain';
-import {
+  BED_KIND_NAMES,
+  bedKindName,
   formatClock,
   formatNumber,
   formatSerial,
   render,
   tp,
+  type BedKindName,
   type Locale,
   type NumeralStyle,
   type TemplateKey,
@@ -86,8 +84,14 @@ const TEMPLATE_FOR: Partial<Record<QueueEvent['type'], TemplateKey>> = {
  * template outside these namespaces (a follow-up reminder, a medicine
  * reminder) must not wake somebody at two in the morning, and the decision
  * belongs beside the sending rather than in the branch that adds the template.
+ *
+ * `bed` is here too, and that is a judgement the requirement does not make
+ * for us (recorded in `docs/STATUS.md`). The answer to a bed request is the
+ * message a family is sitting up waiting for, and a hold is measured in
+ * minutes: a "your bed is held until 11:30 PM" text deferred to seven in the
+ * morning is a bed they lost while being told nothing.
  */
-const ALWAYS_OVERRIDES_QUIET_HOURS = new Set(['queue', 'booking', 'session', 'emergency']);
+const ALWAYS_OVERRIDES_QUIET_HOURS = new Set(['queue', 'booking', 'session', 'emergency', 'bed']);
 
 /** Dhaka local hours during which a non-urgent message waits. */
 const QUIET_FROM_HOUR = 22;
@@ -148,7 +152,9 @@ export function planFor(
     case 'DELAY_DECLARED':
     case 'SESSION_ENDED': {
       const minutes =
-        event.type === 'DELAY_DECLARED' ? String(event.payload.minutes) : String(state.delayMinutes);
+        event.type === 'DELAY_DECLARED'
+          ? String(event.payload.minutes)
+          : String(state.delayMinutes);
 
       return waitingQueue(state).map((entry) => ({
         bookingId: entry.bookingId,
@@ -299,7 +305,9 @@ export async function queueFor(
       ? 0
       : await notificationRepo.smsSentThisMonth(chamber.hospitalId);
   let smsBudgetLeft =
-    chamber.smsBudgetMonthly === null ? Number.POSITIVE_INFINITY : chamber.smsBudgetMonthly - smsUsed;
+    chamber.smsBudgetMonthly === null
+      ? Number.POSITIVE_INFINITY
+      : chamber.smsBudgetMonthly - smsUsed;
 
   const rows: notificationRepo.QueuedNotification[] = [];
   const pending: { channel: 'sms' | 'push'; to: string | null; body: string; key: string }[] = [];
@@ -371,6 +379,91 @@ export async function queueFor(
       ];
     }),
   };
+}
+
+/**
+ * Writes the answer to a bed request into the outbox (`FR-PAT-52`, BACKEND.md
+ * §8: "Bed request answered → push + SMS").
+ *
+ * Inside the caller's transaction, like every queue message, so a hold that
+ * rolls back leaves no text behind claiming it happened. The link is the
+ * family's status page for this request; it is minted by the caller because
+ * only the caller has the token.
+ */
+export async function queueBedRequestAnswer(
+  trx: Tx,
+  input: {
+    readonly requestId: string;
+    readonly outcome: 'held' | 'declined';
+    readonly holdExpiresAt: string | null;
+    readonly link: string;
+  },
+  at: Date = new Date(),
+): Promise<QueuedBatch> {
+  const target = await notificationRepo.bedRequestRecipient(trx, input.requestId);
+  if (target === null) return NOTHING;
+
+  const templateKey: TemplateKey =
+    input.outcome === 'held' ? 'bed.request_held' : 'bed.request_declined';
+  const templates = await templateIndex();
+
+  const { recipient } = target;
+  const locale: Locale = recipient.locale === 'en' ? 'en' : 'bn';
+  const numerals: NumeralStyle = locale === 'bn' ? 'bengali' : 'latin';
+  const params: Record<string, string> = {
+    // Correlation, not copy: which request this message answered.
+    bedRequestId: input.requestId,
+    hospital: locale === 'bn' ? target.hospitalNameBn : target.hospitalNameEn,
+    kind: isBedKindName(target.bedKind) ? bedKindName(target.bedKind, locale) : target.bedKind,
+    time: input.holdExpiresAt === null ? '' : formatClock(input.holdExpiresAt, numerals),
+    link: input.link,
+  };
+
+  const budgetLeft =
+    target.smsBudgetMonthly === null
+      ? Number.POSITIVE_INFINITY
+      : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId));
+
+  const tokens = await notificationRepo.deviceTokensFor(recipient);
+  const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
+
+  const rows: notificationRepo.QueuedNotification[] = [];
+  for (const channel of channels) {
+    const body = templates.get(`${templateKey}|${channel}|${locale}`);
+    if (body === undefined) continue;
+    rows.push({
+      recipient,
+      channel,
+      templateKey,
+      params,
+      body: render(body, params),
+      skipped: suppression({ channel, phone: recipient.phone, templateKey, at, budgetLeft }),
+    });
+  }
+
+  const ids = await notificationRepo.queueAll(trx, rows);
+
+  return {
+    ids,
+    messages: ids.flatMap((id, index) => {
+      const row = rows[index];
+      if (row?.skipped !== null) return [];
+      return [
+        {
+          id,
+          channel: row.channel,
+          to: row.channel === 'sms' ? recipient.phone : null,
+          body: row.body,
+          templateKey,
+          recipient,
+        },
+      ];
+    }),
+  };
+}
+
+function isBedKindName(kind: string): kind is BedKindName {
+  return Object.hasOwn(BED_KIND_NAMES, kind);
 }
 
 /**
@@ -500,15 +593,11 @@ function paramsFor(
     room: chamber.room ?? (locale === 'bn' ? 'ডাক্তারের কক্ষ' : 'the chamber'),
     time: formatClock(chamber.plannedStart, numerals),
     date: chamber.sessionDate,
-    minutes:
-      minutes === undefined || minutes === '' ? '' : formatNumber(Number(minutes), numerals),
+    minutes: minutes === undefined || minutes === '' ? '' : formatNumber(Number(minutes), numerals),
     // An estimate the chamber cannot support is not shown as a time
     // (`FR-QUE-13`) — the same refusal `<LiveSerialCard>` makes, in the same
     // words, because a patient reading both must not see them disagree.
-    eta:
-      eta === undefined || eta === ''
-        ? tp('etaUnknown', locale)
-        : formatClock(eta, numerals),
+    eta: eta === undefined || eta === '' ? tp('etaUnknown', locale) : formatClock(eta, numerals),
     link: planned.params['link'] ?? '',
   };
 }

@@ -395,3 +395,69 @@ export async function listForSession(sessionId: string): Promise<
     params: row.params,
   }));
 }
+
+/** Who a bed request's answer goes to, and what it has to say (`FR-PAT-52`). */
+export interface BedRequestRecipient {
+  readonly recipient: Recipient;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  readonly bedKind: string;
+  /** `hospital_settings.sms_budget_monthly`; null means no cap (`FR-NOT-06`). */
+  readonly smsBudgetMonthly: number | null;
+}
+
+/**
+ * The family behind a bed request.
+ *
+ * Addressed to the patient, with the requester's phone as the fallback — the
+ * same order `recipientsForSession` uses, because the person who asked for
+ * the bed is the one waiting by the phone to hear.
+ */
+export async function bedRequestRecipient(
+  trx: Tx,
+  requestId: string,
+): Promise<BedRequestRecipient | null> {
+  const result = await sql<{
+    patient_id: string;
+    guest_id: string | null;
+    user_id: string | null;
+    phone: string | null;
+    locale: string | null;
+    hospital_id: string;
+    name_bn: string;
+    name_en: string;
+    bed_kind: string;
+    sms_budget_monthly: number | null;
+  }>`
+    SELECT r.patient_id, r.requested_by_guest_id AS guest_id, r.requested_by_user_id AS user_id,
+           COALESCE(p.phone, g.phone, u.phone) AS phone, u.locale,
+           h.id AS hospital_id, h.name_bn, h.name_en, r.bed_kind::text AS bed_kind,
+           s.sms_budget_monthly
+      FROM bed_requests r
+      JOIN patients p ON p.id = r.patient_id
+      JOIN hospitals h ON h.id = r.hospital_id
+      LEFT JOIN guest_identities g ON g.id = r.requested_by_guest_id
+      LEFT JOIN users u ON u.id = r.requested_by_user_id
+      LEFT JOIN hospital_settings s ON s.hospital_id = r.hospital_id
+     WHERE r.id = ${requestId}::uuid
+  `.execute(trx);
+
+  const row = result.rows[0];
+  if (row === undefined) return null;
+
+  return {
+    recipient: {
+      patientId: row.patient_id,
+      guestId: row.guest_id,
+      userId: row.user_id,
+      phone: row.phone,
+      locale: row.locale ?? 'bn',
+    },
+    hospitalId: row.hospital_id,
+    hospitalNameBn: row.name_bn,
+    hospitalNameEn: row.name_en,
+    bedKind: row.bed_kind,
+    smsBudgetMonthly: row.sms_budget_monthly,
+  };
+}

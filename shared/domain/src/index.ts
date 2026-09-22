@@ -102,6 +102,44 @@ export {
   type QueueSettings,
 } from './queue/rules.js';
 
+// --- Beds ------------------------------------------------------------------
+//
+// The bed state machine, shared the way the reducer is: the API guards with
+// it and the ward console applies it before the server answers (`FR-BED-02`).
+export {
+  applyLocal,
+  canApply,
+  canForecastDischarge,
+  canReceiveTransfer,
+  effectiveState,
+  holdLapsed,
+  outcomeOf,
+  ADMISSION_SOURCES,
+  BED_ACTIONS,
+  BED_EVENT_TYPES,
+  HOLD_MINUTE_CHOICES,
+  MAX_HOLD_MINUTES,
+  type AdmissionSource,
+  type BedAction,
+  type BedActionContext,
+  type BedEventType,
+  type BedGuardCode,
+  type BedGuardResult,
+  type BedView,
+  type LocalBedChange,
+  type WardView,
+} from './beds/board.js';
+
+export {
+  forecastTomorrow,
+  mirrorMismatches,
+  nextDay,
+  tallyByKind,
+  type KindForecast,
+  type KindTally,
+  type PublicCapacity,
+} from './beds/capacity.js';
+
 // --- Validation schemas ----------------------------------------------------
 //
 // Shared with the client (BACKEND.md §0): the console builds its offline queue
@@ -111,7 +149,9 @@ export * from './schemas/queue.schema.js';
 export * from './schemas/sync.schema.js';
 export * from './schemas/booking.schema.js';
 export * from './schemas/clinical.schema.js';
+export * from './schemas/bed.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';
 export * as time from './util/time.js';
+export { BD_MOBILE, normaliseBdMobile } from './util/phone.js';

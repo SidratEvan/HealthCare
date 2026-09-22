@@ -13,7 +13,7 @@
  * those here would be re-implementing the queue.
  */
 
-import type { Eta, QueueState } from '@platform/domain';
+import type { BedKind, Eta, PublicCapacity, QueueState } from '@platform/domain';
 
 export interface HospitalCard {
   readonly id: string;
@@ -29,6 +29,12 @@ export interface HospitalCard {
   readonly doctorCount: number | null;
   readonly sittingNow: number;
   readonly openSerialsToday: number;
+  /**
+   * The published bed figures (`FR-PAT-14`), from `v_public_hospital_capacity`.
+   * Each kind carries its own `asOf`; a hospital with no inpatient beds has
+   * `bedTotal` 0 and an empty `byKind`, which is not the same as none free.
+   */
+  readonly beds: PublicCapacity | null;
 }
 
 /**
@@ -227,4 +233,25 @@ export interface AccessView {
 export interface AccessLog {
   readonly consents: readonly ConsentGrant[];
   readonly views: readonly AccessView[];
+}
+
+/**
+ * A family's view of their bed request (`S-A-11` request status, `FR-PAT-52`).
+ *
+ * `state` already accounts for a hold that has run out: the server says
+ * `expired` the moment the hold lapses, whether or not the ward has opened its
+ * board since.
+ */
+export interface BedRequestView {
+  readonly id: string;
+  readonly state: 'requested' | 'held' | 'confirmed' | 'declined' | 'expired';
+  readonly bedKind: BedKind;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  readonly hospitalPhone: string | null;
+  readonly holdExpiresAt: string | null;
+  readonly respondedAt: string | null;
+  readonly createdAt: string;
+  readonly serverTs: string;
 }

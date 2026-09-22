@@ -7,9 +7,9 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/wallet` — step 13. The record a consultation leaves
-behind now reaches the patient's phone, and the patient decides who else sees
-it.
+Last updated: `feat/beds` — step 14. A ward keeps its beds true on a board,
+and the number a family sees on their phone is the one the ward's own screen
+says the app is showing.
 
 ---
 
@@ -31,7 +31,8 @@ it.
 | 11 | `feat/notifications` | merged — migration 0010, templates, the outbox, SMS/push adapters |
 | 12 | `feat/doctor-console` | merged — migration 0007, `S-B-05`, the visit record, `FR-DOC-10` + audit. **E-prescriptions dropped**; `PRD.md` §9/§24/§26 and `APP_FLOW.md` B2 edited to match |
 | 13 | `feat/wallet` | merged — `S-A-12`, the consent handshake (`BTN-A12-QR` → `BTN-B05-SCAN`), the access log and revoke. A pasted code stands in for the QR |
-| 14 | `feat/beds` | **next** — ward board, bed events, public capacity. Needs migration 0008 |
+| 14 | `feat/beds` | merged — migrations 0008 + 0012, `S-B-06` the ward board, `<CapacityMirror>`, `S-A-11` bed search and bed requests, the ward's half of `FR-OFF-01` |
+| 15 | `feat/emergency` | **next** — triage, search ranking, inbound alerts, ER console. `emergency_cases` already exists (0008) |
 
 Three unplanned branches after step 11:
 
@@ -82,12 +83,12 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 1715.
-`pnpm test:e2e` reports 58, in Chromium, against the real API and the seeded
+`pnpm test` reports 2073.
+`pnpm test:e2e` reports 66, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
-`wallet.spec.ts`.
+`wallet.spec.ts`, 8 in `ward-board.spec.ts`.
 
 ### The demo API sleeps, and the console now says so
 
@@ -107,6 +108,79 @@ decision about a sleeping backend, not a test detail, which is why
 Worth knowing when demonstrating: **open the console once a minute before
 showing anyone.** Nothing is broken if the first load is slow; it is the free
 tier waking.
+
+### Step 14 — the ward board, and what the public is shown
+
+**The definition of done is a comparison, and the E2E makes it.**
+`ward-board.spec.ts` opens the ward board in one browser context and the
+patient's bed search in another, and holds `<CapacityMirror>`'s published
+figure and the phone's count to the same number before and after an admit.
+The API suite does the same arithmetically: the board's own tally
+(`tallyByKind` in `shared/domain`) equals the view's row, kind by kind.
+
+**Schema.** 0008 creates all seven tables DATABASE.md §7 names for it —
+`emergency_cases` and `referrals` are schema for steps 15–16, as 0007 was for
+the lab. 0012 holds one view, `v_public_hospital_capacity`; the other `v_*`
+views read tables later steps create, and a shipped migration is never edited,
+so each arrives with its own step. The columns DATABASE.md §2.5 lacked are now
+in it, each with the control that needed it.
+
+**One state machine, two users.** `shared/domain/src/beds/board.ts` is the
+API's guard and the console's optimistic update, the way the reducer is the
+queue's. A discharged bed goes to *cleaning* and a person frees it — no timer
+frees a bed nobody has looked at. A lapsed hold counts as free everywhere at
+once; the logged `RELEASE` (by nobody) is written when the board or the pending
+list is next read, and a bed about to be acted on is swept first. No scheduler
+was needed.
+
+**A hold is a real bed.** Holding a request reserves a bed of the kind asked
+for, so the public count knows about the promise. `release` refuses a bed held
+for a request — answer the request instead, so the family is told.
+
+**Names are read on purpose.** Tiles, broadcasts and the board response carry
+no patient. The bed panel and `LIST-B06-PENDING` do, each read writes
+`audit_log`, and both need the connection: a copy cached on a shared ward
+computer would be a read nobody logged.
+
+**Offline** (`FR-OFF-01`, the owner's choice of full writes): a separate bed
+outbox in `shared/client`, because the queue's is built around one session's
+batch and each bed route is replay-safe on its own. Oldest first; a refused
+action is dropped and rolled back; an unreachable one holds back everything
+after it. The mirror shows "the board says N — the app still shows M" while an
+admit is queued.
+
+**Bed requests.** `POST /bed-requests` is public like a guest booking, returns
+a signed status token (the `bed_request` audience on the guest-link secret),
+and the phone keeps it — no SMS is sent until the hospital answers. Hold and
+decline go out as `bed.request_held` / `bed.request_declined`. The status page
+counts a hold down in minutes and says "expired" the moment it runs out.
+
+**Demo data** (`FR-DEM-04`). 29 wards and 170 beds at the four facilities with
+ward staff; the diagnostic centre and the clinic have none and the app says "no
+inpatient beds", not "0 free". ICU at exactly Shapla, Padma and Karnaphuli
+(Buriganga lost its ICU on the owner's ruling); burn units at Padma and Jamuna.
+137 admissions (134 occupied beds, 3 just discharged into cleaning), four
+pending requests (one held, at Shapla's cabins). Staged for the emergency
+scenario: Padma's ICU full, one fresh free burn bed at Padma, two free burn beds
+at Jamuna that nobody has confirmed for hours. The commit that added the seed
+(`6626c87`) says 180 beds; 170 is the count.
+
+**Freshness decays, and that is the point.** A kind's stamp is its newest bed
+event. With the default ten-minute threshold, every ward turns amber ten minutes
+after a reset unless someone touches the board. Before showing the burn
+scenario, reset or tap a Padma burn bed.
+
+**How to show it.** Console → pick Shapla → বেড বোর্ড খুলুন. Admit into a free
+general bed at the desk; the mirror's general row drops by one, and a phone on
+`/beds?kind=general` shows the same number on its next read. For a request:
+phone → বেড অনুরোধ করুন → the ward's pending list → বেড রাখুন → a bed → a
+duration; the phone's status page counts down.
+
+**Supabase does not have any of this yet.** It needs `pnpm db:migrate`
+(0008, 0012 — additive) and then a reseed for the beds to exist, and the
+reseed is the destructive `db:reset`. Both touch the remote demo database, so
+both are the owner's to run (`ALLOW_REMOTE_DB=1`, plus
+`ALLOW_DESTRUCTIVE_DB=1` for the reset).
 
 ### Step 13 — the wallet, and consent
 
@@ -239,9 +313,9 @@ holds the records in `localStorage`, tokens included — the token is already in
 SMS on the same phone, is scoped to one booking, and expires. When Supabase Auth
 lands, that file becomes a call to `GET /me/bookings`.
 
-**Five tabs lead to screens that are not built** — profile (`S-A-19`), beds
-(step 14), ambulance and blood (step 17), emergency (step 15). Records was the
-sixth until step 13. Each says what will be there and why it is not, rather than being
+**Four tabs lead to screens that are not built** — profile (`S-A-19`), ambulance
+and blood (step 17), emergency (step 15). Records was the fifth until step 13,
+and beds the sixth until step 14. Each says what will be there and why it is not, rather than being
 hidden, greyed out, or a dead link. Hiding them would move the bar as the
 product grows and teach the wrong muscle memory.
 
@@ -470,9 +544,10 @@ database.
 
 ## Open decisions
 
-Eight are open questions, each implemented one way and flagged rather than
-settled silently; all eight need an owner's ruling. One more is recorded as
-settled because the answer changed the tree.
+Each is implemented one way and flagged rather than settled silently, and
+needs an owner's ruling. Number 7 is recorded as settled because the answer
+changed the tree; 8 and 9 are the owner's and are not code. They are grouped by
+the step that raised them, so the numbering is not contiguous in the file.
 
 1. **`FR-QUE-20` grace period.** "2 patients or 15 minutes, whichever is longer"
    is implemented as the longer of *two patients' time at the current rate* and
@@ -569,14 +644,15 @@ Raised while building the app shell (`feat/app-shell`):
    free beds and ICU as well. What is built is the list, the doctor count, who
    is sitting now, serials open today, and freshness. Distance already works
    when a position is passed (`?lat=&lng=`) but nothing asks for one, because
-   `S-A-01` location permission is not built. Beds and ICU need migration 0012,
-   which is step 14.
+   `S-A-01` location permission is not built. Free beds and ICU, each with
+   their own age, joined the card at step 14.
 
 17. **`S-A-05h` exists only as its ডাক্তার tab, inside the booking flow.** The
    document gives it four tabs (ডাক্তার / বেড / টেস্ট / জরুরি), a header of
    bed, ICU and ER-wait stats, and `BTN-A05H-DIRECTIONS` and `-CALL`. There is
    no standalone hospital detail route; a hospital card goes straight to the
-   doctor list as a step of `/book`. The three other tabs are steps 14 and 17.
+   doctor list as a step of `/book`. The বেড tab's content is `S-A-11` (step 14);
+   টেস্ট is step 17 and জরুরি step 15.
    `S-A-06d` Doctor detail is likewise skipped — a doctor row goes straight to
    the session picker, which the document allows as `BTN-A05H-BOOK-<doctorId>`'s
    "fast path".
@@ -682,6 +758,58 @@ Raised while building the wallet (step 13):
    doctor-scoped, for the same reason as decision 23: nothing joins a console
    account to a `doctors` row.
 
+Raised while building the bed board (step 14):
+
+30. **Bed-request answers ignore quiet hours.** `FR-NOT-07` exempts emergency
+   and queue events; nothing says a bed request's answer is either. It is
+   exempt anyway (`ALWAYS_OVERRIDES_QUIET_HOURS` gains `bed`): a hold is
+   measured in minutes, and a "your bed is held until 11:30 PM" text deferred
+   to seven the next morning is a bed lost without being told.
+
+31. **`bed.request_result` became two keys**, `bed.request_held` and
+   `bed.request_declined`. One body with the outcome passed in would put copy
+   outside the template table. BACKEND.md §8 is updated.
+
+32. **Freshness means "the ward last told us something about this kind of
+   bed".** There is no "the board is still right" action, so a ward whose beds
+   genuinely have not changed in an hour looks stale. That is honest but may be
+   harsh on a quiet ward; a confirm-the-board heartbeat would be a product
+   decision (and a new event type).
+
+33. **Inpatients share the two hundred seeded patients** (`FR-DEM-03`). Nearly
+   all of them hold a serial today, so some inpatients also sit in today's OPD
+   queues — the pitch session's patients included. Tiles show no names, so it is
+   only visible in the bed panel. The alternative, a second population of
+   inpatients, would contradict the count `FR-DEM-03` states.
+
+34. **A bed request needs no OTP** — `FR-GST-03` is deferred with the rest of
+   authentication. The request is rate-limited by nothing but one open request
+   per patient per hospital. Worth a rate limit before a real deployment.
+
+35. **The patient's bed search polls every thirty seconds.** There is no public
+   realtime room (the board room is staff-only and sockets require a token), so
+   "instantly" (`FR-BED-02`) is true of the published figure and of the ward's
+   screen, and within thirty seconds of the phone's. An anonymous read-only
+   capacity room would close the gap; it would also be the first
+   unauthenticated socket, which is a security decision.
+
+36. **"Two taps at most" (`FR-BED-02`) is counted from the open bed panel.**
+   Counting the tile tap too, a discharge is three: tile, action, and the
+   confirmation `GR-01` requires. The two requirements cannot both hold
+   literally.
+
+37. **Both consoles' offline outboxes live in memory.** `createDexieStore` exists
+   and neither console uses it, so a reload with actions queued loses them. The
+   reception console has always been this way; the ward board matches it rather
+   than being the only one that differs. Wiring Dexie in is a small change for
+   both.
+
+38. **Found, not fixed: three freshness lines drop the word "minutes".** The
+   reception console, the doctor console and the booking flow's hospital list
+   pass a bare number into `updatedAgo`, so they read "হালনাগাদ ৩ আগে". The live
+   serial screen and every step-14 screen append মিনিট. Out of this step's
+   scope; a one-line `fix/` branch each.
+
 Two are the owner's and are not code:
 
 8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
@@ -780,10 +908,10 @@ Turbopack is substantially faster and this is the only thing holding it off.
   so nothing renders it yet. It holds no credential and calls no endpoint — it
   is the input primitive, and Supabase's flow will need exactly this box.
 
-- **Two signature components (`FRONTEND.md` §6) remain.** `<FreshnessLine>`,
-  `<QueueTable>` and `<LiveSerialCard>` are built and rendering. `<BedTile>`
-  and `<CapacityMirror>` are step 14; `<DelaySheet>` lands with the delay flow
-  it belongs to — see the next item.
+- **One signature component (`FRONTEND.md` §6) remains.** `<FreshnessLine>`,
+  `<QueueTable>`, `<LiveSerialCard>`, `<BedTile>` and `<CapacityMirror>` are
+  built and rendering; `<DelaySheet>` lands with the delay flow it belongs to —
+  see the next item.
 
 - **Tailwind is v4 and compiles in both apps.** The v3-style JS preset was
   replaced by `@theme inline` in `shared/ui/src/styles.css`, which maps every
@@ -799,12 +927,11 @@ Turbopack is substantially faster and this is the only thing holding it off.
   and a booking returns a signed guest tracking link. Requirements not covered
   in this version: `FR-PAT-01`, `FR-PAT-04`, `FR-GST-03/04/09/12`, `FR-SEC-05`,
   `FR-SEC-06`.
-- **`FR-DEM-04` and `FR-DEM-05` are not covered.** `seed_05_beds` needs
-  migration 0008 (`wards`, `beds`, `bed_events`) and `seed_06_ancillary` needs
-  0011 (`ambulances`, `blood_donors`, `pharmacy_stock`). Both files exist and
-  declare what they are waiting for; the seed runner checks each module's
-  tables before calling it and prints the skip with the migration name. They
-  fill in at steps 14 and 17, in the branches that render them.
+- **`FR-DEM-05` is not covered.** `seed_06_ancillary` needs 0011
+  (`ambulances`, `blood_donors`, `pharmacy_stock`). The file exists and declares
+  what it is waiting for; the seed runner checks its tables before calling it and
+  prints the skip with the migration name. It fills in at step 17. `FR-DEM-04`
+  (beds) is covered as of step 14.
 - **`seed_04_history` defers prescriptions and reports** to migration 0007. It
   writes the half the schema holds — past sessions, `done` bookings with
   measured consultation lengths, and the event log behind them — which is what

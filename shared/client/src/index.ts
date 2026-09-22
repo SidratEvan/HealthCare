@@ -23,6 +23,18 @@ export {
 export { createDexieStore, openConsoleDatabase } from './offline/store.dexie.js';
 
 export {
+  BedOutbox,
+  createMemoryBedStore,
+  type BedActionStore,
+  type BedFlushOutcome,
+  type BedSendOutcome,
+  type BedSender,
+  type PendingBedAction,
+} from './offline/beds.js';
+
+export { openHospitalChannel, type HospitalChannelOptions } from './realtime/hospital.js';
+
+export {
   ApiClient,
   ApiError,
   NetworkError,

@@ -117,7 +117,12 @@ test.describe('NAV-A the bottom navigation', () => {
   });
 
   test('the quick tiles all reach a screen (S-A-02)', async ({ page }) => {
-    for (const path of ['beds', 'ambulance', 'blood']) {
+    // Beds became a real screen at step 14 (`S-A-11`); ambulance and blood are
+    // step 17 and still say what will be there.
+    await page.goto(`${PATIENT}/beds`);
+    await expect(page.getByTestId('bed-search')).toBeVisible();
+
+    for (const path of ['ambulance', 'blood']) {
       await page.goto(`${PATIENT}/${path}`);
       await expect(page.getByTestId('not-built')).toBeVisible();
     }

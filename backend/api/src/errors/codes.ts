@@ -46,6 +46,18 @@ export const ERROR_CODES = {
   QUEUE_CONFLICT: { status: 409, message: 'Another counter has already advanced this queue.' },
   QUEUE_GUARD_FAILED: { status: 422, message: 'That queue action is not allowed yet.' },
 
+  // --- Beds (FR-BED-01, FR-BED-02) ----------------------------------------
+  //
+  // Two codes, split the way the queue's are. A transition the bed's current
+  // state does not allow is a 422 — the same request will fail however many
+  // times it is sent. A race lost to another console, or a patient already in
+  // another bed, is a 409. An offline ward console rolls back either one.
+  BED_TRANSITION_INVALID: {
+    status: 422,
+    message: 'That bed cannot do that from its current state.',
+  },
+  BED_CONFLICT: { status: 409, message: 'Another change to this bed or patient got there first.' },
+
   // `FR-PAT-63`. Expired, forged and never-real share one code on purpose: a
   // caller guessing at consent codes must not learn which guess was closer.
   CONSENT_CODE_INVALID: { status: 400, message: 'That code has expired or is not valid.' },
