@@ -754,8 +754,9 @@ database.
 
 Each is implemented one way and flagged rather than settled silently, and
 needs an owner's ruling. Number 7 is recorded as settled because the answer
-changed the tree; 8 and 9 are the owner's and are not code. They are grouped by
-the step that raised them, so the numbering is not contiguous in the file.
+changed the tree; 8 and 9 are settled too and are described at the end of this
+section — closed, and not to be raised. They are grouped by the step that
+raised them, so the numbering is not contiguous in the file.
 
 1. **`FR-QUE-20` grace period.** "2 patients or 15 minutes, whichever is longer"
    is implemented as the longer of *two patients' time at the current rate* and
@@ -1104,16 +1105,13 @@ recorded in the step 16 notes above. These are the ones that were not:
    answers would strand the case forever. The control is added to B4 rather
    than the rule relaxed.
 
-Two are the owner's and are not code:
-
-8. **Repository visibility.** It is public. Commit `69c2d2e` still contains the
-   commercial strategy that `9697d43` removed from the working tree — deleting a
-   file does not remove it from history. Either make the repository private, or
-   rewrite history and force-push.
-9. **Rotate the Supabase credentials.** The database password and the
-   `sb_secret_…` key were pasted into a chat transcript. Nothing references the
-   secret key yet, so rotating it is free; rotating the password means
-   re-encoding `DATABASE_URL`.
+Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
+be raised again**, in a session or in a report. They were repository
+visibility and credential rotation. The owner knows the facts and the
+trade-offs, has decided, and asked directly that neither be brought up again.
+They are recorded here as closed only so that a fresh session does not
+rediscover them and start the conversation over; nothing about either is
+outstanding, and nothing about either needs mentioning.
 
 ---
 
