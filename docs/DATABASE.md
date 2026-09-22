@@ -313,6 +313,10 @@ Checks make each state carry its stamps: an alert says when it was sent, an ackn
 
 #### `referrals`
 `id`, `from_hospital_id`, `to_hospital_id`, `emergency_case_id` nullable, `patient_id` nullable, `required_capability` capability_kind, `summary` jsonb, `state` referral_state, `sent_at`, `seen_at`, `responded_at`, `arrived_at`, `decline_reason`.
+Added by migration 0017 (step 16, owner's ruling 2026-09-22): `required_capability` becomes nullable and `required_bed_kind` bed_kind joins it — a referral asks for a capability, a kind of free bed ("our ICU is full"), or both, never neither; `arrived_case_id` (the case the receiving ER opened when the person arrived — `emergency_case_id` is the sending ER's); `responded_by` (who accepted or declined); `closed_at` (null exactly while `sent`, `seen` or `accepted`); `idempotency_key` **U** (a replayed send finds the referral it made).
+`summary` is `{problem, triage, ageYears, sex, note}` — what the sending case says, and a note of at most 500 characters. It names nobody, and the family's number stays with the ER it was given to.
+Composite keys hold `(emergency_case_id, from_hospital_id)` and `(arrived_case_id, to_hospital_id)` to `emergency_cases (id, hospital_id)`, so a case is referred only by the ER it is at and an arrival is filed only at the ER that received it. Checks make each state carry its stamps (an answer is seen first; an arrival names its case; a reason if and only if declined) and keep the timeline in order. **U:** one open referral per case — two ERs getting ready for one person is a bay held for nobody.
+The sending ER holds the case until the receiving ER records the arrival; that one act opens the receiving case and closes the sending one as `referred` (which requires an arrival, `emergency_cases_referred_after_arrival`).
 
 ---
 
@@ -462,6 +466,7 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0015_indexes.sql               -- non-PK indexes gathered in one place
     0016_emergency_intake.sql      -- step 15: emergency_cases columns and 'declined' (§2.5). Numbered
                                    -- past 0014/0015, which keep their numbers and land later
+    0017_referrals.sql             -- step 16: referrals columns, keys and stamps (§2.5)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities (FR-DEM-01)
