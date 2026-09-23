@@ -88,10 +88,7 @@ export interface LossAndRecovery {
   readonly netLossPoisha: number;
 }
 
-export function lossAndRecovery(
-  noShows: NoShowTotals,
-  recovery: RecoveryTotals,
-): LossAndRecovery {
+export function lossAndRecovery(noShows: NoShowTotals, recovery: RecoveryTotals): LossAndRecovery {
   // Clamped at zero because the two figures come from different tables and a
   // refund landing between the two queries could make prepaid momentarily
   // exceed forgone. A negative loss is not a thing a director can read.

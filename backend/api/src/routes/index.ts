@@ -13,6 +13,7 @@
 
 import { Router } from 'express';
 
+import { adminRoutes } from './admin.routes.js';
 import { bedRoutes } from './bed.routes.js';
 import { bookingRoutes } from './booking.routes.js';
 import { clinicalRoutes } from './clinical.routes.js';
@@ -73,6 +74,10 @@ export function buildApiRouter(): Router {
   // Money (step 18). Paying is the patient's, refunding and settling the
   // administrator's.
   router.use(paymentRoutes);
+  // The dashboard (step 19). No hospital in the path: these reads answer
+  // everything about a facility at once, so the scope comes off the principal
+  // and a caller cannot name a facility at all.
+  router.use(adminRoutes);
   // Provider callbacks. No token, because a provider has none of ours — the
   // signature is the authentication, and it is checked before anything else.
   router.use(webhookRoutes);

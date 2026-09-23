@@ -86,10 +86,7 @@ describe('what the standby list won back', () => {
   it('has no rate to report on a day with no no-shows', () => {
     // Null, not zero. A clean day did not fail at recovery; there was nothing
     // to recover, and 0% on the screen would read as a broken waitlist.
-    const figures = lossAndRecovery(
-      { count: 0, forgonePoisha: 0, prepaidPoisha: 0 },
-      recovery(),
-    );
+    const figures = lossAndRecovery({ count: 0, forgonePoisha: 0, prepaidPoisha: 0 }, recovery());
 
     expect(figures.recoveryRate).toBeNull();
     expect(figures.acceptanceRate).toBeNull();

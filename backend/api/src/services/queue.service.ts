@@ -34,6 +34,8 @@
  * so the log is attributable in the meantime (`FR-QUE-04`).
  */
 
+import { createHash } from 'node:crypto';
+
 import {
   computeEtas,
   continueReplay,
@@ -445,7 +447,8 @@ export async function acceptSlot(input: {
 
     // The reduced state, not the roster: `status` here is what the event log
     // says the booking came to, which is the same thing the guard just read.
-    const freed = offer.freedBookingId === null ? null : findEntry(before, id(offer.freedBookingId));
+    const freed =
+      offer.freedBookingId === null ? null : findEntry(before, id(offer.freedBookingId));
 
     const serving = nowServing(before);
     const passed = serving === null ? 0 : serving.serial;
@@ -524,8 +527,9 @@ export async function expireLapsedOffers(sessionId: string, actor: QueueActor): 
         payload: { offerId: offer.offerId },
         actor,
         // Derived from the offer, so two consoles noticing the same lapse in
-        // the same second record it once.
-        clientEventId: `expire:${offer.offerId}`,
+        // the same second record it once. `queue_events.client_event_id` is a
+        // uuid column, so it has to *be* one rather than merely be unique.
+        clientEventId: expiryKey(offer.offerId),
       });
     } catch (cause: unknown) {
       // A lapse that could not be recorded is not worth failing the read it
@@ -536,6 +540,41 @@ export async function expireLapsedOffers(sessionId: string, actor: QueueActor): 
   }
 
   return lapsed.length;
+}
+
+/**
+ * The idempotency key for recording that one offer lapsed.
+ *
+ * A UUIDv5 over a fixed namespace, which makes it a pure function of the offer
+ * — two consoles noticing the same lapse in the same second produce the same
+ * key, and the second append is recognised as the replay it is rather than
+ * writing a second fact about one event into an append-only log.
+ *
+ * Built by hand because Node has no v5 and a dependency for sixteen bytes of
+ * hashing is not worth asking for (`CLAUDE.md` §7). The shape is RFC 4122
+ * §4.3: SHA-1 of namespace-plus-name, version nibble set to 5, variant bits to
+ * 10.
+ */
+const EXPIRY_NAMESPACE = 'a1b0f2c4-5d6e-4f70-8a91-2b3c4d5e6f70';
+
+export function expiryKey(offerId: string): string {
+  const namespace = Buffer.from(EXPIRY_NAMESPACE.replace(/-/g, ''), 'hex');
+  const hash = createHash('sha1')
+    .update(Buffer.concat([namespace, Buffer.from(offerId, 'utf8')]))
+    .digest();
+
+  const bytes = Uint8Array.prototype.slice.call(hash, 0, 16);
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+
+  const hex = Buffer.from(bytes).toString('hex');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join('-');
 }
 
 /** One offer, or a 404. The controller needs its session to scope-check. */

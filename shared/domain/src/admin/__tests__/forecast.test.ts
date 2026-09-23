@@ -8,11 +8,7 @@ function past(overrides: Partial<HistoricalVolume> = {}): HistoricalVolume {
 
 describe('the same weekday predicts the same weekday', () => {
   it('averages past sessions in that day-and-slot', () => {
-    const [point] = forecastVolume([
-      past({ seen: 28 }),
-      past({ seen: 32 }),
-      past({ seen: 30 }),
-    ]);
+    const [point] = forecastVolume([past({ seen: 28 }), past({ seen: 32 }), past({ seen: 30 })]);
 
     expect(point?.expected).toBe(30);
     expect(point?.observations).toBe(3);

@@ -516,7 +516,5 @@ export function canAcceptSlot(state: QueueState, offerId: string, now: Timestamp
 
 /** Offers whose window has closed but which nothing has recorded as expired. */
 export function lapsedOffers(state: QueueState, now: Timestamp): readonly SlotOfferState[] {
-  return pendingOffers(state).filter(
-    (offer) => differenceInSeconds(offer.expiresAt, now) <= 0,
-  );
+  return pendingOffers(state).filter((offer) => differenceInSeconds(offer.expiresAt, now) <= 0);
 }

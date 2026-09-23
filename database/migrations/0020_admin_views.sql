@@ -191,6 +191,45 @@ SELECT h.id AS hospital_id,
 -- refresh from blocking every dashboard read behind it.
 CREATE UNIQUE INDEX v_admin_daily_key ON v_admin_daily (hospital_id, session_date);
 
+-- ---------------------------------------------------------------------------
+-- analytics_refresh — when each derived object was last rebuilt
+--
+-- Every live figure in this product carries its age (`PRD.md` §3.2,
+-- `FR-OFF-03`), and a materialised view is the one place where the age of the
+-- *data* and the age of the *answer* come apart: rows can be a minute old and
+-- the snapshot an hour old, and only the second is what the screen is showing.
+--
+-- PostgreSQL records no last-refreshed time for a materialised view, so it has
+-- to be written down. Two alternatives were rejected: a `now()` column inside
+-- the view is rewritten by every refresh, which makes CONCURRENTLY's row diff
+-- match nothing and rewrite the whole table each time; and inferring age from
+-- the newest row in the data answers a different question, because a quiet
+-- afternoon would make a stale snapshot look fresh.
+--
+-- One row per object, written in the same transaction as the refresh, so the
+-- stamp cannot claim a rebuild that rolled back.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE analytics_refresh (
+  -- A uuid key on a table whose natural key is the view's name, because
+  -- `DB-P9` has no exceptions but `bookings.serial_number`. The name is unique
+  -- and is what the upsert conflicts on; it is simply not the primary key.
+  id           uuid        PRIMARY KEY DEFAULT uuid_generate_v7(),
+  view_name    text        NOT NULL UNIQUE,
+  refreshed_at timestamptz NOT NULL DEFAULT now(),
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_analytics_refresh_touch
+  BEFORE UPDATE ON analytics_refresh
+  FOR EACH ROW EXECUTE FUNCTION fn_touch_updated_at();
+
+ALTER TABLE analytics_refresh ENABLE ROW LEVEL SECURITY;
+
+COMMENT ON TABLE analytics_refresh IS
+  'When each materialised view was last rebuilt, so S-B-10 can state the age of the snapshot rather than the age of the data. Written in the refresh transaction.';
+
 COMMENT ON MATERIALIZED VIEW v_admin_daily IS
   'Daily aggregates per hospital for S-B-10 (FR-ADM-01, FR-ADM-02, FR-ADM-04, FR-ADM-05, FR-ADM-09). Refreshed on read past five minutes by admin.service; no scheduler exists in this version. Contains no patient identifier.';
 
