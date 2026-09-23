@@ -194,6 +194,7 @@ export async function writeProjections(
     entry.calledAt,
     entry.doneAt,
     entry.arrivedAt,
+    entry.quotedWaitMinutes,
     entry.consultSeconds,
     entry.cancelled?.reason ?? null,
   ]);
@@ -201,8 +202,8 @@ export async function writeProjections(
   if (settled.length > 0) {
     const tuples = settled
       .map((_, index) => {
-        const base = index * 7;
-        return `($${String(base + 1)}::uuid, $${String(base + 2)}::booking_status, $${String(base + 3)}::timestamptz, $${String(base + 4)}::timestamptz, $${String(base + 5)}::timestamptz, $${String(base + 6)}::integer, $${String(base + 7)}::text)`;
+        const base = index * 8;
+        return `($${String(base + 1)}::uuid, $${String(base + 2)}::booking_status, $${String(base + 3)}::timestamptz, $${String(base + 4)}::timestamptz, $${String(base + 5)}::timestamptz, $${String(base + 6)}::integer, $${String(base + 7)}::integer, $${String(base + 8)}::text)`;
       })
       .join(', ');
 
@@ -216,10 +217,12 @@ export async function writeProjections(
               called_at        = v.called_at,
               done_at          = v.done_at,
               arrived_at       = v.arrived_at,
+              quoted_wait_minutes = v.quoted_wait_minutes,
               consult_seconds  = v.consult_seconds,
               cancelled_reason = COALESCE(v.cancelled_reason, b.cancelled_reason)
          FROM (VALUES ${tuples})
-              AS v (id, status, called_at, done_at, arrived_at, consult_seconds, cancelled_reason)
+              AS v (id, status, called_at, done_at, arrived_at, quoted_wait_minutes,
+                    consult_seconds, cancelled_reason)
         WHERE b.id = v.id`,
       settled.flat(),
     );

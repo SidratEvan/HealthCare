@@ -37,6 +37,7 @@
 
 import {
   clampConsultSeconds,
+  MAX_QUOTED_WAIT_MINUTES,
   id,
   isSpecialtyCode,
   serial as asSerial,
@@ -92,6 +93,9 @@ const IN_CHAMBER_MINUTES = 4;
 
 /** The gap between one consultation ending and the next being called. */
 const TURNOVER_SECONDS = 40;
+
+/** How many of those still waiting are already checked in (`FR-REC-18`). */
+const CHECKED_IN_WAITING = 4;
 
 export const seed07DemoLive: SeedModule = {
   name: 'seed_07_demo_live',
@@ -494,11 +498,14 @@ function buildMidQueueLog(
     },
   ];
 
+  const called: { readonly booking: InsertedBooking; readonly calledAt: Timestamp }[] = [];
+
   for (const [index, booking] of done.entries()) {
     const endedAt = finishedAt[index];
     const consultSeconds = consults[index];
     if (endedAt === undefined || consultSeconds === undefined) continue;
     const calledAt = time.addSeconds(endedAt, -consultSeconds);
+    called.push({ booking, calledAt });
 
     drafts.push({
       type: 'PATIENT_CALLED',
@@ -548,8 +555,72 @@ function buildMidQueueLog(
     clientEventId: null,
     actor,
   });
+  called.push({ booking: inChamber, calledAt: calledAtSix });
+
+  drafts.push(...checkInDrafts(rng.stream('check-ins'), bookings, called, chamber, now, actor));
 
   return drafts.sort((a, b) => (a.serverTs < b.serverTs ? -1 : a.serverTs > b.serverTs ? 1 : 0));
+}
+
+/**
+ * Who reception has checked in so far this evening (`FR-REC-18`).
+ *
+ * Everybody already called was checked in before their turn, so the overview
+ * has real waits and real quotes to report for today. Of those still waiting,
+ * the next few in line are here — checked in within the last half hour and
+ * quoted what the queue estimated — and the rest are not yet, so reception
+ * opens with somebody to check in and a guest booking made during the pitch
+ * gets its own এসেছেন to tap. The late patient is not here, which is what
+ * late means.
+ */
+function checkInDrafts(
+  rng: Rng,
+  bookings: readonly InsertedBooking[],
+  called: readonly { readonly booking: InsertedBooking; readonly calledAt: Timestamp }[],
+  chamber: ChamberRow,
+  now: Timestamp,
+  actor: EventDraft['actor'],
+): EventDraft[] {
+  const quote = (minutes: number): number =>
+    Math.min(MAX_QUOTED_WAIT_MINUTES, Math.max(5, Math.round(minutes / 5) * 5));
+
+  const drafts: EventDraft[] = called.map(({ booking, calledAt }) => {
+    const waited = rng.int(10, 35);
+    const at = time.addMinutes(calledAt, -waited);
+    return {
+      type: 'PATIENT_ARRIVED',
+      payload: {
+        bookingId: id<BookingId>(booking.id),
+        quotedWaitMinutes: quote(waited + rng.int(-8, 10)),
+      },
+      serverTs: at,
+      clientTs: at,
+      clientEventId: null,
+      actor,
+    };
+  });
+
+  const waitingNow = bookings
+    .slice(DEMO_LIVE.doneThrough + 1)
+    .filter((booking) => booking.serial !== DEMO_LIVE.lateSerial)
+    .slice(0, CHECKED_IN_WAITING);
+
+  for (const [ahead, booking] of waitingNow.entries()) {
+    const at = time.addMinutes(now, -rng.int(3, 25));
+    drafts.push({
+      type: 'PATIENT_ARRIVED',
+      payload: {
+        bookingId: id<BookingId>(booking.id),
+        quotedWaitMinutes: quote((ahead + 1) * chamber.consultMinutes),
+      },
+      serverTs: at,
+      clientTs: at,
+      clientEventId: null,
+      actor,
+    });
+  }
+
+  return drafts;
 }
 
 /** Who declared the lateness: the account holder, or the guest themselves. */

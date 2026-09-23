@@ -36,6 +36,7 @@
 
 import {
   clampConsultSeconds,
+  MAX_QUOTED_WAIT_MINUTES,
   id,
   isSpecialtyCode,
   serial as asSerial,
@@ -111,6 +112,34 @@ const ADOPTION_DAYS_AGO = 12;
  */
 const LATE_BEFORE_ADOPTION: readonly [number, number] = [10, 55];
 const LATE_AFTER_ADOPTION: readonly [number, number] = [0, 22];
+
+/**
+ * Of the patients seen after a facility went live, how many reception checked
+ * in (`FR-REC-18`).
+ *
+ * Not all of them. A walk-up at a busy counter gets called before anybody taps
+ * এসেছেন, and a dashboard where every single wait was measured would look
+ * like a spreadsheet rather than a hospital. Before the go-live date nobody
+ * was checked in, because the button did not exist for them.
+ */
+const CHECK_IN_SHARE = 0.85;
+
+/**
+ * How long a checked-in patient sat before being called, in minutes.
+ *
+ * After go-live, because people were told when to come: the corridor wait the
+ * product exists to shorten, shortened rather than abolished.
+ */
+const CHECKED_IN_WAIT: readonly [number, number] = [8, 45];
+
+/**
+ * How far the counter's quote was from the wait that followed, in minutes.
+ *
+ * Skewed slightly generous, as a person at a counter is — and wide enough
+ * that about a quarter of quotes are broken, which is the figure worth a
+ * director's attention.
+ */
+const QUOTE_ERROR: readonly [number, number] = [-10, 12];
 
 /** Reasons a booking was cancelled, declared rather than invented per row. */
 const CANCELLATION_REASONS = [
@@ -209,7 +238,11 @@ export const seed04History: SeedModule = {
       );
 
       const staffId = receptionists.get(plan.chamber.hospitalSlug) ?? null;
-      const built = buildSessionLog(history, plan, inserted, outcomes, staffId);
+      // Its own stream, so adding check-ins moved none of the draws the rest of
+      // the history — the offers, the recoveries, the counts in STATUS — was
+      // built from.
+      const checkIns = history.stream(`check-ins-${String(index)}`);
+      const built = buildSessionLog(history, plan, inserted, outcomes, staffId, checkIns);
 
       // `FR-QUE-30` against a chair that a no-show left empty. Planned from
       // the log that has just been built, because who could have accepted
@@ -333,6 +366,8 @@ interface PastSession {
   readonly capacity: number;
   /** How late the doctor was, in minutes. Zero is rare and that is realistic. */
   readonly minutesLate: number;
+  /** After the facility went live on the queue (`FR-ADM-02`): check-ins exist. */
+  readonly live: boolean;
   readonly declaredDelay: number;
   readonly paused: boolean;
 }
@@ -372,6 +407,7 @@ function choosePastSessions(rng: Rng, all: readonly ChamberRow[], now: Timestamp
         plannedEnd: time.fromDhakaWallClock(date, hours.end[0], hours.end[1]),
         capacity: Math.max(20, Math.round((180 / chamber.consultMinutes) * 1.4)),
         minutesLate: rng.int(earliest, latest),
+        live,
         declaredDelay: rng.chance(live ? 0.12 : 0.28) ? rng.int(15, 30) : 0,
         paused: rng.chance(0.3),
       });
@@ -445,6 +481,7 @@ function buildSessionLog(
   bookings: readonly InsertedBooking[],
   outcomes: readonly Outcome[],
   staffId: string | null,
+  checkIns: Rng,
 ): SessionLog {
   const actor: EventDraft['actor'] =
     staffId === null
@@ -526,6 +563,29 @@ function buildSessionLog(
         );
         const calledAt = time.addSeconds(cursor, rng.int(20, 90));
         const doneAt = time.addSeconds(calledAt, consultSeconds);
+
+        // `FR-REC-18`: checked in at the counter some while before the call,
+        // and told roughly how long it would be.
+        if (plan.live && checkIns.chance(CHECK_IN_SHARE)) {
+          const waited = checkIns.int(CHECKED_IN_WAIT[0], CHECKED_IN_WAIT[1]);
+          const checkedInAt = time.addMinutes(calledAt, -waited);
+          const said = waited + checkIns.int(QUOTE_ERROR[0], QUOTE_ERROR[1]);
+          drafts.push({
+            type: 'PATIENT_ARRIVED',
+            payload: {
+              bookingId,
+              // Said in round numbers, as a person at a counter says it.
+              quotedWaitMinutes: Math.min(
+                MAX_QUOTED_WAIT_MINUTES,
+                Math.max(5, Math.round(said / 5) * 5),
+              ),
+            },
+            serverTs: checkedInAt,
+            clientTs: checkedInAt,
+            clientEventId: null,
+            actor,
+          });
+        }
 
         drafts.push({
           type: 'PATIENT_CALLED',
