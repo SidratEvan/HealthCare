@@ -207,6 +207,32 @@ export interface TrackingLinkView extends BookingView {
    * period". Null before the visit, which is most of the link's life.
    */
   readonly record: VisitRecord | null;
+  /**
+   * The tests ordered during this booking's consultation (`TAB-A12-REP`).
+   *
+   * Scoped to the booking, like `record`: a link is what one visit produced,
+   * never everything the person has ever been tested for.
+   */
+  readonly tests: readonly TestOrder[];
+}
+
+/** One ordered test, and its report once the lab has delivered one. */
+export interface TestOrder {
+  readonly id: string;
+  readonly testCode: string;
+  readonly testName: string;
+  readonly state:
+    'ordered' | 'sample_collected' | 'processing' | 'report_ready' | 'delivered' | 'cancelled';
+  readonly pricePoisha: number;
+  readonly orderedAt: string;
+  readonly readyAt: string | null;
+  readonly deliveredAt: string | null;
+  readonly report: {
+    readonly id: string;
+    readonly fileType: string | null;
+    readonly uploadedAt: string;
+    readonly deliveredToWalletAt: string | null;
+  } | null;
 }
 
 /** `BTN-A12-QR` — what the doctor types in, and how long it lasts. */

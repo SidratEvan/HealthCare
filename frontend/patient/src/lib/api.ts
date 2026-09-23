@@ -142,6 +142,20 @@ export async function openTrackingLink(token: string): Promise<TrackingLinkView>
 }
 
 /**
+ * A fresh signed URL for one of that booking's reports (`TAB-A12-REP`).
+ *
+ * Fetched on the tap rather than carried in the link's payload: a signed URL
+ * expires, and one minted when the screen loaded would be dead by the time
+ * somebody scrolled to it.
+ */
+export async function openReportFile(token: string, reportId: string): Promise<string> {
+  const result = await api.get<{ url: string }>(
+    `/guest/link/${encodeURIComponent(token)}/reports/${encodeURIComponent(reportId)}`,
+  );
+  return result.url;
+}
+
+/**
  * A client bound to one booking's access token.
  *
  * Built per call rather than held, because the token is exchanged again every

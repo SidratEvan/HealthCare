@@ -18,6 +18,8 @@
  * (CLAUDE.md §6).
  */
 
+import { randomUUID } from 'node:crypto';
+
 import { sql } from 'kysely';
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -30,6 +32,7 @@ import { signToken } from '../config/jwt.js';
 import { resetEmitter } from '../realtime/emit.js';
 import * as queueService from '../services/queue.service.js';
 
+import { labFixture, reportsOf, TINY_PDF_BASE64 } from './support/labFixture.js';
 import { createQueueFixture, type QueueFixture } from './support/queueFixture.js';
 import { IDS, bearer, patientToken, trackingLink } from './support/tokens.js';
 
@@ -484,5 +487,131 @@ describe('POST /bookings/:id/late — the patient declares it (FR-PAT-33)', () =
       .send({ expectedMinutes: 20 });
 
     expect(response.status).toBe(403);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `TAB-A12-REP`: the reports a link carries (`FR-GST-08`, `FR-LAB-03`)
+// ---------------------------------------------------------------------------
+
+describe('the tracking link carries the booking’s tests, and only those', () => {
+  /** Orders a test on a booking, works it to a report, and delivers it. */
+  async function testedBooking(): Promise<{
+    token: string;
+    bookingId: string;
+    reportId: string;
+  }> {
+    const booked = await bookAsGuest();
+    const shapla = await labFixture('Shapla General');
+
+    // A doctor has to have signed a visit before a test can hang off it.
+    const key = randomUUID();
+    await request(app)
+      .post(`${BASE}/visits`)
+      .set('Authorization', bearer(shapla.doctorToken))
+      .set('Idempotency-Key', key)
+      .send({ bookingId: booked.bookingId, diagnosisText: 'পরীক্ষা', idempotencyKey: key })
+      .expect((response) => {
+        expect([200, 201]).toContain(response.status);
+      });
+
+    const orderKey = randomUUID();
+    const ordered = await request(app)
+      .post(`${BASE}/test-orders`)
+      .set('Authorization', bearer(shapla.doctorToken))
+      .set('Idempotency-Key', orderKey)
+      .send({
+        bookingId: booked.bookingId,
+        tests: [{ testCode: 'CBC' }],
+        idempotencyKey: orderKey,
+      });
+    expect(ordered.status).toBe(201);
+
+    const orderId = (ordered.body as { data: { orders: { id: string }[] } }).data.orders[0]?.id;
+    if (orderId === undefined) throw new Error('no order was created');
+
+    for (const action of ['collect', 'process'] as const) {
+      await request(app)
+        .patch(`${BASE}/test-orders/${orderId}/state`)
+        .set('Authorization', bearer(shapla.labToken))
+        .set('Idempotency-Key', randomUUID())
+        .send({ action, idempotencyKey: randomUUID() })
+        .expect(200);
+    }
+
+    const uploadKey = randomUUID();
+    await request(app)
+      .post(`${BASE}/test-orders/${orderId}/report`)
+      .set('Authorization', bearer(shapla.labToken))
+      .set('Idempotency-Key', uploadKey)
+      .send({ fileType: 'application/pdf', content: TINY_PDF_BASE64, idempotencyKey: uploadKey })
+      .expect(201);
+
+    const [report] = await reportsOf(orderId);
+    if (report === undefined) throw new Error('no report was written');
+
+    return { token: booked.token, bookingId: booked.bookingId, reportId: report.id };
+  }
+
+  it('lists the tests this booking produced, with their delivered reports', async () => {
+    const { token } = await testedBooking();
+
+    const response = await request(app).get(`${BASE}/guest/link/${token}`).expect(200);
+    const tests = (
+      response.body as {
+        data: { tests: { testCode: string; state: string; report: { id: string } | null }[] };
+      }
+    ).data.tests;
+
+    expect(tests).toHaveLength(1);
+    expect(tests[0]?.testCode).toBe('CBC');
+    expect(tests[0]?.state).toBe('delivered');
+    expect(tests[0]?.report).not.toBeNull();
+  });
+
+  it('carries no tests for a booking whose consultation ordered none', async () => {
+    // Not an error and not an absence of reports — this person had no test.
+    const booked = await bookAsGuest();
+    const response = await request(app).get(`${BASE}/guest/link/${booked.token}`).expect(200);
+    expect((response.body as { data: { tests: unknown[] } }).data.tests).toEqual([]);
+  });
+
+  it('opens a report through the link that carried it', async () => {
+    const { token, reportId } = await testedBooking();
+
+    const response = await request(app)
+      .get(`${BASE}/guest/link/${token}/reports/${reportId}`)
+      .expect(200);
+
+    const url = (response.body as { data: { url: string } }).data.url;
+    expect(url).toContain('/files/');
+
+    // The URL it hands back actually serves the file.
+    const file = await request(app).get(`${BASE}${url}`);
+    expect(file.status).toBe(200);
+    expect(file.headers['content-type']).toContain('application/pdf');
+  });
+
+  it("refuses a report belonging to somebody else's visit", async () => {
+    // The whole point of scoping the lookup to the link's own booking: a live
+    // token must not become a key to another patient's results.
+    const mine = await bookAsGuest();
+    const theirs = await testedBooking();
+
+    await request(app)
+      .get(`${BASE}/guest/link/${mine.token}/reports/${theirs.reportId}`)
+      .expect(404);
+  });
+
+  it('refuses a report id that was never real, with the same 404', async () => {
+    const { token } = await testedBooking();
+    await request(app).get(`${BASE}/guest/link/${token}/reports/${randomUUID()}`).expect(404);
+  });
+
+  it('refuses an expired link before it looks at the report at all', async () => {
+    const { reportId } = await testedBooking();
+    await request(app)
+      .get(`${BASE}/guest/link/${'x'.repeat(43)}/reports/${reportId}`)
+      .expect(410);
   });
 });

@@ -7,7 +7,7 @@
  * demo runs on rather than a login (`FR-GST-05`).
  */
 
-import { trackingLinkParams } from '@platform/domain';
+import { trackingLinkParams, trackingReportParams } from '@platform/domain';
 
 import * as guest from '../services/guest.service.js';
 
@@ -17,4 +17,10 @@ import type { Request, Response } from 'express';
 export async function openTrackingLink(req: Request, res: Response): Promise<void> {
   const { token } = trackingLinkParams.parse(req.params);
   res.json({ ok: true, data: await guest.openTrackingLink(token) });
+}
+
+/** `GET /guest/link/:token/reports/:reportId` — `TAB-A12-REP` opens a report. */
+export async function reportUrl(req: Request, res: Response): Promise<void> {
+  const { token, reportId } = trackingReportParams.parse(req.params);
+  res.json({ ok: true, data: { url: await guest.reportUrl(token, reportId) } });
 }

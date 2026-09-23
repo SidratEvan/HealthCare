@@ -13,7 +13,7 @@
 
 import { Router } from 'express';
 
-import { trackingLinkParams } from '@platform/domain';
+import { trackingLinkParams, trackingReportParams } from '@platform/domain';
 
 import * as guest from '../controllers/guest.controller.js';
 import { validate } from '../middleware/validate.js';
@@ -24,4 +24,13 @@ guestRoutes.get(
   '/guest/link/:token',
   validate({ params: trackingLinkParams }),
   guest.openTrackingLink,
+);
+
+// The report behind one of that booking's tests (`TAB-A12-REP`, `FR-GST-08`).
+// Scoped to the link's own booking in the service: a live token must not open
+// a report from somebody else's visit.
+guestRoutes.get(
+  '/guest/link/:token/reports/:reportId',
+  validate({ params: trackingReportParams }),
+  guest.reportUrl,
 );

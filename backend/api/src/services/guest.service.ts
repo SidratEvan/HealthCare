@@ -29,12 +29,15 @@
 
 import { createHash } from 'node:crypto';
 
+import type { TestOrderView } from '@platform/domain';
+
 import { signToken } from '../config/jwt.js';
-import { AppError } from '../errors/AppError.js';
+import { AppError, notFound } from '../errors/AppError.js';
 import * as clinicalRepo from '../repositories/clinical.repo.js';
 import * as guestRepo from '../repositories/guest.repo.js';
 
 import * as bookingService from './booking.service.js';
+import * as lab from './lab.service.js';
 
 import type { BookingView } from './booking.service.js';
 import type { VisitRecord } from '../repositories/clinical.repo.js';
@@ -66,6 +69,17 @@ export interface TrackingLinkView extends BookingView {
    * not carry the second.
    */
   readonly record: VisitRecord | null;
+  /**
+   * The tests ordered during this booking's consultation, and their reports
+   * once the lab has delivered them (`FR-GST-08`, `FR-LAB-03`).
+   *
+   * Scoped to the booking for the same reason `record` is: a link is what one
+   * visit produced, not everything the person has ever been tested for, and
+   * an SMS that gets forwarded to relatives must not carry the second.
+   *
+   * Empty until a doctor ticks a chip, which is most of a link's life.
+   */
+  readonly tests: readonly TestOrderView[];
 }
 
 /**
@@ -87,6 +101,24 @@ const TOKEN_TTL_SECONDS = 15 * 60;
  * is how a guessing attack learns it is getting warmer. The person holding a
  * genuine link reads the same sentence either way — this link has done its job.
  */
+export async function reportUrl(token: string, reportId: string): Promise<string> {
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const link = await guestRepo.resolveTrackingToken(tokenHash);
+  if (link === null) throw new AppError('GUEST_LINK_EXPIRED');
+
+  // **The link's own booking, and nothing else.** A live token must not open
+  // a report belonging to somebody else's visit, so the report is looked up
+  // among this booking's orders rather than by id alone — an unknown id and
+  // another patient's id are the same 404 from outside.
+  const orders = await lab.ordersForBooking(link.bookingId);
+  const owned = orders.some((order) => order.report?.id === reportId);
+  if (!owned) throw notFound('report');
+
+  const url = await lab.reportUrl(reportId);
+  if (url === null) throw notFound('report');
+  return url;
+}
+
 export async function openTrackingLink(token: string): Promise<TrackingLinkView> {
   const tokenHash = createHash('sha256').update(token).digest('hex');
   const link = await guestRepo.resolveTrackingToken(tokenHash);
@@ -98,6 +130,7 @@ export async function openTrackingLink(token: string): Promise<TrackingLinkView>
   return {
     ...view,
     record: await clinicalRepo.findVisitForBooking(link.bookingId),
+    tests: await lab.ordersForBooking(link.bookingId),
     token: await signToken({
       kind: 'access',
       // `bookingId` is what scopes it: `requireBookingScope` refuses this

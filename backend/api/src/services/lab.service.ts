@@ -455,6 +455,34 @@ export async function openSignedFile(input: {
   return await storage().get(input.key);
 }
 
+/**
+ * A fresh signed URL for a stored report, or null when there is no such row.
+ *
+ * Minted per request rather than stored: `reports.file_url` holds the object
+ * key's signed URL as it was at upload, and a signature expires. Re-signing
+ * here is what keeps a report openable next week without making the key
+ * guessable in the meantime.
+ */
+export async function reportUrl(reportId: string): Promise<string | null> {
+  const file = await labRepo.findReportFile(reportId);
+  if (file === null) return null;
+  return await storage().signedUrl(keyFromUrl(file.fileUrl));
+}
+
+/**
+ * The object key inside a stored URL.
+ *
+ * The mock store writes `/files/<encoded key>?…`; a real bucket writes its
+ * own shape. Both are re-signed from the key, so this pulls it back out
+ * rather than keeping a second column that could disagree with the first.
+ */
+function keyFromUrl(fileUrl: string): string {
+  const path = fileUrl.split('?')[0] ?? fileUrl;
+  const marker = '/files/';
+  const at = path.indexOf(marker);
+  return at === -1 ? path : decodeURIComponent(path.slice(at + marker.length));
+}
+
 /** Locks an order and refuses one belonging to another hospital. */
 async function lockOwn(trx: Tx, orderId: string, actor: LabActor): Promise<TestOrderView> {
   const current = await labRepo.lockTestOrder(trx, orderId);
