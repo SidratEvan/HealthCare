@@ -269,7 +269,7 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 | Live status pill | — | চেম্বারে আছেন · এখন চলছে #12 / আসবেন ৫:০০ / আজ বসবেন না (`FR-PAT-13`), subscribed to the session channel while open |
 | Chamber schedule list | `LIST-A06D-SESSIONS` | Rows per session: day, time, hospital, serials left |
 | সিরিয়াল নিন | `BTN-A06D-BOOK` | → `S-A-07b` Session picker |
-| স্ট্যান্ডবাই তালিকায় যোগ | `BTN-A06D-STANDBY` | Visible only when a session is full → `POST /standby` (`FR-PAT-25`) |
+| স্ট্যান্ডবাই তালিকায় নাম দিন | `BTN-A06D-STANDBY` | Visible only when a session is full, beneath its card → `MOD-A06D-STANDBY` → `POST /sessions/:id/standby` → `S-A-08s` (`FR-PAT-25`) |
 | রোগীদের মতামত | `SEC-A06D-FEEDBACK` | Aggregate ratings, shown only above the volume threshold (`FR-PAT-83`) |
 
 ---
@@ -316,6 +316,19 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 ---
 
 ## A5. Live serial — the core screen
+
+**`MOD-A06D-STANDBY`** (in the booking flow, as a step): name, phone, age, sex (`FR-GST-02`), then one choice stated with its consequence — **এখনই পরিশোধ করুন — খালি হলেই সিরিয়াল আপনার** (bKash / Nagad / card; seated on sight; refunded in full if no serial comes, `FR-PAT-26`) or **পরে পরিশোধ — খালি হলে জানাব** (asked on the phone, 10 minutes to answer, `FR-PAT-27`). তালিকায় নাম দিন → `S-A-08s`.
+
+### `S-A-08s` Standby status (`FR-PAT-25`–`27`)
+
+Opened from the join, or from the SMS an offer or a seat sends; the signed status token in the URL is the place on the list. Polled every five seconds while anything can change.
+
+| State | Content / wiring |
+|---|---|
+| Waiting | How many are ahead; a badge saying whether they are seated on sight (paid) or asked here (not); তালিকা থেকে নাম তুলে নিন → confirm, stating that a prepayment comes back (`GR-01`) |
+| Offered | একটি সিরিয়াল খালি হয়েছে, minutes left to answer, payment choice as `SEG-A07C-PAY`. হ্যাঁ, সিরিয়াল নেব → `POST /standby/:token/accept` → seated. না, পরের জনকে দিন → `POST /standby/:token/decline` → the slot is offered to the next patient |
+| Seated | সিরিয়াল N আপনার, and লাইভ সিরিয়াল দেখুন → `S-A-08`. The tracking link is minted once, on the first read after the seat; a device that never saw it is told it went by SMS |
+| Left | That they left the list |
 
 ### `S-A-08` Live serial (`FR-PAT-30`–`38`)
 
@@ -938,7 +951,8 @@ directly, not published — the site's job is to get a decision-maker to
 | Doctor arrived / delay declared | `S-A-08` with the delay sheet |
 | Two patients away | `S-A-08` |
 | Called | `S-A-08` takeover |
-| Slot offered | `S-A-08` offer sheet with accept/decline and countdown |
+| Slot offered | `S-A-08s` offer, with accept/decline and countdown (`FR-PAT-27`); for somebody reception put on the list, the SMS says to ring the counter |
+| Slot seated (prepaid) | `S-A-08s` seated → `S-A-08` (`FR-PAT-26`) |
 | Report ready | `S-A-12` record detail |
 | Follow-up due | `S-A-07b` prefilled with the same doctor |
 | Bed request accepted | `S-A-11` request status |

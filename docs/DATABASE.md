@@ -275,7 +275,7 @@ Recurring chamber schedules: `id`, `doctor_hospital_id` **FK**, `weekday` int, `
 Rebuildable with `SELECT rebuild_queue_state(session_id)`.
 
 #### `standby_list` / `slot_offers` (`FR-QUE-30`)
-`standby_list`: `id`, `session_id`, `patient_id`, `contact_phone`, `position`, `created_at`, `removed_at`.
+`standby_list`: `id`, `session_id`, `patient_id`, `contact_phone`, `position`, `created_at`, `removed_at`, and from 0023 `guest_id` (the identity that joined from the app, null for a counter entry), `seated_booking_id` (the chair they were given; implies `removed_at`), `idempotency_key` **U** (`FR-PAT-25`).
 `slot_offers`: `id`, `session_id`, `freed_booking_id`, `offered_to_patient_id`, `offered_at`, `expires_at`, `accepted_at`, `declined_at`, `recovered_value_poisha`.
 
 ---
@@ -364,7 +364,7 @@ The sending ER holds the case until the receiving ER records the arrival; that o
 ### 2.6 Money
 
 #### `payments`
-`id`, `booking_id`/`bed_request_id`/`test_order_id`/`ambulance_request_id` (exactly one, CHECK), `payer_user_id`/`payer_guest_id`, `amount_poisha`, `platform_fee_poisha`, `method` payment_method, `state` payment_state, `provider_ref`, `idempotency_key` **U** (`FR-PAY-06`), `paid_at`, `refunded_poisha`, `refund_reason`, `refunded_at` (0009).
+`id`, `booking_id`/`bed_request_id`/`test_order_id`/`ambulance_request_id`/`standby_id` (exactly one, CHECK; `standby_id` from 0023 — a standby prepayment before there is a booking, moved to `booking_id` when the patient is seated, `FR-PAT-26`), `payer_user_id`/`payer_guest_id`, `amount_poisha`, `platform_fee_poisha`, `method` payment_method, `state` payment_state, `provider_ref`, `idempotency_key` **U** (`FR-PAY-06`), `paid_at`, `refunded_poisha`, `refund_reason`, `refunded_at` (0009).
 
 **Money is never edited, only added to.** `amount_poisha` and
 `platform_fee_poisha` are fixed at creation by a trigger, the way
@@ -539,6 +539,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- transaction may not use an enum value it added
     0022_check_in.sql              -- bookings.quoted_wait_minutes and the booking-scoped
                                    -- constraint extended to PATIENT_ARRIVED
+    0023_standby_self_serve.sql    -- payments.standby_id as a fifth subject; standby_list
+                                   -- guest_id, seated_booking_id, idempotency_key (FR-PAT-25..27)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities (FR-DEM-01)

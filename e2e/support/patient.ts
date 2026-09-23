@@ -47,3 +47,33 @@ export async function openLiveSerial(context: BrowserContext, trackingUrl: strin
   await expect(page.getByTestId('live-serial')).toBeVisible();
   return page;
 }
+
+/**
+ * Joins a full chamber's standby list through the booking flow
+ * (`BTN-A06D-STANDBY`, `FR-PAT-25`), and lands on its status page.
+ *
+ * `prepay` picks the ruling's first choice — pay now, seated on sight
+ * (`FR-PAT-26`) — or its second, asked on the phone (`FR-PAT-27`).
+ */
+export async function joinStandbyAsGuest(
+  page: Page,
+  session: ConsoleSession,
+  prepay: boolean,
+): Promise<void> {
+  await page.goto(`${PATIENT}/book?specialty=${session.departmentCode}`);
+
+  await page.getByTestId(`hospital-${session.hospitalId}`).click();
+  await page.getByTestId(`doctor-${session.doctorId}`).click();
+  await page.getByTestId(`standby-join-${session.sessionId}`).click();
+
+  const form = page.getByTestId('standby-join');
+  await expect(form).toBeVisible();
+  await form.getByLabel('রোগীর নাম').fill('জাহানারা বেগম');
+  await form.getByLabel('মোবাইল নম্বর').fill(guestPhone());
+  await form.getByLabel('বয়স').fill('52');
+  await form.getByTestId(prepay ? 'standby-choice-prepay' : 'standby-choice-ask').click();
+  await form.getByTestId('standby-confirm').click();
+
+  await expect(page).toHaveURL(/\/standby\?t=/);
+  await expect(page.getByTestId('standby-status')).toBeVisible();
+}

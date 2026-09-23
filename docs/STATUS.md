@@ -7,8 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/check-in`, after step 19 — reception checks a patient in
-and quotes a wait (decision 61, ruled 2026-09-23). Before that, `feat/admin-dashboard` — step 19. A hospital administrator opens
+Last updated: `feat/standby-self-serve`, after step 19 — patients join a full
+chamber's standby list from the app; prepaid are seated automatically,
+everybody else answers on their phone (decision 62, ruled 2026-09-23). Before
+that, `feat/check-in` — reception checks a patient in and quotes a wait
+(decision 61). Before that, `feat/admin-dashboard` — step 19. A hospital administrator opens
 `S-B-10` from the picker and sees what the facility did, what empty chairs
 cost and what the standby list won back — and reception can now give a freed
 chair to the standby list and record the yes, which is the tap that moves that
@@ -127,6 +130,60 @@ decision about a sleeping backend, not a test detail, which is why
 Worth knowing when demonstrating: **open the console once a minute before
 showing anyone.** Nothing is broken if the first load is slow; it is the free
 tier waking.
+
+### Standby from the phone (`feat/standby-self-serve`, after step 19)
+
+**The owner's ruling on decision 62** (2026-09-23): "prepaid gets it
+automatically". A patient joins a full chamber's standby list from the app
+(`FR-PAT-25`). If they pay when joining, the next chair reception offers is
+theirs with nobody asking (`FR-PAT-26`). If not, the offer reaches their phone
+and they say yes or no within ten minutes (`FR-PAT-27`). Reception keeps
+**গ্রহণ করেছেন** for somebody who rings the counter. `FR-PAT-26` and
+`FR-PAT-27` are new; `FR-PAT-25` is amended.
+
+**A payment before there is a booking.** `payments_one_subject` gains a fifth
+subject, `standby_id` (migration 0023). When the person is seated, the
+payment moves onto the booking it bought: the same money, now for the thing
+it paid for. From there every settlement, revenue and refund query that
+already reads bookings counts it. A prepayment for a chair that never came is
+owed back in full under a new reason, `standby_unseated`, when they leave the
+list or when the session ends. The amounts are never touched
+(`trg_payments_amount_locked`).
+
+**Seated on sight, in the offer's own transaction.** `offerFreedSlot` still
+records `SLOT_OFFERED` first, because the recovery figure counts offers made
+and taken (`FR-ADM-03`), then seats a prepaid person with `SLOT_ACCEPTED`
+under the same lock. Seating is one function (`seatOnOffer`) whoever
+accepts. Somebody who joined from the app gets a guest booking with a
+tracking link; somebody reception listed gets a counter booking, as before.
+Offers still go down the list in order: prepaid decides *how* a chair is
+taken, not *who* is next.
+
+**The place is a link.** A signed status token, the `standby` audience on the
+guest-link secret, scoped to one row (the arrangement a bed request has).
+`S-A-08s` polls it every five seconds. The seat's tracking link is minted
+once, on the first read after the seat, because a second mint would kill the
+link already in the SMS. A decline is `SLOT_EXPIRED` under the lapse key, and
+the chair goes straight to the next person.
+
+**Messages.** `queue.slot_offered_link` (answer here: link) for somebody who
+joined from the app, `queue.slot_seated` (serial N is yours: link) for a
+prepaid seat. The counter template stays for rows reception added.
+
+**Demo data.** On the pitch chamber, standby position 1 joined from the app
+and paid by bKash, so the first chair given away in the pitch seats them
+automatically. Positions 2 and 3 are counter entries. Today's other Shapla
+cardiology chamber is set to exactly the serials it holds, so the patient app
+shows it পূর্ণ with **স্ট্যান্ডবাই তালিকায় নাম দিন** beneath.
+
+**How to show it.** Phone: হৃদরোগ → শাপলা → the doctor who is not the pitch
+doctor → স্ট্যান্ডবাই তালিকায় নাম দিন → এখনই পরিশোধ করুন → তালিকায় নাম দিন.
+The status page says খালি হলে প্রথমেই আপনি. For the automatic seat on the
+pitch chamber: reception marks somebody absent and taps খালি সিরিয়াল দিন; the
+card shows it taken at once (position 1 prepaid). `standby.spec.ts` runs all
+three paths across two devices.
+
+**Supabase does not have 0021, 0022 or 0023 yet.**
 
 ### The check-in (`feat/check-in`, after step 19)
 
@@ -1719,8 +1776,11 @@ Raised while building the dashboard (step 19):
    headline. Until one is chosen, the wait tile says what is missing. Nothing
    on it is invented.
 
-62. **Reception records a standby acceptance; `BACKEND.md` §7 says the patient
-   does.** The table lists `POST /offers/:id/accept` as `user | guest`, and
+62. ~~**Reception records a standby acceptance; `BACKEND.md` §7 says the patient
+   does.**~~ **Settled 2026-09-23 and built** (`feat/standby-self-serve`,
+   below): the patient joins from the app; prepaid is seated automatically,
+   everybody else answers on their phone, and reception keeps its button for
+   somebody who rings. The original note follows. The table lists `POST /offers/:id/accept` as `user | guest`, and
    `APP_FLOW.md` D2 routes a slot offer to an `S-A-08` offer sheet. But a
    standby patient holds no booking, so they have no tracking link and no
    `S-A-08` to accept from. The route is `receptionist`, and the SMS

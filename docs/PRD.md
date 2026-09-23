@@ -245,7 +245,9 @@ Many people will never create an account. Guest mode is a first-class path, not 
 - `FR-PAT-22` Confirmation is delivered in-app **and** by SMS, containing hospital, doctor, date, serial number, and expected time window.
 - `FR-PAT-23` A patient can reschedule to another session or cancel; policy and any refund rule are stated before confirming.
 - `FR-PAT-24` The app prevents double-booking the same profile with the same doctor on the same day.
-- `FR-PAT-25` If a session is full, the patient may join a **standby list** and will be offered released slots automatically (see `FR-QUE-30`).
+- `FR-PAT-25` If a session is full, the patient may join a **standby list** from the app and will be offered released slots automatically (see `FR-QUE-30`). Joining asks what a guest booking asks (`FR-GST-02`) and returns a status link that is the patient's place on the list.
+- `FR-PAT-26` **Prepaid standby.** A patient may pay the consultation fee when joining. A prepaid patient is **seated automatically** when a slot is offered to them — nobody asks — and told by SMS and on the status link which serial is theirs. A prepayment for a slot that never comes is refunded in full, whether the patient leaves the list or the session ends. Owner's ruling, 2026-09-23.
+- `FR-PAT-27` **Answering an offer on the phone.** A patient who did not prepay receives the offer on their status link and by SMS, sees the minutes left, and answers yes (then pays as a booking is paid, `FR-PAT-20`) or no (the slot passes to the next patient). Reception may still record a yes for somebody who rings the counter (`FR-REC-30`). Owner's ruling, 2026-09-23.
 
 ### 7.4 Live serial (core)
 

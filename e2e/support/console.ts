@@ -319,6 +319,22 @@ export async function joinStandby(session: ConsoleSession, count: number): Promi
 }
 
 /**
+ * Fills the chamber: capacity lowered to the serials it already holds, so the
+ * patient app shows it পূর্ণ and offers its standby list (`FR-PAT-25`).
+ */
+export async function fillSession(session: ConsoleSession): Promise<void> {
+  await withClient(async (client) => {
+    await client.query(
+      `UPDATE sessions
+          SET capacity = (SELECT count(*) FROM bookings b
+                           WHERE b.session_id = sessions.id AND b.status <> 'cancelled')
+        WHERE id = $1`,
+      [session.sessionId],
+    );
+  });
+}
+
+/**
  * The seeded administrator at a hospital, as `S-B-10` would be opened by one.
  *
  * The same signed staff token the picker's `POST /demo/token` mints for the
