@@ -52,7 +52,9 @@ export type QueueGuardCode =
   | 'OFFER_OUTSTANDING'
   | 'UNKNOWN_OFFER'
   | 'OFFER_SETTLED'
-  | 'OFFER_EXPIRED';
+  | 'OFFER_EXPIRED'
+  | 'ALREADY_ARRIVED'
+  | 'QUOTE_OUT_OF_RANGE';
 
 export type GuardResult =
   | { readonly ok: true }
@@ -308,6 +310,61 @@ function turnReachedAt(state: QueueState, bookingId: BookingId): Timestamp | nul
 
   if (departures.length === 0) return null;
   return departures.reduce((latest, candidate) => (candidate > latest ? candidate : latest));
+}
+
+/**
+ * The longest wait a check-in may quote, in minutes (`FR-REC-18`).
+ *
+ * Eight hours is longer than any chamber. Past it the number is a typing
+ * error, and a patient told "480 minutes" by mistake would go home. The
+ * database holds the same bound (`bookings_quoted_wait_plausible`).
+ */
+export const MAX_QUOTED_WAIT_MINUTES = 480;
+
+/**
+ * Whether a patient may be checked in with this quote (`FR-REC-18`).
+ *
+ * Somebody booked, running late, or waiting without having been seen at the
+ * counter may be. Somebody in the chamber, already checked in, or whose booking
+ * is settled may not — a no-show who turns up is reinstated first
+ * (`FR-QUE-22`), which is a different decision with its own event.
+ */
+export function canCheckIn(
+  state: QueueState,
+  bookingId: BookingId,
+  quotedWaitMinutes: number,
+): GuardResult {
+  if (state.status === 'ended' || state.status === 'cancelled') {
+    return deny('SESSION_ENDED', 'This session has already ended.');
+  }
+
+  const entry = findEntry(state, bookingId);
+  if (entry === null) {
+    return deny('UNKNOWN_BOOKING', 'That booking is not in this session.');
+  }
+  if (
+    entry.status === 'done' ||
+    entry.status === 'cancelled' ||
+    entry.status === 'rescheduled' ||
+    entry.status === 'no_show'
+  ) {
+    return deny('BOOKING_SETTLED', 'That booking has already been settled.');
+  }
+  if (entry.status === 'in_chamber' || entry.arrivedAt !== null) {
+    return deny('ALREADY_ARRIVED', 'That patient is already here.');
+  }
+  if (
+    !Number.isInteger(quotedWaitMinutes) ||
+    quotedWaitMinutes < 0 ||
+    quotedWaitMinutes > MAX_QUOTED_WAIT_MINUTES
+  ) {
+    return deny(
+      'QUOTE_OUT_OF_RANGE',
+      `A quoted wait is a whole number of minutes from 0 to ${String(MAX_QUOTED_WAIT_MINUTES)}.`,
+    );
+  }
+
+  return ALLOWED;
 }
 
 /** Whether a no-show may be reinstated (FR-QUE-22). */

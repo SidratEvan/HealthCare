@@ -81,6 +81,7 @@ export {
 export {
   canAddWalkin,
   canCallNext,
+  canCheckIn,
   canDeclareDelay,
   canDeclareDoctorArrived,
   canDeclareLate,
@@ -100,11 +101,14 @@ export {
   nextToCall,
   DEFAULT_QUEUE_SETTINGS,
   MAX_DELAY_MINUTES,
+  MAX_QUOTED_WAIT_MINUTES,
   SLOT_OFFER_WINDOW_MINUTES,
   type GuardResult,
   type QueueGuardCode,
   type QueueSettings,
 } from './queue/rules.js';
+
+export { suggestedQuote, QUOTE_STEP_MINUTES } from './queue/quote.js';
 
 // --- Beds ------------------------------------------------------------------
 //
@@ -311,6 +315,13 @@ export {
   type ForecastSlot,
   type HistoricalVolume,
 } from './admin/forecast.js';
+
+export {
+  quoteAccuracy,
+  QUOTE_TOLERANCE_MINUTES,
+  type QuoteAccuracy,
+  type QuoteCounts,
+} from './admin/quotes.js';
 
 // --- Validation schemas ----------------------------------------------------
 //

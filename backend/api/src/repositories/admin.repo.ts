@@ -171,6 +171,46 @@ export interface LossRow {
   readonly recoveredPoisha: number;
 }
 
+/**
+ * Quotes given at check-in against the waits that followed (`FR-REC-18`).
+ *
+ * Live, not from `v_admin_daily`: bounded by the range, and a figure about a
+ * promise should not be five minutes behind the promise. Only patients who
+ * have been called count — somebody still sitting has not yet had the wait the
+ * quote was about.
+ */
+export async function quoteCounts(
+  hospitalId: string,
+  range: DateRange,
+  toleranceMinutes: number,
+): Promise<{ quoted: number; kept: number; avgOverMinutes: number | null }> {
+  const result = await sql<{ quoted: string; kept: string; avg_over: string | null }>`
+    SELECT count(*)::text AS quoted,
+           count(*) FILTER (
+             WHERE b.called_at <= b.arrived_at
+                   + make_interval(mins => b.quoted_wait_minutes + ${toleranceMinutes})
+           )::text AS kept,
+           avg(EXTRACT(EPOCH FROM (b.called_at - b.arrived_at)) / 60.0
+               - b.quoted_wait_minutes)::text AS avg_over
+      FROM bookings b
+      JOIN sessions s ON s.id = b.session_id
+     WHERE s.hospital_id = ${hospitalId}
+       AND s.session_date BETWEEN ${range.from}::date AND ${range.to}::date
+       AND b.deleted_at IS NULL
+       AND b.quoted_wait_minutes IS NOT NULL
+       AND b.arrived_at IS NOT NULL
+       AND b.called_at IS NOT NULL
+  `.execute(db);
+
+  const row = result.rows[0];
+  return {
+    quoted: Number(row?.quoted ?? 0),
+    kept: Number(row?.kept ?? 0),
+    avgOverMinutes:
+      row?.avg_over === null || row?.avg_over === undefined ? null : Number(row.avg_over),
+  };
+}
+
 /** The window's totals, already summed across its days. */
 export async function lossTotals(hospitalId: string, range: DateRange): Promise<LossRow> {
   const result = await sql<{

@@ -189,6 +189,30 @@ describe('the today view (FR-ADM-01)', () => {
     }
   });
 
+  it('counts a check-in quote as kept when the patient was called inside it (FR-REC-18)', async () => {
+    // Measured as a difference: the seeded history already holds quotes.
+    const before = (await dashboard()).body.data.quotes;
+    const reception = await staff(['receptionist'], fixture.hospitalId, fixture.receptionistId);
+
+    const write = async (path: string, body: Record<string, unknown> = {}): Promise<void> => {
+      await request(app)
+        .post(`${BASE}${path}`)
+        .set('Authorization', bearer(reception))
+        .set('Idempotency-Key', crypto.randomUUID())
+        .send(body)
+        .expect(200);
+    };
+
+    await write(`/sessions/${fixture.sessionId}/arrived`);
+    await write(`/bookings/${fixture.bookingIds[0] ?? ''}/check-in`, { quotedWaitMinutes: 30 });
+    await write(`/sessions/${fixture.sessionId}/next`);
+
+    const after = (await dashboard()).body.data.quotes;
+    expect(after.quoted - before.quoted).toBe(1);
+    expect(after.kept - before.kept).toBe(1);
+    expect(after.keptRate).toBeGreaterThan(0);
+  });
+
   it('defaults to today when no range is given', async () => {
     const response = await request(app)
       .get(`${BASE}/admin/dashboard`)

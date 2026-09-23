@@ -305,6 +305,8 @@ export interface BookingsTable {
   called_at: Timestamp | null;
   done_at: Timestamp | null;
   arrived_at: Timestamp | null;
+  /** 0022 — the wait quoted at check-in (`FR-REC-18`). */
+  quoted_wait_minutes: number | null;
   consult_seconds: number | null;
   cancelled_reason: string | null;
   created_at: Generated<Timestamp>;
