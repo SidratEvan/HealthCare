@@ -12,8 +12,8 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../app.js';
-import { buildApiRouter } from '../routes/index.js';
 import { ERROR_CODES, NON_FAILURE_CODES, statusFor, type ErrorCode } from '../errors/codes.js';
+import { buildApiRouter } from '../routes/index.js';
 
 const app = createApp();
 
