@@ -97,15 +97,15 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 3391, in about a minute and a half.
-`pnpm test:e2e` reports 95, in Chromium, against the real API and the seeded
+`pnpm test` reports 3469, in about a minute and a half.
+`pnpm test:e2e` reports 98, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`. The last full run took eight minutes.
+`check-in.spec.ts`, 3 in `standby.spec.ts`. The last full run took eight minutes.
 
 `pnpm verify` — typecheck, lint, `format:check`, test — is clean, and so is
 `pnpm build`. `format:check` had been failing on five files since before step
@@ -1275,6 +1275,11 @@ afternoon.
 
   If a session is not appearing and the hour is early in Dhaka, check the date
   before anything else.
+
+  A third lived in the referral seed: its timelines run over hours, so a reset
+  at 01:35 Dhaka put "this morning's" arrival yesterday and the ER console's
+  *today* list opened without it (`referral.spec.ts`). `seed_05` now compresses
+  the declared timelines into the part of today that has happened, in order.
 
 - **`next dev` compiles a route on its first visit, and that is not the
   product's latency.** Five or six seconds per page on this machine. A spec
