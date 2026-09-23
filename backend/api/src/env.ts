@@ -156,6 +156,19 @@ const schema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().default(''),
   SUPABASE_STORAGE_BUCKET: z.string().default('healthcare-dev'),
 
+  /**
+   * Where an uploaded report file goes (`FR-LAB-03`, step 17).
+   *
+   * `mock` keeps the bytes in the API process and serves them back through a
+   * signed URL of this API's own, which is the correct implementation for the
+   * pitch version (CLAUDE.md §1.1) — the same standing `SMS_PROVIDER=log` and
+   * `PAYMENT_PROVIDER=mock` have. `supabase` is the real bucket, and needs the
+   * three keys above.
+   */
+  STORAGE_PROVIDER: z.enum(['mock', 'supabase']).default('mock'),
+  /** How long a report's signed URL lasts, in seconds. */
+  STORAGE_URL_TTL_SECONDS: positiveInt.max(86_400).default(900),
+
   // --- Auth ---------------------------------------------------------------
   JWT_ACCESS_SECRET: secret,
   JWT_REFRESH_SECRET: secret,
@@ -317,6 +330,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       problems.push({
         key: 'PAYMENT_PROVIDER',
         message: 'must be "live" in production — the mock adapter approves every payment',
+      });
+    }
+
+    if (env.STORAGE_PROVIDER === 'mock') {
+      problems.push({
+        key: 'STORAGE_PROVIDER',
+        message:
+          'must be "supabase" in production — the mock store keeps report files in process memory, so a restart loses every report a lab uploaded (FR-LAB-03)',
       });
     }
 

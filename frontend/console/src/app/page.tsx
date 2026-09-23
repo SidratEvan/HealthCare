@@ -1,6 +1,7 @@
 /**
  * `/` — the console: reception (`S-B-02`), the doctor (`S-B-05`), the ward
- * board (`S-B-06`), or the emergency department (`S-B-07`).
+ * board (`S-B-06`), the emergency department (`S-B-07`), the lab (`S-B-08`)
+ * or the pharmacy (`S-B-09`).
  *
  * A client component in full. Every part of these screens is live: state
  * arrives over a socket, actions are applied optimistically against a local
@@ -17,11 +18,35 @@ import { useCallback, useEffect, useState } from 'react';
 import { ConsolePicker, type ConsoleChoice } from '@/components/ConsolePicker';
 import { DoctorConsole } from '@/components/DoctorConsole';
 import { EmergencyConsole } from '@/components/EmergencyConsole';
+import { LabConsole } from '@/components/LabConsole';
+import { PharmacyConsole } from '@/components/PharmacyConsole';
 import { ReceptionConsole } from '@/components/ReceptionConsole';
 import { WardBoard } from '@/components/WardBoard';
 import { readDemoSession } from '@/lib/demo';
 
 import type { ReactNode } from 'react';
+
+/**
+ * Roles whose console belongs to the hospital rather than to a chamber.
+ *
+ * A principal holding one of these has no chamber to open, so the picker is
+ * what it gets when the URL names none.
+ */
+const HOSPITAL_ROLES = new Set(['ward', 'emergency', 'lab', 'pharmacy']);
+
+/**
+ * What each of those is called in the URL.
+ *
+ * Keyed on the choice's own kinds rather than on `string`, so adding a
+ * console to `ConsoleChoice` without naming its view fails to compile instead
+ * of routing to `undefined`.
+ */
+const VIEW_OF: Readonly<Record<Exclude<ConsoleChoice['kind'], 'chamber'>, string>> = {
+  ward: 'ward',
+  emergency: 'er',
+  lab: 'lab',
+  pharmacy: 'pharmacy',
+};
 
 export default function Page(): ReactNode {
   const [ready, setReady] = useState(false);
@@ -43,8 +68,8 @@ export default function Page(): ReactNode {
     // reload keeps it — a chamber by its session, the ward board by name,
     // because a ward is a hospital's and not a chamber's.
     const url = new URL(globalThis.location.href);
-    if (choice.kind === 'ward' || choice.kind === 'emergency') {
-      const opened = choice.kind === 'ward' ? 'ward' : 'er';
+    if (choice.kind !== 'chamber') {
+      const opened = VIEW_OF[choice.kind];
       url.searchParams.delete('session');
       url.searchParams.set('view', opened);
       setSessionId(null);
@@ -65,18 +90,15 @@ export default function Page(): ReactNode {
   // The ward board opens on a hospital, with no chamber (`S-B-06`).
   if (view === 'ward' && session?.role === 'ward') return <WardBoard />;
 
-  // So does the ER (`S-B-07`).
+  // So does the ER (`S-B-07`), the lab (`S-B-08`) and the pharmacy (`S-B-09`).
   if (view === 'er' && session?.role === 'emergency') return <EmergencyConsole />;
+  if (view === 'lab' && session?.role === 'lab') return <LabConsole />;
+  if (view === 'pharmacy' && session?.role === 'pharmacy') return <PharmacyConsole />;
 
   // A chamber in the URL *and* a chamber principal in storage is a console
   // ready to open. Anything else means the picker, which is `S-B-01` standing
   // in for the login this version does not have (CLAUDE.md §4.1).
-  if (
-    sessionId === null ||
-    session === null ||
-    session.role === 'ward' ||
-    session.role === 'emergency'
-  ) {
+  if (sessionId === null || session === null || HOSPITAL_ROLES.has(session.role)) {
     return <ConsolePicker onChosen={chosen} />;
   }
 

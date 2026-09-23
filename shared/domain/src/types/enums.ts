@@ -158,6 +158,34 @@ export const TEST_STATES = [
 ] as const;
 export type TestState = (typeof TEST_STATES)[number];
 
+/**
+ * Ancillary services (migration 0011, DATABASE.md §2.8).
+ *
+ * `ambulance_kind` and `blood_group` are the parenthesised lists in the
+ * document; `ambulance_state` and `blood_request_state` are named there as
+ * `state` with no list, and are the lifecycles `S-A-16` and `S-A-17` describe.
+ * A blood request's urgency reuses `TRIAGE_COLORS` rather than inventing a
+ * fourth vocabulary for the same idea.
+ */
+export const AMBULANCE_KINDS = ['basic', 'als', 'freezer'] as const;
+export type AmbulanceKind = (typeof AMBULANCE_KINDS)[number];
+
+export const AMBULANCE_STATES = [
+  'requested',
+  'quoted',
+  'dispatched',
+  'arrived',
+  'completed',
+  'cancelled',
+] as const;
+export type AmbulanceState = (typeof AMBULANCE_STATES)[number];
+
+export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
+export type BloodGroup = (typeof BLOOD_GROUPS)[number];
+
+export const BLOOD_REQUEST_STATES = ['open', 'matched', 'fulfilled', 'cancelled'] as const;
+export type BloodRequestState = (typeof BLOOD_REQUEST_STATES)[number];
+
 export const PAYMENT_METHODS = ['bkash', 'nagad', 'card', 'cash', 'at_hospital'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
@@ -219,6 +247,10 @@ export const DATABASE_ENUMS = {
   emergency_state: EMERGENCY_STATES,
   referral_state: REFERRAL_STATES,
   test_state: TEST_STATES,
+  ambulance_kind: AMBULANCE_KINDS,
+  ambulance_state: AMBULANCE_STATES,
+  blood_group: BLOOD_GROUPS,
+  blood_request_state: BLOOD_REQUEST_STATES,
   payment_method: PAYMENT_METHODS,
   payment_state: PAYMENT_STATES,
   notif_channel: NOTIF_CHANNELS,

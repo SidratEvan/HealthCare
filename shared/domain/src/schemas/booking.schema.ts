@@ -126,6 +126,18 @@ export const trackingLinkParams = z.object({
 });
 
 /**
+ * `GET /guest/link/:token/reports/:reportId` — one report's signed URL
+ * (`FR-GST-08`, `FR-LAB-03`).
+ *
+ * The URL is minted on the tap rather than carried in the link's payload,
+ * because a signed URL expires and one issued when the screen loaded would be
+ * dead by the time somebody scrolled to it.
+ */
+export const trackingReportParams = trackingLinkParams.extend({
+  reportId: z.string().uuid(),
+});
+
+/**
  * `POST /demo/token` (CLAUDE.md §4.1).
  *
  * The console's stand-in for `S-B-00` Staff login while authentication is

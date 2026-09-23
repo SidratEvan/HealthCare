@@ -60,7 +60,7 @@ import {
 } from './lib/bookings.js';
 import { appendEvents, writeProjections, type EventDraft } from './lib/events.js';
 import { insertRows } from './lib/insert.js';
-import { chambers, staffByRole, type ChamberRow } from './lib/lookup.js';
+import { chambers, facilityIds, staffByRole, type ChamberRow } from './lib/lookup.js';
 import { chamberHours, chamberWeekdays, dhakaDate } from './seed_02_doctors_sessions.js';
 
 import type { Rng } from './lib/random.js';
@@ -87,12 +87,21 @@ export const seed04History: SeedModule = {
   name: 'seed_04_history',
   title: 'five hundred completed past visits and their event logs',
   requirements: ['FR-DEM-03', 'FR-QUE-12', 'FR-ADM-03'],
-  writes: ['sessions', 'bookings', 'queue_events', 'queue_state', 'visits', 'medicines'],
+  writes: [
+    'sessions',
+    'bookings',
+    'queue_events',
+    'queue_state',
+    'visits',
+    'medicines',
+    'test_orders',
+    'reports',
+  ],
   // `visits` arrived with migration 0007, so the record half of `FR-DEM-03` is
   // written now. Prescriptions are not deferred but **dropped**: the owner
   // removed e-prescriptions from this version (`FR-DOC-04`), so there is no
-  // longer anything to wait for. Reports come with the lab at step 17.
-  deferred: ['FR-DEM-03 (reports — build step 17, feat/lab-pharmacy)'],
+  // longer anything to wait for. Reports arrived with the lab at step 17 and
+  // are written below, so `FR-DEM-03` is now covered in full.
 
   async run({ client, now, rng, log }: SeedContext): Promise<SeedSummary> {
     const history = rng.stream('history');
@@ -215,13 +224,19 @@ export const seed04History: SeedModule = {
       );
     }
 
+    const lab = await insertLabWork(client, now, rng.stream('lab'));
+
     log(
       `      ${String(visits)} completed visits, ${String(noShows)} no-shows, ${String(cancellations)} cancellations across ${String(sessions)} past sessions`,
     );
     log(
       `      ${String(visits)} signed visit records, ${String(formulary)} medicines in the formulary`,
     );
-    log('      no prescriptions: FR-DOC-04 was dropped from this version; reports land at step 17');
+    log('      no prescriptions: FR-DOC-04 was dropped from this version');
+    log(
+      `      ${String(lab.orders)} test orders (${String(lab.open)} still on a bench), ` +
+        `${String(lab.reports)} delivered reports`,
+    );
 
     return {
       sessions,
@@ -230,6 +245,8 @@ export const seed04History: SeedModule = {
       queue_state: sessions,
       visits,
       medicines: formulary,
+      test_orders: lab.orders,
+      reports: lab.reports,
     };
   },
 };
@@ -678,6 +695,386 @@ async function insertFormulary(client: Client): Promise<number> {
     client,
     'medicines',
     { columns: ['generic_name', 'brand_name', 'manufacturer', 'strengths', 'form'] },
+    rows,
+  );
+
+  return inserted.length;
+}
+
+// ---------------------------------------------------------------------------
+// The lab (`FR-DEM-03`'s reports, `FR-LAB-01..04`, step 17)
+// ---------------------------------------------------------------------------
+
+/**
+ * The demo catalogue, as `lab.service` holds it.
+ *
+ * Duplicated here rather than imported: `database/seeds` may not import from
+ * `backend/api` (the layering rule), and a catalogue is demo data in both
+ * places. `lab.test.ts` holds the two to the same codes, so they cannot drift
+ * into a seeded order the console cannot name.
+ */
+const DEMO_TESTS: readonly { code: string; nameBn: string; pricePoisha: number }[] = [
+  { code: 'CBC', nameBn: 'সম্পূর্ণ রক্ত পরীক্ষা (CBC)', pricePoisha: 45_000 },
+  { code: 'BLOOD-SUGAR', nameBn: 'রক্তে শর্করা (FBS)', pricePoisha: 20_000 },
+  { code: 'LIPID-PROFILE', nameBn: 'লিপিড প্রোফাইল', pricePoisha: 90_000 },
+  { code: 'SERUM-CREATININE', nameBn: 'সিরাম ক্রিয়েটিনিন', pricePoisha: 50_000 },
+  { code: 'LFT', nameBn: 'লিভার ফাংশন টেস্ট', pricePoisha: 120_000 },
+  { code: 'TSH', nameBn: 'থাইরয়েড (TSH)', pricePoisha: 80_000 },
+  { code: 'URINE-RE', nameBn: 'প্রস্রাব পরীক্ষা (R/E)', pricePoisha: 25_000 },
+  { code: 'XR-CHEST', nameBn: 'বুকের এক্স-রে', pricePoisha: 60_000 },
+  { code: 'ECG', nameBn: 'ইসিজি', pricePoisha: 40_000 },
+  { code: 'ECHO', nameBn: 'ইকোকার্ডিওগ্রাম', pricePoisha: 250_000 },
+  { code: 'USG-ABDOMEN', nameBn: 'পেটের আলট্রাসনোগ্রাম', pricePoisha: 150_000 },
+  { code: 'HBA1C', nameBn: 'HbA1c', pricePoisha: 110_000 },
+];
+
+/** How many of the seeded visits ordered a test. */
+const VISITS_WITH_TESTS = 0.28;
+
+/**
+ * Test orders across the seeded history, and the reports for the finished ones.
+ *
+ * ## What the shape is for
+ *
+ * Three groups, because three screens read this table and each needs
+ * something different in it:
+ *
+ *   - **Finished, with a delivered report.** The wallet's Reports tab
+ *     (`TAB-A12-REP`) and the turnaround medians (`FR-LAB-04`) both stand on
+ *     these. Their sample-to-ready spans are drawn per test type, so the
+ *     medians differ and the slowest-first ranking has something to rank: an
+ *     ECHO takes most of a day, a CBC an hour or two.
+ *   - **Still on a bench, from the last two days.** `S-B-08` opens on these,
+ *     spread across `ordered`, `sample_collected` and `processing` so every
+ *     state button has a row to act on.
+ *   - **A few cancelled**, because a queue where nothing was ever called off
+ *     does not look like a lab.
+ *
+ * ## Reports point at a file that resolves
+ *
+ * `file_url` is an object key under `reports/demo/`, which the mock store
+ * synthesises a labelled placeholder for (`adapters/storage.ts`). A seed runs
+ * in its own process and cannot put bytes into the API's, and a report row
+ * whose URL 404s would be the demo offering a document it cannot open.
+ */
+async function insertLabWork(
+  client: Client,
+  now: Timestamp,
+  rng: Rng,
+): Promise<{ orders: number; reports: number; open: number }> {
+  // `hospitals` has no slug column — a slug is a seed-side name, mapped from
+  // `name_en` by `facilityIds`. Reverse it once so a visit can name the
+  // facility whose lab staff signed its report.
+  const slugOf = new Map([...(await facilityIds(client))].map(([slug, id]) => [id, slug] as const));
+
+  const visits = await loadVisitsForTests(client, slugOf);
+  if (visits.length === 0) return { orders: 0, reports: 0, open: 0 };
+
+  const labStaff = await staffByRole(client, 'lab');
+
+  const chosen = rng.shuffle(visits).slice(0, Math.floor(visits.length * VISITS_WITH_TESTS));
+
+  const orderRows: unknown[][] = [];
+  /** Where in `chosen` and `orderRows` each reported order sits. */
+  const reported: { index: number; visit: VisitForTest; readyAt: Timestamp }[] = [];
+  let open = 0;
+
+  for (const visit of chosen) {
+    const test = rng.pick(DEMO_TESTS);
+
+    // The doctor ordered it during the consultation.
+    const orderedAt = time.addMinutes(visit.signedAt, rng.int(-20, 5));
+    const hoursOld = time.differenceInHours(now, orderedAt);
+
+    // Anything older than two days has been finished, one way or the other: a
+    // bench does not leave a sample sitting for a week, and a queue claiming
+    // otherwise would make the oldest-open figure meaningless.
+    if (hoursOld > 48) {
+      if (rng.chance(0.07)) {
+        orderRows.push(orderRow(visit, test, orderedAt, 'cancelled', null, null, null));
+        continue;
+      }
+
+      const sampleAt = time.addMinutes(orderedAt, rng.int(10, 90));
+      const readyAt = time.addMinutes(sampleAt, turnaroundMinutesFor(test.code, rng));
+      const deliveredAt = time.addMinutes(readyAt, rng.int(0, 3));
+
+      reported.push({ index: orderRows.length, visit, readyAt });
+      orderRows.push(orderRow(visit, test, orderedAt, 'delivered', sampleAt, readyAt, deliveredAt));
+      continue;
+    }
+
+    // The last two days: work a bench still has.
+    open += 1;
+    const state = rng.pick(['ordered', 'sample_collected', 'processing'] as const);
+    const sampleAt = state === 'ordered' ? null : time.addMinutes(orderedAt, rng.int(10, 90));
+    orderRows.push(orderRow(visit, test, orderedAt, state, sampleAt, null, null));
+  }
+
+  if (orderRows.length === 0) return { orders: 0, reports: 0, open: 0 };
+
+  const orders = await insertRows<{ id: string }>(
+    client,
+    'test_orders',
+    {
+      columns: [
+        'visit_id',
+        'patient_id',
+        'hospital_id',
+        'test_code',
+        'test_name',
+        'state',
+        'price_poisha',
+        'ordered_by',
+        'sample_at',
+        'ready_at',
+        'delivered_at',
+        'created_at',
+      ],
+    },
+    orderRows,
+  );
+
+  const reportRows: unknown[][] = [];
+  for (const entry of reported) {
+    const orderId = orders[entry.index]?.id;
+    if (orderId === undefined) continue;
+
+    reportRows.push([
+      orderId,
+      // The object key. The URL a patient opens is signed when it is served.
+      `reports/demo/${orderId}.pdf`,
+      'application/pdf',
+      labStaff.get(entry.visit.facilitySlug) ?? null,
+      entry.readyAt,
+      // `reports_delivery_names_recipients`: a delivery stamp names whom it
+      // reached, and every one of these came out of a consultation.
+      '{patient,doctor}',
+      entry.readyAt,
+    ]);
+  }
+
+  const reports = await insertRows<{ id: string }>(
+    client,
+    'reports',
+    {
+      columns: [
+        'test_order_id',
+        'file_url',
+        'file_type',
+        'uploaded_by',
+        'delivered_to_wallet_at',
+        'delivered_to',
+        'created_at',
+      ],
+    },
+    reportRows,
+  );
+
+  const walkIns = await insertWalkInLabWork(client, now, rng, slugOf);
+
+  return { orders: orders.length + walkIns, reports: reports.length, open: open + walkIns };
+}
+
+/** One `test_orders` row, in the column order `insertLabWork` declares. */
+function orderRow(
+  visit: VisitForTest,
+  test: { code: string; nameBn: string; pricePoisha: number },
+  orderedAt: Timestamp,
+  state: string,
+  sampleAt: Timestamp | null,
+  readyAt: Timestamp | null,
+  deliveredAt: Timestamp | null,
+): unknown[] {
+  return [
+    visit.id,
+    visit.patientId,
+    visit.hospitalId,
+    test.code,
+    test.nameBn,
+    state,
+    test.pricePoisha,
+    visit.createdBy,
+    sampleAt,
+    readyAt,
+    deliveredAt,
+    orderedAt,
+  ];
+}
+
+/**
+ * How long a test type takes, in minutes from sample to report.
+ *
+ * Declared per type rather than drawn from one range, because `FR-LAB-04` is
+ * a *per test type* figure and a demo where every type had the same median
+ * would make the screen that ranks them pointless. These are plausible
+ * turnarounds for a hospital lab, not measurements of one.
+ */
+function turnaroundMinutesFor(code: string, rng: Rng): number {
+  switch (code) {
+    case 'ECG':
+      return rng.int(10, 30);
+    case 'CBC':
+    case 'URINE-RE':
+    case 'BLOOD-SUGAR':
+      return rng.int(45, 150);
+    case 'XR-CHEST':
+      return rng.int(60, 180);
+    case 'LIPID-PROFILE':
+    case 'SERUM-CREATININE':
+    case 'LFT':
+      return rng.int(120, 330);
+    case 'HBA1C':
+    case 'TSH':
+      return rng.int(240, 600);
+    case 'USG-ABDOMEN':
+      return rng.int(90, 260);
+    default:
+      // ECHO and anything added later: a specialist slot, most of a day.
+      return rng.int(360, 900);
+  }
+}
+
+/** A seeded visit a test could have been ordered from. */
+interface VisitForTest {
+  readonly id: string;
+  readonly patientId: string;
+  readonly hospitalId: string;
+  readonly facilitySlug: string;
+  readonly createdBy: string | null;
+  readonly signedAt: Timestamp;
+}
+
+async function loadVisitsForTests(
+  client: Client,
+  slugOf: ReadonlyMap<string, string>,
+): Promise<VisitForTest[]> {
+  const { rows } = await client.query<{
+    id: string;
+    patient_id: string;
+    hospital_id: string;
+    created_by: string | null;
+    signed_at: Date;
+  }>(
+    `SELECT v.id, v.patient_id, v.hospital_id, v.created_by, v.signed_at
+       FROM visits v
+      WHERE v.deleted_at IS NULL AND v.signed_at IS NOT NULL
+      ORDER BY v.signed_at`,
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    patientId: row.patient_id,
+    hospitalId: row.hospital_id,
+    facilitySlug: slugOf.get(row.hospital_id) ?? '',
+    createdBy: row.created_by,
+    signedAt: row.signed_at.toISOString() as Timestamp,
+  }));
+}
+
+/**
+ * How many orders every lab opens with, at minimum.
+ *
+ * `CLAUDE.md` §5.3: no feature ships with an empty screen. Which hospitals
+ * happened to hold a consultation in the last two days is luck of the seeded
+ * history, and on most resets two or three labs had none — so `S-B-08` opened
+ * on nothing at exactly the hospital a demo was being shown at.
+ */
+const OPEN_ORDERS_PER_LAB = 6;
+
+/**
+ * Walk-in lab work, so every bench has a queue (`FR-LAB-01`, `GR-03`).
+ *
+ * These carry **no visit**: `test_orders.visit_id` is nullable precisely
+ * because BACKEND.md §7.6 allows an order from a "patient booking" as well as
+ * from a doctor, and somebody walking into a diagnostic centre with a paper
+ * chit is the commonest way a test is ordered in Bangladesh. It is also the
+ * honest way to date them — an order attached to a three-week-old consultation
+ * but timed this morning would be a row contradicting itself.
+ *
+ * A null visit is not a lesser row. It is the path where a report reaches one
+ * recipient rather than two (`FR-LAB-03` names the ordering doctor, and there
+ * is not one), which is worth having in the demo database rather than only in
+ * a test.
+ */
+async function insertWalkInLabWork(
+  client: Client,
+  now: Timestamp,
+  rng: Rng,
+  slugOf: ReadonlyMap<string, string>,
+): Promise<number> {
+  const labStaff = await staffByRole(client, 'lab');
+  if (labStaff.size === 0) return 0;
+
+  const patients = await loadPatients(client);
+  if (patients.length === 0) return 0;
+
+  const idOf = new Map([...slugOf].map(([id, slug]) => [slug, id] as const));
+  const pool = rng.shuffle(patients);
+  let next = 0;
+
+  const rows: unknown[][] = [];
+
+  for (const [slug, staffUserId] of [...labStaff].sort(([a], [b]) => a.localeCompare(b))) {
+    const hospitalId = idOf.get(slug);
+    if (hospitalId === undefined) continue;
+
+    for (let index = 0; index < OPEN_ORDERS_PER_LAB; index += 1) {
+      const patient = pool[next % pool.length];
+      next += 1;
+      if (patient === undefined) continue;
+
+      const test = rng.pick(DEMO_TESTS);
+
+      // Spread across the last thirty hours, so the oldest has been waiting
+      // since yesterday — which is the figure `oldestOpenSeconds` reports and
+      // the reason the queue is sorted oldest-first.
+      const orderedAt = time.addMinutes(now, -rng.int(30, 30 * 60));
+
+      // Every open state gets rows, so every state button on `S-B-08` has
+      // something to act on the moment it opens.
+      const state =
+        (['ordered', 'sample_collected', 'processing'] as const)[index % 3] ?? 'ordered';
+      const sampleAt = state === 'ordered' ? null : time.addMinutes(orderedAt, rng.int(10, 60));
+
+      rows.push([
+        null,
+        patient.id,
+        hospitalId,
+        test.code,
+        test.nameBn,
+        state,
+        test.pricePoisha,
+        staffUserId,
+        sampleAt,
+        null,
+        null,
+        orderedAt,
+      ]);
+    }
+  }
+
+  if (rows.length === 0) return 0;
+
+  const inserted = await insertRows<{ id: string }>(
+    client,
+    'test_orders',
+    {
+      columns: [
+        'visit_id',
+        'patient_id',
+        'hospital_id',
+        'test_code',
+        'test_name',
+        'state',
+        'price_poisha',
+        'ordered_by',
+        'sample_at',
+        'ready_at',
+        'delivered_at',
+        'created_at',
+      ],
+    },
     rows,
   );
 

@@ -49,6 +49,13 @@ describe('migration files (DATABASE.md §7)', () => {
     //
     // 0017 arrived with step 16, referrals — what `referrals` could not yet
     // say, on the owner's ruling of 2026-09-22.
+    //
+    // 0011 and 0018 arrived with step 17, the lab and the pharmacy. 0011 is
+    // the ancillary set DATABASE.md §7 names, written whole although only
+    // `pharmacy_stock` is read yet, because a shipped migration is never
+    // edited. 0018 adds what `test_orders` and `reports` could not yet say —
+    // an idempotency key and who a report reached — and is numbered past
+    // 0014 and 0015 for the reason 0016 and 0017 are.
     expect(migrations.map((m) => m.version)).toEqual([
       '0001',
       '0002',
@@ -59,10 +66,12 @@ describe('migration files (DATABASE.md §7)', () => {
       '0007',
       '0008',
       '0010',
+      '0011',
       '0012',
       '0013',
       '0016',
       '0017',
+      '0018',
     ]);
   });
 

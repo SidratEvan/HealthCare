@@ -82,6 +82,27 @@ export const ERROR_CODES = {
     message: 'That referral cannot do that from its current state.',
   },
 
+  // --- Lab (FR-LAB-01..03) --------------------------------------------------
+  //
+  // The same shape again, and a 422 for the same reason: the lifecycle only
+  // moves forward, so walking an order back or skipping a state fails however
+  // often it is sent. A replay of a step already taken is answered as one
+  // (`labOrderAlreadyApplied`), never as a refusal.
+  TEST_TRANSITION_INVALID: {
+    status: 422,
+    message: 'That test order cannot do that from its current state.',
+  },
+  /**
+   * The store refused the file, or there is no store configured
+   * (`STORAGE_PROVIDER`). A 503 rather than a 500: the lab's own work is
+   * fine, nothing about the request needs changing, and trying again once
+   * somebody has fixed the environment is the right response.
+   */
+  REPORT_STORAGE_FAILED: {
+    status: 503,
+    message: 'The report could not be stored. Nothing was delivered; try again.',
+  },
+
   // `FR-PAT-63`. Expired, forged and never-real share one code on purpose: a
   // caller guessing at consent codes must not learn which guess was closer.
   CONSENT_CODE_INVALID: { status: 400, message: 'That code has expired or is not valid.' },

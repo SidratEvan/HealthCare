@@ -181,21 +181,40 @@ function QuickTiles(): ReactNode {
   ] as const;
 
   return (
-    <ul className="grid grid-cols-4 gap-2.5">
-      {tiles.map((tile) => (
-        <li key={tile.href}>
-          <a
-            href={tile.href}
-            className="flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-sm border border-line bg-surface px-1.5 py-3 text-center"
-          >
-            <span className="text-brand-600">
-              <tile.Icon size={22} />
-            </span>
-            <span className="text-caption">{tp(tile.label, LOCALE)}</span>
-          </a>
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-2.5">
+      <ul className="grid grid-cols-4 gap-2.5">
+        {tiles.map((tile) => (
+          <li key={tile.href}>
+            <a
+              href={tile.href}
+              className="flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-sm border border-line bg-surface px-1.5 py-3 text-center"
+            >
+              <span className="text-brand-600">
+                <tile.Icon size={22} />
+              </span>
+              <span className="text-caption">{tp(tile.label, LOCALE)}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      {/*
+        Medicine availability (`FR-PHR-02`, step 17).
+
+        A wide row rather than a fifth tile: five tiles across a 360px screen
+        leaves each about sixty pixels, which is under the touch target
+        `MIN_TOUCH_TARGET_PX` sets and too narrow for a Bangla label. The four
+        the canvas declares keep their grid.
+      */}
+      <a
+        href="/medicines"
+        data-testid="quick-medicines"
+        className="flex min-h-touch items-center justify-between rounded-sm border border-line bg-surface px-4 py-3"
+      >
+        <span className="text-body-md">{tp('medicinesTitle', LOCALE)}</span>
+        <span className="text-body-sm text-ink-muted">{tp('medicinesIntro', LOCALE)}</span>
+      </a>
+    </div>
   );
 }
 

@@ -450,10 +450,25 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 > when accounts exist the branch is deleted (`assertSpeaksFor` in
 > `consent.service`).
 | POST | `/documents` | patient — paper upload |
-| POST | `/test-orders` | doctor \| patient booking |
-| PATCH | `/test-orders/:id/state` | lab |
-| POST | `/test-orders/:id/report` | lab — upload → delivers to wallet (`FR-LAB-03`) |
-| POST | `/prescriptions/:id/dispense` | pharmacy |
+| GET | `/lab/catalogue` | doctor — the chips `BTN-B05-TEST` renders |
+| POST | `/test-orders` | doctor. Several tests in one request; the patient and the hospital are read from the booking's visit, never from the body |
+| GET | `/hospitals/:id/test-orders?state=&days=` | lab \| hospital_admin — the bench queue and its turnaround figures (`FR-LAB-01`, `FR-LAB-04`) |
+| PATCH | `/test-orders/:id/state` | lab \| hospital_admin. `collect`, `process`, `ready`, `cancel` — never `deliver`, which is the server's own step |
+| GET | `/test-orders/:id/patient` | lab \| hospital_admin — the name a bench calls somebody by; a separate, audited read (`DB-P7`) |
+| POST | `/test-orders/:id/report` | lab \| hospital_admin — upload → delivers to wallet **and the ordering doctor**, in one transaction (`FR-LAB-03`). Its own 14mb body limit; every other route stays at 256kb |
+| GET | `/hospitals/:id/pharmacy-stock` | pharmacy \| hospital_admin |
+| PUT | `/hospitals/:id/pharmacy-stock` | pharmacy \| hospital_admin — the whole list confirmed, which renews its freshness (`FR-PHR-02`) |
+| GET | `/medicines?q=&lat=&lng=` | **public** — the availability search. A stock flag names nobody |
+| GET | `/files/:key?expires=&sig=` | **public by URL, private by signature** — a stored report. A bad or expired signature is a 404, never a 403 |
+| GET | `/guest/link/:token/reports/:reportId` | the link is the credential. Scoped to that link's own booking, so a live token cannot open another patient's result |
+| ~~POST~~ | ~~`/prescriptions/:id/dispense`~~ | **not built** — prescribing is out of scope this version, so there is nothing to dispense against (`PRD.md` §12) |
+
+> **"Signed URLs only" (§0) is a rule about reads.** No public bucket, every
+> fetch signed and expiring — and that holds under `STORAGE_PROVIDER=mock`,
+> which signs with the same trust root and serves through `/files/:key`. The
+> *upload* goes to the endpoint above rather than direct to a bucket, which is
+> what §7.6 has always said and the only arrangement that works identically
+> under both providers.
 
 ### 7.7 Payments, admin, platform, gov, webhooks
 

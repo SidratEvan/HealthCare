@@ -14,6 +14,15 @@ export interface VisitDraft {
   readonly adviceTextBn: string;
   /** `SEL-B05-FOLLOWUP`: 7, 14, 30, or none. */
   readonly followUpDays: number | null;
+  /** `BTN-B05-TEST`: the chips ticked, by catalogue code (`FR-DOC-06`). */
+  readonly testCodes: readonly string[];
+}
+
+/** One chip on `BTN-B05-TEST`, from the hospital's catalogue. */
+export interface CatalogueTest {
+  readonly code: string;
+  readonly nameBn: string;
+  readonly pricePoisha: number;
 }
 
 /** One past consultation, as `FR-DOC-03`'s history lists it. */
@@ -191,6 +200,57 @@ export async function saveVisit(input: {
         : { followUpDate: dhakaDateIn(input.draft.followUpDays) }),
       sign: input.sign,
       idempotencyKey: key,
+    }),
+  });
+}
+
+/**
+ * `GET /lab/catalogue` — the chips `BTN-B05-TEST` renders.
+ *
+ * Read from the server rather than held here, so the names and prices a
+ * doctor ticks are the ones the lab and the patient's wallet will show. An
+ * empty list is a hospital with no catalogue, and the chips simply do not
+ * appear — never a chip that orders a test nobody can price.
+ */
+export async function fetchTestCatalogue(input: {
+  readonly apiBaseUrl: string;
+  readonly token: string | null;
+}): Promise<readonly CatalogueTest[]> {
+  const result = await call<{ tests: readonly CatalogueTest[] }>(
+    `${input.apiBaseUrl}/lab/catalogue`,
+    input.token,
+    { method: 'GET' },
+  );
+  return result.tests;
+}
+
+/**
+ * `POST /test-orders` — the ticked chips, pushed to the lab queue on save
+ * (`APP_FLOW.md` B2, `FR-DOC-06`, `FR-LAB-01`).
+ *
+ * Called after the visit is filed, because an order is attached to the
+ * consultation it came out of and the server reads the patient and the
+ * hospital from it — never from this request.
+ *
+ * The idempotency key is the caller's and is **stable per consultation**, not
+ * minted here: a doctor whose first attempt failed after the visit saved taps
+ * save again, and the same key has to reach the server or the patient is
+ * booked for two of every test.
+ */
+export async function orderTests(input: {
+  readonly apiBaseUrl: string;
+  readonly token: string | null;
+  readonly bookingId: string;
+  readonly testCodes: readonly string[];
+  readonly idempotencyKey: string;
+}): Promise<void> {
+  await call<unknown>(`${input.apiBaseUrl}/test-orders`, input.token, {
+    method: 'POST',
+    headers: { 'idempotency-key': input.idempotencyKey },
+    body: JSON.stringify({
+      bookingId: input.bookingId,
+      tests: input.testCodes.map((testCode) => ({ testCode })),
+      idempotencyKey: input.idempotencyKey,
     }),
   });
 }

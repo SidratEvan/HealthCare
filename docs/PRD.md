@@ -401,7 +401,26 @@ a schema to design.
 - `FR-LAB-03` Report upload (PDF or image) auto-delivers to the patient wallet and the ordering doctor.
 - `FR-LAB-04` Turnaround time per test type is measured and visible to admin.
 - `FR-PHR-01` Dispense against a prescription QR; partial dispensing supported.
+  **Not in this version** — see below.
 - `FR-PHR-02` Out-of-stock flagging feeds medicine availability search in the patient app.
+
+**Dispensing is out of scope for this version, because prescribing is.**
+`FR-PHR-01` is downstream of `FR-DOC-04`, which the owner removed on
+2026-09-19 (§9): no code path and no seed creates a `prescriptions` row, so
+there is nothing to scan a QR against and nothing to dispense. It stays here
+because it remains a requirement of the product, in the same way the deferred
+authentication requirements do (`CLAUDE.md` §4.1).
+
+What the pharmacy does instead is `FR-PHR-02`, which needs no prescription: a
+counter marks what is and is not on the shelf, and that feeds the patient
+app's medicine search. `S-B-09` names the missing half on screen rather than
+showing a scanner that cannot work.
+
+`FR-LAB-01`'s "and app bookings" is also not built: a patient ordering their
+own test is `S-A-13`, a booking-and-payment flow that is not in step 17's
+contents. Doctor orders (`FR-DOC-06`) are this version's producer, and the
+`test_orders.visit_id` column is nullable so a walk-in order needs no schema
+change when `S-A-13` lands.
 
 ---
 
