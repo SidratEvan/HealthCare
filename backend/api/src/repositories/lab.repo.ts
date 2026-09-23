@@ -514,30 +514,49 @@ export async function searchMedicineAvailability(input: {
          AND (lower(generic_name) LIKE ${pattern} OR lower(brand_name) LIKE ${pattern})
        ORDER BY lower(generic_name)
        LIMIT 10
+    ),
+    answers AS (
+      SELECT h.id AS hospital_id, h.name_bn, h.name_en,
+             m.id AS medicine_id, m.generic_name, m.brand_name, m.form,
+             s.in_stock, s.updated_at,
+             CASE WHEN ${input.lat}::double precision IS NULL OR h.geo IS NULL THEN NULL
+                  ELSE ST_Distance(
+                         h.geo,
+                         ST_SetSRID(ST_MakePoint(${input.lng ?? 0}, ${input.lat ?? 0}), 4326)::geography
+                       )
+             END AS distance_m
+        FROM matched m
+        CROSS JOIN hospitals h
+        LEFT JOIN pharmacy_stock s
+               ON s.hospital_id = h.id AND s.medicine_id = m.id AND s.deleted_at IS NULL
+       WHERE h.deleted_at IS NULL
+         AND h.is_live
+         -- Only facilities that keep a shelf at all. A hospital with no
+         -- pharmacy is not "unknown" about a medicine; it is not a pharmacy.
+         AND EXISTS (
+           SELECT 1 FROM pharmacy_stock ps
+            WHERE ps.hospital_id = h.id AND ps.deleted_at IS NULL
+         )
     )
-    SELECT h.id AS hospital_id, h.name_bn, h.name_en,
-           m.id AS medicine_id, m.generic_name, m.brand_name, m.form,
-           s.in_stock, s.updated_at,
-           CASE WHEN ${input.lat}::double precision IS NULL OR h.geo IS NULL THEN NULL
-                ELSE ST_Distance(
-                       h.geo,
-                       ST_SetSRID(ST_MakePoint(${input.lng ?? 0}, ${input.lat ?? 0}), 4326)::geography
-                     )
-           END AS distance_m
-      FROM matched m
-      CROSS JOIN hospitals h
-      LEFT JOIN pharmacy_stock s
-             ON s.hospital_id = h.id AND s.medicine_id = m.id AND s.deleted_at IS NULL
-     WHERE h.deleted_at IS NULL
-       AND h.is_live
-       -- Only facilities that keep a shelf at all. A hospital with no
-       -- pharmacy is not "unknown" about a medicine; it is not a pharmacy.
-       AND EXISTS (
-         SELECT 1 FROM pharmacy_stock ps
-          WHERE ps.hospital_id = h.id AND ps.deleted_at IS NULL
-       )
-     ORDER BY m.generic_name, distance_m NULLS LAST, h.name_en
-     LIMIT ${input.limit}
+    -- **Capped per medicine, not across the whole result.** A flat row limit
+    -- truncates mid-medicine, and the medicines past the cut then come back
+    -- with no pharmacies at all — which the screen would render as "no
+    -- pharmacy has reported on this medicine". That is a false statement
+    -- about a shortage, which is exactly what PRD.md 3.2 forbids. Ranking
+    -- within each medicine and keeping the nearest few makes every medicine's
+    -- answer complete for the pharmacies it names.
+    SELECT hospital_id, name_bn, name_en, medicine_id, generic_name, brand_name, form,
+           in_stock, updated_at, distance_m
+      FROM (
+        SELECT answers.*,
+               ROW_NUMBER() OVER (
+                 PARTITION BY medicine_id
+                 ORDER BY distance_m NULLS LAST, updated_at DESC NULLS LAST, name_en
+               ) AS rank
+          FROM answers
+      ) ranked
+     WHERE rank <= ${input.limit}
+     ORDER BY generic_name, distance_m NULLS LAST, name_en
   `.execute(db);
 
   return result.rows.map((row) => ({

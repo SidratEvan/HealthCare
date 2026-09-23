@@ -138,9 +138,10 @@ export async function searchMedicines(input: {
     query: input.q,
     lat: input.lat,
     lng: input.lng,
-    // One medicine can have many pharmacies, so the row limit is the caller's
-    // limit multiplied out rather than applied to medicines.
-    limit: input.limit * 10,
+    // The limit is **per medicine**, not across the result: the nearest
+    // pharmacies for each. A flat cap would truncate mid-medicine and leave
+    // the rest looking as though nobody stocks them (`PRD.md` §3.2).
+    limit: input.limit,
   });
 
   const byMedicine = new Map<string, MedicineAvailability>();
