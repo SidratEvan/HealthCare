@@ -13,6 +13,7 @@
 
 import { Router } from 'express';
 
+import { adminRoutes } from './admin.routes.js';
 import { bedRoutes } from './bed.routes.js';
 import { bookingRoutes } from './booking.routes.js';
 import { clinicalRoutes } from './clinical.routes.js';
@@ -26,6 +27,7 @@ import { labRoutes } from './lab.routes.js';
 import { paymentRoutes } from './payment.routes.js';
 import { queueRoutes } from './queue.routes.js';
 import { referralRoutes } from './referral.routes.js';
+import { standbyRoutes } from './standby.routes.js';
 import { syncRoutes } from './sync.routes.js';
 import { webhookRoutes } from './webhooks.routes.js';
 
@@ -54,6 +56,10 @@ export function buildApiRouter(): Router {
   router.use(demoRoutes);
   router.use(bookingRoutes);
   router.use(queueRoutes);
+  // The patient's half of the standby list (`FR-PAT-25`…`27`): joining is
+  // public like a guest booking, and the status token in the path answers
+  // everything after it.
+  router.use(standbyRoutes);
   // Records: the one router whose permission lives in the service rather than
   // the route, because `FR-DOC-10` is a relationship and not a role.
   router.use(clinicalRoutes);
@@ -73,6 +79,10 @@ export function buildApiRouter(): Router {
   // Money (step 18). Paying is the patient's, refunding and settling the
   // administrator's.
   router.use(paymentRoutes);
+  // The dashboard (step 19). No hospital in the path: these reads answer
+  // everything about a facility at once, so the scope comes off the principal
+  // and a caller cannot name a facility at all.
+  router.use(adminRoutes);
   // Provider callbacks. No token, because a provider has none of ours — the
   // signature is the authentication, and it is checked before anything else.
   router.use(webhookRoutes);

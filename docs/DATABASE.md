@@ -36,6 +36,7 @@ CREATE TYPE booking_source    AS ENUM ('app','guest_link','counter','phone','wal
 CREATE TYPE queue_event_type  AS ENUM (
   'SESSION_OPENED','DOCTOR_ARRIVED','DELAY_DECLARED','SESSION_PAUSED','SESSION_RESUMED',
   'PATIENT_CALLED','PATIENT_DONE','PATIENT_LATE','PATIENT_NO_SHOW','PATIENT_REINSERTED',
+  'PATIENT_ARRIVED',             -- 0021, FR-REC-18
   'WALKIN_ADDED','BOOKING_CANCELLED','SLOT_OFFERED','SLOT_ACCEPTED','SLOT_EXPIRED',
   'PRIORITY_REORDERED','SESSION_ENDED','ACTION_UNDONE'
 );
@@ -241,7 +242,8 @@ Recurring chamber schedules: `id`, `doctor_hospital_id` **FK**, `weekday` int, `
 | `reason_text` | text | |
 | `fee_poisha` | int | |
 | `payment_id` | uuid | **FK** nullable |
-| `called_at`, `done_at`, `arrived_at` | timestamptz | |
+| `called_at`, `done_at`, `arrived_at` | timestamptz | `arrived_at` is the check-in (`PATIENT_ARRIVED`, `FR-REC-18`) or a walk-in's admission |
+| `quoted_wait_minutes` | int | the wait quoted at check-in, 0–480; null without an arrival (`bookings_quote_needs_arrival`). Migration 0022 |
 | `consult_seconds` | int | measured, feeds the rate |
 | `cancelled_reason` | text | |
 
@@ -273,7 +275,7 @@ Recurring chamber schedules: `id`, `doctor_hospital_id` **FK**, `weekday` int, `
 Rebuildable with `SELECT rebuild_queue_state(session_id)`.
 
 #### `standby_list` / `slot_offers` (`FR-QUE-30`)
-`standby_list`: `id`, `session_id`, `patient_id`, `contact_phone`, `position`, `created_at`, `removed_at`.
+`standby_list`: `id`, `session_id`, `patient_id`, `contact_phone`, `position`, `created_at`, `removed_at`, and from 0023 `guest_id` (the identity that joined from the app, null for a counter entry), `seated_booking_id` (the chair they were given; implies `removed_at`), `idempotency_key` **U** (`FR-PAT-25`).
 `slot_offers`: `id`, `session_id`, `freed_booking_id`, `offered_to_patient_id`, `offered_at`, `expires_at`, `accepted_at`, `declined_at`, `recovered_value_poisha`.
 
 ---
@@ -362,7 +364,7 @@ The sending ER holds the case until the receiving ER records the arrival; that o
 ### 2.6 Money
 
 #### `payments`
-`id`, `booking_id`/`bed_request_id`/`test_order_id`/`ambulance_request_id` (exactly one, CHECK), `payer_user_id`/`payer_guest_id`, `amount_poisha`, `platform_fee_poisha`, `method` payment_method, `state` payment_state, `provider_ref`, `idempotency_key` **U** (`FR-PAY-06`), `paid_at`, `refunded_poisha`, `refund_reason`, `refunded_at` (0009).
+`id`, `booking_id`/`bed_request_id`/`test_order_id`/`ambulance_request_id`/`standby_id` (exactly one, CHECK; `standby_id` from 0023 — a standby prepayment before there is a booking, moved to `booking_id` when the patient is seated, `FR-PAT-26`), `payer_user_id`/`payer_guest_id`, `amount_poisha`, `platform_fee_poisha`, `method` payment_method, `state` payment_state, `provider_ref`, `idempotency_key` **U** (`FR-PAY-06`), `paid_at`, `refunded_poisha`, `refund_reason`, `refunded_at` (0009).
 
 **Money is never edited, only added to.** `amount_poisha` and
 `platform_fee_poisha` are fixed at creation by a trigger, the way
@@ -435,6 +437,7 @@ PATIENT_DONE        { "bookingId": "…", "consultSeconds": 372 }
 PATIENT_LATE        { "bookingId": "…", "expectedMinutes": 20, "reinsertAfter": 3 }
 PATIENT_NO_SHOW     { "bookingId": "…", "graceUsedMinutes": 17 }
 PATIENT_REINSERTED  { "bookingId": "…", "newPosition": 19 }
+PATIENT_ARRIVED     { "bookingId": "…", "quotedWaitMinutes": 25 }   // FR-REC-18; arrival = serverTs
 WALKIN_ADDED        { "bookingId": "…", "position": "end|index", "index": 15 }
 SLOT_OFFERED        { "freedBookingId": "…", "offeredTo": ["patientId"], "expiresAt": "…" }
 SLOT_ACCEPTED       { "offerId": "…", "newBookingId": "…" }
@@ -530,6 +533,14 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0019_payment_ambulance_fk.sql  -- step 18: the one foreign key 0009 could not make. On a
                                    -- fresh database 0009 runs before 0011, so
                                    -- payments.ambulance_request_id had no table to point at
+    0020_admin_views.sql           -- step 19: v_admin_daily (materialised, refreshed on read
+                                   -- past five minutes), v_no_show_loss, v_referral_flow (§4)
+    0021_patient_arrived.sql       -- the check-in (FR-REC-18): the enum value alone, because a
+                                   -- transaction may not use an enum value it added
+    0022_check_in.sql              -- bookings.quoted_wait_minutes and the booking-scoped
+                                   -- constraint extended to PATIENT_ARRIVED
+    0023_standby_self_serve.sql    -- payments.standby_id as a fifth subject; standby_list
+                                   -- guest_id, seated_booking_id, idempotency_key (FR-PAT-25..27)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities (FR-DEM-01)

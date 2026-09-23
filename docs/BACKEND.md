@@ -367,8 +367,12 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/bookings/:id/cancel` | owner \| staff | appends `BOOKING_CANCELLED`, triggers refund eligibility |
 | POST | `/bookings/:id/reschedule` | owner \| staff | cancels + creates in one transaction |
 | POST | `/bookings/:id/late` | owner | appends `PATIENT_LATE` (`FR-PAT-33`) |
-| POST | `/sessions/:id/standby` | user \| guest | joins standby list |
-| POST | `/offers/:id/accept` | user \| guest | (`FR-QUE-30`) |
+| POST | `/sessions/:id/standby` | none (guest details) | joins a **full** chamber's list; Idempotency-Key required, rate-limited per address; optional `prepay` method charges the fee against the standby row (`FR-PAT-25`, `FR-PAT-26`). Returns the status token |
+| GET | `/standby/:token` | the token | `S-A-08s`: waiting / offered / seated / left; records lapsed offers as it answers; mints the seat's tracking link once |
+| POST | `/standby/:token/accept` | the token | yes to the open offer; books the chair and pays for it with the chosen method (`FR-PAT-27`) |
+| POST | `/standby/:token/decline` | the token | no; `SLOT_EXPIRED`, then the slot is offered to the next patient (`FR-QUE-30`) |
+| POST | `/standby/:token/leave` | the token | off the list; a prepayment is marked owed (`standby_unseated`) |
+| POST | `/offers/:id/accept` | receptionist | a yes rung in to the counter (`FR-REC-30`) — see §7.4 |
 
 ### 7.4 Queue (console)
 
@@ -383,8 +387,11 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/bookings/:id/late` | receptionist | `PATIENT_LATE` |
 | POST | `/bookings/:id/no-show` | receptionist | `PATIENT_NO_SHOW` + auto slot offer |
 | POST | `/bookings/:id/reinstate` | receptionist | `PATIENT_REINSERTED` |
+| POST | `/bookings/:id/check-in` | receptionist | `PATIENT_ARRIVED` — body `{ quotedWaitMinutes }` 0–480; the arrival is the server's clock (`FR-REC-18`) |
 | POST | `/sessions/:id/walkin` | receptionist | `WALKIN_ADDED` |
 | POST | `/sessions/:id/reorder` | receptionist | `PRIORITY_REORDERED` (reason required) |
+| GET | `/sessions/:id/standby` | receptionist, hospital_admin | — (who is waiting and what was offered, no phone numbers; records any lapsed offer as `SLOT_EXPIRED` as it answers) |
+| POST | `/bookings/:id/offer-slot` | receptionist | `SLOT_OFFERED` — `BTN-B02-OFFER`: the freed chair to the next person on the standby list, ten-minute window (`FR-QUE-30`, `FR-REC-30`) |
 | POST | `/events/:id/undo` | actor, ≤ 10 s | `ACTION_UNDONE` |
 | POST | `/sessions/:id/end` | receptionist | `SESSION_ENDED` |
 

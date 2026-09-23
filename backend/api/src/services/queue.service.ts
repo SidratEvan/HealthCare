@@ -34,6 +34,8 @@
  * so the log is attributable in the meantime (`FR-QUE-04`).
  */
 
+import { createHash } from 'node:crypto';
+
 import {
   computeEtas,
   continueReplay,
@@ -46,6 +48,7 @@ import {
   projectedEnd,
   replay,
   waitingQueue,
+  canAcceptSlot,
   canAddWalkin,
   canCallNext,
   canDeclareDelay,
@@ -54,12 +57,17 @@ import {
   canMarkDone,
   canMarkNoShow,
   canPause,
+  canOfferFreedSlot,
   canReinstate,
+  canCheckIn,
   canReorder,
   canResume,
   id,
+  lapsedOffers,
+  recoveredValueFor,
   time,
   DEFAULT_QUEUE_SETTINGS,
+  SLOT_OFFER_WINDOW_MINUTES,
   type Eta,
   type GuardResult,
   type QueueEvent,
@@ -75,13 +83,16 @@ import { logger } from '../config/logger.js';
 import { AppError, guardFailed, notFound } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
 import * as bookingRepo from '../repositories/booking.repo.js';
+import * as paymentRepo from '../repositories/payment.repo.js';
 import * as eventRepo from '../repositories/queueEvent.repo.js';
 import * as stateRepo from '../repositories/queueState.repo.js';
 import * as sessionRepo from '../repositories/session.repo.js';
+import * as standbyRepo from '../repositories/standby.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import * as notifications from './notification.service.js';
 import * as payments from './payment.service.js';
+import { standbyLinkFor } from './standbyLink.js';
 
 /**
  * A session as the HTTP layer sees it, and a booking likewise.
@@ -272,6 +283,491 @@ export async function callNext(input: {
 
   await notifications.dispatch(settled.batch);
   return settled.result;
+}
+
+/**
+ * `POST /sessions/:id/offer-slot` — give an empty chair to the standby list
+ * (`FR-QUE-30`, `FR-REC-30`).
+ *
+ * "Freed slots are offered to standby patients in order, with a short
+ * acceptance window; unaccepted offers pass to the next patient."
+ *
+ * ## Why the offer row is written before the event
+ *
+ * `SLOT_OFFERED` names an `offerId`, and the log must never contain a fact
+ * about nothing — the same reason `createWalkinBooking` runs before
+ * `WALKIN_ADDED`. The difference is that this one is in the *same*
+ * transaction: a walk-in's booking is worth keeping even if the event fails,
+ * because a patient is standing at the counter, while an offer nobody was told
+ * about is only a row that will expire quietly and block the chair meanwhile.
+ *
+ * ## Why the next standby patient is chosen under the lock
+ *
+ * Two receptionists marking two no-shows in the same instant both read the
+ * list, both find the person at position 1, and both offer them a chair —
+ * which leaves one chair covered twice and the next person on the list never
+ * asked. `claimNextStandby` takes `FOR UPDATE SKIP LOCKED` so the second
+ * caller gets position 2, and skips anybody already holding an open offer.
+ */
+export async function offerFreedSlot(input: {
+  readonly sessionId: string;
+  readonly freedBookingId: string;
+  readonly actor: QueueActor;
+  readonly clientEventId?: string | null;
+  readonly clientTs?: string | null;
+}): Promise<AppendEventResult> {
+  const replayed = await findReplay(input.clientEventId ?? null);
+  if (replayed !== null) return replayed;
+
+  const settled = await withTransaction(async (trx) => {
+    const session = await lockSession(trx, input.sessionId);
+    const state = await loadState(trx, session);
+
+    const guard = canOfferFreedSlot(state, id(input.freedBookingId));
+    if (!guard.ok) throw guardFailed(guard.code, guard.detail);
+
+    const now = new Date();
+    const standby = await standbyRepo.claimNextStandby(trx, input.sessionId, now);
+
+    // Not an error worth a stack trace, and not a 500: an empty standby list
+    // is the ordinary state of most chambers. The console shows the chair as
+    // free with nobody to give it to, which is the truth.
+    if (standby === null) {
+      throw new AppError('QUEUE_GUARD_FAILED', {
+        message: 'Nobody is on the standby list for this session.',
+        details: { guard: 'NO_STANDBY' },
+      });
+    }
+
+    const expiresAt = new Date(now.getTime() + SLOT_OFFER_WINDOW_MINUTES * 60_000);
+
+    const offerId = await standbyRepo.insertOffer(trx, {
+      sessionId: input.sessionId,
+      freedBookingId: input.freedBookingId,
+      offeredToPatientId: standby.patientId,
+      expiresAt,
+    });
+
+    const offered = await applyOne(trx, session, state, {
+      sessionId: input.sessionId,
+      type: 'SLOT_OFFERED',
+      payload: {
+        offerId,
+        freedBookingId: input.freedBookingId,
+        // One name, in a list. `DATABASE.md` §3 declares the field as an
+        // array and `FR-QUE-30` says *in order*, so the shape allows a future
+        // broadcast offer and this version never puts more than one in it.
+        offeredTo: [standby.patientId],
+        expiresAt: expiresAt.toISOString(),
+      },
+      actor: input.actor,
+      clientEventId: input.clientEventId ?? null,
+      clientTs: input.clientTs ?? null,
+    });
+
+    // `FR-PAT-26`: somebody who paid when joining is seated on sight. The
+    // offer is still recorded first — the recovery figure counts offers made
+    // and taken (`FR-ADM-03`), and a seat that skipped the offer would be a
+    // recovery the dashboard could not see — and taken in the same
+    // transaction, so there is no moment at which the chair is theirs and
+    // not yet theirs.
+    if (standby.prepaid) {
+      const seat = await seatOnOffer(trx, session, offered.state, {
+        offer: {
+          id: offerId,
+          sessionId: input.sessionId,
+          freedBookingId: input.freedBookingId,
+          offeredToPatientId: standby.patientId,
+        },
+        actor: () => input.actor,
+        at: now,
+        clientEventId: derive(input.clientEventId ?? null, 'c'),
+        clientTs: input.clientTs ?? null,
+      });
+
+      const both = await settle(trx, session, seat.applied.state, [
+        offered.event,
+        seat.applied.event,
+      ]);
+
+      const seatedMessage = await notifications.queueSlotSeated(trx, {
+        sessionId: input.sessionId,
+        patientId: standby.patientId,
+        phone: standby.contactPhone,
+        serial: seat.serial,
+        link: await standbyLinkFor(standby.id, standby.guestId ?? standby.patientId),
+      });
+
+      return { result: both.result, batch: notifications.merge(both.batch, seatedMessage) };
+    }
+
+    const settledOffer = await settle(trx, session, offered.state, [offered.event]);
+
+    // Written in the same transaction as the event, like every other message
+    // (BACKEND.md §8): an offer that rolls back must leave no text behind
+    // telling somebody to come in. Somebody who joined from the app answers
+    // on their phone (`FR-PAT-27`); somebody reception put on the list is
+    // told to ring the counter.
+    const offerMessage = await notifications.queueSlotOffer(trx, {
+      sessionId: input.sessionId,
+      patientId: standby.patientId,
+      phone: standby.contactPhone,
+      expiresAt: expiresAt.toISOString(),
+      link: standby.guestId === null ? null : await standbyLinkFor(standby.id, standby.guestId),
+    });
+
+    return {
+      result: settledOffer.result,
+      batch: notifications.merge(settledOffer.batch, offerMessage),
+    };
+  });
+
+  await notifications.dispatch(settled.batch);
+  return settled.result;
+}
+
+/**
+ * `POST /offers/:id/accept` — a standby patient takes the chair
+ * (`FR-QUE-30`, `FR-ADM-03`).
+ *
+ * Reception's route, for somebody who rang the counter. A patient answering
+ * on their own phone comes through `acceptSlotDetailed` from
+ * `standby.service`, which needs to know which booking they got.
+ */
+export async function acceptSlot(input: {
+  readonly offerId: string;
+  readonly actor: QueueActor;
+  readonly clientEventId?: string | null;
+  readonly clientTs?: string | null;
+}): Promise<AppendEventResult> {
+  return (await acceptSlotDetailed({ ...input, actor: () => input.actor })).result;
+}
+
+/** What an acceptance produced: the queue, and the booking the chair became. */
+export interface SeatResult {
+  readonly result: AppendEventResult;
+  readonly newBookingId: string | null;
+  readonly serial: number | null;
+}
+
+/**
+ * Accepts an offer and says which booking it made.
+ *
+ * `actor` is a function of the new booking because a patient answering from
+ * their phone is a guest acting on a booking that does not exist until this
+ * transaction makes it.
+ */
+export async function acceptSlotDetailed(input: {
+  readonly offerId: string;
+  readonly actor: (newBookingId: string) => QueueActor;
+  readonly clientEventId?: string | null;
+  readonly clientTs?: string | null;
+}): Promise<SeatResult> {
+  const replayed = await findReplay(input.clientEventId ?? null);
+  if (replayed !== null) return { result: replayed, newBookingId: null, serial: null };
+
+  const offer = await standbyRepo.findOffer(input.offerId);
+  if (offer === null) throw notFound('offer');
+
+  const settled = await withTransaction(async (trx) => {
+    const session = await lockSession(trx, offer.sessionId);
+    const before = await loadState(trx, session);
+
+    const guard = canAcceptSlot(before, input.offerId, nowTs());
+    if (!guard.ok) throw guardFailed(guard.code, guard.detail);
+
+    const seat = await seatOnOffer(trx, session, before, {
+      offer: {
+        id: offer.id,
+        sessionId: offer.sessionId,
+        freedBookingId: offer.freedBookingId,
+        offeredToPatientId: offer.offeredToPatientId,
+      },
+      actor: input.actor,
+      at: new Date(),
+      clientEventId: input.clientEventId ?? null,
+      clientTs: input.clientTs ?? null,
+    });
+
+    const done = await settle(trx, session, seat.applied.state, [seat.applied.event]);
+    return { done, seat };
+  });
+
+  await notifications.dispatch(settled.done.batch);
+  return {
+    result: settled.done.result,
+    newBookingId: settled.seat.newBookingId,
+    serial: settled.seat.serial,
+  };
+}
+
+/**
+ * Gives an offered chair to the person it was offered to.
+ *
+ * ## Which serial they get, and why it depends on how the chair came free
+ *
+ * This is open decision 13, and the schema had already answered it:
+ * `bookings_session_serial_key` excludes only `cancelled` rows, so a cancelled
+ * serial is genuinely free and a no-show's is not — the no-show row keeps its
+ * number and stays in history (`DB-P2`).
+ *
+ * That asymmetry turns out to be the right behaviour rather than an accident
+ * of the index. A cancellation happens *before* the queue reaches that point,
+ * so handing the number on puts the standby patient in the slot that actually
+ * opened. A no-show is discovered *as* the queue passes it — giving somebody
+ * serial 12 when the chamber is calling 30 would seat them at a place the
+ * queue has already gone by, and the reducer would carry them as waiting
+ * behind a moment that has passed.
+ *
+ * So: reissue the freed serial when it is both free and still ahead of the
+ * chamber; otherwise issue the next one, which is where a person arriving now
+ * belongs anyway.
+ *
+ * ## Whose booking it is
+ *
+ * Somebody who joined from the app (`FR-PAT-25`) is booked *by* their guest
+ * identity, as a guest booking is — so the seat has a tracking link like any
+ * other, and a prepayment they made moves onto it (`FR-PAT-26`). Somebody
+ * reception put on the list by phone is a counter booking with no owner.
+ */
+async function seatOnOffer(
+  trx: Tx,
+  session: sessionRepo.SessionRow,
+  before: QueueState,
+  input: {
+    readonly offer: {
+      readonly id: string;
+      readonly sessionId: string;
+      readonly freedBookingId: string | null;
+      readonly offeredToPatientId: string;
+    };
+    readonly actor: (newBookingId: string) => QueueActor;
+    readonly at: Date;
+    readonly clientEventId: string | null;
+    readonly clientTs: string | null;
+  },
+): Promise<{
+  readonly applied: Awaited<ReturnType<typeof applyOne>>;
+  readonly newBookingId: string;
+  readonly serial: number;
+}> {
+  const { offer } = input;
+
+  // The row-level race guard. Two accepts of one offer both pass the domain
+  // check against a state each read a moment earlier; this is where the
+  // second finds nothing left to update.
+  const claimed = await standbyRepo.markAccepted(
+    trx,
+    offer.id,
+    recoveredValueFor(session.feePoisha),
+    input.at,
+  );
+  if (!claimed) {
+    throw new AppError('QUEUE_CONFLICT', {
+      message: 'Somebody else took that slot first.',
+      details: { offerId: offer.id },
+    });
+  }
+
+  // The reduced state, not the roster: `status` here is what the event log
+  // says the booking came to, which is the same thing the guard just read.
+  const freed = offer.freedBookingId === null ? null : findEntry(before, id(offer.freedBookingId));
+
+  const serving = nowServing(before);
+  const passed = serving === null ? 0 : serving.serial;
+  const highest = before.entries.reduce((max, entry) => Math.max(max, entry.serial), 0);
+
+  const serial =
+    freed !== null && freed.status === 'cancelled' && freed.serial > passed
+      ? freed.serial
+      : highest + 1;
+
+  const standby = await standbyRepo.activeFor(trx, offer.sessionId, offer.offeredToPatientId);
+  const guestId = standby?.guestId ?? null;
+
+  const newBookingId = await bookingRepo.insertBooking(trx, {
+    sessionId: offer.sessionId,
+    patientId: offer.offeredToPatientId,
+    serial,
+    // A guest who joined from the app booked this, as surely as one who used
+    // the booking flow. `walkin` stays reserved for `WALKIN_ADDED` — somebody
+    // with no prior arrangement — and a standby patient made one.
+    source: guestId === null ? 'counter' : 'guest_link',
+    feePoisha: session.feePoisha,
+    bookedByUserId: null,
+    bookedByGuestId: guestId,
+    reasonText: null,
+    intake: {},
+  });
+
+  if (standby === null) {
+    await standbyRepo.removeFromStandby(trx, offer.sessionId, offer.offeredToPatientId, input.at);
+  } else {
+    // The prepayment, if there was one, now pays for the chair it bought.
+    await paymentRepo.moveStandbyToBooking(trx, standby.id, newBookingId);
+    await standbyRepo.markSeated(trx, standby.id, newBookingId, input.at);
+  }
+
+  // Re-read, so the roster the reducer folds against contains the booking
+  // the event is about to name. Without it `reduceSlotAccepted` records an
+  // anomaly rather than a seated patient.
+  const state = await loadState(trx, session);
+
+  const applied = await applyOne(trx, session, state, {
+    sessionId: offer.sessionId,
+    type: 'SLOT_ACCEPTED',
+    payload: { offerId: offer.id, newBookingId },
+    actor: input.actor(newBookingId),
+    clientEventId: input.clientEventId,
+    clientTs: input.clientTs,
+  });
+
+  return { applied, newBookingId, serial };
+}
+
+/**
+ * The patient said no to the chair on offer (`FR-PAT-27`).
+ *
+ * Recorded as the offer ending — `SLOT_EXPIRED`, under the same derived key a
+ * lapse would use, so a decline and a later lapse noticed on the same offer
+ * are one fact and not two. Then the chair goes to the next person, because
+ * `FR-QUE-30` says "unaccepted offers pass to the next patient" and a no is
+ * the clearest unaccepted there is.
+ */
+export async function declineSlot(input: {
+  readonly offerId: string;
+  readonly actor: QueueActor;
+}): Promise<void> {
+  const offer = await standbyRepo.findOffer(input.offerId);
+  if (offer === null) throw notFound('offer');
+
+  const declined = await withTransaction(
+    async (trx) => await standbyRepo.markDeclined(trx, offer.id, new Date()),
+  );
+  if (!declined) {
+    throw new AppError('QUEUE_GUARD_FAILED', {
+      message: 'That offer has already been answered.',
+      details: { guard: 'OFFER_SETTLED' },
+    });
+  }
+
+  await appendEvent({
+    sessionId: offer.sessionId,
+    type: 'SLOT_EXPIRED',
+    payload: { offerId: offer.id },
+    actor: input.actor,
+    clientEventId: expiryKey(offer.id),
+  });
+
+  if (offer.freedBookingId === null) return;
+
+  try {
+    await offerFreedSlot({
+      sessionId: offer.sessionId,
+      freedBookingId: offer.freedBookingId,
+      actor: { kind: 'system', job: 'standby_decline' },
+    });
+  } catch (cause: unknown) {
+    // Nobody left on the list, or the chamber has moved on: the chair stays
+    // free and reception's card shows it, which is the truth.
+    logger.info({ sessionId: offer.sessionId, err: cause }, 'declined chair not passed on');
+  }
+}
+
+/**
+ * Records the offers whose window has closed, so the chair can be offered on.
+ *
+ * `FR-QUE-30`: "unaccepted offers pass to the next patient". Nothing in this
+ * version runs on a timer — `pg-boss` is not installed — so an offer lapses in
+ * fact the moment its deadline passes and lapses *in the log* the next time
+ * anybody looks at the session. `canAcceptSlot` already refuses on the clock,
+ * so the gap between the two is never a chair given away twice; it is only a
+ * console that has not yet been told the chair is free again.
+ *
+ * Called by the reception console's read path. When a worker process exists it
+ * takes this over on a 30-second tick (`BACKEND.md` §8) and nothing else
+ * changes.
+ */
+export async function expireLapsedOffers(sessionId: string, actor: QueueActor): Promise<number> {
+  const state = await getState(sessionId);
+  const lapsed = lapsedOffers(state, nowTs());
+  if (lapsed.length === 0) return 0;
+
+  for (const offer of lapsed) {
+    try {
+      await appendEvent({
+        sessionId,
+        type: 'SLOT_EXPIRED',
+        payload: { offerId: offer.offerId },
+        actor,
+        // Derived from the offer, so two consoles noticing the same lapse in
+        // the same second record it once. `queue_events.client_event_id` is a
+        // uuid column, so it has to *be* one rather than merely be unique.
+        clientEventId: expiryKey(offer.offerId),
+      });
+    } catch (cause: unknown) {
+      // A lapse that could not be recorded is not worth failing the read it
+      // was noticed during: the offer is already unacceptable by the clock,
+      // and the next reader will try again.
+      logger.warn({ sessionId, offerId: offer.offerId, err: cause }, 'could not expire offer');
+    }
+  }
+
+  return lapsed.length;
+}
+
+/**
+ * The idempotency key for recording that one offer lapsed.
+ *
+ * A UUIDv5 over a fixed namespace, which makes it a pure function of the offer
+ * — two consoles noticing the same lapse in the same second produce the same
+ * key, and the second append is recognised as the replay it is rather than
+ * writing a second fact about one event into an append-only log.
+ *
+ * Built by hand because Node has no v5 and a dependency for sixteen bytes of
+ * hashing is not worth asking for (`CLAUDE.md` §7). The shape is RFC 4122
+ * §4.3: SHA-1 of namespace-plus-name, version nibble set to 5, variant bits to
+ * 10.
+ */
+const EXPIRY_NAMESPACE = 'a1b0f2c4-5d6e-4f70-8a91-2b3c4d5e6f70';
+
+export function expiryKey(offerId: string): string {
+  const namespace = Buffer.from(EXPIRY_NAMESPACE.replace(/-/g, ''), 'hex');
+  const hash = createHash('sha1')
+    .update(Buffer.concat([namespace, Buffer.from(offerId, 'utf8')]))
+    .digest();
+
+  const bytes = Uint8Array.prototype.slice.call(hash, 0, 16);
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+
+  const hex = Buffer.from(bytes).toString('hex');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join('-');
+}
+
+/** One offer, or a 404. The controller needs its session to scope-check. */
+export async function requireOffer(offerId: string): Promise<standbyRepo.OfferRow> {
+  const offer = await standbyRepo.findOffer(offerId);
+  if (offer === null) throw notFound('offer');
+  return offer;
+}
+
+/** The standby list and this session's offers, for `S-B-02`'s panel. */
+export async function standbyFor(sessionId: string): Promise<{
+  readonly waiting: readonly standbyRepo.StandbyRow[];
+  readonly offers: readonly standbyRepo.OfferRow[];
+}> {
+  const [waiting, offers] = await Promise.all([
+    standbyRepo.listStandby(sessionId),
+    standbyRepo.listOffers(sessionId),
+  ]);
+  return { waiting, offers };
 }
 
 /**
@@ -562,6 +1058,7 @@ async function persist(
       calledAt: entry.calledAt,
       doneAt: entry.doneAt,
       arrivedAt: entry.arrivedAt,
+      quotedWaitMinutes: entry.quotedWaitMinutes,
       consultSeconds: entry.consultSeconds,
       cancelledReason: entry.cancelled?.reason ?? null,
     })),
@@ -622,6 +1119,7 @@ function broadcastSpecific(sessionId: string, state: QueueState, event: QueueEve
     case 'PATIENT_LATE':
     case 'PATIENT_NO_SHOW':
     case 'PATIENT_REINSERTED':
+    case 'PATIENT_ARRIVED':
     case 'WALKIN_ADDED':
     case 'BOOKING_CANCELLED':
     case 'SLOT_OFFERED':
@@ -681,6 +1179,13 @@ function assertAllowed(
       break;
     case 'PATIENT_REINSERTED':
       result = canReinstate(state, id(readString(input.payload, 'bookingId')));
+      break;
+    case 'PATIENT_ARRIVED':
+      result = canCheckIn(
+        state,
+        id(readString(input.payload, 'bookingId')),
+        readNumber(input.payload, 'quotedWaitMinutes'),
+      );
       break;
     case 'WALKIN_ADDED':
       result = canAddWalkin(

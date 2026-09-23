@@ -126,6 +126,25 @@ export interface PatientReinsertedEvent extends QueueEventBase {
   readonly payload: { readonly bookingId: BookingId; readonly newPosition: number };
 }
 
+/**
+ * Reception has seen the patient at the counter (`FR-REC-18`).
+ *
+ * The arrival time is the event's own `serverTs`, not a payload field: a
+ * console queued offline for an hour would otherwise record the moment the
+ * receptionist *remembered*, and `FR-ADM-01`'s wait would be measured from it.
+ */
+export interface PatientArrivedEvent extends QueueEventBase {
+  readonly type: 'PATIENT_ARRIVED';
+  readonly payload: {
+    readonly bookingId: BookingId;
+    /**
+     * The wait reception told the patient, in minutes (`FR-PAT-38`). Pre-filled
+     * from the queue's estimate and adjustable at the counter.
+     */
+    readonly quotedWaitMinutes: number;
+  };
+}
+
 export interface WalkinAddedEvent extends QueueEventBase {
   readonly type: 'WALKIN_ADDED';
   readonly payload: {
@@ -200,6 +219,7 @@ export type QueueEvent =
   | PatientLateEvent
   | PatientNoShowEvent
   | PatientReinsertedEvent
+  | PatientArrivedEvent
   | WalkinAddedEvent
   | BookingCancelledEvent
   | SlotOfferedEvent
@@ -222,6 +242,7 @@ export const BOOKING_SCOPED_EVENT_TYPES = [
   'PATIENT_LATE',
   'PATIENT_NO_SHOW',
   'PATIENT_REINSERTED',
+  'PATIENT_ARRIVED',
   'WALKIN_ADDED',
   'BOOKING_CANCELLED',
   'PRIORITY_REORDERED',
@@ -235,6 +256,7 @@ export function bookingIdOf(event: QueueEvent): BookingId | null {
     case 'PATIENT_LATE':
     case 'PATIENT_NO_SHOW':
     case 'PATIENT_REINSERTED':
+    case 'PATIENT_ARRIVED':
     case 'WALKIN_ADDED':
     case 'BOOKING_CANCELLED':
     case 'PRIORITY_REORDERED':

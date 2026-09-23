@@ -245,7 +245,9 @@ Many people will never create an account. Guest mode is a first-class path, not 
 - `FR-PAT-22` Confirmation is delivered in-app **and** by SMS, containing hospital, doctor, date, serial number, and expected time window.
 - `FR-PAT-23` A patient can reschedule to another session or cancel; policy and any refund rule are stated before confirming.
 - `FR-PAT-24` The app prevents double-booking the same profile with the same doctor on the same day.
-- `FR-PAT-25` If a session is full, the patient may join a **standby list** and will be offered released slots automatically (see `FR-QUE-30`).
+- `FR-PAT-25` If a session is full, the patient may join a **standby list** from the app and will be offered released slots automatically (see `FR-QUE-30`). Joining asks what a guest booking asks (`FR-GST-02`) and returns a status link that is the patient's place on the list.
+- `FR-PAT-26` **Prepaid standby.** A patient may pay the consultation fee when joining. A prepaid patient is **seated automatically** when a slot is offered to them — nobody asks — and told by SMS and on the status link which serial is theirs. A prepayment for a slot that never comes is refunded in full, whether the patient leaves the list or the session ends. Owner's ruling, 2026-09-23.
+- `FR-PAT-27` **Answering an offer on the phone.** A patient who did not prepay receives the offer on their status link and by SMS, sees the minutes left, and answers yes (then pays as a booking is paid, `FR-PAT-20`) or no (the slot passes to the next patient). Reception may still record a yes for somebody who rings the counter (`FR-REC-30`). Owner's ruling, 2026-09-23.
 
 ### 7.4 Live serial (core)
 
@@ -257,6 +259,7 @@ Many people will never create an account. Guest mode is a first-class path, not 
 - `FR-PAT-35` Every live figure carries a freshness line ("হালনাগাদ ২ মিনিট আগে").
 - `FR-PAT-36` If the connection to the hospital is lost, the screen states that the number may be stale instead of showing a confident value.
 - `FR-PAT-37` Feature-phone parity: all state changes in `FR-PAT-30`–`34` are mirrored by SMS.
+- `FR-PAT-38` Once reception has checked the patient in (`FR-REC-18`), the live serial screen shows the wait the counter quoted, when it was quoted, and the minutes left against it — beside the live estimate, never instead of it. When the quote has run out the screen says so rather than counting below zero, and the leave-home alert no longer applies to somebody already here.
 
 ### 7.5 Emergency
 
@@ -325,6 +328,7 @@ The highest-volume surface in the system. Optimise for keyboard and repetition.
 - `FR-REC-15` Reorder for priority (elderly, emergency, referred) with a mandatory reason, recorded in the audit log.
 - `FR-REC-16` Undo the last queue action within a short window.
 - `FR-REC-17` The console shows, at a glance: now serving, next three, count waiting, count late, count no-show, average minutes per patient.
+- `FR-REC-18` **Check in** a patient who has arrived at the counter. The console pre-fills a quoted wait from the queue's own estimate and reception may adjust it before confirming — as a restaurant confirms an order with a preparation time. The arrival time and the quote are recorded (`PATIENT_ARRIVED`), and the quote reaches the patient's screen (`FR-PAT-38`). Owner's ruling, 2026-09-23.
 
 ### 8.3 Registration and billing
 
@@ -426,7 +430,7 @@ change when `S-A-13` lands.
 
 ## 13. Functional requirements — Hospital admin dashboard
 
-- `FR-ADM-01` Today view: patients seen, average wait, longest wait, sessions running late, walk-in vs booked ratio.
+- `FR-ADM-01` Today view: patients seen, average wait, longest wait, sessions running late, walk-in vs booked ratio. Wait runs from check-in (`FR-REC-18`) to being called, and beside it the share of patients called within the wait they were quoted.
 - `FR-ADM-02` Wait-time trend over time, with the live-queue adoption date marked.
 - `FR-ADM-03` No-show count and taka value, plus value recovered through waitlist.
 - `FR-ADM-04` Revenue by doctor, department, service type (consultation, tests, beds, pharmacy), and payment method.
@@ -470,7 +474,7 @@ This is the heart of the system. Specified tightly because everything else depen
 
 - `FR-QUE-01` A **session** has: hospital, doctor, department, room, planned start, planned end, status (`scheduled`, `running`, `paused`, `ended`, `cancelled`).
 - `FR-QUE-02` The queue state is **derived from an append-only event log**, never edited in place.
-- `FR-QUE-03` Event types: `SESSION_OPENED`, `DOCTOR_ARRIVED`, `DELAY_DECLARED`, `SESSION_PAUSED`, `SESSION_RESUMED`, `PATIENT_CALLED`, `PATIENT_DONE`, `PATIENT_LATE`, `PATIENT_NO_SHOW`, `PATIENT_REINSERTED`, `WALKIN_ADDED`, `BOOKING_CANCELLED`, `SLOT_OFFERED`, `SLOT_ACCEPTED`, `PRIORITY_REORDERED`, `SESSION_ENDED`.
+- `FR-QUE-03` Event types: `SESSION_OPENED`, `DOCTOR_ARRIVED`, `DELAY_DECLARED`, `SESSION_PAUSED`, `SESSION_RESUMED`, `PATIENT_CALLED`, `PATIENT_DONE`, `PATIENT_LATE`, `PATIENT_NO_SHOW`, `PATIENT_REINSERTED`, `PATIENT_ARRIVED` (`FR-REC-18`), `WALKIN_ADDED`, `BOOKING_CANCELLED`, `SLOT_OFFERED`, `SLOT_ACCEPTED`, `PRIORITY_REORDERED`, `SESSION_ENDED`.
 - `FR-QUE-04` Every event stores: session, actor (user + role), timestamp (server), client timestamp, and payload.
 - `FR-QUE-05` Replaying the log for a session reproduces its exact state. This is the debugging and dispute-resolution mechanism.
 

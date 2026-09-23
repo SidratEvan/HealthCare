@@ -63,7 +63,16 @@ export interface QueueEntry {
   readonly patientId: PatientId;
   readonly source: BookingSource;
   readonly status: BookingStatus;
+  /**
+   * When the patient was seen at the counter: a check-in (`FR-REC-18`) or a
+   * walk-in, which arrives by definition.
+   */
   readonly arrivedAt: Timestamp | null;
+  /**
+   * The wait reception quoted at check-in, in minutes (`FR-PAT-38`). Null for
+   * a walk-in and for anybody not yet checked in.
+   */
+  readonly quotedWaitMinutes: number | null;
   readonly calledAt: Timestamp | null;
   readonly doneAt: Timestamp | null;
   /** Measured at PATIENT_DONE. Feeds the rolling rate (FR-QUE-12). */
@@ -197,6 +206,7 @@ export function emptyState(seed: QueueSeed): QueueState {
     source: booking.source,
     status: 'booked',
     arrivedAt: null,
+    quotedWaitMinutes: null,
     calledAt: null,
     doneAt: null,
     consultSeconds: null,

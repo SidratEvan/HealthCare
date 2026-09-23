@@ -62,9 +62,11 @@ export interface PlannedNotification {
 /**
  * Which events produce which message (BACKEND.md §8's mapping table).
  *
- * `SLOT_OFFERED` is in that table and is absent here: `offerFreedSlot` is not
- * built (`FR-QUE-30`, build step 15), so no such event is ever appended. A
- * template for a message nothing can send would be copy nobody reviews.
+ * `SLOT_OFFERED` is in that table and is still absent here, now for a
+ * different reason. `offerFreedSlot` exists as of step 19 and the message is
+ * real — but a standby patient has no booking, and every recipient this map
+ * produces is resolved through one. It is sent by `queueSlotOffer` instead,
+ * from the phone number on the standby row.
  */
 const TEMPLATE_FOR: Partial<Record<QueueEvent['type'], TemplateKey>> = {
   DOCTOR_ARRIVED: 'queue.doctor_arrived',
@@ -167,12 +169,18 @@ export function planFor(
     // guard above returns before we get here. Listed rather than defaulted so
     // that adding a template without deciding who receives it fails to
     // compile instead of silently notifying nobody.
+    //
+    // `PATIENT_ARRIVED` among them: a check-in's quote is said across the
+    // counter and shown in the app (`FR-PAT-38`), and an SMS to somebody
+    // standing at the desk would cost money to tell them what they were just
+    // told.
     case 'SESSION_OPENED':
     case 'SESSION_PAUSED':
     case 'SESSION_RESUMED':
     case 'PATIENT_DONE':
     case 'PATIENT_LATE':
     case 'PATIENT_REINSERTED':
+    case 'PATIENT_ARRIVED':
     case 'WALKIN_ADDED':
     case 'SLOT_OFFERED':
     case 'SLOT_ACCEPTED':
@@ -261,6 +269,21 @@ export interface QueuedBatch {
 
 /** Nothing to send. Returned rather than null so a caller needs no branch. */
 export const NOTHING: QueuedBatch = { ids: [], messages: [] };
+
+/**
+ * Two batches written in one transaction, dispatched as one.
+ *
+ * `offerFreedSlot` produces both kinds at once: whatever the event itself
+ * implies, plus the offer text to a standby patient who has no booking. They
+ * have to leave the building together — one `dispatch` after one commit — or
+ * a failure between the two sends half the messages an action caused.
+ */
+export function merge(...batches: readonly QueuedBatch[]): QueuedBatch {
+  return {
+    ids: batches.flatMap((batch) => batch.ids),
+    messages: batches.flatMap((batch) => batch.messages),
+  };
+}
 
 /**
  * Writes the outbox rows for a plan, inside the caller's transaction.
@@ -375,6 +398,180 @@ export async function queueFor(
           body: detail.body,
           templateKey: detail.key,
           recipient: row.recipient,
+        },
+      ];
+    }),
+  };
+}
+
+/**
+ * Tells a standby patient a chair has opened (`FR-QUE-30`, `FR-GST-06`).
+ *
+ * BACKEND.md §8 maps `SLOT_OFFERED` to a message, and this is it. It is here
+ * rather than in `planFor` for one reason that decides the shape of the whole
+ * thing: **a standby patient has no booking**. That is what standby means.
+ * `queueFor` resolves every recipient through `recipientsForSession`, keyed on
+ * a booking id, so a slot offer routed through it would find nobody and be
+ * dropped in silence — the worst possible failure for the one message in this
+ * product that expires.
+ *
+ * So the recipient comes from `standby_list.contact_phone`, which is the
+ * number the person gave when they asked to be told. Same outbox, same
+ * suppression rules, same transaction as the event.
+ *
+ * ## Quiet hours do not apply
+ *
+ * `FR-NOT-07` exempts queue events, and this is one. It also deserves the
+ * exemption on its own terms: the offer is alive for ten minutes, and a text
+ * held until seven the next morning is a chair the hospital left empty and a
+ * patient who was never really asked. The same reasoning as `bed`.
+ */
+export async function queueSlotOffer(
+  trx: Tx,
+  input: {
+    readonly sessionId: string;
+    readonly patientId: string;
+    readonly phone: string;
+    readonly expiresAt: string;
+    /**
+     * The standby status link, for somebody who joined from the app
+     * (`FR-PAT-27`): they answer on their phone. Null for somebody reception
+     * put on the list, who is told to ring the counter.
+     */
+    readonly link?: string | null;
+  },
+  at: Date = new Date(),
+): Promise<QueuedBatch> {
+  const link = input.link ?? null;
+  return await queueStandbyMessage(
+    trx,
+    {
+      sessionId: input.sessionId,
+      patientId: input.patientId,
+      phone: input.phone,
+      templateKey: link === null ? 'queue.slot_offered' : 'queue.slot_offered_link',
+      params: (numerals) => ({
+        time: formatClock(input.expiresAt, numerals),
+        ...(link === null ? {} : { link }),
+      }),
+    },
+    at,
+  );
+}
+
+/**
+ * Tells a prepaid standby patient the chair is theirs (`FR-PAT-26`).
+ *
+ * Nobody asked them: they paid to be seated on sight, so the message says it
+ * is done, names the serial, and links to where they can watch it.
+ */
+export async function queueSlotSeated(
+  trx: Tx,
+  input: {
+    readonly sessionId: string;
+    readonly patientId: string;
+    readonly phone: string;
+    readonly serial: number;
+    readonly link: string;
+  },
+  at: Date = new Date(),
+): Promise<QueuedBatch> {
+  return await queueStandbyMessage(
+    trx,
+    {
+      sessionId: input.sessionId,
+      patientId: input.patientId,
+      phone: input.phone,
+      templateKey: 'queue.slot_seated',
+      params: (numerals) => ({
+        serial: formatSerial(input.serial, numerals),
+        link: input.link,
+      }),
+    },
+    at,
+  );
+}
+
+/**
+ * The outbox rows for a message to somebody on a standby list.
+ *
+ * Its own path rather than part of `planFor`: a standby patient may have no
+ * booking yet, and every recipient that map produces is resolved through one.
+ */
+async function queueStandbyMessage(
+  trx: Tx,
+  input: {
+    readonly sessionId: string;
+    readonly patientId: string;
+    readonly phone: string;
+    readonly templateKey: TemplateKey;
+    readonly params: (numerals: NumeralStyle) => Record<string, string>;
+  },
+  at: Date,
+): Promise<QueuedBatch> {
+  const [chamber, templates] = await Promise.all([
+    notificationRepo.chamberFor(input.sessionId),
+    templateIndex(),
+  ]);
+  if (chamber === null) return NOTHING;
+
+  // Built here rather than read back: a standby row carries the phone and the
+  // patient, which is everything the outbox needs, and a lookup would only be
+  // a second chance to get it wrong.
+  const recipient: notificationRepo.Recipient = {
+    patientId: input.patientId,
+    guestId: null,
+    userId: null,
+    phone: input.phone,
+    locale: 'bn',
+  };
+
+  const locale: Locale = 'bn';
+  const numerals: NumeralStyle = 'bengali';
+  const params: Record<string, string> = {
+    doctor: chamber.doctorNameBn,
+    hospital: chamber.hospitalNameBn,
+    ...input.params(numerals),
+  };
+
+  const budgetLeft =
+    chamber.smsBudgetMonthly === null
+      ? Number.POSITIVE_INFINITY
+      : chamber.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(chamber.hospitalId));
+
+  const templateKey = input.templateKey;
+  const tokens = await notificationRepo.deviceTokensFor(recipient);
+  const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
+
+  const rows: notificationRepo.QueuedNotification[] = [];
+  for (const channel of channels) {
+    const body = templates.get(`${templateKey}|${channel}|${locale}`);
+    if (body === undefined) continue;
+    rows.push({
+      recipient,
+      channel,
+      templateKey,
+      params,
+      body: render(body, params),
+      skipped: suppression({ channel, phone: recipient.phone, templateKey, at, budgetLeft }),
+    });
+  }
+
+  const ids = await notificationRepo.queueAll(trx, rows);
+
+  return {
+    ids,
+    messages: ids.flatMap((id, index) => {
+      const row = rows[index];
+      if (row?.skipped !== null) return [];
+      return [
+        {
+          id,
+          channel: row.channel,
+          to: row.channel === 'sms' ? recipient.phone : null,
+          body: row.body,
+          templateKey,
+          recipient,
         },
       ];
     }),

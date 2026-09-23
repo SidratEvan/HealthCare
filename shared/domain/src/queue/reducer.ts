@@ -14,7 +14,7 @@
  *   directory. Every instant comes from the event's own `serverTs`, so the
  *   same log replayed a year later produces the same state.
  *
- *   Total. Every one of the 18 event types is handled. The switch is checked
+ *   Total. Every one of the 19 event types is handled. The switch is checked
  *   for exhaustiveness, so a new type cannot be added without a decision being
  *   made here about what it does.
  *
@@ -138,6 +138,9 @@ export function reduce(state: QueueState, event: QueueEvent): QueueState {
 
     case 'PATIENT_REINSERTED':
       return reduceReinserted(state, event);
+
+    case 'PATIENT_ARRIVED':
+      return reduceArrived(state, event);
 
     case 'WALKIN_ADDED':
       return reduceWalkin(state, event);
@@ -316,6 +319,43 @@ function reduceReinserted(
   );
 
   return advance(moveToActiveIndex(restored, bookingId, newPosition), event);
+}
+
+/**
+ * The patient is at the counter (`FR-REC-18`).
+ *
+ * A booked or late patient becomes `waiting` — present, in the queue — and a
+ * late one keeps the place the lateness moved them to: arriving does not jump
+ * anybody. Nothing else about the order changes, because a check-in is a fact
+ * about where somebody is, not a claim on a turn.
+ *
+ * The first arrival stands. Two consoles checking one patient in, one of them
+ * offline, would otherwise move the recorded arrival to whichever synced last,
+ * and `FR-ADM-01` measures the wait from it.
+ */
+function reduceArrived(
+  state: QueueState,
+  event: Extract<QueueEvent, { type: 'PATIENT_ARRIVED' }>,
+): QueueState {
+  const { bookingId, quotedWaitMinutes } = event.payload;
+  const entry = findEntry(state, bookingId);
+  if (entry === null) return withAnomaly(state, event, 'UNKNOWN_BOOKING', bookingId);
+
+  return advance(
+    mapEntries(state, (current) => {
+      if (current.bookingId !== bookingId || current.arrivedAt !== null) return current;
+
+      const present = current.status === 'booked' || current.status === 'late';
+      return {
+        ...current,
+        status: present ? ('waiting' satisfies BookingStatus) : current.status,
+        late: present ? null : current.late,
+        arrivedAt: event.serverTs,
+        quotedWaitMinutes,
+      };
+    }),
+    event,
+  );
 }
 
 function reduceWalkin(

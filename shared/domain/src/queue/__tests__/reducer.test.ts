@@ -310,6 +310,86 @@ describe('no-show and reinstatement (FR-QUE-22)', () => {
   });
 });
 
+describe('check-in (FR-REC-18)', () => {
+  it('PATIENT_ARRIVED records when the patient was seen and what they were quoted', () => {
+    const { state, log } = setup(4);
+
+    const event = log.next('PATIENT_ARRIVED', { bookingId: bookingId(3), quotedWaitMinutes: 25 });
+    const next = reduce(state, event);
+    const entry = findEntry(next, bookingId(3));
+
+    // The arrival is the server's clock, never a figure a console supplied.
+    expect(entry?.arrivedAt).toBe(event.serverTs);
+    expect(entry?.quotedWaitMinutes).toBe(25);
+    expect(entry?.status).toBe('waiting');
+    expect(checkInvariants(next)).toEqual([]);
+  });
+
+  it('does not move anybody: a check-in is where somebody is, not a claim on a turn', () => {
+    const { state, log } = setup(5);
+
+    const next = reduce(
+      state,
+      log.next('PATIENT_ARRIVED', { bookingId: bookingId(5), quotedWaitMinutes: 40 }),
+    );
+
+    expect(activeQueue(next).map((entry) => entry.serial)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('a late patient who arrives is waiting again, in the place lateness moved them to', () => {
+    const { state, log } = setup(6);
+
+    const next = fold(state, [
+      log.next('PATIENT_LATE', { bookingId: bookingId(1), expectedMinutes: 20, reinsertAfter: 3 }),
+      log.next('PATIENT_ARRIVED', { bookingId: bookingId(1), quotedWaitMinutes: 15 }),
+    ]);
+
+    const entry = findEntry(next, bookingId(1));
+    expect(entry?.status).toBe('waiting');
+    expect(entry?.late).toBeNull();
+    expect(activeQueue(next).map((candidate) => candidate.serial)).toEqual([2, 3, 4, 1, 5, 6]);
+  });
+
+  it('keeps the first arrival when two consoles check one patient in', () => {
+    // One of them offline: the wait `FR-ADM-01` measures runs from the moment
+    // the patient was first seen, not from whichever console synced last.
+    const { state, log } = setup(3);
+
+    const first = log.next('PATIENT_ARRIVED', { bookingId: bookingId(2), quotedWaitMinutes: 20 });
+    log.advance(600);
+    const second = log.next('PATIENT_ARRIVED', { bookingId: bookingId(2), quotedWaitMinutes: 5 });
+
+    const entry = findEntry(fold(state, [first, second]), bookingId(2));
+    expect(entry?.arrivedAt).toBe(first.serverTs);
+    expect(entry?.quotedWaitMinutes).toBe(20);
+  });
+
+  it('records an anomaly rather than throwing on an unknown booking', () => {
+    const { state, log } = setup(2);
+
+    const next = reduce(
+      state,
+      log.next('PATIENT_ARRIVED', { bookingId: bookingId(9), quotedWaitMinutes: 10 }),
+    );
+
+    expect(next.anomalies.map((anomaly) => anomaly.code)).toEqual(['UNKNOWN_BOOKING']);
+  });
+
+  it('replays to the same state however the log is delivered', () => {
+    const { state, log } = setup(4);
+    const events = [
+      log.next('DOCTOR_ARRIVED', {
+        arrivedAt: timestamp('2026-09-17T11:00:00.000Z'),
+        minutesLate: 0,
+      }),
+      log.next('PATIENT_ARRIVED', { bookingId: bookingId(2), quotedWaitMinutes: 30 }),
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+    ];
+
+    expect(replay(makeSeed(4), [...events].reverse())).toEqual(fold(state, events));
+  });
+});
+
 describe('walk-ins and cancellations', () => {
   it('WALKIN_ADDED at the end puts the patient last', () => {
     const { state, log } = setup(3);
@@ -569,6 +649,7 @@ describe('coverage of the event union', () => {
       'PATIENT_LATE',
       'PATIENT_NO_SHOW',
       'PATIENT_REINSERTED',
+      'PATIENT_ARRIVED',
       'WALKIN_ADDED',
       'BOOKING_CANCELLED',
       'SLOT_OFFERED',
@@ -580,7 +661,7 @@ describe('coverage of the event union', () => {
     ]);
 
     expect([...QUEUE_EVENT_TYPES].filter((type) => !covered.has(type))).toEqual([]);
-    expect(QUEUE_EVENT_TYPES).toHaveLength(18);
+    expect(QUEUE_EVENT_TYPES).toHaveLength(19);
   });
 });
 

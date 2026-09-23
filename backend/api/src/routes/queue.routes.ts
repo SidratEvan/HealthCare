@@ -27,8 +27,10 @@ import { Router } from 'express';
 
 import {
   addWalkinBody,
+  acceptOfferBody,
   bookingParams,
   callNextBody,
+  checkInBody,
   declareDelayBody,
   doctorArrivedBody,
   endSessionBody,
@@ -36,6 +38,8 @@ import {
   markDoneBody,
   markLateBody,
   markNoShowBody,
+  offerParams,
+  offerSlotBody,
   pauseSessionBody,
   queueQuery,
   reinstateBody,
@@ -167,6 +171,19 @@ queueRoutes.post(
   queue.reinstate,
 );
 
+/**
+ * The patient is here, and was quoted a wait (`FR-REC-18`). Reception's: it is
+ * said across the counter, by the person who can see who is standing there.
+ */
+queueRoutes.post(
+  '/bookings/:id/check-in',
+  requireAuth,
+  requireRole('receptionist'),
+  write,
+  validate({ params: bookingParams, body: checkInBody }),
+  queue.checkIn,
+);
+
 queueRoutes.post(
   '/sessions/:id/walkin',
   requireAuth,
@@ -184,6 +201,40 @@ queueRoutes.post(
   write,
   validate({ params: sessionParams, body: reorderBody }),
   queue.reorder,
+);
+
+// --- Freed slots and the standby list (FR-QUE-30, FR-REC-30) -----------------
+//
+// Reception's, not a doctor's: giving a chair away and recording who took it
+// is counter work, and the offer is raised from the row the receptionist has
+// just settled. `hospital_admin` reads the list because `FR-ADM-03`'s recovery
+// figure is built from it and an administrator checking the number should be
+// able to see the offers behind it.
+
+queueRoutes.get(
+  '/sessions/:id/standby',
+  requireAuth,
+  requireRole('receptionist', 'hospital_admin'),
+  validate({ params: sessionParams }),
+  queue.getStandby,
+);
+
+queueRoutes.post(
+  '/bookings/:id/offer-slot',
+  requireAuth,
+  requireRole('receptionist'),
+  write,
+  validate({ params: bookingParams, body: offerSlotBody }),
+  queue.offerSlot,
+);
+
+queueRoutes.post(
+  '/offers/:id/accept',
+  requireAuth,
+  requireRole('receptionist'),
+  write,
+  validate({ params: offerParams, body: acceptOfferBody }),
+  queue.acceptOffer,
 );
 
 // --- Undo --------------------------------------------------------------------

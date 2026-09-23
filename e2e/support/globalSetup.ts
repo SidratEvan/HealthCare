@@ -11,6 +11,16 @@
  * Resetting here rather than asking a developer to remember is what makes
  * `pnpm test:e2e` one command on a clean machine.
  *
+ * ## Why it migrates first
+ *
+ * `db:reset` truncates and reseeds; it does not create what a new migration
+ * adds. The unit and API suites build their databases from nothing, so a
+ * step's migration is always there for them — and never here, until somebody
+ * remembers to run it. Step 19 found it: every dashboard spec failed on a 500
+ * because `v_admin_daily` did not exist in this database, while every other
+ * suite was green. Migrating is additive and idempotent, so it runs every
+ * time.
+ *
  * ## Why the routes are visited first
  *
  * The apps run under `next dev`, which compiles a route the first time it is
@@ -48,6 +58,7 @@ const ROUTES = [
   `${PATIENT}/emergency`,
   `${PATIENT}/emergency/results`,
   `${PATIENT}/emergency/onway`,
+  `${PATIENT}/standby`,
   `${CONSOLE}/`,
 ];
 
@@ -58,11 +69,10 @@ export default async function globalSetup(): Promise<void> {
   // database by accident.
   assertLocalDatabase();
 
-  execFileSync('pnpm', ['db:reset'], {
-    stdio: 'inherit',
-    shell: true,
-    env: { ...process.env, DATABASE_URL: E2E_DATABASE_URL, DEMO_MODE: 'true' },
-  });
+  const env = { ...process.env, DATABASE_URL: E2E_DATABASE_URL, DEMO_MODE: 'true' };
+
+  execFileSync('pnpm', ['db:migrate'], { stdio: 'inherit', shell: true, env });
+  execFileSync('pnpm', ['db:reset'], { stdio: 'inherit', shell: true, env });
 
   // One at a time: compiling in parallel only makes each compile slower.
   for (const route of ROUTES) {

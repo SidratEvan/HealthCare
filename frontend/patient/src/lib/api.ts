@@ -22,6 +22,9 @@ import type {
   InboundResult,
   SessionCard,
   StampedList,
+  StandbyAccepted,
+  StandbyJoined,
+  StandbyStatusView,
   MedicineAvailability,
   TrackingLinkView,
 } from '@/lib/types';
@@ -361,5 +364,65 @@ export async function cancelEmergency(token: string): Promise<EmergencyCaseStatu
   return await api.post<EmergencyCaseStatus>(
     `/emergency/track/${encodeURIComponent(token)}/cancel`,
     {},
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The standby list (`FR-PAT-25`…`27`) — public; the status token is the place
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /sessions/:id/standby` (`BTN-A06D-STANDBY`).
+ *
+ * One key per join attempt, reused across its retries: a double tap on a bad
+ * connection is one place on the list and one payment, not two.
+ */
+export async function joinStandby(input: {
+  readonly sessionId: string;
+  readonly guest: {
+    readonly name: string;
+    readonly phone: string;
+    readonly ageYears: number;
+    readonly sex: 'male' | 'female' | 'other';
+  };
+  readonly prepay: 'bkash' | 'nagad' | 'card' | null;
+  readonly idempotencyKey: string;
+}): Promise<StandbyJoined> {
+  return await api.post<StandbyJoined>(
+    `/sessions/${input.sessionId}/standby`,
+    { guest: input.guest, prepay: input.prepay, clientEventId: input.idempotencyKey },
+    input.idempotencyKey,
+  );
+}
+
+/** `GET /standby/:token` — `S-A-08s`, polled while the patient waits. */
+export async function standbyStatus(token: string): Promise<StandbyStatusView> {
+  return await api.get<StandbyStatusView>(`/standby/${encodeURIComponent(token)}`);
+}
+
+/** `POST /standby/:token/accept` — yes to the chair (`FR-PAT-27`). */
+export async function acceptStandby(input: {
+  readonly token: string;
+  readonly method: string;
+  readonly idempotencyKey: string;
+}): Promise<StandbyAccepted> {
+  return await api.post<StandbyAccepted>(
+    `/standby/${encodeURIComponent(input.token)}/accept`,
+    { method: input.method, clientEventId: input.idempotencyKey },
+    input.idempotencyKey,
+  );
+}
+
+/** `POST /standby/:token/decline` — no; the chair goes to the next person. */
+export async function declineStandby(token: string): Promise<void> {
+  await api.post(`/standby/${encodeURIComponent(token)}/decline`, {}, crypto.randomUUID());
+}
+
+/** `POST /standby/:token/leave` — off the list. A prepayment is owed back. */
+export async function leaveStandby(token: string): Promise<{ readonly refundOwed: boolean }> {
+  return await api.post<{ readonly refundOwed: boolean }>(
+    `/standby/${encodeURIComponent(token)}/leave`,
+    {},
+    crypto.randomUUID(),
   );
 }

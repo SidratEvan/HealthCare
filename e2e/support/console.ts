@@ -61,7 +61,22 @@ export interface ConsoleSession {
   readonly doctorStaffId: string;
   /** Booking ids by serial, so a spec can name "serial 7" and mean it. */
   readonly bookingsBySerial: ReadonlyMap<number, string>;
+  /** What this chamber charges, copied onto every booking (`DB-P5`). */
+  readonly feePoisha: number;
 }
+
+/**
+ * Where a fresh session opens.
+ *
+ * - `in-chamber` — the state the pitch opens on: the doctor arrived twenty
+ *   minutes ago and serial 1 is being seen.
+ * - `overdue` — the doctor arrived eighty minutes ago, serial 1 finished
+ *   seventy minutes ago, and serial 2 is at the front of an empty chamber.
+ *   Serial 2's grace period (`FR-QUE-20`) has long since run out, so reception
+ *   may mark them absent — which is the only honest way to reach a no-show
+ *   without a spec waiting fifteen real minutes.
+ */
+export type SessionOpening = 'in-chamber' | 'overdue';
 
 async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({
@@ -84,7 +99,12 @@ async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
  * The only thing that is not seeded is the session itself, and that is
  * precisely so one spec cannot disturb another.
  */
-export async function createConsoleSession(bookings = 8): Promise<ConsoleSession> {
+export async function createConsoleSession(
+  bookings = 8,
+  opening: SessionOpening = 'in-chamber',
+): Promise<ConsoleSession> {
+  const overdue = opening === 'overdue';
+
   return await withClient(async (client) => {
     const chamber = await client.query<{
       hospital_id: string;
@@ -126,10 +146,10 @@ export async function createConsoleSession(bookings = 8): Promise<ConsoleSession
          (hospital_id, doctor_id, department_id, room, session_date,
           planned_start, planned_end, capacity, fee_poisha)
        VALUES ($1, $2, $3, 'E2E', (now() AT TIME ZONE 'Asia/Dhaka')::date,
-               now() - interval '30 minutes', now() + interval '150 minutes',
+               now() - make_interval(mins => $5), now() + interval '150 minutes',
                40, $4)
        RETURNING id`,
-      [row.hospital_id, row.doctor_id, row.department_id, row.fee_poisha],
+      [row.hospital_id, row.doctor_id, row.department_id, row.fee_poisha, overdue ? 90 : 30],
     );
 
     const sessionId = session.rows[0]?.id;
@@ -173,26 +193,63 @@ export async function createConsoleSession(bookings = 8): Promise<ConsoleSession
     const firstBooking = bookingsBySerial.get(1);
     if (firstBooking === undefined) throw new Error('no serial 1');
 
-    await appendEvent(client, sessionId, receptionistId, 'DOCTOR_ARRIVED', {
-      arrivedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
-      minutesLate: 10,
-    });
-    await appendEvent(client, sessionId, receptionistId, 'PATIENT_CALLED', {
-      bookingId: firstBooking,
-      serial: 1,
-    });
+    //
+    // An overdue session's events are stamped in the past, which is what
+    // `server_ts` would say had the console been driven an hour ago. The
+    // grace period reads that column, so this is the log the reducer would
+    // have produced — not a status set by hand.
+    const arrivedMinutesAgo = overdue ? 80 : 20;
+
+    await appendEvent(
+      client,
+      sessionId,
+      receptionistId,
+      'DOCTOR_ARRIVED',
+      {
+        arrivedAt: new Date(Date.now() - arrivedMinutesAgo * 60_000).toISOString(),
+        minutesLate: 10,
+      },
+      overdue ? arrivedMinutesAgo : 0,
+    );
+    await appendEvent(
+      client,
+      sessionId,
+      receptionistId,
+      'PATIENT_CALLED',
+      { bookingId: firstBooking, serial: 1 },
+      overdue ? 75 : 0,
+    );
 
     await client.query(
       `UPDATE sessions
-          SET status = 'running', actual_start = now() - interval '20 minutes'
+          SET status = 'running', actual_start = now() - make_interval(mins => $2)
         WHERE id = $1`,
-      [sessionId],
+      [sessionId, arrivedMinutesAgo],
     );
-    await client.query(
-      `UPDATE bookings SET status = 'in_chamber', called_at = now() - interval '4 minutes'
-        WHERE id = $1`,
-      [firstBooking],
-    );
+
+    if (overdue) {
+      await appendEvent(
+        client,
+        sessionId,
+        receptionistId,
+        'PATIENT_DONE',
+        { bookingId: firstBooking, consultSeconds: 300 },
+        70,
+      );
+      await client.query(
+        `UPDATE bookings
+            SET status = 'done', called_at = now() - interval '75 minutes',
+                done_at = now() - interval '70 minutes', consult_seconds = 300
+          WHERE id = $1`,
+        [firstBooking],
+      );
+    } else {
+      await client.query(
+        `UPDATE bookings SET status = 'in_chamber', called_at = now() - interval '4 minutes'
+          WHERE id = $1`,
+        [firstBooking],
+      );
+    }
 
     return {
       sessionId,
@@ -222,7 +279,74 @@ export async function createConsoleSession(bookings = 8): Promise<ConsoleSession
         },
       }),
       bookingsBySerial,
+      feePoisha: row.fee_poisha,
     };
+  });
+}
+
+/**
+ * Puts seeded patients on this session's standby list (`FR-PAT-25`).
+ *
+ * People who hold no booking on it — somebody already in the queue is not
+ * waiting for a chair. The number is on the demo standby range
+ * (`database/seeds/lib/demo.ts`, `+8801350…`), so an SMS written to it is
+ * recognisably a demonstration message.
+ */
+export async function joinStandby(session: ConsoleSession, count: number): Promise<void> {
+  await withClient(async (client) => {
+    const patients = await client.query<{ id: string }>(
+      `SELECT p.id FROM patients p
+        WHERE p.deleted_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM bookings b
+                           WHERE b.session_id = $1 AND b.patient_id = p.id)
+        ORDER BY p.created_at DESC, p.id
+        LIMIT $2`,
+      [session.sessionId, count],
+    );
+
+    if (patients.rows.length < count) {
+      throw new Error(`Need ${String(count)} seeded patients off this session.`);
+    }
+
+    for (const [index, patient] of patients.rows.entries()) {
+      await client.query(
+        `INSERT INTO standby_list (session_id, patient_id, contact_phone, position)
+         VALUES ($1, $2, $3, $4)`,
+        [session.sessionId, patient.id, `+88013509900${String(index + 10)}`, index + 1],
+      );
+    }
+  });
+}
+
+/**
+ * Fills the chamber: capacity lowered to the serials it already holds, so the
+ * patient app shows it পূর্ণ and offers its standby list (`FR-PAT-25`).
+ */
+export async function fillSession(session: ConsoleSession): Promise<void> {
+  await withClient(async (client) => {
+    await client.query(
+      `UPDATE sessions
+          SET capacity = (SELECT count(*) FROM bookings b
+                           WHERE b.session_id = sessions.id AND b.status <> 'cancelled')
+        WHERE id = $1`,
+      [session.sessionId],
+    );
+  });
+}
+
+/**
+ * The seeded administrator at a hospital, as `S-B-10` would be opened by one.
+ *
+ * The same signed staff token the picker's `POST /demo/token` mints for the
+ * `hospital_admin` role (CLAUDE.md §4.1).
+ */
+export async function adminToken(hospitalId: string): Promise<string> {
+  return await withClient(async (client) => {
+    const adminId = await staffAt(client, hospitalId, 'hospital_admin');
+    return await signToken({
+      kind: 'access',
+      claims: { sub: adminId, kind: 'staff', hospitalId, roles: ['hospital_admin'] },
+    });
   });
 }
 
@@ -268,24 +392,32 @@ export async function loadPitchSession(): Promise<{
   });
 }
 
-/** Appends one event, the way the service would. */
+/**
+ * Appends one event, the way the service would.
+ *
+ * `minutesAgo` stamps `server_ts` in the past, for a session that is meant to
+ * have been running for a while. Events are appended in the order written, so
+ * `seq` and `server_ts` still agree.
+ */
 async function appendEvent(
   client: Client,
   sessionId: string,
   staffId: string,
   type: string,
   payload: Record<string, unknown>,
+  minutesAgo = 0,
 ): Promise<void> {
   await client.query(
     `INSERT INTO queue_events
-       (session_id, type, booking_id, actor_staff_id, actor_role, payload)
-     VALUES ($1, $2, $3, $4, 'receptionist', $5::jsonb)`,
+       (session_id, type, booking_id, actor_staff_id, actor_role, payload, server_ts)
+     VALUES ($1, $2, $3, $4, 'receptionist', $5::jsonb, now() - make_interval(mins => $6))`,
     [
       sessionId,
       type,
       typeof payload['bookingId'] === 'string' ? payload['bookingId'] : null,
       staffId,
       JSON.stringify(payload),
+      minutesAgo,
     ],
   );
 }

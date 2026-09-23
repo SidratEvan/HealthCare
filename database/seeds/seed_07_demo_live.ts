@@ -37,6 +37,7 @@
 
 import {
   clampConsultSeconds,
+  MAX_QUOTED_WAIT_MINUTES,
   id,
   isSpecialtyCode,
   serial as asSerial,
@@ -93,11 +94,22 @@ const IN_CHAMBER_MINUTES = 4;
 /** The gap between one consultation ending and the next being called. */
 const TURNOVER_SECONDS = 40;
 
+/** How many of those still waiting are already checked in (`FR-REC-18`). */
+const CHECKED_IN_WAITING = 4;
+
 export const seed07DemoLive: SeedModule = {
   name: 'seed_07_demo_live',
   title: "today's bookings, and one session mid-queue for the pitch",
   requirements: ['FR-DEM-06', 'FR-QUE-01', 'FR-PAT-25'],
-  writes: ['sessions', 'bookings', 'queue_events', 'queue_state', 'standby_list'],
+  writes: [
+    'sessions',
+    'bookings',
+    'queue_events',
+    'queue_state',
+    'standby_list',
+    'guest_identities',
+    'payments',
+  ],
 
   async run({ client, now, rng, log }: SeedContext): Promise<SeedSummary> {
     const live = rng.stream('demo-live');
@@ -248,6 +260,19 @@ export const seed07DemoLive: SeedModule = {
       '',
     );
 
+    // `FR-PAT-26`: position 1 joined from the app and paid when joining, so
+    // the first chair reception gives away on the pitch goes to them without
+    // anybody being asked — "prepaid gets it automatically", demonstrable on
+    // the first tap rather than only described. Positions 2 and 3 are
+    // reception's own entries, asked by the counter as before.
+    const prepaid = await prepayFirstOnStandby(client, demoSessionId);
+
+    // `FR-PAT-25`: a patient can only join a list for a chamber that is full,
+    // so today needs one. The next cardiology chamber at the pitch hospital is
+    // set to exactly the serials it already holds: the patient app shows it
+    // পূর্ণ, with স্ট্যান্ডবাই তালিকায় নাম দিন beneath.
+    const full = await fillOneChamber(client, demoChamber, demoSessionId, now);
+
     await recountGuestBookings(client);
 
     const serving = state.entries.find((entry) => entry.status === 'in_chamber');
@@ -258,15 +283,97 @@ export const seed07DemoLive: SeedModule = {
       )} waiting, next serial ${String(DEMO_LIVE.bookingsBefore + 1)}`,
     );
     log(`      ${String(filledSessions)} other upcoming sessions filled`);
+    log(
+      `      standby: position 1 prepaid (${prepaid ? 'yes' : 'no'}); ` +
+        `a full chamber for the join: ${full === null ? 'none found' : `${String(full)} serials`}`,
+    );
 
     return {
       bookings: bookings + demoBookings.length,
       queue_events: appended.length,
       queue_state: filledSessions + 1,
       standby_list: standbyRows.length,
+      guest_identities: prepaid ? 1 : 0,
+      payments: prepaid ? 1 : 0,
     };
   },
 };
+
+/**
+ * Makes the pitch chamber's first standby place a prepaid one (`FR-PAT-26`).
+ *
+ * A guest identity for the number already on the row, and a paid payment
+ * whose subject is the row itself (migration 0023) — the shape a join from
+ * the app with bKash leaves behind. Labelled as demonstration data by the
+ * phone range it uses (`database/seeds/lib/demo.ts`).
+ */
+async function prepayFirstOnStandby(client: Client, sessionId: string): Promise<boolean> {
+  const row = await client.query<{ id: string; contact_phone: string; fee_poisha: number }>(
+    `SELECT sl.id, sl.contact_phone, s.fee_poisha
+       FROM standby_list sl JOIN sessions s ON s.id = sl.session_id
+      WHERE sl.session_id = $1 AND sl.position = 1 AND sl.removed_at IS NULL`,
+    [sessionId],
+  );
+  const place = row.rows[0];
+  if (place === undefined) return false;
+
+  const guest = await client.query<{ id: string }>(
+    `INSERT INTO guest_identities (phone, display_name) VALUES ($1, NULL) RETURNING id`,
+    [place.contact_phone],
+  );
+  const guestId = guest.rows[0]?.id;
+  if (guestId === undefined) return false;
+
+  await client.query('UPDATE standby_list SET guest_id = $1 WHERE id = $2', [guestId, place.id]);
+
+  await client.query(
+    `INSERT INTO payments
+       (standby_id, payer_guest_id, amount_poisha, platform_fee_poisha, method, state,
+        idempotency_key, paid_at, created_at)
+     VALUES ($1, $2, $3, 0, 'bkash', 'paid', $4, now() - interval '40 minutes',
+             now() - interval '40 minutes')`,
+    [place.id, guestId, place.fee_poisha, `seed-standby-prepay-${place.id}`],
+  );
+
+  return true;
+}
+
+/**
+ * Fills one of today's chambers to its capacity, so the patient app has a
+ * full chamber to join the standby list of (`FR-PAT-25`, `BTN-A06D-STANDBY`).
+ *
+ * The capacity is lowered to the serials already held rather than bookings
+ * being invented to reach it: the chamber is full *because* of rows that
+ * exist, and nothing on the roster is made up for the purpose.
+ */
+async function fillOneChamber(
+  client: Client,
+  pitch: ChamberRow,
+  pitchSessionId: string,
+  now: Timestamp,
+): Promise<number | null> {
+  const result = await client.query<{ capacity: number }>(
+    `WITH chosen AS (
+       SELECT s.id FROM sessions s
+        WHERE s.session_date = $1::date
+          AND s.status = 'scheduled'
+          AND s.hospital_id = $2
+          AND s.department_id = $3
+          AND s.id <> $4
+          AND s.deleted_at IS NULL
+        ORDER BY s.planned_start, s.id
+        LIMIT 1
+     )
+     UPDATE sessions
+        SET capacity = (SELECT count(*) FROM bookings b
+                         WHERE b.session_id = sessions.id AND b.status <> 'cancelled'
+                           AND b.deleted_at IS NULL)
+      WHERE id IN (SELECT id FROM chosen)
+     RETURNING capacity`,
+    [dhakaDate(now, 0), pitch.hospitalId, pitch.departmentId, pitchSessionId],
+  );
+  return result.rows[0]?.capacity ?? null;
+}
 
 /** How late the doctor was on the pitch session. Twelve minutes, every time. */
 const DEMO_ARRIVAL_LATE_MINUTES = 12;
@@ -494,11 +601,14 @@ function buildMidQueueLog(
     },
   ];
 
+  const called: { readonly booking: InsertedBooking; readonly calledAt: Timestamp }[] = [];
+
   for (const [index, booking] of done.entries()) {
     const endedAt = finishedAt[index];
     const consultSeconds = consults[index];
     if (endedAt === undefined || consultSeconds === undefined) continue;
     const calledAt = time.addSeconds(endedAt, -consultSeconds);
+    called.push({ booking, calledAt });
 
     drafts.push({
       type: 'PATIENT_CALLED',
@@ -548,8 +658,72 @@ function buildMidQueueLog(
     clientEventId: null,
     actor,
   });
+  called.push({ booking: inChamber, calledAt: calledAtSix });
+
+  drafts.push(...checkInDrafts(rng.stream('check-ins'), bookings, called, chamber, now, actor));
 
   return drafts.sort((a, b) => (a.serverTs < b.serverTs ? -1 : a.serverTs > b.serverTs ? 1 : 0));
+}
+
+/**
+ * Who reception has checked in so far this evening (`FR-REC-18`).
+ *
+ * Everybody already called was checked in before their turn, so the overview
+ * has real waits and real quotes to report for today. Of those still waiting,
+ * the next few in line are here — checked in within the last half hour and
+ * quoted what the queue estimated — and the rest are not yet, so reception
+ * opens with somebody to check in and a guest booking made during the pitch
+ * gets its own এসেছেন to tap. The late patient is not here, which is what
+ * late means.
+ */
+function checkInDrafts(
+  rng: Rng,
+  bookings: readonly InsertedBooking[],
+  called: readonly { readonly booking: InsertedBooking; readonly calledAt: Timestamp }[],
+  chamber: ChamberRow,
+  now: Timestamp,
+  actor: EventDraft['actor'],
+): EventDraft[] {
+  const quote = (minutes: number): number =>
+    Math.min(MAX_QUOTED_WAIT_MINUTES, Math.max(5, Math.round(minutes / 5) * 5));
+
+  const drafts: EventDraft[] = called.map(({ booking, calledAt }) => {
+    const waited = rng.int(10, 35);
+    const at = time.addMinutes(calledAt, -waited);
+    return {
+      type: 'PATIENT_ARRIVED',
+      payload: {
+        bookingId: id<BookingId>(booking.id),
+        quotedWaitMinutes: quote(waited + rng.int(-8, 10)),
+      },
+      serverTs: at,
+      clientTs: at,
+      clientEventId: null,
+      actor,
+    };
+  });
+
+  const waitingNow = bookings
+    .slice(DEMO_LIVE.doneThrough + 1)
+    .filter((booking) => booking.serial !== DEMO_LIVE.lateSerial)
+    .slice(0, CHECKED_IN_WAITING);
+
+  for (const [ahead, booking] of waitingNow.entries()) {
+    const at = time.addMinutes(now, -rng.int(3, 25));
+    drafts.push({
+      type: 'PATIENT_ARRIVED',
+      payload: {
+        bookingId: id<BookingId>(booking.id),
+        quotedWaitMinutes: quote((ahead + 1) * chamber.consultMinutes),
+      },
+      serverTs: at,
+      clientTs: at,
+      clientEventId: null,
+      actor,
+    });
+  }
+
+  return drafts;
 }
 
 /** Who declared the lateness: the account holder, or the guest themselves. */

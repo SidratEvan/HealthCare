@@ -9,11 +9,14 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { serial, timestamp } from '../../types/ids.js';
+import { id, serial, timestamp } from '../../types/ids.js';
+import { QUOTE_STEP_MINUTES, suggestedQuote } from '../quote.js';
 import { reduce } from '../reducer.js';
 import {
+  canAcceptSlot,
   canAddWalkin,
   canCallNext,
+  canCheckIn,
   canDeclareDelay,
   canDeclareDoctorArrived,
   canDeclareLate,
@@ -25,14 +28,19 @@ import {
   canResume,
   graceRemaining,
   graceWindowMinutes,
+  canOfferFreedSlot,
   hasCapacity,
+  lapsedOffers,
   nextToCall,
   DEFAULT_QUEUE_SETTINGS,
   MAX_DELAY_MINUTES,
+  MAX_QUOTED_WAIT_MINUTES,
 } from '../rules.js';
 import { emptyState, type QueueState } from '../state.js';
 
 import { bookingId, LogBuilder, makeSeed } from './support.js';
+
+import type { BookingId, PatientId, SlotOfferId } from '../../types/ids.js';
 
 const PLANNED_START = timestamp('2026-09-17T11:00:00.000Z');
 
@@ -317,6 +325,69 @@ describe('reinstating a patient (FR-QUE-22)', () => {
   });
 });
 
+describe('checking a patient in (FR-REC-18)', () => {
+  function refusal(result: ReturnType<typeof canCheckIn>): string | null {
+    return result.ok ? null : result.code;
+  }
+
+  it('allows a booked patient, before and after the doctor arrives', () => {
+    expect(canCheckIn(session().state, bookingId(2), 25).ok).toBe(true);
+    expect(canCheckIn(running().state, bookingId(2), 25).ok).toBe(true);
+  });
+
+  it('allows a patient who declared lateness and has now turned up', () => {
+    const { state, log } = running();
+    const late = reduce(
+      state,
+      log.next('PATIENT_LATE', { bookingId: bookingId(1), expectedMinutes: 20, reinsertAfter: 3 }),
+    );
+
+    expect(canCheckIn(late, bookingId(1), 10).ok).toBe(true);
+  });
+
+  it('refuses a second check-in, which would move the measured arrival', () => {
+    const { state, log } = running();
+    const here = reduce(
+      state,
+      log.next('PATIENT_ARRIVED', { bookingId: bookingId(2), quotedWaitMinutes: 20 }),
+    );
+
+    expect(refusal(canCheckIn(here, bookingId(2), 20))).toBe('ALREADY_ARRIVED');
+  });
+
+  it('refuses somebody already in the chamber, and anybody settled', () => {
+    const { state, log } = running();
+    const next = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.next('PATIENT_NO_SHOW', { bookingId: bookingId(2), graceUsedMinutes: 20 }),
+    ]);
+
+    expect(refusal(canCheckIn(next, bookingId(1), 0))).toBe('ALREADY_ARRIVED');
+    // A no-show who turns up is reinstated first — a different decision.
+    expect(refusal(canCheckIn(next, bookingId(2), 10))).toBe('BOOKING_SETTLED');
+  });
+
+  it('refuses a quote that is not a plausible number of minutes', () => {
+    const { state } = running();
+
+    expect(refusal(canCheckIn(state, bookingId(2), -5))).toBe('QUOTE_OUT_OF_RANGE');
+    expect(refusal(canCheckIn(state, bookingId(2), 12.5))).toBe('QUOTE_OUT_OF_RANGE');
+    expect(refusal(canCheckIn(state, bookingId(2), MAX_QUOTED_WAIT_MINUTES + 1))).toBe(
+      'QUOTE_OUT_OF_RANGE',
+    );
+    expect(canCheckIn(state, bookingId(2), MAX_QUOTED_WAIT_MINUTES).ok).toBe(true);
+  });
+
+  it('refuses an unknown booking and an ended session', () => {
+    const { state, log } = running();
+
+    expect(refusal(canCheckIn(state, bookingId(99), 10))).toBe('UNKNOWN_BOOKING');
+
+    const ended = reduce(state, log.next('SESSION_ENDED', { reason: null }));
+    expect(refusal(canCheckIn(ended, bookingId(2), 10))).toBe('SESSION_ENDED');
+  });
+});
+
 describe('a patient declaring lateness (FR-PAT-33)', () => {
   it('is allowed while they are still waiting', () => {
     const { state } = running();
@@ -444,5 +515,224 @@ describe('capacity', () => {
     const uncapped = { plan: { ...seed.plan, capacity: null }, roster: seed.roster };
 
     expect(hasCapacity(emptyState(uncapped))).toBe(true);
+  });
+});
+
+/** Somebody on the standby list — a patient, not a booking: they have none. */
+const STANDBY_PATIENT = id<PatientId>('44444444-4444-7444-8444-000000000009');
+
+describe('offering a chair somebody freed (FR-QUE-30)', () => {
+  const OFFER_ID = id<SlotOfferId>('55555555-5555-7555-8555-000000000001');
+  /** A running session with serial 2 marked no-show, so a chair is free. */
+  function withFreedChair(): { state: QueueState; log: LogBuilder; freed: BookingId } {
+    const { state, log } = running();
+    const freed = bookingId(2);
+    const after = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+      log.next('PATIENT_CALLED', { bookingId: freed, serial: serial(2) }),
+      log.next('PATIENT_NO_SHOW', { bookingId: freed, graceUsedMinutes: 20 }),
+    ]);
+    return { state: after, log, freed };
+  }
+
+  it('offers a chair a no-show left empty', () => {
+    const { state, freed } = withFreedChair();
+    expect(canOfferFreedSlot(state, freed)).toEqual({ ok: true });
+  });
+
+  it('offers a chair a cancellation left empty', () => {
+    const { state, log } = running();
+    const cancelled = bookingId(4);
+    const after = reduce(
+      state,
+      log.next('BOOKING_CANCELLED', { bookingId: cancelled, reason: 'patient cancelled' }),
+    );
+
+    expect(canOfferFreedSlot(after, cancelled)).toEqual({ ok: true });
+  });
+
+  it('refuses to give away the chair of somebody merely late', () => {
+    // FR-QUE-21: a late patient still holds their place. Offering it would
+    // take a turn from a person standing outside the door in traffic.
+    const { state, log } = running();
+    const late = bookingId(3);
+    const after = reduce(
+      state,
+      log.next('PATIENT_LATE', { bookingId: late, expectedMinutes: 20, reinsertAfter: 3 }),
+    );
+
+    expect(canOfferFreedSlot(after, late)).toMatchObject({ ok: false, code: 'SLOT_NOT_FREE' });
+  });
+
+  it('refuses a chair somebody is still waiting in', () => {
+    const { state } = running();
+    expect(canOfferFreedSlot(state, bookingId(3))).toMatchObject({
+      ok: false,
+      code: 'SLOT_NOT_FREE',
+    });
+  });
+
+  it('refuses a booking that is not in this session', () => {
+    const { state } = running();
+    expect(canOfferFreedSlot(state, bookingId(99))).toMatchObject({
+      ok: false,
+      code: 'UNKNOWN_BOOKING',
+    });
+  });
+
+  it('refuses a second offer against the same chair', () => {
+    // Two outstanding offers for one place is two people told to come in, and
+    // the second to arrive is turned away at the counter.
+    const { state, log, freed } = withFreedChair();
+    const offered = reduce(
+      state,
+      log.next('SLOT_OFFERED', {
+        offerId: OFFER_ID,
+        freedBookingId: freed,
+        offeredTo: [STANDBY_PATIENT],
+        expiresAt: timestamp('2026-09-17T12:10:00.000Z'),
+      }),
+    );
+
+    expect(canOfferFreedSlot(offered, freed)).toMatchObject({
+      ok: false,
+      code: 'OFFER_OUTSTANDING',
+    });
+  });
+
+  it('allows the chair to be offered again once the first offer lapsed', () => {
+    // "Unaccepted offers pass to the next patient" — which is only possible if
+    // an expired offer stops blocking the chair.
+    const { state, log, freed } = withFreedChair();
+    const lapsed = fold(state, [
+      log.next('SLOT_OFFERED', {
+        offerId: OFFER_ID,
+        freedBookingId: freed,
+        offeredTo: [STANDBY_PATIENT],
+        expiresAt: timestamp('2026-09-17T12:10:00.000Z'),
+      }),
+      log.next('SLOT_EXPIRED', { offerId: OFFER_ID }),
+    ]);
+
+    expect(canOfferFreedSlot(lapsed, freed)).toEqual({ ok: true });
+  });
+
+  it('refuses to offer anything once the session has ended', () => {
+    const { state, log, freed } = withFreedChair();
+    const ended = reduce(state, log.next('SESSION_ENDED', { reason: null }));
+
+    expect(canOfferFreedSlot(ended, freed)).toMatchObject({ ok: false, code: 'SESSION_ENDED' });
+  });
+});
+
+describe('accepting an offered chair', () => {
+  const OFFER_ID = id<SlotOfferId>('55555555-5555-7555-8555-000000000002');
+  const EXPIRES = timestamp('2026-09-17T12:10:00.000Z');
+
+  function offered(): { state: QueueState; log: LogBuilder } {
+    const { state, log } = running();
+    const freed = bookingId(2);
+    const after = fold(state, [
+      log.next('BOOKING_CANCELLED', { bookingId: freed, reason: 'patient cancelled' }),
+      log.next('SLOT_OFFERED', {
+        offerId: OFFER_ID,
+        freedBookingId: freed,
+        offeredTo: [STANDBY_PATIENT],
+        expiresAt: EXPIRES,
+      }),
+    ]);
+    return { state: after, log };
+  }
+
+  it('accepts inside the window', () => {
+    const { state } = offered();
+    expect(canAcceptSlot(state, OFFER_ID, timestamp('2026-09-17T12:05:00.000Z'))).toEqual({
+      ok: true,
+    });
+  });
+
+  it('refuses once the clock has passed the deadline, with nothing having swept it', () => {
+    // Nothing runs on a timer in this version, so an offer that lapsed twenty
+    // minutes ago is still `pending` in the log. It must not be acceptable
+    // merely because no worker has said otherwise yet.
+    const { state } = offered();
+    expect(canAcceptSlot(state, OFFER_ID, timestamp('2026-09-17T12:30:00.000Z'))).toMatchObject({
+      ok: false,
+      code: 'OFFER_EXPIRED',
+    });
+  });
+
+  it('refuses at the deadline exactly', () => {
+    const { state } = offered();
+    expect(canAcceptSlot(state, OFFER_ID, EXPIRES)).toMatchObject({
+      ok: false,
+      code: 'OFFER_EXPIRED',
+    });
+  });
+
+  it('refuses a chair already taken', () => {
+    const { state, log } = offered();
+    const taken = reduce(
+      state,
+      log.next('SLOT_ACCEPTED', { offerId: OFFER_ID, newBookingId: bookingId(9) }),
+    );
+
+    expect(canAcceptSlot(taken, OFFER_ID, timestamp('2026-09-17T12:05:00.000Z'))).toMatchObject({
+      ok: false,
+      code: 'OFFER_SETTLED',
+    });
+  });
+
+  it('refuses an offer that does not exist', () => {
+    const { state } = offered();
+    expect(
+      canAcceptSlot(state, 'not-an-offer', timestamp('2026-09-17T12:05:00.000Z')),
+    ).toMatchObject({ ok: false, code: 'UNKNOWN_OFFER' });
+  });
+
+  it('names the offers whose window has closed', () => {
+    const { state } = offered();
+
+    expect(lapsedOffers(state, timestamp('2026-09-17T12:05:00.000Z'))).toHaveLength(0);
+    expect(lapsedOffers(state, timestamp('2026-09-17T12:30:00.000Z'))).toHaveLength(1);
+  });
+});
+
+describe('the quote a check-in starts from (FR-REC-18)', () => {
+  it('is the minutes to the estimated call, in round fives', () => {
+    const { state } = running(6);
+    const now = timestamp('2026-09-17T11:00:00.000Z');
+
+    const quotes = [1, 2, 3, 4].map((serialNumber) =>
+      suggestedQuote(state, bookingId(serialNumber), now),
+    );
+
+    for (const quote of quotes) {
+      expect(quote).not.toBeNull();
+      expect((quote ?? 1) % QUOTE_STEP_MINUTES).toBe(0);
+    }
+    // Further back in the line is a longer wait, never a shorter one.
+    expect(quotes).toEqual([...quotes].sort((a, b) => (a ?? 0) - (b ?? 0)));
+    expect(quotes[3]).toBeGreaterThan(quotes[0] ?? 0);
+  });
+
+  it('has no suggestion for somebody in the chamber, or not in the session', () => {
+    const { state, log } = running(3);
+    const now = timestamp('2026-09-17T11:05:00.000Z');
+    const calling = reduce(
+      state,
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+    );
+
+    expect(suggestedQuote(calling, bookingId(1), now)).toBeNull();
+    expect(suggestedQuote(calling, bookingId(42), now)).toBeNull();
+  });
+
+  it('never suggests more than a quote may say', () => {
+    const { state } = session(3);
+    // A chamber that starts in a fortnight: the estimate is huge, the quote is not.
+    const now = timestamp('2026-09-01T11:00:00.000Z');
+    expect(suggestedQuote(state, bookingId(3), now)).toBe(MAX_QUOTED_WAIT_MINUTES);
   });
 });

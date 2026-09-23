@@ -34,6 +34,7 @@ import { Button, Card, Chip, FreshnessLine, Input } from '@platform/ui';
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 import { HospitalBeds } from '@/components/HospitalBeds';
 import { BackIcon, ChevronIcon, HospitalIcon } from '@/components/icons';
+import { StandbyJoin } from '@/components/StandbyJoin';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
 import {
@@ -68,7 +69,7 @@ const NUMERALS = 'bengali' as const;
  * pick who they see. Doctors-first asked somebody in Dhaka to choose between
  * forty cardiologists without knowing which was twenty minutes away.
  */
-type Step = 'hospital' | 'doctor' | 'session' | 'confirm' | 'done';
+type Step = 'hospital' | 'doctor' | 'session' | 'confirm' | 'standby' | 'done';
 
 export default function BookPage(): ReactNode {
   const [specialty, setSpecialty] = useState<string | null>(null);
@@ -144,6 +145,15 @@ export default function BookPage(): ReactNode {
       });
   }, []);
 
+  /**
+   * `BTN-A06D-STANDBY`: a full chamber's card offers its standby list
+   * (`FR-PAT-25`) instead of a booking.
+   */
+  const chooseStandby = useCallback((chosen: SessionCard) => {
+    setSession(chosen);
+    setStep('standby');
+  }, []);
+
   if (step === 'done' && booking !== null && session !== null) {
     return <Success booking={booking} session={session} />;
   }
@@ -185,10 +195,30 @@ export default function BookPage(): ReactNode {
             doctor={doctor}
             sessions={sessions}
             onChoose={chooseSession}
+            onStandby={chooseStandby}
             onBack={() => {
               setStep('doctor');
             }}
           />
+        ) : null}
+
+        {step === 'standby' && session !== null ? (
+          <>
+            <BackLink
+              onBack={() => {
+                setStep('session');
+              }}
+            />
+            <StandbyJoin
+              session={session}
+              online={online}
+              onJoined={(joined) => {
+                // The status token is the place on the list; the page it
+                // opens is where the offer — or the seat — arrives.
+                globalThis.location.assign(`/standby?t=${encodeURIComponent(joined.token)}`);
+              }}
+            />
+          </>
         ) : null}
 
         {step === 'confirm' && session !== null ? (
@@ -506,11 +536,13 @@ function SessionList({
   doctor,
   sessions,
   onChoose,
+  onStandby,
   onBack,
 }: {
   readonly doctor: HospitalDoctorCard;
   readonly sessions: SessionCard[] | null;
   readonly onChoose: (session: SessionCard) => void;
+  readonly onStandby: (session: SessionCard) => void;
   readonly onBack: () => void;
 }): ReactNode {
   return (
@@ -524,7 +556,7 @@ function SessionList({
       ) : sessions.length === 0 ? (
         <p className="text-body-md text-ink-muted">{tp('noSessions', LOCALE)}</p>
       ) : (
-        <SessionCards sessions={sessions} onChoose={onChoose} />
+        <SessionCards sessions={sessions} onChoose={onChoose} onStandby={onStandby} />
       )}
     </section>
   );
@@ -533,9 +565,11 @@ function SessionList({
 function SessionCards({
   sessions,
   onChoose,
+  onStandby,
 }: {
   readonly sessions: SessionCard[];
   readonly onChoose: (session: SessionCard) => void;
+  readonly onStandby: (session: SessionCard) => void;
 }): ReactNode {
   return (
     <>
@@ -579,6 +613,22 @@ function SessionCards({
                   </div>
                 </Card>
               </button>
+
+              {/* `BTN-A06D-STANDBY` — "visible only when a session is full". */}
+              {full ? (
+                <div className="mt-2">
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => {
+                      onStandby(session);
+                    }}
+                    data-testid={`standby-join-${session.id}`}
+                  >
+                    {tp('standbyJoin', LOCALE)}
+                  </Button>
+                </div>
+              ) : null}
             </li>
           );
         })}

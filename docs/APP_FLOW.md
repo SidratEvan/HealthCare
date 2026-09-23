@@ -269,7 +269,7 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 | Live status pill | — | চেম্বারে আছেন · এখন চলছে #12 / আসবেন ৫:০০ / আজ বসবেন না (`FR-PAT-13`), subscribed to the session channel while open |
 | Chamber schedule list | `LIST-A06D-SESSIONS` | Rows per session: day, time, hospital, serials left |
 | সিরিয়াল নিন | `BTN-A06D-BOOK` | → `S-A-07b` Session picker |
-| স্ট্যান্ডবাই তালিকায় যোগ | `BTN-A06D-STANDBY` | Visible only when a session is full → `POST /standby` (`FR-PAT-25`) |
+| স্ট্যান্ডবাই তালিকায় নাম দিন | `BTN-A06D-STANDBY` | Visible only when a session is full, beneath its card → `MOD-A06D-STANDBY` → `POST /sessions/:id/standby` → `S-A-08s` (`FR-PAT-25`) |
 | রোগীদের মতামত | `SEC-A06D-FEEDBACK` | Aggregate ratings, shown only above the volume threshold (`FR-PAT-83`) |
 
 ---
@@ -317,7 +317,20 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 
 ## A5. Live serial — the core screen
 
-### `S-A-08` Live serial (`FR-PAT-30`–`37`)
+**`MOD-A06D-STANDBY`** (in the booking flow, as a step): name, phone, age, sex (`FR-GST-02`), then one choice stated with its consequence — **এখনই পরিশোধ করুন — খালি হলেই সিরিয়াল আপনার** (bKash / Nagad / card; seated on sight; refunded in full if no serial comes, `FR-PAT-26`) or **পরে পরিশোধ — খালি হলে জানাব** (asked on the phone, 10 minutes to answer, `FR-PAT-27`). তালিকায় নাম দিন → `S-A-08s`.
+
+### `S-A-08s` Standby status (`FR-PAT-25`–`27`)
+
+Opened from the join, or from the SMS an offer or a seat sends; the signed status token in the URL is the place on the list. Polled every five seconds while anything can change.
+
+| State | Content / wiring |
+|---|---|
+| Waiting | How many are ahead; a badge saying whether they are seated on sight (paid) or asked here (not); তালিকা থেকে নাম তুলে নিন → confirm, stating that a prepayment comes back (`GR-01`) |
+| Offered | একটি সিরিয়াল খালি হয়েছে, minutes left to answer, payment choice as `SEG-A07C-PAY`. হ্যাঁ, সিরিয়াল নেব → `POST /standby/:token/accept` → seated. না, পরের জনকে দিন → `POST /standby/:token/decline` → the slot is offered to the next patient |
+| Seated | সিরিয়াল N আপনার, and লাইভ সিরিয়াল দেখুন → `S-A-08`. The tracking link is minted once, on the first read after the seat; a device that never saw it is told it went by SMS |
+| Left | That they left the list |
+
+### `S-A-08` Live serial (`FR-PAT-30`–`38`)
 
 **Subscriptions on mount:** session channel (`session:<id>`), plus a heartbeat every 30 s to detect a dead socket.
 
@@ -329,9 +342,10 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 | Progress bar | — | Position within session |
 | ETA block | — | আনুমানিক সময় + confidence band (`FR-QUE-13`) |
 | Countdown | — | আর বাকি ~40 মিনিট, recalculated locally each minute, corrected by server events |
-| Leave-home banner | `BANNER-A08-LEAVE` | Appears when travel + buffer ≥ remaining wait (`FR-PAT-32`) |
+| Counter's quote | `CARD-A08-QUOTE` | After reception checks the patient in (`FR-REC-18`): কাউন্টার জানিয়েছে — প্রায় ২৫ মিনিট, ৫:১০-এ বলা, and the minutes left against it. Beside the ETA block, never replacing it; when the quote has run out it says so rather than counting below zero (`FR-PAT-38`) |
+| Leave-home banner | `BANNER-A08-LEAVE` | Appears when travel + buffer ≥ remaining wait (`FR-PAT-32`). Not once the patient is checked in — they are already here |
 | Queue preview list | `LIST-A08-QUEUE` | Serving, next few, your row highlighted, late rows marked |
-| আমি দেরি করছি | `BTN-A08-LATE` | → `MOD-A08-LATE` |
+| আমি দেরি করছি | `BTN-A08-LATE` | → `MOD-A08-LATE`. Disabled once checked in |
 | সিরিয়াল বদলান | `BTN-A08-RESCHEDULE` | → `S-A-07b` in reschedule mode |
 | বাতিল করুন | `BTN-A08-CANCEL` | → `MOD-A08-CANCEL` confirm with refund rule stated (`GR-01`, `FR-PAY-03`). **In taka, not as a percentage** — a person deciding wants the number they will get. Computed by `refundIfCancelledNow` in `shared/domain`, the same function the server refunds with, so the sentence and the amount cannot disagree. Four outcomes: an amount back, nothing back, nothing was paid, or the hospital has set no terms and will say |
 | Freshness line | — | সর্বশেষ হালনাগাদ X মিনিট আগে (`GR-05`) |
@@ -625,12 +639,15 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 | Row action | ID | Wiring |
 |---|---|---|
+| এসেছেন | `BTN-B02-CHECKIN-<serial>` | On a booked or late row not yet checked in → `MOD-B02-CHECKIN` → `EVT-PATIENT_ARRIVED` with the quoted wait; queued offline like every row action. The row then reads এসেছেন with the quote under it (`FR-REC-18`) |
 | দেখা শেষ | `BTN-B02-DONE-<serial>` | `EVT-PATIENT_DONE`, duration captured |
 | দেরি | `BTN-B02-LATE-<serial>` | `EVT-PATIENT_LATE` → re-insert after *k* (`FR-QUE-21`) → patient notified of new position |
 | অনুপস্থিত | `BTN-B02-NOSHOW-<serial>` | Enabled only after grace period (`FR-QUE-20`); confirm → `EVT-PATIENT_NO_SHOW` → slot freed → waitlist card activates |
 | ফিরিয়ে আনুন | `BTN-B02-REINSTATE-<serial>` | Visible on no-show rows → `EVT-PATIENT_REINSERTED` with actor logged (`FR-QUE-22`) |
 | অগ্রাধিকার | `BTN-B02-PRIORITY-<serial>` | Drag or button → `MOD` requires a reason → `EVT-PRIORITY_REORDERED` (`FR-REC-15`) |
 | রোগীর তথ্য | `BTN-B02-INFO-<serial>` | Side panel: profile, previous visits at this hospital, payment status |
+
+**`MOD-B02-CHECKIN`**: one question — how long are you telling them? Pre-filled from the queue's own estimate (`suggestedQuote`, the function the patient's phone counts down from), moved in fives with − and +, capped at 480. নিশ্চিত করুন → `EVT-PATIENT_ARRIVED { bookingId, quotedWaitMinutes }`; the arrival time is the server's. The quote reaches `S-A-08` as `CARD-A08-QUOTE`. No SMS: it was said across the counter (`FR-REC-18`, `FR-PAT-38`).
 
 **`MOD-B02-WALKIN`**: phone → if existing, profile auto-fills (duplicate detection by phone, `FR-REC-20`); else quick-create (name, age, sex). Position: শেষে যোগ (default) or নির্দিষ্ট অবস্থানে (reason required). Confirm → `EVT-WALKIN_ADDED` → token print (`FR-REC-21`).
 
@@ -934,7 +951,8 @@ directly, not published — the site's job is to get a decision-maker to
 | Doctor arrived / delay declared | `S-A-08` with the delay sheet |
 | Two patients away | `S-A-08` |
 | Called | `S-A-08` takeover |
-| Slot offered | `S-A-08` offer sheet with accept/decline and countdown |
+| Slot offered | `S-A-08s` offer, with accept/decline and countdown (`FR-PAT-27`); for somebody reception put on the list, the SMS says to ring the counter |
+| Slot seated (prepaid) | `S-A-08s` seated → `S-A-08` (`FR-PAT-26`) |
 | Report ready | `S-A-12` record detail |
 | Follow-up due | `S-A-07b` prefilled with the same doctor |
 | Bed request accepted | `S-A-11` request status |

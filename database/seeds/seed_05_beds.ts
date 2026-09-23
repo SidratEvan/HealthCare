@@ -52,6 +52,7 @@ import { DEMO_REFERRALS } from './data/referrals.js';
 import { DEMO_MARKER, demoPhone, labelBn, labelEn, taka } from './lib/demo.js';
 import { insertRows } from './lib/insert.js';
 import { facilityIds, staffByRole } from './lib/lookup.js';
+import { dhakaDate } from './seed_02_doctors_sessions.js';
 
 import type { DemoWard } from './data/beds.js';
 import type { Rng } from './lib/random.js';
@@ -574,7 +575,7 @@ export const seed05Beds: SeedModule = {
 
     // --- The ERs, and the referrals between them ------------------------------
     const caseIds = await writeEmergencyCases(client, { facilities, erStaff, minutesAgo });
-    const referrals = await writeReferrals(client, { facilities, erStaff, caseIds, minutesAgo });
+    const referrals = await writeReferrals(client, { facilities, erStaff, caseIds, now });
 
     return {
       wards: insertedWards.length,
@@ -826,10 +827,25 @@ async function writeReferrals(
     readonly facilities: ReadonlyMap<string, string>;
     readonly erStaff: ReadonlyMap<string, string>;
     readonly caseIds: ReadonlyMap<string, string>;
-    readonly minutesAgo: (minutes: number) => Timestamp;
+    readonly now: Timestamp;
   },
 ): Promise<number> {
-  const { facilities, erStaff, caseIds, minutesAgo } = context;
+  const { facilities, erStaff, caseIds, now } = context;
+
+  // The ER console lists open referrals and **today's** closed ones, on the
+  // Dhaka day (decision 50). The declared timelines run over hours, so a reset
+  // in the first hours after Dhaka midnight put this morning's arrival
+  // yesterday and the console opened without it — found by
+  // `referral.spec.ts` at 01:35 Dhaka. So the timelines are compressed into
+  // the part of today that has happened, in the same order, whenever they
+  // would not otherwise fit.
+  const sinceMidnight = time.differenceInMinutes(
+    now,
+    time.fromDhakaWallClock(dhakaDate(now, 0), 0, 0),
+  );
+  const longest = Math.max(...DEMO_REFERRALS.map((declared) => declared.sentMinutesAgo));
+  const scale = longest < sinceMidnight ? 1 : Math.max(0, sinceMidnight - 1) / longest;
+  const minutesAgo = (minutes: number): Timestamp => time.addMinutes(now, -minutes * scale);
   const stamp = (minutes: number | undefined): Timestamp | null =>
     minutes === undefined ? null : minutesAgo(minutes);
 

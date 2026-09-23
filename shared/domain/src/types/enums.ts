@@ -57,7 +57,7 @@ export const BOOKING_SOURCES = ['app', 'guest_link', 'counter', 'phone', 'walkin
 export type BookingSource = (typeof BOOKING_SOURCES)[number];
 
 /**
- * The 18 facts that can be true about a session (FR-QUE-03).
+ * The 19 facts that can be true about a session (FR-QUE-03).
  *
  * The queue is derived from these and nothing else (DB-P1). Every switch over
  * this union is checked for exhaustiveness by lint, so a new event type cannot
@@ -74,6 +74,7 @@ export const QUEUE_EVENT_TYPES = [
   'PATIENT_LATE',
   'PATIENT_NO_SHOW',
   'PATIENT_REINSERTED',
+  'PATIENT_ARRIVED',
   'WALKIN_ADDED',
   'BOOKING_CANCELLED',
   'SLOT_OFFERED',

@@ -32,14 +32,18 @@ import {
   clampConsultSeconds,
   nowServing,
   queueCounts,
+  suggestedQuote,
+  time,
   waitingQueue,
   type QueueEntry,
 } from '@platform/domain';
-import { formatClock, formatNumber, t, type Locale } from '@platform/i18n';
+import { format, formatClock, formatNumber, formatSerial, t, type Locale } from '@platform/i18n';
 import { Button, Card, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
+import { CheckInSheet } from '@/components/CheckInSheet';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
+import { StandbyCard } from '@/components/StandbyCard';
 import { useSessionQueue } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 
@@ -68,6 +72,8 @@ const CONSOLE_LOCALE: Locale = 'bn';
  * hours out, on the one line of the screen that says when the session is.
  */
 const CONSOLE_NUMERALS = 'latin' as const;
+
+const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 
 /**
  * The demo principal (CLAUDE.md §4.1).
@@ -99,6 +105,8 @@ function ConsoleBody(): ReactNode {
 
   const sessionId = useSessionId();
   const [now, setNow] = useState(() => new Date());
+  /** The row `MOD-B02-CHECKIN` is open for (`FR-REC-18`). */
+  const [checkingIn, setCheckingIn] = useState<QueueEntry | null>(null);
 
   // The freshness line has to age on screen without anything else happening —
   // that is the whole point of it (FR-OFF-03). One tick a second is enough for
@@ -114,7 +122,7 @@ function ConsoleBody(): ReactNode {
 
   const queue = useSessionQueue({
     sessionId: sessionId ?? '',
-    apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
+    apiBaseUrl: API_BASE,
     socketUrl: process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:4000',
     getToken: readToken,
   });
@@ -320,6 +328,40 @@ function ConsoleBody(): ReactNode {
                   newPosition: 0,
                 });
               }}
+              onCheckIn={(entry) => {
+                setCheckingIn(entry);
+              }}
+            />
+
+            {/* MOD-B02-CHECKIN. The suggestion is the queue's own estimate, the
+                same function the patient's phone counts down from. */}
+            <CheckInSheet
+              serial={checkingIn?.serial ?? null}
+              suggested={
+                checkingIn === null
+                  ? null
+                  : suggestedQuote(state, checkingIn.bookingId, time.fromDate(now))
+              }
+              locale={locale}
+              onClose={() => {
+                setCheckingIn(null);
+              }}
+              onConfirm={(quotedWaitMinutes) => {
+                const entry = checkingIn;
+                setCheckingIn(null);
+                if (entry === null) return;
+                void queue.act('PATIENT_ARRIVED', {
+                  bookingId: entry.bookingId,
+                  quotedWaitMinutes,
+                });
+                show({
+                  title: format('checkedIn', locale, {
+                    serial: formatSerial(entry.serial, 'bengali'),
+                    minutes: formatNumber(quotedWaitMinutes, CONSOLE_NUMERALS),
+                  }),
+                  tone: 'positive',
+                });
+              }}
             />
           </div>
 
@@ -362,6 +404,18 @@ function ConsoleBody(): ReactNode {
                 <Counter label={t('countNoShow', locale)} value={counts?.noShow ?? 0} />
               </dl>
             </Card>
+
+            {/* BTN-B02-OFFER: a freed chair goes to the standby list, and the
+                acceptance is recorded here (FR-REC-30). */}
+            <StandbyCard
+              sessionId={sessionId}
+              state={state}
+              connected={queue.connected}
+              pendingCount={queue.pendingCount}
+              locale={locale}
+              apiBaseUrl={API_BASE}
+              getToken={readToken}
+            />
           </aside>
         </main>
       </div>

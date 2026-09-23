@@ -98,9 +98,36 @@ export const CONSOLE = {
   markNoShow: { bn: 'অনুপস্থিত', en: 'No-show' },
   reinstate: { bn: 'ফিরিয়ে আনুন', en: 'Reinstate' },
 
+  // --- Check-in (FR-REC-18, BTN-B02-CHECKIN, MOD-B02-CHECKIN) ----------------
+  checkIn: { bn: 'এসেছেন', en: 'Checked in' },
+  checkInTitle: { bn: 'সিরিয়াল {serial} এসেছেন', en: 'Serial {serial} is here' },
+  checkInDescription: {
+    bn: 'রোগীকে আনুমানিক কতক্ষণ অপেক্ষা করতে হবে বলছেন?',
+    en: 'Roughly how long are you telling them they will wait?',
+  },
+  checkInFromQueue: {
+    bn: 'সারির হিসাব থেকে নেওয়া — দরকার হলে বদলান।',
+    en: 'From the queue’s estimate — change it if you know better.',
+  },
+  checkInNoEstimate: {
+    bn: 'সারির কোনো হিসাব নেই — নিজে ঠিক করুন।',
+    en: 'The queue has no estimate for them — set it yourself.',
+  },
+  checkInMinutes: { bn: '{minutes} মিনিট', en: '{minutes} min' },
+  checkInLess: { bn: '৫ মিনিট কম', en: '5 minutes less' },
+  checkInMore: { bn: '৫ মিনিট বেশি', en: '5 minutes more' },
+  checkInConfirm: { bn: 'নিশ্চিত করুন', en: 'Confirm' },
+  checkInCancel: { bn: 'থাক', en: 'Not now' },
+  checkedIn: {
+    bn: 'সিরিয়াল {serial} — এসেছেন, {minutes} মিনিট বলা হয়েছে',
+    en: 'Serial {serial} checked in, told {minutes} min',
+  },
+  quotedShort: { bn: '{minutes} মিনিট বলা', en: 'told {minutes} min' },
+
   // --- Statuses ------------------------------------------------------------
   statusBooked: { bn: 'অপেক্ষায়', en: 'Waiting' },
   statusWaiting: { bn: 'অপেক্ষায়', en: 'Waiting' },
+  statusArrived: { bn: 'এসেছেন', en: 'Here' },
   statusInChamber: { bn: 'চেম্বারে', en: 'In chamber' },
   statusDone: { bn: 'দেখা হয়েছে', en: 'Seen' },
   statusLate: { bn: 'দেরিতে', en: 'Late' },
@@ -843,6 +870,227 @@ export const CONSOLE = {
     en: 'Prescriptions are not written in this version, so there is nothing to scan.',
   },
 
+  // --- Hospital admin dashboard (S-B-10, FR-ADM-01..10) --------------------
+  adminSection: { bn: 'হাসপাতাল ড্যাশবোর্ড', en: 'Hospital dashboard' },
+  openAdmin: { bn: 'ড্যাশবোর্ড খুলুন', en: 'Open the dashboard' },
+  adminTitle: { bn: 'হাসপাতাল ড্যাশবোর্ড', en: 'Hospital dashboard' },
+  adminTabToday: { bn: 'সারসংক্ষেপ', en: 'Overview' },
+  adminTabTrends: { bn: 'প্রবণতা', en: 'Trends' },
+  adminTabLoss: { bn: 'ক্ষতি ও পুনরুদ্ধার', en: 'Loss & recovery' },
+  adminTabRevenue: { bn: 'আয়', en: 'Revenue' },
+  adminTabStaff: { bn: 'চিকিৎসক', en: 'Staff' },
+  adminTabBeds: { bn: 'বেড', en: 'Beds' },
+  adminTabReferrals: { bn: 'রেফারেল', en: 'Referrals' },
+  adminTabFeedback: { bn: 'মতামত', en: 'Feedback' },
+  adminTabForecast: { bn: 'পূর্বাভাস', en: 'Forecast' },
+
+  adminRangeToday: { bn: 'আজ', en: 'Today' },
+  adminRange7: { bn: 'গত ৭ দিন', en: 'Last 7 days' },
+  adminRange30: { bn: 'গত ৩০ দিন', en: 'Last 30 days' },
+  adminRange90: { bn: 'গত ৯০ দিন', en: 'Last 90 days' },
+  adminExport: { bn: 'CSV নামান', en: 'Download CSV' },
+  adminPrint: { bn: 'PDF হিসেবে ছাপুন', en: 'Print as PDF' },
+  adminExporting: { bn: 'তৈরি হচ্ছে…', en: 'Preparing…' },
+  adminExportFailed: {
+    bn: 'নামানো যায়নি — আবার চেষ্টা করুন',
+    en: 'Could not download — try again',
+  },
+  adminExportOffline: { bn: 'CSV নামাতে সংযোগ লাগবে', en: 'Downloading needs a connection' },
+  adminOffline: {
+    bn: 'সংযোগ নেই, তাই ড্যাশবোর্ড আনা যায়নি।',
+    en: 'There is no connection, so the dashboard could not be fetched.',
+  },
+  adminOfflineStale: {
+    bn: 'সংযোগ নেই — শেষবার পাওয়া হিসাব দেখানো হচ্ছে। প্রতিটি অংশে তার বয়স লেখা আছে।',
+    en: 'Offline — showing the last figures received. Each section says how old its figures are.',
+  },
+  adminNeverRecorded: { bn: 'এখনো কিছু লেখা হয়নি', en: 'Nothing recorded yet' },
+
+  adminSeen: { bn: 'রোগী দেখা হয়েছে', en: 'Patients seen' },
+  adminBooked: { bn: 'মোট সিরিয়াল', en: 'Serials booked' },
+  adminNoShows: { bn: 'অনুপস্থিত', en: 'No-shows' },
+  adminWalkinRatio: { bn: 'ওয়াক-ইন / আগাম', en: 'Walk-in / booked' },
+  adminOverrun: { bn: 'নির্ধারিত সময়ের চেয়ে দেরি', en: 'Later than the slot' },
+  adminLongestOverrun: { bn: 'সবচেয়ে বেশি দেরি', en: 'Worst overrun' },
+  adminSessionsLate: { bn: 'দেরিতে চলা চেম্বার', en: 'Chambers running late' },
+  adminSessionsNeverStarted: { bn: 'শুরুই হয়নি', en: 'Never started' },
+
+  /** FR-ADM-01's own wording, and why this product cannot answer it yet. */
+  adminWaitUnmeasured: {
+    bn: 'এই সময়ে অপেক্ষা মাপা যায়নি',
+    en: 'No wait was measured in this period',
+  },
+  adminWaitUnmeasuredWhy: {
+    bn: 'অপেক্ষা মাপা হয় কাউন্টারে "এসেছেন" চাপার সময় থেকে ডাকা পর্যন্ত। এই সময়ে কাউকে চেক-ইন করে ডাকা হয়নি। নিচের হিসাব নির্ধারিত সময়ের তুলনায় কত দেরিতে ডাকা হয়েছে।',
+    en: 'Wait runs from check-in at the counter to being called, and nobody was checked in and called in this period. The figure below is how much later than their slot people were called.',
+  },
+  adminAvgWait: { bn: 'গড় অপেক্ষা', en: 'Average wait' },
+  adminLongestWait: { bn: 'সবচেয়ে বেশি অপেক্ষা', en: 'Longest wait' },
+  adminWaitsMeasured: { bn: '{count} জনের চেক-ইন থেকে', en: 'From {count} check-ins' },
+  adminQuotesKept: { bn: 'বলা সময়ের মধ্যে ডাকা', en: 'Called within the quote' },
+  adminQuotesKeptNote: {
+    bn: '{quoted} জনের মধ্যে {kept} জন',
+    en: '{kept} of {quoted}',
+  },
+  adminQuoteOver: { bn: 'বলা সময়ের চেয়ে গড় দেরি', en: 'Average past the quote' },
+
+  adminAdoption: { bn: 'লাইভ সিরিয়াল চালু', en: 'Live queue went live' },
+  adminTrendCaption: {
+    bn: 'প্রতিদিন গড়ে কত মিনিট দেরিতে ডাকা হয়েছে',
+    en: 'Average minutes later than the slot, by day',
+  },
+
+  adminLossChartTitle: {
+    bn: 'প্রতিদিন — যা আদায় হয়নি আর যা ফেরত এসেছে',
+    en: 'By day — never collected, and recovered',
+  },
+  adminForgone: { bn: 'খালি চেয়ারের মূল্য', en: 'Value of empty chairs' },
+  adminPrepaid: { bn: 'এর মধ্যে আগেই নেওয়া', en: 'Of which already paid' },
+  adminUncollected: { bn: 'যা আদায় হয়নি', en: 'Never collected' },
+  adminRecovered: { bn: 'স্ট্যান্ডবাই থেকে ফেরত', en: 'Recovered from standby' },
+  adminNetLoss: { bn: 'প্রকৃত ক্ষতি', en: 'Net loss' },
+  adminOffersMade: { bn: 'প্রস্তাব পাঠানো', en: 'Offers made' },
+  adminOffersAccepted: { bn: 'গ্রহণ করা হয়েছে', en: 'Accepted' },
+  adminRecoveryRate: { bn: 'পুনরুদ্ধারের হার', en: 'Recovery rate' },
+
+  adminBilled: { bn: 'বিল করা হয়েছে', en: 'Billed' },
+  adminCollected: { bn: 'আদায় হয়েছে', en: 'Collected' },
+  adminRefunded: { bn: 'ফেরত', en: 'Refunded' },
+  adminByDoctor: { bn: 'ডাক্তার অনুযায়ী', en: 'By doctor' },
+  adminByDepartment: { bn: 'বিভাগ অনুযায়ী', en: 'By department' },
+  adminByMethod: { bn: 'পরিশোধের মাধ্যম', en: 'By payment method' },
+  adminByService: { bn: 'সেবা অনুযায়ী', en: 'By service' },
+  adminServiceConsultation: { bn: 'চেম্বার', en: 'Consultation' },
+  adminServiceTest: { bn: 'টেস্ট', en: 'Tests' },
+  adminServiceBed: { bn: 'বেড', en: 'Beds' },
+  adminServiceAmbulance: { bn: 'অ্যাম্বুলেন্স', en: 'Ambulance' },
+  adminBookings: { bn: 'সিরিয়াল', en: 'Serials' },
+  adminMethodBkash: { bn: 'বিকাশ', en: 'bKash' },
+  adminMethodNagad: { bn: 'নগদ (মোবাইল)', en: 'Nagad' },
+  adminMethodCard: { bn: 'কার্ড', en: 'Card' },
+  adminMethodCash: { bn: 'ক্যাশ', en: 'Cash' },
+  adminMethodAtHospital: { bn: 'হাসপাতালের কাউন্টারে', en: 'At the counter' },
+  adminMethodUnpaid: { bn: 'এখনো পরিশোধ হয়নি', en: 'Not yet paid' },
+  adminServiceNotCharged: {
+    bn: 'এই সংস্করণে এর জন্য কোনো টাকা নেওয়া হয় না।',
+    en: 'Nothing is charged for this in this version.',
+  },
+
+  adminDoctor: { bn: 'ডাক্তার', en: 'Doctor' },
+  adminChambersCount: { bn: '{count}টি চেম্বার', en: '{count} chambers' },
+  adminMedianLate: { bn: 'সাধারণত দেরি', en: 'Typically late by' },
+  adminWorstLate: { bn: 'সবচেয়ে খারাপ দিন', en: 'Worst day' },
+  adminOnTimeRate: { bn: 'সময়মতো শুরু', en: 'Started on time' },
+  adminAvgConsult: { bn: 'গড় সময় প্রতি রোগী', en: 'Average per patient' },
+  adminNeverStartedNote: { bn: 'কোনো চেম্বার শুরু হয়নি', en: 'No chamber was started' },
+
+  adminBedKind: { bn: 'বেডের ধরন', en: 'Kind of bed' },
+  adminBedsNone: {
+    bn: 'এই প্রতিষ্ঠানে ভর্তির বেড নেই।',
+    en: 'This facility has no inpatient beds.',
+  },
+  adminBedOccupied: { bn: 'ভর্তি', en: 'Occupied' },
+  adminAdmissions: { bn: 'ভর্তি হয়েছে', en: 'Admissions' },
+  adminAlos: { bn: 'গড় অবস্থান', en: 'Average stay' },
+  adminTurnover: { bn: 'বেড খালি থাকার সময়', en: 'Turnover' },
+
+  adminSent: { bn: 'পাঠানো', en: 'Sent' },
+  adminReceived: { bn: 'পাওয়া', en: 'Received' },
+  adminAccepted: { bn: 'গৃহীত', en: 'Accepted' },
+  adminDeclined: { bn: 'ফেরানো', en: 'Declined' },
+  adminOpen: { bn: 'অপেক্ষমাণ', en: 'Open' },
+  adminReferralsNone: {
+    bn: 'এই প্রতিষ্ঠানের কোনো রেফারেল এখনো লেখা হয়নি।',
+    en: 'No referral has been recorded for this facility yet.',
+  },
+  adminLeaked: { bn: 'অন্য হাসপাতালে গেছে', en: 'Went elsewhere' },
+  adminLeakedNote: {
+    bn: 'যাদের রেফার করা হয়েছে এবং অন্য হাসপাতাল নিয়েছে।',
+    en: 'Patients referred out whom another hospital took.',
+  },
+
+  adminFeedbackResponses: { bn: 'মতামত পাওয়া গেছে', en: 'Responses' },
+  adminFeedbackCategory: { bn: 'বিষয়', en: 'Category' },
+  adminFeedbackScore: { bn: 'গড় নম্বর (৫-এর মধ্যে)', en: 'Average (out of 5)' },
+  adminFeedbackWait: { bn: 'অপেক্ষা', en: 'Waiting' },
+  adminFeedbackDoctor: { bn: 'ডাক্তার', en: 'Doctor' },
+  adminFeedbackCleanliness: { bn: 'পরিচ্ছন্নতা', en: 'Cleanliness' },
+  adminFeedbackBilling: { bn: 'বিলের স্বচ্ছতা', en: 'Billing honesty' },
+  adminComplaints: { bn: 'অভিযোগ', en: 'Complaints' },
+  adminAnswered: { bn: 'উত্তর দিয়েছেন', en: 'answered' },
+  adminFeedbackSeededOnly: {
+    bn: 'রোগীর মতামতের ফর্ম এই সংস্করণে নেই — এগুলো ডেমো তথ্য।',
+    en: 'The patient feedback form is not in this version — these are demonstration rows.',
+  },
+
+  adminForecastCaption: {
+    bn: 'বিগত সপ্তাহগুলোর একই বারের গড়',
+    en: 'Average of the same weekday in recent weeks',
+  },
+  adminForecastExpected: { bn: 'প্রত্যাশিত', en: 'Expected' },
+  adminForecastRange: { bn: 'সীমা', en: 'Range' },
+  adminForecastThin: { bn: 'যথেষ্ট তথ্য নেই', en: 'Too little history' },
+  adminObservations: { bn: 'দিনের তথ্য', en: 'days of history' },
+
+  adminSlotMorning: { bn: 'সকাল', en: 'Morning' },
+  adminSlotAfternoon: { bn: 'দুপুর', en: 'Afternoon' },
+  adminSlotEvening: { bn: 'সন্ধ্যা', en: 'Evening' },
+
+  adminWeekday0: { bn: 'রবিবার', en: 'Sunday' },
+  adminWeekday1: { bn: 'সোমবার', en: 'Monday' },
+  adminWeekday2: { bn: 'মঙ্গলবার', en: 'Tuesday' },
+  adminWeekday3: { bn: 'বুধবার', en: 'Wednesday' },
+  adminWeekday4: { bn: 'বৃহস্পতিবার', en: 'Thursday' },
+  adminWeekday5: { bn: 'শুক্রবার', en: 'Friday' },
+  adminWeekday6: { bn: 'শনিবার', en: 'Saturday' },
+
+  adminNothingYet: { bn: 'এখনো কিছু নেই', en: 'Nothing here yet' },
+  adminNothingYetHint: {
+    bn: 'অন্য সময়সীমা বেছে দেখুন — এই সময়ে কিছু লেখা হয়নি।',
+    en: 'Try a longer range — nothing was recorded in this one.',
+  },
+  adminLoadFailed: { bn: 'ড্যাশবোর্ড আসেনি', en: 'The dashboard did not load' },
+  adminHours: { bn: 'ঘণ্টা', en: 'h' },
+
+  // --- Standby and freed slots (S-B-02, FR-QUE-30, FR-REC-30) --------------
+  standbyTitle: { bn: 'স্ট্যান্ডবাই তালিকা', en: 'Standby list' },
+  standbyCount: { bn: '{count} জন অপেক্ষায়', en: '{count} waiting' },
+  standbyPrepaidCount: {
+    bn: '{count} জন আগেই পরিশোধ করেছেন — প্রস্তাব দিলেই বসানো হবে',
+    en: '{count} paid already — offering seats them at once',
+  },
+  standbyNothingFree: {
+    bn: 'কোনো সিরিয়াল খালি হলে এখান থেকে প্রস্তাব পাঠাতে পারবেন।',
+    en: 'When a serial frees up, you can offer it from here.',
+  },
+  standbyFreedSerial: { bn: 'সিরিয়াল {serial} খালি', en: 'Serial {serial} is free' },
+  standbyOffer: { bn: 'খালি সিরিয়াল দিন', en: 'Offer the freed serial' },
+  standbyOffered: { bn: 'প্রস্তাব পাঠানো হয়েছে', en: 'Offered' },
+  standbyAccept: { bn: 'গ্রহণ করেছেন', en: 'They accepted' },
+  standbyAccepted: { bn: 'গ্রহণ করেছেন', en: 'Accepted' },
+  standbyAcceptFailed: { bn: 'গ্রহণ লেখা যায়নি', en: 'The acceptance could not be recorded' },
+  standbyExpired: {
+    bn: 'সময় শেষ — সিরিয়ালটি পরের জনকে দেওয়া যাবে',
+    en: 'The window closed — the serial can go to the next person',
+  },
+  standbyWaitingFor: { bn: 'উত্তরের অপেক্ষায়', en: 'Awaiting an answer' },
+  standbyAnswerBy: { bn: '{time} পর্যন্ত', en: 'until {time}' },
+  standbyNoOne: {
+    bn: 'স্ট্যান্ডবাই তালিকায় কেউ নেই, তাই সিরিয়ালটি খালি থাকছে।',
+    en: 'Nobody is on the standby list, so the serial stays empty.',
+  },
+  standbyOfferFailed: { bn: 'প্রস্তাব পাঠানো যায়নি', en: 'The offer could not be sent' },
+  standbyRecoveredAmount: { bn: '{amount} ফেরত এসেছে', en: '{amount} recovered' },
+  standbyWorking: { bn: 'পাঠানো হচ্ছে…', en: 'Sending…' },
+  standbySyncing: {
+    bn: 'আগের কাজ সার্ভারে পৌঁছানোর অপেক্ষায়',
+    en: 'Waiting for earlier actions to reach the server',
+  },
+  standbyOfflineReason: {
+    bn: 'সংযোগ নেই — প্রস্তাব পাঠাতে সংযোগ লাগবে',
+    en: 'Offline — an offer needs a connection',
+  },
+
   // --- Demo mode (FR-DEM-07, CLAUDE.md §1.1) -------------------------------
   demoBanner: {
     bn: 'এটি একটি ডেমো। সব তথ্য প্রদর্শনের জন্য তৈরি।',
@@ -1330,6 +1578,91 @@ export const PATIENT = {
   serialsTaken: { bn: 'সিরিয়াল নেওয়া হয়েছে', en: 'serials taken' },
   seatsLeft: { bn: 'বাকি আছে', en: 'left' },
   sessionFull: { bn: 'পূর্ণ', en: 'Full' },
+
+  // --- Standby (FR-PAT-25, FR-PAT-26, FR-PAT-27, BTN-A06D-STANDBY, S-A-08s) -
+  standbyJoin: { bn: 'স্ট্যান্ডবাই তালিকায় নাম দিন', en: 'Join the standby list' },
+  standbyJoinTitle: { bn: 'স্ট্যান্ডবাই তালিকায় নাম দিন', en: 'Join the standby list' },
+  standbyJoinWhy: {
+    bn: 'এই চেম্বার পূর্ণ। কেউ বাতিল করলে বা না এলে সিরিয়ালটি তালিকার ক্রমে দেওয়া হয়।',
+    en: 'This chamber is full. When somebody cancels or does not come, the serial goes down the list in order.',
+  },
+  standbyHowTitle: { bn: 'খালি হলে কী হবে?', en: 'When a serial frees up' },
+  standbyPrepayOption: {
+    bn: 'এখনই পরিশোধ করুন — খালি হলেই সিরিয়াল আপনার',
+    en: 'Pay now — the serial is yours as soon as one frees',
+  },
+  standbyPrepayNote: {
+    bn: 'কাউকে জিজ্ঞেস না করেই আপনাকে বসানো হবে। সিরিয়াল না পেলে পুরো টাকা ফেরত।',
+    en: 'You are seated without being asked. If no serial comes, all of it comes back.',
+  },
+  standbyAskOption: {
+    bn: 'পরে পরিশোধ — খালি হলে জানাব',
+    en: 'Pay later — tell me when one frees',
+  },
+  standbyAskNote: {
+    bn: 'খালি হলে ফোনে জানাব; ১০ মিনিটের মধ্যে হ্যাঁ বা না বলবেন।',
+    en: 'We tell you on your phone; you say yes or no within 10 minutes.',
+  },
+  standbyConfirm: { bn: 'তালিকায় নাম দিন', en: 'Join the list' },
+  standbyJoinFailed: {
+    bn: 'তালিকায় নাম দেওয়া যায়নি। আবার চেষ্টা করুন।',
+    en: 'Could not join the list. Please try again.',
+  },
+  standbyNotFull: {
+    bn: 'এই চেম্বারে এখন সিরিয়াল খালি আছে — সরাসরি সিরিয়াল নিন।',
+    en: 'This chamber has a serial free now — book it directly.',
+  },
+  standbyAlreadyBooked: {
+    bn: 'এই রোগীর এই চেম্বারে আগেই সিরিয়াল আছে।',
+    en: 'This patient already has a serial in this chamber.',
+  },
+  standbyStatusTitle: { bn: 'স্ট্যান্ডবাই তালিকা', en: 'Standby list' },
+  standbyPlace: { bn: 'তালিকায় আপনার আগে {count} জন', en: '{count} ahead of you on the list' },
+  standbyFirst: { bn: 'খালি হলে প্রথমেই আপনি', en: 'You are first when a serial frees' },
+  standbyPrepaidBadge: {
+    bn: 'আগেই পরিশোধ করেছেন — খালি হলেই সিরিয়াল আপনার',
+    en: 'Paid already — the serial is yours as soon as one frees',
+  },
+  standbyAskBadge: {
+    bn: 'খালি হলে এখানে জানাব — ১০ মিনিটের মধ্যে হ্যাঁ বলবেন',
+    en: 'We will ask here — say yes within 10 minutes',
+  },
+  standbyOfferTitle: { bn: 'একটি সিরিয়াল খালি হয়েছে', en: 'A serial has freed up' },
+  standbyOfferLeft: {
+    bn: 'হ্যাঁ বলার সময় আর {minutes} মিনিট',
+    en: '{minutes} min left to say yes',
+  },
+  standbyOfferAccept: { bn: 'হ্যাঁ, সিরিয়াল নেব', en: 'Yes, I’ll take it' },
+  standbyOfferDecline: { bn: 'না, পরের জনকে দিন', en: 'No, give it to the next person' },
+  standbyAcceptFailed: {
+    bn: 'নেওয়া গেল না — সময় পেরিয়ে গেছে বা অন্য কেউ নিয়েছেন।',
+    en: 'Could not take it — the time ran out or somebody else took it.',
+  },
+  standbySeatedTitle: { bn: 'সিরিয়াল {serial} আপনার', en: 'Serial {serial} is yours' },
+  standbySeatedLink: { bn: 'লাইভ সিরিয়াল দেখুন', en: 'Follow the live serial' },
+  standbySeatedSms: {
+    bn: 'লাইভ দেখার লিংক আপনার ফোনে SMS-এ পাঠানো হয়েছে।',
+    en: 'The link to follow it was sent to your phone by SMS.',
+  },
+  standbyLeave: { bn: 'তালিকা থেকে নাম তুলে নিন', en: 'Leave the list' },
+  standbyLeaveConfirm: { bn: 'নাম তুলে নিন', en: 'Leave' },
+  standbyLeaveStay: { bn: 'থাক', en: 'Stay' },
+  standbyLeaveRefund: {
+    bn: 'আগেই পরিশোধ করা পুরো টাকা ফেরত দেওয়া হবে।',
+    en: 'What you paid comes back in full.',
+  },
+  standbyLeft: {
+    bn: 'আপনি তালিকা থেকে নাম তুলে নিয়েছেন।',
+    en: 'You have left the list.',
+  },
+  standbyLinkBad: {
+    bn: 'এই লিংকটি আর খোলে না। হাসপাতালের কাউন্টারে যোগাযোগ করুন।',
+    en: 'This link no longer opens. Please contact the hospital counter.',
+  },
+  standbyLoadFailed: {
+    bn: 'তালিকার অবস্থা আনা যায়নি।',
+    en: 'Could not load your place on the list.',
+  },
   expectedWait: { bn: 'আনুমানিক অপেক্ষা', en: 'Expected wait' },
   waitUnknown: { bn: 'এখনো বলা যাচ্ছে না', en: 'Not known yet' },
   noSessions: { bn: 'আগামী সাত দিনে কোনো চেম্বার নেই', en: 'No chambers in the next seven days' },
@@ -1392,6 +1725,22 @@ export const PATIENT = {
   etaWithBand: { bn: '{time} · ±{band} মিনিট', en: '{time} · ±{band} min' },
   etaUnknown: { bn: 'এখনো বলা যাচ্ছে না', en: 'Not known yet' },
   countdown: { bn: 'আর বাকি প্রায় {minutes} মিনিট', en: 'About {minutes} min to go' },
+
+  // FR-PAT-38: the counter's word, beside the live estimate and never instead
+  // of it. `{time}` is when it was said.
+  quoteTitle: { bn: 'কাউন্টার জানিয়েছে', en: 'The counter said' },
+  quoteSaid: {
+    bn: 'প্রায় {minutes} মিনিট — {time}-এ বলা',
+    en: 'About {minutes} min — said at {time}',
+  },
+  quoteLeft: {
+    bn: 'সেই হিসাবে আর প্রায় {minutes} মিনিট',
+    en: 'By that, about {minutes} min to go',
+  },
+  quotePassed: {
+    bn: 'কাউন্টারের বলা সময় পেরিয়ে গেছে। ওপরের হিসাবটি এখনকার।',
+    en: 'The time the counter gave has passed. The estimate above is the current one.',
+  },
   patientsAhead: { bn: 'আপনার আগে {count} জন', en: '{count} ahead of you' },
   youAreNext: { bn: 'আপনিই পরবর্তী', en: 'You are next' },
 
