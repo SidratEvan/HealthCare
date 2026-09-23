@@ -69,6 +69,8 @@ const ROLE_LABEL: Record<string, ConsoleKey> = {
   doctor: 'roleDoctor',
   ward: 'roleWard',
   emergency: 'roleEmergency',
+  lab: 'roleLab',
+  pharmacy: 'rolePharmacy',
   hospital_admin: 'roleHospitalAdmin',
 };
 
@@ -99,7 +101,9 @@ interface DemoConsole {
 export type ConsoleChoice =
   | { readonly kind: 'chamber'; readonly sessionId: string }
   | { readonly kind: 'ward' }
-  | { readonly kind: 'emergency' };
+  | { readonly kind: 'emergency' }
+  | { readonly kind: 'lab' }
+  | { readonly kind: 'pharmacy' };
 
 export function ConsolePicker({
   onChosen,
@@ -314,6 +318,47 @@ export function ConsolePicker({
         </section>
       ) : null}
 
+      {/* `S-B-08` and `S-B-09` belong to the hospital rather than to a
+          chamber, like the ward board and the ER (step 17). A facility with
+          no lab or no dispensary is not offered one: the seeded roster gives
+          a diagnostic centre a lab and no pharmacy, and a clinic the reverse
+          (`data/people.ts`), which is what a director would expect to see. */}
+      {hospital?.roles.includes('lab') === true ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-title-sm">{t('labSection', LOCALE)}</h2>
+          <div>
+            <Button
+              variant="secondary"
+              loading={busy}
+              data-testid={`open-lab-${hospital.hospitalId}`}
+              onClick={() => {
+                void open(hospital.hospitalId, 'lab', { kind: 'lab' });
+              }}
+            >
+              {t('openLab', LOCALE)}
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
+      {hospital?.roles.includes('pharmacy') === true ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-title-sm">{t('pharmacySection', LOCALE)}</h2>
+          <div>
+            <Button
+              variant="secondary"
+              loading={busy}
+              data-testid={`open-pharmacy-${hospital.hospitalId}`}
+              onClick={() => {
+                void open(hospital.hospitalId, 'pharmacy', { kind: 'pharmacy' });
+              }}
+            >
+              {t('openPharmacy', LOCALE)}
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
       {hospital === null ? null : (
         <section className="flex flex-col gap-3">
           <h2 className="text-title-sm">{t('chooseChamber', LOCALE)}</h2>
@@ -337,7 +382,13 @@ export function ConsolePicker({
                     {hospital.roles
                       // The ward board and the ER belong to the hospital, not to a
                       // chamber, and are offered once above.
-                      .filter((role) => role !== 'ward' && role !== 'emergency')
+                      .filter(
+                        (role) =>
+                          role !== 'ward' &&
+                          role !== 'emergency' &&
+                          role !== 'lab' &&
+                          role !== 'pharmacy',
+                      )
                       .map((role) => (
                         <Button
                           key={role}
