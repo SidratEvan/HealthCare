@@ -7,7 +7,8 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/admin-dashboard` — step 19. A hospital administrator opens
+Last updated: `feat/check-in`, after step 19 — reception checks a patient in
+and quotes a wait (decision 61, ruled 2026-09-23). Before that, `feat/admin-dashboard` — step 19. A hospital administrator opens
 `S-B-10` from the picker and sees what the facility did, what empty chairs
 cost and what the standby list won back — and reception can now give a freed
 chair to the standby list and record the yes, which is the tap that moves that
@@ -93,15 +94,15 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 3321, in about a minute and a half.
-`pnpm test:e2e` reports 93, in Chromium, against the real API and the seeded
+`pnpm test` reports 3391, in about a minute and a half.
+`pnpm test:e2e` reports 95, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
-`no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`. The last full run
-took eight minutes.
+`no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
+`check-in.spec.ts`. The last full run took eight minutes.
 
 `pnpm verify` — typecheck, lint, `format:check`, test — is clean, and so is
 `pnpm build`. `format:check` had been failing on five files since before step
@@ -126,6 +127,59 @@ decision about a sleeping backend, not a test detail, which is why
 Worth knowing when demonstrating: **open the console once a minute before
 showing anyone.** Nothing is broken if the first load is slow; it is the free
 tier waking.
+
+### The check-in (`feat/check-in`, after step 19)
+
+**The owner's ruling on decision 61** (2026-09-23): when a patient reaches
+the counter, reception taps **এসেছেন** and tells them roughly how long they
+will wait — the SkipTheDishes idea, a restaurant confirming an order with a
+preparation time. It is a PRD change: `FR-REC-18` (the check-in and quote),
+`FR-PAT-38` (the patient sees it), `PATIENT_ARRIVED` in `FR-QUE-03`, and
+`FR-ADM-01`'s wait now runs from check-in to call, with the share of quotes
+kept beside it.
+
+**The event is `PATIENT_ARRIVED { bookingId, quotedWaitMinutes }`**, the
+nineteenth. The arrival is the event's `serverTs`, never a figure the console
+sends, so an offline console cannot record the moment the receptionist
+remembered. A booked or late patient becomes `waiting` and keeps their place;
+arriving jumps nobody. The first arrival stands if two consoles check one
+person in. The guard refuses a second check-in, anybody in the chamber or
+settled (a no-show who turns up is reinstated first), and any quote outside
+0–480 whole minutes.
+
+**The quote starts from the queue's own estimate.** `suggestedQuote` in
+`shared/domain` is the minutes to `computeEtas`'s call time, rounded to five —
+the number the patient's phone counts down from — and reception moves it
+with − and + before confirming. On the phone it is `CARD-A08-QUOTE`: the
+counter's word *beside* the live estimate, never replacing it, and "the time
+the counter gave has passed" rather than a negative countdown. The leave-home
+banner and আমি দেরি করছি stop applying to somebody already here. No SMS: it
+was said across the counter.
+
+**Schema.** 0021 adds the enum value on its own — a migration is one
+transaction and PostgreSQL will not let a transaction use an enum value it
+added — and 0022 adds `bookings.quoted_wait_minutes` (0–480, never without an
+arrival) and extends the booking-scoped constraint. Both are applied to the
+local container and the test databases; **not yet to Supabase**.
+
+**The dashboard.** Average and longest wait are real now, and beside them the
+share of patients called within their quote plus five minutes, and the
+average minutes past it — read live, not from the snapshot, because a figure
+about a promise should not lag the promise. A period in which nobody was
+checked in still says so rather than showing zero.
+
+**Demo data.** From each facility's go-live date, 85% of patients seen were
+checked in 8–45 minutes before their call and quoted a round figure near
+that, written as events on their own RNG stream so nothing else in the
+history moved: 260 check-ins, a 26-minute average wait, 74% of quotes kept.
+On the pitch session everybody already called was checked in, and the next
+four in line are here; the rest are not, so a guest booked during the pitch
+gets an এসেছেন to tap.
+
+**How to show it.** Book as a guest on the pitch chamber and open the live
+serial. On reception, tap **এসেছেন** on that row, nudge the minutes, নিশ্চিত
+করুন. The phone shows কাউন্টার জানিয়েছে with the minutes left, inside the
+canary's two seconds (`check-in.spec.ts`).
 
 ### Step 19 — the dashboard, and the figure a tap moves
 
@@ -1652,7 +1706,10 @@ Raised while building the money (step 18):
 
 Raised while building the dashboard (step 19):
 
-61. **`FR-ADM-01`'s average wait needs a check-in, and the product has none.**
+61. ~~**`FR-ADM-01`'s average wait needs a check-in, and the product has none.**~~
+   **Settled 2026-09-23 and built** (`feat/check-in`, below): reception
+   checks a patient in and quotes a wait, as a restaurant confirms an order
+   with a preparation time. The original note follows.
    The wait from arriving to being called can only be measured if something
    records the arrival, and no reception action in `PRD.md` §8 does. The
    dashboard says the figure is unmeasured and leads with the lateness against
