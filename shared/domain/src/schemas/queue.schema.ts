@@ -14,7 +14,7 @@
 
 import { z } from 'zod';
 
-import { MAX_DELAY_MINUTES } from '../queue/rules.js';
+import { MAX_DELAY_MINUTES, MAX_QUOTED_WAIT_MINUTES } from '../queue/rules.js';
 
 /** A UUID as it arrives on the wire, before it is branded. */
 const uuid = z.string().uuid();
@@ -110,6 +110,17 @@ export const markNoShowBody = command({});
 
 /** `POST /bookings/:id/reinstate` — a late patient returns (`FR-QUE-21`). */
 export const reinstateBody = command({});
+
+/**
+ * `POST /bookings/:id/check-in` — the patient is at the counter (`FR-REC-18`).
+ *
+ * The quote is the console's to send, because reception may have changed the
+ * pre-filled figure. The arrival time is not: the server stamps it, for the
+ * same reason `DOCTOR_ARRIVED` takes no `arrivedAt` from a route.
+ */
+export const checkInBody = command({
+  quotedWaitMinutes: z.number().int().min(0).max(MAX_QUOTED_WAIT_MINUTES),
+});
 
 /** `POST /sessions/:id/walkin` — reception adds someone at the counter. */
 export const addWalkinBody = command({

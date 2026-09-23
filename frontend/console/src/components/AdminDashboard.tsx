@@ -423,16 +423,44 @@ function TodaySection({ data, now }: SectionProps): ReactNode {
         />
       </div>
 
-      {/* `FR-ADM-01` names average wait. The product cannot measure it, and a
-          dashboard that quietly substituted something else would be one
-          nobody could check. So the screen says what is missing, then gives
-          what is real. */}
-      <Card tone="warn" data-testid="admin-wait-notice">
-        <p className="text-body-md text-warn-700">{t('adminWaitUnmeasured', LOCALE)}</p>
-        <p className="mt-1 max-w-prose text-body-sm text-ink-secondary">
-          {t('adminWaitUnmeasuredWhy', LOCALE)}
-        </p>
-      </Card>
+      {/* `FR-ADM-01`'s wait runs from check-in to the call (`FR-REC-18`). A
+          period in which nobody was checked in has no wait, and says so
+          rather than showing a zero — the most flattering lie this screen
+          could tell. Beside a measured wait, whether the counter's word was
+          kept: the figure a patient actually remembers. */}
+      {today.waitsMeasured === 0 ? (
+        <Card tone="warn" data-testid="admin-wait-notice">
+          <p className="text-body-md text-warn-700">{t('adminWaitUnmeasured', LOCALE)}</p>
+          <p className="mt-1 max-w-prose text-body-sm text-ink-secondary">
+            {t('adminWaitUnmeasuredWhy', LOCALE)}
+          </p>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4" data-testid="admin-waits">
+          <Stat
+            label={t('adminAvgWait', LOCALE)}
+            value={minutes(today.avgWaitMinutes)}
+            testId="admin-avg-wait"
+            note={format('adminWaitsMeasured', LOCALE, { count: num(today.waitsMeasured) })}
+          />
+          <Stat label={t('adminLongestWait', LOCALE)} value={minutes(today.longestWaitMinutes)} />
+          <Stat
+            label={t('adminQuotesKept', LOCALE)}
+            value={percent(data.quotes.keptRate)}
+            tone="brand"
+            testId="admin-quotes-kept"
+            note={
+              data.quotes.quoted === 0
+                ? null
+                : format('adminQuotesKeptNote', LOCALE, {
+                    kept: num(data.quotes.kept),
+                    quoted: num(data.quotes.quoted),
+                  })
+            }
+          />
+          <Stat label={t('adminQuoteOver', LOCALE)} value={minutes(data.quotes.avgOverMinutes)} />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label={t('adminOverrun', LOCALE)} value={minutes(today.avgOverrunMinutes)} />

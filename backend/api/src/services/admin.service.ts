@@ -35,9 +35,12 @@ import {
   forecastVolume,
   lossAndRecovery,
   punctualityByDoctor,
+  quoteAccuracy,
+  QUOTE_TOLERANCE_MINUTES,
   type DoctorPunctuality,
   type ForecastPoint,
   type LossAndRecovery,
+  type QuoteAccuracy,
 } from '@platform/domain';
 
 import { logger } from '../config/logger.js';
@@ -75,7 +78,8 @@ export interface TodayFigures {
   readonly walkin: number;
   readonly bookedAhead: number;
   /**
-   * Arrival to call. Null until a check-in action exists — see migration 0020.
+   * Check-in to call (`FR-REC-18`). Null when nobody in the range was checked
+   * in and then called — never zero.
    */
   readonly avgWaitMinutes: number | null;
   readonly longestWaitMinutes: number | null;
@@ -101,6 +105,8 @@ export interface TrendPoint {
 export interface Dashboard {
   readonly range: adminRepo.DateRange;
   readonly today: TodayFigures;
+  /** How often the wait quoted at check-in was kept. Read live. */
+  readonly quotes: QuoteAccuracy;
   readonly trend: readonly TrendPoint[];
   readonly adoptionDate: string | null;
   readonly loss: LossAndRecovery;
@@ -160,7 +166,7 @@ export async function dashboard(input: DashboardInput): Promise<Dashboard> {
       adminRepo.revenueByService(input.hospitalId, range),
     ]);
 
-  const [timings, beds, referrals, feedbackSummary, complaints, adoption, history] =
+  const [timings, beds, referrals, feedbackSummary, complaints, adoption, history, quotes] =
     await Promise.all([
       adminRepo.sessionTimings(input.hospitalId, range),
       adminRepo.bedUtilisation(input.hospitalId, range),
@@ -173,6 +179,7 @@ export async function dashboard(input: DashboardInput): Promise<Dashboard> {
         daysBefore(range.to, FORECAST_HISTORY_DAYS),
         range.to,
       ),
+      adminRepo.quoteCounts(input.hospitalId, range, QUOTE_TOLERANCE_MINUTES),
     ]);
 
   const loss = lossAndRecovery(
@@ -191,6 +198,7 @@ export async function dashboard(input: DashboardInput): Promise<Dashboard> {
   return {
     range,
     today: totalsOf(daily),
+    quotes: quoteAccuracy(quotes),
     trend: daily.map((row) => ({
       date: row.sessionDate,
       avgWaitMinutes: row.avgWaitMinutes,
@@ -474,6 +482,9 @@ function tableFor(data: Dashboard, view: ExportView): Table {
           ['sessions_total', data.today.sessionsTotal],
           ['sessions_late', data.today.sessionsLate],
           ['sessions_never_started', data.today.sessionsNeverStarted],
+          ['quotes_given', data.quotes.quoted],
+          ['quotes_kept', data.quotes.kept],
+          ['quote_avg_over_minutes', data.quotes.avgOverMinutes],
         ],
       };
 

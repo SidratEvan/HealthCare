@@ -169,12 +169,18 @@ export function planFor(
     // guard above returns before we get here. Listed rather than defaulted so
     // that adding a template without deciding who receives it fails to
     // compile instead of silently notifying nobody.
+    //
+    // `PATIENT_ARRIVED` among them: a check-in's quote is said across the
+    // counter and shown in the app (`FR-PAT-38`), and an SMS to somebody
+    // standing at the desk would cost money to tell them what they were just
+    // told.
     case 'SESSION_OPENED':
     case 'SESSION_PAUSED':
     case 'SESSION_RESUMED':
     case 'PATIENT_DONE':
     case 'PATIENT_LATE':
     case 'PATIENT_REINSERTED':
+    case 'PATIENT_ARRIVED':
     case 'WALKIN_ADDED':
     case 'SLOT_OFFERED':
     case 'SLOT_ACCEPTED':

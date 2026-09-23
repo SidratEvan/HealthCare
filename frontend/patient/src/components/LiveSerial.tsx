@@ -245,10 +245,25 @@ function Ready({
           }
         />
 
+        {/* `FR-PAT-38`: the wait the counter quoted at check-in. Beside the
+            live estimate, never instead of it, and never counting below zero:
+            a promise that has run out says so. */}
+        {mine !== null && !called && mine.arrivedAt !== null && mine.quotedWaitMinutes !== null ? (
+          <CounterQuote
+            arrivedAt={mine.arrivedAt}
+            quotedWaitMinutes={mine.quotedWaitMinutes}
+            now={now}
+          />
+        ) : null}
+
         {/* `BANNER-A08-LEAVE` (`FR-PAT-32`): travel + buffer has caught up with
           the remaining wait. Only while there is still a wait to beat — a
-          person already being called does not need to be told to set off. */}
-        {!called && minutesUntil !== null && minutesUntil <= TRAVEL_MINUTES + 10 ? (
+          person already being called does not need to be told to set off, and
+          nor does one reception has already checked in (`FR-PAT-38`). */}
+        {!called &&
+        mine?.arrivedAt === null &&
+        minutesUntil !== null &&
+        minutesUntil <= TRAVEL_MINUTES + 10 ? (
           <p
             role="status"
             data-testid="leave-now"
@@ -293,7 +308,8 @@ function Ready({
 
         <div className="flex flex-col gap-3">
           <LateSheet
-            disabled={mine === null || called}
+            // Somebody checked in at the counter is not running late.
+            disabled={mine === null || called || mine.arrivedAt !== null}
             onChoose={(minutes) => {
               void act(
                 async ({ bookingId, token: bearer }) => {
@@ -371,6 +387,39 @@ function statusLine(state: QueueState, called: boolean): string {
  * option: an estimate the chamber cannot support is not improved by being
  * shown with a wider band, it is improved by not being shown.
  */
+/** The counter's quote and what is left of it (`FR-PAT-38`). */
+function CounterQuote({
+  arrivedAt,
+  quotedWaitMinutes,
+  now,
+}: {
+  readonly arrivedAt: Timestamp;
+  readonly quotedWaitMinutes: number;
+  readonly now: Date;
+}): ReactNode {
+  const promisedAt = Date.parse(arrivedAt) + quotedWaitMinutes * 60_000;
+  const left = Math.ceil((promisedAt - now.getTime()) / 60_000);
+
+  return (
+    <section
+      data-testid="counter-quote"
+      className="flex flex-col gap-1 rounded-md border border-line bg-surface px-4 py-3"
+    >
+      <p className="text-caption text-ink-muted">{tp('quoteTitle', LOCALE)}</p>
+      <p className="text-body-md">
+        {tp('quoteSaid', LOCALE)
+          .replace('{minutes}', formatMinutes(quotedWaitMinutes, NUMERALS))
+          .replace('{time}', formatClock(arrivedAt, NUMERALS))}
+      </p>
+      <p className="text-body-sm text-ink-secondary" data-testid="counter-quote-left">
+        {left > 0
+          ? tp('quoteLeft', LOCALE).replace('{minutes}', formatMinutes(left, NUMERALS))
+          : tp('quotePassed', LOCALE)}
+      </p>
+    </section>
+  );
+}
+
 function etaText(eta: Eta | null): string | null {
   if (eta === null || eta.confidence === 'unknown') return null;
 

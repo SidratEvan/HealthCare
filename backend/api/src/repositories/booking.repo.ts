@@ -247,6 +247,8 @@ export interface BookingProjection {
   readonly calledAt: string | null;
   readonly doneAt: string | null;
   readonly arrivedAt: string | null;
+  /** The wait quoted at check-in (`FR-REC-18`), null until there is one. */
+  readonly quotedWaitMinutes: number | null;
   readonly consultSeconds: number | null;
   /**
    * Why the booking was cancelled, when it was (`FR-PAT-23`).
@@ -285,6 +287,7 @@ export async function saveProjections(
       ${p.calledAt}::timestamptz,
       ${p.doneAt}::timestamptz,
       ${p.arrivedAt}::timestamptz,
+      ${p.quotedWaitMinutes}::integer,
       ${p.consultSeconds}::integer,
       ${p.cancelledReason}::text
     )`,
@@ -300,15 +303,18 @@ export async function saveProjections(
            called_at        = v.called_at,
            done_at          = v.done_at,
            arrived_at       = v.arrived_at,
+           quoted_wait_minutes = v.quoted_wait_minutes,
            consult_seconds  = v.consult_seconds,
            cancelled_reason = COALESCE(v.cancelled_reason, b.cancelled_reason)
       FROM (VALUES ${sql.join(values, sql`, `)})
-           AS v (id, status, called_at, done_at, arrived_at, consult_seconds, cancelled_reason)
+           AS v (id, status, called_at, done_at, arrived_at, quoted_wait_minutes,
+                 consult_seconds, cancelled_reason)
      WHERE b.id = v.id
        AND (b.status           IS DISTINCT FROM v.status
          OR b.called_at        IS DISTINCT FROM v.called_at
          OR b.done_at          IS DISTINCT FROM v.done_at
          OR b.arrived_at       IS DISTINCT FROM v.arrived_at
+         OR b.quoted_wait_minutes IS DISTINCT FROM v.quoted_wait_minutes
          OR b.consult_seconds  IS DISTINCT FROM v.consult_seconds
          OR b.cancelled_reason IS DISTINCT FROM COALESCE(v.cancelled_reason, b.cancelled_reason))
   `.execute(trx);

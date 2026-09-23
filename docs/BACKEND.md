@@ -383,6 +383,7 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/bookings/:id/late` | receptionist | `PATIENT_LATE` |
 | POST | `/bookings/:id/no-show` | receptionist | `PATIENT_NO_SHOW` + auto slot offer |
 | POST | `/bookings/:id/reinstate` | receptionist | `PATIENT_REINSERTED` |
+| POST | `/bookings/:id/check-in` | receptionist | `PATIENT_ARRIVED` — body `{ quotedWaitMinutes }` 0–480; the arrival is the server's clock (`FR-REC-18`) |
 | POST | `/sessions/:id/walkin` | receptionist | `WALKIN_ADDED` |
 | POST | `/sessions/:id/reorder` | receptionist | `PRIORITY_REORDERED` (reason required) |
 | GET | `/sessions/:id/standby` | receptionist, hospital_admin | — (who is waiting and what was offered, no phone numbers; records any lapsed offer as `SLOT_EXPIRED` as it answers) |

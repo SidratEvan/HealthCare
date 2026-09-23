@@ -59,6 +59,7 @@ import {
   canPause,
   canOfferFreedSlot,
   canReinstate,
+  canCheckIn,
   canReorder,
   canResume,
   id,
@@ -884,6 +885,7 @@ async function persist(
       calledAt: entry.calledAt,
       doneAt: entry.doneAt,
       arrivedAt: entry.arrivedAt,
+      quotedWaitMinutes: entry.quotedWaitMinutes,
       consultSeconds: entry.consultSeconds,
       cancelledReason: entry.cancelled?.reason ?? null,
     })),
@@ -944,6 +946,7 @@ function broadcastSpecific(sessionId: string, state: QueueState, event: QueueEve
     case 'PATIENT_LATE':
     case 'PATIENT_NO_SHOW':
     case 'PATIENT_REINSERTED':
+    case 'PATIENT_ARRIVED':
     case 'WALKIN_ADDED':
     case 'BOOKING_CANCELLED':
     case 'SLOT_OFFERED':
@@ -1003,6 +1006,13 @@ function assertAllowed(
       break;
     case 'PATIENT_REINSERTED':
       result = canReinstate(state, id(readString(input.payload, 'bookingId')));
+      break;
+    case 'PATIENT_ARRIVED':
+      result = canCheckIn(
+        state,
+        id(readString(input.payload, 'bookingId')),
+        readNumber(input.payload, 'quotedWaitMinutes'),
+      );
       break;
     case 'WALKIN_ADDED':
       result = canAddWalkin(

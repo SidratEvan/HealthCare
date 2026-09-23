@@ -317,7 +317,7 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 
 ## A5. Live serial — the core screen
 
-### `S-A-08` Live serial (`FR-PAT-30`–`37`)
+### `S-A-08` Live serial (`FR-PAT-30`–`38`)
 
 **Subscriptions on mount:** session channel (`session:<id>`), plus a heartbeat every 30 s to detect a dead socket.
 
@@ -329,9 +329,10 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 | Progress bar | — | Position within session |
 | ETA block | — | আনুমানিক সময় + confidence band (`FR-QUE-13`) |
 | Countdown | — | আর বাকি ~40 মিনিট, recalculated locally each minute, corrected by server events |
-| Leave-home banner | `BANNER-A08-LEAVE` | Appears when travel + buffer ≥ remaining wait (`FR-PAT-32`) |
+| Counter's quote | `CARD-A08-QUOTE` | After reception checks the patient in (`FR-REC-18`): কাউন্টার জানিয়েছে — প্রায় ২৫ মিনিট, ৫:১০-এ বলা, and the minutes left against it. Beside the ETA block, never replacing it; when the quote has run out it says so rather than counting below zero (`FR-PAT-38`) |
+| Leave-home banner | `BANNER-A08-LEAVE` | Appears when travel + buffer ≥ remaining wait (`FR-PAT-32`). Not once the patient is checked in — they are already here |
 | Queue preview list | `LIST-A08-QUEUE` | Serving, next few, your row highlighted, late rows marked |
-| আমি দেরি করছি | `BTN-A08-LATE` | → `MOD-A08-LATE` |
+| আমি দেরি করছি | `BTN-A08-LATE` | → `MOD-A08-LATE`. Disabled once checked in |
 | সিরিয়াল বদলান | `BTN-A08-RESCHEDULE` | → `S-A-07b` in reschedule mode |
 | বাতিল করুন | `BTN-A08-CANCEL` | → `MOD-A08-CANCEL` confirm with refund rule stated (`GR-01`, `FR-PAY-03`). **In taka, not as a percentage** — a person deciding wants the number they will get. Computed by `refundIfCancelledNow` in `shared/domain`, the same function the server refunds with, so the sentence and the amount cannot disagree. Four outcomes: an amount back, nothing back, nothing was paid, or the hospital has set no terms and will say |
 | Freshness line | — | সর্বশেষ হালনাগাদ X মিনিট আগে (`GR-05`) |
@@ -625,12 +626,15 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 | Row action | ID | Wiring |
 |---|---|---|
+| এসেছেন | `BTN-B02-CHECKIN-<serial>` | On a booked or late row not yet checked in → `MOD-B02-CHECKIN` → `EVT-PATIENT_ARRIVED` with the quoted wait; queued offline like every row action. The row then reads এসেছেন with the quote under it (`FR-REC-18`) |
 | দেখা শেষ | `BTN-B02-DONE-<serial>` | `EVT-PATIENT_DONE`, duration captured |
 | দেরি | `BTN-B02-LATE-<serial>` | `EVT-PATIENT_LATE` → re-insert after *k* (`FR-QUE-21`) → patient notified of new position |
 | অনুপস্থিত | `BTN-B02-NOSHOW-<serial>` | Enabled only after grace period (`FR-QUE-20`); confirm → `EVT-PATIENT_NO_SHOW` → slot freed → waitlist card activates |
 | ফিরিয়ে আনুন | `BTN-B02-REINSTATE-<serial>` | Visible on no-show rows → `EVT-PATIENT_REINSERTED` with actor logged (`FR-QUE-22`) |
 | অগ্রাধিকার | `BTN-B02-PRIORITY-<serial>` | Drag or button → `MOD` requires a reason → `EVT-PRIORITY_REORDERED` (`FR-REC-15`) |
 | রোগীর তথ্য | `BTN-B02-INFO-<serial>` | Side panel: profile, previous visits at this hospital, payment status |
+
+**`MOD-B02-CHECKIN`**: one question — how long are you telling them? Pre-filled from the queue's own estimate (`suggestedQuote`, the function the patient's phone counts down from), moved in fives with − and +, capped at 480. নিশ্চিত করুন → `EVT-PATIENT_ARRIVED { bookingId, quotedWaitMinutes }`; the arrival time is the server's. The quote reaches `S-A-08` as `CARD-A08-QUOTE`. No SMS: it was said across the counter (`FR-REC-18`, `FR-PAT-38`).
 
 **`MOD-B02-WALKIN`**: phone → if existing, profile auto-fills (duplicate detection by phone, `FR-REC-20`); else quick-create (name, age, sex). Position: শেষে যোগ (default) or নির্দিষ্ট অবস্থানে (reason required). Confirm → `EVT-WALKIN_ADDED` → token print (`FR-REC-21`).
 

@@ -30,6 +30,7 @@ import {
   acceptOfferBody,
   bookingParams,
   callNextBody,
+  checkInBody,
   declareDelayBody,
   doctorArrivedBody,
   endSessionBody,
@@ -168,6 +169,19 @@ queueRoutes.post(
   write,
   validate({ params: bookingParams, body: reinstateBody }),
   queue.reinstate,
+);
+
+/**
+ * The patient is here, and was quoted a wait (`FR-REC-18`). Reception's: it is
+ * said across the counter, by the person who can see who is standing there.
+ */
+queueRoutes.post(
+  '/bookings/:id/check-in',
+  requireAuth,
+  requireRole('receptionist'),
+  write,
+  validate({ params: bookingParams, body: checkInBody }),
+  queue.checkIn,
 );
 
 queueRoutes.post(

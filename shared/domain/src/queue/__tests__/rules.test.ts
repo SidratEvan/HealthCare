@@ -10,11 +10,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { id, serial, timestamp } from '../../types/ids.js';
+import { QUOTE_STEP_MINUTES, suggestedQuote } from '../quote.js';
 import { reduce } from '../reducer.js';
 import {
   canAcceptSlot,
   canAddWalkin,
   canCallNext,
+  canCheckIn,
   canDeclareDelay,
   canDeclareDoctorArrived,
   canDeclareLate,
@@ -32,6 +34,7 @@ import {
   nextToCall,
   DEFAULT_QUEUE_SETTINGS,
   MAX_DELAY_MINUTES,
+  MAX_QUOTED_WAIT_MINUTES,
 } from '../rules.js';
 import { emptyState, type QueueState } from '../state.js';
 
@@ -319,6 +322,69 @@ describe('reinstating a patient (FR-QUE-22)', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.code).toBe('NOT_A_NO_SHOW');
+  });
+});
+
+describe('checking a patient in (FR-REC-18)', () => {
+  function refusal(result: ReturnType<typeof canCheckIn>): string | null {
+    return result.ok ? null : result.code;
+  }
+
+  it('allows a booked patient, before and after the doctor arrives', () => {
+    expect(canCheckIn(session().state, bookingId(2), 25).ok).toBe(true);
+    expect(canCheckIn(running().state, bookingId(2), 25).ok).toBe(true);
+  });
+
+  it('allows a patient who declared lateness and has now turned up', () => {
+    const { state, log } = running();
+    const late = reduce(
+      state,
+      log.next('PATIENT_LATE', { bookingId: bookingId(1), expectedMinutes: 20, reinsertAfter: 3 }),
+    );
+
+    expect(canCheckIn(late, bookingId(1), 10).ok).toBe(true);
+  });
+
+  it('refuses a second check-in, which would move the measured arrival', () => {
+    const { state, log } = running();
+    const here = reduce(
+      state,
+      log.next('PATIENT_ARRIVED', { bookingId: bookingId(2), quotedWaitMinutes: 20 }),
+    );
+
+    expect(refusal(canCheckIn(here, bookingId(2), 20))).toBe('ALREADY_ARRIVED');
+  });
+
+  it('refuses somebody already in the chamber, and anybody settled', () => {
+    const { state, log } = running();
+    const next = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.next('PATIENT_NO_SHOW', { bookingId: bookingId(2), graceUsedMinutes: 20 }),
+    ]);
+
+    expect(refusal(canCheckIn(next, bookingId(1), 0))).toBe('ALREADY_ARRIVED');
+    // A no-show who turns up is reinstated first — a different decision.
+    expect(refusal(canCheckIn(next, bookingId(2), 10))).toBe('BOOKING_SETTLED');
+  });
+
+  it('refuses a quote that is not a plausible number of minutes', () => {
+    const { state } = running();
+
+    expect(refusal(canCheckIn(state, bookingId(2), -5))).toBe('QUOTE_OUT_OF_RANGE');
+    expect(refusal(canCheckIn(state, bookingId(2), 12.5))).toBe('QUOTE_OUT_OF_RANGE');
+    expect(refusal(canCheckIn(state, bookingId(2), MAX_QUOTED_WAIT_MINUTES + 1))).toBe(
+      'QUOTE_OUT_OF_RANGE',
+    );
+    expect(canCheckIn(state, bookingId(2), MAX_QUOTED_WAIT_MINUTES).ok).toBe(true);
+  });
+
+  it('refuses an unknown booking and an ended session', () => {
+    const { state, log } = running();
+
+    expect(refusal(canCheckIn(state, bookingId(99), 10))).toBe('UNKNOWN_BOOKING');
+
+    const ended = reduce(state, log.next('SESSION_ENDED', { reason: null }));
+    expect(refusal(canCheckIn(ended, bookingId(2), 10))).toBe('SESSION_ENDED');
   });
 });
 
@@ -630,5 +696,43 @@ describe('accepting an offered chair', () => {
 
     expect(lapsedOffers(state, timestamp('2026-09-17T12:05:00.000Z'))).toHaveLength(0);
     expect(lapsedOffers(state, timestamp('2026-09-17T12:30:00.000Z'))).toHaveLength(1);
+  });
+});
+
+describe('the quote a check-in starts from (FR-REC-18)', () => {
+  it('is the minutes to the estimated call, in round fives', () => {
+    const { state } = running(6);
+    const now = timestamp('2026-09-17T11:00:00.000Z');
+
+    const quotes = [1, 2, 3, 4].map((serialNumber) =>
+      suggestedQuote(state, bookingId(serialNumber), now),
+    );
+
+    for (const quote of quotes) {
+      expect(quote).not.toBeNull();
+      expect((quote ?? 1) % QUOTE_STEP_MINUTES).toBe(0);
+    }
+    // Further back in the line is a longer wait, never a shorter one.
+    expect(quotes).toEqual([...quotes].sort((a, b) => (a ?? 0) - (b ?? 0)));
+    expect(quotes[3]).toBeGreaterThan(quotes[0] ?? 0);
+  });
+
+  it('has no suggestion for somebody in the chamber, or not in the session', () => {
+    const { state, log } = running(3);
+    const now = timestamp('2026-09-17T11:05:00.000Z');
+    const calling = reduce(
+      state,
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+    );
+
+    expect(suggestedQuote(calling, bookingId(1), now)).toBeNull();
+    expect(suggestedQuote(calling, bookingId(42), now)).toBeNull();
+  });
+
+  it('never suggests more than a quote may say', () => {
+    const { state } = session(3);
+    // A chamber that starts in a fortnight: the estimate is huge, the quote is not.
+    const now = timestamp('2026-09-01T11:00:00.000Z');
+    expect(suggestedQuote(state, bookingId(3), now)).toBe(MAX_QUOTED_WAIT_MINUTES);
   });
 });

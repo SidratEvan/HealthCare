@@ -254,6 +254,29 @@ export async function markNoShow(req: Request, res: Response): Promise<void> {
   );
 }
 
+/**
+ * `POST /bookings/:id/check-in` — the patient is at the counter, and has been
+ * told roughly how long they will wait (`FR-REC-18`, `BTN-B02-CHECKIN`).
+ *
+ * The quote comes from the console because reception may have changed the
+ * pre-filled figure; the arrival time is the event's own `serverTs`.
+ */
+export async function checkIn(req: Request, res: Response): Promise<void> {
+  const { booking, sessionId } = await assertBookingScope(req);
+  const body = req.body as { readonly quotedWaitMinutes: number };
+
+  send(
+    res,
+    await queueService.appendEvent({
+      sessionId,
+      type: 'PATIENT_ARRIVED',
+      payload: { bookingId: booking.id, quotedWaitMinutes: body.quotedWaitMinutes },
+      actor: actorOf(req),
+      ...envelope(req),
+    }),
+  );
+}
+
 /** `POST /bookings/:id/reinstate` — a late patient turned up (`FR-QUE-21`). */
 export async function reinstate(req: Request, res: Response): Promise<void> {
   const { booking, sessionId } = await assertBookingScope(req);

@@ -68,6 +68,10 @@ describe('migration files (DATABASE.md §7)', () => {
     // DATABASE.md §4 specifies and 0012 deferred until the step that reads
     // them. `feedback` needed no migration — 0007 already created it beside
     // the `visits` row it rates.
+    //
+    // 0021 and 0022 arrived with the check-in (`FR-REC-18`), after step 19:
+    // two files because a migration runs in one transaction and PostgreSQL
+    // will not let a transaction use an enum value it added itself.
     expect(migrations.map((m) => m.version)).toEqual([
       '0001',
       '0002',
@@ -87,6 +91,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0018',
       '0019',
       '0020',
+      '0021',
+      '0022',
     ]);
   });
 
