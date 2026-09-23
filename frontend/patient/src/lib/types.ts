@@ -235,6 +235,37 @@ export interface TestOrder {
   } | null;
 }
 
+/** One pharmacy's answer about one medicine (`FR-PHR-02`). */
+export interface PharmacyAnswer {
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  /** Kilometres, when the app knew where the person was. */
+  readonly distanceKm: number | null;
+  /** Never folded together: unknown is its own answer (`PRD.md` §3.2). */
+  readonly answer: 'in_stock' | 'out_of_stock' | 'unknown';
+  readonly freshness: {
+    readonly asOf: string | null;
+    readonly ageMinutes: number | null;
+    readonly stale: boolean;
+  };
+}
+
+/** One medicine, and everywhere a patient could look for it. */
+export interface MedicineAvailability {
+  readonly medicineId: string;
+  readonly genericName: string;
+  readonly brandName: string | null;
+  readonly form: string | null;
+  readonly pharmacies: readonly PharmacyAnswer[];
+  /** Counts, so the screen never reaches a verdict (`GR-05`). */
+  readonly summary: {
+    readonly inStock: number;
+    readonly outOfStock: number;
+    readonly unknown: number;
+  };
+}
+
 /** `BTN-A12-QR` — what the doctor types in, and how long it lasts. */
 export interface ConsentOffer {
   readonly code: string;
