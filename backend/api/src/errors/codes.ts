@@ -113,8 +113,18 @@ export const ERROR_CODES = {
    */
   QUEUE_EVENT_DUPLICATE: { status: 200, message: 'Already applied.' },
 
-  // --- Payments (FR-PAY-06) ------------------------------------------------
+  // --- Payments (FR-PAY-03, FR-PAY-06) -------------------------------------
   PAYMENT_FAILED: { status: 402, message: 'The payment provider declined the transaction.' },
+  /**
+   * The hospital has set no cancellation terms, so there is no rule to
+   * enforce (`FR-PAY-03`). A 409 rather than a 500: nothing is broken, and
+   * the fix is somebody deciding the policy. Returning a silent zero instead
+   * would present a computed number as a decision nobody made (`PRD.md` §3.2).
+   */
+  REFUND_POLICY_UNKNOWN: {
+    status: 409,
+    message: 'This hospital has not set its refund terms, so a refund cannot be calculated.',
+  },
 
   // --- Consent (FR-PAT-64, FR-DOC-10) -------------------------------------
   CONSENT_REQUIRED: {

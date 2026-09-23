@@ -22,6 +22,7 @@
 
 import express, { json, type Express } from 'express';
 
+import { rememberRawBody } from './config/rawBody.js';
 import { env } from './env.js';
 import { attachPrincipal } from './middleware/auth.js';
 import { cors } from './middleware/cors.js';
@@ -73,7 +74,18 @@ export function createApp(): Express {
   // the caller is.
   app.use(cors);
 
-  app.use(json({ limit: BODY_LIMIT }));
+  app.use(
+    json({
+      limit: BODY_LIMIT,
+      // A provider signs the bytes it sent, not a re-serialisation of them
+      // (BACKEND.md §7.7). This is the only hook that sees them; see
+      // `config/rawBody.ts` for why, and for why it keeps only the webhooks'.
+      verify: (req, _res, buf) => {
+        if (req.url?.startsWith('/api/v1/webhooks/') !== true) return;
+        rememberRawBody(req, buf.toString('utf8'));
+      },
+    }),
+  );
 
   app.use(attachPrincipal);
   app.use(attachGuestFromLink);

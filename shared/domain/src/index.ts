@@ -252,6 +252,20 @@ export {
   type TurnaroundSummary,
 } from './lab/turnaround.js';
 
+// --- Money (step 18) -------------------------------------------------------
+export {
+  readRefundPolicy,
+  refundFor,
+  refundIfCancelledNow,
+  REFUND_REASONS,
+  type RefundDecision,
+  type RefundPolicy,
+  type RefundReason,
+  type RefundablePayment,
+} from './payments/refund.js';
+
+export { settle, type Settlement, type SettlementRow } from './payments/settlement.js';
+
 export {
   rankStockResults,
   stockAnswerFor,
@@ -277,6 +291,7 @@ export * from './schemas/bed.schema.js';
 export * from './schemas/emergency.schema.js';
 export * from './schemas/referral.schema.js';
 export * from './schemas/lab.schema.js';
+export * from './schemas/payment.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';

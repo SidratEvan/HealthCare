@@ -161,6 +161,26 @@ CONSTRAINT patients_one_owner CHECK (num_nonnulls(owner_user_id, owner_guest_id)
 #### `hospital_settings`
 `hospital_id` **PK/FK**, `no_show_grace_patients` (default 2), `no_show_grace_minutes` (15), `late_reinsert_after` (3), `stale_threshold_minutes` (10), `refund_policy` jsonb, `sms_budget_monthly` int, `prepay_required` boolean, `numeral_style` text, `density_default` text.
 
+**`refund_policy` has a shape as of step 18** (`shared/domain/src/payments/refund.ts`),
+because `FR-PAY-03` needs one and no document had given it one:
+
+```jsonc
+{
+  "cutoffHours": 12,           // cancel this long before the session for the better rate
+  "beforeCutoffPercent": 100,
+  "afterCutoffPercent": 50,
+  "platformFeeRefundable": false
+}
+```
+
+An empty object means the hospital has set no terms, and that is a supported
+state rather than a gap: `MOD-A08-CANCEL` says the hospital will decide, and
+a refund through the API is refused with `REFUND_POLICY_UNKNOWN`. A
+half-written policy is read as no policy — filling in a missing field would
+state a refund the hospital never agreed to. **Doctor absence is not covered
+by it at all** (`FR-PAY-07`): that returns everything, and no policy can
+reduce it.
+
 #### `departments`
 `id`, `hospital_id` **FK**, `name_bn`, `name_en`, `code`, `sort_order`.
 
@@ -342,7 +362,22 @@ The sending ER holds the case until the receiving ER records the arrival; that o
 ### 2.6 Money
 
 #### `payments`
-`id`, `booking_id`/`bed_request_id`/`test_order_id`/`ambulance_request_id` (exactly one, CHECK), `payer_user_id`/`payer_guest_id`, `amount_poisha`, `platform_fee_poisha`, `method` payment_method, `state` payment_state, `provider_ref`, `idempotency_key` **U** (`FR-PAY-06`), `paid_at`, `refunded_poisha`, `refund_reason`.
+`id`, `booking_id`/`bed_request_id`/`test_order_id`/`ambulance_request_id` (exactly one, CHECK), `payer_user_id`/`payer_guest_id`, `amount_poisha`, `platform_fee_poisha`, `method` payment_method, `state` payment_state, `provider_ref`, `idempotency_key` **U** (`FR-PAY-06`), `paid_at`, `refunded_poisha`, `refund_reason`, `refunded_at` (0009).
+
+**Money is never edited, only added to.** `amount_poisha` and
+`platform_fee_poisha` are fixed at creation by a trigger, the way
+`ambulance_requests.quoted_fare_poisha` is (`FR-PAT-74`): a figure somebody
+was shown and agreed to is not something a later code path may revise. A
+refund is recorded in `refunded_poisha`, so a settlement can always state
+collections and refunds separately (`FR-PAY-05`).
+
+The state and the numbers are held to each other by CHECK constraints —
+`refunded` means the whole amount went back, `partially_refunded` means some
+of it did, and a refund with no reason or no stamp is refused. A settlement
+report computed from rows that could disagree with themselves is fiction.
+
+`ambulance_request_id` carries no foreign key until 0019: 0011 creates
+`ambulance_requests` and runs *after* 0009 on a fresh database.
 
 #### `invoices` / `subscriptions`
 `subscriptions`: `id`, `hospital_id`, `plan`, `modules` text[], `monthly_poisha`, `started_at`, `ended_at`, `state`.
@@ -492,6 +527,9 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0018_lab_idempotency.sql       -- step 17: test_orders.idempotency_key, reports.idempotency_key
                                    -- and reports.delivered_to (§2.4). Numbered past 0014/0015
                                    -- for the reason 0016 and 0017 are
+    0019_payment_ambulance_fk.sql  -- step 18: the one foreign key 0009 could not make. On a
+                                   -- fresh database 0009 runs before 0011, so
+                                   -- payments.ambulance_request_id had no table to point at
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities (FR-DEM-01)

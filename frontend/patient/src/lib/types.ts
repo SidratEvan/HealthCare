@@ -179,6 +179,18 @@ export interface BookingView {
   /** The age of the figures, for `<FreshnessLine>` (`FR-PAT-35`). */
   readonly freshAt: string;
   readonly serverTs: string;
+  /**
+   * What was paid, if anything (`FR-PAY-03`).
+   *
+   * Null for a booking nobody has taken money for — pay-at-hospital before
+   * the visit — in which case a cancellation returns nothing and says so.
+   */
+  readonly payment: {
+    readonly amountPoisha: number;
+    readonly platformFeePoisha: number;
+    readonly refundedPoisha: number;
+    readonly paidAt: string | null;
+  } | null;
 }
 
 /** One consultation, as `S-A-12`'s timeline shows it. */

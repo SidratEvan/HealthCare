@@ -41,6 +41,7 @@ import { seed04History } from './seed_04_history.js';
 import { seed05Beds } from './seed_05_beds.js';
 import { seed06Ancillary } from './seed_06_ancillary.js';
 import { seed07DemoLive } from './seed_07_demo_live.js';
+import { seed08Money } from './seed_08_money.js';
 
 import type { Client } from 'pg';
 
@@ -52,6 +53,9 @@ export const SEED_MODULES: readonly SeedModule[] = [
   seed05Beds,
   seed06Ancillary,
   seed07DemoLive,
+  // Last: a payment needs its booking, and `seed_07` is what makes the pitch
+  // session's bookings (`FR-PAY-01`).
+  seed08Money,
 ];
 
 /** `seed_00_reference.sql`, resolved from this file rather than the cwd. */

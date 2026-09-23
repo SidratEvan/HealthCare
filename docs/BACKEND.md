@@ -474,9 +474,11 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/payments/intent` | returns provider redirect/token; idempotent |
-| POST | `/payments/:id/refund` | admin or automatic on doctor absence (`FR-PAY-07`) |
-| POST | `/webhooks/bkash` \| `/nagad` | signature-verified, idempotent |
+| POST | `/payments/intent` | patient \| guest. Idempotent three ways (`FR-PAY-06`). **The amount is not in the body** — it is read from the booking's own `fee_poisha`, so a client cannot decide what it owes. Only a booking is chargeable in this version |
+| GET | `/bookings/:id/payments` | what was charged against one booking |
+| POST | `/payments/:id/refund` | hospital_admin. **The amount is not in the body either** — the *reason* picks the rule and `refundFor` computes it (`FR-PAY-03`). `FR-PAY-07`'s automatic eligibility does not come through here: it is raised when a session ends |
+| GET | `/hospitals/:id/settlement?from=&to=` | hospital_admin (`FR-PAY-05`) |
+| POST | `/webhooks/bkash` \| `/nagad` | **no token**: a provider holds none of ours, so the signature over the raw body *is* the authentication. Answers 200 for a replay, because a 4xx makes a provider retry something already done |
 | POST | `/webhooks/sms-dlr` | delivery receipts → `notifications.state` |
 | GET | `/admin/dashboard?from&to` | aggregates from `v_admin_daily`, `v_no_show_loss`, `v_referral_flow` |
 | GET | `/admin/export?view=` | CSV/PDF (audited) |

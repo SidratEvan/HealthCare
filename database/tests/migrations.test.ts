@@ -56,6 +56,13 @@ describe('migration files (DATABASE.md §7)', () => {
     // edited. 0018 adds what `test_orders` and `reports` could not yet say —
     // an idempotency key and who a report reached — and is numbered past
     // 0014 and 0015 for the reason 0016 and 0017 are.
+    //
+    // 0009 and 0019 arrived with step 18, the money. 0009 takes the number
+    // DATABASE.md §7 gives it even though it lands after 0018 in wall-clock
+    // time — the same trade 0007 made behind 0010. 0019 exists because of
+    // what that ordering costs: on a fresh database 0009 runs *before* 0011,
+    // so `payments.ambulance_request_id` could not carry its foreign key,
+    // and 0019 adds it once `ambulance_requests` exists.
     expect(migrations.map((m) => m.version)).toEqual([
       '0001',
       '0002',
@@ -65,6 +72,7 @@ describe('migration files (DATABASE.md §7)', () => {
       '0006',
       '0007',
       '0008',
+      '0009',
       '0010',
       '0011',
       '0012',
@@ -72,6 +80,7 @@ describe('migration files (DATABASE.md §7)', () => {
       '0016',
       '0017',
       '0018',
+      '0019',
     ]);
   });
 

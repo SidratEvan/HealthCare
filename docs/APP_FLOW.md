@@ -333,7 +333,7 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 | Queue preview list | `LIST-A08-QUEUE` | Serving, next few, your row highlighted, late rows marked |
 | আমি দেরি করছি | `BTN-A08-LATE` | → `MOD-A08-LATE` |
 | সিরিয়াল বদলান | `BTN-A08-RESCHEDULE` | → `S-A-07b` in reschedule mode |
-| বাতিল করুন | `BTN-A08-CANCEL` | → `MOD-A08-CANCEL` confirm with refund rule stated (`GR-01`, `FR-PAY-03`) |
+| বাতিল করুন | `BTN-A08-CANCEL` | → `MOD-A08-CANCEL` confirm with refund rule stated (`GR-01`, `FR-PAY-03`). **In taka, not as a percentage** — a person deciding wants the number they will get. Computed by `refundIfCancelledNow` in `shared/domain`, the same function the server refunds with, so the sentence and the amount cannot disagree. Four outcomes: an amount back, nothing back, nothing was paid, or the hospital has set no terms and will say |
 | Freshness line | — | সর্বশেষ হালনাগাদ X মিনিট আগে (`GR-05`) |
 
 **`MOD-A08-LATE` wiring**
