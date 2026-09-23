@@ -269,6 +269,16 @@ export async function uploadReport(
   if (before.hospitalId !== actor.hospitalId) {
     throw forbiddenScope({ resource: 'test order', hospitalId: before.hospitalId });
   }
+
+  // **Replay before guard.** A successful upload leaves the order `delivered`,
+  // which `canUploadReport` refuses — so a console replaying its outbox would
+  // be told its own completed upload was too late. The key is what decides,
+  // and answering here also means a replayed ten megabytes is never re-stored.
+  const already = await labRepo.findReportByIdempotencyKey(input.idempotencyKey);
+  if (already !== null) {
+    return { order: before, duplicate: true, serverTs: at.toISOString() };
+  }
+
   guard(canUploadReport(before));
 
   const bytes = Buffer.from(input.content, 'base64');
@@ -295,7 +305,9 @@ export async function uploadReport(
   } = await withTransaction(async (trx) => {
     const current = await lockOwn(trx, input.orderId, actor);
 
-    const replayed = await labRepo.findReportByIdempotencyKey(trx, input.idempotencyKey);
+    // Again, inside the lock: two uploads carrying one key that raced the
+    // check above serialise here, and the second finds the first's report.
+    const replayed = await labRepo.findReportByIdempotencyKey(input.idempotencyKey, trx);
     if (replayed !== null) {
       return { order: current, duplicate: true, batch: null };
     }

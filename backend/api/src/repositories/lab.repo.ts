@@ -312,12 +312,12 @@ export async function insertReport(
 
 /** The report a replayed upload already made. */
 export async function findReportByIdempotencyKey(
-  trx: Tx,
   key: string,
+  trx?: Tx,
 ): Promise<{ id: string; fileUrl: string } | null> {
   const result = await sql<{ id: string; file_url: string }>`
     SELECT id, file_url FROM reports WHERE idempotency_key = ${key}
-  `.execute(trx);
+  `.execute(trx ?? db);
   const row = result.rows[0];
   return row === undefined ? null : { id: row.id, fileUrl: row.file_url };
 }

@@ -432,7 +432,7 @@ export async function reportRecipient(
     doctor_id: string | null;
     sms_budget_monthly: number | null;
   }>`
-    SELECT t.patient_id, b.guest_id, b.user_id,
+    SELECT t.patient_id, b.booked_by_guest_id AS guest_id, b.booked_by_user_id AS user_id,
            COALESCE(p.phone, g.phone, u.phone) AS phone, u.locale,
            h.id AS hospital_id, h.name_bn, h.name_en, t.test_name,
            v.doctor_id, s.sms_budget_monthly
@@ -441,8 +441,8 @@ export async function reportRecipient(
       JOIN hospitals h ON h.id = t.hospital_id
       LEFT JOIN visits v ON v.id = t.visit_id
       LEFT JOIN bookings b ON b.id = v.booking_id
-      LEFT JOIN guest_identities g ON g.id = b.guest_id
-      LEFT JOIN users u ON u.id = b.user_id
+      LEFT JOIN guest_identities g ON g.id = b.booked_by_guest_id
+      LEFT JOIN users u ON u.id = b.booked_by_user_id
       LEFT JOIN hospital_settings s ON s.hospital_id = t.hospital_id
      WHERE t.id = ${testOrderId}::uuid
   `.execute(trx);
