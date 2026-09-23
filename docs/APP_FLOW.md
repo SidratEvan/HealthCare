@@ -481,11 +481,19 @@ Ranking: capability match → travel time → ER load → free beds. Stale facil
 > have expired, and a request that failed is an error with a retry — neither is
 > folded into "no records".
 >
-> **Not built:** `TAB-A12-REP` (the lab, step 17), `TAB-A12-RX` (prescribing is
-> out of scope, `PRD.md` §9), `BTN-A12-UPLOAD` (needs Supabase Storage) and
-> `BTN-A12-EXPORT` (needs a PDF writer). None is rendered as an empty tab; the
-> screen names them in one line instead, because an empty *Reports* tab would
-> tell a patient they have no reports.
+> **`TAB-A12-REP` is built** (step 17). Each tracking link carries the tests
+> its booking's consultation ordered (`FR-GST-08`), so the tab is real. It
+> appears **only when there is something in it**: a person who has never had a
+> test is not shown an empty Reports tab. A test still on a bench is listed
+> with what is happening to it — "we are testing it" is a different sentence
+> from "you have no reports", and it is the one that stops somebody ringing
+> the hospital. A delivered report opens through a signed URL minted at the
+> moment of tapping, because a signature expires.
+>
+> **Not built:** `TAB-A12-RX` (prescribing is out of scope, `PRD.md` §9),
+> `BTN-A12-UPLOAD` (needs Supabase Storage) and `BTN-A12-EXPORT` (needs a PDF
+> writer). None is rendered as an empty tab; the screen names them in one line
+> instead.
 
 | Element | ID | Wiring |
 |---|---|---|
@@ -503,6 +511,22 @@ Catalogue → select tests → centre comparison (price, distance, turnaround) �
 
 ### `S-A-14` Pharmacy
 Prescription QR → nearby partner pharmacies with stock status → reserve or request delivery → dispensing recorded (`FR-PHR-01`).
+
+> **Not built as specified, because all three steps hang off a prescription**
+> this version does not write (`PRD.md` §9, §12). What is built instead is the
+> part that needs none: a **medicine availability search** at `/medicines`,
+> reached from the home screen, which is `FR-PHR-02`'s other half. A family
+> holding a paper prescription from any doctor anywhere can still find out who
+> has the medicine.
+>
+> It answers in three, never two: **আছে**, **নেই**, or **জানা নেই** for a
+> pharmacy that has not confirmed in twelve hours or never flagged that
+> medicine at all. Folding *unknown* into *no* invents a shortage; folding it
+> into *yes* sends somebody across Dhaka for nothing (`PRD.md` §3.2). A
+> pharmacy that never flagged the medicine still appears — an absent hospital
+> would read as "does not stock it", which is a claim nobody made. The summary
+> line counts all three rather than reaching a verdict (`GR-05`), and every row
+> carries the age of the claim behind it.
 
 ### `S-A-15` Telemedicine
 Same session/queue mechanics; live serial screen switches its primary action to "কলে যোগ দিন", enabled when called (`FR-PAT-73`).
@@ -660,7 +684,7 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 | Diagnosis field | `INP-B05-DX` | Autocomplete over ICD-ish common terms, free text allowed |
 | Medicine rows | `TBL-B05-RX` | Name (autocomplete over formulary, `FR-DOC-05`), strength, schedule (1+0+1), duration, instruction |
 | + ওষুধ | `BTN-B05-ADDRX` | Adds a row; keyboard-first entry |
-| Test chips | `BTN-B05-TEST` | Adds test orders → pushed to lab queue on save (`FR-DOC-06`) |
+| Test chips | `BTN-B05-TEST` | Adds test orders → pushed to lab queue on save (`FR-DOC-06`). The chips are the hospital's own catalogue (`GET /lab/catalogue`), so the name and price a doctor ticks are the ones the lab and the wallet show. Ticking writes nothing: the orders go with the record, because an order hangs off the visit and there is no visit until it is filed |
 | Advice box | `INP-B05-ADVICE` | Printed in Bangla for the patient (`FR-DOC-07`) |
 | Follow-up | `SEL-B05-FOLLOWUP` | 7/14/30 days or date → schedules patient reminder (`FR-PAT-80`) |
 | খসড়া রাখুন | `BTN-B05-DRAFT` | Saves without finishing the consultation |
@@ -797,9 +821,41 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 ## B5. Lab & pharmacy consoles
 
+> **Built in this version** (step 17): the whole of `S-B-08`, and the stock
+> half of `S-B-09`. Both are opened from `S-B-01` on the hospital rather than
+> on a chamber, as the ward board and the ER are, and only at a facility whose
+> roster has that role — a diagnostic centre gets a lab and no pharmacy, a
+> clinic the reverse.
+>
+> **Not built:** `S-B-09`'s scanner and dispensing (`FR-PHR-01`). Prescribing
+> is out of scope for this version (`PRD.md` §9, §12), so nothing writes a
+> `prescriptions` row and there is nothing to scan. The screen says so in a
+> sentence instead of opening a camera onto an empty table.
+
 **`S-B-08` Lab**: order queue → state buttons (`নমুনা নেওয়া হয়েছে` → `প্রসেসিং` → `রিপোর্ট প্রস্তুত`) → upload report file → auto-delivery to patient wallet and ordering doctor (`FR-LAB-02`, `FR-LAB-03`). Turnaround timer visible per order.
 
+| Element | ID | Wiring |
+|---|---|---|
+| Queue filter | `CHIP-B08-<state>` | চলমান / রিপোর্ট হয়েছে / সব. Open orders sort oldest first — a turnaround clock is running on each (`FR-LAB-04`) |
+| Order row | `CARD-B08-<orderId>` | Test, state, when it was ordered, how long it has been waiting. **No patient name** |
+| রোগীর নাম দেখুন | `BTN-B08-PATIENT` | Fetches the name through an audited read; one tap, recorded (`DB-P7`, `FR-SEC-03`) |
+| নমুনা নেওয়া হয়েছে | `BTN-B08-COLLECT` | → `sample_collected`, stamps `sample_at` |
+| প্রসেসিং | `BTN-B08-PROCESS` | → `processing` |
+| রিপোর্ট দিন | `BTN-B08-UPLOAD` | PDF or image → stored → order `delivered` → wallet and ordering doctor, in one transaction. There is no separate *send*: uploading **is** delivering (`FR-LAB-03`) |
+| বাতিল করুন | `BTN-B08-CANCEL` | Only while the lab still has work. A test with a report cannot be cancelled — the result is the patient's |
+| Turnaround panel | — | Median per test type, slowest beside it, and the count still open. A type with no finished order says so rather than reading zero (`FR-LAB-04`) |
+
+**The lifecycle only moves forward.** A mis-tap is corrected by cancelling and re-ordering, which leaves both rows visible, never by walking an order back: the timestamps are the turnaround measurement, and a measurement that can be edited is not one. `delivered` is the server's own step and is not a button a console may send.
+
 **`S-B-09` Pharmacy**: scan prescription QR → line items with stock status → dispense (full or partial) → record → out-of-stock flag feeds public medicine search (`FR-PHR-01`, `FR-PHR-02`).
+
+| Element | ID | Wiring |
+|---|---|---|
+| Stock row | `ROW-B09-<medicineId>` | The medicine, what this counter last said, **and what a patient searching is being shown right now**, with its age |
+| আছে / নেই | `BTN-B09-IN` / `BTN-B09-OUT` | Sets the flag and renews its freshness (`FR-PHR-02`) |
+| পুরো তালিকা ঠিক আছে | `BTN-B09-CONFIRM-ALL` | Re-sends every flag unchanged. This is how somebody says "still true", and it is the commonest act at this counter |
+
+**A flag that nobody renews goes quiet on its own.** After twelve hours an in-stock claim is published as *জানা নেই* rather than repeated; an out-of-stock flag stands until somebody clears it, because a pharmacy that restocked has every reason to say so and one that has run out has none to keep saying it. The row showing what the public sees is `FR-BED-06`'s idea applied to a shelf: the consequence of not renewing is visible to the person who would renew it.
 
 ---
 

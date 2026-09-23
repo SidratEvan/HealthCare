@@ -271,8 +271,27 @@ One completed consultation: `id`, `booking_id` **FK U**, `patient_id`, `hospital
 Formulary for autocomplete (`FR-DOC-05`): `id`, `generic_name`, `brand_name`, `manufacturer`, `strengths` text[], `form`.
 
 #### `test_orders` / `reports`
-`test_orders`: `id`, `visit_id` nullable, `patient_id`, `hospital_id`, `test_code`, `test_name`, `state` test_state, `ordered_by`, `sample_at`, `ready_at`, `delivered_at`, `price_poisha`.
-`reports`: `id`, `test_order_id` **FK**, `file_url`, `file_type`, `uploaded_by`, `delivered_to_wallet_at`.
+`test_orders`: `id`, `visit_id` nullable, `patient_id`, `hospital_id`, `test_code`, `test_name`, `state` test_state, `ordered_by`, `sample_at`, `ready_at`, `delivered_at`, `price_poisha`, `idempotency_key` **U** (0018).
+`reports`: `id`, `test_order_id` **FK**, `file_url`, `file_type`, `uploaded_by`, `delivered_to_wallet_at`, `idempotency_key` **U** (0018), `delivered_to` text[] (0018).
+
+`visit_id` is nullable because `BACKEND.md` §7.6 allows an order from a
+"patient booking" as well as from a doctor: somebody walking into a
+diagnostic centre with a paper chit has no consultation behind them, and that
+order's report reaches one recipient rather than two.
+
+`idempotency_key` on both tables is `CLAUDE.md` §7 — every write endpoint
+takes one — and it is what makes an offline replay safe: a doctor's four
+ticked chips share one key suffixed by each test's code, so a replay finds
+all four and creates none. `delivered_to` names whom `FR-LAB-03` actually
+reached (`patient`, and `doctor` where there was one), and a delivery stamp
+with an empty list is refused, so the figure the promise is measured by
+cannot be set without saying to whom.
+
+**The lifecycle only moves forward** (`shared/domain/src/lab/orders.ts`).
+`test_orders_timeline_ordered` refuses a `ready_at` before its `sample_at`,
+and the domain refuses the transition that would produce one: the timestamps
+are `FR-LAB-04`'s measurement, and a measurement that can be edited is not
+one. A mistake is corrected by cancelling and re-ordering.
 
 #### `patient_documents`
 Patient-uploaded paper records (`FR-PAT-62`): `id`, `patient_id`, `file_url`, `doc_type`, `doc_date`, `doctor_name_text`, `uploaded_at`.
@@ -467,6 +486,12 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0016_emergency_intake.sql      -- step 15: emergency_cases columns and 'declined' (§2.5). Numbered
                                    -- past 0014/0015, which keep their numbers and land later
     0017_referrals.sql             -- step 16: referrals columns, keys and stamps (§2.5)
+    0011_ancillary.sql             -- step 17: written whole, though only pharmacy_stock is
+                                   -- read yet; a shipped migration is never edited, so the
+                                   -- ambulance and blood tables land with their set
+    0018_lab_idempotency.sql       -- step 17: test_orders.idempotency_key, reports.idempotency_key
+                                   -- and reports.delivered_to (§2.4). Numbered past 0014/0015
+                                   -- for the reason 0016 and 0017 are
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities (FR-DEM-01)
