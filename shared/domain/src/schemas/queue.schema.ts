@@ -159,6 +159,25 @@ export const cancelBookingBody = command({
 /** `POST /events/:id/undo` (`GR-02`). */
 export const undoBody = command({});
 
+/**
+ * `POST /bookings/:id/offer-slot` (`FR-QUE-30`, `BTN-B02-OFFER`).
+ *
+ * No fields of its own. Which standby patient is next is the server's
+ * decision, taken under the session lock — a body naming one would let two
+ * counters offer the same chair to the same person — and the acceptance
+ * window is `SLOT_OFFER_WINDOW_MINUTES`, not something a console proposes.
+ */
+export const offerSlotBody = command({});
+
+/**
+ * `POST /offers/:id/accept` (`FR-QUE-30`).
+ *
+ * Also empty. The serial the accepting patient gets depends on how the chair
+ * came free and on where the queue has reached, which only the server knows,
+ * and the fee comes from the session (`DB-P5`) rather than from the request.
+ */
+export const acceptOfferBody = command({});
+
 // ---------------------------------------------------------------------------
 // Params and query
 // ---------------------------------------------------------------------------
@@ -166,6 +185,7 @@ export const undoBody = command({});
 export const sessionParams = z.object({ id: uuid });
 export const bookingParams = z.object({ id: uuid });
 export const eventParams = z.object({ id: uuid });
+export const offerParams = z.object({ id: uuid });
 
 /** `GET /sessions/:id/queue?sinceSeq=` — the resume handshake (`SY-01`). */
 export const queueQuery = z.object({
@@ -178,3 +198,5 @@ export type EndSessionBody = z.infer<typeof endSessionBody>;
 export type MarkLateBody = z.infer<typeof markLateBody>;
 export type AddWalkinBody = z.infer<typeof addWalkinBody>;
 export type ReorderBody = z.infer<typeof reorderBody>;
+export type OfferSlotBody = z.infer<typeof offerSlotBody>;
+export type AcceptOfferBody = z.infer<typeof acceptOfferBody>;

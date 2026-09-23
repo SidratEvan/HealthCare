@@ -43,6 +43,7 @@ export const TEMPLATE_KEYS = [
   'queue.called',
   'queue.no_show',
   'queue.cancelled',
+  'queue.slot_offered',
   'session.ended',
   'bed.request_held',
   'bed.request_declined',
@@ -193,6 +194,35 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
     version: 1,
     bn: 'সিরিয়াল {serial} বাতিল করা হয়েছে',
     en: 'Serial {serial} has been cancelled',
+  },
+
+  // --- A freed chair is offered (FR-QUE-30) ---------------------------------
+  //
+  // The only message in this product with a deadline inside it, and the one
+  // where the segment limit bites hardest: it has to name a doctor, a
+  // deadline and an action in seventy UCS-2 characters. The hospital name is
+  // what gave way — somebody on a standby list knows which hospital they put
+  // themselves on it for, and the doctor is what they are actually waiting
+  // for. It is still passed as a parameter, so a hospital customising the
+  // copy (`FR-NOT-05`) can spend its own budget putting the name back.
+  //
+  // No serial: the number is allocated when they accept, not when they are
+  // asked. And it says *where to go*, not "reply yes" — nothing in this
+  // version reads an inbound SMS, and inviting a reply that reaches nobody is
+  // worse than not inviting one.
+  {
+    key: 'queue.slot_offered',
+    channel: 'sms',
+    version: 1,
+    bn: '{doctor}-এর চেম্বারে সিরিয়াল খালি। {time} পর্যন্ত কাউন্টারে জানান।',
+    en: 'A serial has opened with {doctor}. Tell the counter by {time}.',
+  },
+  {
+    key: 'queue.slot_offered',
+    channel: 'push',
+    version: 1,
+    bn: '{doctor}-এর চেম্বারে সিরিয়াল খালি — {time} পর্যন্ত',
+    en: 'A serial has opened with {doctor} — until {time}',
   },
 
   // --- The chamber closes (FR-REC-06) ---------------------------------------

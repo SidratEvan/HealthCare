@@ -382,6 +382,82 @@ export async function undo(req: Request, res: Response): Promise<void> {
 // Shared plumbing
 // ---------------------------------------------------------------------------
 
+/**
+ * `POST /bookings/:id/offer-slot` — hand an empty chair to the standby list
+ * (`FR-QUE-30`, `FR-REC-30`, `BTN-B02-OFFER`).
+ *
+ * The route names the freed *booking*, not the session, because a receptionist
+ * acts on the row in front of her: she has just marked serial 14 a no-show and
+ * the offer is about that chair. The session comes off the booking.
+ */
+export async function offerSlot(req: Request, res: Response): Promise<void> {
+  const { booking, sessionId } = await assertBookingScope(req);
+
+  send(
+    res,
+    await queueService.offerFreedSlot({
+      sessionId,
+      freedBookingId: booking.id,
+      actor: actorOf(req),
+      ...envelope(req),
+    }),
+  );
+}
+
+/** `POST /offers/:id/accept` — the standby patient said yes (`FR-QUE-30`). */
+export async function acceptOffer(req: Request, res: Response): Promise<void> {
+  const offerId = param(req, 'id');
+  const offer = await queueService.requireOffer(offerId);
+  await assertSessionScope(req, offer.sessionId);
+
+  send(
+    res,
+    await queueService.acceptSlot({
+      offerId,
+      actor: actorOf(req),
+      ...envelope(req),
+    }),
+  );
+}
+
+/**
+ * `GET /sessions/:id/standby` — who is waiting, and what has been offered.
+ *
+ * Expires anything whose window has closed before answering. Nothing runs on a
+ * timer in this version, so this read *is* the sweep (`expireLapsedOffers`):
+ * the console asking "what is outstanding" is exactly the moment the answer
+ * needs to be current, and an offer already unacceptable by the clock should
+ * not be shown as live.
+ */
+export async function getStandby(req: Request, res: Response): Promise<void> {
+  const sessionId = param(req, 'id');
+  await assertSessionScope(req, sessionId);
+
+  await queueService.expireLapsedOffers(sessionId, actorOf(req));
+  const standby = await queueService.standbyFor(sessionId);
+
+  res.json({
+    ok: true,
+    data: {
+      waiting: standby.waiting.map((row) => ({
+        id: row.id,
+        patientId: row.patientId,
+        position: row.position,
+      })),
+      offers: standby.offers.map((offer) => ({
+        id: offer.id,
+        freedBookingId: offer.freedBookingId,
+        offeredToPatientId: offer.offeredToPatientId,
+        offeredAt: offer.offeredAt.toISOString(),
+        expiresAt: offer.expiresAt.toISOString(),
+        acceptedAt: offer.acceptedAt?.toISOString() ?? null,
+        recoveredValuePoisha: offer.recoveredValuePoisha,
+      })),
+      serverTs: new Date().toISOString(),
+    },
+  });
+}
+
 function param(req: Request, name: string): string {
   const value = req.params[name];
   if (typeof value !== 'string' || value === '') throw notFound('route parameter');

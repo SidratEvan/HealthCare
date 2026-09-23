@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { serial, timestamp } from '../../types/ids.js';
+import { id, serial, timestamp } from '../../types/ids.js';
 import { reduce } from '../reducer.js';
 import {
   canAcceptSlot,
@@ -36,6 +36,8 @@ import {
 import { emptyState, type QueueState } from '../state.js';
 
 import { bookingId, LogBuilder, makeSeed } from './support.js';
+
+import type { BookingId, PatientId, SlotOfferId } from '../../types/ids.js';
 
 const PLANNED_START = timestamp('2026-09-17T11:00:00.000Z');
 
@@ -450,19 +452,20 @@ describe('capacity', () => {
   });
 });
 
-describe('offering a chair somebody freed (FR-QUE-30)', () => {
-  const OFFER_ID = '55555555-5555-7555-8555-000000000001';
-  const NOW = timestamp('2026-09-17T12:00:00.000Z');
+/** Somebody on the standby list — a patient, not a booking: they have none. */
+const STANDBY_PATIENT = id<PatientId>('44444444-4444-7444-8444-000000000009');
 
+describe('offering a chair somebody freed (FR-QUE-30)', () => {
+  const OFFER_ID = id<SlotOfferId>('55555555-5555-7555-8555-000000000001');
   /** A running session with serial 2 marked no-show, so a chair is free. */
-  function withFreedChair(): { state: QueueState; log: LogBuilder; freed: string } {
+  function withFreedChair(): { state: QueueState; log: LogBuilder; freed: BookingId } {
     const { state, log } = running();
     const freed = bookingId(2);
     const after = fold(state, [
       log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
       log.next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
       log.next('PATIENT_CALLED', { bookingId: freed, serial: serial(2) }),
-      log.next('PATIENT_NO_SHOW', { bookingId: freed, afterGraceSeconds: 1_200 }),
+      log.next('PATIENT_NO_SHOW', { bookingId: freed, graceUsedMinutes: 20 }),
     ]);
     return { state: after, log, freed };
   }
@@ -488,7 +491,10 @@ describe('offering a chair somebody freed (FR-QUE-30)', () => {
     // take a turn from a person standing outside the door in traffic.
     const { state, log } = running();
     const late = bookingId(3);
-    const after = reduce(state, log.next('PATIENT_LATE', { bookingId: late, reinsertAfter: 3 }));
+    const after = reduce(
+      state,
+      log.next('PATIENT_LATE', { bookingId: late, expectedMinutes: 20, reinsertAfter: 3 }),
+    );
 
     expect(canOfferFreedSlot(after, late)).toMatchObject({ ok: false, code: 'SLOT_NOT_FREE' });
   });
@@ -518,7 +524,7 @@ describe('offering a chair somebody freed (FR-QUE-30)', () => {
       log.next('SLOT_OFFERED', {
         offerId: OFFER_ID,
         freedBookingId: freed,
-        offeredTo: [bookingId(9)],
+        offeredTo: [STANDBY_PATIENT],
         expiresAt: timestamp('2026-09-17T12:10:00.000Z'),
       }),
     );
@@ -537,7 +543,7 @@ describe('offering a chair somebody freed (FR-QUE-30)', () => {
       log.next('SLOT_OFFERED', {
         offerId: OFFER_ID,
         freedBookingId: freed,
-        offeredTo: [bookingId(9)],
+        offeredTo: [STANDBY_PATIENT],
         expiresAt: timestamp('2026-09-17T12:10:00.000Z'),
       }),
       log.next('SLOT_EXPIRED', { offerId: OFFER_ID }),
@@ -548,14 +554,14 @@ describe('offering a chair somebody freed (FR-QUE-30)', () => {
 
   it('refuses to offer anything once the session has ended', () => {
     const { state, log, freed } = withFreedChair();
-    const ended = reduce(state, log.next('SESSION_ENDED', { endedAt: NOW, seen: 1 }));
+    const ended = reduce(state, log.next('SESSION_ENDED', { reason: null }));
 
     expect(canOfferFreedSlot(ended, freed)).toMatchObject({ ok: false, code: 'SESSION_ENDED' });
   });
 });
 
 describe('accepting an offered chair', () => {
-  const OFFER_ID = '55555555-5555-7555-8555-000000000002';
+  const OFFER_ID = id<SlotOfferId>('55555555-5555-7555-8555-000000000002');
   const EXPIRES = timestamp('2026-09-17T12:10:00.000Z');
 
   function offered(): { state: QueueState; log: LogBuilder } {
@@ -566,7 +572,7 @@ describe('accepting an offered chair', () => {
       log.next('SLOT_OFFERED', {
         offerId: OFFER_ID,
         freedBookingId: freed,
-        offeredTo: [bookingId(9)],
+        offeredTo: [STANDBY_PATIENT],
         expiresAt: EXPIRES,
       }),
     ]);
@@ -614,9 +620,9 @@ describe('accepting an offered chair', () => {
 
   it('refuses an offer that does not exist', () => {
     const { state } = offered();
-    expect(canAcceptSlot(state, 'not-an-offer', timestamp('2026-09-17T12:05:00.000Z'))).toMatchObject(
-      { ok: false, code: 'UNKNOWN_OFFER' },
-    );
+    expect(
+      canAcceptSlot(state, 'not-an-offer', timestamp('2026-09-17T12:05:00.000Z')),
+    ).toMatchObject({ ok: false, code: 'UNKNOWN_OFFER' });
   });
 
   it('names the offers whose window has closed', () => {
