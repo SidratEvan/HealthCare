@@ -23,9 +23,11 @@ import { emergencyRoutes } from './emergency.routes.js';
 import { guestRoutes } from './guest.routes.js';
 import { healthRoutes } from './health.routes.js';
 import { labRoutes } from './lab.routes.js';
+import { paymentRoutes } from './payment.routes.js';
 import { queueRoutes } from './queue.routes.js';
 import { referralRoutes } from './referral.routes.js';
 import { syncRoutes } from './sync.routes.js';
+import { webhookRoutes } from './webhooks.routes.js';
 
 /** Version prefix for everything a client calls. */
 export const API_BASE_PATH = '/api/v1';
@@ -68,6 +70,12 @@ export function buildApiRouter(): Router {
   // The lab and the pharmacy (step 17). The medicine availability search is
   // public; everything else belongs to a bench or a counter.
   router.use(labRoutes);
+  // Money (step 18). Paying is the patient's, refunding and settling the
+  // administrator's.
+  router.use(paymentRoutes);
+  // Provider callbacks. No token, because a provider has none of ours — the
+  // signature is the authentication, and it is checked before anything else.
+  router.use(webhookRoutes);
   router.use(syncRoutes);
   return router;
 }

@@ -71,6 +71,7 @@ import {
   type QueueActor,
 } from '@platform/domain';
 
+import { logger } from '../config/logger.js';
 import { AppError, guardFailed, notFound } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
 import * as bookingRepo from '../repositories/booking.repo.js';
@@ -80,6 +81,7 @@ import * as sessionRepo from '../repositories/session.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import * as notifications from './notification.service.js';
+import * as payments from './payment.service.js';
 
 /**
  * A session as the HTTP layer sees it, and a booking likewise.
@@ -143,7 +145,32 @@ export async function appendEvent(input: AppendEventInput): Promise<AppendEventR
 
   // Committed. Now, and only now, does anything leave the building.
   await notifications.dispatch(settled.batch);
+  await afterSessionEnded(input.type, input.sessionId);
   return settled.result;
+}
+
+/**
+ * `FR-PAY-07`, raised the moment a session closes.
+ *
+ * "Doctor absence triggers automatic refund eligibility without the patient
+ * asking" — so nobody asks. Every patient who paid and was never seen is
+ * marked owed in one statement as soon as the session ends.
+ *
+ * **After the commit, and never able to fail the event.** A session has
+ * ended whether or not the money bookkeeping succeeded, and an end that
+ * rolled back because a payment query was slow would leave a chamber running
+ * on every screen in the hospital. So this is logged and swallowed, like the
+ * confirmation SMS is — the eligibility is recoverable from the rows, a
+ * wedged session is not.
+ */
+async function afterSessionEnded(type: QueueEventType, sessionId: string): Promise<void> {
+  if (type !== 'SESSION_ENDED') return;
+
+  try {
+    await payments.raiseRefundsForEndedSession(sessionId);
+  } catch (cause: unknown) {
+    logger.error({ sessionId, err: cause }, 'could not raise refund eligibility');
+  }
 }
 
 /**
