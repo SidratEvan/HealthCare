@@ -50,6 +50,13 @@ export interface OfferRow {
  * outstanding offer is not available for another one. Without it, somebody at
  * position 1 who has not yet answered would be offered every chair that frees
  * in the next ten minutes.
+ *
+ * The `ORDER BY` is the third: somebody who let an offer lapse, or turned one
+ * down, goes behind everybody who has not yet been asked. `FR-QUE-30` says an
+ * unaccepted offer "passes to the next patient", and ordering on position
+ * alone handed the re-offered chair straight back to the person who had just
+ * not answered. They are not dropped — once everybody has been asked, the list
+ * comes round to them again.
  */
 export async function claimNextStandby(
   trx: Tx,
@@ -75,7 +82,13 @@ export async function claimNextStandby(
             AND o.declined_at IS NULL
             AND o.expires_at > ${now}
        )
-     ORDER BY sl.position
+     ORDER BY (
+               SELECT count(*) FROM slot_offers o
+                WHERE o.offered_to_patient_id = sl.patient_id
+                  AND o.session_id = sl.session_id
+                  AND o.accepted_at IS NULL
+              ),
+              sl.position
      FOR UPDATE SKIP LOCKED
      LIMIT 1
   `.execute(trx);

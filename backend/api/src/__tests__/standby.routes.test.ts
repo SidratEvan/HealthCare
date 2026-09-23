@@ -475,6 +475,32 @@ describe('the standby panel (GET /sessions/:id/standby)', () => {
     expect(again.status).toBe(200);
   });
 
+  it('passes a lapsed chair to the next person, not back to the one who did not answer', async () => {
+    // `FR-QUE-30`: "unaccepted offers pass to the next patient". Ordering on
+    // position alone handed the re-offer straight back to position 1.
+    const freed = await freeAChair();
+    await addStandby(fixture.sparePatientId, 1);
+    const next = fixture.patientIds[0] ?? '';
+    await addStandby(next, 2);
+    await offer(freed);
+
+    passTime(11);
+
+    await request(app)
+      .get(`${BASE}/sessions/${fixture.sessionId}/standby`)
+      .set('Authorization', bearer(reception))
+      .expect(200);
+
+    expect((await offer(freed)).status).toBe(200);
+
+    const latest = await sql<{ offered_to_patient_id: string }>`
+      SELECT offered_to_patient_id FROM slot_offers
+       WHERE session_id = ${fixture.sessionId}
+       ORDER BY offered_at DESC LIMIT 1
+    `.execute(db);
+    expect(latest.rows[0]?.offered_to_patient_id).toBe(next);
+  });
+
   it('is readable by an administrator, who is shown the figure built from it', async () => {
     const response = await request(app)
       .get(`${BASE}/sessions/${fixture.sessionId}/standby`)
