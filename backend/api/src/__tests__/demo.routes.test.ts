@@ -88,14 +88,33 @@ describe('GET /demo/consoles', () => {
     const consoles = response.body.data.consoles as { roles: string[] }[];
 
     for (const entry of consoles) {
-      // `lab` and `pharmacy` are seeded as staff roles but have no screen
-      // until step 17. A door onto an empty room is worse than no door.
-      // `ward` joined at step 14 with the bed board, `emergency` at step 15
-      // with the ER console.
+      // A door onto an empty room is worse than no door. `ward` joined at
+      // step 14 with the bed board, `emergency` at step 15 with the ER
+      // console, `lab` and `pharmacy` with their screens at step 17, and
+      // `hospital_admin` opens `S-B-10` from step 19.
       for (const role of entry.roles) {
-        expect(['receptionist', 'doctor', 'ward', 'emergency', 'hospital_admin']).toContain(role);
+        expect([
+          'receptionist',
+          'doctor',
+          'ward',
+          'emergency',
+          'lab',
+          'pharmacy',
+          'hospital_admin',
+        ]).toContain(role);
       }
     }
+  });
+
+  it('offers the lab and the pharmacy where they are staffed (S-B-08, S-B-09)', async () => {
+    // Missing from the picker from step 17 until step 19 — the consoles were
+    // built and nothing offered them (`demo.service` OFFERED).
+    const response = await request(app).get(`${BASE}/demo/consoles`);
+    const consoles = response.body.data.consoles as { roles: string[] }[];
+
+    expect(consoles.some((entry) => entry.roles.includes('lab'))).toBe(true);
+    expect(consoles.some((entry) => entry.roles.includes('pharmacy'))).toBe(true);
+    expect(consoles.every((entry) => entry.roles.includes('hospital_admin'))).toBe(true);
   });
 
   it('offers the ER console wherever an emergency coordinator works (S-B-07)', async () => {
@@ -213,7 +232,7 @@ describe('POST /demo/token', () => {
 
     const response = await request(app)
       .post(`${BASE}/demo/token`)
-      .send({ hospitalId, role: 'lab' });
+      .send({ hospitalId, role: 'platform_admin' });
 
     expect(response.status).toBe(400);
   });

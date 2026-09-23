@@ -42,13 +42,22 @@ import * as demoRepo from '../repositories/demo.repo.js';
  * about and the primary action on every chamber card. The ward follows the
  * two chamber roles because it is the one console that opens on a hospital
  * rather than a chamber (`S-B-06`, build step 14). The ER console opens on a
- * hospital too (`S-B-07`, build step 15), and follows the ward.
+ * hospital too (`S-B-07`, build step 15), and follows the ward; the lab and the
+ * pharmacy (`S-B-08`, `S-B-09`, step 17) and the dashboard (`S-B-10`, step 19)
+ * follow it.
+ *
+ * `lab` and `pharmacy` were missing from this list from step 17 until step 19,
+ * so the picker never offered either console and `POST /demo/token` refused
+ * both. `lab-report.spec.ts` writes its session straight into storage and so
+ * never used the picker — the same blind spot that hid the ER role at step 15.
  */
 const OFFERED: readonly StaffRole[] = [
   'receptionist',
   'doctor',
   'ward',
   'emergency',
+  'lab',
+  'pharmacy',
   'hospital_admin',
 ];
 
