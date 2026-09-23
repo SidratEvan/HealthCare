@@ -43,6 +43,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { format, formatNumber, t, type ConsoleKey, type Locale } from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
+import { ActionButton } from '@/components/ActionButton';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { readDemoSession } from '@/lib/demo';
 import { failureOf, labApi, type ShelfResponse, type StockRow } from '@/lib/lab';
@@ -200,6 +201,9 @@ function PharmacyBody(): ReactNode {
   const rows = shelf.rows;
   const goneQuiet = rows.filter((row) => row.publishedAs === 'unknown' && row.inStock).length;
 
+  // §5.1: a control that is off says why, rather than being dead.
+  const offReason = !online ? t('offline', locale) : saving ? t('actionSending', locale) : null;
+
   return (
     <div className="flex min-h-screen" data-testid="pharmacy-console">
       <nav aria-label={t('navBilling', locale)} className="w-52 shrink-0 border-r border-line p-4">
@@ -265,19 +269,20 @@ function PharmacyBody(): ReactNode {
           ) : (
             <>
               <div className="flex items-center gap-4">
-                <Button
+                <ActionButton
                   variant="primary"
-                  disabled={saving || !online}
+                  size="md"
+                  reason={offReason}
                   onClick={() => {
                     // Every row, unchanged: "the whole list is still correct".
                     void write(
                       rows.map((row) => ({ medicineId: row.medicineId, inStock: row.inStock })),
                     );
                   }}
-                  data-testid="pharmacy-confirm-all"
+                  testId="pharmacy-confirm-all"
                 >
                   {t('pharmacyConfirmAll', locale)}
-                </Button>
+                </ActionButton>
                 <p className="text-body-sm text-ink-muted">{t('pharmacyConfirmHint', locale)}</p>
               </div>
 
@@ -294,7 +299,7 @@ function PharmacyBody(): ReactNode {
                       row={row}
                       now={now}
                       locale={locale}
-                      disabled={saving || !online}
+                      offReason={offReason}
                       freshness={freshness}
                       formatMinutes={minutes}
                       onSet={(inStock) => {
@@ -317,7 +322,7 @@ function ShelfRow({
   row,
   now,
   locale,
-  disabled,
+  offReason,
   freshness,
   formatMinutes,
   onSet,
@@ -325,7 +330,8 @@ function ShelfRow({
   readonly row: StockRow;
   readonly now: Date;
   readonly locale: Locale;
-  readonly disabled: boolean;
+  /** Why the two buttons are off, or null when they are live (§5.1). */
+  readonly offReason: string | null;
   readonly freshness: { justNow: string; ago: string; never: string; stale: string };
   readonly formatMinutes: (minutes: number) => string;
   readonly onSet: (inStock: boolean) => void;
@@ -344,7 +350,7 @@ function ShelfRow({
           </p>
           {/* `FR-BED-06`'s idea on a shelf: what the public is being told. */}
           <p className="mt-1 text-body-sm text-ink-secondary">
-            {format(t('pharmacyShownAs', locale), {
+            {format('pharmacyShownAs', locale, {
               answer: t(ANSWER_LABEL[row.publishedAs], locale),
             })}
           </p>
@@ -365,28 +371,28 @@ function ShelfRow({
         </Chip>
 
         <div className="flex shrink-0 gap-2">
-          <Button
+          <ActionButton
             size="sm"
             variant={row.inStock ? 'secondary' : 'primary'}
-            disabled={disabled}
+            reason={offReason}
             onClick={() => {
               onSet(true);
             }}
-            data-testid={`stock-in-${row.medicineId}`}
+            testId={`stock-in-${row.medicineId}`}
           >
             {t('pharmacyInStock', locale)}
-          </Button>
-          <Button
+          </ActionButton>
+          <ActionButton
             size="sm"
             variant={row.inStock ? 'primary' : 'secondary'}
-            disabled={disabled}
+            reason={offReason}
             onClick={() => {
               onSet(false);
             }}
-            data-testid={`stock-out-${row.medicineId}`}
+            testId={`stock-out-${row.medicineId}`}
           >
             {t('pharmacyOutOfStock', locale)}
-          </Button>
+          </ActionButton>
         </div>
       </div>
     </Card>

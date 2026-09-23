@@ -761,6 +761,7 @@ export const CONSOLE = {
     en: 'PDF or image. It reaches the patient’s app and the doctor at once.',
   },
   labUploading: { bn: 'পাঠানো হচ্ছে…', en: 'Sending…' },
+  actionSending: { bn: 'আগেরটি পাঠানো হচ্ছে', en: 'Sending the last one' },
   labUploaded: {
     bn: 'রোগী ও ডাক্তার দুজনেই পেয়েছেন',
     en: 'Both the patient and the doctor have it',

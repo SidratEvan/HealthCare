@@ -63,6 +63,7 @@ import {
   useToast,
 } from '@platform/ui';
 
+import { ActionButton } from '@/components/ActionButton';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { readDemoSession } from '@/lib/demo';
 import { failureOf, labApi, readReportFile, type LabQueueResponse } from '@/lib/lab';
@@ -345,7 +346,7 @@ function LabBody(): ReactNode {
           <div className="min-w-0 flex-1">
             <h1 className="font-reading text-title-lg text-ink">{t('labTitle', locale)}</h1>
             <p className="text-body-sm text-ink-muted">
-              {format(t('labOpenCount', locale), { count: formatNumber(openCount, NUMERALS) })}
+              {format('labOpenCount', locale, { count: formatNumber(openCount, NUMERALS) })}
             </p>
           </div>
           <FreshnessLine
@@ -452,16 +453,19 @@ function OrderRow({
   const waiting = openForSeconds(order, now.toISOString() as Timestamp);
   const open = isOpenTestOrder(order.state);
 
+  // §5.1: a control that is off says why, rather than being dead.
+  const offReason = !online ? t('offline', locale) : busy ? t('actionSending', locale) : null;
+
   return (
     <Card data-testid={`lab-order-${order.id}`}>
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1">
           <p className="font-reading text-title-sm text-ink">{order.testName}</p>
           <p className="mt-1 text-body-sm text-ink-muted">
-            {format(t('labOrderedAt', locale), { time: clock(order.orderedAt, locale) })}
+            {format('labOrderedAt', locale, { time: clock(order.orderedAt, locale) })}
             {waiting === null
               ? ''
-              : ` · ${format(t('labWaitingFor', locale), { duration: duration(waiting, locale) })}`}
+              : ` · ${format('labWaitingFor', locale, { duration: duration(waiting, locale) })}`}
           </p>
 
           {/* `DB-P7`: the name is a separate, recorded read. */}
@@ -486,40 +490,40 @@ function OrderRow({
           </Chip>
 
           {next !== undefined ? (
-            <Button
+            <ActionButton
               size="sm"
               variant="primary"
-              disabled={busy || !online}
+              reason={offReason}
               onClick={() => {
                 onAdvance(next.action);
               }}
-              data-testid={`lab-${next.action}-${order.id}`}
+              testId={`lab-${next.action}-${order.id}`}
             >
               {t(next.key, locale)}
-            </Button>
+            </ActionButton>
           ) : null}
 
           {order.state === 'processing' ? (
             <UploadButton
               orderId={order.id}
               locale={locale}
-              disabled={busy || !online}
+              reason={offReason}
               onChoose={onUpload}
             />
           ) : null}
 
           {open ? (
-            <Button
+            <ActionButton
               size="sm"
               variant="quiet"
-              disabled={busy || !online}
+              reason={offReason}
               onClick={() => {
                 onAdvance('cancel');
               }}
-              data-testid={`lab-cancel-${order.id}`}
+              testId={`lab-cancel-${order.id}`}
             >
               {t('labCancel', locale)}
-            </Button>
+            </ActionButton>
           ) : null}
 
           {order.report !== null && order.report.deliveredToWalletAt !== null ? (
@@ -543,18 +547,21 @@ function OrderRow({
 function UploadButton({
   orderId,
   locale,
-  disabled,
+  reason,
   onChoose,
 }: {
   readonly orderId: string;
   readonly locale: Locale;
-  readonly disabled: boolean;
+  /** Why it is off, or null when it is live (§5.1). */
+  readonly reason: string | null;
   readonly onChoose: (file: File) => void;
 }): ReactNode {
+  const disabled = reason !== null;
   return (
     <label
       className="inline-flex min-h-touch cursor-pointer items-center rounded-sm bg-brand-600 px-3 text-body-sm font-semibold text-on-brand aria-disabled:opacity-50"
       aria-disabled={disabled}
+      title={reason ?? undefined}
       data-testid={`lab-upload-${orderId}`}
     >
       {t('labUpload', locale)}
@@ -563,6 +570,7 @@ function UploadButton({
         className="sr-only"
         accept="application/pdf,image/jpeg,image/png,image/webp"
         disabled={disabled}
+        aria-describedby={disabled ? `lab-upload-why-${orderId}` : undefined}
         onChange={(event) => {
           const input = event.currentTarget;
           const file = input.files?.[0];
@@ -572,6 +580,11 @@ function UploadButton({
           input.value = '';
         }}
       />
+      {disabled ? (
+        <span id={`lab-upload-why-${orderId}`} className="sr-only">
+          {reason}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -598,18 +611,18 @@ function Turnaround({
             <p className="text-body-sm text-ink-secondary">
               {row.medianSeconds === null
                 ? t('labTurnaroundNone', locale)
-                : format(t('labTurnaroundMedian', locale), {
+                : format('labTurnaroundMedian', locale, {
                     duration: duration(row.medianSeconds, locale),
                   })}
             </p>
             {row.open > 0 ? (
               <p className="text-caption text-ink-muted">
-                {format(t('labTurnaroundOpen', locale), {
+                {format('labTurnaroundOpen', locale, {
                   count: formatNumber(row.open, NUMERALS),
                 })}
                 {row.oldestOpenSeconds === null
                   ? ''
-                  : ` · ${format(t('labOldestOpen', locale), {
+                  : ` · ${format('labOldestOpen', locale, {
                       duration: duration(row.oldestOpenSeconds, locale),
                     })}`}
               </p>
