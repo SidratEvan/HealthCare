@@ -385,6 +385,8 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/bookings/:id/reinstate` | receptionist | `PATIENT_REINSERTED` |
 | POST | `/sessions/:id/walkin` | receptionist | `WALKIN_ADDED` |
 | POST | `/sessions/:id/reorder` | receptionist | `PRIORITY_REORDERED` (reason required) |
+| GET | `/sessions/:id/standby` | receptionist, hospital_admin | — (who is waiting and what was offered, no phone numbers; records any lapsed offer as `SLOT_EXPIRED` as it answers) |
+| POST | `/bookings/:id/offer-slot` | receptionist | `SLOT_OFFERED` — `BTN-B02-OFFER`: the freed chair to the next person on the standby list, ten-minute window (`FR-QUE-30`, `FR-REC-30`) |
 | POST | `/events/:id/undo` | actor, ≤ 10 s | `ACTION_UNDONE` |
 | POST | `/sessions/:id/end` | receptionist | `SESSION_ENDED` |
 
