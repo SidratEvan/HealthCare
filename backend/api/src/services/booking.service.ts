@@ -406,6 +406,24 @@ export interface BookingView {
   readonly booking: bookingRepo.BookingDetail;
   readonly state: QueueState;
   readonly etas: readonly Eta[];
+  /**
+   * What was paid for this booking, if anything (`FR-PAY-03`).
+   *
+   * `MOD-A08-CANCEL` has to state the refund **before** the patient confirms,
+   * and the refund depends on what was actually taken — a pay-at-hospital
+   * booking gets nothing back because nothing was given. The screen runs
+   * `refundIfCancelledNow` over this and the hospital's policy, which is the
+   * same function the server refunds with, so the sentence a patient reads
+   * and the amount they receive cannot disagree.
+   *
+   * Never carries `provider_ref` (CLAUDE.md §7).
+   */
+  readonly payment: {
+    readonly amountPoisha: number;
+    readonly platformFeePoisha: number;
+    readonly refundedPoisha: number;
+    readonly paidAt: string | null;
+  } | null;
   /** The age of the figures on screen, for `<FreshnessLine>` (`FR-PAT-35`). */
   readonly freshAt: string;
   readonly serverTs: string;
@@ -416,16 +434,33 @@ export async function bookingView(bookingId: string): Promise<BookingView> {
   const booking = await bookingRepo.findDetail(bookingId);
   if (booking === null) throw notFound('booking');
 
-  const [state, etas, cached] = await Promise.all([
+  const [state, etas, cached, paid] = await Promise.all([
     queueService.getState(booking.sessionId),
     queueService.getEtas(booking.sessionId),
     queueService.getCachedState(booking.sessionId),
+    payments.forBooking(bookingId),
   ]);
+
+  // The newest payment that actually took money. A booking may hold several
+  // rows — a failed attempt then a successful one — and the refund is about
+  // the one that succeeded.
+  const settled =
+    paid.find((entry) => entry.paidAt !== null && entry.refundedPoisha < entry.amountPoisha) ??
+    null;
 
   return {
     booking,
     state,
     etas,
+    payment:
+      settled === null
+        ? null
+        : {
+            amountPoisha: settled.amountPoisha,
+            platformFeePoisha: settled.platformFeePoisha,
+            refundedPoisha: settled.refundedPoisha,
+            paidAt: settled.paidAt,
+          },
     // The cache's own timestamp, never this server's clock: a figure is as old
     // as the last event that moved it, and saying otherwise would make every
     // freshness line read "just now" forever (`FR-OFF-03`).

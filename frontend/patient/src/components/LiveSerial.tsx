@@ -30,12 +30,16 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   computeEtas,
   patientsAhead as aheadOf,
+  readRefundPolicy,
+  refundIfCancelledNow,
   time,
   type Eta,
   type QueueEntry,
   type QueueState,
+  type RefundDecision,
+  type Timestamp,
 } from '@platform/domain';
-import { formatClock, formatMinutes, formatSerial, tp } from '@platform/i18n';
+import { formatClock, formatMinutes, formatSerial, formatTaka, tp } from '@platform/i18n';
 import { Button, FreshnessLine, LiveSerialCard, Sheet, SheetActions } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
@@ -44,7 +48,7 @@ import { useSessionChannel } from '@/hooks/useSessionChannel';
 import { useTrackingLink } from '@/hooks/useTrackingLink';
 import { SOCKET_URL, cancelBooking, declareLate } from '@/lib/api';
 
-import type { BookingDetail } from '@/lib/types';
+import type { BookingDetail, BookingView } from '@/lib/types';
 import type { ReactNode } from 'react';
 
 const LOCALE = 'bn' as const;
@@ -95,6 +99,7 @@ export function LiveSerial({ linkToken }: { readonly linkToken: string | null })
   return (
     <Ready
       booking={link.booking}
+      payment={link.initial?.payment ?? null}
       state={state}
       etas={etas}
       freshAt={freshAt}
@@ -107,6 +112,7 @@ export function LiveSerial({ linkToken }: { readonly linkToken: string | null })
 
 function Ready({
   booking,
+  payment,
   state,
   etas,
   freshAt,
@@ -114,6 +120,8 @@ function Ready({
   stale,
   token,
 }: {
+  /** What was paid, for the refund `MOD-A08-CANCEL` has to state. */
+  readonly payment: BookingView['payment'];
   readonly booking: BookingDetail;
   readonly state: QueueState;
   readonly etas: readonly Eta[];
@@ -304,7 +312,7 @@ function Ready({
 
           <CancelSheet
             serial={formatSerial(booking.serial, NUMERALS)}
-            refundStated={Object.keys(booking.refundPolicy).length > 0}
+            refund={cancellationRefund(booking, payment)}
             disabled={mine === null || mine.status === 'cancelled'}
             onConfirm={() => {
               void act(
@@ -489,20 +497,65 @@ function LateSheet({
  * may get it — rather than asking "are you sure", and the safe option sits on
  * the left.
  *
- * The refund rule is stated before confirming. When the hospital has recorded
- * none, the sheet says the hospital will confirm rather than inventing a
- * percentage: `hospital_settings.refund_policy` is an empty object in this
- * version and no document defines its shape, so a number here would be
- * fabricated (`PRD.md` §3.2).
+ * The refund rule is stated before confirming, in taka rather than as a
+ * percentage — a person deciding whether to cancel wants the number they will
+ * get, not the rule that produced it.
+ *
+ * It is computed by `refundIfCancelledNow` from `shared/domain`, which is the
+ * same function the server refunds with. That is the point: the sentence a
+ * patient reads here and the amount that reaches them afterwards come from
+ * one piece of code, so they cannot disagree (`FR-PAY-03`).
+ *
+ * Where the hospital has recorded no terms the sheet says the hospital will
+ * confirm, rather than inventing a percentage (`PRD.md` §3.2) — and where
+ * nothing was ever paid it says that instead, which is a different sentence
+ * and a different fact.
  */
+/**
+ * What this booking gets back if it is cancelled right now.
+ *
+ * Null when nothing was ever taken, which the sheet says in its own words.
+ * Everything else — including "no policy on file" — is a `RefundDecision`,
+ * because `stated: false` is itself an answer the screen has to render.
+ */
+function cancellationRefund(
+  booking: BookingDetail,
+  payment: BookingView['payment'],
+): RefundDecision | null {
+  if (payment?.paidAt == null) return null;
+
+  return refundIfCancelledNow(
+    {
+      amountPoisha: payment.amountPoisha,
+      platformFeePoisha: payment.platformFeePoisha,
+      refundedPoisha: payment.refundedPoisha,
+      paidAt: payment.paidAt as Timestamp,
+    },
+    {
+      now: new Date().toISOString() as Timestamp,
+      sessionStart: booking.plannedStart as Timestamp,
+      policy: readRefundPolicy(booking.refundPolicy),
+    },
+  );
+}
+
+/** The refund, as a sentence somebody deciding can act on. */
+function refundSentence(refund: RefundDecision | null): string {
+  if (refund === null) return tp('refundNothingPaid', LOCALE);
+  if (!refund.stated) return tp('refundPolicyUnknown', LOCALE);
+  if (refund.refundPoisha <= 0) return tp('refundNone', LOCALE);
+  return tp('refundFull', LOCALE).replace('{amount}', formatTaka(refund.refundPoisha, NUMERALS));
+}
+
 function CancelSheet({
   serial,
-  refundStated,
+  refund,
   disabled,
   onConfirm,
 }: {
   readonly serial: string;
-  readonly refundStated: boolean;
+  /** What `refundIfCancelledNow` decided, or null when nothing was paid. */
+  readonly refund: RefundDecision | null;
   readonly disabled: boolean;
   readonly onConfirm: () => void;
 }): ReactNode {
@@ -529,11 +582,9 @@ function CancelSheet({
       }
     >
       <div className="flex flex-col gap-4">
-        {refundStated ? null : (
-          <p className="text-body-md text-ink-secondary" data-testid="refund-rule">
-            {tp('refundPolicyUnknown', LOCALE)}
-          </p>
-        )}
+        <p className="text-body-md text-ink-secondary" data-testid="refund-rule">
+          {refundSentence(refund)}
+        </p>
 
         <SheetActions destructive>
           <Button

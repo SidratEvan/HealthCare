@@ -7,11 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/lab-pharmacy` — step 17. A doctor ticks a test chip and
-signs; the order appears on a bench somebody else is watching; the bench takes
-the sample, processes it and uploads a PDF — and that one act delivers it to
-the patient's phone and the ordering doctor. The pharmacy marks what is on the
-shelf, and a family searching for a medicine is told আছে, নেই or জানা নেই.
+Last updated: `feat/payments` — step 18. A booking records what it charged, a
+retry never charges twice, and a cancellation says in taka what is coming back
+before anybody confirms. When a session ends with people still waiting, every
+one of them is marked owed without asking.
 
 ---
 
@@ -37,7 +36,8 @@ shelf, and a family searching for a medicine is told আছে, নেই or জ
 | 15 | `feat/emergency` | merged — migrations 0013 + 0016, `S-A-10`/`10b`/`10c`, `S-B-07` the ER console, the ward's ER half of `FR-BED-07`, `emergency-burn.spec.ts` |
 | 16 | `feat/referrals` | merged — migration 0017, the referral state machine, both halves of the ER console, `referral.spec.ts` |
 | 17 | `feat/lab-pharmacy` | merged — migrations 0011 + 0018, `S-B-08`, the stock half of `S-B-09`, `BTN-B05-TEST`, `TAB-A12-REP`, the medicine search, `lab-report.spec.ts`. **Dispensing dropped**; `PRD.md` §12 and `APP_FLOW.md` B5 edited to match |
-| 18 | `feat/payments` | **next** — bKash/Nagad adapters, refunds, settlements |
+| 18 | `feat/payments` | merged — migrations 0009 + 0019, the refund and settlement domain, the provider seam, `seed_08_money`, the refund statement on `MOD-A08-CANCEL`. **bKash and Nagad are not implemented**; the mock is the working provider (`CLAUDE.md` §1.1) |
+| 19 | `feat/admin-dashboard` | **next** — aggregates, no-show loss and recovery, exports |
 
 Four unplanned branches after step 11:
 
@@ -91,7 +91,7 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 2878, in about a minute.
+`pnpm test` reports 2943, in about a minute.
 `pnpm test:e2e` reports 85, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
@@ -123,6 +123,131 @@ decision about a sleeping backend, not a test detail, which is why
 Worth knowing when demonstrating: **open the console once a minute before
 showing anyone.** Nothing is broken if the first load is slow; it is the free
 tier waking.
+
+### Step 18 — the money, and what a number somebody agreed to is worth
+
+**The definition of done is the idempotency test** (`CLAUDE.md` §4), and it is
+the first describe in `payment.routes.test.ts` because the failure it guards
+against is the only one in this step that takes money from a person. It is
+tested two ways: a retry after the first completed, and five identical
+requests in flight at once — which is what a patient double-tapping confirm on
+a bad connection actually produces.
+
+**`FR-PAY-06` is three deep.** The caller's key is unique in the database,
+serialised by an advisory lock so a replay that races its original waits, and
+passed to the provider so even a retry past both finds the same transaction.
+Any one would usually do. Payments get all three.
+
+**A client never says how much.** An intent names *what* is being paid for and
+the amount comes from the booking's own `fee_poisha`, copied on at booking
+time (`DB-P5`) so a later fee change cannot alter what was charged. A refund
+names a *reason* and the amount is `refundFor` in `shared/domain`. Neither
+number is ever in a request body, so neither can be argued with — and the test
+that sends `amountPoisha: 1` gets charged the real fee.
+
+**Money is never edited, only added to.** A trigger refuses any change to
+`amount_poisha` or `platform_fee_poisha`, the way `ambulance_requests` refuses
+a change to a quoted fare (`FR-PAT-74`). A refund goes in `refunded_poisha`,
+so a settlement can always state collections and refunds separately. Six CHECK
+constraints hold the state and the numbers to each other, because a settlement
+computed from rows that could contradict themselves is fiction.
+
+**`refund_policy` has a shape now** — open decision 12, which step 18 was the
+step that needed it. It is `cutoffHours`, two percentages and whether the
+platform fee comes back, validated on the way in. **A half-written policy is
+read as no policy**: filling in a missing field would state a refund the
+hospital never agreed to, which is worse than having none. Four demo
+facilities have terms and two deliberately do not, so a cancellation at
+Karnaphuli or Buriganga says the hospital will decide — the honest-degradation
+case (`PRD.md` §3.2), demonstrable rather than only described.
+
+**Doctor absence is the platform's guarantee, not the hospital's terms.**
+`FR-PAY-07` returns everything including the platform fee, and no policy can
+reduce it: the patient did not cancel, so no cancellation policy applies to
+them. It is raised automatically when a session ends — every patient who paid
+and was never seen is marked owed in one statement, after the commit, in a
+way that cannot fail the session's end. A session has ended whether or not the
+money bookkeeping succeeded, and an end that rolled back because a payment
+query was slow would leave a chamber running on every screen in the hospital.
+
+**Eligibility, not payment.** Each refund is then its own decision with its own
+provider call. A batch of gateway calls inside a session's end would make
+ending a session fail when a provider is slow. The patient is owed the moment
+the session ends; the money follows.
+
+**What counts as absence** is not defined by any document. Implemented as: the
+session ended and no `DOCTOR_ARRIVED` was ever appended. A session where the
+doctor came and simply did not reach everybody is recorded as `session_ended`
+instead — those patients are equally owed, and the reason says which happened
+so an administrator is not told a doctor was absent when they were not.
+
+**`MOD-A08-CANCEL` states the refund in taka**, not as a percentage, computed
+by the same function the server refunds with. That is the whole of
+`FR-PAY-03`: a rule the screen computes one way and the server another is a
+rule that gets stated wrongly.
+
+**Subscriptions and invoices have tables and no data.** What a module costs,
+what tiers exist and what a hospital is charged are negotiated per agreement
+and live outside this repository (`CLAUDE.md` §1.1). The code can invoice;
+what it invoices for is not a code decision. `PLATFORM_FEE_POISHA` stays 0, so
+the platform fee is itemised as zero rather than hidden (`FR-PAY-04`).
+
+**bKash and Nagad are not implemented, and say why in detail.** Both need
+merchant credentials that arrive with an agreement. Rather than write an
+integration nobody has ever seen run, each adapter carries the *shape of the
+work* — the call sequence, which response actually means the money moved, and
+the one thing that bites. For bKash: the merchant invoice number is the
+idempotency key and it is per-merchant forever, which is why the service sends
+the payment's own uuid v7 rather than the caller's key. For Nagad: the
+timestamp is Dhaka local and they reject anything a minute out, and **refunds
+are not in their checkout API at all** — worth knowing before automatic
+refunds are promised to a hospital for every method.
+
+**Demo data.** `seed_08_money` is its own module and runs last: 927 payments,
+one per booking with a payer, and twelve counter shifts. The payment mix is
+declared rather than uniform — most people still pay at the counter — because
+a settlement split evenly four ways looks like test data to anybody who has
+run one. One shift in four is deliberately short of its expected figure, since
+a demo where cash always reconciles hides the only thing `counter_shifts` is
+for.
+
+**How to show it.** Book as a guest and pay by bKash; the serial screen's
+বাতিল করুন now names the taka coming back. Then, on the console, end that
+chamber's session with people still waiting — every one of them is marked owed
+without anybody asking, which is `FR-PAY-07` and the part of the pitch that
+says the platform is on the patient's side.
+
+#### Three bugs the tests found, and one the ordering did
+
+**A pool deadlock, found by the concurrency test.** `createIntent` held a
+transaction on the advisory lock while `findDetail` took a *second* pool
+connection. Five concurrent identical intents exhausted a five-connection pool
+and waited on each other. `findDetail` now takes the caller's transaction and
+says in its own doc comment why that matters — the same shape exists anywhere
+a repository read is made from inside a transaction on `db` rather than `trx`.
+
+**Every genuine webhook was rejected.** `express.json()` consumes the stream
+before any route runs, so the webhook's own `text()` parser found nothing and
+verified a signature over an empty string. Every real callback failed and
+every forged one failed identically, which is why nothing looked wrong. The
+raw bytes are now captured by the JSON parser's `verify` hook and kept in a
+`WeakMap` keyed by the request — only for `/webhooks/*`, because a copy of
+every request body in memory is a copy of patient data in memory.
+
+**The money seed covered a quarter of the bookings.** Written into
+`seed_04_history` first, which runs before `seed_05_beds` and
+`seed_07_demo_live` — so 367 payments instead of 919, and the pitch session's
+own bookings, the ones a demo shows, had none at all. It is `seed_08_money`
+now and runs last. **The general lesson: a seed that reads rows another seed
+writes has to run after it, and the order is not obvious from the file name.**
+
+**A migration numbered backwards into the sequence.** `payments` references
+`ambulance_requests`, which 0011 creates — and on a fresh database the runner
+applies files in filename order, so 0009 runs first. The local development
+database already had 0011, so `db:migrate` was green there and only a build
+from scratch failed. `0019_payment_ambulance_fk.sql` adds the key afterwards.
+**A green migrate on a database that is already ahead proves nothing about a
+fresh one.**
 
 ### Step 17 — the lab, and what a report is a promise about
 
@@ -233,14 +358,15 @@ a phone, the patient's রেকর্ড tab now has a রিপোর্ট ta
 pharmacy: ফার্মেসি খুলুন, mark something নেই, then ওষুধ খুঁজুন on the patient
 app and search that medicine.
 
-**Supabase does not have this yet.** Migrations `0011_ancillary.sql` and
-`0018_lab_idempotency.sql` have been applied to the local container and to
-both test databases, and nowhere else. Until they are applied to Supabase, the
+**Supabase does not have this yet.** Migrations `0011_ancillary.sql`,
+`0018_lab_idempotency.sql`, `0009_money.sql` and
+`0019_payment_ambulance_fk.sql` have been applied to the local container and
+to both test databases, and nowhere else. Until they are applied to Supabase, the
 deployed console's lab and pharmacy screens will fail on their first read, and
 the deployed patient app's medicine search will too.
 
-Both migrations are additive — new tables and new columns, nothing dropped —
-so applying them is safe. Getting the *demo data* there is the destructive
+All four are additive — new tables, new columns and one foreign key, nothing
+dropped — so applying them is safe. Getting the *demo data* there is the destructive
 half: the lab queue, the fifty pharmacy items and the delivered reports come
 from a reseed.
 
@@ -729,6 +855,33 @@ afternoon.
 
 ### Things learned the hard way, so they are not relearned
 
+- **A green `db:migrate` on a database that is already ahead proves nothing.**
+  `0009_money.sql` references `ambulance_requests`, which `0011` creates — and
+  on a fresh database the runner applies files in filename order, so 0009 runs
+  first and fails. The local development database already had 0011, so it
+  applied cleanly there and only the test suite's build-from-scratch caught
+  it. **Numbering a migration backwards into the sequence needs a fresh
+  build to verify**, not an incremental one.
+
+- **A seed that reads what another seed wrote has to run after it, and the
+  file name does not tell you the order.** Payments written inside
+  `seed_04_history` covered 367 bookings out of 919: seed_04 runs before
+  `seed_05_beds` and `seed_07_demo_live`, so the pitch session's own bookings
+  had none. `seed_08_money` runs last.
+
+- **A repository read inside a transaction must use the transaction.** A
+  `findDetail` on the pool while its caller held a transaction took a second
+  connection; five concurrent requests then exhausted a five-connection pool
+  and deadlocked. It was invisible until a test fired five identical requests
+  at once. Anywhere a service calls a repository between `withTransaction`'s
+  braces, the `trx` has to be passed.
+
+- **`express.json()` consumes the stream before any route sees it.** A route
+  that mounts its own `text()` parser to read raw bytes finds nothing, and a
+  signature check over an empty string fails every genuine callback *and*
+  every forged one — so nothing looks wrong. The raw body is captured by the
+  JSON parser's own `verify` hook (`config/rawBody.ts`).
+
 - **A CORS allow-list is a bug only a browser can see.** `PUT` was missing
   from `ALLOWED_METHODS`, so `PUT /hospitals/:id/pharmacy-stock` and
   `PUT /hospitals/:id/capabilities` could not be sent from any page — the
@@ -1004,14 +1157,15 @@ Raised while building the seeds (step 5):
 
 Raised while building the live serial screen (step 10):
 
-12. **`hospital_settings.refund_policy` has no defined shape.** `FR-PAY-03`
-   requires the refund rule to be stated before a cancellation is confirmed,
-   and `MOD-A08-CANCEL` states it — but the column is an untyped `jsonb`
-   defaulting to `{}`, no document says what goes in it, and the seeds write
-   nothing. So the sheet degrades honestly: when the object is empty it says
-   "ফেরতের বিষয়টি হাসপাতাল জানাবে" rather than inventing a percentage
-   (`PRD.md` §3.2). Deciding the shape is a product call, and step 18 needs it
-   answered because that is where a refund is actually paid.
+12. ~~**`hospital_settings.refund_policy` has no defined shape.**~~
+   **Answered at step 18, and still open to a ruling on the numbers.** The
+   shape is now `shared/domain/src/payments/refund.ts` and `DATABASE.md` §2.2
+   documents it: `cutoffHours`, a percentage before and after it, and whether
+   the platform fee comes back. Code had to decide *a* shape to enforce
+   anything at all; what any particular hospital refunds is still theirs.
+   Four demo facilities have terms and two deliberately do not, so the
+   "hospital will decide" path stays demonstrable. **Worth an owner's eye on
+   the demo percentages before a pitch** — they are plausible, not agreed.
 
 13. **Nothing reissues a freed serial.** Cancelling releases the number —
    `bookings_session_serial_key` excludes cancelled rows — but `nextSerial`
@@ -1324,6 +1478,35 @@ Raised while building the lab (step 17):
    before the admin dashboard (step 19) puts the figure in front of a
    hospital director.
 
+Raised while building the money (step 18):
+
+57. **What "doctor absence" is.** `FR-PAY-07` names it and no document
+   defines it. Implemented as: the session ended and no `DOCTOR_ARRIVED` was
+   ever appended. A session the doctor did attend but did not finish is
+   recorded as `session_ended` instead — those patients are equally owed, and
+   the distinction keeps an administrator from being told a doctor was absent
+   when they were not. Both refund in full.
+
+58. **A refund is raised as eligibility, and paid separately.** Ending a
+   session marks everybody owed in one statement; each refund is then its own
+   provider call. The alternative — refunding inside the session's end — makes
+   ending a chamber fail when a gateway is slow, which is the worse failure.
+   Nothing yet sweeps the eligible rows and pays them: that is a worker, and
+   `pg-boss` is still not installed. **An administrator refunds them from the
+   endpoint in the meantime**, and `payments_refund_pending_idx` is the list.
+
+59. **The demo refund percentages.** Four facilities have plausible terms
+   (Shapla 100/50 at twelve hours, Padma 100/25 at twenty-four, Jamuna full
+   either way, Meghna 80/0). Nobody agreed these. They are operational
+   configuration like the seeded consultation fees, not the commercial content
+   §1.1 excludes — but worth a glance before a hospital director reads them.
+
+60. **A settlement is dated by the session, not by when the money cleared.**
+   A payment that settled at midnight belongs to the chamber it paid for. That
+   is what a hospital reconciles against, and it is the opposite of what an
+   accountant might expect; step 19's dashboard will surface the same figures
+   and should agree.
+
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
 visibility and credential rotation. The owner knows the facts and the
@@ -1522,6 +1705,36 @@ Turbopack is substantially faster and this is the only thing holding it off.
 - **`<EmergencyEntry>` does not preload on pointer-down** (FRONTEND.md §6.3).
   The results screen asks for location and searches on arrival; preloading
   would need the position first, which is the slow part.
+- **bKash and Nagad are not implemented.** `PAYMENT_PROVIDER=mock` is the
+  working provider and the correct one for this version (`CLAUDE.md` §1.1);
+  `live` selects an adapter that refuses every charge with a named reason
+  rather than a client that throws the moment a patient taps pay. Both
+  provider files carry the call sequence, the response that actually means
+  the money moved, and the one thing that bites — see the step 18 notes.
+  **Nagad has no refund in its checkout API**, so "automatic refunds for every
+  method" is a promise to check before making it.
+
+- **Nothing charges for a bed, a test or an ambulance.** `payments` has the
+  columns because DATABASE.md §2.6 specifies them, and none of those three has
+  a price anybody has agreed: a nightly rate, a catalogue price and a quoted
+  fare are commercial terms per hospital (`CLAUDE.md` §1.1). Charging for them
+  needs those terms, not more code — `payment.service` refuses anything but a
+  booking and says so.
+
+- **`subscriptions` and `invoices` are empty tables.** Nothing generates an
+  invoice, because there is no agreement to invoice against. The shape is
+  there so that when there is one, it is a service and not a migration.
+
+- **`/webhooks/sms-dlr` is not built.** BACKEND.md §7.7 lists it beside the
+  payment callbacks; it belongs to notifications and `SMS_PROVIDER=log` has no
+  delivery receipts to send. It arrives with a real aggregator.
+
+- **A refunded platform fee is approximated in the settlement.** `payments`
+  records one refunded total rather than splitting it by line, so the fee
+  retained is capped at what the patient did not get back — exact at both ends
+  and an approximation in between. A `platform_fee_refunded_poisha` column
+  would make it exact. It does not matter while `PLATFORM_FEE_POISHA` is 0.
+
 - **`FR-PHR-01` (dispensing) is not built**, because prescribing is not.
   `S-B-09` names the missing half on screen rather than showing a scanner that
   cannot work; `PRD.md` §12 and `APP_FLOW.md` B5 were edited to say so. It

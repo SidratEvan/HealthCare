@@ -1071,6 +1071,29 @@ export const PATIENT = {
     bn: 'কোনো ফার্মেসি এই ওষুধের খবর দেয়নি।',
     en: 'No pharmacy has reported on this medicine.',
   },
+  // `FR-PAY-03`: the refund rule is stated before a cancellation is confirmed.
+  refundFull: {
+    bn: 'বাতিল করলে পুরো {amount} ফেরত পাবেন।',
+    en: 'Cancel now and you get the full {amount} back.',
+  },
+  refundPartial: {
+    bn: 'বাতিল করলে {amount} ফেরত পাবেন ({paid} টাকার মধ্যে)।',
+    en: 'Cancel now and you get {amount} back, out of {paid}.',
+  },
+  refundNone: {
+    bn: 'এই সময়ে বাতিল করলে টাকা ফেরত পাবেন না।',
+    en: 'Cancelling now does not return any money.',
+  },
+  refundNothingPaid: {
+    bn: 'আপনি এখনো টাকা দেননি, তাই ফেরতের কিছু নেই।',
+    en: 'You have not paid yet, so there is nothing to refund.',
+  },
+  // `FR-PAY-07`, said in the patient's own words rather than as a policy.
+  refundGuaranteed: {
+    bn: 'ডাক্তার না এলে পুরো টাকা নিজে থেকেই ফেরত যায় — চাইতে হয় না।',
+    en: 'If the doctor does not come, the full amount is returned on its own.',
+  },
+
   medicineCallFirst: {
     bn: 'রওনা দেওয়ার আগে ফোন করে নিশ্চিত হয়ে নিন।',
     en: 'Call to confirm before setting out.',
