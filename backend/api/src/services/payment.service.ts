@@ -98,7 +98,9 @@ export async function createIntent(
     const replayed = await paymentRepo.findByIdempotencyKey(trx, input.idempotencyKey);
     if (replayed !== null) return { payment: replayed, duplicate: true };
 
-    const booking = await bookingRepo.findDetail(input.bookingId);
+    // Inside the transaction, on the same connection: see `findDetail`. A
+    // second pool connection here is how five concurrent intents deadlock.
+    const booking = await bookingRepo.findDetail(input.bookingId, trx);
     if (booking === null) throw notFound('booking');
 
     // The amount is the booking's, never the caller's. `fee_poisha` was
@@ -216,7 +218,7 @@ export async function refund(
     if (payment === null) throw notFound('payment');
     if (payment.bookingId === null) throw notFound('payment');
 
-    const booking = await bookingRepo.findDetail(payment.bookingId);
+    const booking = await bookingRepo.findDetail(payment.bookingId, trx);
     if (booking === null) throw notFound('booking');
     if (booking.hospitalId !== actor.hospitalId) {
       throw forbiddenScope({ resource: 'payment', hospitalId: booking.hospitalId });

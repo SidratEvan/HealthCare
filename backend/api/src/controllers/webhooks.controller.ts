@@ -10,9 +10,11 @@
  *
  * Every adapter implements `verifyWebhook`, the unconfigured one returns
  * false, and a callback that fails the check gets a 401 and changes nothing.
- * The **raw body** is what is signed, which is why the route parses it as
- * text and this decodes it: `express.json()` hands back an object whose
- * re-serialisation is not byte-identical to what was signed.
+ * The **raw body** is what is signed. `express.json()` consumes the stream
+ * before any route sees it, so the bytes are captured by its own `verify`
+ * hook in `app.ts` and read here — a re-serialisation of the parsed object is
+ * not byte-identical to what the provider signed, and would fail every
+ * genuine callback.
  *
  * ## Idempotent, because providers retry
  *
@@ -24,6 +26,7 @@
  */
 
 import { logger } from '../config/logger.js';
+import { rawBodyOf } from '../config/rawBody.js';
 import * as paymentService from '../services/payment.service.js';
 
 import type { Request, Response } from 'express';
@@ -41,7 +44,11 @@ const PAID_STATUSES = new Set(['success', 'completed', 'paid', 'settled']);
  */
 export function callback(providerName: 'bkash' | 'nagad') {
   return async (req: Request, res: Response): Promise<void> => {
-    const raw = typeof req.body === 'string' ? req.body : '';
+    // The bytes as sent — see `config/rawBody.ts`. Never
+    // `JSON.stringify(req.body)`: a re-serialisation does not reproduce a
+    // provider's whitespace or key order, so it would fail every signature
+    // that is actually valid.
+    const raw = rawBodyOf(req) ?? '';
     const signature = req.get('x-signature');
 
     if (!paymentService.verifyProviderSignature(raw, signature)) {

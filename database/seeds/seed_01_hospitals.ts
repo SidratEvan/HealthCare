@@ -58,6 +58,59 @@ const CAPABILITY_AGE_MINUTES: Readonly<Record<string, number>> = {
   'buriganga-clinic': 9,
 };
 
+/**
+ * What each facility refunds on a cancellation (`FR-PAY-03`).
+ *
+ * The shape is `shared/domain/src/payments/refund.ts`, which defines it
+ * because no document does — recorded as an open decision. These are a
+ * hospital's own terms toward its patients, which is operational
+ * configuration like the consultation fees in `seed_02`, not the commercial
+ * content `CLAUDE.md` §1.1 keeps out of the repository.
+ *
+ * **Two facilities are deliberately left out.** Karnaphuli and Buriganga have
+ * no policy on file, so a cancellation there says "ফেরতের বিষয়টি হাসপাতাল
+ * জানাবে" instead of a percentage — which is the honest-degradation case
+ * (`PRD.md` §3.2) and the one a demo should be able to show.
+ */
+const REFUND_POLICIES: Readonly<
+  Record<
+    string,
+    {
+      cutoffHours: number;
+      beforeCutoffPercent: number;
+      afterCutoffPercent: number;
+      platformFeeRefundable: boolean;
+    }
+  >
+> = {
+  // Generous, and the one to demonstrate with.
+  'shapla-general': {
+    cutoffHours: 12,
+    beforeCutoffPercent: 100,
+    afterCutoffPercent: 50,
+    platformFeeRefundable: false,
+  },
+  'padma-specialised': {
+    cutoffHours: 24,
+    beforeCutoffPercent: 100,
+    afterCutoffPercent: 25,
+    platformFeeRefundable: false,
+  },
+  // A government hospital, where the consultation is nominal anyway.
+  'jamuna-medical-college': {
+    cutoffHours: 6,
+    beforeCutoffPercent: 100,
+    afterCutoffPercent: 100,
+    platformFeeRefundable: true,
+  },
+  'meghna-diagnostic': {
+    cutoffHours: 24,
+    beforeCutoffPercent: 80,
+    afterCutoffPercent: 0,
+    platformFeeRefundable: false,
+  },
+};
+
 /** Per-role email local part and ID-card code, in roster order. */
 const ROLE_CODES: Readonly<Record<string, string>> = {
   hospital_admin: 'ADM',
@@ -238,20 +291,28 @@ export const seed01Hospitals: SeedModule = {
 
     // --- hospital_settings -------------------------------------------------
     //
-    // Only `numeral_style` is set per facility. Every queue policy default is
-    // left alone deliberately: the defaults in migration 0004 are the values
-    // the requirements name (`FR-QUE-20`, `FR-QUE-21`, `FR-OFF-04`), and a
-    // seed that overrode them would demo behaviour the product does not have.
+    // `numeral_style` and `refund_policy` are set per facility. Every queue
+    // policy default is left alone deliberately: the defaults in migration
+    // 0004 are the values the requirements name (`FR-QUE-20`, `FR-QUE-21`,
+    // `FR-OFF-04`), and a seed that overrode them would demo behaviour the
+    // product does not have.
     const settingsRows = DEMO_FACILITIES.map((facility) => {
       const hospitalId = facilities.get(facility.slug);
       if (hospitalId === undefined) throw new Error(`No id for ${facility.slug}.`);
-      return [hospitalId, facility.numeralStyle, admins.get(facility.slug) ?? null];
+      return [
+        hospitalId,
+        facility.numeralStyle,
+        // `{}` where there is none: the column's CHECK requires an object,
+        // and an empty one is what `readRefundPolicy` reads as "no policy".
+        JSON.stringify(REFUND_POLICIES[facility.slug] ?? {}),
+        admins.get(facility.slug) ?? null,
+      ];
     });
 
     await insertRows(
       client,
       'hospital_settings',
-      { columns: ['hospital_id', 'numeral_style', 'created_by'] },
+      { columns: ['hospital_id', 'numeral_style', 'refund_policy', 'created_by'] },
       settingsRows,
       '',
     );

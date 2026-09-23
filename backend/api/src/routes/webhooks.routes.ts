@@ -6,9 +6,10 @@
  * it before anything else happens — see there for why, and for why a replayed
  * callback still answers 200.
  *
- * `text()` rather than `json()`, because the signature is over the bytes as
- * sent: `express.json()` would hand back an object whose re-serialisation is
- * not byte-identical to what the provider signed.
+ * The signature is over the bytes as sent, and those are captured by the
+ * global JSON parser's `verify` hook (`app.ts`) rather than by a parser
+ * mounted here — `express.json()` runs first and consumes the stream, so a
+ * route-level `text()` would find nothing left to read.
  *
  * ## `/webhooks/sms-dlr` is not here
  *
@@ -17,14 +18,11 @@
  * no receipts to send. It arrives with a real aggregator.
  */
 
-import { Router, text } from 'express';
+import { Router } from 'express';
 
 import * as webhooks from '../controllers/webhooks.controller.js';
 
 export const webhookRoutes: Router = Router();
 
-/** Small: a callback is a status, not a document. */
-const rawBody = text({ type: '*/*', limit: '64kb' });
-
-webhookRoutes.post('/webhooks/bkash', rawBody, webhooks.callback('bkash'));
-webhookRoutes.post('/webhooks/nagad', rawBody, webhooks.callback('nagad'));
+webhookRoutes.post('/webhooks/bkash', webhooks.callback('bkash'));
+webhookRoutes.post('/webhooks/nagad', webhooks.callback('nagad'));
