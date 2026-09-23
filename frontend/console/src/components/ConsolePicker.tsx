@@ -63,6 +63,9 @@ const ATTEMPT_TIMEOUT_MS = 12_000;
  */
 const ATTEMPTS = 4;
 
+/** Roles whose console opens on the hospital rather than on one chamber. */
+const HOSPITAL_CONSOLES = new Set(['ward', 'emergency', 'lab', 'pharmacy', 'hospital_admin']);
+
 /** The roles this version has a console for. Others are not offered. */
 const ROLE_LABEL: Record<string, ConsoleKey> = {
   receptionist: 'roleReceptionist',
@@ -103,7 +106,8 @@ export type ConsoleChoice =
   | { readonly kind: 'ward' }
   | { readonly kind: 'emergency' }
   | { readonly kind: 'lab' }
-  | { readonly kind: 'pharmacy' };
+  | { readonly kind: 'pharmacy' }
+  | { readonly kind: 'admin' };
 
 export function ConsolePicker({
   onChosen,
@@ -359,6 +363,26 @@ export function ConsolePicker({
         </section>
       ) : null}
 
+      {/* `S-B-10` is the hospital's too (step 19). An administrator reads the
+          whole facility, so there is no chamber to pick. */}
+      {hospital?.roles.includes('hospital_admin') === true ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-title-sm">{t('adminSection', LOCALE)}</h2>
+          <div>
+            <Button
+              variant="secondary"
+              loading={busy}
+              data-testid={`open-admin-${hospital.hospitalId}`}
+              onClick={() => {
+                void open(hospital.hospitalId, 'hospital_admin', { kind: 'admin' });
+              }}
+            >
+              {t('openAdmin', LOCALE)}
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
       {hospital === null ? null : (
         <section className="flex flex-col gap-3">
           <h2 className="text-title-sm">{t('chooseChamber', LOCALE)}</h2>
@@ -380,15 +404,10 @@ export function ConsolePicker({
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     {hospital.roles
-                      // The ward board and the ER belong to the hospital, not to a
-                      // chamber, and are offered once above.
-                      .filter(
-                        (role) =>
-                          role !== 'ward' &&
-                          role !== 'emergency' &&
-                          role !== 'lab' &&
-                          role !== 'pharmacy',
-                      )
+                      // The ward board, the ER, the lab, the pharmacy and the
+                      // dashboard belong to the hospital, not to a chamber, and
+                      // are offered once above.
+                      .filter((role) => !HOSPITAL_CONSOLES.has(role))
                       .map((role) => (
                         <Button
                           key={role}

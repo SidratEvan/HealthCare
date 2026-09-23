@@ -7,10 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/payments` — step 18. A booking records what it charged, a
-retry never charges twice, and a cancellation says in taka what is coming back
-before anybody confirms. When a session ends with people still waiting, every
-one of them is marked owed without asking.
+Last updated: `feat/admin-dashboard` — step 19. A hospital administrator opens
+`S-B-10` from the picker and sees what the facility did, what empty chairs
+cost and what the standby list won back — and reception can now give a freed
+chair to the standby list and record the yes, which is the tap that moves that
+figure.
 
 ---
 
@@ -37,7 +38,8 @@ one of them is marked owed without asking.
 | 16 | `feat/referrals` | merged — migration 0017, the referral state machine, both halves of the ER console, `referral.spec.ts` |
 | 17 | `feat/lab-pharmacy` | merged — migrations 0011 + 0018, `S-B-08`, the stock half of `S-B-09`, `BTN-B05-TEST`, `TAB-A12-REP`, the medicine search, `lab-report.spec.ts`. **Dispensing dropped**; `PRD.md` §12 and `APP_FLOW.md` B5 edited to match |
 | 18 | `feat/payments` | merged — migrations 0009 + 0019, the refund and settlement domain, the provider seam, `seed_08_money`, the refund statement on `MOD-A08-CANCEL`. **bKash and Nagad are not implemented**; the mock is the working provider (`CLAUDE.md` §1.1) |
-| 19 | `feat/admin-dashboard` | **next** — aggregates, no-show loss and recovery, exports |
+| 19 | `feat/admin-dashboard` | merged — migration 0020, `S-B-10`, the standby card on `S-B-02` (`BTN-B02-OFFER`), CSV export with audit, `no-show-recovery.spec.ts`. **Average wait is not measured**: nothing records a patient arriving (decision 61) |
+| 20 | `feat/gov-dashboard` | **next** — aggregate-only national layer. Needs decision 5 answered first |
 
 Four unplanned branches after step 11:
 
@@ -91,14 +93,15 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 2943, in about a minute.
-`pnpm test:e2e` reports 85, in Chromium, against the real API and the seeded
+`pnpm test` reports 3321, in about a minute and a half.
+`pnpm test:e2e` reports 93, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
-6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`. The whole run takes about
-fifteen minutes.
+6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
+`no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`. The last full run
+took eight minutes.
 
 `pnpm verify` — typecheck, lint, `format:check`, test — is clean, and so is
 `pnpm build`. `format:check` had been failing on five files since before step
@@ -123,6 +126,134 @@ decision about a sleeping backend, not a test detail, which is why
 Worth knowing when demonstrating: **open the console once a minute before
 showing anyone.** Nothing is broken if the first load is slow; it is the free
 tier waking.
+
+### Step 19 — the dashboard, and the figure a tap moves
+
+**The definition of done is a chain across two consoles, and the E2E runs
+it.** `no-show-recovery.spec.ts` opens `S-B-10` as the hospital's
+administrator in one browser and reception in another. Reception marks serial
+2 absent, taps **খালি সিরিয়াল দিন** on the new standby card, and records the
+standby patient's yes with **গ্রহণ করেছেন**. The administrator's recovered
+figure then goes up by exactly that chamber's fee. It is asserted as a
+difference, not a total, because the seeded history already holds three weeks
+of recoveries. The spec's second test covers a freed chair with nobody on the
+list. `admin-dashboard.spec.ts` opens the screen **through the picker**, then
+checks every section and its age, the adoption marker, the CSV download, the
+offline state, and that the lab and pharmacy are offered at all (see below).
+
+**`FR-ADM-01`'s average wait cannot be measured, and the screen says so.**
+Nothing in this product records a patient arriving. `PRD.md` §8 gives reception
+call, finish, late, absent, walk-in and reorder, and none of them means "this
+person is here". So `bookings.arrived_at` is written only for walk-ins. The
+column is computed and reports null. Beside it, the figure that *can* be
+measured: how much later than their own slot people were called (planned
+start + the doctor's rate × serials ahead), floored at zero. No arrival times
+were seeded, because a wait figure no real deployment could produce would be
+fabricated. See decision 61.
+
+**The router takes no hospital.** `GET /admin/dashboard` and
+`GET /admin/export` read the facility off the caller's principal, and a caller
+cannot name one; a test passes `?hospitalId=` for another hospital and gets its
+own figures back. Every export writes an `audit_log` row naming the view and
+the window.
+
+**Every section carries its own age.** The overview, the trend and the revenue
+totals come from `v_admin_daily`, a materialised view. Loss, staff, beds and
+the forecast are read live. Referrals and feedback are as old as their newest
+row. One stamp for the screen would be true of one of those and false of the
+rest, so each section renders its own `<FreshnessLine>`. **Nothing refreshes
+`v_admin_daily` on a timer.** `DATABASE.md` §4 says "every 5 min", and with no
+worker a read refreshes it when it is older than that. A refresh that fails
+serves the older snapshot with its true age rather than an error.
+
+**Loss is not the whole fee.** A no-show who prepaid has already paid the
+hospital, and a no-show earns no refund in this version. So the loss tab shows
+the forgone value, the prepaid part of it, and what was actually never
+collected. Recovery is measured against the last of those. Punctuality is a
+median, not a mean: one four-hour day would otherwise describe no day the
+doctor has had. The forecast answers "too little history" below two
+observations instead of inventing a staffing figure.
+
+**The standby card (`BTN-B02-OFFER`, `FR-REC-30`) is new on `S-B-02`.** It
+appears when a chair is free, an offer is out, or anybody is waiting, and it
+reads the free chairs and offers from the same queue state as the table, so
+the two cannot disagree. Offers are **online-only**, because who is asked is
+the server's decision, taken under a row lock so two counters never ask the
+same person. An offer queued offline and sent an hour later would text
+somebody about a chair the chamber had already passed. The button also waits
+while the outbox holds actions: a no-show shows the chair as free here before
+the server knows, and an offer sent in that gap is refused `SLOT_NOT_FREE`.
+With nobody on the list, the card says the chair stays empty instead of
+showing a dead button.
+
+**Acceptance is recorded by reception**, which `BACKEND.md` §7 does not say.
+See decision 62.
+
+**Chart colours are tokens.** Recharts (named in `FRONTEND.md` §9) draws in
+`var(--brand-600)` for a single series. The one two-series chart (never
+collected vs recovered) pairs it with `var(--line-strong)`. That pair was run
+through a colour-vision check: ΔE 42 protan and 45 normal, so the two are
+easily told apart. The grey is faint against a card (1.44:1), so the chart
+always has a text legend and the CSV is its table. Bars are one colour whatever
+their rank. Console surfaces use Latin numerals (`TYP-04`).
+
+**Demo data** (`FR-DEM-*`). Each hospital is onboarded twelve days into its
+twenty-one days of history, and chambers run closer to plan afterwards. The
+trend therefore has a before and an after either side of `FR-ADM-02`'s marker:
+average overrun falls from 45 minutes to 22, and chambers running late from
+94% to 64%. Twenty offers, fourteen taken, ৳16,000 recovered against ৳27,300
+never collected — seeded as **events**, not rows, so the log and the table
+replay into the same history. 202 feedback responses across `FR-PAT-83`'s four
+dimensions, billing the weakest, and the screen says they are demonstration
+rows, because the patient form is not built. The pitch session already had
+three people on standby (`seed_07`), so the card is on screen the moment
+reception opens.
+
+**How to show it.** Console → any hospital → **ড্যাশবোর্ড খুলুন**. The
+overview says wait is not measured and why; প্রবণতা shows the adoption
+marker; ক্ষতি ও পুনরুদ্ধার shows the money. For the live half, open the pitch
+chamber's reception in a second window. Mark somebody absent whose grace has
+run out, tap **খালি সিরিয়াল দিন** then **গ্রহণ করেছেন**, and reload the
+dashboard's loss tab. The recovered figure has moved by that chamber's fee.
+
+**Supabase is five migrations behind.** `0009_money.sql`, `0011_ancillary.sql`,
+`0018_lab_idempotency.sql`, `0019_payment_ambulance_fk.sql` and
+`0020_admin_views.sql` have been applied to the local container and both test
+databases, and not to Supabase. Until they are, the deployed console cannot
+open the lab, the pharmacy, a payment or this dashboard. All five are additive.
+The demo data those screens read comes from a reseed, which truncates and is
+the owner's to authorise:
+
+```bash
+ALLOW_REMOTE_DB=1 pnpm db:migrate                         # additive, safe
+ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 pnpm db:reset    # only on the owner's word
+```
+
+#### Found while finishing it
+
+**The lab and the pharmacy were never offered in the picker.** `demo.service`'s
+`OFFERED` list and `demoTokenBody`'s enum both lacked `lab` and `pharmacy`
+from step 17 on. So **ল্যাব খুলুন** never appeared, and `POST /demo/token`
+refused both roles. The step 17 notes' "Console → any hospital → ল্যাব খুলুন"
+was not reachable. `lab-report.spec.ts` writes its token straight into storage,
+the same blind spot that hid the ER role at step 15. Fixed, and
+`admin-dashboard.spec.ts` now opens through the picker and walks every
+hospital's offer.
+
+**A lapsed offer went back to the person who had not answered.**
+`claimNextStandby` ordered on position alone. Once an offer lapsed it was no
+longer "open", so the re-offer went straight back to position 1. `FR-QUE-30`
+says "unaccepted offers pass to the next patient". Anybody with an unanswered
+offer in the session now sorts behind everybody not yet asked, and the list
+comes round to them once everybody else has had a turn.
+
+**The screen had been drafted against APIs that do not exist.** The first
+draft of `AdminDashboard.tsx` gave a clickable handler to `<Chip>` (it is a
+status label; `<FilterChip>` acts), gave `className` to `<Card>`, called
+`<FreshnessLine>` and `<OfflineBlock>` without their required props, used a
+message key that did not exist, and hard-coded a hex ramp. It never compiled.
+It was rewritten against the real components before anything was committed.
+**A component nobody has type-checked is a sketch, whatever it looks like.**
 
 ### Step 18 — the money, and what a number somebody agreed to is worth
 
@@ -855,6 +986,13 @@ afternoon.
 
 ### Things learned the hard way, so they are not relearned
 
+- **The E2E database is the one database no suite migrates.** The unit, API
+  and schema suites build theirs from nothing, so a step's migration is always
+  there for them. `healthcare_dev`, which Playwright drives, was only ever
+  reseeded, so `0020_admin_views.sql` was missing there while every other suite
+  was green, and every dashboard spec failed on a 500. `globalSetup` now runs
+  `db:migrate` before `db:reset`.
+
 - **A green `db:migrate` on a database that is already ahead proves nothing.**
   `0009_money.sql` references `ambulance_requests`, which `0011` creates — and
   on a fresh database the runner applies files in filename order, so 0009 runs
@@ -1125,7 +1263,9 @@ Raised while building the seeds (step 5):
    role is hospital-scoped *except* the platform and government ones. The seeds
    therefore write no `platform_admin` and no `gov_viewer` rather than invent a
    facility for them. Steps 19 and 20 need this answered — either those columns
-   become nullable, or those roles live somewhere else.
+   become nullable, or those roles live somewhere else. Step 19 did not need
+   it (a hospital administrator has a facility); **step 20 cannot start
+   without it**, because `gov_viewer` is the only role that reads its screen.
 6. **`db:reset` truncates; migration 0006's comment says it drops the schema.**
    The comment predates Supabase, where dropping `public` would take Supabase's
    own objects with it. `DATABASE.md` §7 ("truncate + reseed in one command")
@@ -1166,7 +1306,10 @@ Raised while building the live serial screen (step 10):
    have terms and two deliberately do not, so the "hospital will decide" path
    stays demonstrable. Closed — see decision 59.
 
-13. **Nothing reissues a freed serial.** Cancelling releases the number —
+13. ~~**Nothing reissues a freed serial.**~~ **Closed at step 19** by
+   `offerFreedSlot`: a cancelled serial still ahead of the chamber is reissued
+   to the standby patient who takes it, and otherwise the next serial is
+   issued. The original note follows. Cancelling releases the number —
    `bookings_session_serial_key` excludes cancelled rows — but `nextSerial`
    still allocates `max + 1`, so the gap is never filled. `FR-QUE-30` gives the
    slot to a standby patient through `offerFreedSlot`, which is not built;
@@ -1507,6 +1650,51 @@ Raised while building the money (step 18):
    accountant might expect; step 19's dashboard will surface the same figures
    and should agree.
 
+Raised while building the dashboard (step 19):
+
+61. **`FR-ADM-01`'s average wait needs a check-in, and the product has none.**
+   The wait from arriving to being called can only be measured if something
+   records the arrival, and no reception action in `PRD.md` §8 does. The
+   dashboard says the figure is unmeasured and leads with the lateness against
+   the patient's own slot instead (migration 0020). It could go one of two
+   ways: add a check-in action (a new queue event and a button on `S-B-02`,
+   which is a `PRD.md` change), or accept slot lateness as this version's
+   headline. Until one is chosen, the wait tile says what is missing. Nothing
+   on it is invented.
+
+62. **Reception records a standby acceptance; `BACKEND.md` §7 says the patient
+   does.** The table lists `POST /offers/:id/accept` as `user | guest`, and
+   `APP_FLOW.md` D2 routes a slot offer to an `S-A-08` offer sheet. But a
+   standby patient holds no booking, so they have no tracking link and no
+   `S-A-08` to accept from. The route is `receptionist`, and the SMS
+   (`queue.slot_offered`) says "tell the counter by {time}". Patient-side
+   acceptance needs a standby tracking link, which is a new token audience.
+   `POST /sessions/:id/standby` (`BTN-A06D-STANDBY`, joining the list from
+   the app) is also not built, so standby rows come from the seeds and the
+   E2E fixture only.
+
+63. **The first tab is সারসংক্ষেপ (overview), not "Today".** `APP_FLOW.md` B6
+   puts the date-range selector on its Today row, and every figure follows the
+   range, so a tab called "Today" showing thirty days would be wrong. The
+   screen opens on the last thirty days, which is long enough for the trend to
+   show the adoption marker.
+
+64. **B6's department filter is not built.** The API has no department
+   parameter, and `FR-ADM-01`…`10` do not ask for one. Revenue already breaks
+   down by department. Adding the filter is a query parameter through six
+   repository reads.
+
+65. **An offer is made to one person at a time.** `BTN-B02-OFFER`'s label in
+   `APP_FLOW.md` B1.5 reads "৩ জনকে প্রস্তাব পাঠান", which suggests three at
+   once. `FR-QUE-30` says "in order … unaccepted offers pass to the next".
+   Built as the requirement says: one person, a ten-minute window
+   (`SLOT_OFFER_WINDOW_MINUTES`), then the next. Offering three at once would
+   have three people racing for one chair. `BACKEND.md` §7.4 also says a
+   no-show brings an "auto slot offer", while `APP_FLOW.md` B1.5 gives it a
+   button. `APP_FLOW` has authority over controls, so it is the button:
+   reception decides whether a chair is worth offering this late in the
+   chamber.
+
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
 visibility and credential rotation. The owner knows the facts and the
@@ -1693,13 +1881,10 @@ Turbopack is substantially faster and this is the only thing holding it off.
   from TypeScript source, so a deployable build needs either emitted output from
   `shared/domain` or a bundler. That is a dependency decision for the owner,
   and it blocks the Render deploy at step 6.
-- **Four of the five required Playwright specs exist** (`CLAUDE.md` §6), plus
-  `lab-report.spec.ts` from step 17:
-  `two-device-queue.spec.ts` — the canary, five tests — plus
-  `guest-booking.spec.ts`, now complete including "open the SMS link, see the
-  live serial", `offline-console.spec.ts`, and `emergency-burn.spec.ts`
-  (step 15). Still to write: `no-show-recovery.spec.ts` (its recovery figure is
-  step 19).
+- ~~**Four of the five required Playwright specs exist.**~~ **All five exist
+  as of step 19** (`CLAUDE.md` §6): `two-device-queue.spec.ts` — the canary —
+  `guest-booking.spec.ts`, `offline-console.spec.ts`,
+  `emergency-burn.spec.ts` and `no-show-recovery.spec.ts`.
 - ~~**Five files fail `prettier --check` on `mvp`.**~~ Fixed by
   `chore/format-clean` before step 17; `pnpm verify` is green.
 - **`<EmergencyEntry>` does not preload on pointer-down** (FRONTEND.md §6.3).

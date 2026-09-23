@@ -17,10 +17,18 @@
  *   are really warnings are left to the console to show.
  */
 
-import { differenceInMinutes } from '../util/time.js';
+import { differenceInMinutes, differenceInSeconds } from '../util/time.js';
 
 import { currentRateSeconds } from './rate.js';
-import { activeQueue, findEntry, nowServing, waitingQueue, type QueueState } from './state.js';
+import {
+  activeQueue,
+  findEntry,
+  nowServing,
+  pendingOffers,
+  waitingQueue,
+  type QueueState,
+  type SlotOfferState,
+} from './state.js';
 
 import type { HospitalSettings } from '../types/entities.js';
 import type { BookingId, Timestamp } from '../types/ids.js';
@@ -39,7 +47,12 @@ export type QueueGuardCode =
   | 'DOCTOR_ALREADY_ARRIVED'
   | 'NOT_PAUSED'
   | 'ALREADY_PAUSED'
-  | 'DELAY_OUT_OF_RANGE';
+  | 'DELAY_OUT_OF_RANGE'
+  | 'SLOT_NOT_FREE'
+  | 'OFFER_OUTSTANDING'
+  | 'UNKNOWN_OFFER'
+  | 'OFFER_SETTLED'
+  | 'OFFER_EXPIRED';
 
 export type GuardResult =
   | { readonly ok: true }
@@ -407,4 +420,101 @@ export function canAddWalkin(
 export function hasCapacity(state: QueueState): boolean {
   if (state.plan.capacity === null) return true;
   return activeQueue(state).length < state.plan.capacity;
+}
+
+// ---------------------------------------------------------------------------
+// Offering a freed slot (FR-QUE-30, FR-REC-30)
+//
+// A no-show or a cancellation frees a chair. `FR-QUE-30` gives it to standby
+// patients "in order, with a short acceptance window; unaccepted offers pass
+// to the next patient" — so an offer names one patient at a time, and the
+// window expiring is what moves it along.
+//
+// The event payload's `offeredTo` is a list because `DATABASE.md` §3 declares
+// it one, and `slot_offers.offered_to_patient_id` is a single column because
+// the requirement says *in order*. Both are satisfied by a one-element list:
+// the shape allows a future broadcast offer without a migration, and this
+// version never writes more than one name into it.
+// ---------------------------------------------------------------------------
+
+/**
+ * How long a standby patient has to answer, in minutes.
+ *
+ * No document names it. Ten minutes is the shortest window that survives an
+ * SMS: a text takes up to a minute to land, somebody has to read it, decide,
+ * and answer — and the slot is worthless to the hospital if the person cannot
+ * physically be in the waiting room soon after. Shorter would offer a chair to
+ * people who never had a chance to take it, which is worse than not offering.
+ */
+export const SLOT_OFFER_WINDOW_MINUTES = 10;
+
+/**
+ * Whether a freed slot may be offered at all.
+ *
+ * The guard is about the chair, not about who gets it: whether anybody is on
+ * the standby list is a question for the database, not for the reduced state,
+ * and refusing here for an empty list would put a repository's answer in the
+ * domain.
+ */
+export function canOfferFreedSlot(state: QueueState, freedBookingId: BookingId): GuardResult {
+  if (state.status === 'ended' || state.status === 'cancelled') {
+    return deny('SESSION_ENDED', 'This session has already ended.');
+  }
+
+  const entry = findEntry(state, freedBookingId);
+  if (entry === null) return deny('UNKNOWN_BOOKING', 'That booking is not in this session.');
+
+  // Only a chair that is genuinely empty. A patient who is merely late still
+  // holds their place (`FR-QUE-21`), and offering it away would take a turn
+  // from somebody standing outside the door.
+  if (entry.status !== 'no_show' && entry.status !== 'cancelled') {
+    return deny(
+      'SLOT_NOT_FREE',
+      'Only a cancelled booking or a marked no-show frees a slot to offer.',
+    );
+  }
+
+  // One offer per freed chair. Two outstanding offers against the same slot is
+  // two patients told to come in for one place, and the second to arrive is
+  // turned away at the counter.
+  const outstanding = pendingOffers(state).some((offer) => offer.freedBookingId === freedBookingId);
+  if (outstanding) {
+    return deny('OFFER_OUTSTANDING', 'That slot is already offered and awaiting an answer.');
+  }
+
+  return ALLOWED;
+}
+
+/**
+ * Whether an outstanding offer may still be accepted.
+ *
+ * Expiry is checked against the clock rather than against an `SLOT_EXPIRED`
+ * event, because nothing sweeps the table on a timer in this version
+ * (`pg-boss` is not installed) and an offer that lapsed twenty minutes ago
+ * must not be acceptable merely because no worker has said so yet. The event
+ * is appended when the lapse is noticed; the refusal does not wait for it.
+ */
+export function canAcceptSlot(state: QueueState, offerId: string, now: Timestamp): GuardResult {
+  const offer = state.offers.find((candidate) => candidate.offerId === offerId);
+  if (offer === undefined) return deny('UNKNOWN_OFFER', 'That offer does not exist.');
+
+  if (offer.outcome === 'accepted') {
+    return deny('OFFER_SETTLED', 'That slot has already been taken.');
+  }
+  if (offer.outcome === 'expired') {
+    return deny('OFFER_EXPIRED', 'That offer has expired and the slot has moved on.');
+  }
+  if (differenceInSeconds(offer.expiresAt, now) <= 0) {
+    return deny('OFFER_EXPIRED', 'That offer has expired and the slot has moved on.');
+  }
+  if (state.status === 'ended' || state.status === 'cancelled') {
+    return deny('SESSION_ENDED', 'This session has already ended.');
+  }
+
+  return ALLOWED;
+}
+
+/** Offers whose window has closed but which nothing has recorded as expired. */
+export function lapsedOffers(state: QueueState, now: Timestamp): readonly SlotOfferState[] {
+  return pendingOffers(state).filter((offer) => differenceInSeconds(offer.expiresAt, now) <= 0);
 }

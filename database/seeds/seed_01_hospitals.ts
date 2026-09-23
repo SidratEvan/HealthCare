@@ -193,7 +193,16 @@ export const seed01Hospitals: SeedModule = {
         // Every demo facility is published and onboarded: an unverified
         // facility never appears in search (`hospitals_live_requires_onboarding`),
         // and a demo whose hospitals are invisible shows nothing.
-        expressions: { is_live: 'true', onboarded_at: 'now()' },
+        //
+        // **Onboarded partway through the seeded history, not at seed time.**
+        // `FR-ADM-02` marks the live-queue adoption date on the wait-time
+        // trend, and the marker exists to answer one question — *did this
+        // change anything?* A facility onboarded this morning puts the line at
+        // the right-hand edge of the chart with nothing after it, which
+        // answers nothing. `seed_04_history` reaches back twenty-one days and
+        // runs its chambers closer to plan after this date, so the chart has a
+        // before and an after and the marker sits between them.
+        expressions: { is_live: 'true', onboarded_at: `now() - interval '12 days'` },
       },
       hospitalRows,
       '',

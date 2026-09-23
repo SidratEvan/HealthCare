@@ -1,7 +1,7 @@
 /**
  * `/` — the console: reception (`S-B-02`), the doctor (`S-B-05`), the ward
- * board (`S-B-06`), the emergency department (`S-B-07`), the lab (`S-B-08`)
- * or the pharmacy (`S-B-09`).
+ * board (`S-B-06`), the emergency department (`S-B-07`), the lab (`S-B-08`),
+ * the pharmacy (`S-B-09`) or the hospital dashboard (`S-B-10`).
  *
  * A client component in full. Every part of these screens is live: state
  * arrives over a socket, actions are applied optimistically against a local
@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { AdminDashboard } from '@/components/AdminDashboard';
 import { ConsolePicker, type ConsoleChoice } from '@/components/ConsolePicker';
 import { DoctorConsole } from '@/components/DoctorConsole';
 import { EmergencyConsole } from '@/components/EmergencyConsole';
@@ -32,7 +33,7 @@ import type { ReactNode } from 'react';
  * A principal holding one of these has no chamber to open, so the picker is
  * what it gets when the URL names none.
  */
-const HOSPITAL_ROLES = new Set(['ward', 'emergency', 'lab', 'pharmacy']);
+const HOSPITAL_ROLES = new Set(['ward', 'emergency', 'lab', 'pharmacy', 'hospital_admin']);
 
 /**
  * What each of those is called in the URL.
@@ -46,6 +47,7 @@ const VIEW_OF: Readonly<Record<Exclude<ConsoleChoice['kind'], 'chamber'>, string
   emergency: 'er',
   lab: 'lab',
   pharmacy: 'pharmacy',
+  admin: 'admin',
 };
 
 export default function Page(): ReactNode {
@@ -94,6 +96,7 @@ export default function Page(): ReactNode {
   if (view === 'er' && session?.role === 'emergency') return <EmergencyConsole />;
   if (view === 'lab' && session?.role === 'lab') return <LabConsole />;
   if (view === 'pharmacy' && session?.role === 'pharmacy') return <PharmacyConsole />;
+  if (view === 'admin' && session?.role === 'hospital_admin') return <AdminDashboard />;
 
   // A chamber in the URL *and* a chamber principal in storage is a console
   // ready to open. Anything else means the picker, which is `S-B-01` standing
@@ -103,10 +106,7 @@ export default function Page(): ReactNode {
   }
 
   // The role decides which console, because `S-B-02` and `S-B-05` are two
-  // screens onto the same chamber.
-  //
-  // Unrecognised roles land on reception deliberately: `hospital_admin` is
-  // `S-B-10` and is build step 19, and a console that renders nothing would be
-  // worse than one that shows the queue.
+  // screens onto the same chamber. Anything else lands on reception: a console
+  // that renders nothing would be worse than one that shows the queue.
   return session.role === 'doctor' ? <DoctorConsole /> : <ReceptionConsole />;
 }

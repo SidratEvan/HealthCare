@@ -88,15 +88,19 @@ export {
   canMarkNoShow,
   canPause,
   canReinstate,
+  canAcceptSlot,
+  canOfferFreedSlot,
   canReorder,
   canResume,
   graceRemaining,
   graceWindowMinutes,
   hasCapacity,
+  lapsedOffers,
   lateReinsertIndex,
   nextToCall,
   DEFAULT_QUEUE_SETTINGS,
   MAX_DELAY_MINUTES,
+  SLOT_OFFER_WINDOW_MINUTES,
   type GuardResult,
   type QueueGuardCode,
   type QueueSettings,
@@ -277,6 +281,36 @@ export {
   type StockFlagView,
   type StockSearchSummary,
 } from './lab/stock.js';
+
+// --- Admin analytics -------------------------------------------------------
+//
+// The arithmetic behind `S-B-10` (`FR-ADM-01..09`). The SQL adds up rows; this
+// turns the totals into the figures a hospital director is actually shown, and
+// it lives here rather than in the API because the honesty rules it encodes —
+// what counts as a loss, when a number is too thin to state — are product
+// decisions, not query details.
+export {
+  lossAndRecovery,
+  recoveredValueFor,
+  type LossAndRecovery,
+  type NoShowTotals,
+  type RecoveryTotals,
+} from './admin/recovery.js';
+
+export {
+  punctualityByDoctor,
+  SESSION_ON_TIME_MINUTES,
+  type DoctorPunctuality,
+  type SessionTiming,
+} from './admin/punctuality.js';
+
+export {
+  forecastVolume,
+  MIN_OBSERVATIONS,
+  type ForecastPoint,
+  type ForecastSlot,
+  type HistoricalVolume,
+} from './admin/forecast.js';
 
 // --- Validation schemas ----------------------------------------------------
 //

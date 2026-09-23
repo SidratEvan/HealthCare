@@ -61,6 +61,13 @@ import {
 import { appendEvents, writeProjections, type EventDraft } from './lib/events.js';
 import { insertRows } from './lib/insert.js';
 import { chambers, facilityIds, staffByRole, type ChamberRow } from './lib/lookup.js';
+import {
+  insertFeedback,
+  planRecovery,
+  recoveryEvents,
+  writeRecoveryRows,
+  type FeedbackInput,
+} from './lib/recovery.js';
 import { chamberHours, chamberWeekdays, dhakaDate } from './seed_02_doctors_sessions.js';
 
 import type { Rng } from './lib/random.js';
@@ -76,6 +83,35 @@ const HISTORY_DAYS = 21;
 /** Past evenings seeded per day, across different chambers. */
 const SESSIONS_PER_DAY = 2;
 
+/**
+ * How many days ago each demo facility went live on the queue (`FR-ADM-02`).
+ *
+ * Must match `seed_01_hospitals`, which writes `hospitals.onboarded_at`. The
+ * trend chart marks this date, and the marker only means something if the
+ * chambers on either side of it behave differently — so this constant is read
+ * twice: once to stamp the facility, once to decide how late its doctors ran.
+ *
+ * **This is simulated history, and it is simulated in the honest direction.**
+ * The seed decides how late a doctor was, exactly as it decides how many
+ * patients attended; what it does not do is touch the measurement. The figure
+ * the dashboard draws is computed from these sessions by the same SQL a real
+ * hospital's would be, so the shape of the line is a claim about the seed and
+ * never about the arithmetic.
+ */
+const ADOPTION_DAYS_AGO = 12;
+
+/**
+ * How late a chamber started, before and after the queue went live.
+ *
+ * A chamber that starts on the minute is not what this product exists to fix;
+ * a chamber forty minutes late is. Afterwards the range narrows rather than
+ * collapsing — the queue engine tells people when to come, it does not make
+ * consultants punctual, and a demo claiming it did would be the kind of thing
+ * a hospital director stops believing the rest of.
+ */
+const LATE_BEFORE_ADOPTION: readonly [number, number] = [10, 55];
+const LATE_AFTER_ADOPTION: readonly [number, number] = [0, 22];
+
 /** Reasons a booking was cancelled, declared rather than invented per row. */
 const CANCELLATION_REASONS = [
   'রোগী ফোনে বাতিল করেছেন',
@@ -86,7 +122,7 @@ const CANCELLATION_REASONS = [
 export const seed04History: SeedModule = {
   name: 'seed_04_history',
   title: 'five hundred completed past visits and their event logs',
-  requirements: ['FR-DEM-03', 'FR-QUE-12', 'FR-ADM-03'],
+  requirements: ['FR-DEM-03', 'FR-QUE-12', 'FR-QUE-30', 'FR-ADM-03', 'FR-ADM-08'],
   writes: [
     'sessions',
     'bookings',
@@ -96,6 +132,9 @@ export const seed04History: SeedModule = {
     'medicines',
     'test_orders',
     'reports',
+    'standby_list',
+    'slot_offers',
+    'feedback',
   ],
   // `visits` arrived with migration 0007, so the record half of `FR-DEM-03` is
   // written now. Prescriptions are not deferred but **dropped**: the owner
@@ -126,6 +165,10 @@ export const seed04History: SeedModule = {
     let visits = 0;
     let noShows = 0;
     let cancellations = 0;
+    let feedback = 0;
+    let offersMade = 0;
+    let offersAccepted = 0;
+    let standby = 0;
 
     for (const [index, plan] of plans.entries()) {
       const completed = perSession[index] ?? 0;
@@ -166,8 +209,25 @@ export const seed04History: SeedModule = {
       );
 
       const staffId = receptionists.get(plan.chamber.hospitalSlug) ?? null;
-      const log_ = buildSessionLog(history, plan, inserted, outcomes, staffId);
-      const appended = await appendEvents(client, id<SessionId>(sessionId), log_);
+      const built = buildSessionLog(history, plan, inserted, outcomes, staffId);
+
+      // `FR-QUE-30` against a chair that a no-show left empty. Planned from
+      // the log that has just been built, because who could have accepted
+      // depends on who was still waiting when the offer went out.
+      const offers = planRecovery({
+        rng: history,
+        feePoisha: plan.chamber.feePoisha,
+        freed: built.freed,
+        seen: built.seen,
+      });
+
+      const appended = await appendEvents(
+        client,
+        id<SessionId>(sessionId),
+        inTimeOrder([...built.drafts, ...recoveryEvents(offers, built.actor)]),
+      );
+
+      const recovered = await writeRecoveryRows(client, sessionId, offers);
 
       await writeProjections(
         client,
@@ -204,18 +264,23 @@ export const seed04History: SeedModule = {
       // The count the log prints is the count the database holds, not the
       // number this module intended to write. `FR-DEM-03` is a promise about
       // rows.
-      if (written !== completed) {
+      if (written.length !== completed) {
         throw new Error(
-          `Session ${sessionId}: ${String(completed)} consultations finished but ${String(written)} records were written.`,
+          `Session ${sessionId}: ${String(completed)} consultations finished but ${String(written.length)} records were written.`,
         );
       }
+
+      feedback += await insertFeedback(client, history, written);
 
       sessions += 1;
       bookings += inserted.length;
       events += appended.length;
-      visits += written;
+      visits += written.length;
       noShows += extraNoShows;
       cancellations += extraCancellations;
+      offersMade += recovered.offers;
+      offersAccepted += offers.filter((offer) => offer.acceptedBookingId !== null).length;
+      standby += recovered.standby;
     }
 
     if (visits !== HISTORY_VISIT_TARGET) {
@@ -234,6 +299,11 @@ export const seed04History: SeedModule = {
     );
     log('      no prescriptions: FR-DOC-04 was dropped from this version');
     log(
+      `      ${String(offersMade)} freed chairs offered to the standby list, ` +
+        `${String(offersAccepted)} taken (FR-QUE-30, FR-ADM-03)`,
+    );
+    log(`      ${String(feedback)} post-visit responses (FR-ADM-08, seeded only)`);
+    log(
       `      ${String(lab.orders)} test orders (${String(lab.open)} still on a bench), ` +
         `${String(lab.reports)} delivered reports`,
     );
@@ -247,6 +317,9 @@ export const seed04History: SeedModule = {
       medicines: formulary,
       test_orders: lab.orders,
       reports: lab.reports,
+      standby_list: standby,
+      slot_offers: offersMade,
+      feedback,
     };
   },
 };
@@ -289,16 +362,17 @@ function choosePastSessions(rng: Rng, all: readonly ChamberRow[], now: Timestamp
       const hours = chamberHours(chamber.hospitalSlug);
       const plannedStart = time.fromDhakaWallClock(date, hours.start[0], hours.start[1]);
 
+      const live = offset <= ADOPTION_DAYS_AGO;
+      const [earliest, latest] = live ? LATE_AFTER_ADOPTION : LATE_BEFORE_ADOPTION;
+
       plans.push({
         chamber,
         date,
         plannedStart,
         plannedEnd: time.fromDhakaWallClock(date, hours.end[0], hours.end[1]),
         capacity: Math.max(20, Math.round((180 / chamber.consultMinutes) * 1.4)),
-        // A chamber that starts on the minute is not what this product exists
-        // to fix; a chamber forty minutes late is.
-        minutesLate: rng.int(0, 45),
-        declaredDelay: rng.chance(0.2) ? rng.int(15, 30) : 0,
+        minutesLate: rng.int(earliest, latest),
+        declaredDelay: rng.chance(live ? 0.12 : 0.28) ? rng.int(15, 30) : 0,
         paused: rng.chance(0.3),
       });
     }
@@ -352,19 +426,34 @@ function assignOutcomes(
  * measured consultation — so the log is internally consistent and the rate the
  * reducer derives from it is a real average of real durations.
  */
+interface SessionLog {
+  readonly drafts: readonly EventDraft[];
+  readonly actor: EventDraft['actor'];
+  /** Chairs a no-show left empty, with the instant reception marked them. */
+  readonly freed: readonly { readonly bookingId: string; readonly markedAt: Timestamp }[];
+  /** Everybody seen, in the order they were called (`FR-QUE-30`'s candidates). */
+  readonly seen: readonly {
+    readonly bookingId: string;
+    readonly patientId: string;
+    readonly calledAt: Timestamp;
+  }[];
+}
+
 function buildSessionLog(
   rng: Rng,
   plan: PastSession,
-  bookings: readonly { id: string; serial: number }[],
+  bookings: readonly InsertedBooking[],
   outcomes: readonly Outcome[],
   staffId: string | null,
-): EventDraft[] {
+): SessionLog {
   const actor: EventDraft['actor'] =
     staffId === null
       ? { kind: 'system', job: 'seed_04_history' }
       : { kind: 'staff', staffUserId: id<StaffUserId>(staffId), role: 'receptionist' };
 
   const drafts: EventDraft[] = [];
+  const freed: { bookingId: string; markedAt: Timestamp }[] = [];
+  const seen: { bookingId: string; patientId: string; calledAt: Timestamp }[] = [];
   const openedAt = time.addMinutes(plan.plannedStart, -rng.int(0, 10));
   const arrivedAt = time.addMinutes(plan.plannedStart, plan.minutesLate);
 
@@ -455,6 +544,7 @@ function buildSessionLog(
           actor,
         });
 
+        seen.push({ bookingId: booking.id, patientId: booking.patient.id, calledAt });
         cursor = doneAt;
         consultationsSoFar += 1;
         break;
@@ -472,6 +562,7 @@ function buildSessionLog(
           clientEventId: null,
           actor,
         });
+        freed.push({ bookingId: booking.id, markedAt });
         cursor = markedAt;
         break;
       }
@@ -503,10 +594,21 @@ function buildSessionLog(
     actor,
   });
 
-  // `queue_events.seq` orders the log, and the seed inserts in array order —
-  // but a cancellation is timestamped before the session opened, so sorting by
-  // `serverTs` here keeps the two orderings from disagreeing.
-  return drafts.sort((a, b) => (a.serverTs < b.serverTs ? -1 : a.serverTs > b.serverTs ? 1 : 0));
+  return { drafts, actor, freed, seen };
+}
+
+/**
+ * Puts a session's events into the order they happened.
+ *
+ * `queue_events.seq` orders the log and the seed inserts in array order — but
+ * a cancellation is timestamped before the session opened and an offer is
+ * planned after the rest of the evening is known, so both would otherwise
+ * arrive out of sequence.
+ */
+function inTimeOrder(drafts: readonly EventDraft[]): EventDraft[] {
+  return [...drafts].sort((a, b) =>
+    a.serverTs < b.serverTs ? -1 : a.serverTs > b.serverTs ? 1 : 0,
+  );
 }
 
 /** A declared chief complaint for this department (CLAUDE.md §8). */
@@ -601,8 +703,9 @@ async function insertVisits(
   outcomes: readonly Outcome[],
   rng: Rng,
   doctorStaffId: string | null,
-): Promise<number> {
+): Promise<FeedbackInput[]> {
   const rows: unknown[][] = [];
+  const written: Omit<FeedbackInput, 'visitId'>[] = [];
 
   for (const [index, outcome] of outcomes.entries()) {
     if (outcome.kind !== 'done') continue;
@@ -634,9 +737,16 @@ async function insertVisits(
       seenAt,
       doctorStaffId,
     ]);
+
+    written.push({
+      patientId: booking.patient.id,
+      hospitalId: plan.chamber.hospitalId,
+      // Rated after the visit, not during it (`FR-PAT-83` is post-visit).
+      at: time.addMinutes(seenAt, rng.int(30, 48 * 60)),
+    });
   }
 
-  if (rows.length === 0) return 0;
+  if (rows.length === 0) return [];
 
   const inserted = await insertRows<{ id: string }>(
     client,
@@ -658,7 +768,12 @@ async function insertVisits(
     rows,
   );
 
-  return inserted.length;
+  return inserted.map((visit, index) => {
+    const detail = written[index];
+    /* c8 ignore next -- one `written` entry is pushed per inserted row */
+    if (detail === undefined) throw new Error('visit rows and their details drifted apart.');
+    return { visitId: visit.id, ...detail };
+  });
 }
 
 /** The Dhaka calendar date `days` after an instant, as `YYYY-MM-DD`. */

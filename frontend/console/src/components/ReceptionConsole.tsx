@@ -40,6 +40,7 @@ import { Button, Card, FreshnessLine, ToastProvider, useToast } from '@platform/
 
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
+import { StandbyCard } from '@/components/StandbyCard';
 import { useSessionQueue } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 
@@ -68,6 +69,8 @@ const CONSOLE_LOCALE: Locale = 'bn';
  * hours out, on the one line of the screen that says when the session is.
  */
 const CONSOLE_NUMERALS = 'latin' as const;
+
+const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 
 /**
  * The demo principal (CLAUDE.md §4.1).
@@ -114,7 +117,7 @@ function ConsoleBody(): ReactNode {
 
   const queue = useSessionQueue({
     sessionId: sessionId ?? '',
-    apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
+    apiBaseUrl: API_BASE,
     socketUrl: process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:4000',
     getToken: readToken,
   });
@@ -362,6 +365,18 @@ function ConsoleBody(): ReactNode {
                 <Counter label={t('countNoShow', locale)} value={counts?.noShow ?? 0} />
               </dl>
             </Card>
+
+            {/* BTN-B02-OFFER: a freed chair goes to the standby list, and the
+                acceptance is recorded here (FR-REC-30). */}
+            <StandbyCard
+              sessionId={sessionId}
+              state={state}
+              connected={queue.connected}
+              pendingCount={queue.pendingCount}
+              locale={locale}
+              apiBaseUrl={API_BASE}
+              getToken={readToken}
+            />
           </aside>
         </main>
       </div>

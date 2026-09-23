@@ -147,9 +147,17 @@ export const trackingReportParams = trackingLinkParams.extend({
 export const demoTokenBody = z.object({
   hospitalId: uuid,
   // The roles the picker offers (`demo.service` OFFERED). `emergency` joined at
-  // step 15 with `S-B-07`; the two lists move together, and `demo.routes.test`
-  // mints one of each.
-  role: z.enum(['receptionist', 'doctor', 'ward', 'emergency', 'hospital_admin']),
+  // step 15 with `S-B-07`, `lab` and `pharmacy` with `S-B-08`/`S-B-09`; the two
+  // lists move together, and `demo.routes.test` mints one of each.
+  role: z.enum([
+    'receptionist',
+    'doctor',
+    'ward',
+    'emergency',
+    'lab',
+    'pharmacy',
+    'hospital_admin',
+  ]),
 });
 
 export type CreateBookingBody = z.infer<typeof createBookingBody>;

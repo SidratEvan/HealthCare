@@ -87,6 +87,12 @@ describe('placeholders', () => {
     // without it is a notice they cannot match to their own booking.
     for (const key of TEMPLATE_KEYS) {
       if (key === 'queue.doctor_arrived') continue;
+      // A slot offer has no serial to name *yet*. The number is allocated at
+      // the moment the patient accepts, not when they are asked — quoting one
+      // in the offer would promise a place that another standby patient may
+      // take first. What they act on is the doctor and the deadline, and the
+      // message names both.
+      if (key === 'queue.slot_offered') continue;
       // A bed request has no serial; its messages name the hospital and the
       // bed instead, which the next test holds them to. Nor does an
       // emergency: those name the hospital and link to the case. Nor does a
