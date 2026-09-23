@@ -48,6 +48,9 @@ export interface DailyRow {
   readonly avgWaitMinutes: number | null;
   readonly longestWaitMinutes: number | null;
   readonly waitsMeasured: number;
+  readonly avgOverrunMinutes: number | null;
+  readonly longestOverrunMinutes: number | null;
+  readonly overrunsMeasured: number;
   readonly avgConsultSeconds: number | null;
   readonly sessionsTotal: number;
   readonly sessionsNeverStarted: number;
@@ -70,6 +73,9 @@ export async function dailyRows(hospitalId: string, range: DateRange): Promise<D
     avg_wait_minutes: number | null;
     longest_wait_minutes: number | null;
     waits_measured: number;
+    avg_overrun_minutes: number | null;
+    longest_overrun_minutes: number | null;
+    overruns_measured: number;
     avg_consult_seconds: number | null;
     sessions_total: number;
     sessions_never_started: number;
@@ -81,7 +87,8 @@ export async function dailyRows(hospitalId: string, range: DateRange): Promise<D
   }>`
     SELECT session_date::text, seen, no_shows, cancelled, booked_total,
            walkin_count, booked_count, avg_wait_minutes, longest_wait_minutes,
-           waits_measured, avg_consult_seconds, sessions_total,
+           waits_measured, avg_overrun_minutes, longest_overrun_minutes,
+           overruns_measured, avg_consult_seconds, sessions_total,
            sessions_never_started, avg_start_delta_minutes, sessions_late,
            collected_poisha, refunded_poisha, billed_poisha
       FROM v_admin_daily
@@ -101,6 +108,9 @@ export async function dailyRows(hospitalId: string, range: DateRange): Promise<D
     avgWaitMinutes: row.avg_wait_minutes,
     longestWaitMinutes: row.longest_wait_minutes,
     waitsMeasured: row.waits_measured,
+    avgOverrunMinutes: row.avg_overrun_minutes,
+    longestOverrunMinutes: row.longest_overrun_minutes,
+    overrunsMeasured: row.overruns_measured,
     avgConsultSeconds: row.avg_consult_seconds,
     sessionsTotal: row.sessions_total,
     sessionsNeverStarted: row.sessions_never_started,

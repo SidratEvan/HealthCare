@@ -74,9 +74,16 @@ export interface TodayFigures {
   readonly cancelled: number;
   readonly walkin: number;
   readonly bookedAhead: number;
+  /**
+   * Arrival to call. Null until a check-in action exists — see migration 0020.
+   */
   readonly avgWaitMinutes: number | null;
   readonly longestWaitMinutes: number | null;
   readonly waitsMeasured: number;
+  /** How much later than their slot patients were called. The measurable one. */
+  readonly avgOverrunMinutes: number | null;
+  readonly longestOverrunMinutes: number | null;
+  readonly overrunsMeasured: number;
   readonly sessionsTotal: number;
   readonly sessionsLate: number;
   readonly sessionsNeverStarted: number;
@@ -85,8 +92,10 @@ export interface TodayFigures {
 export interface TrendPoint {
   readonly date: string;
   readonly avgWaitMinutes: number | null;
+  readonly avgOverrunMinutes: number | null;
   readonly seen: number;
   readonly waitsMeasured: number;
+  readonly overrunsMeasured: number;
 }
 
 export interface Dashboard {
@@ -185,8 +194,10 @@ export async function dashboard(input: DashboardInput): Promise<Dashboard> {
     trend: daily.map((row) => ({
       date: row.sessionDate,
       avgWaitMinutes: row.avgWaitMinutes,
+      avgOverrunMinutes: row.avgOverrunMinutes,
       seen: row.seen,
       waitsMeasured: row.waitsMeasured,
+      overrunsMeasured: row.overrunsMeasured,
     })),
     adoptionDate: adoption,
     loss,
@@ -256,9 +267,20 @@ function totalsOf(daily: readonly adminRepo.DailyRow[]): TodayFigures {
     0,
   );
 
+  const overruns = daily.reduce((total, row) => total + row.overrunsMeasured, 0);
+  const overrunMinutes = daily.reduce(
+    (total, row) => total + (row.avgOverrunMinutes ?? 0) * row.overrunsMeasured,
+    0,
+  );
+
   const longest = daily.reduce<number | null>((worst, row) => {
     if (row.longestWaitMinutes === null) return worst;
     return worst === null ? row.longestWaitMinutes : Math.max(worst, row.longestWaitMinutes);
+  }, null);
+
+  const worstOverrun = daily.reduce<number | null>((worst, row) => {
+    if (row.longestOverrunMinutes === null) return worst;
+    return worst === null ? row.longestOverrunMinutes : Math.max(worst, row.longestOverrunMinutes);
   }, null);
 
   return {
@@ -275,6 +297,9 @@ function totalsOf(daily: readonly adminRepo.DailyRow[]): TodayFigures {
     avgWaitMinutes: measured === 0 ? null : Math.round(waitedMinutes / measured),
     longestWaitMinutes: longest,
     waitsMeasured: measured,
+    avgOverrunMinutes: overruns === 0 ? null : Math.round(overrunMinutes / overruns),
+    longestOverrunMinutes: worstOverrun,
+    overrunsMeasured: overruns,
     sessionsTotal: sum(daily, (row) => row.sessionsTotal),
     sessionsLate: sum(daily, (row) => row.sessionsLate),
     sessionsNeverStarted: sum(daily, (row) => row.sessionsNeverStarted),
@@ -443,6 +468,9 @@ function tableFor(data: Dashboard, view: ExportView): Table {
           ['avg_wait_minutes', data.today.avgWaitMinutes],
           ['longest_wait_minutes', data.today.longestWaitMinutes],
           ['waits_measured', data.today.waitsMeasured],
+          ['avg_overrun_minutes', data.today.avgOverrunMinutes],
+          ['longest_overrun_minutes', data.today.longestOverrunMinutes],
+          ['overruns_measured', data.today.overrunsMeasured],
           ['sessions_total', data.today.sessionsTotal],
           ['sessions_late', data.today.sessionsLate],
           ['sessions_never_started', data.today.sessionsNeverStarted],
@@ -451,11 +479,20 @@ function tableFor(data: Dashboard, view: ExportView): Table {
 
     case 'trend':
       return {
-        header: ['date', 'avg_wait_minutes', 'waits_measured', 'seen'],
+        header: [
+          'date',
+          'avg_wait_minutes',
+          'waits_measured',
+          'avg_overrun_minutes',
+          'overruns_measured',
+          'seen',
+        ],
         rows: data.trend.map((point) => [
           point.date,
           point.avgWaitMinutes,
           point.waitsMeasured,
+          point.avgOverrunMinutes,
+          point.overrunsMeasured,
           point.seen,
         ]),
       };

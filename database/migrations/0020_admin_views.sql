@@ -47,15 +47,34 @@
 -- v_admin_daily — one row per hospital per day (FR-ADM-01, FR-ADM-02,
 -- FR-ADM-04, FR-ADM-05, FR-ADM-09)
 --
--- ## Waiting is measured from arrival, not from booking
+-- ## Two wait figures, because the one `FR-ADM-01` names cannot be measured yet
 --
 -- `FR-ADM-01` wants average and longest wait. The wait a patient experiences
--- is the time between reaching the hospital and being called — not the days
--- between booking and appointment, which is not a wait, it is a calendar.
--- `bookings.arrived_at` is stamped when reception checks somebody in, so the
--- figure is null for a patient nobody checked in, and those rows are excluded
--- rather than counted as zero. A queue that never recorded arrivals reports no
--- wait at all, which is the honest answer to "we did not measure".
+-- is the time between reaching the hospital and being called — and **nothing
+-- in this product records a patient arriving.** `PRD.md` §8 gives reception no
+-- check-in action: `FR-REC-10`..`FR-REC-16` call, finish, mark late, mark
+-- absent, insert a walk-in and reorder, and none of them is "this person is
+-- here". `bookings.arrived_at` is written only by `WALKIN_ADDED`, which is
+-- somebody standing at the counter.
+--
+-- So `avg_wait_minutes` is defined correctly and is null for every booked
+-- patient, today and until a check-in event exists. It is computed anyway,
+-- because the day that event lands this figure starts working with no change
+-- here, and `waits_measured` states how many rows it rests on so the screen
+-- can say "over none".
+--
+-- `overrun_minutes` is the figure that *can* be measured from what the product
+-- records: how much later than their slot a patient was called. The slot is
+-- the session's planned start plus the doctor's own consultation rate times
+-- the serials ahead of them — which is exactly what the patient was told to
+-- expect, and exactly what stops being wrong when the queue runs to time. For
+-- serial 1 it is the wait in full; for serial 40 it is the part of the wait
+-- that nobody planned. Floored at zero: a patient called early did not wait a
+-- negative time, and averaging a negative into the figure would let one early
+-- start cancel somebody else's hour in a corridor.
+--
+-- This is a measurement choice the documents do not make, and it is recorded
+-- in `docs/STATUS.md` as needing a ruling.
 --
 -- ## Seen means done
 --
@@ -82,9 +101,25 @@ WITH booking_day AS (
          CASE
            WHEN b.arrived_at IS NOT NULL AND b.called_at IS NOT NULL
              THEN GREATEST(0, EXTRACT(EPOCH FROM (b.called_at - b.arrived_at)) / 60.0)
-         END AS wait_minutes
+         END AS wait_minutes,
+
+         -- How much later than their own slot the patient was called.
+         CASE
+           WHEN b.called_at IS NOT NULL
+             THEN GREATEST(
+               0,
+               EXTRACT(
+                 EPOCH FROM (
+                   b.called_at
+                   - (s.planned_start
+                      + make_interval(mins => (b.serial_number - 1) * d.default_consult_minutes))
+                 )
+               ) / 60.0
+             )
+         END AS overrun_minutes
     FROM bookings b
     JOIN sessions s ON s.id = b.session_id
+    JOIN doctors d  ON d.id = s.doctor_id
    WHERE b.deleted_at IS NULL
      AND s.deleted_at IS NULL
 ),
@@ -142,6 +177,10 @@ SELECT h.id AS hospital_id,
        round(avg(d.wait_minutes))::int AS avg_wait_minutes,
        max(d.wait_minutes)::int        AS longest_wait_minutes,
        count(d.wait_minutes)::int      AS waits_measured,
+
+       round(avg(d.overrun_minutes))::int AS avg_overrun_minutes,
+       max(d.overrun_minutes)::int        AS longest_overrun_minutes,
+       count(d.overrun_minutes)::int      AS overruns_measured,
 
        round(avg(d.consult_seconds))::int AS avg_consult_seconds,
 
