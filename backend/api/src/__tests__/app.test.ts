@@ -12,6 +12,7 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../app.js';
+import { buildApiRouter } from '../routes/index.js';
 import { ERROR_CODES, NON_FAILURE_CODES, statusFor, type ErrorCode } from '../errors/codes.js';
 
 const app = createApp();
@@ -193,5 +194,77 @@ describe('error codes (BACKEND.md §9)', () => {
     for (const code of NON_FAILURE_CODES) {
       expect(statusFor(code), code).toBeLessThan(300);
     }
+  });
+});
+
+describe('CORS allows exactly the verbs the routers use', () => {
+  const ORIGIN = 'http://localhost:3100';
+
+  /**
+   * Every HTTP method the mounted routers register.
+   *
+   * Read off the router stack rather than listed by hand, so a route added
+   * with a verb nobody allowed fails here instead of in a browser.
+   *
+   * **This test exists because that failure is almost invisible.** A preflight
+   * for a disallowed method still answers 204; the browser then refuses to
+   * send the real request on its own, and nothing server-side logs anything,
+   * because the request never arrives. `PUT /hospitals/:id/pharmacy-stock`
+   * (step 17) and `PUT /hospitals/:id/capabilities` (step 15) were both
+   * unreachable from a browser for exactly this reason.
+   */
+  function methodsInUse(): Set<string> {
+    const router = buildApiRouter() as unknown as {
+      stack: { route?: { methods: Record<string, boolean> }; handle?: unknown }[];
+    };
+
+    const methods = new Set<string>();
+
+    const walk = (stack: typeof router.stack): void => {
+      for (const layer of stack) {
+        if (layer.route !== undefined) {
+          for (const [method, on] of Object.entries(layer.route.methods)) {
+            if (on && method !== '_all') methods.add(method.toUpperCase());
+          }
+          continue;
+        }
+        const nested = (layer.handle as { stack?: typeof router.stack } | undefined)?.stack;
+        if (nested !== undefined) walk(nested);
+      }
+    };
+
+    walk(router.stack);
+    return methods;
+  }
+
+  it('answers a preflight with every method a route is registered for', async () => {
+    const used = methodsInUse();
+    expect(used.size).toBeGreaterThan(0);
+
+    const response = await request(app)
+      .options('/api/v1/medicines')
+      .set('Origin', ORIGIN)
+      .set('Access-Control-Request-Method', 'PUT');
+
+    expect(response.status).toBe(204);
+
+    const allowed = new Set(
+      (response.headers['access-control-allow-methods'] ?? '')
+        .split(',')
+        .map((method) => method.trim().toUpperCase())
+        .filter((method) => method !== ''),
+    );
+
+    const missing = [...used].filter((method) => !allowed.has(method)).sort();
+    expect(missing, 'a verb a route uses that no browser may send').toEqual([]);
+  });
+
+  it('still refuses an origin that is not one of ours', async () => {
+    const response = await request(app)
+      .options('/api/v1/medicines')
+      .set('Origin', 'http://evil.example.com')
+      .set('Access-Control-Request-Method', 'GET');
+
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
   });
 });
