@@ -93,14 +93,15 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 2943, in about a minute.
-`pnpm test:e2e` reports 85, in Chromium, against the real API and the seeded
+`pnpm test` reports 3321, in about a minute and a half.
+`pnpm test:e2e` reports 93, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
-6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`. The whole run takes about
-fifteen minutes.
+6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
+`no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`. The last full run
+took eight minutes.
 
 `pnpm verify` — typecheck, lint, `format:check`, test — is clean, and so is
 `pnpm build`. `format:check` had been failing on five files since before step
