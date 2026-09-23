@@ -1096,8 +1096,10 @@ database.
 
 Each is implemented one way and flagged rather than settled silently, and
 needs an owner's ruling. Number 7 is recorded as settled because the answer
-changed the tree; 8 and 9 are settled too and are described at the end of this
-section — closed, and not to be raised. They are grouped by the step that
+changed the tree; 8, 9, 12 and 59 are settled too — closed, and not to be
+raised. 12 and 59 are the refund policy and its demo percentages, ruled on
+2026-09-23: the demo refund is the deliverable and payment specifics are not
+to be put in front of the owner again. They are grouped by the step that
 raised them, so the numbering is not contiguous in the file.
 
 1. **`FR-QUE-20` grace period.** "2 patients or 15 minutes, whichever is longer"
@@ -1158,14 +1160,11 @@ Raised while building the seeds (step 5):
 Raised while building the live serial screen (step 10):
 
 12. ~~**`hospital_settings.refund_policy` has no defined shape.**~~
-   **Answered at step 18, and still open to a ruling on the numbers.** The
-   shape is now `shared/domain/src/payments/refund.ts` and `DATABASE.md` §2.2
-   documents it: `cutoffHours`, a percentage before and after it, and whether
-   the platform fee comes back. Code had to decide *a* shape to enforce
-   anything at all; what any particular hospital refunds is still theirs.
-   Four demo facilities have terms and two deliberately do not, so the
-   "hospital will decide" path stays demonstrable. **Worth an owner's eye on
-   the demo percentages before a pitch** — they are plausible, not agreed.
+   **Settled at step 18.** The shape is `shared/domain/src/payments/refund.ts`
+   and `DATABASE.md` §2.2 documents it: `cutoffHours`, a percentage before and
+   after it, and whether the platform fee comes back. Four demo facilities
+   have terms and two deliberately do not, so the "hospital will decide" path
+   stays demonstrable. Closed — see decision 59.
 
 13. **Nothing reissues a freed serial.** Cancelling releases the number —
    `bookings_session_serial_key` excludes cancelled rows — but `nextSerial`
@@ -1495,11 +1494,12 @@ Raised while building the money (step 18):
    `pg-boss` is still not installed. **An administrator refunds them from the
    endpoint in the meantime**, and `payments_refund_pending_idx` is the list.
 
-59. **The demo refund percentages.** Four facilities have plausible terms
-   (Shapla 100/50 at twelve hours, Padma 100/25 at twenty-four, Jamuna full
-   either way, Meghna 80/0). Nobody agreed these. They are operational
-   configuration like the seeded consultation fees, not the commercial content
-   §1.1 excludes — but worth a glance before a hospital director reads them.
+59. ~~**The demo refund percentages.**~~ **Settled, and not to be raised.**
+   Shapla 100/50 at twelve hours, Padma 100/25 at twenty-four, Jamuna full
+   either way, Meghna 80/0, and two facilities with none. These stand. The
+   owner's ruling (2026-09-23): this is the pitch version, the demo refund is
+   the deliverable, and payment specifics are not something to put in front of
+   him. Do not ask about them again.
 
 60. **A settlement is dated by the session, not by when the money cleared.**
    A payment that settled at midnight belongs to the chamber it paid for. That
@@ -1710,9 +1710,9 @@ Turbopack is substantially faster and this is the only thing holding it off.
   `live` selects an adapter that refuses every charge with a named reason
   rather than a client that throws the moment a patient taps pay. Both
   provider files carry the call sequence, the response that actually means
-  the money moved, and the one thing that bites — see the step 18 notes.
-  **Nagad has no refund in its checkout API**, so "automatic refunds for every
-  method" is a promise to check before making it.
+  the money moved, and the one thing that bites — see the step 18 notes. Nagad
+  has no refund in its checkout API, which is written into `nagad.ts` where
+  whoever implements it will read it.
 
 - **Nothing charges for a bed, a test or an ambulance.** `payments` has the
   columns because DATABASE.md §2.6 specifies them, and none of those three has
