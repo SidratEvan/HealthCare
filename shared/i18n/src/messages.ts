@@ -762,6 +762,18 @@ export const CONSOLE = {
   },
   labUploading: { bn: 'পাঠানো হচ্ছে…', en: 'Sending…' },
   actionSending: { bn: 'আগেরটি পাঠানো হচ্ছে', en: 'Sending the last one' },
+
+  // BTN-B05-TEST on the doctor console (FR-DOC-06).
+  orderTests: { bn: 'পরীক্ষা দিন', en: 'Order tests' },
+  orderTestsHint: {
+    bn: 'বেছে নিলে রেকর্ড দেওয়ার সময় ল্যাবে চলে যাবে।',
+    en: 'What you tick goes to the lab when you file the record.',
+  },
+  orderTestsCount: { bn: '{count}টি পরীক্ষা বেছে নেওয়া হয়েছে', en: '{count} tests ticked' },
+  testsNotSent: {
+    bn: 'রেকর্ড জমা হয়েছে, কিন্তু পরীক্ষাগুলো ল্যাবে যায়নি। আবার সেভ করুন।',
+    en: 'The record saved, but the tests did not reach the lab. Save again.',
+  },
   labUploaded: {
     bn: 'রোগী ও ডাক্তার দুজনেই পেয়েছেন',
     en: 'Both the patient and the doctor have it',
