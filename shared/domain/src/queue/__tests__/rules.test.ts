@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { serial, timestamp } from '../../types/ids.js';
 import { reduce } from '../reducer.js';
 import {
+  canAcceptSlot,
   canAddWalkin,
   canCallNext,
   canDeclareDelay,
@@ -25,7 +26,9 @@ import {
   canResume,
   graceRemaining,
   graceWindowMinutes,
+  canOfferFreedSlot,
   hasCapacity,
+  lapsedOffers,
   nextToCall,
   DEFAULT_QUEUE_SETTINGS,
   MAX_DELAY_MINUTES,
@@ -444,5 +447,182 @@ describe('capacity', () => {
     const uncapped = { plan: { ...seed.plan, capacity: null }, roster: seed.roster };
 
     expect(hasCapacity(emptyState(uncapped))).toBe(true);
+  });
+});
+
+describe('offering a chair somebody freed (FR-QUE-30)', () => {
+  const OFFER_ID = '55555555-5555-7555-8555-000000000001';
+  const NOW = timestamp('2026-09-17T12:00:00.000Z');
+
+  /** A running session with serial 2 marked no-show, so a chair is free. */
+  function withFreedChair(): { state: QueueState; log: LogBuilder; freed: string } {
+    const { state, log } = running();
+    const freed = bookingId(2);
+    const after = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+      log.next('PATIENT_CALLED', { bookingId: freed, serial: serial(2) }),
+      log.next('PATIENT_NO_SHOW', { bookingId: freed, afterGraceSeconds: 1_200 }),
+    ]);
+    return { state: after, log, freed };
+  }
+
+  it('offers a chair a no-show left empty', () => {
+    const { state, freed } = withFreedChair();
+    expect(canOfferFreedSlot(state, freed)).toEqual({ ok: true });
+  });
+
+  it('offers a chair a cancellation left empty', () => {
+    const { state, log } = running();
+    const cancelled = bookingId(4);
+    const after = reduce(
+      state,
+      log.next('BOOKING_CANCELLED', { bookingId: cancelled, reason: 'patient cancelled' }),
+    );
+
+    expect(canOfferFreedSlot(after, cancelled)).toEqual({ ok: true });
+  });
+
+  it('refuses to give away the chair of somebody merely late', () => {
+    // FR-QUE-21: a late patient still holds their place. Offering it would
+    // take a turn from a person standing outside the door in traffic.
+    const { state, log } = running();
+    const late = bookingId(3);
+    const after = reduce(state, log.next('PATIENT_LATE', { bookingId: late, reinsertAfter: 3 }));
+
+    expect(canOfferFreedSlot(after, late)).toMatchObject({ ok: false, code: 'SLOT_NOT_FREE' });
+  });
+
+  it('refuses a chair somebody is still waiting in', () => {
+    const { state } = running();
+    expect(canOfferFreedSlot(state, bookingId(3))).toMatchObject({
+      ok: false,
+      code: 'SLOT_NOT_FREE',
+    });
+  });
+
+  it('refuses a booking that is not in this session', () => {
+    const { state } = running();
+    expect(canOfferFreedSlot(state, bookingId(99))).toMatchObject({
+      ok: false,
+      code: 'UNKNOWN_BOOKING',
+    });
+  });
+
+  it('refuses a second offer against the same chair', () => {
+    // Two outstanding offers for one place is two people told to come in, and
+    // the second to arrive is turned away at the counter.
+    const { state, log, freed } = withFreedChair();
+    const offered = reduce(
+      state,
+      log.next('SLOT_OFFERED', {
+        offerId: OFFER_ID,
+        freedBookingId: freed,
+        offeredTo: [bookingId(9)],
+        expiresAt: timestamp('2026-09-17T12:10:00.000Z'),
+      }),
+    );
+
+    expect(canOfferFreedSlot(offered, freed)).toMatchObject({
+      ok: false,
+      code: 'OFFER_OUTSTANDING',
+    });
+  });
+
+  it('allows the chair to be offered again once the first offer lapsed', () => {
+    // "Unaccepted offers pass to the next patient" — which is only possible if
+    // an expired offer stops blocking the chair.
+    const { state, log, freed } = withFreedChair();
+    const lapsed = fold(state, [
+      log.next('SLOT_OFFERED', {
+        offerId: OFFER_ID,
+        freedBookingId: freed,
+        offeredTo: [bookingId(9)],
+        expiresAt: timestamp('2026-09-17T12:10:00.000Z'),
+      }),
+      log.next('SLOT_EXPIRED', { offerId: OFFER_ID }),
+    ]);
+
+    expect(canOfferFreedSlot(lapsed, freed)).toEqual({ ok: true });
+  });
+
+  it('refuses to offer anything once the session has ended', () => {
+    const { state, log, freed } = withFreedChair();
+    const ended = reduce(state, log.next('SESSION_ENDED', { endedAt: NOW, seen: 1 }));
+
+    expect(canOfferFreedSlot(ended, freed)).toMatchObject({ ok: false, code: 'SESSION_ENDED' });
+  });
+});
+
+describe('accepting an offered chair', () => {
+  const OFFER_ID = '55555555-5555-7555-8555-000000000002';
+  const EXPIRES = timestamp('2026-09-17T12:10:00.000Z');
+
+  function offered(): { state: QueueState; log: LogBuilder } {
+    const { state, log } = running();
+    const freed = bookingId(2);
+    const after = fold(state, [
+      log.next('BOOKING_CANCELLED', { bookingId: freed, reason: 'patient cancelled' }),
+      log.next('SLOT_OFFERED', {
+        offerId: OFFER_ID,
+        freedBookingId: freed,
+        offeredTo: [bookingId(9)],
+        expiresAt: EXPIRES,
+      }),
+    ]);
+    return { state: after, log };
+  }
+
+  it('accepts inside the window', () => {
+    const { state } = offered();
+    expect(canAcceptSlot(state, OFFER_ID, timestamp('2026-09-17T12:05:00.000Z'))).toEqual({
+      ok: true,
+    });
+  });
+
+  it('refuses once the clock has passed the deadline, with nothing having swept it', () => {
+    // Nothing runs on a timer in this version, so an offer that lapsed twenty
+    // minutes ago is still `pending` in the log. It must not be acceptable
+    // merely because no worker has said otherwise yet.
+    const { state } = offered();
+    expect(canAcceptSlot(state, OFFER_ID, timestamp('2026-09-17T12:30:00.000Z'))).toMatchObject({
+      ok: false,
+      code: 'OFFER_EXPIRED',
+    });
+  });
+
+  it('refuses at the deadline exactly', () => {
+    const { state } = offered();
+    expect(canAcceptSlot(state, OFFER_ID, EXPIRES)).toMatchObject({
+      ok: false,
+      code: 'OFFER_EXPIRED',
+    });
+  });
+
+  it('refuses a chair already taken', () => {
+    const { state, log } = offered();
+    const taken = reduce(
+      state,
+      log.next('SLOT_ACCEPTED', { offerId: OFFER_ID, newBookingId: bookingId(9) }),
+    );
+
+    expect(canAcceptSlot(taken, OFFER_ID, timestamp('2026-09-17T12:05:00.000Z'))).toMatchObject({
+      ok: false,
+      code: 'OFFER_SETTLED',
+    });
+  });
+
+  it('refuses an offer that does not exist', () => {
+    const { state } = offered();
+    expect(canAcceptSlot(state, 'not-an-offer', timestamp('2026-09-17T12:05:00.000Z'))).toMatchObject(
+      { ok: false, code: 'UNKNOWN_OFFER' },
+    );
+  });
+
+  it('names the offers whose window has closed', () => {
+    const { state } = offered();
+
+    expect(lapsedOffers(state, timestamp('2026-09-17T12:05:00.000Z'))).toHaveLength(0);
+    expect(lapsedOffers(state, timestamp('2026-09-17T12:30:00.000Z'))).toHaveLength(1);
   });
 });
