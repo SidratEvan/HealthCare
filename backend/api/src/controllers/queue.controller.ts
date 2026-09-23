@@ -466,6 +466,8 @@ export async function getStandby(req: Request, res: Response): Promise<void> {
         id: row.id,
         patientId: row.patientId,
         position: row.position,
+        // Paid when joining (`FR-PAT-26`): offering them a chair seats them.
+        prepaid: row.prepaid,
       })),
       offers: standby.offers.map((offer) => ({
         id: offer.id,

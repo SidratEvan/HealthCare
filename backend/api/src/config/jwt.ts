@@ -27,7 +27,7 @@ import { env } from '../env.js';
 
 /** Which secret a token is signed with, and therefore what it may authorise. */
 export type TokenKind =
-  'access' | 'refresh' | 'guest' | 'consent' | 'bed_request' | 'emergency_case';
+  'access' | 'refresh' | 'guest' | 'consent' | 'bed_request' | 'emergency_case' | 'standby';
 
 const ISSUER = 'healthcare-api';
 
@@ -61,6 +61,10 @@ const SECRETS: Record<TokenKind, Uint8Array> = {
   // And for the family's view of an emergency alert they sent (`S-A-10c`):
   // scoped to one case, useless as anything else.
   emergency_case: encoder.encode(env.GUEST_LINK_SECRET),
+
+  // And for a place on a standby list (`FR-PAT-27`): the link a patient
+  // answers an offer from. One row, useless as a tracking link or a bearer.
+  standby: encoder.encode(env.GUEST_LINK_SECRET),
 };
 
 const AUDIENCES: Record<TokenKind, string> = {
@@ -70,6 +74,7 @@ const AUDIENCES: Record<TokenKind, string> = {
   consent: 'consent-offer',
   bed_request: 'bed-request',
   emergency_case: 'emergency-case',
+  standby: 'standby',
 };
 
 /**
@@ -94,6 +99,8 @@ export interface TokenClaims extends JWTPayload {
   bedRequestId?: string;
   /** Present for an emergency alert's status link: the one case it may see. */
   emergencyCaseId?: string;
+  /** Present for a standby status link: the one place on a list it may act on. */
+  standbyId?: string;
 }
 
 export interface SignOptions {
@@ -126,6 +133,10 @@ function defaultLifetime(kind: TokenKind): string {
       // following one journey to one ER — a case token that outlived the
       // night would be a stranger's alert readable from an old SMS.
       return '24h';
+    case 'standby':
+      // As long as a tracking link: an offer can come at the end of the
+      // chamber, and a seated patient opens their serial from this link.
+      return `${String(env.GUEST_LINK_TTL_DAYS)}d`;
   }
 }
 

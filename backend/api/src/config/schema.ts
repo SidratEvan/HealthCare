@@ -365,6 +365,11 @@ export interface StandbyListTable {
   patient_id: string;
   contact_phone: string;
   position: number;
+  /** 0023 — the phone's guest identity when joined from the app (`FR-PAT-25`). */
+  guest_id: string | null;
+  /** 0023 — the chair they were given (`FR-QUE-30`). */
+  seated_booking_id: string | null;
+  idempotency_key: string | null;
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
   removed_at: Timestamp | null;

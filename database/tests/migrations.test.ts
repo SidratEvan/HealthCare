@@ -71,7 +71,9 @@ describe('migration files (DATABASE.md §7)', () => {
     //
     // 0021 and 0022 arrived with the check-in (`FR-REC-18`), after step 19:
     // two files because a migration runs in one transaction and PostgreSQL
-    // will not let a transaction use an enum value it added itself.
+    // will not let a transaction use an enum value it added itself. 0023 is
+    // the standby list's self-serve half: a payment can now be for a standby
+    // row until the person is seated.
     expect(migrations.map((m) => m.version)).toEqual([
       '0001',
       '0002',
@@ -93,6 +95,7 @@ describe('migration files (DATABASE.md §7)', () => {
       '0020',
       '0021',
       '0022',
+      '0023',
     ]);
   });
 

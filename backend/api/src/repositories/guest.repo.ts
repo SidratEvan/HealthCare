@@ -130,6 +130,22 @@ export async function insertTrackingLink(input: {
 }
 
 /**
+ * Whether a booking already has a live tracking link.
+ *
+ * Minting one replaces the last (`ON CONFLICT … DO UPDATE`), which would kill
+ * the link already in somebody's SMS. A caller that only wants to issue a link
+ * when there is none asks this first.
+ */
+export async function hasTrackingLink(bookingId: string): Promise<boolean> {
+  const result = await sql<{ present: boolean }>`
+    SELECT EXISTS (
+      SELECT 1 FROM guest_links WHERE booking_id = ${bookingId} AND revoked_at IS NULL
+    ) AS present
+  `.execute(db);
+  return result.rows[0]?.present ?? false;
+}
+
+/**
  * Resolves a tracking token to the booking it opens.
  *
  * Checks expiry and revocation here rather than leaving it to the caller: a

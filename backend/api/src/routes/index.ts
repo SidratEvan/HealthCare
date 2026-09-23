@@ -27,6 +27,7 @@ import { labRoutes } from './lab.routes.js';
 import { paymentRoutes } from './payment.routes.js';
 import { queueRoutes } from './queue.routes.js';
 import { referralRoutes } from './referral.routes.js';
+import { standbyRoutes } from './standby.routes.js';
 import { syncRoutes } from './sync.routes.js';
 import { webhookRoutes } from './webhooks.routes.js';
 
@@ -55,6 +56,10 @@ export function buildApiRouter(): Router {
   router.use(demoRoutes);
   router.use(bookingRoutes);
   router.use(queueRoutes);
+  // The patient's half of the standby list (`FR-PAT-25`…`27`): joining is
+  // public like a guest booking, and the status token in the path answers
+  // everything after it.
+  router.use(standbyRoutes);
   // Records: the one router whose permission lives in the service rather than
   // the route, because `FR-DOC-10` is a relationship and not a role.
   router.use(clinicalRoutes);

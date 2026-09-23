@@ -433,8 +433,81 @@ export async function queueSlotOffer(
     readonly patientId: string;
     readonly phone: string;
     readonly expiresAt: string;
+    /**
+     * The standby status link, for somebody who joined from the app
+     * (`FR-PAT-27`): they answer on their phone. Null for somebody reception
+     * put on the list, who is told to ring the counter.
+     */
+    readonly link?: string | null;
   },
   at: Date = new Date(),
+): Promise<QueuedBatch> {
+  const link = input.link ?? null;
+  return await queueStandbyMessage(
+    trx,
+    {
+      sessionId: input.sessionId,
+      patientId: input.patientId,
+      phone: input.phone,
+      templateKey: link === null ? 'queue.slot_offered' : 'queue.slot_offered_link',
+      params: (numerals) => ({
+        time: formatClock(input.expiresAt, numerals),
+        ...(link === null ? {} : { link }),
+      }),
+    },
+    at,
+  );
+}
+
+/**
+ * Tells a prepaid standby patient the chair is theirs (`FR-PAT-26`).
+ *
+ * Nobody asked them: they paid to be seated on sight, so the message says it
+ * is done, names the serial, and links to where they can watch it.
+ */
+export async function queueSlotSeated(
+  trx: Tx,
+  input: {
+    readonly sessionId: string;
+    readonly patientId: string;
+    readonly phone: string;
+    readonly serial: number;
+    readonly link: string;
+  },
+  at: Date = new Date(),
+): Promise<QueuedBatch> {
+  return await queueStandbyMessage(
+    trx,
+    {
+      sessionId: input.sessionId,
+      patientId: input.patientId,
+      phone: input.phone,
+      templateKey: 'queue.slot_seated',
+      params: (numerals) => ({
+        serial: formatSerial(input.serial, numerals),
+        link: input.link,
+      }),
+    },
+    at,
+  );
+}
+
+/**
+ * The outbox rows for a message to somebody on a standby list.
+ *
+ * Its own path rather than part of `planFor`: a standby patient may have no
+ * booking yet, and every recipient that map produces is resolved through one.
+ */
+async function queueStandbyMessage(
+  trx: Tx,
+  input: {
+    readonly sessionId: string;
+    readonly patientId: string;
+    readonly phone: string;
+    readonly templateKey: TemplateKey;
+    readonly params: (numerals: NumeralStyle) => Record<string, string>;
+  },
+  at: Date,
 ): Promise<QueuedBatch> {
   const [chamber, templates] = await Promise.all([
     notificationRepo.chamberFor(input.sessionId),
@@ -458,7 +531,7 @@ export async function queueSlotOffer(
   const params: Record<string, string> = {
     doctor: chamber.doctorNameBn,
     hospital: chamber.hospitalNameBn,
-    time: formatClock(input.expiresAt, numerals),
+    ...input.params(numerals),
   };
 
   const budgetLeft =
@@ -466,7 +539,7 @@ export async function queueSlotOffer(
       ? Number.POSITIVE_INFINITY
       : chamber.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(chamber.hospitalId));
 
-  const templateKey: TemplateKey = 'queue.slot_offered';
+  const templateKey = input.templateKey;
   const tokens = await notificationRepo.deviceTokensFor(recipient);
   const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
 

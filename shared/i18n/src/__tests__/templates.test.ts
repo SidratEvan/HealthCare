@@ -92,7 +92,7 @@ describe('placeholders', () => {
       // in the offer would promise a place that another standby patient may
       // take first. What they act on is the doctor and the deadline, and the
       // message names both.
-      if (key === 'queue.slot_offered') continue;
+      if (key === 'queue.slot_offered' || key === 'queue.slot_offered_link') continue;
       // A bed request has no serial; its messages name the hospital and the
       // bed instead, which the next test holds them to. Nor does an
       // emergency: those name the hospital and link to the case. Nor does a

@@ -44,6 +44,8 @@ export const TEMPLATE_KEYS = [
   'queue.no_show',
   'queue.cancelled',
   'queue.slot_offered',
+  'queue.slot_offered_link',
+  'queue.slot_seated',
   'session.ended',
   'bed.request_held',
   'bed.request_declined',
@@ -223,6 +225,44 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
     version: 1,
     bn: '{doctor}-এর চেম্বারে সিরিয়াল খালি — {time} পর্যন্ত',
     en: 'A serial has opened with {doctor} — until {time}',
+  },
+
+  // --- The same offer, to somebody who joined from the app (FR-PAT-27) ------
+  //
+  // They answer on their phone, so the message links to where they do it
+  // rather than to a counter. The link goes last, as every link here does.
+  {
+    key: 'queue.slot_offered_link',
+    channel: 'sms',
+    version: 1,
+    bn: '{doctor}-এর চেম্বারে সিরিয়াল খালি। {time}-এর মধ্যে জানান: {link}',
+    en: 'A serial has opened with {doctor}. Answer by {time}: {link}',
+  },
+  {
+    key: 'queue.slot_offered_link',
+    channel: 'push',
+    version: 1,
+    bn: '{doctor}-এর চেম্বারে সিরিয়াল খালি — {time}-এর মধ্যে জানান',
+    en: 'A serial has opened with {doctor} — answer by {time}',
+  },
+
+  // --- A prepaid standby patient, seated (FR-PAT-26) ------------------------
+  //
+  // Nobody asked them: they paid to be seated on sight. So it says it is
+  // done, and which serial, and where to watch it.
+  {
+    key: 'queue.slot_seated',
+    channel: 'sms',
+    version: 1,
+    bn: '{doctor}-এর চেম্বারে সিরিয়াল {serial} আপনার। দেখুন: {link}',
+    en: 'Serial {serial} with {doctor} is yours. Follow it: {link}',
+  },
+  {
+    key: 'queue.slot_seated',
+    channel: 'push',
+    version: 1,
+    bn: '{doctor}-এর চেম্বারে সিরিয়াল {serial} আপনার',
+    en: 'Serial {serial} with {doctor} is yours',
   },
 
   // --- The chamber closes (FR-REC-06) ---------------------------------------
