@@ -233,6 +233,27 @@ a phone, the patient's রেকর্ড tab now has a রিপোর্ট ta
 pharmacy: ফার্মেসি খুলুন, mark something নেই, then ওষুধ খুঁজুন on the patient
 app and search that medicine.
 
+**Supabase does not have this yet.** Migrations `0011_ancillary.sql` and
+`0018_lab_idempotency.sql` have been applied to the local container and to
+both test databases, and nowhere else. Until they are applied to Supabase, the
+deployed console's lab and pharmacy screens will fail on their first read, and
+the deployed patient app's medicine search will too.
+
+Both migrations are additive — new tables and new columns, nothing dropped —
+so applying them is safe. Getting the *demo data* there is the destructive
+half: the lab queue, the fifty pharmacy items and the delivered reports come
+from a reseed.
+
+```bash
+# Additive, safe, no data lost:
+ALLOW_REMOTE_DB=1 pnpm db:migrate
+# Then, and only with the owner saying so, because it truncates:
+ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 pnpm db:reset
+```
+
+**A remote reset is the owner's to authorise, every time.** Nothing in step 17
+was run against Supabase.
+
 #### The CORS bug the E2E found, which nothing else would have
 
 `PUT` was missing from the API's `Access-Control-Allow-Methods`. The pharmacy
