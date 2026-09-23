@@ -105,6 +105,73 @@ function mockUrlFor(key: string): string {
 }
 
 /**
+ * The key prefix the seed writes for reports it did not really upload.
+ *
+ * `seed_04_history` writes delivered reports so the wallet's Reports tab and
+ * the turnaround figures have something in them (`FR-DEM-03`, `FR-LAB-04`).
+ * It runs in its own process and cannot put bytes into this one's `Map`, so
+ * the rows would point at nothing and a patient tapping a report would get a
+ * 404 — the demo promising a document it cannot open.
+ *
+ * So the mock store synthesises one on a miss under this prefix, labelled as
+ * demonstration data (`FR-DEM-07`). It is not a real result and does not
+ * pretend to be: it says so, in Bangla, on its one page. Nothing outside the
+ * mock provider has this behaviour, and a real bucket never sees the prefix.
+ */
+const DEMO_REPORT_PREFIX = 'reports/demo/';
+
+/**
+ * A one-page PDF saying what it is.
+ *
+ * Written by hand rather than with a PDF library, because adding a dependency
+ * to render eight words is not a trade worth making (CLAUDE.md §7) — and this
+ * is the whole of it: a page, a font, two lines of text.
+ */
+export function demoReportPdf(): Buffer {
+  const heading = 'DEMONSTRATION DATA - NOT A REAL TEST RESULT';
+  const body = 'This platform is running on seeded demo data (FR-DEM-07).';
+
+  // A content stream: begin text, pick a font and a point, draw a line, move
+  // down, draw the second, end text.
+  const content = [
+    'BT',
+    '/F1 14 Tf 56 760 Td',
+    `(${heading}) Tj`,
+    '/F1 10 Tf 0 -28 Td',
+    `(${body}) Tj`,
+    'ET',
+  ].join('\n');
+
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ' +
+      '/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${String(content.length)} >>\nstream\n${content}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+
+  // Byte offsets, so the xref table is accurate. Every character written here
+  // is ASCII, so a string index is a byte index.
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(pdf.length);
+    pdf += `${String(index + 1)} 0 obj\n${object}\nendobj\n`;
+  }
+
+  const startxref = pdf.length;
+  pdf += `xref\n0 ${String(objects.length + 1)}\n0000000000 65535 f \n`;
+  for (const offset of offsets) {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${String(objects.length + 1)} /Root 1 0 R >>\n`;
+  pdf += `startxref\n${String(startxref)}\n%%EOF\n`;
+
+  return Buffer.from(pdf, 'latin1');
+}
+
+/**
  * Keeps files in this process.
  *
  * A `Map`, not a temporary directory: the demo database is reset routinely
@@ -135,7 +202,15 @@ export class MockStorageAdapter implements StorageAdapter {
   }
 
   async get(key: string): Promise<{ contentType: string; bytes: Buffer } | null> {
-    return await Promise.resolve(this.files.get(key) ?? null);
+    const held = this.files.get(key);
+    if (held !== undefined) return await Promise.resolve(held);
+
+    // A report the seed wrote in another process. See `DEMO_REPORT_PREFIX`.
+    if (key.startsWith(DEMO_REPORT_PREFIX)) {
+      return await Promise.resolve({ contentType: 'application/pdf', bytes: demoReportPdf() });
+    }
+
+    return await Promise.resolve(null);
   }
 
   /** How many objects are held. For tests. */

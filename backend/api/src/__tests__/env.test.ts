@@ -36,6 +36,7 @@ const PROD: Readonly<Record<string, string>> = {
   VAPID_PUBLIC_KEY: 'vapid-public',
   VAPID_PRIVATE_KEY: 'vapid-private',
   PAYMENT_PROVIDER: 'live',
+  STORAGE_PROVIDER: 'supabase',
   SENTRY_DSN: 'https://sentry.example.com/1',
   DEMO_MODE: 'false',
 };
@@ -142,6 +143,12 @@ describe('production', () => {
 
   it('refuses the mock payment adapter, which approves every payment', () => {
     expect(problemsOf({ ...PROD, PAYMENT_PROVIDER: 'mock' })).toContain('PAYMENT_PROVIDER');
+  });
+
+  it('refuses the mock file store, which loses every report on restart', () => {
+    // `FR-LAB-03`: a report that reached a patient's wallet has to still be
+    // there tomorrow. The mock keeps bytes in process memory.
+    expect(problemsOf({ ...PROD, STORAGE_PROVIDER: 'mock' })).toContain('STORAGE_PROVIDER');
   });
 
   it('refuses a shared access and refresh secret', () => {
