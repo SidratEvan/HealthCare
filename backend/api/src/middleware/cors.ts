@@ -32,7 +32,19 @@ export function allowedOrigins(): readonly string[] {
 /** Headers a browser app actually sends. Nothing wider. */
 const ALLOWED_HEADERS = ['authorization', 'content-type', 'idempotency-key'] as const;
 
-const ALLOWED_METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] as const;
+/**
+ * The verbs this API's routers actually use.
+ *
+ * `PUT` joined the list with step 17: `PUT /hospitals/:id/pharmacy-stock`
+ * replaces a pharmacy's flags wholesale (`FR-PHR-02`), and a PUT missing from
+ * here fails in a way that is easy to miss — the preflight answers 200, and
+ * the browser then blocks the real request on its own. Nothing server-side
+ * logs a thing, because the request never arrives.
+ *
+ * `PUT /hospitals/:id/capabilities` (step 15) had the same shape and the same
+ * fault; nothing had exercised it from a browser either.
+ */
+const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 
 export function cors(req: Request, res: Response, next: NextFunction): void {
   const origin = req.get('origin');

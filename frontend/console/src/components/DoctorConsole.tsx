@@ -26,8 +26,14 @@
  * which is what the wallet reads and what step 13 is built on.
  *
  * `BTN-B05-SCAN` is here as a pasted code rather than a camera — see
- * `ConsentScan`. `BTN-B05-TEST` is step 17 and is absent rather than disabled:
- * a control that cannot work should not be on a screen a doctor is learning.
+ * `ConsentScan`.
+ *
+ * `BTN-B05-TEST` arrived with step 17. The chips come from the hospital's own
+ * catalogue (`GET /lab/catalogue`), and `APP_FLOW.md` B2 says when they are
+ * sent: "pushed to lab queue **on save**". So ticking a chip writes nothing —
+ * the orders go with the record, in the order that matters, because
+ * `POST /test-orders` reads the patient and the hospital from the visit and
+ * there is no visit until the record is filed.
  *
  * ## The failure that is spelled out in the document
  *
@@ -41,15 +47,31 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { nowServing, queueCounts, waitingQueue } from '@platform/domain';
 import type { QueueEntry } from '@platform/domain';
-import { formatClock, formatNumber, formatTaka, t, type Locale } from '@platform/i18n';
-import { Button, Card, Chip, FreshnessLine, Input, ToastProvider, useToast } from '@platform/ui';
+import { format, formatClock, formatNumber, formatTaka, t, type Locale } from '@platform/i18n';
+import {
+  Button,
+  Card,
+  Chip,
+  FilterChip,
+  FreshnessLine,
+  Input,
+  ToastProvider,
+  useToast,
+} from '@platform/ui';
 
 import { ConsentScan } from '@/components/ConsentScan';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { PatientPanel } from '@/components/PatientPanel';
 import { useSessionQueue } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
-import { fetchSessionFee, saveVisit, type VisitDraft } from '@/lib/visits';
+import {
+  fetchSessionFee,
+  fetchTestCatalogue,
+  orderTests,
+  saveVisit,
+  type CatalogueTest,
+  type VisitDraft,
+} from '@/lib/visits';
 
 import type { ReactNode } from 'react';
 
@@ -134,6 +156,12 @@ function DoctorBody(): ReactNode {
   const [draft, setDraft] = useState<VisitDraft>(emptyDraft);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [catalogue, setCatalogue] = useState<readonly CatalogueTest[]>([]);
+  /**
+   * One key per consultation, so a retry after a half-failed save replays the
+   * same order rather than making a second set (`orderTests`).
+   */
+  const [testKey, setTestKey] = useState(() => crypto.randomUUID());
 
   /**
    * A new patient in the chamber is a new note.
@@ -146,7 +174,29 @@ function DoctorBody(): ReactNode {
   useEffect(() => {
     setDraft(emptyDraft());
     setFailed(false);
+    setTestKey(crypto.randomUUID());
   }, [servingBookingId]);
+
+  // The catalogue is the hospital's and does not change during a session, so
+  // it is fetched once. A failure leaves it empty and the chips absent, which
+  // is better than chips that order a test nobody can price.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const tests = await fetchTestCatalogue({
+          apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
+          token: readToken(),
+        });
+        if (!cancelled) setCatalogue(tests);
+      } catch {
+        if (!cancelled) setCatalogue([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const canSign = useMemo(
     () =>
@@ -171,8 +221,31 @@ function DoctorBody(): ReactNode {
           sign,
         });
 
+        // `APP_FLOW.md` B2: the ticked chips go to the lab queue on save, and
+        // only once the visit exists — the order is attached to it.
+        //
+        // A failure here is *not* B2's failure: the record saved, and the
+        // consultation is not un-done because a test order did not send. The
+        // doctor is told which half failed and the chips stay ticked, so
+        // saving again replays the same key and orders nothing twice.
+        let testsSent = true;
+        if (draft.testCodes.length > 0) {
+          try {
+            await orderTests({
+              apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
+              token: readToken(),
+              bookingId: servingBookingId,
+              testCodes: draft.testCodes,
+              idempotencyKey: testKey,
+            });
+          } catch {
+            testsSent = false;
+            show({ title: t('testsNotSent', LOCALE), tone: 'caution' });
+          }
+        }
+
         if (!sign) {
-          show({ title: t('draftSaved', LOCALE), tone: 'positive' });
+          if (testsSent) show({ title: t('draftSaved', LOCALE), tone: 'positive' });
           return;
         }
 
@@ -196,7 +269,7 @@ function DoctorBody(): ReactNode {
         setBusy(false);
       }
     },
-    [servingBookingId, draft, show],
+    [servingBookingId, draft, testKey, show],
   );
 
   if (sessionId === null) {
@@ -243,6 +316,7 @@ function DoctorBody(): ReactNode {
         <div className="flex min-w-0 flex-col gap-5">
           <VisitNote
             disabled={serving === null || busy}
+            catalogue={catalogue}
             draft={draft}
             onChange={setDraft}
             canSign={canSign}
@@ -398,6 +472,7 @@ function Stat({
  */
 function VisitNote({
   disabled,
+  catalogue,
   draft,
   onChange,
   canSign,
@@ -406,6 +481,8 @@ function VisitNote({
   onSign,
 }: {
   readonly disabled: boolean;
+  /** The hospital's test catalogue; empty means no chips (`BTN-B05-TEST`). */
+  readonly catalogue: readonly CatalogueTest[];
   readonly draft: VisitDraft;
   readonly onChange: (draft: VisitDraft) => void;
   readonly canSign: boolean;
@@ -459,6 +536,44 @@ function VisitNote({
           />
           <p className="text-caption text-ink-muted">{t('adviceHint', LOCALE)}</p>
         </div>
+
+        {/* `BTN-B05-TEST` (`FR-DOC-06`). Absent when the hospital has no
+            catalogue, rather than an empty box. */}
+        {catalogue.length > 0 ? (
+          <fieldset className="flex flex-col gap-2" data-testid="visit-tests">
+            <legend className="font-ui text-body-sm font-semibold text-ink">
+              {t('orderTests', LOCALE)}
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {catalogue.map((test) => {
+                const ticked = draft.testCodes.includes(test.code);
+                return (
+                  <FilterChip
+                    key={test.code}
+                    selected={ticked}
+                    onToggle={() => {
+                      onChange({
+                        ...draft,
+                        testCodes: ticked
+                          ? draft.testCodes.filter((code) => code !== test.code)
+                          : [...draft.testCodes, test.code],
+                      });
+                    }}
+                  >
+                    {test.nameBn}
+                  </FilterChip>
+                );
+              })}
+            </div>
+            <p className="text-caption text-ink-muted">
+              {draft.testCodes.length === 0
+                ? t('orderTestsHint', LOCALE)
+                : format('orderTestsCount', LOCALE, {
+                    count: formatNumber(draft.testCodes.length, NUMERALS),
+                  })}
+            </p>
+          </fieldset>
+        ) : null}
 
         <fieldset className="flex flex-col gap-2">
           <legend className="font-ui text-body-sm font-semibold text-ink">
@@ -582,7 +697,7 @@ function UpNext({ waiting }: { readonly waiting: readonly QueueEntry[] }): React
 }
 
 function emptyDraft(): VisitDraft {
-  return { diagnosisText: '', adviceTextBn: '', followUpDays: null };
+  return { diagnosisText: '', adviceTextBn: '', followUpDays: null, testCodes: [] };
 }
 
 /**

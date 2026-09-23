@@ -179,6 +179,18 @@ export interface BookingView {
   /** The age of the figures, for `<FreshnessLine>` (`FR-PAT-35`). */
   readonly freshAt: string;
   readonly serverTs: string;
+  /**
+   * What was paid, if anything (`FR-PAY-03`).
+   *
+   * Null for a booking nobody has taken money for — pay-at-hospital before
+   * the visit — in which case a cancellation returns nothing and says so.
+   */
+  readonly payment: {
+    readonly amountPoisha: number;
+    readonly platformFeePoisha: number;
+    readonly refundedPoisha: number;
+    readonly paidAt: string | null;
+  } | null;
 }
 
 /** One consultation, as `S-A-12`'s timeline shows it. */
@@ -207,6 +219,63 @@ export interface TrackingLinkView extends BookingView {
    * period". Null before the visit, which is most of the link's life.
    */
   readonly record: VisitRecord | null;
+  /**
+   * The tests ordered during this booking's consultation (`TAB-A12-REP`).
+   *
+   * Scoped to the booking, like `record`: a link is what one visit produced,
+   * never everything the person has ever been tested for.
+   */
+  readonly tests: readonly TestOrder[];
+}
+
+/** One ordered test, and its report once the lab has delivered one. */
+export interface TestOrder {
+  readonly id: string;
+  readonly testCode: string;
+  readonly testName: string;
+  readonly state:
+    'ordered' | 'sample_collected' | 'processing' | 'report_ready' | 'delivered' | 'cancelled';
+  readonly pricePoisha: number;
+  readonly orderedAt: string;
+  readonly readyAt: string | null;
+  readonly deliveredAt: string | null;
+  readonly report: {
+    readonly id: string;
+    readonly fileType: string | null;
+    readonly uploadedAt: string;
+    readonly deliveredToWalletAt: string | null;
+  } | null;
+}
+
+/** One pharmacy's answer about one medicine (`FR-PHR-02`). */
+export interface PharmacyAnswer {
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  /** Kilometres, when the app knew where the person was. */
+  readonly distanceKm: number | null;
+  /** Never folded together: unknown is its own answer (`PRD.md` §3.2). */
+  readonly answer: 'in_stock' | 'out_of_stock' | 'unknown';
+  readonly freshness: {
+    readonly asOf: string | null;
+    readonly ageMinutes: number | null;
+    readonly stale: boolean;
+  };
+}
+
+/** One medicine, and everywhere a patient could look for it. */
+export interface MedicineAvailability {
+  readonly medicineId: string;
+  readonly genericName: string;
+  readonly brandName: string | null;
+  readonly form: string | null;
+  readonly pharmacies: readonly PharmacyAnswer[];
+  /** Counts, so the screen never reaches a verdict (`GR-05`). */
+  readonly summary: {
+    readonly inStock: number;
+    readonly outOfStock: number;
+    readonly unknown: number;
+  };
 }
 
 /** `BTN-A12-QR` — what the doctor types in, and how long it lasts. */

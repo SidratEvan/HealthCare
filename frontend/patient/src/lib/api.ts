@@ -22,6 +22,7 @@ import type {
   InboundResult,
   SessionCard,
   StampedList,
+  MedicineAvailability,
   TrackingLinkView,
 } from '@/lib/types';
 
@@ -139,6 +140,35 @@ export async function book(input: {
  */
 export async function openTrackingLink(token: string): Promise<TrackingLinkView> {
   return await api.get<TrackingLinkView>(`/guest/link/${encodeURIComponent(token)}`);
+}
+
+/**
+ * `GET /medicines?q=` — who near here has this medicine (`FR-PHR-02`).
+ *
+ * Public: a stock flag names no patient and no staff member, so this needs no
+ * token, like hospital discovery beside it. No position is sent — `S-A-01`
+ * location permission is not built, and the API ranks by freshness instead,
+ * which is the honest fallback rather than a guessed coordinate.
+ */
+export async function searchMedicines(q: string): Promise<readonly MedicineAvailability[]> {
+  const result = await api.get<{ medicines: readonly MedicineAvailability[] }>(
+    `/medicines?q=${encodeURIComponent(q)}`,
+  );
+  return result.medicines;
+}
+
+/**
+ * A fresh signed URL for one of that booking's reports (`TAB-A12-REP`).
+ *
+ * Fetched on the tap rather than carried in the link's payload: a signed URL
+ * expires, and one minted when the screen loaded would be dead by the time
+ * somebody scrolled to it.
+ */
+export async function openReportFile(token: string, reportId: string): Promise<string> {
+  const result = await api.get<{ url: string }>(
+    `/guest/link/${encodeURIComponent(token)}/reports/${encodeURIComponent(reportId)}`,
+  );
+  return result.url;
 }
 
 /**

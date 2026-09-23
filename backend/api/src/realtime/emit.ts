@@ -28,6 +28,7 @@ import type {
   PublicCapacity,
   QueueState,
   ReferralView,
+  TestOrderView,
 } from '@platform/domain';
 
 import { logger } from '../config/logger.js';
@@ -373,4 +374,49 @@ export function referralUpdated(
       data,
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// The lab (`hospital:<id>:lab`, BACKEND.md §6)
+// ---------------------------------------------------------------------------
+
+/**
+ * `test.ordered` — a doctor has ticked test chips and signed (`FR-DOC-06`,
+ * `FR-LAB-01`).
+ *
+ * Into the hospital's lab room, so an order appears on a bench's screen
+ * without anybody refreshing. The order carries the test and its stamps and
+ * not the patient: the room is every lab console at the hospital, and the
+ * name a bench needs to call somebody is fetched by the one console that
+ * needs it, through an audited read (`DB-P7`).
+ */
+export function testOrdered(
+  hospitalId: string,
+  data: { readonly orders: readonly TestOrderView[] },
+  serverTs: string,
+): void {
+  emitter().emit(ROOMS.lab(hospitalId), 'test.ordered', {
+    type: 'test.ordered',
+    serverTs,
+    data,
+  });
+}
+
+/**
+ * `test.updated` — a state button, an uploaded report, or a delivery
+ * (`FR-LAB-02`, `FR-LAB-03`).
+ *
+ * One order, after commit. Two benches working the same queue see each
+ * other's taps, which is what stops a sample being collected twice.
+ */
+export function testUpdated(
+  hospitalId: string,
+  data: { readonly order: TestOrderView },
+  serverTs: string,
+): void {
+  emitter().emit(ROOMS.lab(hospitalId), 'test.updated', {
+    type: 'test.updated',
+    serverTs,
+    data,
+  });
 }

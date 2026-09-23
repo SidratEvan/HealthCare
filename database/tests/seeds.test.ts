@@ -992,14 +992,16 @@ describe('FR-EMG-07..09 — the referrals the ERs open on', () => {
 
 describe('the runner reports what it could not do', () => {
   it('declares which migration each unbuildable module is waiting for', () => {
-    // FR-DEM-05 is not covered in this version. The module exists and says
-    // so; the runner checks its tables before calling it and skips with the
-    // migration named, rather than producing an empty screen silently.
-    // Asserted on the declarations and the live schema, since the seed run
-    // itself happened in global setup. `seed_05_beds` left this list at step
-    // 14, when migration 0008 gave it tables to write.
+    // **Nothing is waiting any more.** `seed_05_beds` left this list at step
+    // 14 when 0008 gave it tables, and `seed_06_ancillary` left it at step 17
+    // when 0011 did — so every declared module now runs and every `FR-DEM-*`
+    // requirement is covered by rows rather than by a skip notice.
+    //
+    // The list is asserted rather than the assertion deleted: the runner's
+    // skip-with-a-reason path is how a future module says what it needs, and
+    // the shape below is what it has to declare to use it.
     const pending = SEED_MODULES.filter((module) => module.pendingMigration !== undefined);
-    expect(pending.map((module) => module.name)).toEqual(['seed_06_ancillary']);
+    expect(pending.map((module) => module.name)).toEqual([]);
 
     for (const module of pending) {
       expect(module.pendingMigration).toMatch(/^00\d\d_/);

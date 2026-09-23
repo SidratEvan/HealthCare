@@ -125,6 +125,7 @@ export const CONSOLE = {
   countNoShow: { bn: 'অনুপস্থিত', en: 'No-show' },
   currentRate: { bn: 'গড় সময়', en: 'Average time' },
   minutesShort: { bn: 'মিনিট', en: 'min' },
+  hoursShort: { bn: 'ঘণ্টা', en: 'h' },
 
   // --- Offline block (B1.5, FR-OFF-01) -------------------------------------
   online: { bn: 'সংযুক্ত', en: 'Online' },
@@ -714,6 +715,134 @@ export const CONSOLE = {
   erReferralOut: { bn: 'পাঠানো → {hospital}', en: 'Sent → {hospital}' },
   erReferralIn: { bn: '{hospital} → এখানে', en: '{hospital} → here' },
 
+  // --- The lab (S-B-08, APP_FLOW.md B5, FR-LAB-01..04) ---------------------
+  roleLab: { bn: 'ল্যাব', en: 'Lab' },
+  labSection: { bn: 'ল্যাব', en: 'Laboratory' },
+  openLab: { bn: 'ল্যাব খুলুন', en: 'Open the lab' },
+  labTitle: { bn: 'ল্যাব — পরীক্ষার তালিকা', en: 'Lab — test queue' },
+
+  // The queue (FR-LAB-01). Oldest first, because a clock is running on each.
+  labQueueOpen: { bn: 'চলমান', en: 'In progress' },
+  labQueueReported: { bn: 'রিপোর্ট হয়েছে', en: 'Reported' },
+  labQueueAll: { bn: 'সব', en: 'All' },
+  labOpenCount: { bn: '{count}টি বাকি', en: '{count} waiting' },
+  labEmpty: { bn: 'এখন কোনো পরীক্ষা বাকি নেই', en: 'Nothing waiting right now' },
+  labEmptyHint: {
+    bn: 'ডাক্তার পরীক্ষা লিখলে এখানে নিজে থেকেই আসবে।',
+    en: 'When a doctor orders a test it appears here on its own.',
+  },
+  labLoadFailed: { bn: 'পরীক্ষার তালিকা আনা যায়নি', en: 'Could not load the test queue' },
+
+  // A row. The patient's name is fetched separately and only when asked.
+  labOrderedAt: { bn: '{time}-এ লেখা', en: 'Ordered at {time}' },
+  labWaitingFor: { bn: '{duration} ধরে', en: 'For {duration}' },
+  labShowPatient: { bn: 'রোগীর নাম দেখুন', en: 'Show the patient' },
+  labPatientHint: {
+    bn: 'নাম দেখা হলে তা রেকর্ড হয়।',
+    en: 'Viewing the name is recorded.',
+  },
+
+  // State buttons (FR-LAB-02), in the words APP_FLOW.md B5 gives them.
+  labCollect: { bn: 'নমুনা নেওয়া হয়েছে', en: 'Sample collected' },
+  labProcess: { bn: 'প্রসেসিং', en: 'Processing' },
+  labReady: { bn: 'রিপোর্ট প্রস্তুত', en: 'Report ready' },
+  labCancel: { bn: 'বাতিল করুন', en: 'Cancel' },
+  labStateOrdered: { bn: 'লেখা হয়েছে', en: 'Ordered' },
+  labStateSampleCollected: { bn: 'নমুনা নেওয়া হয়েছে', en: 'Sample collected' },
+  labStateProcessing: { bn: 'প্রসেসিং', en: 'Processing' },
+  labStateReportReady: { bn: 'রিপোর্ট প্রস্তুত', en: 'Report ready' },
+  labStateDelivered: { bn: 'রোগী পেয়েছেন', en: 'Delivered' },
+  labStateCancelled: { bn: 'বাতিল', en: 'Cancelled' },
+
+  // Upload (FR-LAB-03). The delivery is the point, so the button says it.
+  labUpload: { bn: 'রিপোর্ট দিন', en: 'Upload the report' },
+  labUploadHint: {
+    bn: 'PDF বা ছবি। দেওয়ামাত্র রোগীর অ্যাপে ও ডাক্তারের কাছে পৌঁছে যাবে।',
+    en: 'PDF or image. It reaches the patient’s app and the doctor at once.',
+  },
+  labUploading: { bn: 'পাঠানো হচ্ছে…', en: 'Sending…' },
+  actionSending: { bn: 'আগেরটি পাঠানো হচ্ছে', en: 'Sending the last one' },
+
+  // BTN-B05-TEST on the doctor console (FR-DOC-06).
+  orderTests: { bn: 'পরীক্ষা দিন', en: 'Order tests' },
+  orderTestsHint: {
+    bn: 'বেছে নিলে রেকর্ড দেওয়ার সময় ল্যাবে চলে যাবে।',
+    en: 'What you tick goes to the lab when you file the record.',
+  },
+  orderTestsCount: { bn: '{count}টি পরীক্ষা বেছে নেওয়া হয়েছে', en: '{count} tests ticked' },
+  testsNotSent: {
+    bn: 'রেকর্ড জমা হয়েছে, কিন্তু পরীক্ষাগুলো ল্যাবে যায়নি। আবার সেভ করুন।',
+    en: 'The record saved, but the tests did not reach the lab. Save again.',
+  },
+  labUploaded: {
+    bn: 'রোগী ও ডাক্তার দুজনেই পেয়েছেন',
+    en: 'Both the patient and the doctor have it',
+  },
+  labUploadFailed: {
+    bn: 'রিপোর্ট জমা হয়নি। কিছুই পাঠানো হয়নি — আবার চেষ্টা করুন।',
+    en: 'The report was not stored. Nothing was sent — try again.',
+  },
+  labFileTooBig: { bn: 'ফাইলটি ১০ এমবি-র বেশি', en: 'That file is larger than 10 MB' },
+  labFileWrongType: { bn: 'শুধু PDF বা ছবি দেওয়া যাবে', en: 'Only a PDF or an image can be sent' },
+  labDeliveredTo: { bn: 'পৌঁছেছে: রোগী ও ডাক্তার', en: 'Delivered to: patient and doctor' },
+  labDeliveredToPatient: { bn: 'পৌঁছেছে: রোগী', en: 'Delivered to: patient' },
+
+  // Turnaround (FR-LAB-04), measured and never claimed.
+  labTurnaroundTitle: { bn: 'কত সময় লাগছে', en: 'Turnaround' },
+  labTurnaroundHint: {
+    bn: 'লেখা থেকে রিপোর্ট পর্যন্ত — যা সত্যি হয়েছে তা থেকে মাপা।',
+    en: 'Ordered to report ready — measured from what actually happened.',
+  },
+  labTurnaroundMedian: { bn: 'সাধারণত {duration}', en: 'Usually {duration}' },
+  labTurnaroundNone: { bn: 'এখনো মাপা যায়নি', en: 'No measurement yet' },
+  labTurnaroundOpen: { bn: '{count}টি চলছে', en: '{count} open' },
+  labTurnaroundSlowest: { bn: 'সবচেয়ে ধীর {duration}', en: 'Slowest {duration}' },
+  labOldestOpen: { bn: 'সবচেয়ে পুরোনো {duration} ধরে', en: 'Oldest waiting {duration}' },
+
+  // --- The pharmacy (S-B-09, APP_FLOW.md B5, FR-PHR-02) --------------------
+  rolePharmacy: { bn: 'ফার্মেসি', en: 'Pharmacy' },
+  pharmacySection: { bn: 'ফার্মেসি', en: 'Pharmacy' },
+  openPharmacy: { bn: 'ফার্মেসি খুলুন', en: 'Open the pharmacy' },
+  pharmacyTitle: { bn: 'ফার্মেসি — ওষুধের মজুদ', en: 'Pharmacy — medicine stock' },
+  pharmacyIntro: {
+    bn: 'কোন ওষুধ আছে তা এখানে জানালে রোগীর অ্যাপে দেখা যাবে।',
+    en: 'What you mark here is what patients searching see.',
+  },
+  pharmacyEmpty: {
+    bn: 'এই ফার্মেসিতে কোনো ওষুধ যোগ করা হয়নি',
+    en: 'No medicines listed for this pharmacy',
+  },
+  pharmacyEmptyHint: {
+    bn: 'ওষুধ যোগ করতে ব্যবস্থাপনার সঙ্গে যোগাযোগ করুন।',
+    en: 'Ask administration to add medicines.',
+  },
+  pharmacyLoadFailed: { bn: 'মজুদের তালিকা আনা যায়নি', en: 'Could not load the stock list' },
+  pharmacyInStock: { bn: 'আছে', en: 'In stock' },
+  pharmacyOutOfStock: { bn: 'নেই', en: 'Out of stock' },
+  // The third answer: what the public is told when nobody has confirmed lately.
+  pharmacyUnknown: { bn: 'জানা নেই', en: 'Not known' },
+  pharmacyShownAs: { bn: 'রোগী দেখছেন: {answer}', en: 'Patients see: {answer}' },
+  pharmacyConfirm: { bn: 'এখনো ঠিক আছে', en: 'Still correct' },
+  pharmacyConfirmAll: { bn: 'পুরো তালিকা ঠিক আছে', en: 'The whole list is correct' },
+  pharmacyConfirmHint: {
+    bn: 'কিছু না বদলেও চাপুন — এতে রোগী জানবে তথ্যটি আজকের।',
+    en: 'Tap even when nothing changed — it tells patients the list is today’s.',
+  },
+  pharmacySaved: { bn: 'মজুদ হালনাগাদ হয়েছে', en: 'Stock updated' },
+  pharmacySaveFailed: { bn: 'হালনাগাদ হয়নি — আবার চেষ্টা করুন', en: 'Not updated — try again' },
+  pharmacyStaleWarning: {
+    bn: 'অনেকক্ষণ যাচাই হয়নি, তাই রোগীকে "জানা নেই" দেখানো হচ্ছে।',
+    en: 'Not confirmed for a while, so patients are shown “not known”.',
+  },
+  pharmacyDispenseAbsent: {
+    bn: 'প্রেসক্রিপশন স্ক্যান এই সংস্করণে নেই।',
+    en: 'Prescription scanning is not in this version.',
+  },
+  pharmacyDispenseAbsentHint: {
+    bn: 'এই সংস্করণে ব্যবস্থাপত্র লেখা হয় না, তাই স্ক্যান করার মতো কিছু নেই।',
+    en: 'Prescriptions are not written in this version, so there is nothing to scan.',
+  },
+
   // --- Demo mode (FR-DEM-07, CLAUDE.md §1.1) -------------------------------
   demoBanner: {
     bn: 'এটি একটি ডেমো। সব তথ্য প্রদর্শনের জন্য তৈরি।',
@@ -882,8 +1011,92 @@ export const PATIENT = {
   // `PRD.md` §3.2: an empty Reports tab would be a claim about the patient's
   // health. This is a claim about the build, which is the true one.
   walletAbsent: {
-    bn: 'টেস্টের রিপোর্ট, ব্যবস্থাপত্র, পুরোনো কাগজ যোগ করা আর পিডিএফ ডাউনলোড — এগুলো এখনো তৈরি হয়নি।',
-    en: 'Test reports, prescriptions, adding old paper records and PDF download are not built yet.',
+    bn: 'ব্যবস্থাপত্র, পুরোনো কাগজ যোগ করা আর পিডিএফ ডাউনলোড — এগুলো এখনো তৈরি হয়নি।',
+    en: 'Prescriptions, adding old paper records and PDF download are not built yet.',
+  },
+
+  // --- TAB-A12-REP: test reports (FR-LAB-03, FR-PAT-61) --------------------
+  reportsTab: { bn: 'রিপোর্ট', en: 'Reports' },
+  timelineTab: { bn: 'টাইমলাইন', en: 'Timeline' },
+  reportsNone: {
+    bn: 'এই ফোনের সিরিয়ালগুলোয় কোনো টেস্ট লেখা হয়নি।',
+    en: 'No tests were ordered on the serials this phone holds.',
+  },
+  reportReady: { bn: 'রিপোর্ট এসেছে', en: 'Report ready' },
+  reportOpen: { bn: 'রিপোর্ট দেখুন', en: 'Open the report' },
+  reportWaiting: { bn: 'রিপোর্টের অপেক্ষায়', en: 'Waiting for the report' },
+  reportOrderedOn: { bn: '{date}-এ লেখা', en: 'Ordered {date}' },
+  reportReadyOn: { bn: '{date}-এ এসেছে', en: 'Ready {date}' },
+  reportStateOrdered: { bn: 'নমুনা দেওয়া বাকি', en: 'Sample not taken yet' },
+  reportStateSampleCollected: { bn: 'নমুনা নেওয়া হয়েছে', en: 'Sample collected' },
+  reportStateProcessing: { bn: 'পরীক্ষা চলছে', en: 'Being tested' },
+  reportStateCancelled: { bn: 'বাতিল হয়েছে', en: 'Cancelled' },
+  reportOpenFailed: {
+    bn: 'রিপোর্টটি খোলা যায়নি। একটু পরে আবার চেষ্টা করুন।',
+    en: 'The report would not open. Try again in a moment.',
+  },
+
+  // --- Medicine availability (FR-PHR-02) -----------------------------------
+  medicinesTitle: { bn: 'ওষুধ খুঁজুন', en: 'Find a medicine' },
+  medicinesIntro: {
+    bn: 'ওষুধের নাম লিখুন — কোন ফার্মেসিতে আছে তা দেখা যাবে।',
+    en: 'Type a medicine name to see which pharmacies have it.',
+  },
+  medicinesSearch: { bn: 'ওষুধের নাম', en: 'Medicine name' },
+  medicinesSearchHint: { bn: 'অন্তত দুটি অক্ষর লিখুন', en: 'Type at least two letters' },
+  medicinesSearching: { bn: 'খোঁজা হচ্ছে…', en: 'Searching…' },
+  medicinesNoMatch: {
+    bn: 'এই নামের কোনো ওষুধ তালিকায় নেই।',
+    en: 'No medicine by that name is listed.',
+  },
+  medicinesFailed: { bn: 'খোঁজা যায়নি। আবার চেষ্টা করুন।', en: 'The search failed. Try again.' },
+  medicinesOffline: {
+    bn: 'ইন্টারনেট সংযোগ নেই। ওষুধ খুঁজতে সংযোগ লাগবে।',
+    en: 'No internet connection. Finding a medicine needs one.',
+  },
+  // The three answers (`lab/stock.ts`). "Not known" is never folded into "no".
+  medicineHere: { bn: 'আছে', en: 'In stock' },
+  medicineNotHere: { bn: 'নেই', en: 'Out of stock' },
+  medicineUnknown: { bn: 'জানা নেই', en: 'Not known' },
+  medicineUnknownHint: {
+    bn: 'এই ফার্মেসি সম্প্রতি জানায়নি — ফোন করে জেনে নিন।',
+    en: 'This pharmacy has not said recently — call and ask.',
+  },
+  // `GR-05`: counts, never a verdict about the whole city.
+  medicineSummary: {
+    bn: '{inStock}টিতে আছে · {outOfStock}টিতে নেই · {unknown}টি জানায়নি',
+    en: '{inStock} have it · {outOfStock} do not · {unknown} have not said',
+  },
+  medicineNoPharmacies: {
+    bn: 'কোনো ফার্মেসি এই ওষুধের খবর দেয়নি।',
+    en: 'No pharmacy has reported on this medicine.',
+  },
+  // `FR-PAY-03`: the refund rule is stated before a cancellation is confirmed.
+  refundFull: {
+    bn: 'বাতিল করলে পুরো {amount} ফেরত পাবেন।',
+    en: 'Cancel now and you get the full {amount} back.',
+  },
+  refundPartial: {
+    bn: 'বাতিল করলে {amount} ফেরত পাবেন ({paid} টাকার মধ্যে)।',
+    en: 'Cancel now and you get {amount} back, out of {paid}.',
+  },
+  refundNone: {
+    bn: 'এই সময়ে বাতিল করলে টাকা ফেরত পাবেন না।',
+    en: 'Cancelling now does not return any money.',
+  },
+  refundNothingPaid: {
+    bn: 'আপনি এখনো টাকা দেননি, তাই ফেরতের কিছু নেই।',
+    en: 'You have not paid yet, so there is nothing to refund.',
+  },
+  // `FR-PAY-07`, said in the patient's own words rather than as a policy.
+  refundGuaranteed: {
+    bn: 'ডাক্তার না এলে পুরো টাকা নিজে থেকেই ফেরত যায় — চাইতে হয় না।',
+    en: 'If the doctor does not come, the full amount is returned on its own.',
+  },
+
+  medicineCallFirst: {
+    bn: 'রওনা দেওয়ার আগে ফোন করে নিশ্চিত হয়ে নিন।',
+    en: 'Call to confirm before setting out.',
   },
 
   // --- Tabs not built in this version --------------------------------------
@@ -1275,6 +1488,7 @@ export const PATIENT = {
   loading: { bn: 'লোড হচ্ছে', en: 'Loading' },
 
   minutesShort: { bn: 'মিনিট', en: 'min' },
+  hoursShort: { bn: 'ঘণ্টা', en: 'h' },
 
   // --- Freshness (FR-OFF-03, GR-05, DoD §5.8) -------------------------------
   // A live figure never appears without saying how old it is, on this surface

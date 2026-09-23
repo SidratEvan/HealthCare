@@ -223,6 +223,61 @@ export {
   type Freshness,
 } from './emergency/freshness.js';
 
+// --- The lab and the pharmacy (step 17) ------------------------------------
+export {
+  applyLocalLabChange,
+  canActOnTestOrder,
+  canDeliverReport,
+  canUploadReport,
+  hasReport,
+  isOpenTestOrder,
+  labOrderAlreadyApplied,
+  sortLabQueue,
+  LAB_ACTIONS,
+  LAB_ACTION_RESULT,
+  OPEN_TEST_STATES,
+  REPORTED_TEST_STATES,
+  type LabAction,
+  type LabGuardCode,
+  type LabGuardResult,
+  type LocalLabChange,
+  type TestOrderView,
+  type TestReportView,
+} from './lab/orders.js';
+
+export {
+  openForSeconds,
+  summariseTurnaround,
+  turnaroundSeconds,
+  type TurnaroundSummary,
+} from './lab/turnaround.js';
+
+// --- Money (step 18) -------------------------------------------------------
+export {
+  readRefundPolicy,
+  refundFor,
+  refundIfCancelledNow,
+  REFUND_REASONS,
+  type RefundDecision,
+  type RefundPolicy,
+  type RefundReason,
+  type RefundablePayment,
+} from './payments/refund.js';
+
+export { settle, type Settlement, type SettlementRow } from './payments/settlement.js';
+
+export {
+  rankStockResults,
+  stockAnswerFor,
+  summariseStockSearch,
+  STOCK_ANSWERS,
+  STOCK_STALE_THRESHOLD_MINUTES,
+  type StockAnswer,
+  type StockAvailabilityView,
+  type StockFlagView,
+  type StockSearchSummary,
+} from './lab/stock.js';
+
 // --- Validation schemas ----------------------------------------------------
 //
 // Shared with the client (BACKEND.md §0): the console builds its offline queue
@@ -235,6 +290,8 @@ export * from './schemas/clinical.schema.js';
 export * from './schemas/bed.schema.js';
 export * from './schemas/emergency.schema.js';
 export * from './schemas/referral.schema.js';
+export * from './schemas/lab.schema.js';
+export * from './schemas/payment.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';

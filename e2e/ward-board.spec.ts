@@ -192,6 +192,14 @@ test.describe('a bed request, from the phone to the bed (FR-PAT-52, FR-BED-07)',
     await sheet.getByRole('button', { name: 'পুরুষ' }).click();
     await sheet.getByTestId('request-send').click();
 
+    // Wait for the navigation itself before asserting on the page it lands
+    // on. Sending routes to `/beds/request?t=…`, and an expect() started
+    // mid-navigation is racing it: `next dev` compiles that route on first
+    // visit, which under a full suite run can take longer than the ten-second
+    // expect timeout even though it is instant on its own. `waitForURL` has
+    // the test's own budget and makes the wait explicit rather than implicit.
+    await app.waitForURL(/\/beds\/request/);
+
     await expect(app.getByTestId('request-status')).toHaveAttribute('data-state', 'requested');
 
     // The ward sees it, and holds one of the fixture's general beds.

@@ -178,7 +178,15 @@ interface DetailQueryRow {
 }
 
 /** The booking behind a live serial screen, with its chamber. */
-export async function findDetail(bookingId: string): Promise<BookingDetail | null> {
+/**
+ * `trx` is optional but matters: a caller that is already inside a
+ * transaction **must** pass it. Running this on the pool instead takes a
+ * second connection while the first is held, and a handful of concurrent
+ * callers then exhaust the pool and wait on each other — which is a deadlock,
+ * not a slow query. `payment.service.createIntent` found this by being tested
+ * with five identical requests in flight.
+ */
+export async function findDetail(bookingId: string, trx?: Tx): Promise<BookingDetail | null> {
   const result = await sql<DetailQueryRow>`
     SELECT b.id, b.session_id, b.serial_number, b.status, b.fee_poisha,
            b.patient_id, p.full_name,
@@ -199,7 +207,7 @@ export async function findDetail(bookingId: string): Promise<BookingDetail | nul
       JOIN departments dep ON dep.id = s.department_id
       LEFT JOIN hospital_settings hs ON hs.hospital_id = h.id
      WHERE b.id = ${bookingId} AND b.deleted_at IS NULL
-  `.execute(db);
+  `.execute(trx ?? db);
 
   const row = result.rows[0];
   if (row === undefined) return null;

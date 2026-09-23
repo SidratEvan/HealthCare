@@ -396,6 +396,77 @@ export async function listForSession(sessionId: string): Promise<
   }));
 }
 
+/** Who a ready report goes to, and what the notice may name (`FR-LAB-03`). */
+export interface ReportRecipient {
+  readonly recipient: Recipient;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  readonly testName: string;
+  /** The doctor who ordered it, so `FR-LAB-03`'s second recipient is named. */
+  readonly orderingDoctorId: string | null;
+  readonly smsBudgetMonthly: number | null;
+}
+
+/**
+ * The patient a test order belongs to, and the doctor who ordered it.
+ *
+ * Addressed to the patient. Where a test came out of a consultation the
+ * visit's booking supplies the guest or account behind them, which is how a
+ * guest with no account still gets told (`FR-GST-08`).
+ */
+export async function reportRecipient(
+  trx: Tx,
+  testOrderId: string,
+): Promise<ReportRecipient | null> {
+  const result = await sql<{
+    patient_id: string;
+    guest_id: string | null;
+    user_id: string | null;
+    phone: string | null;
+    locale: string | null;
+    hospital_id: string;
+    name_bn: string;
+    name_en: string;
+    test_name: string;
+    doctor_id: string | null;
+    sms_budget_monthly: number | null;
+  }>`
+    SELECT t.patient_id, b.booked_by_guest_id AS guest_id, b.booked_by_user_id AS user_id,
+           COALESCE(p.phone, g.phone, u.phone) AS phone, u.locale,
+           h.id AS hospital_id, h.name_bn, h.name_en, t.test_name,
+           v.doctor_id, s.sms_budget_monthly
+      FROM test_orders t
+      JOIN patients p ON p.id = t.patient_id
+      JOIN hospitals h ON h.id = t.hospital_id
+      LEFT JOIN visits v ON v.id = t.visit_id
+      LEFT JOIN bookings b ON b.id = v.booking_id
+      LEFT JOIN guest_identities g ON g.id = b.booked_by_guest_id
+      LEFT JOIN users u ON u.id = b.booked_by_user_id
+      LEFT JOIN hospital_settings s ON s.hospital_id = t.hospital_id
+     WHERE t.id = ${testOrderId}::uuid
+  `.execute(trx);
+
+  const row = result.rows[0];
+  if (row === undefined) return null;
+
+  return {
+    recipient: {
+      patientId: row.patient_id,
+      guestId: row.guest_id,
+      userId: row.user_id,
+      phone: row.phone,
+      locale: row.locale ?? 'bn',
+    },
+    hospitalId: row.hospital_id,
+    hospitalNameBn: row.name_bn,
+    hospitalNameEn: row.name_en,
+    testName: row.test_name,
+    orderingDoctorId: row.doctor_id,
+    smsBudgetMonthly: row.sms_budget_monthly,
+  };
+}
+
 /** Who a bed request's answer goes to, and what it has to say (`FR-PAT-52`). */
 export interface BedRequestRecipient {
   readonly recipient: Recipient;

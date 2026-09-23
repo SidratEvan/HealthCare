@@ -7,10 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/referrals` — step 16. Jamuna's ER, with no ICU of its own,
-finds Shapla's free ICU bed and refers a case there; Shapla sees the card,
-accepts, and the person stays Jamuna's until Shapla says they walked in — one
-tap that gives them a token at Shapla and closes Jamuna's case as referred.
+Last updated: `feat/payments` — step 18. A booking records what it charged, a
+retry never charges twice, and a cancellation says in taka what is coming back
+before anybody confirms. When a session ends with people still waiting, every
+one of them is marked owed without asking.
 
 ---
 
@@ -35,7 +35,9 @@ tap that gives them a token at Shapla and closes Jamuna's case as referred.
 | 14 | `feat/beds` | merged — migrations 0008 + 0012, `S-B-06` the ward board, `<CapacityMirror>`, `S-A-11` bed search and bed requests, the ward's half of `FR-OFF-01` |
 | 15 | `feat/emergency` | merged — migrations 0013 + 0016, `S-A-10`/`10b`/`10c`, `S-B-07` the ER console, the ward's ER half of `FR-BED-07`, `emergency-burn.spec.ts` |
 | 16 | `feat/referrals` | merged — migration 0017, the referral state machine, both halves of the ER console, `referral.spec.ts` |
-| 17 | `feat/lab-pharmacy` | **next** — test orders, report delivery, dispensing. Migration 0011 is what `seed_06_ancillary` and `INP-B07-BLOOD` are both waiting on |
+| 17 | `feat/lab-pharmacy` | merged — migrations 0011 + 0018, `S-B-08`, the stock half of `S-B-09`, `BTN-B05-TEST`, `TAB-A12-REP`, the medicine search, `lab-report.spec.ts`. **Dispensing dropped**; `PRD.md` §12 and `APP_FLOW.md` B5 edited to match |
+| 18 | `feat/payments` | merged — migrations 0009 + 0019, the refund and settlement domain, the provider seam, `seed_08_money`, the refund statement on `MOD-A08-CANCEL`. **bKash and Nagad are not implemented**; the mock is the working provider (`CLAUDE.md` §1.1) |
+| 19 | `feat/admin-dashboard` | **next** — aggregates, no-show loss and recovery, exports |
 
 Four unplanned branches after step 11:
 
@@ -89,13 +91,14 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 2599, in about ninety seconds.
-`pnpm test:e2e` reports 79, in Chromium, against the real API and the seeded
+`pnpm test` reports 2943, in about a minute.
+`pnpm test:e2e` reports 85, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
-6 in `referral.spec.ts`. The whole E2E run takes about ten minutes.
+6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`. The whole run takes about
+fifteen minutes.
 
 `pnpm verify` — typecheck, lint, `format:check`, test — is clean, and so is
 `pnpm build`. `format:check` had been failing on five files since before step
@@ -120,6 +123,283 @@ decision about a sleeping backend, not a test detail, which is why
 Worth knowing when demonstrating: **open the console once a minute before
 showing anyone.** Nothing is broken if the first load is slow; it is the free
 tier waking.
+
+### Step 18 — the money, and what a number somebody agreed to is worth
+
+**The definition of done is the idempotency test** (`CLAUDE.md` §4), and it is
+the first describe in `payment.routes.test.ts` because the failure it guards
+against is the only one in this step that takes money from a person. It is
+tested two ways: a retry after the first completed, and five identical
+requests in flight at once — which is what a patient double-tapping confirm on
+a bad connection actually produces.
+
+**`FR-PAY-06` is three deep.** The caller's key is unique in the database,
+serialised by an advisory lock so a replay that races its original waits, and
+passed to the provider so even a retry past both finds the same transaction.
+Any one would usually do. Payments get all three.
+
+**A client never says how much.** An intent names *what* is being paid for and
+the amount comes from the booking's own `fee_poisha`, copied on at booking
+time (`DB-P5`) so a later fee change cannot alter what was charged. A refund
+names a *reason* and the amount is `refundFor` in `shared/domain`. Neither
+number is ever in a request body, so neither can be argued with — and the test
+that sends `amountPoisha: 1` gets charged the real fee.
+
+**Money is never edited, only added to.** A trigger refuses any change to
+`amount_poisha` or `platform_fee_poisha`, the way `ambulance_requests` refuses
+a change to a quoted fare (`FR-PAT-74`). A refund goes in `refunded_poisha`,
+so a settlement can always state collections and refunds separately. Six CHECK
+constraints hold the state and the numbers to each other, because a settlement
+computed from rows that could contradict themselves is fiction.
+
+**`refund_policy` has a shape now** — open decision 12, which step 18 was the
+step that needed it. It is `cutoffHours`, two percentages and whether the
+platform fee comes back, validated on the way in. **A half-written policy is
+read as no policy**: filling in a missing field would state a refund the
+hospital never agreed to, which is worse than having none. Four demo
+facilities have terms and two deliberately do not, so a cancellation at
+Karnaphuli or Buriganga says the hospital will decide — the honest-degradation
+case (`PRD.md` §3.2), demonstrable rather than only described.
+
+**Doctor absence is the platform's guarantee, not the hospital's terms.**
+`FR-PAY-07` returns everything including the platform fee, and no policy can
+reduce it: the patient did not cancel, so no cancellation policy applies to
+them. It is raised automatically when a session ends — every patient who paid
+and was never seen is marked owed in one statement, after the commit, in a
+way that cannot fail the session's end. A session has ended whether or not the
+money bookkeeping succeeded, and an end that rolled back because a payment
+query was slow would leave a chamber running on every screen in the hospital.
+
+**Eligibility, not payment.** Each refund is then its own decision with its own
+provider call. A batch of gateway calls inside a session's end would make
+ending a session fail when a provider is slow. The patient is owed the moment
+the session ends; the money follows.
+
+**What counts as absence** is not defined by any document. Implemented as: the
+session ended and no `DOCTOR_ARRIVED` was ever appended. A session where the
+doctor came and simply did not reach everybody is recorded as `session_ended`
+instead — those patients are equally owed, and the reason says which happened
+so an administrator is not told a doctor was absent when they were not.
+
+**`MOD-A08-CANCEL` states the refund in taka**, not as a percentage, computed
+by the same function the server refunds with. That is the whole of
+`FR-PAY-03`: a rule the screen computes one way and the server another is a
+rule that gets stated wrongly.
+
+**Subscriptions and invoices have tables and no data.** What a module costs,
+what tiers exist and what a hospital is charged are negotiated per agreement
+and live outside this repository (`CLAUDE.md` §1.1). The code can invoice;
+what it invoices for is not a code decision. `PLATFORM_FEE_POISHA` stays 0, so
+the platform fee is itemised as zero rather than hidden (`FR-PAY-04`).
+
+**bKash and Nagad are not implemented, and say why in detail.** Both need
+merchant credentials that arrive with an agreement. Rather than write an
+integration nobody has ever seen run, each adapter carries the *shape of the
+work* — the call sequence, which response actually means the money moved, and
+the one thing that bites. For bKash: the merchant invoice number is the
+idempotency key and it is per-merchant forever, which is why the service sends
+the payment's own uuid v7 rather than the caller's key. For Nagad: the
+timestamp is Dhaka local and they reject anything a minute out, and **refunds
+are not in their checkout API at all** — worth knowing before automatic
+refunds are promised to a hospital for every method.
+
+**Demo data.** `seed_08_money` is its own module and runs last: 927 payments,
+one per booking with a payer, and twelve counter shifts. The payment mix is
+declared rather than uniform — most people still pay at the counter — because
+a settlement split evenly four ways looks like test data to anybody who has
+run one. One shift in four is deliberately short of its expected figure, since
+a demo where cash always reconciles hides the only thing `counter_shifts` is
+for.
+
+**How to show it.** Book as a guest and pay by bKash; the serial screen's
+বাতিল করুন now names the taka coming back. Then, on the console, end that
+chamber's session with people still waiting — every one of them is marked owed
+without anybody asking, which is `FR-PAY-07` and the part of the pitch that
+says the platform is on the patient's side.
+
+#### Three bugs the tests found, and one the ordering did
+
+**A pool deadlock, found by the concurrency test.** `createIntent` held a
+transaction on the advisory lock while `findDetail` took a *second* pool
+connection. Five concurrent identical intents exhausted a five-connection pool
+and waited on each other. `findDetail` now takes the caller's transaction and
+says in its own doc comment why that matters — the same shape exists anywhere
+a repository read is made from inside a transaction on `db` rather than `trx`.
+
+**Every genuine webhook was rejected.** `express.json()` consumes the stream
+before any route runs, so the webhook's own `text()` parser found nothing and
+verified a signature over an empty string. Every real callback failed and
+every forged one failed identically, which is why nothing looked wrong. The
+raw bytes are now captured by the JSON parser's `verify` hook and kept in a
+`WeakMap` keyed by the request — only for `/webhooks/*`, because a copy of
+every request body in memory is a copy of patient data in memory.
+
+**The money seed covered a quarter of the bookings.** Written into
+`seed_04_history` first, which runs before `seed_05_beds` and
+`seed_07_demo_live` — so 367 payments instead of 919, and the pitch session's
+own bookings, the ones a demo shows, had none at all. It is `seed_08_money`
+now and runs last. **The general lesson: a seed that reads rows another seed
+writes has to run after it, and the order is not obvious from the file name.**
+
+**A migration numbered backwards into the sequence.** `payments` references
+`ambulance_requests`, which 0011 creates — and on a fresh database the runner
+applies files in filename order, so 0009 runs first. The local development
+database already had 0011, so `db:migrate` was green there and only a build
+from scratch failed. `0019_payment_ambulance_fk.sql` adds the key afterwards.
+**A green migrate on a database that is already ahead proves nothing about a
+fresh one.**
+
+### Step 17 — the lab, and what a report is a promise about
+
+**The definition of done is one sentence, and the E2E is that sentence.**
+`lab-report.spec.ts` drives it through three screens in one run: a doctor
+ticks a chip on `BTN-B05-TEST` and signs, the order appears on a bench in
+another browser context, the bench takes the sample, processes it and chooses
+a real PDF — and the patient, whose phone has held nothing but a tracking
+link since booking, opens the report. The rest of the spec: a test still on a
+bench says what is happening to it rather than "no reports"; a patient with no
+test is shown no Reports tab at all; the bench opens on work rather than on
+nothing; and a pharmacy flagging a medicine নেই reaches the public search.
+
+**Uploading is delivering, and that is one transaction.** `FR-LAB-03` says a
+report "auto-delivers to the patient wallet and the ordering doctor", so
+there is no separate *send* button — the file is stored, the `reports` row is
+written, the order closes as `delivered` and `delivered_to` names whom it
+reached, or the whole thing rolls back and the lab is told the upload failed.
+A report row claiming a delivery that did not happen is the one outcome worth
+designing against. The file is stored **before** the transaction opens: the
+worst case is then an orphaned object, which costs bytes, rather than a
+`file_url` pointing at nothing.
+
+**The lifecycle only moves forward.** `shared/domain/src/lab/orders.ts` is the
+API's guard and the console's optimistic update, as `referrals.ts` is for a
+referral. A lab that mis-taps cancels and re-orders, which leaves both rows
+visible; walking an order back is refused, because the timestamps are
+`FR-LAB-04`'s measurement and a measurement that can be edited is not one.
+`delivered` is deliberately absent from `LAB_ACTIONS`: it is the server's own
+step, so a console cannot claim a delivery it did not perform.
+
+**A stale tap is a replay, not a refusal.** A console whose outbox held
+*collect* while the bench moved on gets a 200 and a `duplicate`, because the
+action's outcome has held since the sample was taken. The genuine refusal is
+reserved for working an order already cancelled. The lab console is
+online-first by choice — a bench's actions are minutes apart and an upload is
+a file — but every send carries a `clientEventId` and an idempotency key, so
+adding an outbox later is a store rather than a redesign.
+
+**The patient's name is not on the queue.** A row is the test, its state and
+its age; the name is one tap and that tap is a request the server records
+(`DB-P7`), the arrangement the ward board's bed panel already has. A bench
+calling somebody to a counter needs it; a screen left open on a shared desk
+does not.
+
+**Turnaround is measured from the promise the patient heard** — ordered to
+report ready, not sample to ready. The hour a sample sat uncollected is part
+of what somebody told "come back this afternoon" actually waited. Delivery is
+not the end point: ready-to-delivered measures this system rather than the
+lab. A type with no finished order says it has no measurement instead of
+reading zero, and the open count and the oldest waiting order sit beside the
+median so a lab cannot improve its figure by never finishing anything.
+
+**`FR-PHR-01` is not built, and this is the reasoning.** Dispensing against a
+prescription QR is downstream of `FR-DOC-04`, which the owner removed on
+2026-09-19. No code path and no seed creates a `prescriptions` row, so a
+scanner would open a camera onto an empty table and `POST /prescriptions/:id/dispense`
+would guard a table that is always empty. It follows prescribing out of scope
+the same way `TBL-B05-RX` did. `FR-PHR-02` needs no prescription and is built
+in full. `PRD.md` §12 and `APP_FLOW.md` B5 were edited to say so.
+
+**`FR-LAB-01`'s "and app bookings" is also not built.** A patient ordering
+their own test is `S-A-13`, a catalogue-plus-payment flow that is not in step
+17's contents. Doctor orders are this version's producer. `test_orders.visit_id`
+is nullable already, so `S-A-13` needs no schema change when it lands — and the
+seed uses that nullability today for walk-in orders, which is both the
+commonest way a test is ordered here and the path where a report reaches one
+recipient rather than two.
+
+**A stock flag goes quiet rather than lying.** After twelve hours an in-stock
+claim is published as *জানা নেই* instead of repeated; an out-of-stock flag
+stands until somebody clears it, because a pharmacy that restocked has every
+reason to say so and one that has run out has none to keep saying it. Twelve
+hours rather than a bed's ten minutes: a shelf does not empty that fast, and
+a ten-minute threshold would mark the whole list unknown by mid-morning and
+teach families to ignore the feature. `S-B-09` shows each row as **what a
+patient is being told right now** beside what the counter last said —
+`FR-BED-06`'s idea applied to a shelf.
+
+**Demo data** (`FR-DEM-03`, `FR-DEM-05`). `seed_06_ancillary` runs for the
+first time: eight ambulances, thirty blood donors and exactly fifty pharmacy
+items — ten formulary medicines on five shelves. Nothing is waiting on a
+migration any more. `seed_04_history` writes the reports half of `FR-DEM-03`
+that step 12 deferred: 170 test orders, 112 delivered reports, turnarounds
+drawn per test type so the medians differ and the slowest-first ranking has
+something to rank. One shelf (Karnaphuli) is deliberately two days old, so
+the lapse to *জানা নেই* is visible in the demo and not only in a test.
+
+**Every lab opens with work.** Which hospital held a consultation in the last
+two days is luck of the seeded history, and on most resets two labs had none —
+so `S-B-08` opened empty at exactly the hospital a demo was being shown at.
+The top-up is walk-in orders with no visit behind them, spread across all
+three open states and the last thirty hours.
+
+**Seeded reports point at a file that resolves.** A seed runs in its own
+process and cannot put bytes into the API's, so a report row would 404 when
+tapped — the demo promising a document it cannot open. The mock store
+synthesises a one-page placeholder for keys under `reports/demo/`, labelled as
+demonstration data in the PDF itself (`FR-DEM-07`). Nothing outside the mock
+provider has that behaviour and a real bucket never sees the prefix.
+
+**How to show it.** Console → any hospital → ল্যাব খুলুন for the bench, and a
+second window on the same hospital's চেম্বার as the doctor. In the chamber:
+type a diagnosis, tick a test chip, রেকর্ড দিন ও পরবর্তী. The bench's queue
+gains the row without a refresh; নমুনা নেওয়া হয়েছে → প্রসেসিং → রিপোর্ট দিন
+with any PDF, and the toast says both the patient and the doctor have it. On
+a phone, the patient's রেকর্ড tab now has a রিপোর্ট tab beside it. For the
+pharmacy: ফার্মেসি খুলুন, mark something নেই, then ওষুধ খুঁজুন on the patient
+app and search that medicine.
+
+**Supabase does not have this yet.** Migrations `0011_ancillary.sql`,
+`0018_lab_idempotency.sql`, `0009_money.sql` and
+`0019_payment_ambulance_fk.sql` have been applied to the local container and
+to both test databases, and nowhere else. Until they are applied to Supabase, the
+deployed console's lab and pharmacy screens will fail on their first read, and
+the deployed patient app's medicine search will too.
+
+All four are additive — new tables, new columns and one foreign key, nothing
+dropped — so applying them is safe. Getting the *demo data* there is the destructive
+half: the lab queue, the fifty pharmacy items and the delivered reports come
+from a reseed.
+
+```bash
+# Additive, safe, no data lost:
+ALLOW_REMOTE_DB=1 pnpm db:migrate
+# Then, and only with the owner saying so, because it truncates:
+ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 pnpm db:reset
+```
+
+**A remote reset is the owner's to authorise, every time.** Nothing in step 17
+was run against Supabase.
+
+#### The CORS bug the E2E found, which nothing else would have
+
+`PUT` was missing from the API's `Access-Control-Allow-Methods`. The pharmacy
+console could never have saved from a browser — **and neither could the ER
+console's capability switches (`PUT /hospitals/:id/capabilities`), which have
+been unreachable that way since step 15.**
+
+The failure is close to invisible. The preflight answers 204 and looks fine;
+the browser then refuses to send the real request on its own; nothing
+server-side logs anything, because the request never arrives. Unit and API
+tests all pass, because supertest is not a browser. Only a real page found it.
+
+`app.test.ts` now reads the verbs off the mounted router stack and asserts
+every one appears in the preflight's allowed methods, so a route added with an
+unlisted verb fails in CI. It was verified to fail without the fix.
+
+**The lesson worth keeping:** a middleware allow-list that is written once and
+grows by hand is a class of bug that only a browser can see. The same shape
+applies to `ALLOWED_HEADERS` — a route that starts requiring a new request
+header will fail the same silent way.
 
 ### Step 16 — referrals, and who holds the person
 
@@ -575,6 +855,61 @@ afternoon.
 
 ### Things learned the hard way, so they are not relearned
 
+- **A green `db:migrate` on a database that is already ahead proves nothing.**
+  `0009_money.sql` references `ambulance_requests`, which `0011` creates — and
+  on a fresh database the runner applies files in filename order, so 0009 runs
+  first and fails. The local development database already had 0011, so it
+  applied cleanly there and only the test suite's build-from-scratch caught
+  it. **Numbering a migration backwards into the sequence needs a fresh
+  build to verify**, not an incremental one.
+
+- **A seed that reads what another seed wrote has to run after it, and the
+  file name does not tell you the order.** Payments written inside
+  `seed_04_history` covered 367 bookings out of 919: seed_04 runs before
+  `seed_05_beds` and `seed_07_demo_live`, so the pitch session's own bookings
+  had none. `seed_08_money` runs last.
+
+- **A repository read inside a transaction must use the transaction.** A
+  `findDetail` on the pool while its caller held a transaction took a second
+  connection; five concurrent requests then exhausted a five-connection pool
+  and deadlocked. It was invisible until a test fired five identical requests
+  at once. Anywhere a service calls a repository between `withTransaction`'s
+  braces, the `trx` has to be passed.
+
+- **`express.json()` consumes the stream before any route sees it.** A route
+  that mounts its own `text()` parser to read raw bytes finds nothing, and a
+  signature check over an empty string fails every genuine callback *and*
+  every forged one — so nothing looks wrong. The raw body is captured by the
+  JSON parser's own `verify` hook (`config/rawBody.ts`).
+
+- **A CORS allow-list is a bug only a browser can see.** `PUT` was missing
+  from `ALLOWED_METHODS`, so `PUT /hospitals/:id/pharmacy-stock` and
+  `PUT /hospitals/:id/capabilities` could not be sent from any page — the
+  preflight answers 204, the browser refuses on its own, and nothing
+  server-side logs anything because the request never arrives. Every unit and
+  API test passed, because supertest is not a browser. `app.test.ts` now reads
+  the verbs off the mounted router stack and asserts each is allowed.
+  **`ALLOWED_HEADERS` has the same shape** and no such test yet: a route that
+  starts requiring a new request header will fail the same silent way.
+
+- **`pnpm typecheck | grep error` reports nothing useful.** pnpm's recursive
+  runner drops the compiler's output when the stream is piped, so a grep comes
+  back empty on a failing run. **Check the exit code**, or run `npx tsc
+  --noEmit` in the package. Four real console errors were missed this way in
+  step 17, including a `FRONTEND.md` §5.1 violation.
+
+- **A disabled button has to carry its reason** (`FRONTEND.md` §5.1), and
+  `ButtonProps` enforces it as a discriminated union — which means
+  `disabled={busy || offline}` does not compile, exactly when a screen most
+  wants a boolean. `ActionButton` in the console takes `reason: string | null`
+  instead: a string turns the button off and becomes its accessible
+  description, null leaves it live.
+
+- **`format()` takes `(key, locale, values)`**, not a pre-resolved string.
+  `format(t('key', locale), {…})` typechecks as far as the argument count and
+  then fails on it; it is an easy shape to get wrong because `t()` alone reads
+  naturally in the same position.
+
 - **Use Supabase's session pooler (port 5432), not the transaction pooler
   (6543)**, even though the dashboard labels the latter `DATABASE_URL`.
   Transaction pooling does not carry a session-level `search_path`, and the
@@ -714,9 +1049,16 @@ afternoon.
 `.env` is gitignored and has never been tracked in any commit. It holds the
 Supabase connection string and three generated dev secrets.
 
-`SUPABASE_SERVICE_ROLE_KEY` is deliberately **not** set: nothing needs it until
-something uploads a file — `BTN-A12-UPLOAD` (paper records) or the lab's
-reports at step 17. Step 13 built neither.
+`SUPABASE_SERVICE_ROLE_KEY` is deliberately **not** set, and step 17 did not
+change that. The lab's report upload runs on `STORAGE_PROVIDER=mock`, which is
+the correct implementation for this version (`CLAUDE.md` §1.1) — the same
+standing `SMS_PROVIDER=log` and `PAYMENT_PROVIDER=mock` have. It keeps the
+bytes in the API process and serves them through a signed URL of this API's
+own, so the whole of `FR-LAB-03` is real end to end; only the disk is not.
+
+`STORAGE_PROVIDER=supabase` is refused without the key, and `mock` is refused
+in production, so neither can be reached by accident. Switching is a bucket,
+three variables and no code.
 
 ---
 
@@ -754,8 +1096,10 @@ database.
 
 Each is implemented one way and flagged rather than settled silently, and
 needs an owner's ruling. Number 7 is recorded as settled because the answer
-changed the tree; 8 and 9 are settled too and are described at the end of this
-section — closed, and not to be raised. They are grouped by the step that
+changed the tree; 8, 9, 12 and 59 are settled too — closed, and not to be
+raised. 12 and 59 are the refund policy and its demo percentages, ruled on
+2026-09-23: the demo refund is the deliverable and payment specifics are not
+to be put in front of the owner again. They are grouped by the step that
 raised them, so the numbering is not contiguous in the file.
 
 1. **`FR-QUE-20` grace period.** "2 patients or 15 minutes, whichever is longer"
@@ -815,14 +1159,12 @@ Raised while building the seeds (step 5):
 
 Raised while building the live serial screen (step 10):
 
-12. **`hospital_settings.refund_policy` has no defined shape.** `FR-PAY-03`
-   requires the refund rule to be stated before a cancellation is confirmed,
-   and `MOD-A08-CANCEL` states it — but the column is an untyped `jsonb`
-   defaulting to `{}`, no document says what goes in it, and the seeds write
-   nothing. So the sheet degrades honestly: when the object is empty it says
-   "ফেরতের বিষয়টি হাসপাতাল জানাবে" rather than inventing a percentage
-   (`PRD.md` §3.2). Deciding the shape is a product call, and step 18 needs it
-   answered because that is where a refund is actually paid.
+12. ~~**`hospital_settings.refund_policy` has no defined shape.**~~
+   **Settled at step 18.** The shape is `shared/domain/src/payments/refund.ts`
+   and `DATABASE.md` §2.2 documents it: `cutoffHours`, a percentage before and
+   after it, and whether the platform fee comes back. Four demo facilities
+   have terms and two deliberately do not, so the "hospital will decide" path
+   stays demonstrable. Closed — see decision 59.
 
 13. **Nothing reissues a freed serial.** Cancelling releases the number —
    `bookings_session_serial_key` excludes cancelled rows — but `nextSerial`
@@ -1068,9 +1410,10 @@ capability); these are the ones that were not:
    yet moves one to `in_treatment`).
 
 47. **Blood stock (`FR-EMG-06`, `INP-B07-BLOOD`) is not built.** No table in
-   DATABASE.md holds a hospital's blood by group; 0011 (step 17) has donors and
-   requests. The ER console's blood input belongs with that step, and needs a
-   table (or a column set) that the documents do not yet name.
+   DATABASE.md holds a hospital's blood by group. 0011 landed with step 17
+   and has `blood_donors` and `blood_requests` — neither of which is an
+   inventory — so the ER console's blood input is still waiting on a table
+   (or a column set) that the documents do not yet name.
 
 48. **A family's case link lives 24 hours** (`emergency_case` token audience).
    An emergency is over in hours; a token that outlived the night would make a
@@ -1104,6 +1447,65 @@ recorded in the step 16 notes above. These are the ones that were not:
    one open referral per case and no withdrawal, a receiving ER that never
    answers would strand the case forever. The control is added to B4 rather
    than the rule relaxed.
+
+Raised while building the lab (step 17):
+
+53. **`FR-PHR-01` follows prescribing out of this version.** Implemented as
+   *not built*, with the screen saying why. The alternative was to seed demo
+   prescriptions so a QR had something to scan — which would demonstrate a
+   flow no doctor in the demo can start, and the owner dropped `FR-DOC-04`
+   deliberately. Flagged in `PRD.md` §12 and `APP_FLOW.md` B5. **Say the word
+   if the pitch wants the dispensing screen demonstrable anyway**; it is a
+   seed and a screen, not a schema.
+
+54. **What a test costs.** `DEMO_TEST_CATALOGUE` prices twelve common tests in
+   poisha (CBC 450 taka, ECHO 2,500, and so on). These are the demo hospital's
+   list prices, the same standing `seed_02`'s doctor fees have, and they exist
+   so a `test_orders` row carries a number for `FR-ADM-04`. Not commercial
+   content (`CLAUDE.md` §1.1) — a real hospital's catalogue arrives with its
+   agreement — but somebody should glance at them before a pitch.
+
+55. **Twelve hours is how long a stock flag stands.** No document names a
+   threshold and `hospital_settings` has no column for one. A bed's ten
+   minutes would paint the whole shelf unknown by mid-morning; twelve hours
+   means a morning check stands all day and yesterday's does not. Changing it
+   is one constant in `shared/domain/src/lab/stock.ts`.
+
+56. **Turnaround is measured ordered-to-ready, not sample-to-ready.** The
+   second is the interval a lab would rather be judged on; the first is what
+   the patient waited, and `PRD.md` §3.2 cuts that way. Worth confirming
+   before the admin dashboard (step 19) puts the figure in front of a
+   hospital director.
+
+Raised while building the money (step 18):
+
+57. **What "doctor absence" is.** `FR-PAY-07` names it and no document
+   defines it. Implemented as: the session ended and no `DOCTOR_ARRIVED` was
+   ever appended. A session the doctor did attend but did not finish is
+   recorded as `session_ended` instead — those patients are equally owed, and
+   the distinction keeps an administrator from being told a doctor was absent
+   when they were not. Both refund in full.
+
+58. **A refund is raised as eligibility, and paid separately.** Ending a
+   session marks everybody owed in one statement; each refund is then its own
+   provider call. The alternative — refunding inside the session's end — makes
+   ending a chamber fail when a gateway is slow, which is the worse failure.
+   Nothing yet sweeps the eligible rows and pays them: that is a worker, and
+   `pg-boss` is still not installed. **An administrator refunds them from the
+   endpoint in the meantime**, and `payments_refund_pending_idx` is the list.
+
+59. ~~**The demo refund percentages.**~~ **Settled, and not to be raised.**
+   Shapla 100/50 at twelve hours, Padma 100/25 at twenty-four, Jamuna full
+   either way, Meghna 80/0, and two facilities with none. These stand. The
+   owner's ruling (2026-09-23): this is the pitch version, the demo refund is
+   the deliverable, and payment specifics are not something to put in front of
+   him. Do not ask about them again.
+
+60. **A settlement is dated by the session, not by when the money cleared.**
+   A payment that settled at midnight belongs to the chamber it paid for. That
+   is what a hospital reconciles against, and it is the opposite of what an
+   accountant might expect; step 19's dashboard will surface the same figures
+   and should agree.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
@@ -1219,16 +1621,13 @@ Turbopack is substantially faster and this is the only thing holding it off.
   and a booking returns a signed guest tracking link. Requirements not covered
   in this version: `FR-PAT-01`, `FR-PAT-04`, `FR-GST-03/04/09/12`, `FR-SEC-05`,
   `FR-SEC-06`.
-- **`FR-DEM-05` is not covered.** `seed_06_ancillary` needs 0011
-  (`ambulances`, `blood_donors`, `pharmacy_stock`). The file exists and declares
-  what it is waiting for; the seed runner checks its tables before calling it and
-  prints the skip with the migration name. It fills in at step 17. `FR-DEM-04`
-  (beds) is covered as of step 14.
-- **`seed_04_history` defers prescriptions and reports** to migration 0007. It
-  writes the half the schema holds — past sessions, `done` bookings with
-  measured consultation lengths, and the event log behind them — which is what
-  the rolling rate (`FR-QUE-12`) and the admin figures read. The clinical
-  records land in step 12.
+- ~~**`FR-DEM-05` is not covered.**~~ **Covered as of step 17.** Migration
+  0011 landed and `seed_06_ancillary` runs: eight ambulances, thirty blood
+  donors, fifty pharmacy items. **No seed module is waiting on a migration any
+  more**, so every `FR-DEM-*` requirement is rows rather than a skip notice.
+- ~~**`seed_04_history` defers prescriptions and reports.**~~ Reports landed
+  with step 17, so `FR-DEM-03` is covered in full. Prescriptions are not
+  deferred but **dropped** (`FR-DOC-04`), so there is nothing left waiting.
 - **Today's sessions other than the pitch one are left `scheduled`.** If a
   reset happens late at night, an 18:00 chamber that has already passed still
   shows as scheduled with no events. That is honest — nothing was recorded —
@@ -1294,20 +1693,77 @@ Turbopack is substantially faster and this is the only thing holding it off.
   from TypeScript source, so a deployable build needs either emitted output from
   `shared/domain` or a bundler. That is a dependency decision for the owner,
   and it blocks the Render deploy at step 6.
-- **Four of the five required Playwright specs exist** (`CLAUDE.md` §6):
+- **Four of the five required Playwright specs exist** (`CLAUDE.md` §6), plus
+  `lab-report.spec.ts` from step 17:
   `two-device-queue.spec.ts` — the canary, five tests — plus
   `guest-booking.spec.ts`, now complete including "open the SMS link, see the
   live serial", `offline-console.spec.ts`, and `emergency-burn.spec.ts`
   (step 15). Still to write: `no-show-recovery.spec.ts` (its recovery figure is
   step 19).
-- **Five files fail `prettier --check` on `mvp`, and none is step 15's**:
-  `database/seeds/lib/templates.ts`,
-  `shared/ui/src/components/__tests__/liveSerial.test.tsx`, `render.yaml`, and
-  both apps' `next-env.d.ts` (which `next dev` rewrites). `pnpm lint` and
-  `pnpm test` pass; `pnpm verify` runs `format:check` and stops on them. A
-  `chore/` branch — and `next-env.d.ts` probably belongs in `.prettierignore`.
+- ~~**Five files fail `prettier --check` on `mvp`.**~~ Fixed by
+  `chore/format-clean` before step 17; `pnpm verify` is green.
 - **`<EmergencyEntry>` does not preload on pointer-down** (FRONTEND.md §6.3).
   The results screen asks for location and searches on arrival; preloading
   would need the position first, which is the slow part.
+- **bKash and Nagad are not implemented.** `PAYMENT_PROVIDER=mock` is the
+  working provider and the correct one for this version (`CLAUDE.md` §1.1);
+  `live` selects an adapter that refuses every charge with a named reason
+  rather than a client that throws the moment a patient taps pay. Both
+  provider files carry the call sequence, the response that actually means
+  the money moved, and the one thing that bites — see the step 18 notes. Nagad
+  has no refund in its checkout API, which is written into `nagad.ts` where
+  whoever implements it will read it.
+
+- **Nothing charges for a bed, a test or an ambulance.** `payments` has the
+  columns because DATABASE.md §2.6 specifies them, and none of those three has
+  a price anybody has agreed: a nightly rate, a catalogue price and a quoted
+  fare are commercial terms per hospital (`CLAUDE.md` §1.1). Charging for them
+  needs those terms, not more code — `payment.service` refuses anything but a
+  booking and says so.
+
+- **`subscriptions` and `invoices` are empty tables.** Nothing generates an
+  invoice, because there is no agreement to invoice against. The shape is
+  there so that when there is one, it is a service and not a migration.
+
+- **`/webhooks/sms-dlr` is not built.** BACKEND.md §7.7 lists it beside the
+  payment callbacks; it belongs to notifications and `SMS_PROVIDER=log` has no
+  delivery receipts to send. It arrives with a real aggregator.
+
+- **A refunded platform fee is approximated in the settlement.** `payments`
+  records one refunded total rather than splitting it by line, so the fee
+  retained is capped at what the patient did not get back — exact at both ends
+  and an approximation in between. A `platform_fee_refunded_poisha` column
+  would make it exact. It does not matter while `PLATFORM_FEE_POISHA` is 0.
+
+- **`FR-PHR-01` (dispensing) is not built**, because prescribing is not.
+  `S-B-09` names the missing half on screen rather than showing a scanner that
+  cannot work; `PRD.md` §12 and `APP_FLOW.md` B5 were edited to say so. It
+  becomes buildable the day `FR-DOC-04` does, and needs no schema: the
+  `prescriptions` and `prescription_items` tables are already there.
+
+- **`S-A-13` (diagnostics booking) is not built**, so `FR-LAB-01`'s "and app
+  bookings" half is uncovered. It is a catalogue-plus-payment flow and payment
+  is step 18. Nothing blocks it: `test_orders.visit_id` is nullable and the
+  seed already writes walk-in orders through that path.
+
+- **`lab.report_ready` reaches nobody in this version.** `BACKEND.md` §8 maps
+  it to **push only**, which is a defensible product call — a report is not a
+  summons, and it is in the wallet before the message is written. But no
+  screen asks for notification permission yet, so every push is recorded as
+  `skipped: no_device_token`. The row is written and says so; the delivery
+  `FR-LAB-03` actually promises has already happened. Worth the owner's word
+  on whether a report deserves an SMS, which would be a `BACKEND.md` §8 edit.
+
+- **The test catalogue is declared twice**, in `lab.service.ts` and in
+  `seed_04_history.ts`. `database/seeds` may not import from `backend/api`
+  (the layering rule), and a catalogue is demo data in both places. They are
+  held to the same codes by test rather than by a shared module; a real
+  hospital's catalogue is a table, and that is the right time to merge them.
+
+- **The mock store keeps report files in process memory**, so restarting
+  `pnpm dev:api` loses anything uploaded during a demo. Seeded reports survive,
+  because those are synthesised on read. `STORAGE_PROVIDER=supabase` is
+  required in production and the env refuses `mock` there.
+
 - **`frontend/site` is still empty.** `shared/client`, `frontend/console` and
   `frontend/patient` are built.

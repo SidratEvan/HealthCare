@@ -22,6 +22,7 @@
 
 import express, { json, type Express } from 'express';
 
+import { rememberRawBody } from './config/rawBody.js';
 import { env } from './env.js';
 import { attachPrincipal } from './middleware/auth.js';
 import { cors } from './middleware/cors.js';
@@ -34,9 +35,16 @@ import { API_BASE_PATH, buildApiRouter, rootRoutes } from './routes/index.js';
 /**
  * Largest request body accepted.
  *
- * A prescription with twenty medicine rows is a few kilobytes. File uploads do
- * not come through here at all — they go to Supabase Storage through a signed
- * URL (BACKEND.md §0), which is why this can be this small.
+ * A prescription with twenty medicine rows is a few kilobytes, and every
+ * ordinary endpoint is smaller than that.
+ *
+ * **One route lifts it**: `POST /test-orders/:id/report` carries the report
+ * file itself (`FR-LAB-03`), and sets its own limit beside its own handler in
+ * `lab.routes.ts` rather than raising this one for everybody. BACKEND.md §0's
+ * "signed URLs only" is a rule about *reads* — no public bucket, every fetch
+ * signed and expiring — and it holds either way; §7.6 puts the upload on the
+ * endpoint, which is also the only arrangement that works identically under
+ * `STORAGE_PROVIDER=mock` and against a real bucket.
  */
 const BODY_LIMIT = '256kb';
 
@@ -66,7 +74,18 @@ export function createApp(): Express {
   // the caller is.
   app.use(cors);
 
-  app.use(json({ limit: BODY_LIMIT }));
+  app.use(
+    json({
+      limit: BODY_LIMIT,
+      // A provider signs the bytes it sent, not a re-serialisation of them
+      // (BACKEND.md §7.7). This is the only hook that sees them; see
+      // `config/rawBody.ts` for why, and for why it keeps only the webhooks'.
+      verify: (req, _res, buf) => {
+        if (req.url?.startsWith('/api/v1/webhooks/') !== true) return;
+        rememberRawBody(req, buf.toString('utf8'));
+      },
+    }),
+  );
 
   app.use(attachPrincipal);
   app.use(attachGuestFromLink);

@@ -312,7 +312,16 @@ test.describe('the SMS link opens the live serial (FR-GST-05)', () => {
     // Never "are you sure": the sheet says the serial is released and somebody
     // else may get it, and states the refund position before confirming.
     await expect(page.getByText(/ছেড়ে দেওয়া হবে/)).toBeVisible();
-    await expect(page.getByTestId('refund-rule')).toBeVisible();
+
+    // `FR-PAY-03` asks for the rule *stated*, not merely a line present. It is
+    // one of four real sentences — an amount back, nothing back, nothing paid,
+    // or the hospital will say — and never blank. Which one depends on the
+    // hospital's seeded terms and on how the booking was paid for, so the
+    // assertion is over the set; `payment.routes.test.ts` and the domain
+    // tests pin the arithmetic that chooses between them.
+    const refund = page.getByTestId('refund-rule');
+    await expect(refund).toBeVisible();
+    await expect(refund).toHaveText(/ফেরত পাবেন|ফেরত পাবেন না|টাকা দেননি|হাসপাতাল জানাবে/);
 
     await page.getByTestId('cancel-confirm').click();
     await expect(page.getByTestId('live-serial-notice')).toHaveText('সিরিয়াল বাতিল করা হয়েছে');

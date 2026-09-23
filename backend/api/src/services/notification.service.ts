@@ -544,6 +544,78 @@ export async function queueEmergencyAnswer(
   };
 }
 
+/**
+ * Writes the report-ready notice into the outbox (`FR-LAB-03`, BACKEND.md §8:
+ * "Report ready → `lab.report_ready` → push").
+ *
+ * **Push only, by the document.** §8's mapping gives this one channel and no
+ * SMS, which is a product judgement this code follows rather than second-
+ * guesses: a report is not a summons, and by the time this runs it is already
+ * in the wallet. In this version every push is skipped with `no_device_token`
+ * (no screen asks for notification permission yet), so the honest outcome is
+ * a recorded row saying nobody was reached — while the delivery `FR-LAB-03`
+ * actually promises has already happened, in the caller's transaction.
+ *
+ * The notice names the test and the hospital and nothing else. A result on a
+ * lock screen is read by whoever is holding the phone (`DB-P7`).
+ */
+export async function queueReportReady(
+  trx: Tx,
+  input: { readonly testOrderId: string },
+  at: Date = new Date(),
+): Promise<QueuedBatch> {
+  const target = await notificationRepo.reportRecipient(trx, input.testOrderId);
+  if (target === null) return NOTHING;
+
+  const templateKey: TemplateKey = 'lab.report_ready';
+  const templates = await templateIndex();
+
+  const { recipient } = target;
+  const locale: Locale = recipient.locale === 'en' ? 'en' : 'bn';
+  const params: Record<string, string> = {
+    // Correlation, not copy: which order this message announced.
+    testOrderId: input.testOrderId,
+    test: target.testName,
+    hospital: locale === 'bn' ? target.hospitalNameBn : target.hospitalNameEn,
+  };
+
+  const body = templates.get(`${templateKey}|push|${locale}`);
+  if (body === undefined) return NOTHING;
+
+  const budgetLeft =
+    target.smsBudgetMonthly === null
+      ? Number.POSITIVE_INFINITY
+      : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId));
+
+  const rows: notificationRepo.QueuedNotification[] = [
+    {
+      recipient,
+      channel: 'push',
+      templateKey,
+      params,
+      body: render(body, params),
+      skipped: suppression({
+        channel: 'push',
+        phone: recipient.phone,
+        templateKey,
+        at,
+        budgetLeft,
+      }),
+    },
+  ];
+
+  const ids = await notificationRepo.queueAll(trx, rows);
+
+  return {
+    ids,
+    messages: ids.flatMap((id, index) => {
+      const row = rows[index];
+      if (row?.skipped !== null) return [];
+      return [{ id, channel: row.channel, to: null, body: row.body, templateKey, recipient }];
+    }),
+  };
+}
+
 function isBedKindName(kind: string): kind is BedKindName {
   return Object.hasOwn(BED_KIND_NAMES, kind);
 }

@@ -25,7 +25,7 @@
  * tracking link directly.
  */
 
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 import {
   id,
@@ -46,6 +46,7 @@ import * as sessionRepo from '../repositories/session.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import * as notifications from './notification.service.js';
+import * as payments from './payment.service.js';
 import * as queueService from './queue.service.js';
 
 import type { AppendEventResult } from './queue.service.js';
@@ -175,6 +176,12 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
 
     const serial = roster.reduce((max, booking) => Math.max(max, booking.serial), 0) + 1;
 
+    // Resolved once and carried out, because the payment needs the same
+    // identity the booking was made with — a `guest_identities` row, which is
+    // what `payments_one_payer` references and is not the `patients` row.
+    const bookedByGuestId =
+      input.booker.kind === 'guest' ? await guestIdFor(trx, input.booker) : null;
+
     const bookingId = await bookingRepo.insertBooking(trx, {
       sessionId: input.sessionId,
       patientId,
@@ -182,12 +189,17 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
       source: input.booker.kind === 'guest' ? 'guest_link' : 'app',
       feePoisha: session.feePoisha,
       bookedByUserId: input.booker.kind === 'user' ? input.booker.userId : null,
-      bookedByGuestId: input.booker.kind === 'guest' ? await guestIdFor(trx, input.booker) : null,
+      bookedByGuestId,
       reasonText: input.reason ?? null,
       intake: { ...(input.intake ?? {}), demo: true },
     });
 
-    return { bookingId, serial, patientId };
+    const payer: payments.Payer =
+      input.booker.kind === 'user'
+        ? { kind: 'user', userId: input.booker.userId }
+        : { kind: 'guest', guestId: bookedByGuestId ?? '' };
+
+    return { bookingId, serial, patientId, payer };
   });
 
   // Outside the transaction: the link is derived from the row, and minting it
@@ -213,16 +225,58 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
   // has their serial.
   await queueBookingConfirmation(created.bookingId, input.sessionId, trackingUrl);
 
+  // The money, recorded (step 18). Outside the booking transaction and after
+  // the confirmation, deliberately: a patient who has a serial must not lose
+  // it because a payment gateway was slow, and a booking that rolled back
+  // over a charge would send them round to take a second one. So the booking
+  // is the commitment and the payment is recorded against it — which is also
+  // the order a settlement reads them in (`FR-PAY-05`).
+  const paid = await recordBookingPayment(created, input);
+
   return {
     bookingId: created.bookingId,
     serial: created.serial,
     sessionId: input.sessionId,
     fee,
     trackingUrl,
-    // `PAYMENT_PROVIDER=mock` always succeeds (CLAUDE.md §1.1). Nothing is
-    // recorded: `payments` is migration 0009.
-    paid: input.method !== 'at_hospital',
+    paid,
   };
+}
+
+/**
+ * Writes the `payments` row a booking produced (`FR-PAY-01`, `FR-PAY-06`).
+ *
+ * Never throws. A failure here leaves a booking with no payment row, which is
+ * recoverable — the patient holds a serial, the hospital can take the money at
+ * the counter, and a settlement counts the booking with nothing against it.
+ * Throwing would lose the serial instead, which is not.
+ *
+ * `at_hospital` records the intention and stays `pending` until somebody takes
+ * the cash; everything else is charged through the provider, which under
+ * `PAYMENT_PROVIDER=mock` settles inline (CLAUDE.md §1.1).
+ */
+async function recordBookingPayment(
+  created: { readonly bookingId: string; readonly payer: payments.Payer },
+  input: CreateBookingInput,
+): Promise<boolean> {
+  try {
+    const result = await payments.createIntent(
+      {
+        bookingId: created.bookingId,
+        method: input.method,
+        // The booking's own client event id where there is one, so a retried
+        // confirm makes one payment and not two (`FR-PAY-06`, `FR-QUE-51`).
+        idempotencyKey: input.clientEventId ?? randomUUID(),
+        returnUrl: `${env.WEB_BASE_URL}/s/${created.bookingId}`,
+      },
+      created.payer,
+    );
+    return result.payment.state === 'paid';
+  } catch (cause: unknown) {
+    // The booking id, never the payer (`DB-P7`).
+    logger.error({ bookingId: created.bookingId, err: cause }, 'could not record the payment');
+    return false;
+  }
 }
 
 /**
@@ -352,6 +406,24 @@ export interface BookingView {
   readonly booking: bookingRepo.BookingDetail;
   readonly state: QueueState;
   readonly etas: readonly Eta[];
+  /**
+   * What was paid for this booking, if anything (`FR-PAY-03`).
+   *
+   * `MOD-A08-CANCEL` has to state the refund **before** the patient confirms,
+   * and the refund depends on what was actually taken — a pay-at-hospital
+   * booking gets nothing back because nothing was given. The screen runs
+   * `refundIfCancelledNow` over this and the hospital's policy, which is the
+   * same function the server refunds with, so the sentence a patient reads
+   * and the amount they receive cannot disagree.
+   *
+   * Never carries `provider_ref` (CLAUDE.md §7).
+   */
+  readonly payment: {
+    readonly amountPoisha: number;
+    readonly platformFeePoisha: number;
+    readonly refundedPoisha: number;
+    readonly paidAt: string | null;
+  } | null;
   /** The age of the figures on screen, for `<FreshnessLine>` (`FR-PAT-35`). */
   readonly freshAt: string;
   readonly serverTs: string;
@@ -362,16 +434,33 @@ export async function bookingView(bookingId: string): Promise<BookingView> {
   const booking = await bookingRepo.findDetail(bookingId);
   if (booking === null) throw notFound('booking');
 
-  const [state, etas, cached] = await Promise.all([
+  const [state, etas, cached, paid] = await Promise.all([
     queueService.getState(booking.sessionId),
     queueService.getEtas(booking.sessionId),
     queueService.getCachedState(booking.sessionId),
+    payments.forBooking(bookingId),
   ]);
+
+  // The newest payment that actually took money. A booking may hold several
+  // rows — a failed attempt then a successful one — and the refund is about
+  // the one that succeeded.
+  const settled =
+    paid.find((entry) => entry.paidAt !== null && entry.refundedPoisha < entry.amountPoisha) ??
+    null;
 
   return {
     booking,
     state,
     etas,
+    payment:
+      settled === null
+        ? null
+        : {
+            amountPoisha: settled.amountPoisha,
+            platformFeePoisha: settled.platformFeePoisha,
+            refundedPoisha: settled.refundedPoisha,
+            paidAt: settled.paidAt,
+          },
     // The cache's own timestamp, never this server's clock: a figure is as old
     // as the last event that moved it, and saying otherwise would make every
     // freshness line read "just now" forever (`FR-OFF-03`).
