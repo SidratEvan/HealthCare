@@ -148,6 +148,8 @@ export async function insertPayment(
     readonly bedRequestId: string | null;
     readonly testOrderId: string | null;
     readonly ambulanceRequestId: string | null;
+    /** 0023 — a standby prepayment, before there is a booking (`FR-PAT-26`). */
+    readonly standbyId?: string | null;
     readonly payerUserId: string | null;
     readonly payerGuestId: string | null;
     readonly amountPoisha: number;
@@ -159,12 +161,13 @@ export async function insertPayment(
 ): Promise<string> {
   const result = await sql<{ id: string }>`
     INSERT INTO payments
-      (booking_id, bed_request_id, test_order_id, ambulance_request_id,
+      (booking_id, bed_request_id, test_order_id, ambulance_request_id, standby_id,
        payer_user_id, payer_guest_id, amount_poisha, platform_fee_poisha,
        method, idempotency_key, created_by)
     VALUES (
       ${input.bookingId}::uuid, ${input.bedRequestId}::uuid,
       ${input.testOrderId}::uuid, ${input.ambulanceRequestId}::uuid,
+      ${input.standbyId ?? null}::uuid,
       ${input.payerUserId}::uuid, ${input.payerGuestId}::uuid,
       ${input.amountPoisha}, ${input.platformFeePoisha},
       ${input.method}::payment_method, ${input.idempotencyKey}, ${input.createdBy}::uuid
@@ -352,4 +355,63 @@ export async function bookingsInPeriod(input: {
   `.execute(db);
 
   return Number(result.rows[0]?.count ?? '0');
+}
+
+/**
+ * The paid, unrefunded prepayment on a standby row, if it has one
+ * (`FR-PAT-26`).
+ */
+export async function paidForStandby(trx: Tx, standbyId: string): Promise<string | null> {
+  const result = await sql<{ id: string }>`
+    SELECT id FROM payments
+     WHERE standby_id = ${standbyId}::uuid
+       AND state = 'paid'::payment_state
+       AND refunded_poisha = 0
+       AND refund_reason IS NULL
+       AND deleted_at IS NULL
+     LIMIT 1
+  `.execute(trx);
+  return result.rows[0]?.id ?? null;
+}
+
+/**
+ * Moves a standby prepayment onto the booking it bought (`FR-QUE-30`).
+ *
+ * The same money, now for the thing it paid for. From here every settlement,
+ * revenue and refund query that reads bookings counts it, and nothing has to
+ * know it began on a standby list. The amounts are untouched —
+ * `trg_payments_amount_locked` would refuse otherwise.
+ */
+export async function moveStandbyToBooking(
+  trx: Tx,
+  standbyId: string,
+  bookingId: string,
+): Promise<number> {
+  const result = await sql<{ id: string }>`
+    UPDATE payments
+       SET booking_id = ${bookingId}::uuid, standby_id = NULL
+     WHERE standby_id = ${standbyId}::uuid
+       AND deleted_at IS NULL
+    RETURNING id
+  `.execute(trx);
+  return result.rows.length;
+}
+
+/**
+ * Standby prepayments on a session whose payer was never seated — owed back in
+ * full when the session ends (`standby_unseated`). Seated ones have already
+ * moved to their booking and are that booking's business.
+ */
+export async function unseatedStandbyForSession(trx: Tx, sessionId: string): Promise<string[]> {
+  const result = await sql<{ id: string }>`
+    SELECT p.id
+      FROM payments p
+      JOIN standby_list sl ON sl.id = p.standby_id
+     WHERE sl.session_id = ${sessionId}::uuid
+       AND p.state = 'paid'::payment_state
+       AND p.refunded_poisha = 0
+       AND p.refund_reason IS NULL
+       AND p.deleted_at IS NULL
+  `.execute(trx);
+  return result.rows.map((row) => row.id);
 }

@@ -333,6 +333,7 @@ export * from './schemas/sync.schema.js';
 export * from './schemas/booking.schema.js';
 export * from './schemas/clinical.schema.js';
 export * from './schemas/bed.schema.js';
+export * from './schemas/standby.schema.js';
 export * from './schemas/emergency.schema.js';
 export * from './schemas/referral.schema.js';
 export * from './schemas/lab.schema.js';

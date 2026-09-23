@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 
+import { REFUND_REASONS } from '../payments/refund.js';
 import { PAYMENT_METHODS } from '../types/enums.js';
 
 const uuid = z.string().uuid();
@@ -65,7 +66,7 @@ export const paymentParams = z.object({ id: uuid });
  * raised by the session ending, without anybody asking.
  */
 export const refundBody = z.object({
-  reason: z.enum(['patient_cancelled', 'doctor_absent', 'session_ended']),
+  reason: z.enum(REFUND_REASONS),
   /** An administrator's own words, recorded beside the rule that decided it. */
   note: z.string().trim().max(300).nullable().default(null),
   idempotencyKey: uuid,

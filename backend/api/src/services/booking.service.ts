@@ -364,7 +364,7 @@ async function guestIdFor(trx: Tx, booker: Extract<Booker, { kind: 'guest' }>): 
  * access token when the screen opens. What leaks from a forwarded SMS is then
  * something the hospital can switch off.
  */
-async function issueTrackingLink(
+export async function issueTrackingLink(
   bookingId: string,
   sessionId: string,
   phone: string,

@@ -58,6 +58,7 @@ const ROUTES = [
   `${PATIENT}/emergency`,
   `${PATIENT}/emergency/results`,
   `${PATIENT}/emergency/onway`,
+  `${PATIENT}/standby`,
   `${CONSOLE}/`,
 ];
 

@@ -124,6 +124,67 @@ export async function createIntent(
     return { payment: created, duplicate: false };
   });
 
+  return await charge(payment, duplicate, input);
+}
+
+/**
+ * A standby prepayment (`FR-PAT-26`, migration 0023).
+ *
+ * Paid when joining, before there is a booking to pay for, so the standby row
+ * is the subject until the person is seated — at which point
+ * `queue.service` moves it onto the booking it bought. The amount is the
+ * session's own fee, never the caller's, as a booking's is.
+ */
+export async function createStandbyPrepayment(
+  input: {
+    readonly standbyId: string;
+    readonly amountPoisha: number;
+    readonly method: PaymentMethod;
+    readonly idempotencyKey: string;
+    readonly returnUrl: string;
+  },
+  payer: Payer,
+): Promise<PaymentIntentResult> {
+  const { payment, duplicate } = await withTransaction(async (trx) => {
+    await paymentRepo.lockIdempotencyKey(trx, input.idempotencyKey);
+
+    const replayed = await paymentRepo.findByIdempotencyKey(trx, input.idempotencyKey);
+    if (replayed !== null) return { payment: replayed, duplicate: true };
+
+    const id = await paymentRepo.insertPayment(trx, {
+      bookingId: null,
+      bedRequestId: null,
+      testOrderId: null,
+      ambulanceRequestId: null,
+      standbyId: input.standbyId,
+      payerUserId: payer.kind === 'user' ? payer.userId : null,
+      payerGuestId: payer.kind === 'guest' ? payer.guestId : null,
+      amountPoisha: input.amountPoisha,
+      platformFeePoisha: platformFeeWithin(input.amountPoisha),
+      method: input.method,
+      idempotencyKey: input.idempotencyKey,
+      createdBy: null,
+    });
+
+    const created = await paymentRepo.findPayment(id, trx);
+    if (created === null) throw notFound('payment');
+    return { payment: created, duplicate: false };
+  });
+
+  return await charge(payment, duplicate, input);
+}
+
+/**
+ * Takes the money for a payment row that now exists (`FR-PAY-01`).
+ *
+ * Shared by every subject: what a payment is *for* decides how the row is
+ * written, and nothing about how the provider is called.
+ */
+async function charge(
+  payment: PaymentView,
+  duplicate: boolean,
+  input: { readonly method: PaymentMethod; readonly returnUrl: string },
+): Promise<PaymentIntentResult> {
   const serverTs = new Date().toISOString();
 
   // A replay is answered with what the first attempt produced, and the
@@ -325,6 +386,14 @@ export async function raiseRefundsForEndedSession(sessionId: string): Promise<{
   readonly reason: RefundReason | null;
 }> {
   return await withTransaction(async (trx) => {
+    // `FR-PAT-26`: whoever paid to be seated from the standby list and never
+    // was is owed all of it back, whatever else is true of the session.
+    const standbyOwed = await paymentRepo.markRefundOwed(trx, {
+      paymentIds: await paymentRepo.unseatedStandbyForSession(trx, sessionId),
+      reason: 'standby_unseated' satisfies RefundReason,
+    });
+    if (standbyOwed > 0) logger.info({ sessionId, standbyOwed }, 'standby refunds owed');
+
     const owed = await paymentRepo.paidForSession(trx, sessionId);
     if (owed.length === 0) return { eligible: 0, reason: null };
 

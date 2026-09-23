@@ -58,8 +58,19 @@ import { toEpochMs } from '../util/time.js';
 
 import type { Timestamp } from '../types/ids.js';
 
-/** Why a refund is owed. Recorded on the payment, and shown to the patient. */
-export const REFUND_REASONS = ['patient_cancelled', 'doctor_absent', 'session_ended'] as const;
+/**
+ * Why a refund is owed. Recorded on the payment, and shown to the patient.
+ *
+ * `standby_unseated`: paid when joining a standby list (`FR-PAT-26`) and never
+ * given a chair — the session ended first, or they left the list. Nothing was
+ * delivered, so all of it comes back, as it does for an absent doctor.
+ */
+export const REFUND_REASONS = [
+  'patient_cancelled',
+  'doctor_absent',
+  'session_ended',
+  'standby_unseated',
+] as const;
 export type RefundReason = (typeof REFUND_REASONS)[number];
 
 /** A hospital's cancellation terms, once validated. */
@@ -172,7 +183,11 @@ export function refundFor(
 
   // `FR-PAY-07`. The patient did not cancel; nobody saw them. All of it,
   // including the platform fee — the serial was worth nothing to them.
-  if (input.reason === 'doctor_absent' || input.reason === 'session_ended') {
+  if (
+    input.reason === 'doctor_absent' ||
+    input.reason === 'session_ended' ||
+    input.reason === 'standby_unseated'
+  ) {
     return { refundPoisha: remaining, reason: input.reason, guaranteed: true, stated: true };
   }
 

@@ -24,6 +24,8 @@ import { ApiClient } from '@platform/client';
 export interface StandbyWaiting {
   readonly id: string;
   readonly position: number;
+  /** Paid when joining (`FR-PAT-26`): offering them a chair seats them. */
+  readonly prepaid: boolean;
 }
 
 export interface StandbyOffer {

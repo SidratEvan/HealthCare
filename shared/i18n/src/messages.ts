@@ -1055,6 +1055,10 @@ export const CONSOLE = {
   // --- Standby and freed slots (S-B-02, FR-QUE-30, FR-REC-30) --------------
   standbyTitle: { bn: 'স্ট্যান্ডবাই তালিকা', en: 'Standby list' },
   standbyCount: { bn: '{count} জন অপেক্ষায়', en: '{count} waiting' },
+  standbyPrepaidCount: {
+    bn: '{count} জন আগেই পরিশোধ করেছেন — প্রস্তাব দিলেই বসানো হবে',
+    en: '{count} paid already — offering seats them at once',
+  },
   standbyNothingFree: {
     bn: 'কোনো সিরিয়াল খালি হলে এখান থেকে প্রস্তাব পাঠাতে পারবেন।',
     en: 'When a serial frees up, you can offer it from here.',
@@ -1574,6 +1578,91 @@ export const PATIENT = {
   serialsTaken: { bn: 'সিরিয়াল নেওয়া হয়েছে', en: 'serials taken' },
   seatsLeft: { bn: 'বাকি আছে', en: 'left' },
   sessionFull: { bn: 'পূর্ণ', en: 'Full' },
+
+  // --- Standby (FR-PAT-25, FR-PAT-26, FR-PAT-27, BTN-A06D-STANDBY, S-A-08s) -
+  standbyJoin: { bn: 'স্ট্যান্ডবাই তালিকায় নাম দিন', en: 'Join the standby list' },
+  standbyJoinTitle: { bn: 'স্ট্যান্ডবাই তালিকায় নাম দিন', en: 'Join the standby list' },
+  standbyJoinWhy: {
+    bn: 'এই চেম্বার পূর্ণ। কেউ বাতিল করলে বা না এলে সিরিয়ালটি তালিকার ক্রমে দেওয়া হয়।',
+    en: 'This chamber is full. When somebody cancels or does not come, the serial goes down the list in order.',
+  },
+  standbyHowTitle: { bn: 'খালি হলে কী হবে?', en: 'When a serial frees up' },
+  standbyPrepayOption: {
+    bn: 'এখনই পরিশোধ করুন — খালি হলেই সিরিয়াল আপনার',
+    en: 'Pay now — the serial is yours as soon as one frees',
+  },
+  standbyPrepayNote: {
+    bn: 'কাউকে জিজ্ঞেস না করেই আপনাকে বসানো হবে। সিরিয়াল না পেলে পুরো টাকা ফেরত।',
+    en: 'You are seated without being asked. If no serial comes, all of it comes back.',
+  },
+  standbyAskOption: {
+    bn: 'পরে পরিশোধ — খালি হলে জানাব',
+    en: 'Pay later — tell me when one frees',
+  },
+  standbyAskNote: {
+    bn: 'খালি হলে ফোনে জানাব; ১০ মিনিটের মধ্যে হ্যাঁ বা না বলবেন।',
+    en: 'We tell you on your phone; you say yes or no within 10 minutes.',
+  },
+  standbyConfirm: { bn: 'তালিকায় নাম দিন', en: 'Join the list' },
+  standbyJoinFailed: {
+    bn: 'তালিকায় নাম দেওয়া যায়নি। আবার চেষ্টা করুন।',
+    en: 'Could not join the list. Please try again.',
+  },
+  standbyNotFull: {
+    bn: 'এই চেম্বারে এখন সিরিয়াল খালি আছে — সরাসরি সিরিয়াল নিন।',
+    en: 'This chamber has a serial free now — book it directly.',
+  },
+  standbyAlreadyBooked: {
+    bn: 'এই রোগীর এই চেম্বারে আগেই সিরিয়াল আছে।',
+    en: 'This patient already has a serial in this chamber.',
+  },
+  standbyStatusTitle: { bn: 'স্ট্যান্ডবাই তালিকা', en: 'Standby list' },
+  standbyPlace: { bn: 'তালিকায় আপনার আগে {count} জন', en: '{count} ahead of you on the list' },
+  standbyFirst: { bn: 'খালি হলে প্রথমেই আপনি', en: 'You are first when a serial frees' },
+  standbyPrepaidBadge: {
+    bn: 'আগেই পরিশোধ করেছেন — খালি হলেই সিরিয়াল আপনার',
+    en: 'Paid already — the serial is yours as soon as one frees',
+  },
+  standbyAskBadge: {
+    bn: 'খালি হলে এখানে জানাব — ১০ মিনিটের মধ্যে হ্যাঁ বলবেন',
+    en: 'We will ask here — say yes within 10 minutes',
+  },
+  standbyOfferTitle: { bn: 'একটি সিরিয়াল খালি হয়েছে', en: 'A serial has freed up' },
+  standbyOfferLeft: {
+    bn: 'হ্যাঁ বলার সময় আর {minutes} মিনিট',
+    en: '{minutes} min left to say yes',
+  },
+  standbyOfferAccept: { bn: 'হ্যাঁ, সিরিয়াল নেব', en: 'Yes, I’ll take it' },
+  standbyOfferDecline: { bn: 'না, পরের জনকে দিন', en: 'No, give it to the next person' },
+  standbyAcceptFailed: {
+    bn: 'নেওয়া গেল না — সময় পেরিয়ে গেছে বা অন্য কেউ নিয়েছেন।',
+    en: 'Could not take it — the time ran out or somebody else took it.',
+  },
+  standbySeatedTitle: { bn: 'সিরিয়াল {serial} আপনার', en: 'Serial {serial} is yours' },
+  standbySeatedLink: { bn: 'লাইভ সিরিয়াল দেখুন', en: 'Follow the live serial' },
+  standbySeatedSms: {
+    bn: 'লাইভ দেখার লিংক আপনার ফোনে SMS-এ পাঠানো হয়েছে।',
+    en: 'The link to follow it was sent to your phone by SMS.',
+  },
+  standbyLeave: { bn: 'তালিকা থেকে নাম তুলে নিন', en: 'Leave the list' },
+  standbyLeaveConfirm: { bn: 'নাম তুলে নিন', en: 'Leave' },
+  standbyLeaveStay: { bn: 'থাক', en: 'Stay' },
+  standbyLeaveRefund: {
+    bn: 'আগেই পরিশোধ করা পুরো টাকা ফেরত দেওয়া হবে।',
+    en: 'What you paid comes back in full.',
+  },
+  standbyLeft: {
+    bn: 'আপনি তালিকা থেকে নাম তুলে নিয়েছেন।',
+    en: 'You have left the list.',
+  },
+  standbyLinkBad: {
+    bn: 'এই লিংকটি আর খোলে না। হাসপাতালের কাউন্টারে যোগাযোগ করুন।',
+    en: 'This link no longer opens. Please contact the hospital counter.',
+  },
+  standbyLoadFailed: {
+    bn: 'তালিকার অবস্থা আনা যায়নি।',
+    en: 'Could not load your place on the list.',
+  },
   expectedWait: { bn: 'আনুমানিক অপেক্ষা', en: 'Expected wait' },
   waitUnknown: { bn: 'এখনো বলা যাচ্ছে না', en: 'Not known yet' },
   noSessions: { bn: 'আগামী সাত দিনে কোনো চেম্বার নেই', en: 'No chambers in the next seven days' },

@@ -256,9 +256,22 @@ describe('FR-DEM-03: two hundred profiles and five hundred past visits', () => {
         expect(await count(client, 'SELECT count(*)::text AS n FROM patients')).toBe(PATIENT_COUNT);
         expect(PATIENT_COUNT).toBe(200);
         expect(await count(client, 'SELECT count(*)::text AS n FROM users')).toBe(ACCOUNT_COUNT);
-        expect(await count(client, 'SELECT count(*)::text AS n FROM guest_identities')).toBe(
-          GUEST_COUNT,
-        );
+        // The profiles' own guest identities. The standby range (`+880135…`,
+        // `lib/demo.ts`) is excluded: `seed_07` gives the pitch chamber's
+        // prepaid standby place its own identity (`FR-PAT-26`), which is a
+        // person joining a list, not one of the two hundred profiles.
+        expect(
+          await count(
+            client,
+            "SELECT count(*)::text AS n FROM guest_identities WHERE phone NOT LIKE '+880135%'",
+          ),
+        ).toBe(GUEST_COUNT);
+        expect(
+          await count(
+            client,
+            "SELECT count(*)::text AS n FROM guest_identities WHERE phone LIKE '+880135%'",
+          ),
+        ).toBe(1);
 
         // patients_one_owner is a check constraint, but a seed that put every
         // profile on an account would satisfy it and still miss FR-GST-04.

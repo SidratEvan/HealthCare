@@ -403,3 +403,48 @@ export interface InboundResult {
   readonly trackUrl: string;
   readonly duplicate: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// The standby list (`FR-PAT-25`, `FR-PAT-26`, `FR-PAT-27`, `S-A-08s`)
+// ---------------------------------------------------------------------------
+
+/** What joining answers with. The token is the place on the list. */
+export interface StandbyJoined {
+  readonly standbyId: string;
+  readonly position: number;
+  /** True once the prepayment was actually taken. */
+  readonly prepaid: boolean;
+  readonly token: string;
+  readonly statusUrl: string;
+  readonly duplicate: boolean;
+}
+
+/** `GET /standby/:token` — `S-A-08s`. */
+export interface StandbyStatusView {
+  readonly standbyId: string;
+  readonly sessionId: string;
+  readonly state: 'waiting' | 'offered' | 'seated' | 'left';
+  readonly doctorNameBn: string | null;
+  readonly hospitalNameBn: string | null;
+  readonly plannedStart: string | null;
+  readonly feePoisha: number;
+  readonly position: number;
+  readonly ahead: number;
+  readonly prepaid: boolean;
+  readonly offer: { readonly id: string; readonly expiresAt: string } | null;
+  readonly seated: {
+    readonly bookingId: string;
+    readonly serial: number;
+    /** Given once, the first time it is asked after the seat. */
+    readonly trackingUrl: string | null;
+  } | null;
+  readonly serverTs: string;
+}
+
+/** `POST /standby/:token/accept`. */
+export interface StandbyAccepted {
+  readonly bookingId: string;
+  readonly serial: number;
+  readonly trackingUrl: string | null;
+  readonly paid: boolean;
+}

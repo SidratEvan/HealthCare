@@ -66,9 +66,18 @@ const NUMERALS = 'latin' as const;
  *
  * The read is what records a lapsed offer (nothing sweeps on a timer), so
  * without it an offer whose window closed would sit on this card as
- * "awaiting an answer" until something else moved the queue.
+ * "awaiting an answer" until something else moved the queue — and a patient
+ * who said yes or no on their phone (`FR-PAT-27`) would not show here until
+ * then either.
  */
 const OUTSTANDING_POLL_MS = 15_000;
+
+/**
+ * How often it is re-read otherwise. A patient joining the list from the app
+ * (`FR-PAT-25`) is not a queue event, so nothing on the session channel says
+ * they arrived.
+ */
+const IDLE_POLL_MS = 30_000;
 
 export function StandbyCard({
   sessionId,
@@ -112,8 +121,10 @@ export function StandbyCard({
   const outstanding = state.offers.filter((offer) => offer.outcome === 'pending');
 
   useEffect(() => {
-    if (outstanding.length === 0) return;
-    const timer = setInterval(() => void refresh(), OUTSTANDING_POLL_MS);
+    const timer = setInterval(
+      () => void refresh(),
+      outstanding.length === 0 ? IDLE_POLL_MS : OUTSTANDING_POLL_MS,
+    );
     return () => {
       clearInterval(timer);
     };
@@ -132,6 +143,7 @@ export function StandbyCard({
   // Null until the panel has been read once: "nobody is waiting" is a claim,
   // and the card does not make it before it knows.
   const waiting = panel === null ? null : panel.waiting.length;
+  const prepaidCount = panel === null ? 0 : panel.waiting.filter((row) => row.prepaid).length;
 
   // "Appears when a slot frees." Nothing free, nothing offered and nobody
   // waiting is a card with nothing to say, so there is no card.
@@ -201,6 +213,15 @@ export function StandbyCard({
           count: waiting === null ? '—' : formatNumber(waiting, NUMERALS),
         })}
       </p>
+      {/* `FR-PAT-26`: offering a chair to somebody who paid seats them without
+          asking, and the receptionist should know that before tapping. */}
+      {prepaidCount === 0 ? null : (
+        <p className="text-caption text-brand-700" data-testid="standby-prepaid-count">
+          {format('standbyPrepaidCount', locale, {
+            count: formatNumber(prepaidCount, NUMERALS),
+          })}
+        </p>
+      )}
 
       <ul className="mt-3 flex flex-col gap-3">
         {freed.map((entry) => (
