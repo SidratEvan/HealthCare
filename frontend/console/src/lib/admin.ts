@@ -32,7 +32,7 @@ export interface TodayFigures {
   readonly cancelled: number;
   readonly walkin: number;
   readonly bookedAhead: number;
-  /** Arrival to call. Null until a check-in action exists (migration 0020). */
+  /** Check-in to call (`FR-REC-18`). Null when nobody was checked in and called. */
   readonly avgWaitMinutes: number | null;
   readonly longestWaitMinutes: number | null;
   readonly waitsMeasured: number;
@@ -42,6 +42,14 @@ export interface TodayFigures {
   readonly sessionsTotal: number;
   readonly sessionsLate: number;
   readonly sessionsNeverStarted: number;
+}
+
+/** How often the wait quoted at check-in was kept (`FR-ADM-01`). */
+export interface QuoteAccuracy {
+  readonly quoted: number;
+  readonly kept: number;
+  readonly keptRate: number | null;
+  readonly avgOverMinutes: number | null;
 }
 
 export interface TrendPoint {
@@ -145,6 +153,7 @@ export interface ForecastPoint {
 export interface Dashboard {
   readonly range: { readonly from: string; readonly to: string };
   readonly today: TodayFigures;
+  readonly quotes: QuoteAccuracy;
   readonly trend: readonly TrendPoint[];
   readonly adoptionDate: string | null;
   readonly loss: LossFigures;

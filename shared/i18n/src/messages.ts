@@ -98,9 +98,36 @@ export const CONSOLE = {
   markNoShow: { bn: 'অনুপস্থিত', en: 'No-show' },
   reinstate: { bn: 'ফিরিয়ে আনুন', en: 'Reinstate' },
 
+  // --- Check-in (FR-REC-18, BTN-B02-CHECKIN, MOD-B02-CHECKIN) ----------------
+  checkIn: { bn: 'এসেছেন', en: 'Checked in' },
+  checkInTitle: { bn: 'সিরিয়াল {serial} এসেছেন', en: 'Serial {serial} is here' },
+  checkInDescription: {
+    bn: 'রোগীকে আনুমানিক কতক্ষণ অপেক্ষা করতে হবে বলছেন?',
+    en: 'Roughly how long are you telling them they will wait?',
+  },
+  checkInFromQueue: {
+    bn: 'সারির হিসাব থেকে নেওয়া — দরকার হলে বদলান।',
+    en: 'From the queue’s estimate — change it if you know better.',
+  },
+  checkInNoEstimate: {
+    bn: 'সারির কোনো হিসাব নেই — নিজে ঠিক করুন।',
+    en: 'The queue has no estimate for them — set it yourself.',
+  },
+  checkInMinutes: { bn: '{minutes} মিনিট', en: '{minutes} min' },
+  checkInLess: { bn: '৫ মিনিট কম', en: '5 minutes less' },
+  checkInMore: { bn: '৫ মিনিট বেশি', en: '5 minutes more' },
+  checkInConfirm: { bn: 'নিশ্চিত করুন', en: 'Confirm' },
+  checkInCancel: { bn: 'থাক', en: 'Not now' },
+  checkedIn: {
+    bn: 'সিরিয়াল {serial} — এসেছেন, {minutes} মিনিট বলা হয়েছে',
+    en: 'Serial {serial} checked in, told {minutes} min',
+  },
+  quotedShort: { bn: '{minutes} মিনিট বলা', en: 'told {minutes} min' },
+
   // --- Statuses ------------------------------------------------------------
   statusBooked: { bn: 'অপেক্ষায়', en: 'Waiting' },
   statusWaiting: { bn: 'অপেক্ষায়', en: 'Waiting' },
+  statusArrived: { bn: 'এসেছেন', en: 'Here' },
   statusInChamber: { bn: 'চেম্বারে', en: 'In chamber' },
   statusDone: { bn: 'দেখা হয়েছে', en: 'Seen' },
   statusLate: { bn: 'দেরিতে', en: 'Late' },
@@ -889,11 +916,23 @@ export const CONSOLE = {
   adminSessionsNeverStarted: { bn: 'শুরুই হয়নি', en: 'Never started' },
 
   /** FR-ADM-01's own wording, and why this product cannot answer it yet. */
-  adminWaitUnmeasured: { bn: 'অপেক্ষার সময় মাপা হয়নি', en: 'Wait time is not measured' },
-  adminWaitUnmeasuredWhy: {
-    bn: 'রোগী হাসপাতালে পৌঁছেছেন — এটি এখনো কোথাও লেখা হয় না, তাই করিডোরের অপেক্ষা মাপা যায় না। নিচের হিসাব নির্ধারিত সময়ের তুলনায় কত দেরিতে ডাকা হয়েছে।',
-    en: 'Nothing records a patient arriving yet, so the corridor wait cannot be measured. The figure below is how much later than their slot people were called.',
+  adminWaitUnmeasured: {
+    bn: 'এই সময়ে অপেক্ষা মাপা যায়নি',
+    en: 'No wait was measured in this period',
   },
+  adminWaitUnmeasuredWhy: {
+    bn: 'অপেক্ষা মাপা হয় কাউন্টারে "এসেছেন" চাপার সময় থেকে ডাকা পর্যন্ত। এই সময়ে কাউকে চেক-ইন করে ডাকা হয়নি। নিচের হিসাব নির্ধারিত সময়ের তুলনায় কত দেরিতে ডাকা হয়েছে।',
+    en: 'Wait runs from check-in at the counter to being called, and nobody was checked in and called in this period. The figure below is how much later than their slot people were called.',
+  },
+  adminAvgWait: { bn: 'গড় অপেক্ষা', en: 'Average wait' },
+  adminLongestWait: { bn: 'সবচেয়ে বেশি অপেক্ষা', en: 'Longest wait' },
+  adminWaitsMeasured: { bn: '{count} জনের চেক-ইন থেকে', en: 'From {count} check-ins' },
+  adminQuotesKept: { bn: 'বলা সময়ের মধ্যে ডাকা', en: 'Called within the quote' },
+  adminQuotesKeptNote: {
+    bn: '{quoted} জনের মধ্যে {kept} জন',
+    en: '{kept} of {quoted}',
+  },
+  adminQuoteOver: { bn: 'বলা সময়ের চেয়ে গড় দেরি', en: 'Average past the quote' },
 
   adminAdoption: { bn: 'লাইভ সিরিয়াল চালু', en: 'Live queue went live' },
   adminTrendCaption: {
@@ -1597,6 +1636,22 @@ export const PATIENT = {
   etaWithBand: { bn: '{time} · ±{band} মিনিট', en: '{time} · ±{band} min' },
   etaUnknown: { bn: 'এখনো বলা যাচ্ছে না', en: 'Not known yet' },
   countdown: { bn: 'আর বাকি প্রায় {minutes} মিনিট', en: 'About {minutes} min to go' },
+
+  // FR-PAT-38: the counter's word, beside the live estimate and never instead
+  // of it. `{time}` is when it was said.
+  quoteTitle: { bn: 'কাউন্টার জানিয়েছে', en: 'The counter said' },
+  quoteSaid: {
+    bn: 'প্রায় {minutes} মিনিট — {time}-এ বলা',
+    en: 'About {minutes} min — said at {time}',
+  },
+  quoteLeft: {
+    bn: 'সেই হিসাবে আর প্রায় {minutes} মিনিট',
+    en: 'By that, about {minutes} min to go',
+  },
+  quotePassed: {
+    bn: 'কাউন্টারের বলা সময় পেরিয়ে গেছে। ওপরের হিসাবটি এখনকার।',
+    en: 'The time the counter gave has passed. The estimate above is the current one.',
+  },
   patientsAhead: { bn: 'আপনার আগে {count} জন', en: '{count} ahead of you' },
   youAreNext: { bn: 'আপনিই পরবর্তী', en: 'You are next' },
 

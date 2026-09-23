@@ -39,9 +39,12 @@ test.describe('the hospital dashboard (S-B-10)', () => {
     await expect(page).toHaveURL(/view=admin/);
     await expect(page.getByText('এটি একটি ডেমো', { exact: false })).toBeVisible();
 
-    // FR-ADM-01 names average wait, which nothing measures. The screen says
-    // so instead of showing a zero, and gives the figure that is real.
-    await expect(page.getByTestId('admin-wait-notice')).toBeVisible();
+    // FR-ADM-01's wait, measured from check-in (FR-REC-18), with how often
+    // the counter's quote was kept beside it. The seeded history checks
+    // people in from the go-live date onward.
+    await expect(page.getByTestId('admin-waits')).toBeVisible();
+    await expect(page.getByTestId('admin-avg-wait-value')).toHaveText(/\d/);
+    await expect(page.getByTestId('admin-quotes-kept-value')).toHaveText(/\d+%/);
     await expect(page.getByTestId('admin-seen-value')).toHaveText(/\d/);
   });
 

@@ -23,7 +23,7 @@
  */
 
 import type { BookingStatus, QueueEntry, QueueState } from '@platform/domain';
-import { formatSerial, t, type Locale } from '@platform/i18n';
+import { format, formatNumber, formatSerial, t, type Locale } from '@platform/i18n';
 import { Button, Chip, type ChipTone } from '@platform/ui';
 
 import type { ReactNode } from 'react';
@@ -68,6 +68,8 @@ export interface QueueTableProps {
   readonly onLate: (entry: QueueEntry) => void;
   readonly onNoShow: (entry: QueueEntry) => void;
   readonly onReinstate: (entry: QueueEntry) => void;
+  /** `BTN-B02-CHECKIN`: the patient is at the counter (`FR-REC-18`). */
+  readonly onCheckIn: (entry: QueueEntry) => void;
   /** Patient display names, by patient id. Absent while they load. */
   readonly patientNames: ReadonlyMap<string, string>;
 }
@@ -80,6 +82,7 @@ export function QueueTable({
   onLate,
   onNoShow,
   onReinstate,
+  onCheckIn,
   patientNames,
 }: QueueTableProps): ReactNode {
   if (state.entries.length === 0) {
@@ -110,7 +113,7 @@ export function QueueTable({
           <th scope="col" className="w-28 px-4 py-3">
             {t('colSource', locale)}
           </th>
-          <th scope="col" className="w-64 px-4 py-3">
+          <th scope="col" className="w-96 px-4 py-3">
             {t('colActions', locale)}
           </th>
         </tr>
@@ -140,9 +143,23 @@ export function QueueTable({
               </td>
 
               <td className="px-4">
+                {/* Here, checked in: said as a word, because "waiting" is also
+                    what a booked patient still at home is (`FR-REC-18`). */}
                 <Chip tone={STATUS_TONE[entry.status]}>
-                  {t(STATUS_LABEL[entry.status], locale)}
+                  {entry.status === 'waiting' && entry.arrivedAt !== null
+                    ? t('statusArrived', locale)
+                    : t(STATUS_LABEL[entry.status], locale)}
                 </Chip>
+                {entry.quotedWaitMinutes !== null && isWaiting(entry.status) ? (
+                  <span
+                    className="mt-1 block text-caption text-ink-muted tabular-nums"
+                    data-testid={`quoted-${String(entry.serial)}`}
+                  >
+                    {format('quotedShort', locale, {
+                      minutes: formatNumber(entry.quotedWaitMinutes, 'latin'),
+                    })}
+                  </span>
+                ) : null}
               </td>
 
               <td className="px-4 text-body-sm text-ink-muted">
@@ -165,6 +182,22 @@ export function QueueTable({
                       }}
                     >
                       {t('markDone', locale)}
+                    </Button>
+                  ) : null}
+
+                  {/* `BTN-B02-CHECKIN`: first, because it is the first thing
+                      that happens to a patient at the counter. */}
+                  {entry.arrivedAt === null &&
+                  (isWaiting(entry.status) || entry.status === 'late') ? (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => {
+                        onCheckIn(entry);
+                      }}
+                      data-testid={`check-in-${String(entry.serial)}`}
+                    >
+                      {t('checkIn', locale)}
                     </Button>
                   ) : null}
 
