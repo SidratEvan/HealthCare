@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { openForSeconds, summariseTurnaround, turnaroundSeconds } from '../turnaround.js';
 
-import type { TestOrderView } from '../orders.js';
 import type { Timestamp } from '../../types/ids.js';
+import type { TestOrderView } from '../orders.js';
 
 const NOW = '2026-09-22T10:00:00.000Z' as Timestamp;
 const at = (minutes: number): Timestamp =>

@@ -228,9 +228,7 @@ export function canUploadReport(current: Pick<TestOrderView, 'state'>): LabGuard
  *
  * The server's own check before it takes the one step no console may take.
  */
-export function canDeliverReport(
-  current: Pick<TestOrderView, 'state' | 'report'>,
-): LabGuardResult {
+export function canDeliverReport(current: Pick<TestOrderView, 'state' | 'report'>): LabGuardResult {
   if (current.report === null) {
     return deny('NO_REPORT', 'There is no report to deliver.');
   }
@@ -271,10 +269,7 @@ export interface LocalLabChange {
  * writes are the same ones the server will write, so a reconciliation after
  * the round trip moves nothing on screen.
  */
-export function applyLocalLabChange(
-  current: TestOrderView,
-  change: LocalLabChange,
-): TestOrderView {
+export function applyLocalLabChange(current: TestOrderView, change: LocalLabChange): TestOrderView {
   if (!canActOnTestOrder(current, change.action).ok) return current;
 
   switch (change.action) {

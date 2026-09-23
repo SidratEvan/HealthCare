@@ -22,6 +22,7 @@ import { discoveryRoutes } from './discovery.routes.js';
 import { emergencyRoutes } from './emergency.routes.js';
 import { guestRoutes } from './guest.routes.js';
 import { healthRoutes } from './health.routes.js';
+import { labRoutes } from './lab.routes.js';
 import { queueRoutes } from './queue.routes.js';
 import { referralRoutes } from './referral.routes.js';
 import { syncRoutes } from './sync.routes.js';
@@ -64,6 +65,9 @@ export function buildApiRouter(): Router {
   router.use(emergencyRoutes);
   // Referrals between ERs (step 16): the coordinator's, at either end.
   router.use(referralRoutes);
+  // The lab and the pharmacy (step 17). The medicine availability search is
+  // public; everything else belongs to a bench or a counter.
+  router.use(labRoutes);
   router.use(syncRoutes);
   return router;
 }

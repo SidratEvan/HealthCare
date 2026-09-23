@@ -48,6 +48,7 @@ export const TEMPLATE_KEYS = [
   'bed.request_declined',
   'emergency.acknowledged',
   'emergency.declined',
+  'lab.report_ready',
 ] as const;
 
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
@@ -291,6 +292,19 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
     version: 1,
     bn: '{hospital} এখন আপনাকে নিতে পারছে না — অন্য হাসপাতাল দেখুন',
     en: '{hospital} cannot take you right now — see other hospitals',
+  },
+
+  // `FR-LAB-03`. **Push only**, because BACKEND.md §8's mapping says push and
+  // nothing else — a report is not a summons, and it is already in the wallet
+  // by the time this is written. In this version that means the row is
+  // recorded and skipped with `no_device_token`, like every other push: the
+  // delivery itself is what FR-LAB-03 promises, and it has already happened.
+  {
+    key: 'lab.report_ready',
+    channel: 'push',
+    version: 1,
+    bn: '{test}-এর রিপোর্ট এসেছে — {hospital}',
+    en: 'Your {test} report is ready — {hospital}',
   },
 ];
 

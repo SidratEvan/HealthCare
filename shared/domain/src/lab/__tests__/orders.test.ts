@@ -11,7 +11,6 @@ import {
   sortLabQueue,
   LAB_ACTIONS,
   LAB_ACTION_RESULT,
-  type LabAction,
   type TestOrderView,
 } from '../orders.js';
 
@@ -113,7 +112,12 @@ describe('delivered is the server’s step, not a button', () => {
     const withReport = order({
       state: 'report_ready',
       readyAt: at(90),
-      report: { id: 'report-1', fileType: 'application/pdf', uploadedAt: at(90), deliveredToWalletAt: null },
+      report: {
+        id: 'report-1',
+        fileType: 'application/pdf',
+        uploadedAt: at(90),
+        deliveredToWalletAt: null,
+      },
     });
 
     const noReport = canDeliverReport(ready);
@@ -217,7 +221,8 @@ describe('the state predicates', () => {
 
   it('covers every action in LAB_ACTIONS with a result state', () => {
     for (const action of LAB_ACTIONS) {
-      expect(LAB_ACTION_RESULT[action as LabAction]).toBeDefined();
+      expect(LAB_ACTION_RESULT[action]).toBeDefined();
     }
+    expect(Object.keys(LAB_ACTION_RESULT)).toHaveLength(LAB_ACTIONS.length);
   });
 });

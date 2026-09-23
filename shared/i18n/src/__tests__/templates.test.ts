@@ -89,8 +89,11 @@ describe('placeholders', () => {
       if (key === 'queue.doctor_arrived') continue;
       // A bed request has no serial; its messages name the hospital and the
       // bed instead, which the next test holds them to. Nor does an
-      // emergency: those name the hospital and link to the case.
-      if (key.startsWith('bed.') || key.startsWith('emergency.')) continue;
+      // emergency: those name the hospital and link to the case. Nor does a
+      // report: a test order is not a serial, and the message names the test.
+      if (key.startsWith('bed.') || key.startsWith('emergency.') || key.startsWith('lab.')) {
+        continue;
+      }
       expect(placeholdersFor(key), `${key} never says which serial`).toContain('serial');
     }
   });
@@ -101,6 +104,18 @@ describe('placeholders', () => {
     }
     // A hold that does not say when it runs out is a bed lost without warning.
     expect(placeholdersFor('bed.request_held')).toContain('time');
+  });
+
+  it('names the test and the hospital in a report notice, and nothing clinical', () => {
+    // `FR-LAB-03`. The test's name is what lets somebody match the notice to
+    // the report; the result is never in it, because a notification is read
+    // on a lock screen by whoever is holding the phone (`DB-P7`).
+    expect(placeholdersFor('lab.report_ready')).toEqual(['hospital', 'test']);
+
+    for (const template of TEMPLATES.filter((entry) => entry.key.startsWith('lab.'))) {
+      expect(placeholdersIn(template.bn)).not.toContain('result');
+      expect(placeholdersIn(template.bn)).not.toContain('name');
+    }
   });
 
   it('names the hospital in every emergency message, and links the SMS to the case', () => {

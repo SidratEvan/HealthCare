@@ -111,7 +111,10 @@ describe('the order somebody standing on a road needs', () => {
   });
 
   it('does not mutate what it was given', () => {
-    const input = [result({ hospitalId: 'a', answer: 'out_of_stock' }), result({ hospitalId: 'b' })];
+    const input = [
+      result({ hospitalId: 'a', answer: 'out_of_stock' }),
+      result({ hospitalId: 'b' }),
+    ];
     rankStockResults(input);
     expect(input.map((entry) => entry.hospitalId)).toEqual(['a', 'b']);
   });
