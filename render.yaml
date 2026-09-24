@@ -50,9 +50,13 @@ services:
 
     envVars:
       - key: NODE_VERSION
-        # What CI and development run (BACKEND.md §0). Node 20 left support in
-        # April 2026, and the test tooling already needs 22.19 or later.
-        value: "24"
+        # 22, not the 24 CI runs (BACKEND.md §0: 22.19 is the floor). 24 is the
+        # Node Render ships with, under a read-only /usr, and a service that
+        # was set up by hand still runs `npm install -g pnpm` in its build and
+        # fails there. On 22 Render installs Node itself, somewhere writable.
+        # The live service does not read this file; it takes the version from
+        # `.nvmrc`, which says the same (docs/DEPLOY.md §2).
+        value: "22"
 
       # Belt and braces: if anything still reaches for corepack, do not let it
       # stop on a confirmation prompt.

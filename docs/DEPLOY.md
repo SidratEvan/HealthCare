@@ -89,9 +89,17 @@ pick it up, the four that matter are:
 | Setting | Value |
 |---|---|
 | Region | Singapore |
-| Build command | `corepack enable && pnpm install --frozen-lockfile` |
-| Start command | `pnpm --filter @platform/api start` |
+| Build command | `npm install --prefix .render --no-audit --no-fund pnpm@12.4.2 && .render/node_modules/.bin/pnpm install --frozen-lockfile` |
+| Start command | `.render/node_modules/.bin/pnpm --filter @platform/api start` |
 | Health check path | `/healthz` |
+
+**The Node version comes from `.nvmrc`** when `NODE_VERSION` is not set in the
+dashboard, and it is `22` on purpose. Render ships its own Node 24 under a
+read-only `/usr`, so on 24 any `npm install -g` in the build fails with
+`EROFS`. On 22, Render downloads Node into a writable directory. The build
+command above does not install anything globally, so it works on either. It is
+also the safe choice when a service was created before this changed and still
+runs `npm install -g pnpm@12.4.2 && pnpm install --frozen-lockfile`.
 
 ### 2.1 Environment variables
 
