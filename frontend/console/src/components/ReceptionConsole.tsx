@@ -247,8 +247,10 @@ function ConsoleBody(): ReactNode {
 
         {/* --- session bar (B1.2) ------------------------------------------ */}
         {/* Whose chamber, then when: the doctor's name is what a receptionist
-            and a patient at the counter both check first. Times in Bangla day
-            periods and numerals, as the rest of this screen's numbers are. */}
+            and a patient at the counter both check first. Times through
+            `formatClock`, in the reading language's day periods and digits —
+            never sliced out of the ISO string, which is UTC (`DB-P4`) and once
+            put an 18:00 Dhaka chamber on this line as 12:00. */}
         <header className="flex items-center gap-3 border-b border-line bg-surface px-6 py-4">
           <div className="min-w-0 flex-1">
             <h1 className="text-title-md font-bold" data-testid="chamber-title">

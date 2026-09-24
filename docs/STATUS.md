@@ -104,19 +104,29 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 3728, in about a minute and a half.
-`pnpm test:e2e` reports 108, in Chromium, against the real API and the seeded
+`pnpm test` reports 3762, in about a minute and a half.
+`pnpm test:e2e` reports 114, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`. The
-last full run took twelve minutes.
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`. The last full
+run took twelve minutes.
 
-`pnpm verify` — typecheck, lint, `format:check`, test — is clean, and so is
-`pnpm build`. `format:check` had been failing on five files since before step
+**Two API tests fail between midnight and early morning, Dhaka time, on `mvp`
+as well.** `demo.routes.test.ts` expects the ER console and the ward board to
+be offered at four or more facilities. Shortly after midnight the seeded
+"today" has sessions at only two of them, so both assertions read 2. Seen at
+02:00 Dhaka on 2026-09-25; not caused by `feat/language-switch`, and not fixed
+there. Once in the same run, `standby.routes.test.ts` "writes an SMS to the
+number on the standby row" read the wrong phone. It passed alone and on the
+next two full runs, so it looks like an ordering interaction on the shared API
+database.
+
+`pnpm verify` — typecheck, lint, `format:check`, test — is clean outside those
+early-morning hours, and so is `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
 

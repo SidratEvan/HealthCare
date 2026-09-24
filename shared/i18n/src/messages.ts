@@ -105,7 +105,8 @@ export const CONSOLE = {
   reinstate: { bn: 'ফিরিয়ে আনুন', en: 'Reinstate' },
 
   // --- Check-in (FR-REC-18, BTN-B02-CHECKIN, MOD-B02-CHECKIN) ----------------
-  checkIn: { bn: 'এসেছেন', en: 'Checked in' },
+  // A button, so a verb in English as in Bangla (FRONTEND.md §5.1).
+  checkIn: { bn: 'এসেছেন', en: 'Check in' },
   checkInTitle: { bn: 'সিরিয়াল {serial} এসেছেন', en: 'Serial {serial} is here' },
   checkInDescription: {
     bn: 'রোগীকে আনুমানিক কতক্ষণ অপেক্ষা করতে হবে বলছেন?',
