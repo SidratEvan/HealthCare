@@ -13,6 +13,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 import { createConsoleSession, fillSession, type ConsoleSession } from './support/console.js';
+import { bengali } from './support/digits.js';
 import { joinStandbyAsGuest } from './support/patient.js';
 
 const CONSOLE = 'http://localhost:3100';
@@ -95,7 +96,9 @@ test.describe('a place on the standby list, from the phone (FR-PAT-25)', () => {
     await expect(patient.getByTestId('standby-ask')).toBeVisible();
 
     const reception = await openReception(counter);
-    await expect(reception.getByTestId('standby-waiting')).toContainText('1', { timeout: 35_000 });
+    await expect(reception.getByTestId('standby-waiting')).toContainText(bengali(1), {
+      timeout: 35_000,
+    });
     await freeAndOffer(reception);
 
     // Asked, on the phone, with the minutes it has to answer in.
@@ -128,7 +131,9 @@ test.describe('a place on the standby list, from the phone (FR-PAT-25)', () => {
     await joinStandbyAsGuest(secondPhone, demo, false);
 
     const reception = await openReception(counter);
-    await expect(reception.getByTestId('standby-waiting')).toContainText('2', { timeout: 35_000 });
+    await expect(reception.getByTestId('standby-waiting')).toContainText(bengali(2), {
+      timeout: 35_000,
+    });
     await freeAndOffer(reception);
 
     await expect(firstPhone.getByTestId('standby-offer')).toBeVisible({ timeout: POLL_BUDGET_MS });

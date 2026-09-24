@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/render-pnpm`, after `fix/pitch-design` and step 20 — the design pass the owner
+Last updated: `fix/console-bangla-digits`, after the Render fixes, `fix/pitch-design` and step 20 — the design pass the owner
 asked for after seeing the live demo, and the bugs found on it (below). Before
 that, `fix/ci-node` (CI green again on Node 24) and `feat/gov-dashboard` —
 **step 20, the last step in the build plan**. A government viewer opens `S-B-13` from the picker and sees capacity
@@ -178,6 +178,20 @@ version from `.nvmrc`: `20` had it download Node into a writable directory, and
 `22`, above the 22.19 floor, and CI stays on 24 through `ci.yml`. To run the API
 on 24, change the dashboard's build and start commands to the ones in
 `DEPLOY.md` §2 first, then `.nvmrc`.
+
+### Bangla digits on every console (`fix/console-bangla-digits`)
+
+A read of every live screen after the redeploy found the consoles writing
+English digits into Bangla sentences: "3 জন অপেক্ষায়", "হালনাগাদ 5 ঘণ্টা
+আগে", "168টির মধ্যে", "10:50 AM". `TYP-04` asked for Latin numerals on
+consoles, but §0.2 of the same document bans them inside Bangla sentences, and
+the lab, the pharmacy and the reception queue already used Bengali. **The owner
+ruled on 2026-09-24: Bangla digits on every console.** Each console's
+`NUMERALS` is now `'bengali'`, and `TYP-04`, `I18N-04` and `I18N-06` say so.
+Bed and room labels and ER case codes stay as printed, because they are
+identifiers, not quantities. The specs read figures through
+`e2e/support/digits.ts`. The patient app already used Bengali digits: its
+"সন্ধ্যা ৬:০০" only looks like an English 0 at display size in Anek Bangla.
 
 ### Step 20 — the national layer, and what a government viewer can reach
 

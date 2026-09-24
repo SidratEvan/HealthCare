@@ -22,8 +22,8 @@ import { Button, Sheet, SheetActions } from '@platform/ui';
 
 import type { ReactNode } from 'react';
 
-/** Console figures use Latin numerals (`TYP-04`). */
-const NUMERALS = 'latin' as const;
+/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
+const NUMERALS = 'bengali' as const;
 
 /** What to start from when the queue has no estimate for this patient. */
 const FALLBACK_QUOTE_MINUTES = 30;

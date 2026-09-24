@@ -19,6 +19,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { createConsoleSession } from './support/console.js';
+import { ANY_DIGIT, latin } from './support/digits.js';
 import { districtOf, namesThatMustNotAppear } from './support/gov.js';
 
 const CONSOLE = 'http://localhost:3100';
@@ -42,7 +43,7 @@ async function openThroughPicker(page: Page): Promise<void> {
 async function thisWeek(page: Page, district: string, signal: string): Promise<number> {
   const row = page.getByTestId(`gov-signal-${district}-${signal}`);
   await expect(row).toBeVisible();
-  return Number(await row.locator('td').nth(2).innerText());
+  return Number(latin(await row.locator('td').nth(2).innerText()));
 }
 
 test.describe('the national dashboard (S-B-13)', () => {
@@ -70,7 +71,7 @@ test.describe('the national dashboard (S-B-13)', () => {
   test('maps capacity by district, and says what nobody records (FR-GOV-01)', async ({ page }) => {
     await openThroughPicker(page);
 
-    await expect(page.getByTestId('gov-beds-free-value')).toHaveText(/\d/);
+    await expect(page.getByTestId('gov-beds-free-value')).toHaveText(ANY_DIGIT);
     await expect(page.getByTestId('gov-district-Dhaka')).toContainText('ঢাকা');
     await expect(page.getByTestId('gov-district-Chattogram')).toBeVisible();
     // Ventilators and blood: said to be unrecorded, not shown as zero.

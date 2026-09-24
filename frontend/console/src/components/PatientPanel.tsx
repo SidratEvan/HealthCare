@@ -33,7 +33,8 @@ import { fetchRecords, type PatientRecords } from '@/lib/visits';
 import type { ReactNode } from 'react';
 
 const LOCALE: Locale = 'bn';
-const NUMERALS = 'latin' as const;
+/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
+const NUMERALS = 'bengali' as const;
 
 export function PatientPanel({ entry }: { readonly entry: QueueEntry }): ReactNode {
   const [records, setRecords] = useState<PatientRecords | null>(null);

@@ -86,8 +86,8 @@ import type { ReactNode } from 'react';
 
 const LOCALE: Locale = 'bn';
 
-/** Console surfaces use Latin numerals for reading speed (`TYP-04`). */
-const NUMERALS = 'latin' as const;
+/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
+const NUMERALS = 'bengali' as const;
 
 /** `SEL-B05-FOLLOWUP`: "7/14/30 days or date". */
 const FOLLOW_UP_CHOICES = [7, 14, 30] as const;

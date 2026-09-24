@@ -47,9 +47,9 @@ export function dayPeriod(hour24: number): string {
 /**
  * A wall-clock time in Dhaka, as a Bangla sentence says it.
  *
- * `বিকাল ৫:১২` on a patient surface, `5:12 PM` on a console — `TYP-04` puts
- * Latin numerals in front of staff for data-entry speed, and a period word
- * beside Latin digits would be the same mismatch in reverse.
+ * `বিকাল ৫:১২` on every Bangla surface (`TYP-04`); `5:12 PM` for the `latin`
+ * style, where a period word beside Latin digits would be the same mismatch
+ * in reverse.
  *
  * Timestamps are UTC in the database (`DB-P4`); converting for display is a
  * client concern, and this is where it happens.

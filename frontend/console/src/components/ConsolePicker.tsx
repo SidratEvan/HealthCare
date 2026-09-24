@@ -37,8 +37,8 @@ import type { ReactNode } from 'react';
 
 const LOCALE = 'bn' as const;
 
-/** Console surfaces use Latin numerals for data-entry speed (`TYP-04`). */
-const NUMERALS = 'latin' as const;
+/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
+const NUMERALS = 'bengali' as const;
 
 const API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 
