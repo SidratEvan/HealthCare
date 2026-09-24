@@ -464,6 +464,22 @@ change when `S-A-13` lands.
 - `FR-GOV-05` Designed to exchange records with the national shared health record infrastructure via published APIs; the Platform complements it and never claims to replace it.
 - `FR-GOV-06` No patient identifiers are exposed in this layer under any configuration.
 
+> **In this version** (step 20, `S-B-13`): `FR-GOV-01`–`04` and `06` are built;
+> `FR-GOV-05` (exchange with the national shared health record) waits, like
+> every real integration, for a counterparty (`CLAUDE.md` §1.1).
+>
+> - `FR-GOV-03` counts a category the **treating doctor** puts on the visit
+>   (`CHIP-B05-SIGNAL`: dengue, diarrhoeal, fever, or none). Nothing else in
+>   the product records a category — the booking reason and the diagnosis are
+>   free text — and reading one out of free text would be the diagnostic
+>   inference §27 rules out. A spike is this week at least double the usual
+>   week and at least five cases.
+> - `FR-GOV-01`'s ventilators and blood availability are shown as not
+>   recorded: no table holds either.
+> - `FR-GOV-04` names no facility; it shows the facility's kind.
+> - A government viewer holds no facility (`FR-ROLE-01`): `staff_users` and
+>   `staff_roles` allow a null hospital for the two national roles only.
+
 ---
 
 ## 16. The Live Queue Engine

@@ -137,7 +137,9 @@ backend/api/src/
 │   ├── jobs.ts                  # pg-boss client (publish only; workers consume)
 │   └── logger.ts                # pino
 ├── middleware/
-│   ├── auth.ts                  # verifies JWT → req.principal {kind, id, hospitalId, roles}
+│   ├── auth.ts                  # verifies JWT → req.principal {kind, id, hospitalId, roles};
+│   │                            # a staff token with no hospital whose every role is national
+│   │                            # (platform_admin, gov_viewer) → kind 'national', no hospitalId
 │   ├── guestAuth.ts             # verifies guest token or guest_link token (FR-GST-05)
 │   ├── requireRole.ts           # role + hospital scoping (FR-ROLE-01..02)
 │   ├── audit.ts                 # writes audit_log on patient-identifying reads (FR-SEC-03)
@@ -187,7 +189,7 @@ backend/api/src/
 │   ├── admin.service.ts         # dashboard aggregates, exports
 │   ├── hospital.service.ts      # settings, staff, doctors, sessions, templates
 │   ├── platform.service.ts      # onboarding, verification, flags, subscriptions
-│   ├── gov.service.ts           # aggregate-only queries
+│   ├── gov.service.ts           # aggregate-only assembly; refuses a payload carrying an identifier
 │   └── sync.service.ts          # offline event replay + cursors (§5)
 ├── repositories/                # ONLY place SQL lives
 │   ├── booking.repo.ts
@@ -206,7 +208,8 @@ backend/api/src/
 │   ├── payment.repo.ts
 │   ├── notification.repo.ts
 │   ├── audit.repo.ts
-│   └── analytics.repo.ts
+│   ├── analytics.repo.ts
+│   └── gov.repo.ts              # reads the v_gov_* views only, as the gov_reader role
 ├── realtime/
 │   ├── rooms.ts                 # room naming: session:<id>, hospital:<id>:beds, …
 │   ├── auth.ts                  # socket handshake auth (JWT or guest link token)
@@ -491,7 +494,7 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 | GET | `/admin/export?view=` | CSV/PDF (audited) |
 | CRUD | `/hospital/doctors`, `/hospital/sessions`, `/hospital/templates`, `/hospital/beds`, `/hospital/staff`, `/hospital/settings` | hospital_admin |
 | CRUD | `/platform/hospitals`, `/platform/verify-doctor`, `/platform/flags`, `/platform/subscriptions` | platform_admin |
-| GET | `/gov/capacity`, `/gov/er-load`, `/gov/signals` | gov_viewer, aggregate only (`FR-GOV-06`) |
+| GET | `/gov/capacity`, `/gov/er-load`, `/gov/signals`, `/gov/benchmarks` | gov_viewer, aggregate only (`FR-GOV-06`). No parameters: no hospital, no patient, no range to widen. Guarded by `requireNationalRole('gov_viewer')`, which admits a `national` principal and nothing else — the mirror of every hospital route, which refuses that kind. Each read runs read-only as the `gov_reader` database role (DATABASE.md §5), and the payload is walked for identifiers before it is sent (`findIdentifiers`). `/gov/benchmarks` is `FR-GOV-04`, which `S-B-13` shows and this table had not yet routed |
 
 ---
 
