@@ -12,7 +12,7 @@
 
 | Concern | Choice | Why |
 |---|---|---|
-| Runtime | **Node.js 24 + TypeScript (strict)** | Shared domain types with the frontend. 22.19 is the floor (`engines`): the test tooling's `undici` needs it |
+| Runtime | **Node.js 24 + TypeScript (strict)** | Shared domain types with the frontend. 22.19 is the floor (`engines`): the test tooling's `undici` needs it. The demo API on Render runs 22 (`.nvmrc`): Render's own 24 has a read-only global directory (`DEPLOY.md` §2) |
 | HTTP | **Express 5** | Familiar, boring, fine at this scale |
 | Database | **PostgreSQL (Supabase)** | See `DATABASE.md` |
 | DB access | **Kysely** (typed query builder) + raw SQL for hot paths | No heavy ORM hiding the event log |
