@@ -143,22 +143,32 @@ export const trackingReportParams = trackingLinkParams.extend({
  * The console's stand-in for `S-B-00` Staff login while authentication is
  * deferred. A hospital and a role, and nothing else — there is no password to
  * validate, which is the point.
+ *
+ * Or, for the national layer (`S-B-13`, step 20), a role alone: a government
+ * viewer works for no facility (`FR-ROLE-01`, migration 0024), so naming one
+ * is refused rather than ignored — `strictObject` turns a stray `hospitalId`
+ * into a 400 instead of a token that looks as if it were scoped to something.
  */
-export const demoTokenBody = z.object({
-  hospitalId: uuid,
-  // The roles the picker offers (`demo.service` OFFERED). `emergency` joined at
-  // step 15 with `S-B-07`, `lab` and `pharmacy` with `S-B-08`/`S-B-09`; the two
-  // lists move together, and `demo.routes.test` mints one of each.
-  role: z.enum([
-    'receptionist',
-    'doctor',
-    'ward',
-    'emergency',
-    'lab',
-    'pharmacy',
-    'hospital_admin',
-  ]),
-});
+export const demoTokenBody = z.union([
+  z.object({
+    hospitalId: uuid,
+    // The roles the picker offers (`demo.service` OFFERED). `emergency` joined at
+    // step 15 with `S-B-07`, `lab` and `pharmacy` with `S-B-08`/`S-B-09`; the two
+    // lists move together, and `demo.routes.test` mints one of each.
+    role: z.enum([
+      'receptionist',
+      'doctor',
+      'ward',
+      'emergency',
+      'lab',
+      'pharmacy',
+      'hospital_admin',
+    ]),
+  }),
+  z.strictObject({ role: z.literal('gov_viewer') }),
+]);
+
+export type DemoTokenBody = z.infer<typeof demoTokenBody>;
 
 export type CreateBookingBody = z.infer<typeof createBookingBody>;
 export type GuestDetails = z.infer<typeof guestDetails>;

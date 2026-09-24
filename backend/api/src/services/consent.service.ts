@@ -308,6 +308,7 @@ async function assertSpeaksFor(principal: Principal, patientId: string): Promise
     }
 
     case 'staff':
+    case 'national':
       throw forbiddenScope({ reason: 'patient_only' });
   }
 }

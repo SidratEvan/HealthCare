@@ -27,6 +27,7 @@ import {
   expiredToken,
   guestToken,
   IDS,
+  nationalToken,
   patientToken,
   refreshToken,
   rolelessStaffToken,
@@ -159,6 +160,66 @@ describe('a staff token missing its scope authorises nothing (FR-ROLE-01)', () =
 
     expect(response.status).toBe(401);
     expect(response.body.error.details.reason).toBe('incomplete_claims');
+  });
+});
+
+describe('a national account belongs to no hospital (FR-ROLE-01, R10/R11)', () => {
+  it('becomes a national principal when every role on it is national', async () => {
+    const response = await request(apps.authenticated())
+      .get('/probe')
+      .set('authorization', bearer(await nationalToken(['gov_viewer'])));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.principal).toEqual({
+      kind: 'national',
+      id: IDS.staff,
+      roles: ['gov_viewer'],
+    });
+  });
+
+  it('is refused by a hospital role guard, whatever roles it lists', async () => {
+    // `requireRole` admits hospital staff only. A government viewer is not
+    // one, so no route written for a console can be reached with this token.
+    const response = await request(apps.role('gov_viewer', 'receptionist'))
+      .get('/probe')
+      .set('authorization', bearer(await nationalToken(['gov_viewer'])));
+
+    expect(response.status).toBe(403);
+    expect(response.body.error.details.was).toBe('national');
+  });
+
+  it('is refused by a hospital scope check', async () => {
+    const response = await request(apps.hospitalScoped('gov_viewer'))
+      .get(`/probe/hospital/${IDS.hospital}`)
+      .set('authorization', bearer(await nationalToken(['gov_viewer'])));
+
+    expect(response.status).toBe(403);
+  });
+
+  it('does not let a hospital role ride along without a hospital', async () => {
+    const response = await request(apps.authenticated())
+      .get('/probe')
+      .set('authorization', bearer(await nationalToken(['gov_viewer', 'ward'])));
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.details.reason).toBe('incomplete_claims');
+  });
+
+  it('opens a national route, and a hospital token does not', async () => {
+    const national = await request(apps.national('gov_viewer'))
+      .get('/probe')
+      .set('authorization', bearer(await nationalToken(['gov_viewer'])));
+    expect(national.status).toBe(200);
+
+    const hospital = await request(apps.national('gov_viewer'))
+      .get('/probe')
+      .set('authorization', bearer(await staffToken(['gov_viewer'])));
+    expect(hospital.status).toBe(403);
+    expect(hospital.body.error.details.was).toBe('staff');
+  });
+
+  it('refuses to build a national route that admits everyone', () => {
+    expect(() => apps.national()).toThrow(/at least one role/);
   });
 });
 

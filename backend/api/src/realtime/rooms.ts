@@ -71,6 +71,10 @@ export function canJoinSession(
     case 'patient':
     case 'guest':
       return context.holdsBooking;
+    case 'national':
+      // A chamber's room carries patients' serials and names; the national
+      // layer reads aggregates over HTTP and has no room (`FR-GOV-06`).
+      return false;
   }
 }
 
@@ -91,6 +95,8 @@ export function ambientRoomsFor(principal: Principal): string[] {
       return [];
     case 'guest':
       // A tracking link is scoped to one booking and nothing else (FR-GST-05).
+      return [];
+    case 'national':
       return [];
   }
 }

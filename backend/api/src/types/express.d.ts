@@ -8,7 +8,7 @@
  * `hospitalId` happened to be undefined on both sides.
  */
 
-import type { StaffRole } from '@platform/domain';
+import type { NationalRole, StaffRole } from '@platform/domain';
 
 /** An authenticated account holder (FR-PAT-01). */
 export interface PatientPrincipal {
@@ -37,7 +37,24 @@ export interface StaffPrincipal {
   readonly roles: readonly StaffRole[];
 }
 
-export type Principal = PatientPrincipal | GuestPrincipal | StaffPrincipal;
+/**
+ * Somebody who works for no facility: R10 or R11 (`FR-ROLE-01`).
+ *
+ * Its own kind rather than a `StaffPrincipal` with no hospital, and that is
+ * the point. Every hospital-scoped guard in the API asks `kind === 'staff'`
+ * before anything else, so a national principal fails all of them without any
+ * of them having to know it exists — a government viewer cannot open a queue,
+ * a ward board or a record by any route that was written for hospital staff
+ * (`FR-ROLE-04`). The only routes that admit it are the ones that say so with
+ * `requireNationalRole`.
+ */
+export interface NationalPrincipal {
+  readonly kind: 'national';
+  readonly id: string;
+  readonly roles: readonly NationalRole[];
+}
+
+export type Principal = PatientPrincipal | GuestPrincipal | StaffPrincipal | NationalPrincipal;
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace -- the only way to augment Express's types
