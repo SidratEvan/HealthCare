@@ -17,6 +17,8 @@
 
 import { expect, test, type Page } from '@playwright/test';
 
+import { ANY_DIGIT } from './support/digits.js';
+
 const CONSOLE = 'http://localhost:3100';
 
 /** Opens `S-B-10` for the picker's first hospital, the way a person would. */
@@ -43,9 +45,9 @@ test.describe('the hospital dashboard (S-B-10)', () => {
     // the counter's quote was kept beside it. The seeded history checks
     // people in from the go-live date onward.
     await expect(page.getByTestId('admin-waits')).toBeVisible();
-    await expect(page.getByTestId('admin-avg-wait-value')).toHaveText(/\d/);
-    await expect(page.getByTestId('admin-quotes-kept-value')).toHaveText(/\d+%/);
-    await expect(page.getByTestId('admin-seen-value')).toHaveText(/\d/);
+    await expect(page.getByTestId('admin-avg-wait-value')).toHaveText(ANY_DIGIT);
+    await expect(page.getByTestId('admin-quotes-kept-value')).toHaveText(/[০-৯]+%/);
+    await expect(page.getByTestId('admin-seen-value')).toHaveText(ANY_DIGIT);
   });
 
   test('shows every section, each with its own age (CLAUDE.md §5.8)', async ({ page }) => {

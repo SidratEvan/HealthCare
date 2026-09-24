@@ -19,6 +19,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { createConsoleSession, type ConsoleSession } from './support/console.js';
+import { bengali } from './support/digits.js';
 
 const CONSOLE = 'http://localhost:3100';
 
@@ -113,7 +114,7 @@ test.describe('signing files the record and advances the queue (FR-DOC-08)', () 
     // `FR-DOC-08`: equivalent to reception's *done*. Serial 2 is now in the
     // chamber, and the note has been cleared for them — a new patient is a new
     // note, and a diagnosis left on screen would be the previous person's.
-    await expect(page.getByTestId('patient-panel')).toContainText('2');
+    await expect(page.getByTestId('patient-panel')).toContainText(bengali(2));
     await expect(page.getByTestId('visit-diagnosis')).toHaveValue('');
 
     // And the record exists for the *first* patient: the panel for serial 2
@@ -145,7 +146,7 @@ test.describe('signing files the record and advances the queue (FR-DOC-08)', () 
     await page.getByTestId('save-draft').click();
 
     // Still serial 1: a draft is a note, not a decision.
-    await expect(page.getByTestId('patient-panel')).toContainText('1');
+    await expect(page.getByTestId('patient-panel')).toContainText(bengali(1));
     await expect(page.getByTestId('visit-diagnosis')).toHaveValue('পরীক্ষা বাকি');
   });
 });

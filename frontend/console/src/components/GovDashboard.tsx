@@ -72,8 +72,8 @@ import {
 
 const LOCALE: Locale = 'bn';
 
-/** Console surfaces use Latin numerals (`TYP-04`). */
-const NUMERALS = 'latin' as const;
+/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
+const NUMERALS = 'bengali' as const;
 
 /**
  * How often the screen re-reads.

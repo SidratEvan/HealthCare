@@ -24,6 +24,7 @@ import {
   joinStandby,
   type ConsoleSession,
 } from './support/console.js';
+import { bengali, latin } from './support/digits.js';
 
 const CONSOLE = 'http://localhost:3100';
 
@@ -70,7 +71,7 @@ async function openDashboard(browser: Browser): Promise<Page> {
 async function recoveredPoisha(dashboard: Page): Promise<number> {
   await dashboard.getByTestId('admin-tab-loss').click();
   const text = await dashboard.getByTestId('admin-recovered-value').innerText();
-  const taka = Number(text.replace(/[^\d.]/g, ''));
+  const taka = Number(latin(text).replace(/[^\d.]/g, ''));
   if (Number.isNaN(taka)) throw new Error(`unreadable recovered figure: ${text}`);
   return Math.round(taka * 100);
 }
@@ -86,7 +87,7 @@ test.describe('a freed chair, recovered (FR-QUE-30, FR-REC-30, FR-ADM-03)', () =
     // The card is there before anything is free, because people are waiting.
     const card = reception.getByTestId('standby-card');
     await expect(card).toBeVisible();
-    await expect(reception.getByTestId('standby-waiting')).toContainText('2');
+    await expect(reception.getByTestId('standby-waiting')).toContainText(bengali(2));
 
     // Serial 2 never came. Their grace period ran out an hour ago.
     await reception.getByTestId('queue-row-2').getByRole('button', { name: 'অনুপস্থিত' }).click();
@@ -109,7 +110,7 @@ test.describe('a freed chair, recovered (FR-QUE-30, FR-REC-30, FR-ADM-03)', () =
     await expect(accepted).toBeVisible({ timeout: 10_000 });
     await expect(accepted).toContainText('ফেরত এসেছে');
     // Off the list: the person holding a chair is not still waiting for one.
-    await expect(reception.getByTestId('standby-waiting')).toContainText('1');
+    await expect(reception.getByTestId('standby-waiting')).toContainText(bengali(1));
 
     // The administrator's screen, in another browser, re-read. Loss and
     // recovery is a live view, not the five-minute snapshot, so the tap is

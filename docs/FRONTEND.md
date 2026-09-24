@@ -212,7 +212,7 @@ Self-hosted rather than linked from a CDN: no third-party request, no FOUT on po
 - `TYP-01` Bengali needs more leading than Latin. Minimum line-height **1.65** for body, **1.35** for display. Cramped Bangla is the most common amateur tell.
 - `TYP-02` Never apply `letter-spacing` to Bangla. Never `text-transform: uppercase` (meaningless in the script).
 - `TYP-03` No synthetic italics. Emphasis is weight or colour.
-- `TYP-04` Use Bengali numerals (০১২৩৪৫৬৭৮৯) in patient-facing surfaces. Console surfaces use Latin numerals for data-entry speed, configurable per user.
+- `TYP-04` Use Bengali numerals (০১২৩৪৫৬৭৮৯) on every Bangla surface, patient app and staff consoles alike. The consoles used Latin numerals "for data-entry speed" until the owner's ruling of 2026-09-24: on a screen written in Bangla they put a second script into every sentence, which §0.2 bans. Latin digits remain right for identifiers that are printed that way on the ward itself (bed and room labels, ER case codes), and for the `en` locale.
 - `TYP-05` Sentence terminator is দাঁড়ি (।), not a full stop, in Bangla copy.
 - `TYP-06` Don't break a Bangla conjunct across lines; set `word-break: keep-all` and avoid hyphenation.
 - `TYP-07` Minimum body size 15 px mobile / 14 px console. Bangla matras disappear below that on cheap panels.
@@ -407,9 +407,9 @@ Patient app is comfortable density. Console is compact density: 56 px rows, 44 p
 - `I18N-01` Two locales: `bn` (default) and `en`. No others planned; do not build a locale-negotiation framework beyond these.
 - `I18N-02` `next-intl` with namespaced message files: `messages/bn/{common,booking,queue,emergency,console}.json` and the `en` mirror. Every key exists in both files; CI fails on a missing key.
 - `I18N-03` No string literals in components (`FR-LOC-02`). ESLint rule forbids bare text nodes in JSX outside `<Trans>`/`t()`.
-- `I18N-04` Numerals: `formatNumber(value, locale)` utility converts to Bengali digits for `bn` patient surfaces, Latin for console (`TYP-04`). Never hand-convert in a component.
+- `I18N-04` Numerals: `formatNumber(value, locale)` utility converts to Bengali digits for `bn` surfaces, patient and console (`TYP-04`). Never hand-convert in a component.
 - `I18N-05` Dates and times: 12-hour with Bangla period words (সকাল, দুপুর, বিকাল, সন্ধ্যা, রাত), never "AM/PM" in Bangla copy.
-- `I18N-06` Currency: `৳ ১,২০০` with Bangla digits in patient app; `৳ 1,200` in console.
+- `I18N-06` Currency: `৳ ১,২০০` with Bangla digits, in the patient app and the console alike (`TYP-04`).
 - `I18N-07` Copy is written in Bangla first and translated to English, not the reverse. Bangla written as a translation reads translated — the market notices immediately.
 - `I18N-08` Language toggle lives in settings and in the first-run screen; switching applies instantly without reload and updates SMS preference server-side (`FR-NOT-04`).
 - `I18N-09` Pluralisation and gendered forms handled through ICU message syntax, not string concatenation.

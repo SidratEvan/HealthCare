@@ -44,6 +44,9 @@ import {
 const PATIENT = 'http://localhost:3000';
 const CONSOLE = 'http://localhost:3100';
 
+/** The guest each test books, as the doctor's panel names them. */
+const GUEST_NAME = 'রহিমা খাতুন';
+
 /** From the seed's declared set, so the spec invents no clinical content. */
 const ASSESSMENT = DEMO_ASSESSMENTS[0];
 
@@ -70,7 +73,7 @@ async function bookAsGuest(page: Page): Promise<string> {
   await page.getByTestId(`doctor-${demo.doctorId}`).click();
   await page.getByTestId(`session-${demo.sessionId}`).click();
 
-  await page.getByLabel('রোগীর নাম').fill('রহিমা খাতুন');
+  await page.getByLabel('রোগীর নাম').fill(GUEST_NAME);
   await page.getByLabel('মোবাইল নম্বর').fill(guestPhone());
   await page.getByLabel('বয়স').fill('34');
   await page.getByTestId('confirm-booking').click();
@@ -128,6 +131,9 @@ test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
     // Serial 1 is finished through the API rather than typed: this spec is
     // about the test chips, and signing needs content either way.
     await callInTheGuest();
+    // The call reaches this screen over the socket. Until it has, the panel is
+    // still on serial 1, and a visit signed now would land on that booking.
+    await expect(doctor.getByTestId('patient-panel')).toContainText(GUEST_NAME);
     await expect(doctor.getByTestId('visit-diagnosis')).toHaveValue('');
 
     await doctor.getByTestId('visit-diagnosis').fill(ASSESSMENT.diagnosisBn);
@@ -214,6 +220,7 @@ test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
     const doctor = await context.newPage();
     await enterConsole(doctor, demo.doctorToken, 'doctor', `${CONSOLE}/?session=${demo.sessionId}`);
     await callInTheGuest();
+    await expect(doctor.getByTestId('patient-panel')).toContainText(GUEST_NAME);
     await doctor.getByTestId('visit-diagnosis').fill(ASSESSMENT.diagnosisBn);
     await doctor.getByTestId('visit-tests').getByRole('button').first().click();
     await doctor.getByTestId('sign-and-next').click();

@@ -58,8 +58,8 @@ import { standbyApi, type StandbyPanel } from '@/lib/standby';
 
 import type { ReactNode } from 'react';
 
-/** Console surfaces use Latin numerals for figures and times (`TYP-04`). */
-const NUMERALS = 'latin' as const;
+/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
+const NUMERALS = 'bengali' as const;
 
 /**
  * How often the panel is re-read while an offer is outstanding.

@@ -102,8 +102,8 @@ import { readDemoSession } from '@/lib/demo';
 
 const LOCALE: Locale = 'bn';
 
-/** Console surfaces use Latin numerals (`TYP-04`, `I18N-06`: `৳ 1,200`). */
-const NUMERALS = 'latin' as const;
+/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
+const NUMERALS = 'bengali' as const;
 
 /** Thirty days: long enough that the trend shows the adoption marker. */
 const DEFAULT_RANGE: RangeDays = 29;
