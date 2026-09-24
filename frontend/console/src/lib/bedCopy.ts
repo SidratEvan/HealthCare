@@ -9,8 +9,8 @@
 import { effectiveState, type BedState, type BedView, type Timestamp } from '@platform/domain';
 import { format, formatClock, formatNumber, t, type ConsoleKey, type Locale } from '@platform/i18n';
 
-/** Console surfaces use Latin numerals for data-entry speed (`TYP-04`). */
-export const NUMERALS = 'latin' as const;
+/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
+export const NUMERALS = 'bengali' as const;
 
 const STATE_KEY: Record<BedState, ConsoleKey> = {
   free: 'bedStateFree',

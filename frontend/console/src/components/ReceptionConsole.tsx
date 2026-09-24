@@ -59,24 +59,22 @@ import { fetchPatientNames } from '@/lib/roster';
 
 import type { ReactNode } from 'react';
 
-/** Console surfaces use Latin numerals for data-entry speed (`TYP-04`). */
 const CONSOLE_LOCALE: Locale = 'bn';
 
 /**
- * Latin digits, and the AM/PM a receptionist reads fastest (`TYP-04`).
+ * Bangla digits, as on every surface (`TYP-04`, the owner's ruling of
+ * 2026-09-24): the serials, the quoted waits, the counts.
+ */
+const CONSOLE_NUMERALS = 'bengali' as const;
+
+/**
+ * The chamber's own hours are Bangla, day period and numerals — "বিকাল ৫:০০",
+ * never "5:00 PM".
  *
  * These times used to be `plannedStart.slice(11, 16)` — the hour and minute cut
  * straight out of the ISO string, which is UTC (`DB-P4`). A chamber running
  * 18:00–21:00 in Dhaka therefore showed as 12:00–15:00 on the console, six
  * hours out, on the one line of the screen that says when the session is.
- */
-const CONSOLE_NUMERALS = 'latin' as const;
-
-/**
- * The chamber's own hours are Bangla, day period and numerals — "বিকাল ৫:০০",
- * never "5:00 PM" — because every other number on this screen, the serials
- * included, already is. A header in a second script beside them is the
- * mixed-script line `TYP-08` warns against.
  */
 const CHAMBER_NUMERALS = 'bengali' as const;
 

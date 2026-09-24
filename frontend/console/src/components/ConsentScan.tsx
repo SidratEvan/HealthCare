@@ -39,7 +39,8 @@ import {
 import type { ReactNode } from 'react';
 
 const LOCALE: Locale = 'bn';
-const NUMERALS = 'latin' as const;
+/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
+const NUMERALS = 'bengali' as const;
 
 type State =
   | { readonly kind: 'entering'; readonly problem: 'invalid' | 'failed' | null }

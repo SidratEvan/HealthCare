@@ -12,6 +12,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 import { createConsoleSession, type ConsoleSession } from './support/console.js';
+import { bengali, latin } from './support/digits.js';
 import { bookAsGuest, openLiveSerial } from './support/patient.js';
 
 const CONSOLE = 'http://localhost:3100';
@@ -60,16 +61,15 @@ test.describe('checking a patient in (FR-REC-18)', () => {
     // Pre-filled from the queue's estimate; reception adds five minutes
     // because it can see something the rolling rate cannot.
     const suggested = Number(
-      (await sheet.getByTestId('check-in-minutes').innerText()).replace(/\D/g, ''),
+      latin(await sheet.getByTestId('check-in-minutes').innerText()).replace(/\D/g, ''),
     );
     await sheet.getByTestId('check-in-more').click();
-    await expect(sheet.getByTestId('check-in-minutes')).toContainText(String(suggested + 5));
+    await expect(sheet.getByTestId('check-in-minutes')).toContainText(bengali(suggested + 5));
     await sheet.getByTestId('check-in-confirm').click();
 
     // The row says the patient is here, and what they were told.
     const row = reception.getByTestId('queue-row-9');
     await expect(row).toContainText('এসেছেন');
-    // In Bengali digits, as the serial on the same row is.
     await expect(reception.getByTestId('quoted-9')).toContainText(bengali(suggested + 5));
     await expect(reception.getByTestId('check-in-9')).toHaveCount(0);
 
@@ -104,8 +104,3 @@ test.describe('checking a patient in (FR-REC-18)', () => {
     await expect(second.getByTestId('queue-row-4')).toContainText('এসেছেন', { timeout: 10_000 });
   });
 });
-
-/** A number in Bengali digits, as the console's queue rows set it. */
-function bengali(value: number): string {
-  return String(value).replace(/\d/g, (digit) => '০১২৩৪৫৬৭৮৯'[Number(digit)] ?? digit);
-}
