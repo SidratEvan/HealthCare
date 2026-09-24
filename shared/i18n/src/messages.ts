@@ -84,6 +84,7 @@ export const CONSOLE = {
     en: 'No chambers are running today. Rebuild the demo data.',
   },
   changeConsole: { bn: 'কনসোল বদলান', en: 'Change console' },
+  facilityConsoles: { bn: 'হাসপাতালের কনসোল', en: 'Hospital consoles' },
   consoleLoadFailed: { bn: 'কনসোলের তালিকা আনা যায়নি', en: 'Could not load the consoles' },
 
   // --- Queue table (B1.4) --------------------------------------------------

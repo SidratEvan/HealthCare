@@ -94,7 +94,8 @@
    * them from the app's own origin. Until that existed no face was loaded at *
    * all, and every screen fell back to whatever the device happened to have *
    * — the single largest reason the product looked assembled, not designed. */
-  --font-ui: var(--font-anek, 'Anek Bangla'), 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
+  --font-ui:
+    var(--font-anek, 'Anek Bangla'), 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
   --font-reading: var(--font-tiro, 'Tiro Bangla'), 'Noto Serif Bengali', Georgia, serif;
 }
 

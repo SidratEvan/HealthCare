@@ -197,13 +197,13 @@ function PharmacyBody(): ReactNode {
     <div className="flex min-h-screen" data-testid="pharmacy-console">
       <ConsoleRail current="navBilling" locale={locale}>
         <OfflineBlock
-            connected={online}
-            pendingCount={0}
-            lastServerTs={shelf.serverTs}
-            stuckCount={0}
-            locale={locale}
-            now={now}
-          />
+          connected={online}
+          pendingCount={0}
+          lastServerTs={shelf.serverTs}
+          stuckCount={0}
+          locale={locale}
+          now={now}
+        />
       </ConsoleRail>
 
       <div className="flex min-w-0 flex-1 flex-col">

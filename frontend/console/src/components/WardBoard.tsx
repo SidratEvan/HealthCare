@@ -180,13 +180,13 @@ function BoardBody(): ReactNode {
       {/* --- navigation rail ------------------------------------------------- */}
       <ConsoleRail current="navBeds" locale={locale}>
         <OfflineBlock
-            connected={board.connected}
-            pendingCount={board.pendingCount}
-            lastServerTs={board.lastServerTs}
-            stuckCount={0}
-            locale={locale}
-            now={now}
-          />
+          connected={board.connected}
+          pendingCount={board.pendingCount}
+          lastServerTs={board.lastServerTs}
+          stuckCount={0}
+          locale={locale}
+          now={now}
+        />
       </ConsoleRail>
 
       <div className="flex min-w-0 flex-1 flex-col">

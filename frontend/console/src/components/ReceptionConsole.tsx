@@ -248,13 +248,13 @@ function ConsoleBody(): ReactNode {
       {/* --- navigation rail (B1.1) ---------------------------------------- */}
       <ConsoleRail current="navQueue" locale={locale}>
         <OfflineBlock
-            connected={queue.connected}
-            pendingCount={queue.pendingCount}
-            lastServerTs={queue.lastServerTs}
-            stuckCount={0}
-            locale={locale}
-            now={now}
-          />
+          connected={queue.connected}
+          pendingCount={queue.pendingCount}
+          lastServerTs={queue.lastServerTs}
+          stuckCount={0}
+          locale={locale}
+          now={now}
+        />
       </ConsoleRail>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -275,8 +275,8 @@ function ConsoleBody(): ReactNode {
                 : `${chamber.doctorNameBn} · ${chamber.departmentNameBn}`}
             </h1>
             <p className="text-body-sm text-ink-secondary tabular-nums">
-              {t('chamberHours', locale)} {formatClock(state.plan.plannedStart, CHAMBER_NUMERALS)}{' '}
-              – {formatClock(state.plan.plannedEnd, CHAMBER_NUMERALS)} ·{' '}
+              {t('chamberHours', locale)} {formatClock(state.plan.plannedStart, CHAMBER_NUMERALS)} –{' '}
+              {formatClock(state.plan.plannedEnd, CHAMBER_NUMERALS)} ·{' '}
               {state.doctorArrivedAt === null
                 ? t('notStarted', locale)
                 : `${t('actualStart', locale)} ${formatClock(state.doctorArrivedAt, CHAMBER_NUMERALS)}`}
@@ -416,7 +416,6 @@ function ConsoleBody(): ReactNode {
             </section>
 
             <div className="px-1">
-
               {/*
                 CLAUDE.md §5.8: every live figure renders <FreshnessLine>.
                 This is the figure the whole product is about, so it is the one

@@ -206,13 +206,13 @@ function ConsoleBody(): ReactNode {
       {/* --- navigation rail ------------------------------------------------- */}
       <ConsoleRail current="navEmergency" locale={locale}>
         <OfflineBlock
-            connected={er.connected}
-            pendingCount={er.pendingCount}
-            lastServerTs={er.lastServerTs}
-            stuckCount={0}
-            locale={locale}
-            now={now}
-          />
+          connected={er.connected}
+          pendingCount={er.pendingCount}
+          lastServerTs={er.lastServerTs}
+          stuckCount={0}
+          locale={locale}
+          now={now}
+        />
       </ConsoleRail>
 
       <div className="flex min-w-0 flex-1 flex-col">

@@ -301,13 +301,13 @@ function LabBody(): ReactNode {
       {/* --- navigation rail ------------------------------------------------- */}
       <ConsoleRail current="navTests" locale={locale}>
         <OfflineBlock
-            connected={online}
-            pendingCount={0}
-            lastServerTs={queue.serverTs}
-            stuckCount={0}
-            locale={locale}
-            now={now}
-          />
+          connected={online}
+          pendingCount={0}
+          lastServerTs={queue.serverTs}
+          stuckCount={0}
+          locale={locale}
+          now={now}
+        />
       </ConsoleRail>
 
       <div className="flex min-w-0 flex-1 flex-col">

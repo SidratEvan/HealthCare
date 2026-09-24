@@ -29,6 +29,7 @@ import {
   formatTaka,
   tp,
   formatAge,
+  districtName,
 } from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine, Input } from '@platform/ui';
 
@@ -320,9 +321,7 @@ function HospitalList({
                   <div className="min-w-0 flex-1">
                     <p className="text-title-sm">{hospital.nameBn}</p>
                     <p className="text-body-sm text-ink-muted">
-                      {hospital.thana === null
-                        ? hospital.district
-                        : `${hospital.thana}, ${hospital.district}`}
+                      {hospital.addressBn ?? districtName(hospital.district, LOCALE)}
                     </p>
 
                     <div className="mt-2 flex flex-wrap items-center gap-2">
