@@ -10,6 +10,8 @@
 
 import '@platform/ui/styles.css';
 
+import { fontVariables } from '@/app/fonts';
+
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
@@ -28,7 +30,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { readonly children: ReactNode }): ReactNode {
   return (
-    <html lang="bn">
+    <html lang="bn" className={fontVariables}>
       <body className="min-h-screen bg-canvas text-ink">{children}</body>
     </html>
   );

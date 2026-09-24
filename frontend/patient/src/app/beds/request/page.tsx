@@ -26,7 +26,14 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { ApiError } from '@platform/client';
-import { bedKindName, formatClock, formatNumber, tp, type PatientKey } from '@platform/i18n';
+import {
+  bedKindName,
+  formatClock,
+  formatNumber,
+  tp,
+  type PatientKey,
+  formatAge,
+} from '@platform/i18n';
 import { FreshnessLine } from '@platform/ui';
 
 import { TabScreen } from '@/components/TabScreen';
@@ -212,9 +219,7 @@ function Status({
           never: tp('updatedNever', LOCALE),
           stale: tp('staleWarning', LOCALE),
         }}
-        formatMinutes={(minutes) =>
-          `${formatNumber(minutes, NUMERALS)} ${tp('minutesShort', LOCALE)}`
-        }
+        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
       />
 
       <div className="flex flex-col gap-3">

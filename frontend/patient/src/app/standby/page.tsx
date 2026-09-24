@@ -27,7 +27,14 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { ApiError } from '@platform/client';
-import { formatDateTime, formatNumber, formatSerial, formatTaka, tp } from '@platform/i18n';
+import {
+  formatDateTime,
+  formatNumber,
+  formatSerial,
+  formatTaka,
+  tp,
+  formatAge,
+} from '@platform/i18n';
 import { Button, Card, FreshnessLine } from '@platform/ui';
 
 import { TabScreen } from '@/components/TabScreen';
@@ -218,9 +225,7 @@ function Body({
           never: tp('updatedNever', LOCALE),
           stale: tp('staleWarning', LOCALE),
         }}
-        formatMinutes={(minutes) =>
-          `${formatNumber(minutes, NUMERALS)} ${tp('minutesShort', LOCALE)}`
-        }
+        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
       />
 
       {view.state === 'waiting' || view.state === 'offered' ? (

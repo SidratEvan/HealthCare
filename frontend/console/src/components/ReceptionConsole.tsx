@@ -37,28 +37,27 @@ import {
   waitingQueue,
   type QueueEntry,
 } from '@platform/domain';
-import { format, formatClock, formatNumber, formatSerial, t, type Locale } from '@platform/i18n';
+import {
+  format,
+  formatClock,
+  formatNumber,
+  formatSerial,
+  t,
+  type Locale,
+  formatAge,
+} from '@platform/i18n';
 import { Button, Card, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
 import { CheckInSheet } from '@/components/CheckInSheet';
+import { ConsoleRail } from '@/components/ConsoleRail';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
 import { StandbyCard } from '@/components/StandbyCard';
 import { useSessionQueue } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
+import { fetchPatientNames } from '@/lib/roster';
 
 import type { ReactNode } from 'react';
-
-/** `APP_FLOW.md` B1.1. Only the queue rail item leads anywhere in this step. */
-const NAV_ITEMS = [
-  'navQueue',
-  'navRegistration',
-  'navBeds',
-  'navEmergency',
-  'navTests',
-  'navBilling',
-  'navDashboard',
-] as const;
 
 /** Console surfaces use Latin numerals for data-entry speed (`TYP-04`). */
 const CONSOLE_LOCALE: Locale = 'bn';
@@ -72,6 +71,14 @@ const CONSOLE_LOCALE: Locale = 'bn';
  * hours out, on the one line of the screen that says when the session is.
  */
 const CONSOLE_NUMERALS = 'latin' as const;
+
+/**
+ * The chamber's own hours are Bangla, day period and numerals — "বিকাল ৫:০০",
+ * never "5:00 PM" — because every other number on this screen, the serials
+ * included, already is. A header in a second script beside them is the
+ * mixed-script line `TYP-08` warns against.
+ */
+const CHAMBER_NUMERALS = 'bengali' as const;
 
 const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 
@@ -139,6 +146,30 @@ function ConsoleBody(): ReactNode {
   const serving = state === null ? null : nowServing(state);
   const counts = state === null ? null : queueCounts(state);
   const waiting = state === null ? [] : waitingQueue(state);
+  const chamber = readDemoSession()?.chamber ?? null;
+
+  /**
+   * Names beside the serials (`B1.4`). Re-read whenever the queue holds
+   * somebody the last read did not — a walk-in or a standby seat — so a new
+   * row is never left nameless while its neighbours have one.
+   */
+  const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
+  const nameless = state?.entries.some((entry) => !names.has(entry.patientId)) ?? false;
+  useEffect(() => {
+    if (sessionId === null || !nameless) return;
+    let cancelled = false;
+    fetchPatientNames({ apiBaseUrl: API_BASE, token: readToken(), sessionId })
+      .then((fresh) => {
+        if (!cancelled) setNames(fresh);
+      })
+      .catch(() => {
+        // A roster that did not load leaves the serials, which are enough to
+        // run the queue; the names arrive on the next read.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, nameless]);
 
   /**
    * `BTN-B02-NEXT`.
@@ -215,32 +246,16 @@ function ConsoleBody(): ReactNode {
   return (
     <div className="flex min-h-screen">
       {/* --- navigation rail (B1.1) ---------------------------------------- */}
-      <nav aria-label={t('navQueue', locale)} className="w-52 shrink-0 border-r border-line p-4">
-        <ul className="flex flex-col gap-1">
-          {NAV_ITEMS.map((key, index) => (
-            <li key={key}>
-              <a
-                href={index === 0 ? '/' : '#'}
-                aria-current={index === 0 ? 'page' : undefined}
-                className="flex min-h-touch items-center rounded-sm px-3 text-body-md aria-[current=page]:bg-brand-100 aria-[current=page]:font-semibold"
-              >
-                {t(key, locale)}
-              </a>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-6">
-          <OfflineBlock
-            connected={queue.connected}
-            pendingCount={queue.pendingCount}
-            lastServerTs={queue.lastServerTs}
-            stuckCount={0}
-            locale={locale}
-            now={now}
-          />
-        </div>
-      </nav>
+      <ConsoleRail current="navQueue" locale={locale}>
+        <OfflineBlock
+          connected={queue.connected}
+          pendingCount={queue.pendingCount}
+          lastServerTs={queue.lastServerTs}
+          stuckCount={0}
+          locale={locale}
+          now={now}
+        />
+      </ConsoleRail>
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
@@ -249,16 +264,22 @@ function ConsoleBody(): ReactNode {
         </p>
 
         {/* --- session bar (B1.2) ------------------------------------------ */}
-        <header className="flex items-center gap-3 border-b border-line px-6 py-4">
+        {/* Whose chamber, then when: the doctor's name is what a receptionist
+            and a patient at the counter both check first. Times in Bangla day
+            periods and numerals, as the rest of this screen's numbers are. */}
+        <header className="flex items-center gap-3 border-b border-line bg-surface px-6 py-4">
           <div className="min-w-0 flex-1">
-            <p className="text-title-sm tabular-nums">
-              {formatClock(state.plan.plannedStart, CONSOLE_NUMERALS)} –{' '}
-              {formatClock(state.plan.plannedEnd, CONSOLE_NUMERALS)}
-            </p>
-            <p className="text-body-sm text-ink-muted tabular-nums">
+            <h1 className="text-title-md font-bold" data-testid="chamber-title">
+              {chamber === null
+                ? t('navQueue', locale)
+                : `${chamber.doctorNameBn} · ${chamber.departmentNameBn}`}
+            </h1>
+            <p className="text-body-sm text-ink-secondary tabular-nums">
+              {t('chamberHours', locale)} {formatClock(state.plan.plannedStart, CHAMBER_NUMERALS)} –{' '}
+              {formatClock(state.plan.plannedEnd, CHAMBER_NUMERALS)} ·{' '}
               {state.doctorArrivedAt === null
                 ? t('notStarted', locale)
-                : `${t('actualStart', locale)} ${formatClock(state.doctorArrivedAt, CONSOLE_NUMERALS)}`}
+                : `${t('actualStart', locale)} ${formatClock(state.doctorArrivedAt, CHAMBER_NUMERALS)}`}
             </p>
           </div>
 
@@ -296,13 +317,13 @@ function ConsoleBody(): ReactNode {
         </header>
 
         {/* --- queue table (B1.4) ------------------------------------------ */}
-        <main className="flex min-h-0 flex-1">
-          <div className="min-w-0 flex-1 overflow-auto">
+        <main className="flex min-h-0 flex-1 gap-5 p-5">
+          <div className="min-w-0 flex-1 overflow-auto rounded-lg border border-line bg-surface">
             <QueueTable
               state={state}
               locale={locale}
               pendingBookingIds={pendingBookingIds}
-              patientNames={new Map()}
+              patientNames={names}
               onDone={(entry) => {
                 void queue.act('PATIENT_DONE', {
                   bookingId: entry.bookingId,
@@ -366,17 +387,35 @@ function ConsoleBody(): ReactNode {
           </div>
 
           {/* --- right column (B1.5) ---------------------------------------- */}
-          <aside className="w-80 shrink-0 space-y-4 border-l border-line p-4">
-            <Card tone={serving === null ? 'default' : 'brand'}>
-              <p className="text-caption text-ink-muted">{t('nowServing', locale)}</p>
+          <aside className="w-80 shrink-0 space-y-4">
+            {/* The chamber, in the institution's colour: the number and the
+                person, large, because this is what reception is asked about
+                all evening (the `Reception` artboard, FRONTEND.md §0.4). */}
+            <section
+              className="rounded-lg bg-brand-700 p-5 text-ink-inverse"
+              data-testid="now-serving-card"
+            >
+              <p className="text-body-sm text-brand-100">{t('nowServing', locale)}</p>
               {serving === null ? (
-                <p className="mt-1 text-body-md">{t('nobodyInChamber', locale)}</p>
+                <p className="mt-2 text-body-md">{t('nobodyInChamber', locale)}</p>
               ) : (
-                <p className="mt-1 text-display-lg tabular-nums" data-testid="now-serving">
-                  {formatNumber(serving.serial, 'bengali')}
-                </p>
+                <>
+                  <p className="text-display-lg font-bold tabular-nums" data-testid="now-serving">
+                    {formatNumber(serving.serial, 'bengali')}
+                  </p>
+                  <p className="mt-1 text-body-lg" data-testid="now-serving-name">
+                    {names.get(serving.patientId) ?? ''}
+                  </p>
+                </>
               )}
+              <p className="mt-3 text-body-sm text-brand-100">
+                {format('waitingCount', locale, {
+                  count: formatNumber(waiting.length, 'bengali'),
+                })}
+              </p>
+            </section>
 
+            <div className="px-1">
               {/*
                 CLAUDE.md §5.8: every live figure renders <FreshnessLine>.
                 This is the figure the whole product is about, so it is the one
@@ -391,9 +430,9 @@ function ConsoleBody(): ReactNode {
                   never: t('neverSynced', locale),
                   stale: t('staleWarning', locale),
                 }}
-                formatMinutes={(minutes) => formatNumber(minutes, 'bengali')}
+                formatMinutes={(value) => formatAge(value, locale, 'bengali')}
               />
-            </Card>
+            </div>
 
             <Card>
               <p className="text-caption text-ink-muted">{t('countersToday', locale)}</p>

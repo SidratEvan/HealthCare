@@ -65,6 +65,7 @@ export { DAY_PERIODS, DHAKA, dayPeriod, formatClock, formatDateTime } from './da
 
 export {
   NUMERAL_STYLE_BY_SURFACE,
+  formatAge,
   formatMinutes,
   formatNumber,
   formatPhone,

@@ -28,6 +28,7 @@ import { COLOUR } from '@platform/ui';
 
 import '@platform/ui/styles.css';
 
+import { fontVariables } from '@/app/fonts';
 import { ServiceWorker } from '@/components/ServiceWorker';
 
 import type { Metadata, Viewport } from 'next';
@@ -67,7 +68,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { readonly children: ReactNode }): ReactNode {
   return (
-    <html lang="bn">
+    <html lang="bn" className={fontVariables}>
       {/*
         `overscroll-none` stops the rubber-band bounce revealing the browser's
         background behind a fixed bottom bar, which is the single clearest

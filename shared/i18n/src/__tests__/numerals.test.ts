@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatAge,
   formatMinutes,
   formatNumber,
   formatPhone,
@@ -115,5 +116,26 @@ describe('phone numbers stay Latin everywhere', () => {
     // Honest degradation: a malformed number is shown as stored rather than
     // reformatted into something that looks valid.
     expect(formatPhone('01712345678')).toBe('01712345678');
+  });
+});
+
+describe('an age is said in the unit a person would use (FR-OFF-03)', () => {
+  it('counts minutes under an hour', () => {
+    expect(formatAge(0, 'bn', 'bengali')).toBe('০ মিনিট');
+    expect(formatAge(59, 'bn', 'bengali')).toBe('৫৯ মিনিট');
+  });
+
+  it('says hours, not three hundred minutes', () => {
+    expect(formatAge(60, 'bn', 'bengali')).toBe('১ ঘণ্টা');
+    expect(formatAge(301, 'bn', 'bengali')).toBe('৫ ঘণ্টা');
+  });
+
+  it('says days after a day', () => {
+    expect(formatAge(24 * 60 * 3 + 5, 'bn', 'bengali')).toBe('৩ দিন');
+  });
+
+  it('never rounds an age down to younger than it is, nor below zero', () => {
+    expect(formatAge(119, 'en', 'latin')).toBe('1 h');
+    expect(formatAge(-4, 'en', 'latin')).toBe('0 min');
   });
 });

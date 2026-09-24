@@ -55,6 +55,7 @@ import {
   symptomSignalName,
   t,
   type Locale,
+  formatAge,
 } from '@platform/i18n';
 import {
   Button,
@@ -438,7 +439,7 @@ function SessionHeader({
             never: t('neverSynced', LOCALE),
             stale: t('staleWarning', LOCALE),
           }}
-          formatMinutes={(minutes) => formatNumber(minutes, NUMERALS)}
+          formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
         />
 
         <div className="ms-auto">

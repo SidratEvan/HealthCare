@@ -110,10 +110,13 @@ export function QueueTable({
           <th scope="col" className="w-32 px-4 py-3">
             {t('colStatus', locale)}
           </th>
-          <th scope="col" className="w-28 px-4 py-3">
+          <th scope="col" className="w-24 px-4 py-3">
             {t('colSource', locale)}
           </th>
-          <th scope="col" className="w-96 px-4 py-3">
+          {/* Wide enough for the three buttons a waiting row carries, and no
+              wider: the name column gets the rest, so a name reads on one
+              line. */}
+          <th scope="col" className="w-72 px-4 py-3">
             {t('colActions', locale)}
           </th>
         </tr>
@@ -138,7 +141,9 @@ export function QueueTable({
               </td>
 
               <td className="px-4">
-                <span className="text-body-md">{patientNames.get(entry.patientId) ?? '—'}</span>
+                <span className={serving ? 'text-body-md font-semibold' : 'text-body-md'}>
+                  {patientNames.get(entry.patientId) ?? '—'}
+                </span>
                 {unsent ? <PendingGlyph label={t('pendingToSync', locale)} /> : null}
               </td>
 
@@ -156,7 +161,8 @@ export function QueueTable({
                     data-testid={`quoted-${String(entry.serial)}`}
                   >
                     {format('quotedShort', locale, {
-                      minutes: formatNumber(entry.quotedWaitMinutes, 'latin'),
+                      // Bengali, as the serial on the same row is.
+                      minutes: formatNumber(entry.quotedWaitMinutes, 'bengali'),
                     })}
                   </span>
                 ) : null}

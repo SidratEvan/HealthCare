@@ -39,7 +39,14 @@ import {
   type RefundDecision,
   type Timestamp,
 } from '@platform/domain';
-import { formatClock, formatMinutes, formatSerial, formatTaka, tp } from '@platform/i18n';
+import {
+  formatClock,
+  formatMinutes,
+  formatSerial,
+  formatTaka,
+  tp,
+  formatAge,
+} from '@platform/i18n';
 import { Button, FreshnessLine, LiveSerialCard, Sheet, SheetActions } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
@@ -238,9 +245,7 @@ function Ready({
                 never: tp('updatedNever', LOCALE),
                 stale: tp('staleWarning', LOCALE),
               }}
-              formatMinutes={(minutes) =>
-                `${formatMinutes(minutes, NUMERALS)} ${tp('minutesShort', LOCALE)}`
-              }
+              formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
             />
           }
         />

@@ -7,8 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/gov-dashboard` — **step 20, the last step in the build
-plan**. A government viewer opens `S-B-13` from the picker and sees capacity
+Last updated: `fix/pitch-design`, after step 20 — the design pass the owner
+asked for after seeing the live demo, and the bugs found on it (below). Before
+that, `fix/ci-node` (CI green again on Node 24) and `feat/gov-dashboard` —
+**step 20, the last step in the build plan**. A government viewer opens `S-B-13` from the picker and sees capacity
 by district, the emergency heat map, disease signals and an anonymised
 benchmark, read as a database role that cannot open a single patient row.
 Decision 5 (a national role has no facility) is implemented one way and needs
@@ -100,7 +102,7 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 3712, in about a minute and a half.
+`pnpm test` reports 3728, in about a minute and a half.
 `pnpm test:e2e` reports 108, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
@@ -115,6 +117,45 @@ last full run took twelve minutes.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### The design pass (`fix/pitch-design`, after step 20)
+
+The owner looked at the deployed demo and said the design "looks shit" and
+that not everything worked. Both were fair. What was found and done:
+
+- **No typeface had ever been loaded.** `--font-ui` named Anek Bangla and
+  nothing installed it, so every screen rendered in whatever Bangla font the
+  device had (Nirmala UI on Windows, something else on each phone). Both apps
+  now load Anek Bangla and Tiro Bangla through `next/font` (`src/app/fonts.ts`),
+  self-hosted at build time. This alone is most of the difference. The patient
+  service worker's shell cache is bumped to `shell-v2` so installed phones pick
+  it up.
+- **Reception never showed a patient's name.** `ReceptionConsole` passed an
+  empty map to the table from step 8 on, although `GET /sessions/:id/queue`
+  always returned the names. Now read from it (`lib/roster.ts`), and re-read
+  when a walk-in or a standby seat appears.
+- **Reception, to the design reference** (`FRONTEND.md` §0.4, the `Reception`
+  artboard): a green rail naming the hospital, shared by all five hospital
+  consoles (`ConsoleRail`); the doctor and department in the header, with the
+  chamber hours in Bangla ("সকাল ১০:১৩", never "10:13 AM"); the queue framed
+  as a card; the now-in-chamber card in brand green with the patient's name.
+  The picker (`S-B-01`) gets a green header band, the facility's consoles as a
+  card grid and the chambers in two columns.
+- **Every freshness line says its age in the unit a person would use**
+  (`formatAge`): minutes, then hours, then days. It read "৩০১ মিনিট আগে" on a
+  morning ward, and "হালনাগাদ ৩ আগে" where a caller passed a bare number —
+  decision 38, now closed.
+- **Smaller:** an empty revenue chart says nothing was collected instead of
+  drawing ৳0.01 axes; a negative "average past the quote" says there was no
+  overrun; the national map reads "২৮টির মধ্যে ৭টি"; hospital cards give the
+  Bangla address, not "Dhanmondi, Dhaka"; the quoted wait on a queue row is in
+  Bengali digits like its serial.
+
+**What the live demo needed that was not code:** its database was seeded
+before steps 17–19 (no payments, lab orders or feedback), and the pitch
+chamber was built at 03:40 Dhaka, so it read "3:40 AM – 6:40 AM" and the
+patient app could not book onto it. A reseed about an hour before a pitch
+fixes both; see *Running the pitch demo*.
 
 ### Step 20 — the national layer, and what a government viewer can reach
 
@@ -1495,6 +1536,11 @@ Raised while building the seeds (step 5):
    as a fallback. The document stands until ruled otherwise, so step 7 builds
    tokens on Anek Bangla — but the canvas's serif display carries the hero
    numeral well, and switching later is a token change, not a rewrite.
+   **Until `fix/pitch-design` neither face was actually loaded**, so the
+   question was moot in practice: now Anek Bangla is, per the document. Headings
+   set in `font-reading` get Tiro Bangla, a serif, which is close to the
+   canvas's display voice. Swapping display to Noto Serif Bengali is one line
+   in each app's `fonts.ts` and the token.
 
 11. **`--warn-700` is AA, not the AAA `FRONTEND.md` §1.3 claimed.** The table
    said 7.9:1; the §1.1 hex `#6B4A10` actually yields 6.97:1, missing AAA by
@@ -1710,7 +1756,9 @@ Raised while building the bed board (step 14):
    than being the only one that differs. Wiring Dexie in is a small change for
    both.
 
-38. **Found, not fixed: three freshness lines drop the word "minutes".** The
+38. ~~**Found, not fixed: three freshness lines drop the word "minutes".**~~
+   **Fixed on `fix/pitch-design`**: every freshness line goes through
+   `formatAge` (minutes, hours, days). The original note follows. The
    reception console, the doctor console and the booking flow's hospital list
    pass a bare number into `updatedAgo`, so they read "হালনাগাদ ৩ আগে". The live
    serial screen and every step-14 screen append মিনিট. Out of this step's

@@ -33,7 +33,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { BED_KINDS, normaliseBdMobile, type BedKind } from '@platform/domain';
-import { bedKindName, formatNumber, formatTaka, tp } from '@platform/i18n';
+import { bedKindName, formatNumber, formatTaka, tp, formatAge } from '@platform/i18n';
 import { Button, Card, FilterChip, FreshnessLine, Input, Sheet } from '@platform/ui';
 
 import { HospitalIcon } from '@/components/icons';
@@ -320,9 +320,7 @@ function HospitalBedCard({
             never: tp('updatedNever', LOCALE),
             stale: tp('staleWarning', LOCALE),
           }}
-          formatMinutes={(minutes) =>
-            `${formatNumber(minutes, NUMERALS)} ${tp('minutesShort', LOCALE)}`
-          }
+          formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
         />
 
         {stale ? (

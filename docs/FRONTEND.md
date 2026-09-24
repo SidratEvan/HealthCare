@@ -203,7 +203,7 @@ Both scripts come from one superfamily so Bangla and English share skeleton, wei
 | **Long-form reading (reports, policy, consent)** | **Tiro Bangla** | A proper text serif for dense reading; used only in document contexts | Google Fonts, OFL |
 | **Fallback stack** | `'Anek Bangla', 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif` | Hind Siliguri is the most commonly installed quality Bangla face in the region | — |
 
-Self-host via `@fontsource-variable/anek-bangla` rather than a CDN link: no third-party request, no FOUT on poor networks, and it works offline in the PWA shell.
+Self-hosted rather than linked from a CDN: no third-party request, no FOUT on poor networks, and it works offline in the PWA shell. Each app loads Anek Bangla and Tiro Bangla through `next/font/google` in `src/app/fonts.ts`, which downloads the faces at build time and serves them from the app's own origin — part of Next, so no extra package. The faces are exposed as `--font-anek` and `--font-tiro`, which `--font-ui` and `--font-reading` read with the family names as fallback. (Until the design pass after step 20 no face was loaded at all, and every screen rendered in whatever Bangla font the device had.)
 
 **Banned:** Inter, Roboto, Poppins, Montserrat as brand faces. Kalpurush/SolaimanLipi as UI faces (they read as legacy desktop documents, not product).
 

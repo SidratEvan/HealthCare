@@ -29,6 +29,12 @@ export interface HospitalCard {
   readonly kind: string;
   readonly district: string;
   readonly thana: string | null;
+  /**
+   * The street address in Bangla, as the facility writes it. The card shows
+   * this rather than `thana, district`, which are stored in English and put a
+   * Latin line under every Bangla name on the list.
+   */
+  readonly addressBn?: string | null;
   readonly distanceKm: number | null;
   readonly capabilities: readonly string[];
   readonly capabilityAsOf: string | null;
