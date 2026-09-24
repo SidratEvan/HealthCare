@@ -37,7 +37,15 @@ import {
   waitingQueue,
   type QueueEntry,
 } from '@platform/domain';
-import { format, formatClock, formatNumber, formatSerial, t, type Locale } from '@platform/i18n';
+import {
+  format,
+  formatClock,
+  formatNumber,
+  formatSerial,
+  t,
+  type Locale,
+  formatAge,
+} from '@platform/i18n';
 import { Button, Card, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
 import { CheckInSheet } from '@/components/CheckInSheet';
@@ -391,7 +399,7 @@ function ConsoleBody(): ReactNode {
                   never: t('neverSynced', locale),
                   stale: t('staleWarning', locale),
                 }}
-                formatMinutes={(minutes) => formatNumber(minutes, 'bengali')}
+                formatMinutes={(value) => formatAge(value, locale, 'bengali')}
               />
             </Card>
 

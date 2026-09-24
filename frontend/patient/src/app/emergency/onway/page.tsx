@@ -30,7 +30,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { ApiError } from '@platform/client';
-import { formatNumber, problemName, tp } from '@platform/i18n';
+import { formatNumber, problemName, tp, formatAge } from '@platform/i18n';
 import { Button, FreshnessLine, Sheet, SheetActions } from '@platform/ui';
 
 import { TabScreen } from '@/components/TabScreen';
@@ -276,7 +276,7 @@ function Body({
           never: tp('updatedNever', LOCALE),
           stale: tp('staleWarning', LOCALE),
         }}
-        formatMinutes={(minutes) => `${n(minutes)} ${tp('minutesShort', LOCALE)}`}
+        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
       />
 
       <div className="flex flex-col gap-3">

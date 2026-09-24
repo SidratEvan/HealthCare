@@ -43,7 +43,7 @@ import {
   type EmergencyProblem,
   type ReferralView,
 } from '@platform/domain';
-import { format, formatNumber, problemName, t, type Locale } from '@platform/i18n';
+import { format, formatNumber, problemName, t, type Locale, formatAge } from '@platform/i18n';
 import { Button, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
 import { InboundCard, TriageTable } from '@/components/ErCases';
@@ -208,8 +208,7 @@ function ConsoleBody(): ReactNode {
     never: t('neverConfirmed', locale),
     stale: t('staleWarning', locale),
   };
-  const minutes = (value: number): string =>
-    `${formatNumber(value, NUMERALS)} ${t('minutesShort', locale)}`;
+  const minutes = (value: number): string => formatAge(value, locale, NUMERALS);
   const capabilitiesPending = er.pendingCount > 0 && er.pendingCaseIds.size < er.pendingCount;
 
   return (

@@ -127,6 +127,28 @@ export function formatMinutes(minutes: number, style: NumeralStyle): string {
   return formatNumber(Math.max(0, Math.round(minutes)), style);
 }
 
+const AGE_UNITS = {
+  bn: { minutes: 'মিনিট', hours: 'ঘণ্টা', days: 'দিন' },
+  en: { minutes: 'min', hours: 'h', days: 'd' },
+} as const;
+
+/**
+ * How old something is, in the unit a person would say it in (`FR-OFF-03`).
+ *
+ * Minutes under an hour, whole hours under a day, whole days after that —
+ * floored, so a figure is never described as younger than it is. Every
+ * freshness line goes through here: before it, each screen appended its own
+ * unit, some appended none, and a morning's ward board read "৩০১ মিনিট আগে"
+ * while a queue read "হালনাগাদ ৩ আগে" (STATUS decision 38).
+ */
+export function formatAge(minutes: number, locale: 'bn' | 'en', style: NumeralStyle): string {
+  const whole = Math.max(0, Math.floor(minutes));
+  const units = AGE_UNITS[locale];
+  if (whole < 60) return `${formatNumber(whole, style)} ${units.minutes}`;
+  if (whole < 24 * 60) return `${formatNumber(Math.floor(whole / 60), style)} ${units.hours}`;
+  return `${formatNumber(Math.floor(whole / (24 * 60)), style)} ${units.days}`;
+}
+
 /**
  * A phone number, always Latin.
  *

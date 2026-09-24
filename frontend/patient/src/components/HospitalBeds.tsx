@@ -12,7 +12,7 @@
  */
 
 import type { PublicCapacity } from '@platform/domain';
-import { formatNumber, tp } from '@platform/i18n';
+import { formatNumber, tp, formatAge } from '@platform/i18n';
 import { Chip, FreshnessLine } from '@platform/ui';
 
 import type { ReactNode } from 'react';
@@ -63,9 +63,7 @@ export function HospitalBeds({
           never: tp('updatedNever', LOCALE),
           stale: tp('staleWarning', LOCALE),
         }}
-        formatMinutes={(minutes) =>
-          `${formatNumber(minutes, NUMERALS)} ${tp('minutesShort', LOCALE)}`
-        }
+        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
       />
     </div>
   );

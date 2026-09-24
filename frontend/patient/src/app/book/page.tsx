@@ -28,6 +28,7 @@ import {
   formatSerial,
   formatTaka,
   tp,
+  formatAge,
 } from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine, Input } from '@platform/ui';
 
@@ -511,7 +512,7 @@ function Freshness({ asOf, now }: { readonly asOf: string; readonly now: Date })
         never: tp('updatedNever', LOCALE),
         stale: tp('staleWarning', LOCALE),
       }}
-      formatMinutes={(minutes) => formatMinutes(minutes, NUMERALS)}
+      formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
     />
   );
 }
@@ -755,7 +756,7 @@ function Confirm({
             never: tp('updatedNever', LOCALE),
             stale: tp('staleWarning', LOCALE),
           }}
-          formatMinutes={(minutes) => formatMinutes(minutes, NUMERALS)}
+          formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
         />
       </Card>
 

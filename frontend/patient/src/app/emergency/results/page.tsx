@@ -32,7 +32,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { EMERGENCY_PROBLEMS, type EmergencyProblem } from '@platform/domain';
-import { formatNumber, problemName, tp } from '@platform/i18n';
+import { formatAge, problemName, tp } from '@platform/i18n';
 import { Button, FreshnessLine } from '@platform/ui';
 
 import { EmergencyResultCard } from '@/components/EmergencyResult';
@@ -273,9 +273,7 @@ function Results({
           never: tp('updatedNever', LOCALE),
           stale: tp('staleWarning', LOCALE),
         }}
-        formatMinutes={(minutes) =>
-          `${formatNumber(minutes, NUMERALS)} ${tp('minutesShort', LOCALE)}`
-        }
+        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
       />
 
       {lead === undefined ? null : (

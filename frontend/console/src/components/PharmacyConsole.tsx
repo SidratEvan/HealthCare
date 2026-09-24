@@ -40,7 +40,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { format, formatNumber, t, type ConsoleKey, type Locale } from '@platform/i18n';
+import { format, formatAge, t, type ConsoleKey, type Locale } from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
 import { ActionButton } from '@/components/ActionButton';
@@ -162,8 +162,7 @@ function PharmacyBody(): ReactNode {
     never: t('neverConfirmed', locale),
     stale: t('staleWarning', locale),
   };
-  const minutes = (value: number): string =>
-    `${formatNumber(value, NUMERALS)} ${t('minutesShort', locale)}`;
+  const minutes = (value: number): string => formatAge(value, locale, NUMERALS);
 
   if (hospitalId === '') return <Notice>{t('noSession', locale)}</Notice>;
 

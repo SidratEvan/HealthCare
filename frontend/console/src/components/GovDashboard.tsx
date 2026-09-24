@@ -52,6 +52,7 @@ import {
   type BedKindName,
   type ConsoleKey,
   type Locale,
+  formatAge,
 } from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine } from '@platform/ui';
 
@@ -858,7 +859,7 @@ function Freshness({ asOf, now }: { readonly asOf: string | null; readonly now: 
         never: t('adminNeverRecorded', LOCALE),
         stale: t('staleWarning', LOCALE),
       }}
-      formatMinutes={(value) => `${num(value)} ${t('minutesShort', LOCALE)}`}
+      formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
     />
   );
 }

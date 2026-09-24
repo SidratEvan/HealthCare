@@ -35,7 +35,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
-import { formatSerial, tp } from '@platform/i18n';
+import { formatAge, formatSerial, tp } from '@platform/i18n';
 import { Button, Card, FreshnessLine, Input } from '@platform/ui';
 
 import { TabScreen } from '@/components/TabScreen';
@@ -181,8 +181,7 @@ function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability })
     never: tp('updatedNever', LOCALE),
     stale: tp('staleWarning', LOCALE),
   };
-  const minutes = (value: number): string =>
-    `${formatSerial(value, NUMERALS)} ${tp('minutesShort', LOCALE)}`;
+  const minutes = (value: number): string => formatAge(value, LOCALE, NUMERALS);
 
   return (
     <Card>

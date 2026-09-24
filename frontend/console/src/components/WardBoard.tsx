@@ -29,7 +29,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { BED_KINDS, forecastTomorrow, tallyByKind, type Timestamp } from '@platform/domain';
-import { bedKindName, format, formatNumber, t, type Locale } from '@platform/i18n';
+import { bedKindName, format, formatNumber, t, type Locale, formatAge } from '@platform/i18n';
 import {
   BedTile,
   Button,
@@ -183,8 +183,7 @@ function BoardBody(): ReactNode {
     never: t('neverConfirmed', locale),
     stale: t('staleWarning', locale),
   };
-  const minutes = (value: number): string =>
-    `${formatNumber(value, NUMERALS)} ${t('minutesShort', locale)}`;
+  const minutes = (value: number): string => formatAge(value, locale, NUMERALS);
 
   return (
     <div className="flex min-h-screen" data-testid="ward-board">

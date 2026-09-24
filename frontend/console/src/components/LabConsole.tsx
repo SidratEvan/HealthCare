@@ -52,7 +52,7 @@ import {
   type Timestamp,
   type TurnaroundSummary,
 } from '@platform/domain';
-import { format, formatNumber, t, type ConsoleKey, type Locale } from '@platform/i18n';
+import { format, formatNumber, t, type ConsoleKey, type Locale, formatAge } from '@platform/i18n';
 import {
   Button,
   Card,
@@ -268,8 +268,7 @@ function LabBody(): ReactNode {
     never: t('neverConfirmed', locale),
     stale: t('staleWarning', locale),
   };
-  const minutes = (value: number): string =>
-    `${formatNumber(value, NUMERALS)} ${t('minutesShort', locale)}`;
+  const minutes = (value: number): string => formatAge(value, locale, NUMERALS);
 
   if (hospitalId === '') return <Notice>{t('noSession', locale)}</Notice>;
 
