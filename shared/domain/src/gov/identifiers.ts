@@ -47,7 +47,9 @@ export function findIdentifiers(value: unknown, path = ''): string[] {
   }
 
   if (Array.isArray(value)) {
-    return value.flatMap((item: unknown, index) => findIdentifiers(item, `${path}[${String(index)}]`));
+    return value.flatMap((item: unknown, index) =>
+      findIdentifiers(item, `${path}[${String(index)}]`),
+    );
   }
 
   if (value !== null && typeof value === 'object') {

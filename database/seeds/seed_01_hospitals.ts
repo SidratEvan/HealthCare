@@ -309,9 +309,7 @@ export const seed01Hospitals: SeedModule = {
           null,
           demoEmail('gov', 'national'),
           'NAT-GOV-01',
-          labelBn(
-            composeName(nationalNames, nationalNames.chance(0.5) ? 'female' : 'male'),
-          ),
+          labelBn(composeName(nationalNames, nationalNames.chance(0.5) ? 'female' : 'male')),
           DISABLED_PASSWORD,
         ],
       ],

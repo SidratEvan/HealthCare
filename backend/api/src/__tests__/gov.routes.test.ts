@@ -27,8 +27,8 @@ import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 import { AppError } from '../errors/AppError.js';
-import * as queueService from '../services/queue.service.js';
 import { aggregateOnly } from '../services/gov.service.js';
+import * as queueService from '../services/queue.service.js';
 
 import { createQueueFixture, staffIdFor } from './support/queueFixture.js';
 import {
@@ -132,7 +132,7 @@ describe('a government viewer opens nothing written for a hospital (FR-ROLE-04)'
 
 describe('the database refuses the base tables (DATABASE.md §5)', () => {
   /** Runs one statement as `gov_reader`, the way `gov.repo` reads. */
-  async function asGovReader(statement: string): Promise<'ok' | string> {
+  async function asGovReader(statement: string): Promise<string> {
     try {
       await db.transaction().execute(async (tx) => {
         await sql`SET LOCAL ROLE gov_reader`.execute(tx);
@@ -207,9 +207,9 @@ describe('nothing identifying reaches the wire (FR-GOV-06)', () => {
   });
 
   it('refuses to send a payload that grew an identifier', () => {
-    expect(() => aggregateOnly('test', { districts: [{ district: 'Dhaka', patientId: 'x' }] })).toThrow(
-      AppError,
-    );
+    expect(() =>
+      aggregateOnly('test', { districts: [{ district: 'Dhaka', patientId: 'x' }] }),
+    ).toThrow(AppError);
     expect(aggregateOnly('test', { districts: [{ district: 'Dhaka', cases: 3 }] })).toEqual({
       districts: [{ district: 'Dhaka', cases: 3 }],
     });
@@ -419,8 +419,9 @@ describe('anonymised benchmarking (FR-GOV-04)', () => {
 
   it('ranks the wait shortest first', async () => {
     const response = await get('/gov/benchmarks', await nationalToken());
-    const wait = (response.body.data.measures as { measure: string; entries: { value: number }[] }[])
-      .find((entry) => entry.measure === 'wait');
+    const wait = (
+      response.body.data.measures as { measure: string; entries: { value: number }[] }[]
+    ).find((entry) => entry.measure === 'wait');
 
     const values = wait?.entries.map((entry) => entry.value) ?? [];
     expect(values.length).toBeGreaterThan(1);

@@ -16,12 +16,7 @@
  * checks, which is the state real leaks live in.
  */
 
-import {
-  NATIONAL_ROLES,
-  STAFF_ROLES,
-  type NationalRole,
-  type StaffRole,
-} from '@platform/domain';
+import { NATIONAL_ROLES, STAFF_ROLES, type NationalRole, type StaffRole } from '@platform/domain';
 
 import { verifyToken, type TokenClaims } from '../config/jwt.js';
 import { authRequired, tokenInvalid } from '../errors/AppError.js';

@@ -14,7 +14,14 @@ const TODAY = '2026-09-23';
 const DHAKA: DistrictReporting = { division: 'Dhaka', district: 'Dhaka', firstDay: '2026-08-01' };
 
 function cases(day: string, count: number, overrides: Partial<SignalDay> = {}): SignalDay {
-  return { division: 'Dhaka', district: 'Dhaka', signal: 'dengue', day, cases: count, ...overrides };
+  return {
+    division: 'Dhaka',
+    district: 'Dhaka',
+    signal: 'dengue',
+    day,
+    cases: count,
+    ...overrides,
+  };
 }
 
 function reading(days: readonly SignalDay[], reporting: readonly DistrictReporting[] = [DHAKA]) {
@@ -151,10 +158,7 @@ describe('what the screen is given', () => {
   it('puts spikes first', () => {
     const readings = readSignals(
       [cases('2026-09-22', 8, { signal: 'fever' })],
-      [
-        { division: 'Dhaka', district: 'Narayanganj', firstDay: '2026-08-01' },
-        DHAKA,
-      ],
+      [{ division: 'Dhaka', district: 'Narayanganj', firstDay: '2026-08-01' }, DHAKA],
       TODAY,
     );
 

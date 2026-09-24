@@ -6,7 +6,9 @@ describe('the national layer sends nothing that identifies (FR-GOV-06)', () => {
   it('passes a district count', () => {
     expect(
       findIdentifiers({
-        districts: [{ division: 'Dhaka', district: 'Dhaka', bedFree: 27, asOf: '2026-09-23T14:49:07Z' }],
+        districts: [
+          { division: 'Dhaka', district: 'Dhaka', bedFree: 27, asOf: '2026-09-23T14:49:07Z' },
+        ],
         totals: { bedFree: 31 },
       }),
     ).toEqual([]);

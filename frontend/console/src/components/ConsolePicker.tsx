@@ -95,6 +95,9 @@ interface DemoConsole {
   readonly sessions: readonly DemoSessionCard[];
 }
 
+/** A national role the API has a seeded account for (step 20). */
+type NationalRole = 'gov_viewer';
+
 /**
  * What the picker opened: a chamber, or a hospital's ward board.
  *
@@ -107,7 +110,8 @@ export type ConsoleChoice =
   | { readonly kind: 'emergency' }
   | { readonly kind: 'lab' }
   | { readonly kind: 'pharmacy' }
-  | { readonly kind: 'admin' };
+  | { readonly kind: 'admin' }
+  | { readonly kind: 'gov' };
 
 export function ConsolePicker({
   onChosen,
@@ -116,6 +120,7 @@ export function ConsolePicker({
   readonly onChosen: (choice: ConsoleChoice) => void;
 }): ReactNode {
   const [consoles, setConsoles] = useState<DemoConsole[] | null>(null);
+  const [national, setNational] = useState<readonly NationalRole[]>([]);
   const [failed, setFailed] = useState(false);
   /** True once an attempt has timed out and another is running. */
   const [waking, setWaking] = useState(false);
@@ -140,10 +145,15 @@ export function ConsolePicker({
           });
           if (!response.ok) throw new Error(String(response.status));
 
-          const body = (await response.json()) as { data: { consoles: DemoConsole[] } };
+          const body = (await response.json()) as {
+            data: { consoles: DemoConsole[]; national?: NationalRole[] };
+          };
           if (cancelled) return;
 
           setConsoles(body.data.consoles);
+          // Absent from an API older than step 20, which offers nothing
+          // national rather than failing the picker.
+          setNational(body.data.national ?? []);
           // One facility is the common case in a demo; skipping a choice that
           // has one answer is not a shortcut, it is one fewer tap before the
           // thing being demonstrated.
@@ -169,21 +179,27 @@ export function ConsolePicker({
     };
   }, []);
 
-  /** Takes a principal for this hospital and role, then opens the chamber. */
+  /**
+   * Takes a principal for this hospital and role, then opens the chamber.
+   *
+   * A null hospital is the national console: the token is asked for with a
+   * role alone, because naming a facility for a government viewer is refused
+   * (`demoTokenBody`, migration 0024).
+   */
   const open = useCallback(
-    async (hospitalId: string, role: string, choice: ConsoleChoice) => {
+    async (hospitalId: string | null, role: string, choice: ConsoleChoice) => {
       setBusy(true);
       try {
         const response = await fetch(`${API}/demo/token`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ hospitalId, role }),
+          body: JSON.stringify(hospitalId === null ? { role } : { hospitalId, role }),
         });
 
         if (!response.ok) throw new Error(String(response.status));
 
         const body = (await response.json()) as {
-          data: { token: string; staffName: string; hospitalId: string };
+          data: { token: string; staffName: string; hospitalId: string | null };
         };
 
         writeDemoSession({
@@ -250,12 +266,35 @@ export function ConsolePicker({
     );
   }
 
+  // `S-B-13` belongs to no hospital, so it is offered whether or not any
+  // hospital is running something today.
+  const nationalSection =
+    national.length === 0 ? null : (
+      <section className="flex flex-col gap-3">
+        <h2 className="text-title-sm">{t('govSection', LOCALE)}</h2>
+        <p className="text-body-sm text-ink-secondary">{t('govSectionHint', LOCALE)}</p>
+        <div>
+          <Button
+            variant="secondary"
+            loading={busy}
+            data-testid="open-gov"
+            onClick={() => {
+              void open(null, 'gov_viewer', { kind: 'gov' });
+            }}
+          >
+            {t('openGov', LOCALE)}
+          </Button>
+        </div>
+      </section>
+    );
+
   if (consoles.length === 0) {
     return (
       <Shell>
         <p className="text-body-md text-ink-secondary" data-testid="picker-empty">
           {t('noConsoles', LOCALE)}
         </p>
+        {nationalSection}
       </Shell>
     );
   }
@@ -432,6 +471,8 @@ export function ConsolePicker({
           </ul>
         </section>
       )}
+
+      {nationalSection}
     </Shell>
   );
 }

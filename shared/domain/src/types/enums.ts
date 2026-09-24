@@ -238,7 +238,10 @@ export type SymptomSignal = (typeof SYMPTOM_SIGNALS)[number];
  * A `staff_roles` row holding one of these has no hospital, and every other
  * role must have one (0024, `staff_roles_national_has_no_hospital`).
  */
-export const NATIONAL_ROLES = ['platform_admin', 'gov_viewer'] as const satisfies readonly StaffRole[];
+export const NATIONAL_ROLES = [
+  'platform_admin',
+  'gov_viewer',
+] as const satisfies readonly StaffRole[];
 export type NationalRole = (typeof NATIONAL_ROLES)[number];
 
 /** Locales. bn is the product, en is the toggle (FR-LOC-01, I18N-01). */

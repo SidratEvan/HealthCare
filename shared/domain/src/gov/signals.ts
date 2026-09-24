@@ -158,7 +158,10 @@ export function readSignals(
 }
 
 /** The rule, on its own, so a test can state it without building a district. */
-export function statusOf(thisWeek: number, usualWeek: number): Exclude<SignalStatus, 'too_little_history'> {
+export function statusOf(
+  thisWeek: number,
+  usualWeek: number,
+): Exclude<SignalStatus, 'too_little_history'> {
   return thisWeek >= SPIKE_MIN_CASES && thisWeek >= SPIKE_RATIO * usualWeek ? 'spike' : 'normal';
 }
 
@@ -189,9 +192,7 @@ function addDays(date: string, days: number): string {
 
 /** Whole days from `from` up to, not including, `to`. */
 function daysBetween(from: string, to: string): number {
-  return Math.round(
-    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000,
-  );
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
 function everyDay(from: string, to: string): string[] {

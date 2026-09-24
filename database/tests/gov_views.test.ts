@@ -104,7 +104,7 @@ describe('no gov view has a column that could identify (FR-GOV-06)', () => {
 
 describe('a national role has no hospital, and only a national role (0024, FR-ROLE-01)', () => {
   /** Runs `sql` in a transaction that is always rolled back. */
-  async function attempt(sql: string, values: readonly unknown[]): Promise<'ok' | string> {
+  async function attempt(sql: string, values: readonly unknown[]): Promise<string> {
     return await withClient(async (client) => {
       await client.query('BEGIN');
       try {
@@ -171,7 +171,11 @@ describe('a national role has no hospital, and only a national role (0024, FR-RO
 
 describe('the seeded national account (FR-DEM-07, S-B-13)', () => {
   it('is one government viewer, belonging to no facility', async () => {
-    const rows = await query<{ hospital_id: string | null; role_hospital: string | null; email: string }>(`
+    const rows = await query<{
+      hospital_id: string | null;
+      role_hospital: string | null;
+      email: string;
+    }>(`
       SELECT su.hospital_id, sr.hospital_id AS role_hospital, su.email
         FROM staff_users su
         JOIN staff_roles sr ON sr.staff_user_id = su.id

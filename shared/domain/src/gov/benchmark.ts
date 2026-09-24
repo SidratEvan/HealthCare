@@ -46,12 +46,7 @@ export interface FacilityFigures {
 }
 
 export type BenchmarkMeasure =
-  | 'wait'
-  | 'turnaround'
-  | 'score_wait'
-  | 'score_doctor'
-  | 'score_cleanliness'
-  | 'score_billing';
+  'wait' | 'turnaround' | 'score_wait' | 'score_doctor' | 'score_cleanliness' | 'score_billing';
 
 export interface BenchmarkEntry {
   readonly kind: FacilityKind;

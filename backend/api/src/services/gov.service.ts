@@ -96,7 +96,10 @@ export function totalsOf(districts: readonly govRepo.DistrictCapacity[]): Capaci
   const withBeds = districts.filter((district) => district.bedTotal > 0);
   const icu = districts.filter((district) => district.icuTotal !== null);
 
-  const kinds = new Map<string, { total: number; free: number; asOf: string | null; unknown: boolean }>();
+  const kinds = new Map<
+    string,
+    { total: number; free: number; asOf: string | null; unknown: boolean }
+  >();
   for (const district of districts) {
     for (const entry of district.byKind) {
       const current = kinds.get(entry.kind) ?? { total: 0, free: 0, asOf: null, unknown: false };
@@ -182,7 +185,10 @@ export async function erLoad(now: Date = new Date()): Promise<ErLoad> {
       onTheWay: sum(districts.map((district) => district.onTheWay)),
       red: sum(districts.map((district) => district.red)),
     },
-    peak: Math.max(0, ...districts.flatMap((district) => district.hourly.map((cell) => cell.cases))),
+    peak: Math.max(
+      0,
+      ...districts.flatMap((district) => district.hourly.map((cell) => cell.cases)),
+    ),
   });
 }
 
