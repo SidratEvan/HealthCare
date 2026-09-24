@@ -34,10 +34,9 @@ import {
   t,
   triageName,
   type Locale,
+  numeralsFor,
 } from '@platform/i18n';
 import { Button, Chip } from '@platform/ui';
-
-import { NUMERALS } from '@/lib/bedCopy';
 
 import type { PendingHandoff, PendingRequest } from '@/lib/beds';
 
@@ -124,6 +123,7 @@ function HandoffCard({
   now,
   onAdmitHandoff,
 }: PendingAdmissionsProps & { readonly handoff: PendingHandoff }): ReactNode {
+  const numerals = numeralsFor(locale);
   const [choosing, setChoosing] = useState(false);
   const at = now.toISOString() as Timestamp;
 
@@ -146,7 +146,7 @@ function HandoffCard({
           <p className="text-caption tabular-nums text-ink-muted">
             {handoff.ageYears === null
               ? ''
-              : format('ageYears', locale, { age: formatNumber(handoff.ageYears, NUMERALS) })}
+              : format('ageYears', locale, { age: formatNumber(handoff.ageYears, numerals) })}
             {handoff.triage === null ? '' : ` · ${triageName(handoff.triage, locale)}`}
           </p>
         </div>
@@ -156,7 +156,7 @@ function HandoffCard({
       </div>
       <p className="text-caption text-ink-secondary">
         {t('pendingFromEr', locale)} ·{' '}
-        {format('pendingErSince', locale, { time: formatClock(handoff.requestedAt, NUMERALS) })}
+        {format('pendingErSince', locale, { time: formatClock(handoff.requestedAt, numerals) })}
       </p>
 
       {choosing ? (
@@ -209,6 +209,7 @@ function RequestCard({
   onAnswered,
   onProblem,
 }: PendingAdmissionsProps & { readonly request: PendingRequest }): ReactNode {
+  const numerals = numeralsFor(locale);
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [busy, setBusy] = useState(false);
   const at = now.toISOString() as Timestamp;
@@ -258,7 +259,7 @@ function RequestCard({
           <p className="text-caption tabular-nums text-ink-muted">
             {request.patientAgeYears === null
               ? t(sex, locale)
-              : `${format('ageYears', locale, { age: formatNumber(request.patientAgeYears, NUMERALS) })} · ${t(sex, locale)}`}
+              : `${format('ageYears', locale, { age: formatNumber(request.patientAgeYears, numerals) })} · ${t(sex, locale)}`}
             {request.contactPhone === null ? '' : ` · ${formatPhone(request.contactPhone)}`}
           </p>
         </div>
@@ -271,7 +272,7 @@ function RequestCard({
         {t('pendingFromApp', locale)}
         {request.expectedArrivalAt === null
           ? ''
-          : ` · ${format('pendingArrives', locale, { time: formatClock(request.expectedArrivalAt, NUMERALS) })}`}
+          : ` · ${format('pendingArrives', locale, { time: formatClock(request.expectedArrivalAt, numerals) })}`}
       </p>
 
       {request.note === null || request.note === '' ? null : (
@@ -282,7 +283,7 @@ function RequestCard({
         <p className="text-body-sm text-brand-700" data-testid="pending-held">
           {format('pendingHeld', locale, {
             bed: request.heldBedLabel ?? '',
-            time: formatClock(request.holdExpiresAt, NUMERALS),
+            time: formatClock(request.holdExpiresAt, numerals),
           })}
         </p>
       ) : null}
@@ -358,7 +359,7 @@ function RequestCard({
                 void answer({ action: 'hold', bedId: step.bedId, minutes });
               }}
             >
-              {format('holdFor', locale, { minutes: formatNumber(minutes, NUMERALS) })}
+              {format('holdFor', locale, { minutes: formatNumber(minutes, numerals) })}
             </Button>
           ))}
           <Button

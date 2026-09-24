@@ -1,11 +1,9 @@
 'use client';
 
-import { tp } from '@platform/i18n';
-
 import { NotBuiltYet } from '@/components/TabScreen';
 
 import type { ReactNode } from 'react';
 
 export default function Page(): ReactNode {
-  return <NotBuiltYet title={tp('quickAmbulance', 'bn')} explanation="ambulanceComing" />;
+  return <NotBuiltYet title="quickAmbulance" explanation="ambulanceComing" />;
 }

@@ -28,17 +28,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { formatNumber, t, type ConsoleKey } from '@platform/i18n';
-import { Button, Card, CardMeta, CardTitle } from '@platform/ui';
+import { format, formatNumber, localName, numeralsFor, t, type ConsoleKey } from '@platform/i18n';
+import { Button, Card, CardMeta, CardTitle, useLocale } from '@platform/ui';
 
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { writeDemoSession } from '@/lib/demo';
 
 import type { ReactNode } from 'react';
-
-const LOCALE = 'bn' as const;
-
-/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
-const NUMERALS = 'bengali' as const;
 
 const API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 
@@ -80,7 +76,9 @@ const ROLE_LABEL: Record<string, ConsoleKey> = {
 interface DemoSessionCard {
   readonly id: string;
   readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   readonly room: string | null;
   readonly status: string;
   readonly waiting: number;
@@ -90,6 +88,7 @@ interface DemoSessionCard {
 interface DemoConsole {
   readonly hospitalId: string;
   readonly nameBn: string;
+  readonly nameEn: string;
   readonly district: string;
   readonly roles: readonly string[];
   readonly sessions: readonly DemoSessionCard[];
@@ -119,6 +118,8 @@ export function ConsolePicker({
   /** Called with what to open, once a principal is in place. */
   readonly onChosen: (choice: ConsoleChoice) => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [consoles, setConsoles] = useState<DemoConsole[] | null>(null);
   const [national, setNational] = useState<readonly NationalRole[]>([]);
   const [failed, setFailed] = useState(false);
@@ -213,13 +214,17 @@ export function ConsolePicker({
           hospitalId: body.data.hospitalId,
           staffName: body.data.staffName,
           role,
-          ...(picked === undefined ? {} : { hospitalNameBn: picked.nameBn }),
+          ...(picked === undefined
+            ? {}
+            : { hospitalNameBn: picked.nameBn, hospitalNameEn: picked.nameEn }),
           ...(chamber === undefined
             ? {}
             : {
                 chamber: {
                   doctorNameBn: chamber.doctorNameBn,
+                  doctorNameEn: chamber.doctorNameEn,
                   departmentNameBn: chamber.departmentNameBn,
+                  departmentNameEn: chamber.departmentNameEn,
                   room: chamber.room,
                 },
               }),
@@ -243,7 +248,7 @@ export function ConsolePicker({
           data-testid="picker-failed"
           className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
         >
-          {t('consoleLoadFailed', LOCALE)}
+          {t('consoleLoadFailed', locale)}
         </p>
 
         {/* A dead end is not a state. Reloading is the whole retry, because the
@@ -254,7 +259,7 @@ export function ConsolePicker({
             globalThis.location.reload();
           }}
         >
-          {t('retry', LOCALE)}
+          {t('retry', locale)}
         </Button>
       </Shell>
     );
@@ -270,7 +275,7 @@ export function ConsolePicker({
             data-testid="picker-waking"
             className="rounded-sm bg-warn-100 px-3 py-2 text-body-md text-warn-700"
           >
-            {t('consoleWaking', LOCALE)}
+            {t('consoleWaking', locale)}
           </p>
         ) : null}
 
@@ -287,8 +292,8 @@ export function ConsolePicker({
   const nationalSection =
     national.length === 0 ? null : (
       <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
-        <h2 className="text-title-sm">{t('govSection', LOCALE)}</h2>
-        <p className="text-body-sm text-ink-secondary">{t('govSectionHint', LOCALE)}</p>
+        <h2 className="text-title-sm">{t('govSection', locale)}</h2>
+        <p className="text-body-sm text-ink-secondary">{t('govSectionHint', locale)}</p>
         <div>
           <Button
             variant="secondary"
@@ -298,7 +303,7 @@ export function ConsolePicker({
               void open(null, 'gov_viewer', { kind: 'gov' });
             }}
           >
-            {t('openGov', LOCALE)}
+            {t('openGov', locale)}
           </Button>
         </div>
       </section>
@@ -308,7 +313,7 @@ export function ConsolePicker({
     return (
       <Shell>
         <p className="text-body-md text-ink-secondary" data-testid="picker-empty">
-          {t('noConsoles', LOCALE)}
+          {t('noConsoles', locale)}
         </p>
         {nationalSection}
       </Shell>
@@ -318,7 +323,7 @@ export function ConsolePicker({
   return (
     <Shell>
       <section className="flex flex-col gap-3">
-        <h2 className="text-title-sm">{t('chooseHospital', LOCALE)}</h2>
+        <h2 className="text-title-sm">{t('chooseHospital', locale)}</h2>
 
         <ul className="flex flex-wrap gap-2">
           {consoles.map((candidate) => (
@@ -331,7 +336,7 @@ export function ConsolePicker({
                   setHospital(candidate);
                 }}
               >
-                {candidate.nameBn}
+                {localName(locale, candidate.nameBn, candidate.nameEn)}
               </Button>
             </li>
           ))}
@@ -357,21 +362,22 @@ export function ConsolePicker({
 
       {hospital === null ? null : (
         <section className="flex flex-col gap-3">
-          <h2 className="text-title-sm">{t('chooseChamber', LOCALE)}</h2>
+          <h2 className="text-title-sm">{t('chooseChamber', locale)}</h2>
 
           <ul className="grid gap-3 md:grid-cols-2">
             {hospital.sessions.map((session) => (
               <li key={session.id}>
                 <Card tone={session.status === 'running' ? 'brand' : 'default'}>
-                  <CardTitle>{session.doctorNameBn}</CardTitle>
+                  <CardTitle>
+                    {localName(locale, session.doctorNameBn, session.doctorNameEn)}
+                  </CardTitle>
                   <CardMeta>
-                    {session.departmentNameBn}
+                    {localName(locale, session.departmentNameBn, session.departmentNameEn)}
                     {session.room === null ? '' : ` · ${session.room}`} ·{' '}
-                    {t(statusKey(session.status), LOCALE)} ·{' '}
-                    {t('waitingCount', LOCALE).replace(
-                      '{count}',
-                      formatNumber(session.waiting, NUMERALS),
-                    )}
+                    {t(statusKey(session.status), locale)} ·{' '}
+                    {format('waitingCount', locale, {
+                      count: formatNumber(session.waiting, numerals),
+                    })}
                   </CardMeta>
 
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -394,7 +400,7 @@ export function ConsolePicker({
                             });
                           }}
                         >
-                          {t(ROLE_LABEL[role] ?? 'roleReceptionist', LOCALE)}
+                          {t(ROLE_LABEL[role] ?? 'roleReceptionist', locale)}
                         </Button>
                       ))}
                   </div>
@@ -459,17 +465,18 @@ function FacilityConsoles({
   readonly busy: boolean;
   readonly onOpen: (role: string, choice: ConsoleChoice) => void;
 }): ReactNode {
+  const locale = useLocale();
   const offered = FACILITY_CONSOLES.filter((entry) => hospital.roles.includes(entry.role));
   if (offered.length === 0) return null;
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-title-sm">{t('facilityConsoles', LOCALE)}</h2>
+      <h2 className="text-title-sm">{t('facilityConsoles', locale)}</h2>
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {offered.map((entry) => (
           <li key={entry.id}>
             <Card>
-              <CardTitle>{t(entry.title, LOCALE)}</CardTitle>
+              <CardTitle>{t(entry.title, locale)}</CardTitle>
               <div className="mt-3">
                 <Button
                   variant="secondary"
@@ -480,7 +487,7 @@ function FacilityConsoles({
                     onOpen(entry.role, entry.choice);
                   }}
                 >
-                  {t(entry.action, LOCALE)}
+                  {t(entry.action, locale)}
                 </Button>
               </div>
             </Card>
@@ -498,14 +505,16 @@ function statusKey(status: string): ConsoleKey {
 }
 
 function Shell({ children }: { readonly children: ReactNode }): ReactNode {
+  const locale = useLocale();
   return (
     <div className="min-h-screen">
       {/* The institution's colour across the top, as the consoles' rail is:
           the first screen a director sees should look like the product, not
           like a form in front of it. */}
       <header className="bg-brand-700 text-ink-inverse">
-        <div className="mx-auto max-w-[1040px] px-8 py-8">
-          <h1 className="font-reading text-title-lg">{t('chooseConsole', LOCALE)}</h1>
+        <div className="mx-auto flex max-w-[1040px] items-center gap-4 px-8 py-8">
+          <h1 className="font-reading text-title-lg">{t('chooseConsole', locale)}</h1>
+          <ConsoleLanguageSwitch />
         </div>
       </header>
 
@@ -513,7 +522,7 @@ function Shell({ children }: { readonly children: ReactNode }): ReactNode {
         {/* The console has no login. Saying so is the honest state, and it is
             the same reason every demo row carries its label (`FR-DEM-07`). */}
         <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {t('demoSignIn', LOCALE)}
+          {t('demoSignIn', locale)}
         </p>
 
         {children}

@@ -26,17 +26,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { formatDateTime, formatNumber, tp } from '@platform/i18n';
-import { Button, Card, Chip, Sheet } from '@platform/ui';
+import { formatDateTime, formatNumber, tp, numeralsFor, localName } from '@platform/i18n';
+import { Button, Card, Chip, Sheet, useLocale } from '@platform/ui';
 
 import { useNow } from '@/hooks/useNow';
 import { accessLog, offerConsent, openTrackingLink, revokeConsent } from '@/lib/api';
 
 import type { AccessLog, ConsentGrant, ConsentOffer } from '@/lib/types';
 import type { ReactNode } from 'react';
-
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
 
 /** A patient this device can speak for, and the link that lets it. */
 export interface Speaker {
@@ -61,14 +58,15 @@ export function WalletConsent({
   /** Only when this device holds more than one patient's bookings. */
   readonly showName: boolean;
 }): ReactNode {
+  const locale = useLocale();
   return (
     <Card>
       <div className="flex flex-col gap-3" data-testid={`wallet-consent-${speaker.patientId}`}>
-        <h2 className="text-title-sm">{tp('walletShare', LOCALE)}</h2>
+        <h2 className="text-title-sm">{tp('walletShare', locale)}</h2>
 
         {showName ? (
           <p className="text-body-sm text-ink-secondary">
-            {tp('walletPatient', LOCALE).replace('{name}', speaker.patientName)}
+            {tp('walletPatient', locale).replace('{name}', speaker.patientName)}
           </p>
         ) : null}
 
@@ -98,6 +96,8 @@ function CodeSheet({
   readonly speaker: Speaker;
   readonly online: boolean;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [open, setOpen] = useState(false);
   const [offer, setOffer] = useState<OfferState>({ kind: 'idle' });
   const [copied, setCopied] = useState(false);
@@ -138,13 +138,13 @@ function CodeSheet({
     <Sheet
       open={open}
       onOpenChange={setOpen}
-      title={tp('consentCodeTitle', LOCALE)}
+      title={tp('consentCodeTitle', locale)}
       trigger={
         online ? (
-          <Button data-testid="show-consent-code">{tp('showCode', LOCALE)}</Button>
+          <Button data-testid="show-consent-code">{tp('showCode', locale)}</Button>
         ) : (
-          <Button disabled disabledReason={tp('offline', LOCALE)}>
-            {tp('showCode', LOCALE)}
+          <Button disabled disabledReason={tp('offline', locale)}>
+            {tp('showCode', locale)}
           </Button>
         )
       }
@@ -155,9 +155,9 @@ function CodeSheet({
             {/* Scope and expiry before the code, because they are what the
                 patient is agreeing to (`APP_FLOW.md` S-A-12). */}
             <p className="text-body-md text-ink-secondary" data-testid="consent-scope">
-              {tp('consentScope', LOCALE).replace(
+              {tp('consentScope', locale).replace(
                 '{hours}',
-                formatNumber(offer.offer.grantHours, NUMERALS),
+                formatNumber(offer.offer.grantHours, numerals),
               )}
             </p>
 
@@ -173,9 +173,9 @@ function CodeSheet({
                 {/* Not a live region: announcing every second would drown the
                     screen reader. Expiry itself is a state change and is read. */}
                 <p className="text-body-sm tabular-nums text-ink-muted">
-                  {tp('consentCodeExpiresIn', LOCALE).replace(
+                  {tp('consentCodeExpiresIn', locale).replace(
                     '{seconds}',
-                    formatNumber(secondsLeft, NUMERALS),
+                    formatNumber(secondsLeft, numerals),
                   )}
                 </p>
 
@@ -199,7 +199,7 @@ function CodeSheet({
                       });
                   }}
                 >
-                  {copied ? tp('copied', LOCALE) : tp('copyCode', LOCALE)}
+                  {copied ? tp('copied', locale) : tp('copyCode', locale)}
                 </Button>
               </>
             ) : (
@@ -209,10 +209,10 @@ function CodeSheet({
                   className="text-body-md text-warn-700"
                   data-testid="consent-code-expired"
                 >
-                  {tp('consentCodeExpired', LOCALE)}
+                  {tp('consentCodeExpired', locale)}
                 </p>
                 <Button fullWidth onClick={() => void fetchOffer()}>
-                  {tp('newCode', LOCALE)}
+                  {tp('newCode', locale)}
                 </Button>
               </>
             )}
@@ -220,17 +220,17 @@ function CodeSheet({
         ) : offer.kind === 'failed' ? (
           <>
             <p className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700">
-              {tp('listFailed', LOCALE)}
+              {tp('listFailed', locale)}
             </p>
             <Button fullWidth onClick={() => void fetchOffer()}>
-              {tp('tryAgain', LOCALE)}
+              {tp('tryAgain', locale)}
             </Button>
           </>
         ) : (
           <div aria-busy="true" className="flex flex-col gap-3">
             <div className="h-5 w-2/3 rounded-sm bg-sunken" />
             <div className="h-16 rounded-md bg-sunken" />
-            <span className="sr-only">{tp('loading', LOCALE)}</span>
+            <span className="sr-only">{tp('loading', locale)}</span>
           </div>
         )}
 
@@ -241,7 +241,7 @@ function CodeSheet({
             setOpen(false);
           }}
         >
-          {tp('close', LOCALE)}
+          {tp('close', locale)}
         </Button>
       </div>
     </Sheet>
@@ -264,6 +264,8 @@ function AccessSheet({
   readonly speaker: Speaker;
   readonly online: boolean;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [open, setOpen] = useState(false);
   const [log, setLog] = useState<LogState>({ kind: 'loading' });
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -313,15 +315,15 @@ function AccessSheet({
     <Sheet
       open={open}
       onOpenChange={setOpen}
-      title={tp('whoLooked', LOCALE)}
+      title={tp('whoLooked', locale)}
       trigger={
         online ? (
           <Button variant="secondary" data-testid="show-access">
-            {tp('whoLooked', LOCALE)}
+            {tp('whoLooked', locale)}
           </Button>
         ) : (
-          <Button variant="secondary" disabled disabledReason={tp('offline', LOCALE)}>
-            {tp('whoLooked', LOCALE)}
+          <Button variant="secondary" disabled disabledReason={tp('offline', locale)}>
+            {tp('whoLooked', locale)}
           </Button>
         )
       }
@@ -331,29 +333,29 @@ function AccessSheet({
           <div aria-busy="true" className="flex flex-col gap-3">
             <div className="h-12 rounded-md bg-sunken" />
             <div className="h-12 rounded-md bg-sunken" />
-            <span className="sr-only">{tp('loading', LOCALE)}</span>
+            <span className="sr-only">{tp('loading', locale)}</span>
           </div>
         ) : log.kind === 'failed' ? (
           <>
             <p className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700">
-              {tp('listFailed', LOCALE)}
+              {tp('listFailed', locale)}
             </p>
             <Button fullWidth onClick={() => void load()}>
-              {tp('tryAgain', LOCALE)}
+              {tp('tryAgain', locale)}
             </Button>
           </>
         ) : (
           <>
             {revokeFailed ? (
               <p role="alert" className="text-body-sm text-alert-700">
-                {tp('revokeFailed', LOCALE)}
+                {tp('revokeFailed', locale)}
               </p>
             ) : null}
 
             <section className="flex flex-col gap-3">
-              <h3 className="text-body-lg font-semibold">{tp('grantsTitle', LOCALE)}</h3>
+              <h3 className="text-body-lg font-semibold">{tp('grantsTitle', locale)}</h3>
               {log.log.consents.length === 0 ? (
-                <p className="text-body-sm text-ink-muted">{tp('noGrants', LOCALE)}</p>
+                <p className="text-body-sm text-ink-muted">{tp('noGrants', locale)}</p>
               ) : (
                 <ul className="flex flex-col gap-3">
                   {log.log.consents.map((grant) => (
@@ -371,9 +373,9 @@ function AccessSheet({
             </section>
 
             <section className="flex flex-col gap-3">
-              <h3 className="text-body-lg font-semibold">{tp('viewsTitle', LOCALE)}</h3>
+              <h3 className="text-body-lg font-semibold">{tp('viewsTitle', locale)}</h3>
               {log.log.views.length === 0 ? (
-                <p className="text-body-sm text-ink-muted">{tp('noViews', LOCALE)}</p>
+                <p className="text-body-sm text-ink-muted">{tp('noViews', locale)}</p>
               ) : (
                 <ul className="flex flex-col gap-2" data-testid="access-views">
                   {log.log.views.map((view, index) => (
@@ -381,11 +383,13 @@ function AccessSheet({
                     // ordered, so position is stable for one render.
                     <li key={`${view.at}-${String(index)}`} className="flex flex-col">
                       <span className="text-body-md">
-                        {view.staffName ?? tp('hospitalStaff', LOCALE)}
-                        {view.hospitalNameBn === null ? null : ` · ${view.hospitalNameBn}`}
+                        {view.staffName ?? tp('hospitalStaff', locale)}
+                        {view.hospitalNameBn === null
+                          ? null
+                          : ` · ${localName(locale, view.hospitalNameBn, view.hospitalNameEn)}`}
                       </span>
                       <span className="text-body-sm tabular-nums text-ink-muted">
-                        {formatDateTime(view.at, NUMERALS)}
+                        {formatDateTime(view.at, numerals)}
                       </span>
                     </li>
                   ))}
@@ -402,7 +406,7 @@ function AccessSheet({
             setOpen(false);
           }}
         >
-          {tp('close', LOCALE)}
+          {tp('close', locale)}
         </Button>
       </div>
     </Sheet>
@@ -421,6 +425,8 @@ function GrantRow({
   readonly busy: boolean;
   readonly onRevoke: () => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const expired = grant.expiresAt !== null && new Date(grant.expiresAt) <= now;
   const live = grant.revokedAt === null && !expired;
 
@@ -430,18 +436,20 @@ function GrantRow({
       data-testid={`grant-${grant.id}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-body-md font-semibold">{grant.hospitalNameBn}</span>
+        <span className="text-body-md font-semibold">
+          {localName(locale, grant.hospitalNameBn, grant.hospitalNameEn)}
+        </span>
         {/* A11Y-03: the state is a word, never only a colour. */}
         <Chip tone={live ? 'positive' : 'neutral'}>
           {grant.revokedAt !== null
-            ? tp('grantRevoked', LOCALE)
+            ? tp('grantRevoked', locale)
             : expired
-              ? tp('grantExpired', LOCALE)
+              ? tp('grantExpired', locale)
               : grant.expiresAt === null
-                ? tp('grantLive', LOCALE)
-                : tp('grantLiveUntil', LOCALE).replace(
+                ? tp('grantLive', locale)
+                : tp('grantLiveUntil', locale).replace(
                     '{time}',
-                    formatDateTime(grant.expiresAt, NUMERALS),
+                    formatDateTime(grant.expiresAt, numerals),
                   )}
         </Chip>
       </div>
@@ -454,7 +462,7 @@ function GrantRow({
           data-testid={`revoke-${grant.id}`}
           onClick={onRevoke}
         >
-          {tp('revokeGrant', LOCALE)}
+          {tp('revokeGrant', locale)}
         </Button>
       ) : null}
     </div>

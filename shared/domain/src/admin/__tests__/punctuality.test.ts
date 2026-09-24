@@ -8,6 +8,7 @@ function timing(overrides: Partial<SessionTiming> = {}): SessionTiming {
     doctorNameBn: 'ডা. আনিসুর রহমান',
     doctorNameEn: 'Dr Anisur Rahman',
     departmentNameBn: 'কার্ডিওলজি',
+    departmentNameEn: 'Cardiology',
     startDeltaMinutes: 0,
     avgConsultSeconds: 480,
     seen: 20,

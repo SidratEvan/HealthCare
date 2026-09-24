@@ -30,8 +30,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { ApiError } from '@platform/client';
-import { formatNumber, problemName, tp, formatAge } from '@platform/i18n';
-import { Button, FreshnessLine, Sheet, SheetActions } from '@platform/ui';
+import { formatNumber, problemName, tp, formatAge, numeralsFor, localName } from '@platform/i18n';
+import { Button, FreshnessLine, Sheet, SheetActions, useLocale } from '@platform/ui';
 
 import { TabScreen } from '@/components/TabScreen';
 import { useNow } from '@/hooks/useNow';
@@ -40,8 +40,6 @@ import { directionsUrl } from '@/lib/emergency';
 
 import type { EmergencyCaseStatus } from '@/lib/types';
 
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
 const REFRESH_MS = 5_000;
 
 type Loaded =
@@ -51,6 +49,7 @@ type Loaded =
   | { readonly state: 'ready'; readonly status: EmergencyCaseStatus };
 
 export default function Page(): ReactNode {
+  const locale = useLocale();
   const now = useNow(1_000);
   const [token, setToken] = useState<string | null>(null);
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
@@ -101,7 +100,7 @@ export default function Page(): ReactNode {
   }, [token, settled, load]);
 
   return (
-    <TabScreen title={tp('onWayScreenTitle', LOCALE)}>
+    <TabScreen title={tp('onWayScreenTitle', locale)}>
       <Body
         loaded={loaded}
         now={now}
@@ -116,8 +115,8 @@ export default function Page(): ReactNode {
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
         dismissible={!cancelling}
-        title={tp('onWayCancel', LOCALE)}
-        description={tp('onWayCancelConfirm', LOCALE)}
+        title={tp('onWayCancel', locale)}
+        description={tp('onWayCancelConfirm', locale)}
       >
         <SheetActions destructive>
           <Button
@@ -141,10 +140,10 @@ export default function Page(): ReactNode {
                 });
             }}
           >
-            {tp('onWayCancel', LOCALE)}
+            {tp('onWayCancel', locale)}
           </Button>
           <Button variant="secondary" onClick={() => setConfirmCancel(false)}>
-            {tp('onWayKeep', LOCALE)}
+            {tp('onWayKeep', locale)}
           </Button>
         </SheetActions>
       </Sheet>
@@ -163,6 +162,8 @@ function Body({
   readonly onRetry: () => void;
   readonly onCancel: () => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   if (loaded.state === 'loading') {
     return (
       <div className="h-48 rounded-lg bg-sunken" aria-busy="true" data-testid="onway-loading" />
@@ -172,9 +173,9 @@ function Body({
   if (loaded.state === 'invalid') {
     return (
       <div className="flex flex-col gap-3" data-testid="onway-invalid">
-        <p className="text-body-md text-ink-secondary">{tp('onWayLinkExpired', LOCALE)}</p>
+        <p className="text-body-md text-ink-secondary">{tp('onWayLinkExpired', locale)}</p>
         <a href="/emergency" className="text-body-md text-brand-600">
-          {tp('emergencyTitle', LOCALE)}
+          {tp('emergencyTitle', locale)}
         </a>
       </div>
     );
@@ -183,16 +184,16 @@ function Body({
   if (loaded.state === 'failed') {
     return (
       <div className="flex flex-col gap-3" role="alert" data-testid="onway-failed">
-        <p className="text-body-md text-ink-secondary">{tp('listFailed', LOCALE)}</p>
+        <p className="text-body-md text-ink-secondary">{tp('listFailed', locale)}</p>
         <a
           href="tel:999"
           className="flex min-h-touch items-center justify-center rounded-md bg-alert-600 px-5 text-body-lg font-semibold text-white"
         >
-          {tp('call999', LOCALE)}
+          {tp('call999', locale)}
         </a>
         <div>
           <Button variant="secondary" onClick={onRetry}>
-            {tp('tryAgain', LOCALE)}
+            {tp('tryAgain', locale)}
           </Button>
         </div>
       </div>
@@ -201,7 +202,7 @@ function Body({
 
   const { status } = loaded;
   const { hospital } = status;
-  const n = (value: number): string => formatNumber(value, NUMERALS);
+  const n = (value: number): string => formatNumber(value, numerals);
 
   // How long until the ER expects them, counted down on screen.
   const etaLeft =
@@ -219,14 +220,14 @@ function Body({
 
   const headline =
     status.state === 'acknowledged'
-      ? tp('onWayReady', LOCALE)
+      ? tp('onWayReady', locale)
       : status.state === 'inbound'
-        ? tp('onWayWaiting', LOCALE)
+        ? tp('onWayWaiting', locale)
         : status.state === 'declined'
-          ? tp('onWayDeclined', LOCALE)
+          ? tp('onWayDeclined', locale)
           : status.state === 'cancelled'
-            ? tp('onWayCancelled', LOCALE)
-            : tp('onWayArrived', LOCALE);
+            ? tp('onWayCancelled', locale)
+            : tp('onWayArrived', locale);
 
   const tone =
     status.state === 'acknowledged'
@@ -244,24 +245,28 @@ function Body({
     >
       <section className={`flex flex-col gap-2 rounded-lg border p-5 ${tone}`} aria-live="polite">
         <p className="text-body-sm">
-          {hospital.nameBn} · {problemName(status.problem, LOCALE)}
+          {localName(locale, hospital.nameBn, hospital.nameEn)} ·{' '}
+          {problemName(status.problem, locale)}
         </p>
         <p className="font-reading text-title-lg" data-testid="onway-headline">
           {headline}
         </p>
         {status.state === 'acknowledged' ? (
           <p className="text-body-md">
-            {tp('onWayReadyLine', LOCALE).replace('{hospital}', hospital.nameBn)}
+            {tp('onWayReadyLine', locale).replace(
+              '{hospital}',
+              localName(locale, hospital.nameBn, hospital.nameEn),
+            )}
           </p>
         ) : null}
         {status.state === 'declined' && status.declineReason !== null ? (
           <p className="text-body-md" data-testid="onway-reason">
-            {tp('onWayDeclinedReason', LOCALE).replace('{reason}', status.declineReason)}
+            {tp('onWayDeclinedReason', locale).replace('{reason}', status.declineReason)}
           </p>
         ) : null}
         {open && etaLeft !== null ? (
           <p className="text-body-md tabular-nums" data-testid="onway-eta">
-            {tp('onWayEta', LOCALE).replace('{minutes}', n(etaLeft))}
+            {tp('onWayEta', locale).replace('{minutes}', n(etaLeft))}
           </p>
         ) : null}
       </section>
@@ -271,12 +276,12 @@ function Body({
         asOf={new Date(status.serverTs)}
         now={now}
         labels={{
-          justNow: tp('updatedJustNow', LOCALE),
-          ago: tp('updatedAgo', LOCALE),
-          never: tp('updatedNever', LOCALE),
-          stale: tp('staleWarning', LOCALE),
+          justNow: tp('updatedJustNow', locale),
+          ago: tp('updatedAgo', locale),
+          never: tp('updatedNever', locale),
+          stale: tp('staleWarning', locale),
         }}
-        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+        formatMinutes={(value) => formatAge(value, locale, numerals)}
       />
 
       <div className="flex flex-col gap-3">
@@ -286,7 +291,7 @@ function Body({
             data-testid="onway-find-another"
             className="flex min-h-touch items-center justify-center rounded-md bg-alert-600 px-5 text-body-lg font-semibold text-white"
           >
-            {tp('onWayFindAnother', LOCALE)}
+            {tp('onWayFindAnother', locale)}
           </a>
         ) : null}
 
@@ -298,7 +303,7 @@ function Body({
             data-testid="onway-navigate"
             className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-semibold text-white"
           >
-            {tp('onWayNavigate', LOCALE)}
+            {tp('onWayNavigate', locale)}
           </a>
         ) : null}
 
@@ -308,13 +313,13 @@ function Body({
             data-testid="onway-call"
             className="flex min-h-touch items-center justify-center rounded-md border border-line-strong px-5 text-body-lg text-ink"
           >
-            {tp('onWayCallEr', LOCALE)}
+            {tp('onWayCallEr', locale)}
           </a>
         )}
 
         {open ? (
           <Button variant="quiet" data-testid="onway-cancel" onClick={onCancel}>
-            {tp('onWayCancel', LOCALE)}
+            {tp('onWayCancel', locale)}
           </Button>
         ) : null}
 
@@ -322,7 +327,7 @@ function Body({
           href="tel:999"
           className="flex min-h-touch items-center justify-center rounded-md border border-alert-600 px-5 text-body-md text-alert-700"
         >
-          {tp('call999', LOCALE)}
+          {tp('call999', locale)}
         </a>
       </div>
     </div>

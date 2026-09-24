@@ -50,11 +50,12 @@ import {
   problemName,
   t,
   type Locale,
+  numeralsFor,
+  localName,
 } from '@platform/i18n';
 import { Button, Chip, FilterChip, FreshnessLine, Input, Sheet, SheetActions } from '@platform/ui';
 
 import { TriageChip, whoLine } from '@/components/ErCases';
-import { NUMERALS } from '@/lib/bedCopy';
 
 import type { SuggestedHospital } from '@/lib/emergency';
 
@@ -114,6 +115,7 @@ export function ReferralTimeline({
   readonly referral: ReferralView;
   readonly locale: Locale;
 }): ReactNode {
+  const numerals = numeralsFor(locale);
   return (
     <ol
       className="flex flex-wrap gap-x-3 gap-y-1 text-caption tabular-nums text-ink-muted"
@@ -122,7 +124,7 @@ export function ReferralTimeline({
     >
       {referralTimeline(referral).map((entry) => (
         <li key={entry.step} data-step={entry.step}>
-          {format(STEP_KEY[entry.step], locale, { time: formatClock(entry.at, NUMERALS) })}
+          {format(STEP_KEY[entry.step], locale, { time: formatClock(entry.at, numerals) })}
         </li>
       ))}
     </ol>
@@ -163,6 +165,7 @@ export function ReferSheet({
   }) => void;
   readonly onClose: () => void;
 }): ReactNode {
+  const numerals = numeralsFor(locale);
   const [need, setNeed] = useState<EmergencyNeed>({ capability: null, bedKind: null });
   const [results, setResults] = useState<readonly SuggestedHospital[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -215,12 +218,16 @@ export function ReferSheet({
       title={
         chosen === null
           ? format('erReferTitle', locale, { token })
-          : format('erReferConfirm', locale, { hospital: chosen.nameBn })
+          : format('erReferConfirm', locale, {
+              hospital: localName(locale, chosen.nameBn, chosen.nameEn),
+            })
       }
       description={
         chosen === null
           ? t('erReferNeedHint', locale)
-          : format('erReferConsequence', locale, { hospital: chosen.nameBn })
+          : format('erReferConsequence', locale, {
+              hospital: localName(locale, chosen.nameBn, chosen.nameEn),
+            })
       }
     >
       <div className="flex flex-col gap-4 font-ui" data-testid="er-refer-sheet">
@@ -309,26 +316,28 @@ export function ReferSheet({
                       className="flex items-start justify-between gap-3 rounded-sm bg-sunken p-3"
                     >
                       <div className="min-w-0">
-                        <p className="text-body-md text-ink">{hospital.nameBn}</p>
+                        <p className="text-body-md text-ink">
+                          {localName(locale, hospital.nameBn, hospital.nameEn)}
+                        </p>
                         <p className="text-caption tabular-nums text-ink-secondary">
                           {[
                             hospital.distanceKm === null
                               ? null
                               : format('erDistanceKm', locale, {
-                                  km: formatNumber(hospital.distanceKm, NUMERALS),
+                                  km: formatNumber(hospital.distanceKm, numerals),
                                 }),
                             hospital.travelMinutes === null
                               ? null
                               : format('erReferTravel', locale, {
-                                  minutes: formatNumber(hospital.travelMinutes, NUMERALS),
+                                  minutes: formatNumber(hospital.travelMinutes, numerals),
                                 }),
                             hospital.freeBeds === null
                               ? null
                               : format('erReferFreeBeds', locale, {
-                                  count: formatNumber(hospital.freeBeds, NUMERALS),
+                                  count: formatNumber(hospital.freeBeds, numerals),
                                 }),
                             format('erLoad', locale, {
-                              count: formatNumber(hospital.erLoad, NUMERALS),
+                              count: formatNumber(hospital.erLoad, numerals),
                             }),
                           ]
                             .filter((part): part is string => part !== null)
@@ -378,12 +387,12 @@ export function ReferSheet({
                       withoutCapability === 0
                         ? null
                         : format('erReferExcludedCapability', locale, {
-                            count: formatNumber(withoutCapability, NUMERALS),
+                            count: formatNumber(withoutCapability, numerals),
                           }),
                       withoutBeds === 0
                         ? null
                         : format('erReferExcludedBeds', locale, {
-                            count: formatNumber(withoutBeds, NUMERALS),
+                            count: formatNumber(withoutBeds, numerals),
                           }),
                     ]
                       .filter((part): part is string => part !== null)
@@ -525,7 +534,9 @@ export function IncomingReferrals({
             >
               <div>
                 <p className="font-reading text-title-md text-ink">
-                  {format('erIncomingFrom', locale, { hospital: referral.from.nameBn })}
+                  {format('erIncomingFrom', locale, {
+                    hospital: localName(locale, referral.from.nameBn, referral.from.nameEn),
+                  })}
                   {isNew ? (
                     <span className="ml-2 align-middle">
                       <Chip tone="alert">{t('erNewAlert', locale)}</Chip>
@@ -600,7 +611,9 @@ export function IncomingReferrals({
               </div>
               {accepted ? (
                 <p className="text-caption text-ink-muted">
-                  {format('erIncomingArrivedHint', locale, { hospital: referral.from.nameBn })}
+                  {format('erIncomingArrivedHint', locale, {
+                    hospital: localName(locale, referral.from.nameBn, referral.from.nameEn),
+                  })}
                 </p>
               ) : null}
             </article>
@@ -655,14 +668,18 @@ export function ReferralLine({
         <p className="text-body-sm text-ink">
           {referral.state === 'declined'
             ? format('erReferralDeclinedBy', locale, {
-                hospital: referral.to.nameBn,
+                hospital: localName(locale, referral.to.nameBn, referral.to.nameEn),
                 reason: referral.declineReason ?? '',
               })
-            : format('erReferralTo', locale, { hospital: referral.to.nameBn })}
+            : format('erReferralTo', locale, {
+                hospital: localName(locale, referral.to.nameBn, referral.to.nameEn),
+              })}
         </p>
         {referral.state === 'accepted' ? (
           <p className="text-caption text-brand-700">
-            {format('erReferralOnTheWay', locale, { hospital: referral.to.nameBn })}
+            {format('erReferralOnTheWay', locale, {
+              hospital: localName(locale, referral.to.nameBn, referral.to.nameEn),
+            })}
           </p>
         ) : null}
         <ReferralTimeline referral={referral} locale={locale} />
@@ -724,8 +741,12 @@ export function ReferralsToday({
               >
                 <p className="text-body-sm text-ink">
                   {outgoing
-                    ? format('erReferralOut', locale, { hospital: referral.to.nameBn })
-                    : format('erReferralIn', locale, { hospital: referral.from.nameBn })}
+                    ? format('erReferralOut', locale, {
+                        hospital: localName(locale, referral.to.nameBn, referral.to.nameEn),
+                      })
+                    : format('erReferralIn', locale, {
+                        hospital: localName(locale, referral.from.nameBn, referral.from.nameEn),
+                      })}
                 </p>
                 <p className="text-caption text-ink-secondary">
                   {[
@@ -781,7 +802,7 @@ export function ReferralDeclineSheet({
       variant="modal"
       title={t('erDeclineTitle', locale)}
       description={format('erIncomingDeclineConsequence', locale, {
-        hospital: referral.from.nameBn,
+        hospital: localName(locale, referral.from.nameBn, referral.from.nameEn),
       })}
     >
       <form
@@ -839,9 +860,11 @@ export function ReferralCancelSheet({
       }}
       variant="modal"
       dismissible={false}
-      title={format('erReferralCancelConfirm', locale, { hospital: referral.to.nameBn })}
+      title={format('erReferralCancelConfirm', locale, {
+        hospital: localName(locale, referral.to.nameBn, referral.to.nameEn),
+      })}
       description={format('erReferralCancelConsequence', locale, {
-        hospital: referral.to.nameBn,
+        hospital: localName(locale, referral.to.nameBn, referral.to.nameEn),
       })}
     >
       <SheetActions destructive>

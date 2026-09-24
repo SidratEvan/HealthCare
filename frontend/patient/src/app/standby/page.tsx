@@ -34,8 +34,10 @@ import {
   formatTaka,
   tp,
   formatAge,
+  numeralsFor,
+  localName,
 } from '@platform/i18n';
-import { Button, Card, FreshnessLine } from '@platform/ui';
+import { Button, Card, FreshnessLine, useLocale } from '@platform/ui';
 
 import { TabScreen } from '@/components/TabScreen';
 import { useNow } from '@/hooks/useNow';
@@ -45,8 +47,6 @@ import { recentBookings, rememberBooking } from '@/lib/bookings';
 
 import type { StandbyStatusView } from '@/lib/types';
 
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
 const REFRESH_MS = 5_000;
 
 type Method = 'bkash' | 'nagad' | 'card' | 'at_hospital';
@@ -58,6 +58,7 @@ type Loaded =
   | { readonly state: 'ready'; readonly view: StandbyStatusView };
 
 export default function Page(): ReactNode {
+  const locale = useLocale();
   const now = useNow(1_000);
   const online = useOnline();
   const [token, setToken] = useState<string | null>(null);
@@ -109,14 +110,14 @@ export default function Page(): ReactNode {
   }, [token, settled, load]);
 
   return (
-    <TabScreen title={tp('standbyStatusTitle', LOCALE)}>
+    <TabScreen title={tp('standbyStatusTitle', locale)}>
       {online ? null : (
         <p
           role="status"
           data-testid="standby-offline"
           className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
         >
-          {tp('offline', LOCALE)}
+          {tp('offline', locale)}
         </p>
       )}
 
@@ -155,6 +156,8 @@ function Body({
   readonly onChanged: () => void;
   readonly onSeated: (url: string | null) => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   if (loaded.state === 'loading') {
     return (
       <div className="h-48 rounded-md bg-sunken" aria-busy="true" data-testid="standby-loading" />
@@ -164,7 +167,7 @@ function Body({
   if (loaded.state === 'invalid') {
     return (
       <p className="text-body-md text-ink-secondary" data-testid="standby-invalid">
-        {tp('standbyLinkBad', LOCALE)}
+        {tp('standbyLinkBad', locale)}
       </p>
     );
   }
@@ -172,9 +175,9 @@ function Body({
   if (loaded.state === 'failed') {
     return (
       <div className="flex flex-col gap-3" role="alert" data-testid="standby-failed">
-        <p className="text-body-md text-ink-secondary">{tp('standbyLoadFailed', LOCALE)}</p>
+        <p className="text-body-md text-ink-secondary">{tp('standbyLoadFailed', locale)}</p>
         <Button variant="secondary" onClick={onChanged}>
-          {tp('tryAgain', LOCALE)}
+          {tp('tryAgain', locale)}
         </Button>
       </div>
     );
@@ -185,11 +188,15 @@ function Body({
   return (
     <div className="flex flex-col gap-4" data-testid="standby-status" data-state={view.state}>
       <Card>
-        <p className="text-body-md">{view.doctorNameBn}</p>
-        <p className="text-body-sm text-ink-muted">{view.hospitalNameBn}</p>
+        <p className="text-body-md">
+          {localName(locale, view.doctorNameBn ?? '', view.doctorNameEn)}
+        </p>
+        <p className="text-body-sm text-ink-muted">
+          {localName(locale, view.hospitalNameBn ?? '', view.hospitalNameEn)}
+        </p>
         {view.plannedStart === null ? null : (
           <p className="text-body-sm text-ink-muted tabular-nums">
-            {formatDateTime(view.plannedStart, NUMERALS)}
+            {formatDateTime(view.plannedStart, numerals)}
           </p>
         )}
       </Card>
@@ -211,7 +218,7 @@ function Body({
       ) : null}
       {view.state === 'left' ? (
         <Card data-testid="standby-left">
-          <p className="text-body-md">{tp('standbyLeft', LOCALE)}</p>
+          <p className="text-body-md">{tp('standbyLeft', locale)}</p>
         </Card>
       ) : null}
 
@@ -220,12 +227,12 @@ function Body({
         asOf={new Date(view.serverTs)}
         now={now}
         labels={{
-          justNow: tp('updatedJustNow', LOCALE),
-          ago: tp('updatedAgo', LOCALE),
-          never: tp('updatedNever', LOCALE),
-          stale: tp('staleWarning', LOCALE),
+          justNow: tp('updatedJustNow', locale),
+          ago: tp('updatedAgo', locale),
+          never: tp('updatedNever', locale),
+          stale: tp('staleWarning', locale),
         }}
-        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+        formatMinutes={(value) => formatAge(value, locale, numerals)}
       />
 
       {view.state === 'waiting' || view.state === 'offered' ? (
@@ -236,6 +243,8 @@ function Body({
 }
 
 function Waiting({ view }: { readonly view: StandbyStatusView }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <section
       className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-5"
@@ -243,14 +252,14 @@ function Waiting({ view }: { readonly view: StandbyStatusView }): ReactNode {
     >
       <p className="text-title-lg" data-testid="standby-ahead">
         {view.ahead === 0
-          ? tp('standbyFirst', LOCALE)
-          : tp('standbyPlace', LOCALE).replace('{count}', formatNumber(view.ahead, NUMERALS))}
+          ? tp('standbyFirst', locale)
+          : tp('standbyPlace', locale).replace('{count}', formatNumber(view.ahead, numerals))}
       </p>
       <p
         className={`rounded-sm px-3 py-2 text-body-sm ${view.prepaid ? 'bg-brand-100 text-brand-700' : 'bg-sunken text-ink-secondary'}`}
         data-testid={view.prepaid ? 'standby-prepaid' : 'standby-ask'}
       >
-        {view.prepaid ? tp('standbyPrepaidBadge', LOCALE) : tp('standbyAskBadge', LOCALE)}
+        {view.prepaid ? tp('standbyPrepaidBadge', locale) : tp('standbyAskBadge', locale)}
       </p>
     </section>
   );
@@ -273,6 +282,8 @@ function Offer({
   readonly onDeclined: () => void;
   readonly onSeated: (url: string | null) => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [method, setMethod] = useState<Method>('bkash');
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -289,7 +300,7 @@ function Offer({
       if (url !== null) remember(view, accepted.bookingId, accepted.serial, url);
       onSeated(url);
     } catch {
-      setFailure(tp('standbyAcceptFailed', LOCALE));
+      setFailure(tp('standbyAcceptFailed', locale));
       onDeclined();
     } finally {
       setBusy(false);
@@ -306,7 +317,7 @@ function Offer({
     }
   };
 
-  const offline = online ? null : tp('offline', LOCALE);
+  const offline = online ? null : tp('offline', locale);
 
   return (
     <section
@@ -314,14 +325,14 @@ function Offer({
       aria-live="assertive"
       data-testid="standby-offer"
     >
-      <p className="text-title-lg text-brand-900">{tp('standbyOfferTitle', LOCALE)}</p>
+      <p className="text-title-lg text-brand-900">{tp('standbyOfferTitle', locale)}</p>
       <p className="text-display-lg tabular-nums text-brand-900" data-testid="standby-offer-left">
-        {tp('standbyOfferLeft', LOCALE).replace('{minutes}', formatNumber(left, NUMERALS))}
+        {tp('standbyOfferLeft', locale).replace('{minutes}', formatNumber(left, numerals))}
       </p>
 
       <fieldset className="flex flex-col gap-2 border-0 p-0">
         <legend className="font-ui text-body-sm font-semibold text-ink">
-          {tp('payWith', LOCALE)} · {formatTaka(view.feePoisha, NUMERALS)}
+          {tp('payWith', locale)} · {formatTaka(view.feePoisha, numerals)}
         </legend>
         <div className="grid grid-cols-2 gap-2">
           {(
@@ -341,7 +352,7 @@ function Offer({
               }}
               className="min-h-touch rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-surface aria-pressed:font-semibold"
             >
-              {tp(key, LOCALE)}
+              {tp(key, locale)}
             </button>
           ))}
         </div>
@@ -363,7 +374,7 @@ function Offer({
         }}
         {...(offline === null ? {} : { disabled: true as const, disabledReason: offline })}
       >
-        {tp('standbyOfferAccept', LOCALE)}
+        {tp('standbyOfferAccept', locale)}
       </Button>
       <Button
         variant="secondary"
@@ -374,7 +385,7 @@ function Offer({
         }}
         {...(offline === null ? {} : { disabled: true as const, disabledReason: offline })}
       >
-        {tp('standbyOfferDecline', LOCALE)}
+        {tp('standbyOfferDecline', locale)}
       </Button>
     </section>
   );
@@ -387,23 +398,25 @@ function Seated({
   readonly serial: number;
   readonly liveUrl: string | null;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <section
       className="flex flex-col gap-3 rounded-lg border border-brand-600 bg-brand-100 p-5"
       data-testid="standby-seated"
     >
       <p className="font-reading text-display-lg text-brand-900">
-        {tp('standbySeatedTitle', LOCALE).replace('{serial}', formatSerial(serial, NUMERALS))}
+        {tp('standbySeatedTitle', locale).replace('{serial}', formatSerial(serial, numerals))}
       </p>
       {liveUrl === null ? (
-        <p className="text-body-md text-ink-secondary">{tp('standbySeatedSms', LOCALE)}</p>
+        <p className="text-body-md text-ink-secondary">{tp('standbySeatedSms', locale)}</p>
       ) : (
         <a
           href={liveUrl}
           data-testid="standby-live-link"
           className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-4 text-body-lg font-semibold text-white"
         >
-          {tp('standbySeatedLink', LOCALE)}
+          {tp('standbySeatedLink', locale)}
         </a>
       )}
     </section>
@@ -421,8 +434,9 @@ function Leave({
   readonly online: boolean;
   readonly onLeft: () => void;
 }): ReactNode {
+  const locale = useLocale();
   const [asking, setAsking] = useState(false);
-  const offline = online ? null : tp('offline', LOCALE);
+  const offline = online ? null : tp('offline', locale);
 
   if (!asking) {
     return (
@@ -434,7 +448,7 @@ function Leave({
         data-testid="standby-leave"
         {...(offline === null ? {} : { disabled: true as const, disabledReason: offline })}
       >
-        {tp('standbyLeave', LOCALE)}
+        {tp('standbyLeave', locale)}
       </Button>
     );
   }
@@ -444,7 +458,7 @@ function Leave({
     <Card>
       {prepaid ? (
         <p className="text-body-md" data-testid="standby-leave-refund">
-          {tp('standbyLeaveRefund', LOCALE)}
+          {tp('standbyLeaveRefund', locale)}
         </p>
       ) : null}
       <div className="mt-3 flex gap-2">
@@ -454,7 +468,7 @@ function Leave({
             setAsking(false);
           }}
         >
-          {tp('standbyLeaveStay', LOCALE)}
+          {tp('standbyLeaveStay', locale)}
         </Button>
         <Button
           variant="primary"
@@ -463,7 +477,7 @@ function Leave({
             void leaveStandby(token).finally(onLeft);
           }}
         >
-          {tp('standbyLeaveConfirm', LOCALE)}
+          {tp('standbyLeaveConfirm', locale)}
         </Button>
       </div>
     </Card>
@@ -499,7 +513,9 @@ function remember(view: StandbyStatusView, bookingId: string, serial: number, ur
     serial,
     sessionId: view.sessionId,
     doctorNameBn: view.doctorNameBn ?? '',
+    doctorNameEn: view.doctorNameEn ?? '',
     hospitalNameBn: view.hospitalNameBn ?? '',
+    hospitalNameEn: view.hospitalNameEn ?? '',
     plannedStart: view.plannedStart ?? new Date().toISOString(),
     url,
     token,

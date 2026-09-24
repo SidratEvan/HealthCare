@@ -4,7 +4,8 @@
  * `lang="bn"` is load-bearing: `tokens.css` keys the Bangla typesetting rules
  * off it — the 1.65 line-height floor, no letter-spacing, no conjunct breaking
  * (`TYP-01`, `TYP-02`, `TYP-06`). This product is written in Bangla, not
- * translated into it (CLAUDE.md §11.5).
+ * translated into it (CLAUDE.md §11.5). English is the switch at the top of
+ * every screen (`SEG-A00-LANG`); `<LocaleDocument>` moves `lang` with it.
  *
  * ## What makes this an app rather than a page
  *
@@ -24,11 +25,13 @@
  * gesture area.
  */
 
-import { COLOUR } from '@platform/ui';
+import { tp } from '@platform/i18n';
+import { COLOUR, LocaleDocument } from '@platform/ui';
 
 import '@platform/ui/styles.css';
 
 import { fontVariables } from '@/app/fonts';
+import { LanguageBar } from '@/components/LanguageBar';
 import { ServiceWorker } from '@/components/ServiceWorker';
 
 import type { Metadata, Viewport } from 'next';
@@ -75,8 +78,10 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
         tell that a standalone app is a web page.
       */}
       <body className="min-h-screen overscroll-none bg-canvas text-ink">
+        <LanguageBar />
         {children}
         <ServiceWorker />
+        <LocaleDocument title={{ bn: tp('appName', 'bn'), en: tp('appName', 'en') }} />
       </body>
     </html>
   );

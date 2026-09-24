@@ -26,10 +26,9 @@ import {
   t,
   type CapabilityName,
   type Locale,
+  numeralsFor,
 } from '@platform/i18n';
 import { Button, FreshnessLine } from '@platform/ui';
-
-import { NUMERALS } from '@/lib/bedCopy';
 
 import type { ReactNode } from 'react';
 
@@ -146,6 +145,7 @@ export function ErBeds({
   readonly freshness: FreshnessCopy;
   readonly minutes: (value: number) => string;
 }): ReactNode {
+  const numerals = numeralsFor(locale);
   const kinds = published?.byKind ?? [];
 
   return (
@@ -168,8 +168,8 @@ export function ErBeds({
                 <span className="text-body-md text-ink">{bedKindName(entry.kind, locale)}</span>
                 <span className="text-body-md tabular-nums text-ink">
                   {format('mirrorFreeOfTotal', locale, {
-                    free: formatNumber(entry.free, NUMERALS),
-                    total: formatNumber(entry.total, NUMERALS),
+                    free: formatNumber(entry.free, numerals),
+                    total: formatNumber(entry.total, numerals),
                   })}
                 </span>
               </div>

@@ -100,6 +100,7 @@ export interface EmergencyResult {
   readonly nameBn: string;
   readonly nameEn: string;
   readonly addressBn: string | null;
+  readonly addressEn: string | null;
   readonly lat: number | null;
   readonly lng: number | null;
   readonly emergencyPhone: string | null;
@@ -212,6 +213,7 @@ export async function search(query: {
       nameBn: hospital.nameBn,
       nameEn: hospital.nameEn,
       addressBn: hospital.addressBn,
+      addressEn: hospital.addressEn,
       lat: hospital.lat,
       lng: hospital.lng,
       emergencyPhone: hospital.emergencyPhone,

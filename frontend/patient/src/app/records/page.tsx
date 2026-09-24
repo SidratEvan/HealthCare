@@ -51,8 +51,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError } from '@platform/client';
-import { formatDateTime, formatSerial, tp } from '@platform/i18n';
-import { Button, Card } from '@platform/ui';
+import { formatDateTime, formatSerial, tp, numeralsFor, localName } from '@platform/i18n';
+import { Button, Card, useLocale } from '@platform/ui';
 
 import { TabScreen } from '@/components/TabScreen';
 import { WalletConsent, type Speaker } from '@/components/WalletConsent';
@@ -62,9 +62,6 @@ import { recentBookings, type SavedBooking } from '@/lib/bookings';
 
 import type { TestOrder, VisitRecord } from '@/lib/types';
 import type { ReactNode } from 'react';
-
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
 
 /** What the links on this device added up to. */
 interface Wallet {
@@ -98,6 +95,7 @@ type State =
   | { readonly kind: 'ready'; readonly wallet: Wallet };
 
 export default function RecordsPage(): ReactNode {
+  const locale = useLocale();
   const online = useOnline();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -127,20 +125,20 @@ export default function RecordsPage(): ReactNode {
   }, []);
 
   return (
-    <TabScreen title={tp('navRecords', LOCALE)}>
+    <TabScreen title={tp('navRecords', locale)}>
       {state.kind === 'loading' ? (
         // GR-03 loading: the shape of the answer, never a spinner.
         <div className="flex flex-col gap-3" aria-busy="true" data-testid="records-loading">
           <div className="h-24 rounded-md bg-sunken" />
           <div className="h-24 rounded-md bg-sunken" />
-          <span className="sr-only">{tp('loading', LOCALE)}</span>
+          <span className="sr-only">{tp('loading', locale)}</span>
         </div>
       ) : state.kind === 'failed' ? (
         // GR-03 offline and error. Offline first, because it names the cause
         // and the remedy; the service worker never answers an API request from
         // a cache (`FR-OFF-03`), so there is nothing older to show instead.
         <Problem
-          message={online ? tp('listFailed', LOCALE) : tp('recordsOffline', LOCALE)}
+          message={online ? tp('listFailed', locale) : tp('recordsOffline', locale)}
           onRetry={retry}
         />
       ) : (
@@ -159,6 +157,8 @@ function Loaded({
   readonly online: boolean;
   readonly onRetry: () => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   // `TAB-A12-REP` appears only when there is something in it. A person who has
   // never had a test is not shown an empty Reports tab.
   const [tab, setTab] = useState<'timeline' | 'reports'>('timeline');
@@ -170,7 +170,7 @@ function Loaded({
         <div
           className="flex gap-2"
           role="tablist"
-          aria-label={tp('navRecords', LOCALE)}
+          aria-label={tp('navRecords', locale)}
           data-testid="wallet-tabs"
         >
           {(['timeline', 'reports'] as const).map((value) => (
@@ -185,7 +185,7 @@ function Loaded({
               }}
               className="min-h-touch rounded-pill px-4 text-body-md aria-selected:bg-brand-100 aria-selected:font-semibold"
             >
-              {tp(value === 'timeline' ? 'timelineTab' : 'reportsTab', LOCALE)}
+              {tp(value === 'timeline' ? 'timelineTab' : 'reportsTab', locale)}
             </button>
           ))}
         </div>
@@ -196,7 +196,7 @@ function Loaded({
           data-testid="records-offline"
           className="rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
         >
-          {tp('offline', LOCALE)}
+          {tp('offline', locale)}
         </p>
       )}
 
@@ -209,10 +209,10 @@ function Loaded({
         >
           <p className="text-body-md text-ink-secondary">
             {wallet.pending === 0
-              ? tp('noRecordsYet', LOCALE)
-              : tp('recordsAfterVisit', LOCALE).replace(
+              ? tp('noRecordsYet', locale)
+              : tp('recordsAfterVisit', locale).replace(
                   '{count}',
-                  formatSerial(wallet.pending, NUMERALS),
+                  formatSerial(wallet.pending, numerals),
                 )}
           </p>
         </div>
@@ -228,15 +228,15 @@ function Loaded({
 
       {tab === 'reports' || wallet.records.length === 0 || wallet.pending === 0 ? null : (
         <p className="text-caption text-ink-muted">
-          {tp('recordsPending', LOCALE).replace('{count}', formatSerial(wallet.pending, NUMERALS))}
+          {tp('recordsPending', locale).replace('{count}', formatSerial(wallet.pending, numerals))}
         </p>
       )}
 
       {tab === 'reports' || wallet.expired === 0 ? null : (
         <p className="text-caption text-ink-muted" data-testid="records-expired">
-          {tp('recordsExpiredLinks', LOCALE).replace(
+          {tp('recordsExpiredLinks', locale).replace(
             '{count}',
-            formatSerial(wallet.expired, NUMERALS),
+            formatSerial(wallet.expired, numerals),
           )}
         </p>
       )}
@@ -244,13 +244,13 @@ function Loaded({
       {wallet.failed === 0 ? null : (
         <div className="flex flex-wrap items-center gap-3" data-testid="records-partly-failed">
           <p className="text-body-sm text-alert-700">
-            {tp('recordsPartlyFailed', LOCALE).replace(
+            {tp('recordsPartlyFailed', locale).replace(
               '{count}',
-              formatSerial(wallet.failed, NUMERALS),
+              formatSerial(wallet.failed, numerals),
             )}
           </p>
           <Button variant="quiet" size="sm" onClick={onRetry}>
-            {tp('tryAgain', LOCALE)}
+            {tp('tryAgain', locale)}
           </Button>
         </div>
       )}
@@ -264,12 +264,12 @@ function Loaded({
         />
       ))}
 
-      <p className="text-caption text-ink-muted">{tp('recordsOnThisDevice', LOCALE)}</p>
+      <p className="text-caption text-ink-muted">{tp('recordsOnThisDevice', locale)}</p>
 
       {/* What the wallet cannot hold yet, named rather than rendered as empty
           tabs (`PRD.md` §3.2). */}
       <p data-testid="wallet-absent" className="text-caption text-ink-muted">
-        {tp('walletAbsent', LOCALE)}
+        {tp('walletAbsent', locale)}
       </p>
     </>
   );
@@ -277,18 +277,23 @@ function Loaded({
 
 /** `CARD-A12-<recordId>` — the visit, opened out rather than behind a tap. */
 function RecordCard({ record }: { readonly record: VisitRecord }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <Card>
       <div className="flex flex-col gap-2" data-testid={`record-${record.id}`}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-title-sm">{record.departmentNameBn}</p>
+          <p className="text-title-sm">
+            {localName(locale, record.departmentNameBn, record.departmentNameEn)}
+          </p>
           <p className="text-body-sm tabular-nums text-ink-muted">
-            {formatDateTime(record.visitedAt, NUMERALS)}
+            {formatDateTime(record.visitedAt, numerals)}
           </p>
         </div>
 
         <p className="text-body-sm text-ink-secondary">
-          {record.doctorNameBn} · {record.hospitalNameBn}
+          {localName(locale, record.doctorNameBn, record.doctorNameEn)} ·{' '}
+          {localName(locale, record.hospitalNameBn, record.hospitalNameEn)}
         </p>
 
         {record.diagnosisText === null ? null : (
@@ -301,9 +306,9 @@ function RecordCard({ record }: { readonly record: VisitRecord }): ReactNode {
 
         {record.followUpDate === null ? null : (
           <p className="rounded-sm bg-brand-100 px-3 py-2 text-body-sm text-brand-700">
-            {tp('followUpOn', LOCALE).replace(
+            {tp('followUpOn', locale).replace(
               '{date}',
-              formatDateTime(`${record.followUpDate}T09:00:00+06:00`, NUMERALS),
+              formatDateTime(`${record.followUpDate}T09:00:00+06:00`, numerals),
             )}
           </p>
         )}
@@ -327,13 +332,14 @@ function RecordCard({ record }: { readonly record: VisitRecord }): ReactNode {
  * scrolled to it.
  */
 function ReportList({ tests }: { readonly tests: readonly LinkedTest[] }): ReactNode {
+  const locale = useLocale();
   if (tests.length === 0) {
     return (
       <div
         data-testid="reports-empty"
         className="flex flex-col gap-3 rounded-md border border-line bg-surface p-5"
       >
-        <p className="text-body-md text-ink-secondary">{tp('reportsNone', LOCALE)}</p>
+        <p className="text-body-md text-ink-secondary">{tp('reportsNone', locale)}</p>
       </div>
     );
   }
@@ -358,6 +364,8 @@ const WAITING_LABEL: Readonly<Record<string, string>> = {
 };
 
 function ReportCard({ test }: { readonly test: LinkedTest }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const ready = test.report !== null && test.report.deliveredToWalletAt !== null;
   const waitingKey = WAITING_LABEL[test.state];
 
@@ -367,9 +375,9 @@ function ReportCard({ test }: { readonly test: LinkedTest }): ReactNode {
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <p className="text-title-sm">{test.testName}</p>
           <p className="text-body-sm tabular-nums text-ink-muted">
-            {tp('reportOrderedOn', LOCALE).replace(
+            {tp('reportOrderedOn', locale).replace(
               '{date}',
-              formatDateTime(test.orderedAt, NUMERALS),
+              formatDateTime(test.orderedAt, numerals),
             )}
           </p>
         </div>
@@ -378,10 +386,10 @@ function ReportCard({ test }: { readonly test: LinkedTest }): ReactNode {
           <>
             <p className="text-body-sm text-ok-700">
               {test.readyAt === null
-                ? tp('reportReady', LOCALE)
-                : tp('reportReadyOn', LOCALE).replace(
+                ? tp('reportReady', locale)
+                : tp('reportReadyOn', locale).replace(
                     '{date}',
-                    formatDateTime(test.readyAt, NUMERALS),
+                    formatDateTime(test.readyAt, numerals),
                   )}
             </p>
             <OpenReport
@@ -393,8 +401,8 @@ function ReportCard({ test }: { readonly test: LinkedTest }): ReactNode {
         ) : (
           <p className="text-body-sm text-ink-secondary">
             {waitingKey === undefined
-              ? tp('reportWaiting', LOCALE)
-              : tp(waitingKey as never, LOCALE)}
+              ? tp('reportWaiting', locale)
+              : tp(waitingKey as never, locale)}
           </p>
         )}
       </div>
@@ -418,6 +426,7 @@ function OpenReport({
   readonly linkToken: string;
   readonly reportId: string;
 }): ReactNode {
+  const locale = useLocale();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -442,12 +451,12 @@ function OpenReport({
             });
         }}
       >
-        {busy ? tp('loading', LOCALE) : tp('reportOpen', LOCALE)}
+        {busy ? tp('loading', locale) : tp('reportOpen', locale)}
       </Button>
 
       {failed ? (
         <p role="alert" className="text-body-sm text-alert-700">
-          {tp('reportOpenFailed', LOCALE)}
+          {tp('reportOpenFailed', locale)}
         </p>
       ) : null}
     </div>
@@ -461,11 +470,12 @@ function Problem({
   readonly message: string;
   readonly onRetry: () => void;
 }): ReactNode {
+  const locale = useLocale();
   return (
     <div data-testid="records-error" className="flex flex-col gap-3">
       <p className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700">{message}</p>
       <Button onClick={onRetry} data-testid="records-retry">
-        {tp('tryAgain', LOCALE)}
+        {tp('tryAgain', locale)}
       </Button>
     </div>
   );

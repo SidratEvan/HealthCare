@@ -432,6 +432,7 @@ export interface TimingRow {
   readonly doctorNameBn: string;
   readonly doctorNameEn: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   readonly startDeltaMinutes: number | null;
   readonly avgConsultSeconds: number | null;
   readonly seen: number;
@@ -444,6 +445,7 @@ export async function sessionTimings(hospitalId: string, range: DateRange): Prom
     doctor_name_bn: string;
     doctor_name_en: string;
     department_name_bn: string;
+    department_name_en: string;
     start_delta_minutes: number | null;
     avg_consult_seconds: number | null;
     seen: number;
@@ -452,6 +454,7 @@ export async function sessionTimings(hospitalId: string, range: DateRange): Prom
            d.full_name_bn AS doctor_name_bn,
            d.full_name_en AS doctor_name_en,
            dep.name_bn AS department_name_bn,
+           dep.name_en AS department_name_en,
            CASE
              WHEN s.actual_start IS NOT NULL
                THEN round(EXTRACT(EPOCH FROM (s.actual_start - s.planned_start)) / 60.0)::int
@@ -477,6 +480,7 @@ export async function sessionTimings(hospitalId: string, range: DateRange): Prom
     doctorNameBn: row.doctor_name_bn,
     doctorNameEn: row.doctor_name_en,
     departmentNameBn: row.department_name_bn,
+    departmentNameEn: row.department_name_en,
     startDeltaMinutes: row.start_delta_minutes,
     avgConsultSeconds: row.avg_consult_seconds,
     seen: row.seen,
