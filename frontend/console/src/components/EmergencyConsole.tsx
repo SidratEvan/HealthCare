@@ -46,6 +46,7 @@ import {
 import { format, formatNumber, problemName, t, type Locale, formatAge } from '@platform/i18n';
 import { Button, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
+import { ConsoleRail } from '@/components/ConsoleRail';
 import { InboundCard, TriageTable } from '@/components/ErCases';
 import {
   IncomingReferrals,
@@ -64,17 +65,6 @@ import { NUMERALS } from '@/lib/bedCopy';
 import { readDemoSession } from '@/lib/demo';
 
 const LOCALE: Locale = 'bn';
-
-/** `APP_FLOW.md` B1.1's rail. Emergency is this screen. */
-const NAV_ITEMS = [
-  'navQueue',
-  'navRegistration',
-  'navBeds',
-  'navEmergency',
-  'navTests',
-  'navBilling',
-  'navDashboard',
-] as const;
 
 /** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
 function readToken(): string | null {
@@ -214,25 +204,8 @@ function ConsoleBody(): ReactNode {
   return (
     <div className="flex min-h-screen" data-testid="er-console">
       {/* --- navigation rail ------------------------------------------------- */}
-      <nav
-        aria-label={t('navEmergency', locale)}
-        className="w-52 shrink-0 border-r border-line p-4"
-      >
-        <ul className="flex flex-col gap-1">
-          {NAV_ITEMS.map((key) => (
-            <li key={key}>
-              <span
-                aria-current={key === 'navEmergency' ? 'page' : undefined}
-                className="flex min-h-touch items-center rounded-sm px-3 text-body-md aria-[current=page]:bg-brand-100 aria-[current=page]:font-semibold"
-              >
-                {t(key, locale)}
-              </span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-6">
-          <OfflineBlock
+      <ConsoleRail current="navEmergency" locale={locale}>
+        <OfflineBlock
             connected={er.connected}
             pendingCount={er.pendingCount}
             lastServerTs={er.lastServerTs}
@@ -240,8 +213,7 @@ function ConsoleBody(): ReactNode {
             locale={locale}
             now={now}
           />
-        </div>
-      </nav>
+      </ConsoleRail>
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}

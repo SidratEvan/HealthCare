@@ -21,7 +21,7 @@
  * state, rather than showing the browser's dinosaur.
  */
 
-const SHELL = 'shell-v1';
+const SHELL = 'shell-v2';
 
 /**
  * Paths worth having before they are asked for.

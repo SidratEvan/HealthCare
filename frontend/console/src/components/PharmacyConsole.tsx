@@ -44,23 +44,13 @@ import { format, formatAge, t, type ConsoleKey, type Locale } from '@platform/i1
 import { Button, Card, Chip, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
 
 import { ActionButton } from '@/components/ActionButton';
+import { ConsoleRail } from '@/components/ConsoleRail';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { readDemoSession } from '@/lib/demo';
 import { failureOf, labApi, type ShelfResponse, type StockRow } from '@/lib/lab';
 
 const LOCALE: Locale = 'bn';
 const NUMERALS = 'bengali' as const;
-
-/** `APP_FLOW.md` B1.1's rail. Billing is where a pharmacy counter sits. */
-const NAV_ITEMS = [
-  'navQueue',
-  'navRegistration',
-  'navBeds',
-  'navEmergency',
-  'navTests',
-  'navBilling',
-  'navDashboard',
-] as const;
 
 /** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
 function readToken(): string | null {
@@ -205,22 +195,8 @@ function PharmacyBody(): ReactNode {
 
   return (
     <div className="flex min-h-screen" data-testid="pharmacy-console">
-      <nav aria-label={t('navBilling', locale)} className="w-52 shrink-0 border-r border-line p-4">
-        <ul className="flex flex-col gap-1">
-          {NAV_ITEMS.map((key) => (
-            <li key={key}>
-              <span
-                aria-current={key === 'navBilling' ? 'page' : undefined}
-                className="flex min-h-touch items-center rounded-sm px-3 text-body-md aria-[current=page]:bg-brand-100 aria-[current=page]:font-semibold"
-              >
-                {t(key, locale)}
-              </span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-6">
-          <OfflineBlock
+      <ConsoleRail current="navBilling" locale={locale}>
+        <OfflineBlock
             connected={online}
             pendingCount={0}
             lastServerTs={shelf.serverTs}
@@ -228,8 +204,7 @@ function PharmacyBody(): ReactNode {
             locale={locale}
             now={now}
           />
-        </div>
-      </nav>
+      </ConsoleRail>
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* FR-DEM-07 */}

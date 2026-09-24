@@ -64,23 +64,13 @@ import {
 } from '@platform/ui';
 
 import { ActionButton } from '@/components/ActionButton';
+import { ConsoleRail } from '@/components/ConsoleRail';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { readDemoSession } from '@/lib/demo';
 import { failureOf, labApi, readReportFile, type LabQueueResponse } from '@/lib/lab';
 
 const LOCALE: Locale = 'bn';
 const NUMERALS = 'bengali' as const;
-
-/** `APP_FLOW.md` B1.1's rail. Tests is this screen; the rest are elsewhere. */
-const NAV_ITEMS = [
-  'navQueue',
-  'navRegistration',
-  'navBeds',
-  'navEmergency',
-  'navTests',
-  'navBilling',
-  'navDashboard',
-] as const;
 
 /** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
 function readToken(): string | null {
@@ -309,22 +299,8 @@ function LabBody(): ReactNode {
   return (
     <div className="flex min-h-screen" data-testid="lab-console">
       {/* --- navigation rail ------------------------------------------------- */}
-      <nav aria-label={t('navTests', locale)} className="w-52 shrink-0 border-r border-line p-4">
-        <ul className="flex flex-col gap-1">
-          {NAV_ITEMS.map((key) => (
-            <li key={key}>
-              <span
-                aria-current={key === 'navTests' ? 'page' : undefined}
-                className="flex min-h-touch items-center rounded-sm px-3 text-body-md aria-[current=page]:bg-brand-100 aria-[current=page]:font-semibold"
-              >
-                {t(key, locale)}
-              </span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-6">
-          <OfflineBlock
+      <ConsoleRail current="navTests" locale={locale}>
+        <OfflineBlock
             connected={online}
             pendingCount={0}
             lastServerTs={queue.serverTs}
@@ -332,8 +308,7 @@ function LabBody(): ReactNode {
             locale={locale}
             now={now}
           />
-        </div>
-      </nav>
+      </ConsoleRail>
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}

@@ -386,10 +386,7 @@ function CapacitySection({
                 <tr key={kind.kind} className="border-t border-line-hairline">
                   <td className="py-2 pr-4">{bedKind(kind.kind)}</td>
                   <td className="py-2 pr-4 text-right tabular-nums">
-                    {num(kind.free)}{' '}
-                    <span className="text-ink-muted">
-                      {format('govFreeOfTotal', LOCALE, { total: num(kind.total) })}
-                    </span>
+                    {freeOfTotal(kind.free, kind.total)}
                   </td>
                 </tr>
               ))}
@@ -437,17 +434,13 @@ function DistrictTile({
           <dd className="text-right tabular-nums">
             {district.bedTotal === 0
               ? t('govNoBeds', LOCALE)
-              : `${num(district.bedFree)} ${format('govFreeOfTotal', LOCALE, {
-                  total: num(district.bedTotal),
-                })}`}
+              : freeOfTotal(district.bedFree, district.bedTotal)}
           </dd>
           <dt className="text-ink-secondary">{t('govIcuFree', LOCALE)}</dt>
           <dd className="text-right tabular-nums">
             {district.icuTotal === null || district.icuFree === null
               ? t('govNoIcu', LOCALE)
-              : `${num(district.icuFree)} ${format('govFreeOfTotal', LOCALE, {
-                  total: num(district.icuTotal),
-                })}`}
+              : freeOfTotal(district.icuFree, district.icuTotal)}
           </dd>
           <dt className="text-ink-secondary">{t('govBurnUnits', LOCALE)}</dt>
           <dd className="text-right tabular-nums">{num(district.burnUnitsOpen)}</dd>
@@ -925,6 +918,15 @@ function GovSkeleton(): ReactNode {
 
 function num(value: number): string {
   return formatNumber(value, NUMERALS);
+}
+
+/**
+ * "২৮টির মধ্যে ৭টি" — the total first, the way the sentence runs in Bangla.
+ * Setting the free count before "২৮টির মধ্যে" read as "7 of-28", a number
+ * dropped in front of a phrase it does not belong to.
+ */
+function freeOfTotal(free: number, total: number): string {
+  return format('govFreeOfTotalInline', LOCALE, { free: num(free), total: num(total) });
 }
 
 /** `DD/MM`, which is as much as an axis tick can carry. */

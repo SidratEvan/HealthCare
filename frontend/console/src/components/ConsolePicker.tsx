@@ -202,11 +202,27 @@ export function ConsolePicker({
           data: { token: string; staffName: string; hospitalId: string | null };
         };
 
+        const picked = consoles?.find((entry) => entry.hospitalId === hospitalId);
+        const chamber =
+          choice.kind === 'chamber'
+            ? picked?.sessions.find((session) => session.id === choice.sessionId)
+            : undefined;
+
         writeDemoSession({
           token: body.data.token,
           hospitalId: body.data.hospitalId,
           staffName: body.data.staffName,
           role,
+          ...(picked === undefined ? {} : { hospitalNameBn: picked.nameBn }),
+          ...(chamber === undefined
+            ? {}
+            : {
+                chamber: {
+                  doctorNameBn: chamber.doctorNameBn,
+                  departmentNameBn: chamber.departmentNameBn,
+                  room: chamber.room,
+                },
+              }),
         });
 
         onChosen(choice);
@@ -216,7 +232,7 @@ export function ConsolePicker({
         setBusy(false);
       }
     },
-    [onChosen],
+    [onChosen, consoles],
   );
 
   if (failed) {

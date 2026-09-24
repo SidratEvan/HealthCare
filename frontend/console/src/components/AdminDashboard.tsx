@@ -459,7 +459,24 @@ function TodaySection({ data, now }: SectionProps): ReactNode {
                   })
             }
           />
-          <Stat label={t('adminQuoteOver', LOCALE)} value={minutes(data.quotes.avgOverMinutes)} />
+          {/* Below zero means people were called before the time they were
+              quoted, on average. That is no overrun, and is said as such
+              rather than as a negative number of minutes late. */}
+          <Stat
+            label={t('adminQuoteOver', LOCALE)}
+            value={
+              data.quotes.avgOverMinutes !== null && data.quotes.avgOverMinutes < 0
+                ? t('adminQuoteNoOverrun', LOCALE)
+                : minutes(data.quotes.avgOverMinutes)
+            }
+            note={
+              data.quotes.avgOverMinutes !== null && data.quotes.avgOverMinutes < 0
+                ? format('adminQuoteEarlyBy', LOCALE, {
+                    minutes: num(Math.round(-data.quotes.avgOverMinutes)),
+                  })
+                : null
+            }
+          />
         </div>
       )}
 
@@ -741,6 +758,19 @@ function RevenueBars({
   readonly slices: readonly RevenueSlice[];
 }): ReactNode {
   if (slices.length === 0) return null;
+
+  // Nothing collected is a sentence, not a chart: an axis ticked ৳0.01 to
+  // ৳0.04 over empty bars reads as a broken screen (`GR-03`, empty state).
+  if (slices.every((slice) => slice.collectedPoisha === 0)) {
+    return (
+      <Card data-testid="admin-revenue-none">
+        <h2 className="text-title-sm">
+          {title} · {t('adminCollected', LOCALE)}
+        </h2>
+        <p className="mt-2 text-body-md text-ink-secondary">{t('adminNothingCollected', LOCALE)}</p>
+      </Card>
+    );
+  }
 
   const rows = [...slices]
     .sort((a, b) => b.collectedPoisha - a.collectedPoisha)

@@ -87,9 +87,15 @@
   /* --- Type (§2.1) ------------------------------------------------------- *
    * One superfamily across both scripts. Hind Siliguri is the fallback       *
    * because it is the most commonly installed quality Bangla face in the     *
-   * region; the system stack is last and is never the design.               */
-  --font-ui: 'Anek Bangla', 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
-  --font-reading: 'Tiro Bangla', 'Noto Serif Bengali', Georgia, serif;
+   * region; the system stack is last and is never the design.                *
+   *                                                                          *
+   * `--font-anek` and `--font-tiro` are set by each app's `next/font` load   *
+   * (`src/app/fonts.ts`), which downloads the faces at build time and serves *
+   * them from the app's own origin. Until that existed no face was loaded at *
+   * all, and every screen fell back to whatever the device happened to have *
+   * — the single largest reason the product looked assembled, not designed. */
+  --font-ui: var(--font-anek, 'Anek Bangla'), 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
+  --font-reading: var(--font-tiro, 'Tiro Bangla'), 'Noto Serif Bengali', Georgia, serif;
 }
 
 /*

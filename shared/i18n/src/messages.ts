@@ -77,6 +77,7 @@ export const CONSOLE = {
   sessionScheduled: { bn: 'শুরু হয়নি', en: 'Not started' },
   sessionEnded: { bn: 'শেষ', en: 'Finished' },
   waitingCount: { bn: '{count} জন অপেক্ষায়', en: '{count} waiting' },
+  chamberHours: { bn: 'চেম্বার', en: 'Chamber' },
   openConsole: { bn: 'কনসোল খুলুন', en: 'Open the console' },
   noConsoles: {
     bn: 'আজ কোনো চেম্বার চলছে না। ডেমো তথ্য আবার তৈরি করুন।',
@@ -933,6 +934,15 @@ export const CONSOLE = {
     en: '{kept} of {quoted}',
   },
   adminQuoteOver: { bn: 'বলা সময়ের চেয়ে গড় দেরি', en: 'Average past the quote' },
+  adminQuoteNoOverrun: { bn: 'দেরি হয়নি', en: 'No overrun' },
+  adminQuoteEarlyBy: {
+    bn: 'গড়ে {minutes} মিনিট আগেই ডাকা হয়েছে',
+    en: 'Called {minutes} min early on average',
+  },
+  adminNothingCollected: {
+    bn: 'এই সময়ে এখনো কোনো টাকা আদায় হয়নি।',
+    en: 'Nothing has been collected in this period yet.',
+  },
 
   adminAdoption: { bn: 'লাইভ সিরিয়াল চালু', en: 'Live queue went live' },
   adminTrendCaption: {
@@ -1135,6 +1145,7 @@ export const CONSOLE = {
   govBurnUnits: { bn: 'বার্ন ইউনিট চালু', en: 'Burn units open' },
   govErActive: { bn: 'জরুরি বিভাগে এখন', en: 'In emergency now' },
   govFreeOfTotal: { bn: '{total}টির মধ্যে', en: 'of {total}' },
+  govFreeOfTotalInline: { bn: '{total}টির মধ্যে {free}টি', en: '{free} of {total}' },
   govNoIcu: { bn: 'আইসিইউ নেই', en: 'No ICU' },
   govNoBeds: { bn: 'ভর্তির বেড নেই', en: 'No inpatient beds' },
   govUnrecorded: { bn: 'হিসাব রাখা হয় না', en: 'Not recorded' },

@@ -109,8 +109,8 @@
    * One superfamily across both scripts. Hind Siliguri is the fallback: the
    * most commonly installed quality Bangla face in the region. The system
    * stack is last and is never the design.                                   */
-  --font-ui: 'Anek Bangla', 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
-  --font-reading: 'Tiro Bangla', 'Noto Serif Bengali', Georgia, serif;
+  --font-ui: var(--font-anek, 'Anek Bangla'), 'Hind Siliguri', 'Noto Sans Bengali', system-ui, sans-serif;
+  --font-reading: var(--font-tiro, 'Tiro Bangla'), 'Noto Serif Bengali', Georgia, serif;
 
   --text-display-xl: 56px;
   --text-display-xl--line-height: 1.15;
