@@ -21,7 +21,15 @@
 import { useEffect, useState } from 'react';
 
 import { SPECIALTIES } from '@platform/domain';
-import { formatNumber, formatSerial, tp } from '@platform/i18n';
+import {
+  formatNumber,
+  formatSerial,
+  tp,
+  numeralsFor,
+  districtName,
+  localName,
+} from '@platform/i18n';
+import { useLocale } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 import {
@@ -40,25 +48,24 @@ import { recentBookings, type SavedBooking } from '@/lib/bookings';
 
 import type { ReactNode } from 'react';
 
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
-
 /**
  * The area this app is showing.
  *
  * Hard-coded for the demo: `MOD-A02-AREA` is the area picker and there is no
  * location permission flow yet (`S-A-01`). The canvas shows a real area under
  * the app name, and a blank there makes the header look unfinished — so it
- * says the area the demo's facilities are in, which is true.
+ * says the area the demo's facilities are in, which is true. A district key,
+ * so it reads ঢাকা or Dhaka with the language switch.
  */
-const AREA = 'ঢাকা';
+const AREA = 'Dhaka';
 
 export default function Home(): ReactNode {
+  const locale = useLocale();
   return (
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 px-5 pt-4">
         <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {tp('demoBanner', LOCALE)}
+          {tp('demoBanner', locale)}
         </p>
 
         <Header />
@@ -77,16 +84,17 @@ export default function Home(): ReactNode {
 
 /** App name, area, and the profile control (`BTN-A02-PROFILE`). */
 function Header(): ReactNode {
+  const locale = useLocale();
   return (
     <header className="flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="font-reading text-title-lg text-brand-700">{tp('appName', LOCALE)}</h1>
-        <p className="text-body-sm text-ink-secondary">{AREA}</p>
+        <h1 className="font-reading text-title-lg text-brand-700">{tp('appName', locale)}</h1>
+        <p className="text-body-sm text-ink-secondary">{districtName(AREA, locale)}</p>
       </div>
 
       <a
         href="/profile"
-        aria-label={tp('navProfile', LOCALE)}
+        aria-label={tp('navProfile', locale)}
         className="flex size-11 shrink-0 items-center justify-center rounded-pill border border-line bg-surface text-ink"
       >
         <ProfileIcon size={20} />
@@ -103,6 +111,7 @@ function Header(): ReactNode {
  * moved below the fold."
  */
 function EmergencyCard(): ReactNode {
+  const locale = useLocale();
   return (
     <a
       href="/emergency"
@@ -114,9 +123,9 @@ function EmergencyCard(): ReactNode {
       </span>
       <span className="min-w-0">
         <span className="block font-reading text-title-md font-bold">
-          {tp('emergency', LOCALE)}
+          {tp('emergency', locale)}
         </span>
-        <span className="block text-body-sm opacity-90">{tp('emergencyLine', LOCALE)}</span>
+        <span className="block text-body-sm opacity-90">{tp('emergencyLine', locale)}</span>
       </span>
     </a>
   );
@@ -131,11 +140,12 @@ function EmergencyCard(): ReactNode {
  * they can reach before they pick who they see.
  */
 function Specialties(): ReactNode {
+  const locale = useLocale();
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="font-reading text-title-sm">{tp('seeADoctor', LOCALE)}</h2>
-        <p className="text-body-sm text-ink-secondary">{tp('seeADoctorSub', LOCALE)}</p>
+        <h2 className="font-reading text-title-sm">{tp('seeADoctor', locale)}</h2>
+        <p className="text-body-sm text-ink-secondary">{tp('seeADoctorSub', locale)}</p>
       </div>
 
       <ul className="grid grid-cols-2 gap-3">
@@ -154,7 +164,9 @@ function Specialties(): ReactNode {
                 </span>
                 {/* ICO-03: the name carries the meaning; the icon makes it
                     findable. Never the icon alone on a patient surface. */}
-                <span className="text-body-lg font-semibold">{specialty.nameBn}</span>
+                <span className="text-body-lg font-semibold">
+                  {localName(locale, specialty.nameBn, specialty.nameEn)}
+                </span>
               </a>
             </li>
           );
@@ -173,6 +185,7 @@ function Specialties(): ReactNode {
  * yet" rather than a dead link.
  */
 function QuickTiles(): ReactNode {
+  const locale = useLocale();
   const tiles = [
     { href: '/beds', label: 'quickBed', Icon: BedIcon },
     { href: '/ambulance', label: 'quickAmbulance', Icon: AmbulanceIcon },
@@ -192,7 +205,7 @@ function QuickTiles(): ReactNode {
               <span className="text-brand-600">
                 <tile.Icon size={22} />
               </span>
-              <span className="text-caption">{tp(tile.label, LOCALE)}</span>
+              <span className="text-caption">{tp(tile.label, locale)}</span>
             </a>
           </li>
         ))}
@@ -211,8 +224,8 @@ function QuickTiles(): ReactNode {
         data-testid="quick-medicines"
         className="flex min-h-touch items-center justify-between rounded-sm border border-line bg-surface px-4 py-3"
       >
-        <span className="text-body-md">{tp('medicinesTitle', LOCALE)}</span>
-        <span className="text-body-sm text-ink-muted">{tp('medicinesIntro', LOCALE)}</span>
+        <span className="text-body-md">{tp('medicinesTitle', locale)}</span>
+        <span className="text-body-sm text-ink-muted">{tp('medicinesIntro', locale)}</span>
       </a>
     </div>
   );
@@ -230,6 +243,8 @@ function QuickTiles(): ReactNode {
  * a strip saying "no serial" is a row of furniture.
  */
 function ActiveSerial(): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [booking, setBooking] = useState<SavedBooking | null>(null);
   const [nowServing, setNowServing] = useState<number | null>(null);
 
@@ -261,17 +276,17 @@ function ActiveSerial(): ReactNode {
       className="flex items-center gap-3 rounded-md border border-brand-border bg-brand-100 p-4"
     >
       <span className="flex size-11 shrink-0 items-center justify-center rounded-pill bg-brand-600 text-title-sm font-bold text-white tabular-nums">
-        {formatSerial(booking.serial, NUMERALS)}
+        {formatSerial(booking.serial, numerals)}
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="block text-body-md font-semibold">{tp('activeSerialTitle', LOCALE)}</span>
+        <span className="block text-body-md font-semibold">{tp('activeSerialTitle', locale)}</span>
         <span className="block truncate text-body-sm text-ink-secondary">
           {nowServing === null
-            ? booking.doctorNameBn
-            : tp('activeSerialMeta', LOCALE)
-                .replace('{doctor}', booking.doctorNameBn)
-                .replace('{serving}', formatNumber(nowServing, NUMERALS))}
+            ? localName(locale, booking.doctorNameBn, booking.doctorNameEn)
+            : tp('activeSerialMeta', locale)
+                .replace('{doctor}', localName(locale, booking.doctorNameBn, booking.doctorNameEn))
+                .replace('{serving}', formatNumber(nowServing, numerals))}
         </span>
       </span>
 

@@ -83,9 +83,12 @@ import {
   type ConsoleKey,
   type Locale,
   formatAge,
+  numeralsFor,
+  localName,
 } from '@platform/i18n';
-import { Button, Card, FilterChip, FreshnessLine } from '@platform/ui';
+import { Button, Card, FilterChip, FreshnessLine, useLocale } from '@platform/ui';
 
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import {
   adminApi,
   downloadExport,
@@ -99,11 +102,6 @@ import {
   type RevenueSlice,
 } from '@/lib/admin';
 import { readDemoSession } from '@/lib/demo';
-
-const LOCALE: Locale = 'bn';
-
-/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
-const NUMERALS = 'bengali' as const;
 
 /** Thirty days: long enough that the trend shows the adoption marker. */
 const DEFAULT_RANGE: RangeDays = 29;
@@ -162,6 +160,7 @@ const EXPORT_FOR: Readonly<Record<Tab, ExportView>> = {
 type LoadState = 'loading' | 'ready' | 'error' | 'offline';
 
 export function AdminDashboard(): ReactNode {
+  const locale = useLocale();
   const [data, setData] = useState<Dashboard | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [pending, setPending] = useState(false);
@@ -238,10 +237,10 @@ export function AdminDashboard(): ReactNode {
           data-testid={state === 'offline' ? 'admin-offline' : 'admin-error'}
         >
           <p className="text-body-md text-alert-700">
-            {t(state === 'offline' ? 'adminOffline' : 'adminLoadFailed', LOCALE)}
+            {t(state === 'offline' ? 'adminOffline' : 'adminLoadFailed', locale)}
           </p>
           <Button variant="secondary" onClick={() => void load(days)} data-testid="admin-retry">
-            {t('retry', LOCALE)}
+            {t('retry', locale)}
           </Button>
         </div>
       </Shell>
@@ -258,13 +257,13 @@ export function AdminDashboard(): ReactNode {
           className="rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
           data-testid="admin-offline-banner"
         >
-          {t('adminOfflineStale', LOCALE)}
+          {t('adminOfflineStale', locale)}
         </p>
       ) : null}
 
       {state === 'error' ? (
         <p role="alert" className="rounded-sm bg-alert-100 px-3 py-2 text-body-sm text-alert-700">
-          {t('adminLoadFailed', LOCALE)}
+          {t('adminLoadFailed', locale)}
         </p>
       ) : null}
 
@@ -277,7 +276,7 @@ export function AdminDashboard(): ReactNode {
               setDays(range.days);
             }}
           >
-            {t(range.key, LOCALE)}
+            {t(range.key, locale)}
           </FilterChip>
         ))}
 
@@ -286,10 +285,10 @@ export function AdminDashboard(): ReactNode {
             <Button
               variant="secondary"
               disabled
-              disabledReason={t('adminExportOffline', LOCALE)}
+              disabledReason={t('adminExportOffline', locale)}
               data-testid="admin-export"
             >
-              {t('adminExport', LOCALE)}
+              {t('adminExport', locale)}
             </Button>
           ) : (
             <Button
@@ -298,7 +297,7 @@ export function AdminDashboard(): ReactNode {
               onClick={() => void onExport()}
               data-testid="admin-export"
             >
-              {exporting ? t('adminExporting', LOCALE) : t('adminExport', LOCALE)}
+              {exporting ? t('adminExporting', locale) : t('adminExport', locale)}
             </Button>
           )}
           {/* `FR-ADM-10` says CSV/PDF. The PDF is the browser's own, from this
@@ -312,14 +311,14 @@ export function AdminDashboard(): ReactNode {
             }}
             data-testid="admin-print"
           >
-            {t('adminPrint', LOCALE)}
+            {t('adminPrint', locale)}
           </Button>
         </span>
       </div>
 
       {exportFailed ? (
         <p role="alert" className="text-body-sm text-alert-700">
-          {t('adminExportFailed', LOCALE)}
+          {t('adminExportFailed', locale)}
         </p>
       ) : null}
 
@@ -360,6 +359,7 @@ function Tabs({
   readonly selected: Tab;
   readonly onSelect: (tab: Tab) => void;
 }): ReactNode {
+  const locale = useLocale();
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
     event.preventDefault();
@@ -376,7 +376,7 @@ function Tabs({
   return (
     <div
       role="tablist"
-      aria-label={t('adminTitle', LOCALE)}
+      aria-label={t('adminTitle', locale)}
       onKeyDown={onKeyDown}
       className="flex flex-wrap gap-1 border-b border-line pb-2 print:hidden"
     >
@@ -397,7 +397,7 @@ function Tabs({
             data-testid={`admin-tab-${entry.id}`}
             className="flex min-h-touch items-center rounded-sm px-3 text-body-md text-ink-secondary hover:bg-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 aria-selected:bg-brand-100 aria-selected:font-semibold aria-selected:text-ink"
           >
-            {t(entry.key, LOCALE)}
+            {t(entry.key, locale)}
           </button>
         );
       })}
@@ -410,16 +410,18 @@ function Tabs({
 // ---------------------------------------------------------------------------
 
 function TodaySection({ data, now }: SectionProps): ReactNode {
+  const locale = useLocale();
+  const { num, minutes, percent } = formattersFor(locale);
   const today = data.today;
 
   return (
     <Section testId="admin-section-today" asOf={data.freshness.snapshotAt} now={now}>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label={t('adminSeen', LOCALE)} value={num(today.seen)} testId="admin-seen" />
-        <Stat label={t('adminBooked', LOCALE)} value={num(today.booked)} />
-        <Stat label={t('adminNoShows', LOCALE)} value={num(today.noShows)} />
+        <Stat label={t('adminSeen', locale)} value={num(today.seen)} testId="admin-seen" />
+        <Stat label={t('adminBooked', locale)} value={num(today.booked)} />
+        <Stat label={t('adminNoShows', locale)} value={num(today.noShows)} />
         <Stat
-          label={t('adminWalkinRatio', LOCALE)}
+          label={t('adminWalkinRatio', locale)}
           value={`${num(today.walkin)} / ${num(today.bookedAhead)}`}
         />
       </div>
@@ -431,29 +433,29 @@ function TodaySection({ data, now }: SectionProps): ReactNode {
           kept: the figure a patient actually remembers. */}
       {today.waitsMeasured === 0 ? (
         <Card tone="warn" data-testid="admin-wait-notice">
-          <p className="text-body-md text-warn-700">{t('adminWaitUnmeasured', LOCALE)}</p>
+          <p className="text-body-md text-warn-700">{t('adminWaitUnmeasured', locale)}</p>
           <p className="mt-1 max-w-prose text-body-sm text-ink-secondary">
-            {t('adminWaitUnmeasuredWhy', LOCALE)}
+            {t('adminWaitUnmeasuredWhy', locale)}
           </p>
         </Card>
       ) : (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4" data-testid="admin-waits">
           <Stat
-            label={t('adminAvgWait', LOCALE)}
+            label={t('adminAvgWait', locale)}
             value={minutes(today.avgWaitMinutes)}
             testId="admin-avg-wait"
-            note={format('adminWaitsMeasured', LOCALE, { count: num(today.waitsMeasured) })}
+            note={format('adminWaitsMeasured', locale, { count: num(today.waitsMeasured) })}
           />
-          <Stat label={t('adminLongestWait', LOCALE)} value={minutes(today.longestWaitMinutes)} />
+          <Stat label={t('adminLongestWait', locale)} value={minutes(today.longestWaitMinutes)} />
           <Stat
-            label={t('adminQuotesKept', LOCALE)}
+            label={t('adminQuotesKept', locale)}
             value={percent(data.quotes.keptRate)}
             tone="brand"
             testId="admin-quotes-kept"
             note={
               data.quotes.quoted === 0
                 ? null
-                : format('adminQuotesKeptNote', LOCALE, {
+                : format('adminQuotesKeptNote', locale, {
                     kept: num(data.quotes.kept),
                     quoted: num(data.quotes.quoted),
                   })
@@ -463,15 +465,15 @@ function TodaySection({ data, now }: SectionProps): ReactNode {
               quoted, on average. That is no overrun, and is said as such
               rather than as a negative number of minutes late. */}
           <Stat
-            label={t('adminQuoteOver', LOCALE)}
+            label={t('adminQuoteOver', locale)}
             value={
               data.quotes.avgOverMinutes !== null && data.quotes.avgOverMinutes < 0
-                ? t('adminQuoteNoOverrun', LOCALE)
+                ? t('adminQuoteNoOverrun', locale)
                 : minutes(data.quotes.avgOverMinutes)
             }
             note={
               data.quotes.avgOverMinutes !== null && data.quotes.avgOverMinutes < 0
-                ? format('adminQuoteEarlyBy', LOCALE, {
+                ? format('adminQuoteEarlyBy', locale, {
                     minutes: num(Math.round(-data.quotes.avgOverMinutes)),
                   })
                 : null
@@ -481,17 +483,17 @@ function TodaySection({ data, now }: SectionProps): ReactNode {
       )}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label={t('adminOverrun', LOCALE)} value={minutes(today.avgOverrunMinutes)} />
+        <Stat label={t('adminOverrun', locale)} value={minutes(today.avgOverrunMinutes)} />
         <Stat
-          label={t('adminLongestOverrun', LOCALE)}
+          label={t('adminLongestOverrun', locale)}
           value={minutes(today.longestOverrunMinutes)}
         />
         <Stat
-          label={t('adminSessionsLate', LOCALE)}
+          label={t('adminSessionsLate', locale)}
           value={`${num(today.sessionsLate)} / ${num(today.sessionsTotal)}`}
         />
         <Stat
-          label={t('adminSessionsNeverStarted', LOCALE)}
+          label={t('adminSessionsNeverStarted', locale)}
           value={num(today.sessionsNeverStarted)}
         />
       </div>
@@ -504,6 +506,8 @@ function TodaySection({ data, now }: SectionProps): ReactNode {
 // ---------------------------------------------------------------------------
 
 function TrendSection({ data, now }: SectionProps): ReactNode {
+  const locale = useLocale();
+  const { num, minutes, shortDate } = formattersFor(locale);
   // Every day of the range is on the axis, measured or not. The view only has
   // rows for days a chamber ran, and an axis built from those alone joins
   // Wednesday to Saturday as if Thursday and Friday had been measured — and
@@ -523,7 +527,7 @@ function TrendSection({ data, now }: SectionProps): ReactNode {
         <Empty />
       ) : (
         <Card>
-          <h2 className="text-title-sm">{t('adminTrendCaption', LOCALE)}</h2>
+          <h2 className="text-title-sm">{t('adminTrendCaption', locale)}</h2>
           <div className="mt-3 h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={points} margin={{ top: 16, right: 16, bottom: 4, left: 0 }}>
@@ -539,7 +543,7 @@ function TrendSection({ data, now }: SectionProps): ReactNode {
                 <Tooltip
                   {...TOOLTIP}
                   cursor={{ stroke: SERIES_NEUTRAL }}
-                  formatter={(value) => [minutes(asNumber(value)), t('adminOverrun', LOCALE)]}
+                  formatter={(value) => [minutes(asNumber(value)), t('adminOverrun', locale)]}
                 />
 
                 {/* `FR-ADM-02`: "with the live-queue adoption date marked". The
@@ -552,7 +556,7 @@ function TrendSection({ data, now }: SectionProps): ReactNode {
                     stroke={AXIS_INK}
                     strokeDasharray="4 4"
                     label={{
-                      value: t('adminAdoption', LOCALE),
+                      value: t('adminAdoption', locale),
                       position: 'insideTopLeft',
                       fill: LABEL_INK,
                       fontSize: 'var(--text-caption)',
@@ -589,6 +593,8 @@ function TrendSection({ data, now }: SectionProps): ReactNode {
 // ---------------------------------------------------------------------------
 
 function LossSection({ data, now }: SectionProps): ReactNode {
+  const locale = useLocale();
+  const { num, taka, percent, shortDate } = formattersFor(locale);
   const loss = data.loss;
 
   // The whole range on the axis, as the trend has: a day with nothing lost
@@ -606,39 +612,39 @@ function LossSection({ data, now }: SectionProps): ReactNode {
   return (
     <Section testId="admin-section-loss" asOf={data.freshness.serverTs} now={now}>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label={t('adminNoShows', LOCALE)} value={num(loss.noShowCount)} />
-        <Stat label={t('adminForgone', LOCALE)} value={taka(loss.forgonePoisha)} />
+        <Stat label={t('adminNoShows', locale)} value={num(loss.noShowCount)} />
+        <Stat label={t('adminForgone', locale)} value={taka(loss.forgonePoisha)} />
         {/* The honest half. A patient who prepaid and did not attend has
             already given the hospital its money, so it is named separately
             rather than counted as a loss. */}
-        <Stat label={t('adminPrepaid', LOCALE)} value={taka(loss.prepaidPoisha)} />
+        <Stat label={t('adminPrepaid', locale)} value={taka(loss.prepaidPoisha)} />
         <Stat
-          label={t('adminUncollected', LOCALE)}
+          label={t('adminUncollected', locale)}
           value={taka(loss.uncollectedPoisha)}
           testId="admin-uncollected"
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label={t('adminOffersMade', LOCALE)} value={num(loss.offered)} />
-        <Stat label={t('adminOffersAccepted', LOCALE)} value={num(loss.accepted)} />
+        <Stat label={t('adminOffersMade', locale)} value={num(loss.offered)} />
+        <Stat label={t('adminOffersAccepted', locale)} value={num(loss.accepted)} />
         <Stat
-          label={t('adminRecovered', LOCALE)}
+          label={t('adminRecovered', locale)}
           value={taka(loss.recoveredPoisha)}
           tone="brand"
           testId="admin-recovered"
           note={
             loss.recoveryRate === null
               ? null
-              : `${t('adminRecoveryRate', LOCALE)} ${percent(loss.recoveryRate)}`
+              : `${t('adminRecoveryRate', locale)} ${percent(loss.recoveryRate)}`
           }
         />
-        <Stat label={t('adminNetLoss', LOCALE)} value={taka(loss.netLossPoisha)} />
+        <Stat label={t('adminNetLoss', locale)} value={taka(loss.netLossPoisha)} />
       </div>
 
       {days.length === 0 ? null : (
         <Card>
-          <h2 className="text-title-sm">{t('adminLossChartTitle', LOCALE)}</h2>
+          <h2 className="text-title-sm">{t('adminLossChartTitle', locale)}</h2>
           <div className="mt-3 h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               {/* Side by side, not stacked: a chair freed by a cancellation can
@@ -665,7 +671,7 @@ function LossSection({ data, now }: SectionProps): ReactNode {
                 />
                 <Bar
                   dataKey="lost"
-                  name={t('adminUncollected', LOCALE)}
+                  name={t('adminUncollected', locale)}
                   fill={SERIES_NEUTRAL}
                   radius={[4, 4, 0, 0]}
                   maxBarSize={16}
@@ -673,7 +679,7 @@ function LossSection({ data, now }: SectionProps): ReactNode {
                 />
                 <Bar
                   dataKey="recovered"
-                  name={t('adminRecovered', LOCALE)}
+                  name={t('adminRecovered', locale)}
                   fill={SERIES}
                   radius={[4, 4, 0, 0]}
                   maxBarSize={16}
@@ -709,39 +715,41 @@ const SERVICE_KEY: Readonly<Record<string, ConsoleKey>> = {
 };
 
 function RevenueSection({ data, now }: SectionProps): ReactNode {
+  const locale = useLocale();
+  const { taka } = formattersFor(locale);
   const revenue = data.revenue;
 
   return (
     <Section testId="admin-section-revenue" asOf={data.freshness.snapshotAt} now={now}>
       <div className="grid grid-cols-3 gap-4">
-        <Stat label={t('adminBilled', LOCALE)} value={taka(revenue.billedPoisha)} />
-        <Stat label={t('adminCollected', LOCALE)} value={taka(revenue.collectedPoisha)} />
-        <Stat label={t('adminRefunded', LOCALE)} value={taka(revenue.refundedPoisha)} />
+        <Stat label={t('adminBilled', locale)} value={taka(revenue.billedPoisha)} />
+        <Stat label={t('adminCollected', locale)} value={taka(revenue.collectedPoisha)} />
+        <Stat label={t('adminRefunded', locale)} value={taka(revenue.refundedPoisha)} />
       </div>
 
-      <RevenueBars title={t('adminByDoctor', LOCALE)} slices={revenue.byDoctor.slice(0, 10)} />
-      <RevenueBars title={t('adminByDepartment', LOCALE)} slices={revenue.byDepartment} />
+      <RevenueBars title={t('adminByDoctor', locale)} slices={revenue.byDoctor.slice(0, 10)} />
+      <RevenueBars title={t('adminByDepartment', locale)} slices={revenue.byDepartment} />
 
       <RevenueTable
-        title={t('adminByService', LOCALE)}
+        title={t('adminByService', locale)}
         slices={revenue.byService}
-        labelOf={(label) => t(SERVICE_KEY[label] ?? 'adminServiceConsultation', LOCALE)}
+        labelOf={(label) => t(SERVICE_KEY[label] ?? 'adminServiceConsultation', locale)}
         // Three of the four cannot have money in this version. The row says
         // so rather than being left out: a missing line reads as "we did not
         // look".
         noteOf={(slice) =>
           slice.bookings === 0 && slice.label !== 'consultation'
-            ? t('adminServiceNotCharged', LOCALE)
+            ? t('adminServiceNotCharged', locale)
             : null
         }
       />
 
       <RevenueTable
-        title={t('adminByMethod', LOCALE)}
+        title={t('adminByMethod', locale)}
         slices={revenue.byMethod}
         labelOf={(label) => {
           const key = METHOD_KEY[label];
-          return key === undefined ? label : t(key, LOCALE);
+          return key === undefined ? label : t(key, locale);
         }}
         noteOf={() => null}
       />
@@ -757,6 +765,8 @@ function RevenueBars({
   readonly title: string;
   readonly slices: readonly RevenueSlice[];
 }): ReactNode {
+  const locale = useLocale();
+  const { taka } = formattersFor(locale);
   if (slices.length === 0) return null;
 
   // Nothing collected is a sentence, not a chart: an axis ticked ৳0.01 to
@@ -765,9 +775,9 @@ function RevenueBars({
     return (
       <Card data-testid="admin-revenue-none">
         <h2 className="text-title-sm">
-          {title} · {t('adminCollected', LOCALE)}
+          {title} · {t('adminCollected', locale)}
         </h2>
-        <p className="mt-2 text-body-md text-ink-secondary">{t('adminNothingCollected', LOCALE)}</p>
+        <p className="mt-2 text-body-md text-ink-secondary">{t('adminNothingCollected', locale)}</p>
       </Card>
     );
   }
@@ -775,7 +785,7 @@ function RevenueBars({
   const rows = [...slices]
     .sort((a, b) => b.collectedPoisha - a.collectedPoisha)
     .map((slice) => ({
-      label: slice.label,
+      label: localName(locale, slice.label, slice.labelEn),
       collected: slice.collectedPoisha,
       billed: slice.billedPoisha,
     }));
@@ -783,7 +793,7 @@ function RevenueBars({
   return (
     <Card>
       <h2 className="text-title-sm">
-        {title} · {t('adminCollected', LOCALE)}
+        {title} · {t('adminCollected', locale)}
       </h2>
       <div className={`mt-3 w-full ${rows.length > 5 ? 'h-80' : 'h-48'}`}>
         <ResponsiveContainer width="100%" height="100%">
@@ -811,7 +821,7 @@ function RevenueBars({
             <Tooltip
               {...TOOLTIP}
               cursor={{ fill: 'var(--brand-100)' }}
-              formatter={(value) => [taka(asNumber(value)), t('adminCollected', LOCALE)]}
+              formatter={(value) => [taka(asNumber(value)), t('adminCollected', locale)]}
             />
             <Bar
               dataKey="collected"
@@ -838,6 +848,8 @@ function RevenueTable({
   readonly labelOf: (label: string) => string;
   readonly noteOf: (slice: RevenueSlice) => string | null;
 }): ReactNode {
+  const locale = useLocale();
+  const { num, taka } = formattersFor(locale);
   if (slices.length === 0) return null;
 
   return (
@@ -850,13 +862,13 @@ function RevenueTable({
               <span className="sr-only">{title}</span>
             </th>
             <th scope="col" className="pb-2 text-right font-normal">
-              {t('adminBookings', LOCALE)}
+              {t('adminBookings', locale)}
             </th>
             <th scope="col" className="pb-2 text-right font-normal">
-              {t('adminCollected', LOCALE)}
+              {t('adminCollected', locale)}
             </th>
             <th scope="col" className="pb-2 text-right font-normal">
-              {t('adminRefunded', LOCALE)}
+              {t('adminRefunded', locale)}
             </th>
           </tr>
         </thead>
@@ -888,6 +900,8 @@ function RevenueTable({
 // ---------------------------------------------------------------------------
 
 function StaffSection({ data, now }: SectionProps): ReactNode {
+  const locale = useLocale();
+  const { num, minutes, percent } = formattersFor(locale);
   return (
     <Section testId="admin-section-staff" asOf={data.freshness.serverTs} now={now}>
       {data.staff.length === 0 ? (
@@ -898,19 +912,19 @@ function StaffSection({ data, now }: SectionProps): ReactNode {
             <thead>
               <tr className="text-left text-caption text-ink-muted">
                 <th scope="col" className="pb-2 font-normal">
-                  {t('adminDoctor', LOCALE)}
+                  {t('adminDoctor', locale)}
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminMedianLate', LOCALE)}
+                  {t('adminMedianLate', locale)}
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminWorstLate', LOCALE)}
+                  {t('adminWorstLate', locale)}
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminOnTimeRate', LOCALE)}
+                  {t('adminOnTimeRate', locale)}
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminAvgConsult', LOCALE)}
+                  {t('adminAvgConsult', locale)}
                 </th>
               </tr>
             </thead>
@@ -918,15 +932,15 @@ function StaffSection({ data, now }: SectionProps): ReactNode {
               {data.staff.map((doctor) => (
                 <tr key={doctor.doctorId} className="border-t border-line-hairline">
                   <th scope="row" className="py-2 text-left font-normal">
-                    {doctor.doctorNameBn}
+                    {localName(locale, doctor.doctorNameBn, doctor.doctorNameEn)}
                     <span className="block text-caption text-ink-muted">
-                      {doctor.departmentNameBn} ·{' '}
-                      {format('adminChambersCount', LOCALE, { count: num(doctor.sessions) })}
+                      {localName(locale, doctor.departmentNameBn, doctor.departmentNameEn)} ·{' '}
+                      {format('adminChambersCount', locale, { count: num(doctor.sessions) })}
                     </span>
                   </th>
                   <td className="py-2 text-right tabular-nums">
                     {doctor.medianDeltaMinutes === null
-                      ? t('adminNeverStartedNote', LOCALE)
+                      ? t('adminNeverStartedNote', locale)
                       : minutes(doctor.medianDeltaMinutes)}
                   </td>
                   <td className="py-2 text-right tabular-nums">
@@ -953,29 +967,31 @@ function StaffSection({ data, now }: SectionProps): ReactNode {
 // ---------------------------------------------------------------------------
 
 function BedsSection({ data, now }: SectionProps): ReactNode {
+  const locale = useLocale();
+  const { num, hours, bedKind } = formattersFor(locale);
   return (
     <Section testId="admin-section-beds" asOf={data.freshness.serverTs} now={now}>
       {data.beds.length === 0 ? (
-        <Empty hint={t('adminBedsNone', LOCALE)} />
+        <Empty hint={t('adminBedsNone', locale)} />
       ) : (
         <Card>
           <table className="w-full text-body-sm">
             <thead>
               <tr className="text-left text-caption text-ink-muted">
                 <th scope="col" className="pb-2 font-normal">
-                  {t('adminBedKind', LOCALE)}
+                  {t('adminBedKind', locale)}
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminBedOccupied', LOCALE)}
+                  {t('adminBedOccupied', locale)}
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminAdmissions', LOCALE)}
+                  {t('adminAdmissions', locale)}
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminAlos', LOCALE)}
+                  {t('adminAlos', locale)}
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminTurnover', LOCALE)}
+                  {t('adminTurnover', locale)}
                 </th>
               </tr>
             </thead>
@@ -1006,34 +1022,36 @@ function BedsSection({ data, now }: SectionProps): ReactNode {
 // ---------------------------------------------------------------------------
 
 function ReferralsSection({ data, now }: SectionProps): ReactNode {
+  const locale = useLocale();
+  const { num } = formattersFor(locale);
   const flow = data.referrals;
 
   return (
     <Section testId="admin-section-referrals" asOf={data.freshness.referralsAt} now={now}>
       {flow === null ? (
-        <Empty hint={t('adminReferralsNone', LOCALE)} />
+        <Empty hint={t('adminReferralsNone', locale)} />
       ) : (
         <>
-          <h2 className="text-title-sm">{t('adminSent', LOCALE)}</h2>
+          <h2 className="text-title-sm">{t('adminSent', locale)}</h2>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Stat label={t('adminSent', LOCALE)} value={num(flow.sentTotal)} />
-            <Stat label={t('adminAccepted', LOCALE)} value={num(flow.sentAccepted)} />
-            <Stat label={t('adminDeclined', LOCALE)} value={num(flow.sentDeclined)} />
-            <Stat label={t('adminOpen', LOCALE)} value={num(flow.sentOpen)} />
+            <Stat label={t('adminSent', locale)} value={num(flow.sentTotal)} />
+            <Stat label={t('adminAccepted', locale)} value={num(flow.sentAccepted)} />
+            <Stat label={t('adminDeclined', locale)} value={num(flow.sentDeclined)} />
+            <Stat label={t('adminOpen', locale)} value={num(flow.sentOpen)} />
           </div>
 
           <Stat
-            label={t('adminLeaked', LOCALE)}
+            label={t('adminLeaked', locale)}
             value={num(flow.leaked)}
-            note={t('adminLeakedNote', LOCALE)}
+            note={t('adminLeakedNote', locale)}
           />
 
-          <h2 className="text-title-sm">{t('adminReceived', LOCALE)}</h2>
+          <h2 className="text-title-sm">{t('adminReceived', locale)}</h2>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Stat label={t('adminReceived', LOCALE)} value={num(flow.receivedTotal)} />
-            <Stat label={t('adminAccepted', LOCALE)} value={num(flow.receivedAccepted)} />
-            <Stat label={t('adminDeclined', LOCALE)} value={num(flow.receivedDeclined)} />
-            <Stat label={t('adminOpen', LOCALE)} value={num(flow.receivedOpen)} />
+            <Stat label={t('adminReceived', locale)} value={num(flow.receivedTotal)} />
+            <Stat label={t('adminAccepted', locale)} value={num(flow.receivedAccepted)} />
+            <Stat label={t('adminDeclined', locale)} value={num(flow.receivedDeclined)} />
+            <Stat label={t('adminOpen', locale)} value={num(flow.receivedOpen)} />
           </div>
         </>
       )}
@@ -1053,6 +1071,9 @@ const COMPLAINT_KEY: Readonly<Record<ComplaintCategory, ConsoleKey>> = {
 };
 
 function FeedbackSection({ data, now }: SectionProps): ReactNode {
+  const locale = useLocale();
+  const { num } = formattersFor(locale);
+  const numerals = numeralsFor(locale);
   const { summary, complaints } = data.feedback;
 
   const scoreOf = (category: ComplaintCategory): number | null => {
@@ -1068,23 +1089,23 @@ function FeedbackSection({ data, now }: SectionProps): ReactNode {
         <Empty />
       ) : (
         <>
-          <Stat label={t('adminFeedbackResponses', LOCALE)} value={num(summary.responses)} />
+          <Stat label={t('adminFeedbackResponses', locale)} value={num(summary.responses)} />
 
           <Card>
             <table className="w-full text-body-sm">
               <thead>
                 <tr className="text-left text-caption text-ink-muted">
                   <th scope="col" className="pb-2 font-normal">
-                    {t('adminFeedbackCategory', LOCALE)}
+                    {t('adminFeedbackCategory', locale)}
                   </th>
                   <th scope="col" className="pb-2 text-right font-normal">
-                    {t('adminFeedbackScore', LOCALE)}
+                    {t('adminFeedbackScore', locale)}
                   </th>
                   <th scope="col" className="pb-2 text-right font-normal">
-                    {t('adminAnswered', LOCALE)}
+                    {t('adminAnswered', locale)}
                   </th>
                   <th scope="col" className="pb-2 text-right font-normal">
-                    {t('adminComplaints', LOCALE)}
+                    {t('adminComplaints', locale)}
                   </th>
                 </tr>
               </thead>
@@ -1094,12 +1115,12 @@ function FeedbackSection({ data, now }: SectionProps): ReactNode {
                   return (
                     <tr key={complaint.category} className="border-t border-line-hairline">
                       <th scope="row" className="py-2 text-left font-normal">
-                        {t(COMPLAINT_KEY[complaint.category], LOCALE)}
+                        {t(COMPLAINT_KEY[complaint.category], locale)}
                       </th>
                       <td className="py-2 text-right tabular-nums">
                         {score === null
                           ? '—'
-                          : formatNumber(score, NUMERALS, {
+                          : formatNumber(score, numerals, {
                               minimumFractionDigits: 1,
                               maximumFractionDigits: 1,
                             })}
@@ -1121,7 +1142,7 @@ function FeedbackSection({ data, now }: SectionProps): ReactNode {
           {/* `FR-PAT-83`'s form is not built, so every row here came from the
               seeds. Saying so is the difference between demonstration data and
               a claim about real patients (`FR-DEM-07`). */}
-          <p className="text-body-sm text-ink-muted">{t('adminFeedbackSeededOnly', LOCALE)}</p>
+          <p className="text-body-sm text-ink-muted">{t('adminFeedbackSeededOnly', locale)}</p>
         </>
       )}
     </Section>
@@ -1149,27 +1170,29 @@ const WEEKDAY_KEY: readonly ConsoleKey[] = [
 ];
 
 function ForecastSection({ data, now }: SectionProps): ReactNode {
+  const locale = useLocale();
+  const { num } = formattersFor(locale);
   return (
     <Section testId="admin-section-forecast" asOf={data.freshness.serverTs} now={now}>
       {data.forecast.length === 0 ? (
         <Empty />
       ) : (
         <Card>
-          <h2 className="text-title-sm">{t('adminForecastCaption', LOCALE)}</h2>
+          <h2 className="text-title-sm">{t('adminForecastCaption', locale)}</h2>
           <table className="mt-3 w-full text-body-sm">
             <thead>
               <tr className="text-left text-caption text-ink-muted">
                 <th scope="col" className="pb-2 font-normal">
-                  <span className="sr-only">{t('adminTabForecast', LOCALE)}</span>
+                  <span className="sr-only">{t('adminTabForecast', locale)}</span>
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminForecastExpected', LOCALE)}
+                  {t('adminForecastExpected', locale)}
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminForecastRange', LOCALE)}
+                  {t('adminForecastRange', locale)}
                 </th>
                 <th scope="col" className="pb-2 text-right font-normal">
-                  {t('adminObservations', LOCALE)}
+                  {t('adminObservations', locale)}
                 </th>
               </tr>
             </thead>
@@ -1180,14 +1203,14 @@ function ForecastSection({ data, now }: SectionProps): ReactNode {
                   className="border-t border-line-hairline"
                 >
                   <th scope="row" className="py-2 text-left font-normal">
-                    {t(WEEKDAY_KEY[point.weekday] ?? 'adminWeekday0', LOCALE)}
-                    <span className="pl-2 text-ink-muted">{t(SLOT_KEY[point.slot], LOCALE)}</span>
+                    {t(WEEKDAY_KEY[point.weekday] ?? 'adminWeekday0', locale)}
+                    <span className="pl-2 text-ink-muted">{t(SLOT_KEY[point.slot], locale)}</span>
                   </th>
                   <td className="py-2 text-right tabular-nums">
                     {/* Null below two observations. A staffing figure invented
                         from one Friday is a figure somebody could roster
                         against (`PRD.md` §3.2). */}
-                    {point.expected === null ? t('adminForecastThin', LOCALE) : num(point.expected)}
+                    {point.expected === null ? t('adminForecastThin', locale) : num(point.expected)}
                   </td>
                   <td className="py-2 text-right text-ink-muted tabular-nums">
                     {point.low === null || point.high === null
@@ -1217,27 +1240,31 @@ interface SectionProps {
 }
 
 function Shell({ children }: { readonly children: ReactNode }): ReactNode {
+  const locale = useLocale();
   const staffName = readDemoSession()?.staffName ?? null;
 
   return (
     <div className="min-h-screen">
       {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
       <p className="bg-warn-100 px-6 py-2 text-caption text-warn-700 print:hidden">
-        {t('demoBanner', LOCALE)}
+        {t('demoBanner', locale)}
       </p>
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 p-6" data-testid="admin-dashboard">
         <header className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <h1 className="text-title-lg">{t('adminTitle', LOCALE)}</h1>
+            <h1 className="text-title-lg">{t('adminTitle', locale)}</h1>
             {staffName === null ? null : <p className="text-body-sm text-ink-muted">{staffName}</p>}
           </div>
-          <a
-            href="/"
-            className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100 print:hidden"
-          >
-            {t('changeConsole', LOCALE)}
-          </a>
+          <div className="flex items-center gap-3 print:hidden">
+            <ConsoleLanguageSwitch className="" />
+            <a
+              href="/"
+              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
+            >
+              {t('changeConsole', locale)}
+            </a>
+          </div>
         </header>
 
         {children}
@@ -1258,18 +1285,20 @@ function Section({
   readonly now: Date;
   readonly children: ReactNode;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <section className="flex flex-col gap-4" data-testid={testId}>
       <FreshnessLine
         asOf={asOf === null ? null : new Date(asOf)}
         now={now}
         labels={{
-          justNow: t('updatedJustNow', LOCALE),
-          ago: t('updatedAgo', LOCALE),
-          never: t('adminNeverRecorded', LOCALE),
-          stale: t('staleWarning', LOCALE),
+          justNow: t('updatedJustNow', locale),
+          ago: t('updatedAgo', locale),
+          never: t('adminNeverRecorded', locale),
+          stale: t('staleWarning', locale),
         }}
-        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+        formatMinutes={(value) => formatAge(value, locale, numerals)}
       />
       {children}
     </section>
@@ -1304,10 +1333,11 @@ function Stat({
 }
 
 function Empty({ hint }: { readonly hint?: string }): ReactNode {
+  const locale = useLocale();
   return (
     <Card data-testid="admin-empty">
-      <p className="text-body-md text-ink-secondary">{t('adminNothingYet', LOCALE)}</p>
-      <p className="mt-1 text-body-sm text-ink-muted">{hint ?? t('adminNothingYetHint', LOCALE)}</p>
+      <p className="text-body-md text-ink-secondary">{t('adminNothingYet', locale)}</p>
+      <p className="mt-1 text-body-sm text-ink-muted">{hint ?? t('adminNothingYetHint', locale)}</p>
     </Card>
   );
 }
@@ -1333,31 +1363,54 @@ function DashboardSkeleton(): ReactNode {
 // Formatting
 // ---------------------------------------------------------------------------
 
-function num(value: number): string {
-  return formatNumber(value, NUMERALS);
-}
+/**
+ * The figures on this screen, in the language it is being read in.
+ *
+ * Built from the locale on each render, so a component destructures the
+ * ones it uses and every call site reads as it did when the screen was
+ * Bangla-only.
+ */
+function formattersFor(locale: Locale) {
+  const numerals = numeralsFor(locale);
 
-function taka(poisha: number): string {
-  // Chart ticks and tooltips hand back whatever the axis computed, which is
-  // not always a whole number of poisha.
-  return formatTaka(Math.round(poisha), NUMERALS);
-}
+  function num(value: number): string {
+    return formatNumber(value, numerals);
+  }
 
-function minutes(value: number | null): string {
-  if (value === null) return '—';
-  return `${num(value)} ${t('minutesShort', LOCALE)}`;
-}
+  function taka(poisha: number): string {
+    // Chart ticks and tooltips hand back whatever the axis computed, which is
+    // not always a whole number of poisha.
+    return formatTaka(Math.round(poisha), numerals);
+  }
 
-function hours(value: number | null): string {
-  if (value === null) return '—';
-  return `${num(value)} ${t('adminHours', LOCALE)}`;
-}
+  function minutes(value: number | null): string {
+    if (value === null) return '—';
+    return `${num(value)} ${t('minutesShort', locale)}`;
+  }
 
-function percent(rate: number | null): string {
-  if (rate === null) return '—';
-  return `${num(Math.round(rate * 100))}%`;
-}
+  function hours(value: number | null): string {
+    if (value === null) return '—';
+    return `${num(value)} ${t('adminHours', locale)}`;
+  }
 
+  function percent(rate: number | null): string {
+    if (rate === null) return '—';
+    return `${num(Math.round(rate * 100))}%`;
+  }
+
+  /** `DD/MM`, which is as much as an axis tick can carry. */
+  function shortDate(iso: string): string {
+    const [, month, day] = iso.split('-');
+    if (month === undefined || day === undefined) return iso;
+    return `${num(Number(day))}/${num(Number(month))}`;
+  }
+
+  function bedKind(kind: string): string {
+    return kind in BED_KIND_NAMES ? bedKindName(kind as BedKindName, locale) : kind;
+  }
+
+  return { num, taka, minutes, hours, percent, shortDate, bedKind };
+}
 /** Recharts hands a tooltip value as a number, a string or an array. */
 function asNumber(value: unknown): number {
   return typeof value === 'number' ? value : Number(value);
@@ -1373,15 +1426,4 @@ function everyDay(from: string, to: string): string[] {
     at.setUTCDate(at.getUTCDate() + 1);
   }
   return dates;
-}
-
-/** `DD/MM`, which is as much as an axis tick can carry. */
-function shortDate(iso: string): string {
-  const [, month, day] = iso.split('-');
-  if (month === undefined || day === undefined) return iso;
-  return `${num(Number(day))}/${num(Number(month))}`;
-}
-
-function bedKind(kind: string): string {
-  return kind in BED_KIND_NAMES ? bedKindName(kind as BedKindName, LOCALE) : kind;
 }

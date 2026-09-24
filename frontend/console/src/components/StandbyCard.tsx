@@ -50,6 +50,7 @@ import {
   formatTaka,
   t,
   type Locale,
+  numeralsFor,
 } from '@platform/i18n';
 import { Card, useToast } from '@platform/ui';
 
@@ -57,9 +58,6 @@ import { ActionButton } from '@/components/ActionButton';
 import { standbyApi, type StandbyPanel } from '@/lib/standby';
 
 import type { ReactNode } from 'react';
-
-/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
-const NUMERALS = 'bengali' as const;
 
 /**
  * How often the panel is re-read while an offer is outstanding.
@@ -97,6 +95,7 @@ export function StandbyCard({
   readonly apiBaseUrl: string;
   readonly getToken: () => string | null;
 }): ReactNode {
+  const numerals = numeralsFor(locale);
   const { show } = useToast();
   const api = useMemo(() => standbyApi(apiBaseUrl, getToken), [apiBaseUrl, getToken]);
 
@@ -158,7 +157,7 @@ export function StandbyCard({
 
   const serialOf = (bookingId: string | null): string => {
     const entry = state.entries.find((candidate) => candidate.bookingId === bookingId);
-    return entry === undefined ? '—' : formatSerial(entry.serial, 'bengali');
+    return entry === undefined ? '—' : formatSerial(entry.serial, numerals);
   };
 
   const recoveredOf = (offerId: string): number | null =>
@@ -210,7 +209,7 @@ export function StandbyCard({
       <p className="text-caption text-ink-muted">{t('standbyTitle', locale)}</p>
       <p className="mt-1 text-title-sm tabular-nums" data-testid="standby-waiting">
         {format('standbyCount', locale, {
-          count: waiting === null ? '—' : formatNumber(waiting, NUMERALS),
+          count: waiting === null ? '—' : formatNumber(waiting, numerals),
         })}
       </p>
       {/* `FR-PAT-26`: offering a chair to somebody who paid seats them without
@@ -218,7 +217,7 @@ export function StandbyCard({
       {prepaidCount === 0 ? null : (
         <p className="text-caption text-brand-700" data-testid="standby-prepaid-count">
           {format('standbyPrepaidCount', locale, {
-            count: formatNumber(prepaidCount, NUMERALS),
+            count: formatNumber(prepaidCount, numerals),
           })}
         </p>
       )}
@@ -228,7 +227,7 @@ export function StandbyCard({
           <li key={entry.bookingId} className="flex flex-col gap-2" data-testid="standby-freed">
             <p className="text-body-sm">
               {format('standbyFreedSerial', locale, {
-                serial: formatSerial(entry.serial, 'bengali'),
+                serial: formatSerial(entry.serial, numerals),
               })}
             </p>
             {/* Nobody to give it to is a sentence, not a button that cannot be
@@ -264,7 +263,7 @@ export function StandbyCard({
               {t('standbyWaitingFor', locale)}{' '}
               <span className="tabular-nums">
                 {format('standbyAnswerBy', locale, {
-                  time: formatClock(pending.expiresAt, NUMERALS),
+                  time: formatClock(pending.expiresAt, numerals),
                 })}
               </span>
             </p>
@@ -295,7 +294,7 @@ export function StandbyCard({
                 <span className="tabular-nums">
                   {' · '}
                   {format('standbyRecoveredAmount', locale, {
-                    amount: formatTaka(recovered, NUMERALS),
+                    amount: formatTaka(recovered, numerals),
                   })}
                 </span>
               )}

@@ -54,8 +54,9 @@ import {
   formatTaka,
   symptomSignalName,
   t,
-  type Locale,
   formatAge,
+  numeralsFor,
+  localName,
 } from '@platform/i18n';
 import {
   Button,
@@ -66,9 +67,11 @@ import {
   Input,
   ToastProvider,
   useToast,
+  useLocale,
 } from '@platform/ui';
 
 import { ConsentScan } from '@/components/ConsentScan';
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { PatientPanel } from '@/components/PatientPanel';
 import { useSessionQueue } from '@/hooks/useSessionQueue';
@@ -83,11 +86,6 @@ import {
 } from '@/lib/visits';
 
 import type { ReactNode } from 'react';
-
-const LOCALE: Locale = 'bn';
-
-/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
-const NUMERALS = 'bengali' as const;
 
 /** `SEL-B05-FOLLOWUP`: "7/14/30 days or date". */
 const FOLLOW_UP_CHOICES = [7, 14, 30] as const;
@@ -105,6 +103,8 @@ export function DoctorConsole(): ReactNode {
 }
 
 function DoctorBody(): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const { show } = useToast();
   const sessionId = useSessionId();
   const [now, setNow] = useState(() => new Date());
@@ -129,9 +129,9 @@ function DoctorBody(): ReactNode {
 
   useEffect(() => {
     if (queue.lastConflict === null) return;
-    show({ title: t('conflictRolledBack', LOCALE), tone: 'caution' });
+    show({ title: t('conflictRolledBack', locale), tone: 'caution' });
     queue.clearConflict();
-  }, [queue, show]);
+  }, [queue, show, locale]);
 
   /**
    * The chamber's fee, for `FR-DOC-09`.
@@ -249,12 +249,12 @@ function DoctorBody(): ReactNode {
             });
           } catch {
             testsSent = false;
-            show({ title: t('testsNotSent', LOCALE), tone: 'caution' });
+            show({ title: t('testsNotSent', locale), tone: 'caution' });
           }
         }
 
         if (!sign) {
-          if (testsSent) show({ title: t('draftSaved', LOCALE), tone: 'positive' });
+          if (testsSent) show({ title: t('draftSaved', locale), tone: 'positive' });
           return;
         }
 
@@ -264,10 +264,10 @@ function DoctorBody(): ReactNode {
         show({
           title:
             called === undefined
-              ? t('signedNobodyLeft', LOCALE)
-              : t('signedAndCalled', LOCALE).replace(
+              ? t('signedNobodyLeft', locale)
+              : t('signedAndCalled', locale).replace(
                   '{serial}',
-                  formatNumber(called.serial, NUMERALS),
+                  formatNumber(called.serial, numerals),
                 ),
           tone: 'positive',
         });
@@ -278,11 +278,11 @@ function DoctorBody(): ReactNode {
         setBusy(false);
       }
     },
-    [servingBookingId, draft, testKey, show],
+    [servingBookingId, draft, testKey, show, locale],
   );
 
   if (sessionId === null) {
-    return <p className="p-6 text-body-md text-ink-muted">{t('loading', LOCALE)}</p>;
+    return <p className="p-6 text-body-md text-ink-muted">{t('loading', locale)}</p>;
   }
 
   return (
@@ -298,7 +298,7 @@ function DoctorBody(): ReactNode {
         now={now}
         onDelay={() => {
           void queue.act('DELAY_DECLARED', { minutes: 30, reason: null, declaredBy: 'doctor' });
-          show({ title: t('declareDelay', LOCALE), tone: 'positive' });
+          show({ title: t('declareDelay', locale), tone: 'positive' });
         }}
         busy={queue.loading}
       />
@@ -308,7 +308,7 @@ function DoctorBody(): ReactNode {
         <div className="flex min-w-0 flex-col gap-5">
           {serving === null ? (
             <Card>
-              <p className="text-body-md text-ink-secondary">{t('nobodyToSee', LOCALE)}</p>
+              <p className="text-body-md text-ink-secondary">{t('nobodyToSee', locale)}</p>
             </Card>
           ) : (
             <PatientPanel entry={serving} />
@@ -343,7 +343,7 @@ function DoctorBody(): ReactNode {
             pendingCount={queue.pendingCount}
             lastServerTs={queue.lastServerTs}
             stuckCount={0}
-            locale={LOCALE}
+            locale={locale}
             now={now}
           />
         </div>
@@ -383,42 +383,44 @@ function SessionHeader({
   readonly onDelay: () => void;
   readonly busy: boolean;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const late = delayMinutes > 0;
 
   return (
     <header className="border-b border-line bg-surface">
       <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-3 p-5">
         <div className="min-w-0">
-          <h1 className="font-reading text-title-md">{t('doctorConsole', LOCALE)}</h1>
+          <h1 className="font-reading text-title-md">{t('doctorConsole', locale)}</h1>
           <p className="text-body-sm tabular-nums text-ink-muted">
             {plannedStart === null || plannedEnd === null
-              ? t('notStarted', LOCALE)
-              : `${t('plannedWindow', LOCALE)} ${formatClock(plannedStart, NUMERALS)}–${formatClock(plannedEnd, NUMERALS)}`}
+              ? t('notStarted', locale)
+              : `${t('plannedWindow', locale)} ${formatClock(plannedStart, numerals)}–${formatClock(plannedEnd, numerals)}`}
           </p>
         </div>
 
         {/* A11Y-03: the state is a word, never only a colour. */}
         <Chip tone={late ? 'caution' : 'positive'}>
           {late
-            ? `${t('runningLate', LOCALE)} · ${formatNumber(delayMinutes, NUMERALS)} ${t('minutesShort', LOCALE)}`
-            : t('onTime', LOCALE)}
+            ? `${t('runningLate', locale)} · ${formatNumber(delayMinutes, numerals)} ${t('minutesShort', locale)}`
+            : t('onTime', locale)}
         </Chip>
 
         <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <Stat label={t('countSeen', LOCALE)} value={counts === null ? null : counts.done} />
-          <Stat label={t('countWaiting', LOCALE)} value={counts === null ? null : counts.waiting} />
+          <Stat label={t('countSeen', locale)} value={counts === null ? null : counts.done} />
+          <Stat label={t('countWaiting', locale)} value={counts === null ? null : counts.waiting} />
           <Stat
-            label={t('currentRate', LOCALE)}
+            label={t('currentRate', locale)}
             value={avgConsultSeconds === null ? null : Math.round(avgConsultSeconds / 60)}
-            unit={t('minutesShort', LOCALE)}
+            unit={t('minutesShort', locale)}
           />
           {/* `FR-DOC-09` session earnings: what has actually been seen, at this
               chamber's fee. Absent rather than zero when the fee is unknown. */}
           {feePoisha === null || counts === null ? null : (
             <div>
-              <dt className="text-caption text-ink-muted">{t('sessionEarnings', LOCALE)}</dt>
+              <dt className="text-caption text-ink-muted">{t('sessionEarnings', locale)}</dt>
               <dd className="text-title-sm font-semibold tabular-nums">
-                {formatTaka(feePoisha * counts.done, NUMERALS)}
+                {formatTaka(feePoisha * counts.done, numerals)}
               </dd>
             </div>
           )}
@@ -434,18 +436,19 @@ function SessionHeader({
           asOf={lastServerTs === null ? null : new Date(lastServerTs)}
           now={now}
           labels={{
-            justNow: t('updatedJustNow', LOCALE),
-            ago: t('updatedAgo', LOCALE),
-            never: t('neverSynced', LOCALE),
-            stale: t('staleWarning', LOCALE),
+            justNow: t('updatedJustNow', locale),
+            ago: t('updatedAgo', locale),
+            never: t('neverSynced', locale),
+            stale: t('staleWarning', locale),
           }}
-          formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+          formatMinutes={(value) => formatAge(value, locale, numerals)}
         />
 
-        <div className="ms-auto">
+        <div className="ms-auto flex items-center gap-3">
           <Button variant="secondary" size="sm" onClick={onDelay} loading={busy}>
-            {t('declareDelay', LOCALE)}
+            {t('declareDelay', locale)}
           </Button>
+          <ConsoleLanguageSwitch className="" />
         </div>
       </div>
     </header>
@@ -461,11 +464,13 @@ function Stat({
   readonly value: number | null;
   readonly unit?: string;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <div>
       <dt className="text-caption text-ink-muted">{label}</dt>
       <dd className="text-title-sm font-semibold tabular-nums">
-        {value === null ? '—' : formatNumber(value, NUMERALS)}
+        {value === null ? '—' : formatNumber(value, numerals)}
         {unit === undefined || value === null ? '' : ` ${unit}`}
       </dd>
     </div>
@@ -499,10 +504,12 @@ function VisitNote({
   readonly onDraft: () => void;
   readonly onSign: () => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <Card>
       <div className="flex flex-col gap-4">
-        <h2 className="font-reading text-title-sm">{t('visitNote', LOCALE)}</h2>
+        <h2 className="font-reading text-title-sm">{t('visitNote', locale)}</h2>
 
         {failed ? (
           <p
@@ -510,13 +517,13 @@ function VisitNote({
             data-testid="visit-failed"
             className="rounded-sm bg-alert-100 px-3 py-2 text-body-sm text-alert-700"
           >
-            {t('visitSaveFailed', LOCALE)}
+            {t('visitSaveFailed', locale)}
           </p>
         ) : null}
 
         <Input
-          label={t('diagnosis', LOCALE)}
-          helper={t('diagnosisHint', LOCALE)}
+          label={t('diagnosis', locale)}
+          helper={t('diagnosisHint', locale)}
           density="console"
           data-testid="visit-diagnosis"
           value={draft.diagnosisText}
@@ -530,7 +537,7 @@ function VisitNote({
             a single-line field would hide most of what the patient will read. */}
         <div className="flex flex-col gap-2">
           <label htmlFor="advice" className="font-ui text-body-sm font-semibold text-ink">
-            {t('adviceBn', LOCALE)}
+            {t('adviceBn', locale)}
           </label>
           <textarea
             id="advice"
@@ -543,7 +550,7 @@ function VisitNote({
             }}
             className="w-full rounded-md border border-line-strong bg-surface p-3 text-body-md text-ink disabled:opacity-60"
           />
-          <p className="text-caption text-ink-muted">{t('adviceHint', LOCALE)}</p>
+          <p className="text-caption text-ink-muted">{t('adviceHint', locale)}</p>
         </div>
 
         {/* `BTN-B05-TEST` (`FR-DOC-06`). Absent when the hospital has no
@@ -551,7 +558,7 @@ function VisitNote({
         {catalogue.length > 0 ? (
           <fieldset className="flex flex-col gap-2" data-testid="visit-tests">
             <legend className="font-ui text-body-sm font-semibold text-ink">
-              {t('orderTests', LOCALE)}
+              {t('orderTests', locale)}
             </legend>
             <div className="flex flex-wrap gap-2">
               {catalogue.map((test) => {
@@ -569,16 +576,16 @@ function VisitNote({
                       });
                     }}
                   >
-                    {test.nameBn}
+                    {localName(locale, test.nameBn, test.nameEn)}
                   </FilterChip>
                 );
               })}
             </div>
             <p className="text-caption text-ink-muted">
               {draft.testCodes.length === 0
-                ? t('orderTestsHint', LOCALE)
-                : format('orderTestsCount', LOCALE, {
-                    count: formatNumber(draft.testCodes.length, NUMERALS),
+                ? t('orderTestsHint', locale)
+                : format('orderTestsCount', locale, {
+                    count: formatNumber(draft.testCodes.length, numerals),
                   })}
             </p>
           </fieldset>
@@ -591,11 +598,11 @@ function VisitNote({
             the record, and the patient's wallet does not show this. */}
         <fieldset className="flex flex-col gap-2" data-testid="visit-signal">
           <legend className="font-ui text-body-sm font-semibold text-ink">
-            {t('visitSignal', LOCALE)}
+            {t('visitSignal', locale)}
           </legend>
           <div className="flex flex-wrap gap-2">
             <FollowUpChoice
-              label={t('visitSignalNone', LOCALE)}
+              label={t('visitSignalNone', locale)}
               active={draft.symptomSignal === null}
               disabled={disabled}
               testId="visit-signal-none"
@@ -606,7 +613,7 @@ function VisitNote({
             {SYMPTOM_SIGNALS.map((signal) => (
               <FollowUpChoice
                 key={signal}
-                label={symptomSignalName(signal, LOCALE)}
+                label={symptomSignalName(signal, locale)}
                 active={draft.symptomSignal === signal}
                 disabled={disabled}
                 testId={`visit-signal-${signal}`}
@@ -616,16 +623,16 @@ function VisitNote({
               />
             ))}
           </div>
-          <p className="text-caption text-ink-muted">{t('visitSignalHint', LOCALE)}</p>
+          <p className="text-caption text-ink-muted">{t('visitSignalHint', locale)}</p>
         </fieldset>
 
         <fieldset className="flex flex-col gap-2">
           <legend className="font-ui text-body-sm font-semibold text-ink">
-            {t('followUp', LOCALE)}
+            {t('followUp', locale)}
           </legend>
           <div className="flex flex-wrap gap-2">
             <FollowUpChoice
-              label={t('followUpNone', LOCALE)}
+              label={t('followUpNone', locale)}
               active={draft.followUpDays === null}
               disabled={disabled}
               onSelect={() => {
@@ -635,7 +642,7 @@ function VisitNote({
             {FOLLOW_UP_CHOICES.map((days) => (
               <FollowUpChoice
                 key={days}
-                label={t('followUpDays', LOCALE).replace('{days}', formatNumber(days, NUMERALS))}
+                label={t('followUpDays', locale).replace('{days}', formatNumber(days, numerals))}
                 active={draft.followUpDays === days}
                 disabled={disabled}
                 onSelect={() => {
@@ -658,14 +665,14 @@ function VisitNote({
               variant="secondary"
               size="lg"
               disabled
-              disabledReason={t('nobodyToSee', LOCALE)}
+              disabledReason={t('nobodyToSee', locale)}
               data-testid="save-draft"
             >
-              {t('saveDraft', LOCALE)}
+              {t('saveDraft', locale)}
             </Button>
           ) : (
             <Button variant="secondary" size="lg" data-testid="save-draft" onClick={onDraft}>
-              {t('saveDraft', LOCALE)}
+              {t('saveDraft', locale)}
             </Button>
           )}
 
@@ -674,15 +681,15 @@ function VisitNote({
               size="lg"
               disabled
               disabledReason={
-                disabled ? t('nobodyToSee', LOCALE) : t('needSomethingToSign', LOCALE)
+                disabled ? t('nobodyToSee', locale) : t('needSomethingToSign', locale)
               }
               data-testid="sign-and-next"
             >
-              {t('signAndNext', LOCALE)}
+              {t('signAndNext', locale)}
             </Button>
           ) : (
             <Button size="lg" data-testid="sign-and-next" onClick={onSign}>
-              {t('signAndNext', LOCALE)}
+              {t('signAndNext', locale)}
             </Button>
           )}
         </div>
@@ -725,16 +732,18 @@ function FollowUpChoice({
 
 /** Who the doctor sees after this one. Three is enough to pace a chamber. */
 function UpNext({ waiting }: { readonly waiting: readonly QueueEntry[] }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   if (waiting.length === 0) return null;
 
   return (
     <Card>
       <div className="flex flex-col gap-3">
-        <h2 className="text-title-sm">{t('waitingNext', LOCALE)}</h2>
+        <h2 className="text-title-sm">{t('waitingNext', locale)}</h2>
         <ul className="flex flex-wrap gap-2">
           {waiting.slice(0, 3).map((entry) => (
             <li key={entry.bookingId}>
-              <Chip tone="neutral">{formatNumber(entry.serial, NUMERALS)}</Chip>
+              <Chip tone="neutral">{formatNumber(entry.serial, numerals)}</Chip>
             </li>
           ))}
         </ul>

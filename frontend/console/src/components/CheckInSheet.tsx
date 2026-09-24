@@ -17,13 +17,10 @@
 import { useEffect, useState } from 'react';
 
 import { MAX_QUOTED_WAIT_MINUTES, QUOTE_STEP_MINUTES } from '@platform/domain';
-import { format, formatNumber, formatSerial, t, type Locale } from '@platform/i18n';
+import { format, formatNumber, formatSerial, t, type Locale, numeralsFor } from '@platform/i18n';
 import { Button, Sheet, SheetActions } from '@platform/ui';
 
 import type { ReactNode } from 'react';
-
-/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
-const NUMERALS = 'bengali' as const;
 
 /** What to start from when the queue has no estimate for this patient. */
 const FALLBACK_QUOTE_MINUTES = 30;
@@ -43,6 +40,7 @@ export function CheckInSheet({
   readonly onConfirm: (quotedWaitMinutes: number) => void;
   readonly onClose: () => void;
 }): ReactNode {
+  const numerals = numeralsFor(locale);
   const [minutes, setMinutes] = useState(suggested ?? FALLBACK_QUOTE_MINUTES);
 
   // A new patient starts from their own estimate, not the last one's figure.
@@ -62,7 +60,7 @@ export function CheckInSheet({
       }}
       variant="modal"
       title={format('checkInTitle', locale, {
-        serial: serial === null ? '' : formatSerial(serial, 'bengali'),
+        serial: serial === null ? '' : formatSerial(serial, numerals),
       })}
       description={t('checkInDescription', locale)}
     >
@@ -86,7 +84,7 @@ export function CheckInSheet({
             className="min-w-32 text-center text-title-lg tabular-nums"
             data-testid="check-in-minutes"
           >
-            {format('checkInMinutes', locale, { minutes: formatNumber(minutes, NUMERALS) })}
+            {format('checkInMinutes', locale, { minutes: formatNumber(minutes, numerals) })}
           </p>
           <Button
             variant="secondary"

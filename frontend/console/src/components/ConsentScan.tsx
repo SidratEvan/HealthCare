@@ -23,8 +23,8 @@
 
 import { useCallback, useState } from 'react';
 
-import { format, formatDateTime, t, type Locale } from '@platform/i18n';
-import { Button, Card, Input } from '@platform/ui';
+import { format, formatDateTime, t, numeralsFor } from '@platform/i18n';
+import { Button, Card, Input, useLocale } from '@platform/ui';
 
 import { Absent, PastVisits } from '@/components/PatientPanel';
 import { readDemoSession } from '@/lib/demo';
@@ -38,10 +38,6 @@ import {
 
 import type { ReactNode } from 'react';
 
-const LOCALE: Locale = 'bn';
-/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
-const NUMERALS = 'bengali' as const;
-
 type State =
   | { readonly kind: 'entering'; readonly problem: 'invalid' | 'failed' | null }
   | { readonly kind: 'opening' }
@@ -53,6 +49,8 @@ type State =
     };
 
 export function ConsentScan(): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [code, setCode] = useState('');
   const [state, setState] = useState<State>({ kind: 'entering', problem: null });
 
@@ -94,9 +92,9 @@ export function ConsentScan(): ReactNode {
         <div className="flex flex-col gap-4" data-testid="consented-records">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <p className="text-body-md font-semibold" data-testid="consent-granted">
-              {format('consentGranted', LOCALE, {
+              {format('consentGranted', locale, {
                 name: state.consent.patientName,
-                time: formatDateTime(state.consent.expiresAt, NUMERALS),
+                time: formatDateTime(state.consent.expiresAt, numerals),
               })}
             </p>
             <Button
@@ -106,13 +104,13 @@ export function ConsentScan(): ReactNode {
                 setState({ kind: 'entering', problem: null });
               }}
             >
-              {t('closeRecords', LOCALE)}
+              {t('closeRecords', locale)}
             </Button>
           </div>
 
           {state.records === null ? (
             <p role="status" className="text-body-sm text-alert-700">
-              {t('loadFailed', LOCALE)}
+              {t('loadFailed', locale)}
             </p>
           ) : (
             <>
@@ -137,18 +135,18 @@ export function ConsentScan(): ReactNode {
           if (ready) void open();
         }}
       >
-        <h2 className="text-title-sm">{t('scanTitle', LOCALE)}</h2>
+        <h2 className="text-title-sm">{t('scanTitle', locale)}</h2>
 
         <Input
-          label={t('consentCode', LOCALE)}
-          helper={t('scanHint', LOCALE)}
+          label={t('consentCode', locale)}
+          helper={t('scanHint', locale)}
           density="console"
           autoComplete="off"
           spellCheck={false}
           data-testid="consent-code-input"
           value={code}
           {...(state.kind === 'entering' && state.problem === 'invalid'
-            ? { error: t('codeInvalid', LOCALE) }
+            ? { error: t('codeInvalid', locale) }
             : {})}
           onChange={(event) => {
             setCode(event.target.value);
@@ -157,7 +155,7 @@ export function ConsentScan(): ReactNode {
 
         {state.kind === 'entering' && state.problem === 'failed' ? (
           <p role="alert" className="text-body-sm text-alert-700">
-            {t('loadFailed', LOCALE)}
+            {t('loadFailed', locale)}
           </p>
         ) : null}
 
@@ -169,11 +167,11 @@ export function ConsentScan(): ReactNode {
               loading={state.kind === 'opening'}
               data-testid="open-consented-records"
             >
-              {t('openRecords', LOCALE)}
+              {t('openRecords', locale)}
             </Button>
           ) : (
-            <Button variant="secondary" disabled disabledReason={t('needCode', LOCALE)}>
-              {t('openRecords', LOCALE)}
+            <Button variant="secondary" disabled disabledReason={t('needCode', locale)}>
+              {t('openRecords', locale)}
             </Button>
           )}
         </div>

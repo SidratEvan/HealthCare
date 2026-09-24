@@ -34,10 +34,10 @@ import {
   t,
   triageName,
   type Locale,
+  numeralsFor,
+  localName,
 } from '@platform/i18n';
 import { Button, Chip, FilterChip, Input, Sheet, SheetActions } from '@platform/ui';
-
-import { NUMERALS } from '@/lib/bedCopy';
 
 import type { WalkInInput } from '@/hooks/useEmergencyConsole';
 import type { SuggestedHospital } from '@/lib/emergency';
@@ -241,6 +241,7 @@ export function DeclineSheet({
   readonly onDecline: (entry: EmergencyCaseView, reason: string) => void;
   readonly fetchSuggestions: (problem: EmergencyProblem) => Promise<readonly SuggestedHospital[]>;
 }): ReactNode {
+  const numerals = numeralsFor(locale);
   const [reason, setReason] = useState('');
   const [tried, setTried] = useState(false);
   const [declined, setDeclined] = useState(false);
@@ -289,13 +290,15 @@ export function DeclineSheet({
                   className="flex items-center justify-between gap-3 rounded-sm bg-sunken p-3 font-ui"
                 >
                   <div className="min-w-0">
-                    <p className="text-body-md text-ink">{hospital.nameBn}</p>
+                    <p className="text-body-md text-ink">
+                      {localName(locale, hospital.nameBn, hospital.nameEn)}
+                    </p>
                     <p className="text-caption tabular-nums text-ink-muted">
                       {hospital.distanceKm === null
                         ? ''
-                        : `${format('erDistanceKm', locale, { km: formatNumber(hospital.distanceKm, NUMERALS) })} · `}
+                        : `${format('erDistanceKm', locale, { km: formatNumber(hospital.distanceKm, numerals) })} · `}
                       {format('erLoad', locale, {
-                        count: formatNumber(hospital.erLoad, NUMERALS),
+                        count: formatNumber(hospital.erLoad, numerals),
                       })}
                       {hospital.freshness.stale ? ` · ${t('staleWarning', locale)}` : ''}
                     </p>

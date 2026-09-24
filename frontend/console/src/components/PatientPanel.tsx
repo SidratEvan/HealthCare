@@ -24,19 +24,16 @@
 import { useEffect, useState } from 'react';
 
 import type { QueueEntry } from '@platform/domain';
-import { formatDateTime, formatNumber, t, type Locale } from '@platform/i18n';
-import { Card, Chip } from '@platform/ui';
+import { formatDateTime, formatNumber, t, numeralsFor, localName } from '@platform/i18n';
+import { Card, Chip, useLocale } from '@platform/ui';
 
 import { readDemoSession } from '@/lib/demo';
 import { fetchRecords, type PatientRecords } from '@/lib/visits';
 
 import type { ReactNode } from 'react';
 
-const LOCALE: Locale = 'bn';
-/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
-const NUMERALS = 'bengali' as const;
-
 export function PatientPanel({ entry }: { readonly entry: QueueEntry }): ReactNode {
+  const locale = useLocale();
   const [records, setRecords] = useState<PatientRecords | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -75,7 +72,7 @@ export function PatientPanel({ entry }: { readonly entry: QueueEntry }): ReactNo
           // GR-03's error state. The serial is still correct and still useful,
           // so the panel degrades to it rather than disappearing.
           <p role="status" className="text-body-sm text-alert-700">
-            {t('loadFailed', LOCALE)}
+            {t('loadFailed', locale)}
           </p>
         ) : records === null ? (
           <div aria-busy="true" className="flex flex-col gap-2">
@@ -102,29 +99,31 @@ function Header({
   readonly entry: QueueEntry;
   readonly records: PatientRecords | null;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const patient = records?.patient;
 
   return (
     <div className="flex items-start gap-4">
       <span className="flex size-14 shrink-0 items-center justify-center rounded-pill bg-brand-600 text-title-md font-bold tabular-nums text-white">
-        {formatNumber(entry.serial, NUMERALS)}
+        {formatNumber(entry.serial, numerals)}
       </span>
 
       <div className="min-w-0 flex-1">
         <h2 className="truncate font-reading text-title-md">
-          {patient?.fullName ?? t('patientPanel', LOCALE)}
+          {patient?.fullName ?? t('patientPanel', locale)}
         </h2>
 
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm text-ink-secondary">
           {patient?.ageYears === null || patient?.ageYears === undefined ? null : (
             <span className="tabular-nums">
-              {formatNumber(patient.ageYears, NUMERALS)} {t('years', LOCALE)}
+              {formatNumber(patient.ageYears, numerals)} {t('years', locale)}
             </span>
           )}
-          {patient === undefined ? null : <span>{t(sexKey(patient.sex), LOCALE)}</span>}
+          {patient === undefined ? null : <span>{t(sexKey(patient.sex), locale)}</span>}
           {patient?.bloodGroup === null || patient?.bloodGroup === undefined ? null : (
             <span>
-              {t('bloodGroup', LOCALE)} {patient.bloodGroup}
+              {t('bloodGroup', locale)} {patient.bloodGroup}
             </span>
           )}
         </div>
@@ -135,12 +134,13 @@ function Header({
 
 /** The pre-visit answers (`MOD-A07-INTAKE`), warnings first. */
 function Intake({ records }: { readonly records: PatientRecords }): ReactNode {
+  const locale = useLocale();
   const intake = records.intake;
 
   if (!intake?.asked) {
     return (
       <p data-testid="intake-not-asked" className="text-body-sm text-warn-700">
-        {t('intakeNotAsked', LOCALE)}
+        {t('intakeNotAsked', locale)}
       </p>
     );
   }
@@ -150,23 +150,23 @@ function Intake({ records }: { readonly records: PatientRecords }): ReactNode {
       {/* Allergies first, and in the alert tone when there are any: this is the
           line that changes what a doctor may safely prescribe. */}
       <Row
-        label={t('allergies', LOCALE)}
+        label={t('allergies', locale)}
         values={intake.allergiesBn}
         tone={intake.allergiesBn.length > 0 ? 'alert' : 'neutral'}
         testId="intake-allergies"
       />
       <Row
-        label={t('chronicConditions', LOCALE)}
+        label={t('chronicConditions', locale)}
         values={intake.conditionsBn}
         tone={intake.conditionsBn.length > 0 ? 'caution' : 'neutral'}
       />
-      <Row label={t('currentMedicines', LOCALE)} values={intake.medicinesBn} />
+      <Row label={t('currentMedicines', locale)} values={intake.medicinesBn} />
 
       {intake.complaintBn === null ? null : (
-        <Field label={t('chiefComplaint', LOCALE)} value={intake.complaintBn} />
+        <Field label={t('chiefComplaint', locale)} value={intake.complaintBn} />
       )}
       {intake.durationBn === null ? null : (
-        <Field label={t('symptomDuration', LOCALE)} value={intake.durationBn} />
+        <Field label={t('symptomDuration', locale)} value={intake.durationBn} />
       )}
     </div>
   );
@@ -189,11 +189,12 @@ function Row({
   readonly tone?: 'neutral' | 'caution' | 'alert';
   readonly testId?: string;
 }): ReactNode {
+  const locale = useLocale();
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2" data-testid={testId}>
       <span className="text-caption text-ink-muted">{label}</span>
       {values.length === 0 ? (
-        <span className="text-body-sm text-ink-muted">{t('noneDeclared', LOCALE)}</span>
+        <span className="text-body-sm text-ink-muted">{t('noneDeclared', locale)}</span>
       ) : (
         <span className="flex flex-wrap gap-2">
           {values.map((value) => (
@@ -218,26 +219,29 @@ function Field({ label, value }: { readonly label: string; readonly value: strin
 
 /** `FR-DOC-03`'s "last visits", newest first. Also what a consent code opens. */
 export function PastVisits({ records }: { readonly records: PatientRecords }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <section className="flex flex-col gap-2 border-t border-line pt-4">
-      <h3 className="text-body-sm font-semibold">{t('pastVisits', LOCALE)}</h3>
+      <h3 className="text-body-sm font-semibold">{t('pastVisits', locale)}</h3>
 
       {records.visits.length === 0 ? (
-        <p className="text-body-sm text-ink-muted">{t('noPastVisits', LOCALE)}</p>
+        <p className="text-body-sm text-ink-muted">{t('noPastVisits', locale)}</p>
       ) : (
         <ul className="flex flex-col gap-2" data-testid="past-visits">
           {records.visits.slice(0, 5).map((visit) => (
             <li key={visit.id} className="rounded-sm bg-surface p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="text-body-sm font-semibold">
-                  {visit.diagnosisText ?? t('noneDeclared', LOCALE)}
+                  {visit.diagnosisText ?? t('noneDeclared', locale)}
                 </span>
                 <span className="text-caption tabular-nums text-ink-muted">
-                  {formatDateTime(visit.visitedAt, NUMERALS)}
+                  {formatDateTime(visit.visitedAt, numerals)}
                 </span>
               </div>
               <p className="text-caption text-ink-muted">
-                {visit.doctorNameBn} · {visit.departmentNameBn}
+                {localName(locale, visit.doctorNameBn, visit.doctorNameEn)} ·{' '}
+                {localName(locale, visit.departmentNameBn, visit.departmentNameEn)}
               </p>
               {visit.adviceTextBn === null ? null : (
                 <p className="mt-1 text-body-sm text-ink-secondary">{visit.adviceTextBn}</p>
@@ -259,13 +263,14 @@ export function PastVisits({ records }: { readonly records: PatientRecords }): R
  * statement the product cannot support (`PRD.md` §3.2, `FR-OFF-05`).
  */
 export function Absent({ records }: { readonly records: PatientRecords }): ReactNode {
+  const locale = useLocale();
   if (records.absent.length === 0) return null;
 
   return (
     <p data-testid="panel-absent" className="text-caption text-ink-muted">
       {records.absent
         .map((what) =>
-          what === 'prescriptions' ? t('prescriptionsAbsent', LOCALE) : t('reportsAbsent', LOCALE),
+          what === 'prescriptions' ? t('prescriptionsAbsent', locale) : t('reportsAbsent', locale),
         )
         .join(' · ')}
     </p>

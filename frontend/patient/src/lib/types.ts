@@ -35,6 +35,7 @@ export interface HospitalCard {
    * Latin line under every Bangla name on the list.
    */
   readonly addressBn?: string | null;
+  readonly addressEn?: string | null;
   readonly distanceKm: number | null;
   readonly capabilities: readonly string[];
   readonly capabilityAsOf: string | null;
@@ -83,6 +84,7 @@ export interface HospitalDoctorCard {
   readonly degrees: string | null;
   readonly departmentCode: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   readonly feePoisha: number;
   readonly room: string | null;
   readonly bmdcVerifiedAt: string | null;
@@ -115,8 +117,10 @@ export interface SessionCard {
   readonly id: string;
   readonly hospitalId: string;
   readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
   readonly doctorId: string;
   readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
   readonly departmentCode: string;
   readonly sessionDate: string;
   readonly plannedStart: string;
@@ -208,8 +212,11 @@ export interface VisitRecord {
   readonly followUpDate: string | null;
   readonly signedAt: string | null;
   readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
   readonly serial: number;
   readonly visitedAt: string;
 }
@@ -297,6 +304,7 @@ export interface ConsentGrant {
   readonly id: string;
   readonly hospitalId: string;
   readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
   readonly scope: string;
   readonly grantedAt: string;
   readonly expiresAt: string | null;
@@ -308,6 +316,7 @@ export interface ConsentGrant {
 export interface AccessView {
   readonly at: string;
   readonly hospitalNameBn: string | null;
+  readonly hospitalNameEn: string | null;
   readonly staffName: string | null;
 }
 
@@ -348,6 +357,7 @@ export interface EmergencyResult {
   readonly nameBn: string;
   readonly nameEn: string;
   readonly addressBn: string | null;
+  readonly addressEn: string | null;
   readonly lat: number | null;
   readonly lng: number | null;
   readonly emergencyPhone: string | null;
@@ -396,6 +406,7 @@ export interface EmergencyCaseStatus {
     readonly nameBn: string;
     readonly nameEn: string;
     readonly addressBn: string | null;
+    readonly addressEn: string | null;
     readonly lat: number | null;
     readonly lng: number | null;
     readonly emergencyPhone: string | null;
@@ -431,7 +442,9 @@ export interface StandbyStatusView {
   readonly sessionId: string;
   readonly state: 'waiting' | 'offered' | 'seated' | 'left';
   readonly doctorNameBn: string | null;
+  readonly doctorNameEn: string | null;
   readonly hospitalNameBn: string | null;
+  readonly hospitalNameEn: string | null;
   readonly plannedStart: string | null;
   readonly feePoisha: number;
   readonly position: number;

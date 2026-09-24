@@ -33,8 +33,10 @@ import {
   tp,
   type PatientKey,
   formatAge,
+  numeralsFor,
+  localName,
 } from '@platform/i18n';
-import { FreshnessLine } from '@platform/ui';
+import { FreshnessLine, useLocale } from '@platform/ui';
 
 import { TabScreen } from '@/components/TabScreen';
 import { useNow } from '@/hooks/useNow';
@@ -42,8 +44,6 @@ import { trackBedRequest } from '@/lib/api';
 
 import type { BedRequestView } from '@/lib/types';
 
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
 const REFRESH_MS = 20_000;
 
 const STATE_KEY: Record<BedRequestView['state'], PatientKey> = {
@@ -61,6 +61,7 @@ type Loaded =
   | { readonly state: 'ready'; readonly request: BedRequestView };
 
 export default function Page(): ReactNode {
+  const locale = useLocale();
   const now = useNow(1_000);
   const [token, setToken] = useState<string | null>(null);
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
@@ -112,7 +113,7 @@ export default function Page(): ReactNode {
   }, [token, settled, load]);
 
   return (
-    <TabScreen title={tp('requestStatus', LOCALE)}>
+    <TabScreen title={tp('requestStatus', locale)}>
       <Status
         loaded={loaded}
         now={now}
@@ -133,6 +134,8 @@ function Status({
   readonly now: Date;
   readonly onRetry: () => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   if (loaded.state === 'loading') {
     return (
       <div className="h-40 rounded-md bg-sunken" aria-busy="true" data-testid="request-loading" />
@@ -142,9 +145,9 @@ function Status({
   if (loaded.state === 'invalid') {
     return (
       <div className="flex flex-col gap-3" data-testid="request-invalid">
-        <p className="text-body-md text-ink-secondary">{tp('requestLinkInvalid', LOCALE)}</p>
+        <p className="text-body-md text-ink-secondary">{tp('requestLinkInvalid', locale)}</p>
         <a href="/beds" className="text-body-md text-brand-600">
-          {tp('requestSeeOthers', LOCALE)}
+          {tp('requestSeeOthers', locale)}
         </a>
       </div>
     );
@@ -153,13 +156,13 @@ function Status({
   if (loaded.state === 'failed') {
     return (
       <div className="flex flex-col gap-3" role="alert" data-testid="request-failed">
-        <p className="text-body-md text-ink-secondary">{tp('listFailed', LOCALE)}</p>
+        <p className="text-body-md text-ink-secondary">{tp('listFailed', locale)}</p>
         <button
           type="button"
           onClick={onRetry}
           className="min-h-touch rounded-md border border-line-strong px-4 text-body-md"
         >
-          {tp('tryAgain', LOCALE)}
+          {tp('tryAgain', locale)}
         </button>
       </div>
     );
@@ -183,29 +186,30 @@ function Status({
     <div className="flex flex-col gap-4" data-testid="request-status" data-state={shownState}>
       <section className={`flex flex-col gap-2 rounded-lg border p-5 ${tone}`} aria-live="polite">
         <p className="text-body-sm">
-          {request.hospitalNameBn} · {bedKindName(request.bedKind, LOCALE)}
+          {localName(locale, request.hospitalNameBn, request.hospitalNameEn)} ·{' '}
+          {bedKindName(request.bedKind, locale)}
         </p>
-        <p className="text-title-lg">{tp(STATE_KEY[shownState], LOCALE)}</p>
+        <p className="text-title-lg">{tp(STATE_KEY[shownState], locale)}</p>
 
         {shownState === 'held' && request.holdExpiresAt !== null && leftMinutes !== null ? (
           <>
             <p className="text-display-lg tabular-nums" data-testid="hold-left">
-              {tp('requestHoldLeft', LOCALE).replace(
+              {tp('requestHoldLeft', locale).replace(
                 '{minutes}',
-                formatNumber(leftMinutes, NUMERALS),
+                formatNumber(leftMinutes, numerals),
               )}
             </p>
             <p className="text-body-md">
-              {tp('requestHeldUntil', LOCALE).replace(
+              {tp('requestHeldUntil', locale).replace(
                 '{time}',
-                formatClock(request.holdExpiresAt, NUMERALS),
+                formatClock(request.holdExpiresAt, numerals),
               )}
             </p>
           </>
         ) : null}
 
         {shownState === 'requested' ? (
-          <p className="text-body-md">{tp('requestWaitingExplainer', LOCALE)}</p>
+          <p className="text-body-md">{tp('requestWaitingExplainer', locale)}</p>
         ) : null}
       </section>
 
@@ -214,12 +218,12 @@ function Status({
         asOf={new Date(request.serverTs)}
         now={now}
         labels={{
-          justNow: tp('updatedJustNow', LOCALE),
-          ago: tp('updatedAgo', LOCALE),
-          never: tp('updatedNever', LOCALE),
-          stale: tp('staleWarning', LOCALE),
+          justNow: tp('updatedJustNow', locale),
+          ago: tp('updatedAgo', locale),
+          never: tp('updatedNever', locale),
+          stale: tp('staleWarning', locale),
         }}
-        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+        formatMinutes={(value) => formatAge(value, locale, numerals)}
       />
 
       <div className="flex flex-col gap-3">
@@ -229,7 +233,7 @@ function Status({
             data-testid="call-hospital"
             className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-semibold text-white"
           >
-            {tp('requestCallHospital', LOCALE)}
+            {tp('requestCallHospital', locale)}
           </a>
         )}
         {shownState === 'declined' || shownState === 'expired' ? (
@@ -238,7 +242,7 @@ function Status({
             data-testid="see-others"
             className="flex min-h-touch items-center justify-center rounded-md border border-line-strong px-5 text-body-lg"
           >
-            {tp('requestSeeOthers', LOCALE)}
+            {tp('requestSeeOthers', locale)}
           </a>
         ) : null}
       </div>

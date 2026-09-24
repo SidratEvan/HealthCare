@@ -52,7 +52,17 @@ import {
   type Timestamp,
   type TurnaroundSummary,
 } from '@platform/domain';
-import { format, formatNumber, t, type ConsoleKey, type Locale, formatAge } from '@platform/i18n';
+import {
+  format,
+  formatClock,
+  formatNumber,
+  t,
+  type ConsoleKey,
+  type Locale,
+  formatAge,
+  numeralsFor,
+  labTestName,
+} from '@platform/i18n';
 import {
   Button,
   Card,
@@ -61,16 +71,15 @@ import {
   FreshnessLine,
   ToastProvider,
   useToast,
+  useLocale,
 } from '@platform/ui';
 
 import { ActionButton } from '@/components/ActionButton';
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { ConsoleRail } from '@/components/ConsoleRail';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { readDemoSession } from '@/lib/demo';
 import { failureOf, labApi, readReportFile, type LabQueueResponse } from '@/lib/lab';
-
-const LOCALE: Locale = 'bn';
-const NUMERALS = 'bengali' as const;
 
 /** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
 function readToken(): string | null {
@@ -102,7 +111,8 @@ export function LabConsole(): ReactNode {
 }
 
 function LabBody(): ReactNode {
-  const locale = LOCALE;
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const { show } = useToast();
   const session = readDemoSession();
   const hospitalId = session?.hospitalId ?? '';
@@ -258,7 +268,7 @@ function LabBody(): ReactNode {
     never: t('neverConfirmed', locale),
     stale: t('staleWarning', locale),
   };
-  const minutes = (value: number): string => formatAge(value, locale, NUMERALS);
+  const minutes = (value: number): string => formatAge(value, locale, numerals);
 
   if (hospitalId === '') return <Notice>{t('noSession', locale)}</Notice>;
 
@@ -320,7 +330,7 @@ function LabBody(): ReactNode {
           <div className="min-w-0 flex-1">
             <h1 className="font-reading text-title-lg text-ink">{t('labTitle', locale)}</h1>
             <p className="text-body-sm text-ink-muted">
-              {format('labOpenCount', locale, { count: formatNumber(openCount, NUMERALS) })}
+              {format('labOpenCount', locale, { count: formatNumber(openCount, numerals) })}
             </p>
           </div>
           <FreshnessLine
@@ -329,6 +339,7 @@ function LabBody(): ReactNode {
             labels={freshness}
             formatMinutes={minutes}
           />
+          <ConsoleLanguageSwitch className="" />
         </header>
 
         <div className="flex min-h-0 flex-1 gap-6 p-6">
@@ -434,7 +445,9 @@ function OrderRow({
     <Card data-testid={`lab-order-${order.id}`}>
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1">
-          <p className="font-reading text-title-sm text-ink">{order.testName}</p>
+          <p className="font-reading text-title-sm text-ink">
+            {labTestName(order.testCode, locale, order.testName)}
+          </p>
           <p className="mt-1 text-body-sm text-ink-muted">
             {format('labOrderedAt', locale, { time: clock(order.orderedAt, locale) })}
             {waiting === null
@@ -571,6 +584,7 @@ function Turnaround({
   readonly rows: readonly TurnaroundSummary[];
   readonly locale: Locale;
 }): ReactNode {
+  const numerals = numeralsFor(locale);
   return (
     <section aria-labelledby="turnaround-heading" data-testid="lab-turnaround">
       <h2 id="turnaround-heading" className="font-reading text-title-sm text-ink">
@@ -581,7 +595,9 @@ function Turnaround({
       <ul className="mt-3 flex flex-col gap-2">
         {rows.map((row) => (
           <li key={row.testCode} className="rounded-sm border border-line p-3">
-            <p className="text-body-md text-ink">{row.testName}</p>
+            <p className="text-body-md text-ink">
+              {labTestName(row.testCode, locale, row.testName)}
+            </p>
             <p className="text-body-sm text-ink-secondary">
               {row.medianSeconds === null
                 ? t('labTurnaroundNone', locale)
@@ -592,7 +608,7 @@ function Turnaround({
             {row.open > 0 ? (
               <p className="text-caption text-ink-muted">
                 {format('labTurnaroundOpen', locale, {
-                  count: formatNumber(row.open, NUMERALS),
+                  count: formatNumber(row.open, numerals),
                 })}
                 {row.oldestOpenSeconds === null
                   ? ''
@@ -616,22 +632,24 @@ function Notice({ children }: { readonly children: ReactNode }): ReactNode {
   );
 }
 
-/** A Dhaka wall clock, in the numerals the locale asks for (`TYP-04`). */
+/**
+ * A Dhaka wall clock, in the numerals the locale asks for (`TYP-04`).
+ *
+ * `formatClock`, not `toLocaleTimeString('bn-BD')`: the browser's Bangla
+ * clock is Bengali digits with a Latin "PM" stuck on the end, the
+ * half-translated form `I18N-05` rules out.
+ */
 function clock(at: string, locale: Locale): string {
-  const formatted = new Date(at).toLocaleTimeString(locale === 'bn' ? 'bn-BD' : 'en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Dhaka',
-  });
-  return formatted;
+  return formatClock(at, numeralsFor(locale));
 }
 
 /** Seconds as a person says them: minutes under an hour, hours above. */
 function duration(seconds: number, locale: Locale): string {
+  const numerals = numeralsFor(locale);
   const mins = Math.max(1, Math.round(seconds / 60));
   if (mins < 60) {
-    return `${formatNumber(mins, NUMERALS)} ${t('minutesShort', locale)}`;
+    return `${formatNumber(mins, numerals)} ${t('minutesShort', locale)}`;
   }
   const hours = Math.round(mins / 6) / 10;
-  return `${formatNumber(hours, NUMERALS)} ${t('hoursShort', locale)}`;
+  return `${formatNumber(hours, numerals)} ${t('hoursShort', locale)}`;
 }

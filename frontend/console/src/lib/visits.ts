@@ -27,6 +27,7 @@ export interface VisitDraft {
 export interface CatalogueTest {
   readonly code: string;
   readonly nameBn: string;
+  readonly nameEn: string;
   readonly pricePoisha: number;
 }
 
@@ -39,8 +40,11 @@ export interface VisitRecord {
   readonly followUpDate: string | null;
   readonly signedAt: string | null;
   readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
   readonly serial: number;
   readonly visitedAt: string;
 }

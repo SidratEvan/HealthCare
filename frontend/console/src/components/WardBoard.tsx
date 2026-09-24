@@ -29,7 +29,15 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { BED_KINDS, forecastTomorrow, tallyByKind, type Timestamp } from '@platform/domain';
-import { bedKindName, format, formatNumber, t, type Locale, formatAge } from '@platform/i18n';
+import {
+  bedKindName,
+  format,
+  formatNumber,
+  t,
+  formatAge,
+  numeralsFor,
+  localName,
+} from '@platform/i18n';
 import {
   BedTile,
   Button,
@@ -39,17 +47,17 @@ import {
   ToastProvider,
   useToast,
   type CapacityMirrorRow,
+  useLocale,
 } from '@platform/ui';
 
 import { BedPanel } from '@/components/BedPanel';
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { ConsoleRail } from '@/components/ConsoleRail';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { PendingAdmissions } from '@/components/PendingAdmissions';
 import { useBedBoard } from '@/hooks/useBedBoard';
-import { NUMERALS, shownState, stateLabel, tileDetail } from '@/lib/bedCopy';
+import { shownState, stateLabel, tileDetail } from '@/lib/bedCopy';
 import { readDemoSession } from '@/lib/demo';
-
-const LOCALE: Locale = 'bn';
 
 /** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
 function readToken(): string | null {
@@ -65,7 +73,8 @@ export function WardBoard(): ReactNode {
 }
 
 function BoardBody(): ReactNode {
-  const locale = LOCALE;
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const { show } = useToast();
   const session = readDemoSession();
   const hospitalId = session?.hospitalId ?? '';
@@ -112,8 +121,14 @@ function BoardBody(): ReactNode {
   );
 
   const wardNames = useMemo(
-    () => new Map((board.board?.wards ?? []).map((entry) => [entry.id, entry.nameBn])),
-    [board.board],
+    () =>
+      new Map(
+        (board.board?.wards ?? []).map((entry) => [
+          entry.id,
+          localName(locale, entry.nameBn, entry.nameEn),
+        ]),
+      ),
+    [board.board, locale],
   );
 
   const at = now.toISOString() as Timestamp;
@@ -173,7 +188,7 @@ function BoardBody(): ReactNode {
     never: t('neverConfirmed', locale),
     stale: t('staleWarning', locale),
   };
-  const minutes = (value: number): string => formatAge(value, locale, NUMERALS);
+  const minutes = (value: number): string => formatAge(value, locale, numerals);
 
   return (
     <div className="flex min-h-screen" data-testid="ward-board">
@@ -199,7 +214,7 @@ function BoardBody(): ReactNode {
           <div className="min-w-0 flex-1">
             <h1 className="font-reading text-title-lg text-ink">{t('wardBoardTitle', locale)}</h1>
             <p className="text-body-sm text-ink-muted">
-              {loaded.hospitalNameBn}
+              {localName(locale, loaded.hospitalNameBn, loaded.hospitalNameEn)}
               {session?.staffName === undefined ? '' : ` · ${session.staffName}`}
             </p>
             <FreshnessLine
@@ -216,6 +231,7 @@ function BoardBody(): ReactNode {
           >
             {t('changeConsole', locale)}
           </a>
+          <ConsoleLanguageSwitch className="" />
         </header>
 
         <main className="flex min-h-0 flex-1">
@@ -249,7 +265,7 @@ function BoardBody(): ReactNode {
                         setWard(entry.id);
                       }}
                     >
-                      {entry.nameBn}
+                      {localName(locale, entry.nameBn, entry.nameEn)}
                     </FilterChip>
                   ))}
                 </div>
@@ -260,11 +276,11 @@ function BoardBody(): ReactNode {
                     return (
                       <section key={entry.id} aria-labelledby={`ward-${entry.id}`}>
                         <h2 id={`ward-${entry.id}`} className="mb-2 text-title-sm text-ink">
-                          {entry.nameBn}{' '}
+                          {localName(locale, entry.nameBn, entry.nameEn)}{' '}
                           <span className="text-body-sm text-ink-muted">
                             ·{' '}
                             {format('floorN', locale, {
-                              floor: formatNumber(entry.floor, NUMERALS),
+                              floor: formatNumber(entry.floor, numerals),
                             })}{' '}
                             · {bedKindName(entry.kind, locale)}
                           </span>
@@ -337,7 +353,7 @@ function BoardBody(): ReactNode {
               freeOfTotal={t('mirrorFreeOfTotal', locale)}
               mismatch={t('mirrorMismatch', locale)}
               empty={t('mirrorEmpty', locale)}
-              formatCount={(value) => formatNumber(value, NUMERALS)}
+              formatCount={(value) => formatNumber(value, numerals)}
             />
 
             {/* FR-BED-04: a forecast, for staff, labelled as such. */}
@@ -357,8 +373,8 @@ function BoardBody(): ReactNode {
                       <span className="text-ink">{bedKindName(entry.kind, locale)}</span>
                       <span className="tabular-nums text-ink-secondary">
                         {format('forecastRow', locale, {
-                          now: formatNumber(entry.freeNow, NUMERALS),
-                          tomorrow: formatNumber(entry.freeTomorrow, NUMERALS),
+                          now: formatNumber(entry.freeNow, numerals),
+                          tomorrow: formatNumber(entry.freeTomorrow, numerals),
                         })}
                       </span>
                     </li>
@@ -366,7 +382,7 @@ function BoardBody(): ReactNode {
                 </ul>
                 {unforecast === 0 ? null : (
                   <p className="mt-2 text-caption text-ink-muted">
-                    {format('forecastBlind', locale, { count: formatNumber(unforecast, NUMERALS) })}
+                    {format('forecastBlind', locale, { count: formatNumber(unforecast, numerals) })}
                   </p>
                 )}
               </section>

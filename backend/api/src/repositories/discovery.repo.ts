@@ -28,6 +28,7 @@ export interface HospitalCard {
   readonly district: string;
   readonly thana: string | null;
   readonly addressBn: string | null;
+  readonly addressEn: string | null;
   readonly lat: number | null;
   readonly lng: number | null;
   readonly phone: string | null;
@@ -83,6 +84,7 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
     district: string;
     thana: string | null;
     address_bn: string | null;
+    address_en: string | null;
     lat: number | null;
     lng: number | null;
     phone: string | null;
@@ -95,7 +97,7 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
     open_serials_today: string;
   }>`
     SELECT h.id, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
-           h.thana, h.address_bn, h.lat, h.lng, h.phone, h.emergency_phone,
+           h.thana, h.address_bn, h.address_en, h.lat, h.lng, h.phone, h.emergency_phone,
            CASE
              WHEN ${hasPosition}::boolean AND h.geo IS NOT NULL
              THEN ST_Distance(h.geo, ST_SetSRID(ST_MakePoint(${query.lng ?? 0}, ${query.lat ?? 0}), 4326)::geography)
@@ -169,6 +171,7 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
     district: row.district,
     thana: row.thana,
     addressBn: row.address_bn,
+    addressEn: row.address_en,
     lat: row.lat,
     lng: row.lng,
     phone: row.phone,
@@ -191,6 +194,7 @@ export interface HospitalDoctorCard {
   readonly degrees: string | null;
   readonly departmentCode: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   readonly feePoisha: number;
   readonly room: string | null;
   readonly bmdcVerifiedAt: string | null;
@@ -223,6 +227,7 @@ export async function doctorsAtHospital(
     degrees: string | null;
     department_code: string;
     department_name_bn: string;
+    department_name_en: string;
     fee_poisha: number;
     room: string | null;
     bmdc_verified_at: Date | null;
@@ -231,7 +236,8 @@ export async function doctorsAtHospital(
     open_serials: string | null;
   }>`
     SELECT d.id, d.full_name_bn AS name_bn, d.full_name_en AS name_en, d.degrees,
-           dep.code AS department_code, dep.name_bn AS department_name_bn,
+           dep.code AS department_code,
+           dep.name_bn AS department_name_bn, dep.name_en AS department_name_en,
            dh.fee_poisha, dh.room, d.bmdc_verified_at,
            EXISTS (SELECT 1 FROM sessions s
                     WHERE s.doctor_id = d.id AND s.hospital_id = ${hospitalId}::uuid
@@ -266,6 +272,7 @@ export async function doctorsAtHospital(
     degrees: row.degrees,
     departmentCode: row.department_code,
     departmentNameBn: row.department_name_bn,
+    departmentNameEn: row.department_name_en,
     feePoisha: row.fee_poisha,
     room: row.room,
     bmdcVerifiedAt: row.bmdc_verified_at?.toISOString() ?? null,
@@ -401,8 +408,10 @@ export interface SessionCard {
   readonly id: string;
   readonly hospitalId: string;
   readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
   readonly doctorId: string;
   readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
   readonly departmentCode: string;
   readonly sessionDate: string;
   readonly plannedStart: string;
@@ -432,8 +441,10 @@ export async function listBookableSessions(input: {
     id: string;
     hospital_id: string;
     hospital_name_bn: string;
+    hospital_name_en: string;
     doctor_id: string;
     doctor_name_bn: string;
+    doctor_name_en: string;
     department_code: string;
     session_date: string;
     planned_start: Date;
@@ -444,8 +455,10 @@ export async function listBookableSessions(input: {
     capacity: number | null;
     taken: string;
   }>`
-    SELECT s.id, s.hospital_id, h.name_bn AS hospital_name_bn,
-           s.doctor_id, d.full_name_bn AS doctor_name_bn,
+    SELECT s.id, s.hospital_id,
+           h.name_bn AS hospital_name_bn, h.name_en AS hospital_name_en,
+           s.doctor_id,
+           d.full_name_bn AS doctor_name_bn, d.full_name_en AS doctor_name_en,
            dep.code AS department_code,
            s.session_date::text AS session_date,
            s.planned_start, s.planned_end, s.status::text AS status,
@@ -471,8 +484,10 @@ export async function listBookableSessions(input: {
     id: row.id,
     hospitalId: row.hospital_id,
     hospitalNameBn: row.hospital_name_bn,
+    hospitalNameEn: row.hospital_name_en,
     doctorId: row.doctor_id,
     doctorNameBn: row.doctor_name_bn,
+    doctorNameEn: row.doctor_name_en,
     departmentCode: row.department_code,
     sessionDate: row.session_date,
     plannedStart: row.planned_start.toISOString(),

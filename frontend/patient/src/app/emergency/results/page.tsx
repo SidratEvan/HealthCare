@@ -32,8 +32,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { EMERGENCY_PROBLEMS, type EmergencyProblem } from '@platform/domain';
-import { formatAge, problemName, tp } from '@platform/i18n';
-import { Button, FreshnessLine } from '@platform/ui';
+import { formatAge, problemName, tp, numeralsFor } from '@platform/i18n';
+import { Button, FreshnessLine, useLocale } from '@platform/ui';
 
 import { EmergencyResultCard } from '@/components/EmergencyResult';
 import { TabScreen } from '@/components/TabScreen';
@@ -45,8 +45,6 @@ import { lastSearch, rememberSearch } from '@/lib/emergency';
 
 import type { EmergencySearchResult } from '@/lib/types';
 
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
 const REFRESH_MS = 30_000;
 
 type Loaded =
@@ -59,6 +57,7 @@ function isProblem(value: string | null): value is EmergencyProblem {
 }
 
 export default function Page(): ReactNode {
+  const locale = useLocale();
   const now = useNow(1_000);
   const online = useOnline();
   const { position, retry: retryPosition } = usePosition();
@@ -125,8 +124,8 @@ export default function Page(): ReactNode {
 
   const title =
     problem === null
-      ? tp('emergencyNearestTitle', LOCALE)
-      : tp('emergencyResultsFor', LOCALE).replace('{problem}', problemName(problem, LOCALE));
+      ? tp('emergencyNearestTitle', locale)
+      : tp('emergencyResultsFor', locale).replace('{problem}', problemName(problem, locale));
 
   return (
     <TabScreen title={title}>
@@ -135,14 +134,14 @@ export default function Page(): ReactNode {
 
       {position.kind === 'locating' ? (
         <p className="text-body-md text-ink-secondary" role="status" data-testid="locating">
-          {tp('emergencyLocating', LOCALE)}
+          {tp('emergencyLocating', locale)}
         </p>
       ) : position.kind === 'unavailable' ? (
         <div className="flex flex-col gap-2 rounded-md bg-sunken p-3" data-testid="no-location">
-          <p className="text-body-sm text-ink-secondary">{tp('emergencyNoLocation', LOCALE)}</p>
+          <p className="text-body-sm text-ink-secondary">{tp('emergencyNoLocation', locale)}</p>
           <div>
             <Button variant="secondary" size="sm" onClick={retryPosition}>
-              {tp('emergencyTryLocation', LOCALE)}
+              {tp('emergencyTryLocation', locale)}
             </Button>
           </div>
         </div>
@@ -165,7 +164,7 @@ export default function Page(): ReactNode {
       {critical ? (
         <section aria-labelledby="narrow-title" className="flex flex-col gap-3">
           <h2 id="narrow-title" className="text-title-sm text-ink">
-            {tp('emergencyWhatHappened', LOCALE)}
+            {tp('emergencyWhatHappened', locale)}
           </h2>
           <ul className="grid grid-cols-2 gap-2">
             {EMERGENCY_PROBLEMS.map((candidate) => (
@@ -176,7 +175,7 @@ export default function Page(): ReactNode {
                   aria-current={candidate === problem ? 'page' : undefined}
                   className="flex min-h-touch items-center justify-center rounded-md border border-line-strong bg-surface px-3 text-body-md text-ink aria-[current=page]:border-alert-600 aria-[current=page]:bg-alert-100"
                 >
-                  {problemName(candidate, LOCALE)}
+                  {problemName(candidate, locale)}
                 </a>
               </li>
             ))}
@@ -189,7 +188,7 @@ export default function Page(): ReactNode {
         href="/ambulance"
         className="flex min-h-touch items-center justify-center rounded-md border border-line px-4 text-body-md text-ink"
       >
-        {tp('emergencyAmbulance', LOCALE)}
+        {tp('emergencyAmbulance', locale)}
       </a>
     </TabScreen>
   );
@@ -212,6 +211,8 @@ function Results({
   readonly now: Date;
   readonly onRetry: () => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   if (loaded.state === 'loading') {
     // GR-03 loading: the shape of the answer.
     return (
@@ -226,11 +227,11 @@ function Results({
     return (
       <div className="flex flex-col gap-3" role="alert" data-testid="results-failed">
         <p className="text-body-md text-ink-secondary">
-          {online ? tp('listFailed', LOCALE) : tp('emergencyOfflineNoList', LOCALE)}
+          {online ? tp('listFailed', locale) : tp('emergencyOfflineNoList', locale)}
         </p>
         <div>
           <Button variant="secondary" onClick={onRetry}>
-            {tp('tryAgain', LOCALE)}
+            {tp('tryAgain', locale)}
           </Button>
         </div>
       </div>
@@ -244,7 +245,7 @@ function Results({
   if (results.length === 0) {
     return (
       <p className="text-body-md text-ink-secondary" data-testid="results-empty">
-        {tp('emergencyNoResults', LOCALE)}
+        {tp('emergencyNoResults', locale)}
       </p>
     );
   }
@@ -259,7 +260,7 @@ function Results({
           className="rounded-md bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
           data-testid="results-offline"
         >
-          {tp('emergencyOffline', LOCALE)}
+          {tp('emergencyOffline', locale)}
         </p>
       ) : null}
 
@@ -268,22 +269,22 @@ function Results({
         asOf={new Date(search.serverTs)}
         now={now}
         labels={{
-          justNow: tp('updatedJustNow', LOCALE),
-          ago: tp('updatedAgo', LOCALE),
-          never: tp('updatedNever', LOCALE),
-          stale: tp('staleWarning', LOCALE),
+          justNow: tp('updatedJustNow', locale),
+          ago: tp('updatedAgo', locale),
+          never: tp('updatedNever', locale),
+          stale: tp('staleWarning', locale),
         }}
-        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+        formatMinutes={(value) => formatAge(value, locale, numerals)}
       />
 
       {lead === undefined ? null : (
         <section aria-labelledby="lead-title" className="flex flex-col gap-2">
           <h2 id="lead-title" className="text-title-sm text-ink">
             {problem === null
-              ? tp('emergencyBestNow', LOCALE)
-              : tp('emergencyNearestCapable', LOCALE).replace(
+              ? tp('emergencyBestNow', locale)
+              : tp('emergencyNearestCapable', locale).replace(
                   '{problem}',
-                  problemName(problem, LOCALE),
+                  problemName(problem, locale),
                 )}
           </h2>
           <EmergencyResultCard
@@ -301,7 +302,7 @@ function Results({
       {rest.length === 0 ? null : (
         <section aria-labelledby="others-title" className="flex flex-col gap-3">
           <h2 id="others-title" className="text-title-sm text-ink">
-            {tp('emergencyOtherHospitals', LOCALE)}
+            {tp('emergencyOtherHospitals', locale)}
           </h2>
           {rest.map((result) => (
             <EmergencyResultCard
@@ -328,13 +329,14 @@ function onSent(token: string): void {
 
 /** `FR-PAT-47`: the national number, on every emergency screen. */
 function Call999(): ReactNode {
+  const locale = useLocale();
   return (
     <a
       href="tel:999"
       data-testid="results-call-999"
       className="flex min-h-[60px] items-center justify-center rounded-lg bg-alert-600 px-5 font-reading text-title-md font-bold text-white"
     >
-      {tp('call999', LOCALE)}
+      {tp('call999', locale)}
     </a>
   );
 }

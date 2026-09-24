@@ -14,16 +14,13 @@
 
 import { useCallback, useState } from 'react';
 
-import { formatDateTime, formatTaka, tp } from '@platform/i18n';
-import { Button, Card, Input } from '@platform/ui';
+import { formatDateTime, formatTaka, tp, numeralsFor, localName } from '@platform/i18n';
+import { Button, Card, Input, useLocale } from '@platform/ui';
 
 import { joinStandby } from '@/lib/api';
 
 import type { SessionCard, StandbyJoined } from '@/lib/types';
 import type { ReactNode } from 'react';
-
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
 
 type Prepay = 'bkash' | 'nagad' | 'card';
 
@@ -36,6 +33,8 @@ export function StandbyJoin({
   readonly online: boolean;
   readonly onJoined: (joined: StandbyJoined) => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [age, setAge] = useState('');
@@ -67,32 +66,36 @@ export function StandbyJoin({
       const guard = (error as { details?: { guard?: string } }).details?.guard;
       setFailure(
         guard === 'SESSION_NOT_FULL'
-          ? tp('standbyNotFull', LOCALE)
+          ? tp('standbyNotFull', locale)
           : guard === 'ALREADY_BOOKED'
-            ? tp('standbyAlreadyBooked', LOCALE)
-            : tp('standbyJoinFailed', LOCALE),
+            ? tp('standbyAlreadyBooked', locale)
+            : tp('standbyJoinFailed', locale),
       );
     } finally {
       setBusy(false);
     }
-  }, [session.id, name, phone, age, sex, prepay, idempotencyKey, onJoined]);
+  }, [session.id, name, phone, age, sex, prepay, idempotencyKey, onJoined, locale]);
 
   return (
     <section className="flex flex-col gap-4" data-testid="standby-join">
-      <h1 className="font-reading text-title-lg">{tp('standbyJoinTitle', LOCALE)}</h1>
+      <h1 className="font-reading text-title-lg">{tp('standbyJoinTitle', locale)}</h1>
 
       <Card>
         <p className="text-title-sm tabular-nums">
-          {formatDateTime(session.plannedStart, NUMERALS)}
+          {formatDateTime(session.plannedStart, numerals)}
         </p>
-        <p className="text-body-sm text-ink-muted">{session.doctorNameBn}</p>
-        <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
-        <p className="mt-2 text-body-sm text-ink-secondary">{tp('standbyJoinWhy', LOCALE)}</p>
+        <p className="text-body-sm text-ink-muted">
+          {localName(locale, session.doctorNameBn, session.doctorNameEn)}
+        </p>
+        <p className="text-body-sm text-ink-muted">
+          {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
+        </p>
+        <p className="mt-2 text-body-sm text-ink-secondary">{tp('standbyJoinWhy', locale)}</p>
       </Card>
 
       <div className="flex flex-col gap-4">
         <Input
-          label={tp('patientName', LOCALE)}
+          label={tp('patientName', locale)}
           required
           value={name}
           onChange={(event) => {
@@ -100,13 +103,13 @@ export function StandbyJoin({
           }}
         />
         <Input
-          label={tp('mobileNumber', LOCALE)}
+          label={tp('mobileNumber', locale)}
           kind="phone"
           required
           value={phone}
           placeholder="+8801XXXXXXXXX"
-          helper={tp('mobileHelper', LOCALE)}
-          {...(phoneTouched && !phoneValid ? { error: tp('mobileInvalid', LOCALE) } : {})}
+          helper={tp('mobileHelper', locale)}
+          {...(phoneTouched && !phoneValid ? { error: tp('mobileInvalid', locale) } : {})}
           onBlur={() => {
             setPhoneTouched(true);
           }}
@@ -115,7 +118,7 @@ export function StandbyJoin({
           }}
         />
         <Input
-          label={tp('age', LOCALE)}
+          label={tp('age', locale)}
           kind="number"
           required
           value={age}
@@ -125,7 +128,7 @@ export function StandbyJoin({
         />
         <fieldset className="flex flex-col gap-2 border-0 p-0">
           <legend className="font-ui text-body-sm font-semibold text-ink">
-            {tp('sex', LOCALE)}
+            {tp('sex', locale)}
           </legend>
           <div className="flex gap-2">
             {(['female', 'male', 'other'] as const).map((value) => (
@@ -138,7 +141,7 @@ export function StandbyJoin({
                 }}
                 className="min-h-touch flex-1 rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
               >
-                {tp(value, LOCALE)}
+                {tp(value, locale)}
               </button>
             ))}
           </div>
@@ -148,7 +151,7 @@ export function StandbyJoin({
       {/* The ruling, as two whole choices with their consequences. */}
       <fieldset className="flex flex-col gap-3 border-0 p-0">
         <legend className="font-ui text-body-sm font-semibold text-ink">
-          {tp('standbyHowTitle', LOCALE)}
+          {tp('standbyHowTitle', locale)}
         </legend>
 
         <button
@@ -160,9 +163,9 @@ export function StandbyJoin({
           data-testid="standby-choice-prepay"
           className="flex flex-col gap-1 rounded-md border border-line-strong bg-surface p-4 text-left aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
         >
-          <span className="text-body-md font-semibold">{tp('standbyPrepayOption', LOCALE)}</span>
+          <span className="text-body-md font-semibold">{tp('standbyPrepayOption', locale)}</span>
           <span className="text-body-sm text-ink-secondary">
-            {formatTaka(session.feePoisha, NUMERALS)} · {tp('standbyPrepayNote', LOCALE)}
+            {formatTaka(session.feePoisha, numerals)} · {tp('standbyPrepayNote', locale)}
           </span>
         </button>
 
@@ -184,7 +187,7 @@ export function StandbyJoin({
                 }}
                 className="min-h-touch rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
               >
-                {tp(key, LOCALE)}
+                {tp(key, locale)}
               </button>
             ))}
           </div>
@@ -199,8 +202,8 @@ export function StandbyJoin({
           data-testid="standby-choice-ask"
           className="flex flex-col gap-1 rounded-md border border-line-strong bg-surface p-4 text-left aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
         >
-          <span className="text-body-md font-semibold">{tp('standbyAskOption', LOCALE)}</span>
-          <span className="text-body-sm text-ink-secondary">{tp('standbyAskNote', LOCALE)}</span>
+          <span className="text-body-md font-semibold">{tp('standbyAskOption', locale)}</span>
+          <span className="text-body-sm text-ink-secondary">{tp('standbyAskNote', locale)}</span>
         </button>
       </fieldset>
 
@@ -222,10 +225,10 @@ export function StandbyJoin({
           ? {}
           : {
               disabled: true as const,
-              disabledReason: online ? tp('yourDetails', LOCALE) : tp('offline', LOCALE),
+              disabledReason: online ? tp('yourDetails', locale) : tp('offline', locale),
             })}
       >
-        {tp('standbyConfirm', LOCALE)}
+        {tp('standbyConfirm', locale)}
       </Button>
     </section>
   );

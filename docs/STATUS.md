@@ -7,14 +7,16 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/console-bangla-digits`, after the Render fixes, `fix/pitch-design` and step 20 — the design pass the owner
-asked for after seeing the live demo, and the bugs found on it (below). Before
+Last updated: `feat/language-switch` — **English, everywhere, behind a switch at
+the top of both apps** (below). Before that, `fix/console-bangla-digits`, the
+Render fixes, `fix/pitch-design` and step 20 — the design pass the owner
+asked for after seeing the live demo, and the bugs found on it. Before
 that, `fix/ci-node` (CI green again on Node 24) and `feat/gov-dashboard` —
 **step 20, the last step in the build plan**. A government viewer opens `S-B-13` from the picker and sees capacity
 by district, the emergency heat map, disease signals and an anonymised
 benchmark, read as a database role that cannot open a single patient row.
 Decision 5 (a national role has no facility) is implemented one way and needs
-the owner's ruling, with six more listed under open decisions (66–72).
+the owner's ruling, with seven more listed under open decisions (66–73).
 Before that, `feat/standby-self-serve` (decision 62) and `feat/check-in`
 (decision 61), after step 19.
 
@@ -178,6 +180,79 @@ version from `.nvmrc`: `20` had it download Node into a writable directory, and
 `22`, above the 22.19 floor, and CI stays on 24 through `ci.yml`. To run the API
 on 24, change the dashboard's build and start commands to the ones in
 `DEPLOY.md` §2 first, then `.nvmrc`.
+
+### English, everywhere (`feat/language-switch`)
+
+**The owner asked on 2026-09-24** for "a version that says it's in English
+too — every single thing", with a switch at the top of both the hospital
+console and the patient app: one button for English, one for Bangla.
+
+**The switch.** `SEG-A00-LANG` is a strip above every patient screen,
+rendered once by the root layout (`LanguageBar`), so no screen lacks it.
+`SEG-B00-LANG` is at the right end of the header on the picker and on all
+eight consoles (`ConsoleLanguageSwitch`). Both are `<LanguageSwitch>` from
+`@platform/ui`: two toggles, **বাংলা** and **English**, each named in its own
+script and marked with its own `lang`, no flags. Bangla stays the default
+(`FR-LOC-01`).
+
+**One store, every screen at once.** `useLocale()` / `setLocale()` in
+`@platform/ui` (`locale/store.ts`) hold the choice outside React and read it
+through `useSyncExternalStore`, so one press re-renders every screen, sheet
+and toast in the same commit. It is kept in `localStorage` under
+`platform.locale`, and another tab of the same app follows through the
+`storage` event. `<LocaleDocument>` moves `<html lang>` (the Bangla
+typesetting rules key off it) and the tab title. The locale decides everything
+else: which half of each message is read (both halves already existed for
+every key), the digits (`numeralsFor`, so English reads `1,234` and
+`5:30 PM`), and which of a facility's two names is shown (`localName`).
+
+**Every screen was hard-coded to Bangla, and that is what most of the diff
+is.** Forty-one components declared `const LOCALE = 'bn'` and
+`const NUMERALS = 'bengali'` at module scope. They now read the store. The
+admin and national dashboards' formatters (`num`, `taka`, `minutes` …) became
+`formattersFor(locale)`, destructured per component. One trap is worth
+knowing: `lib/bedCopy.ts` *exported* its `'bengali'` constant, and seven ward
+and ER files imported it. The compiler could not see that, because the name
+was always defined. The export is gone. Four hooks read `locale` without
+listing it in their dependencies, which would have kept the old language
+after a switch; this repository has no `react-hooks` lint rule to catch that.
+
+**The API returns both names wherever it returned one.** Switching must not
+wait on the network (`I18N-08`), so each read that named something in Bangla
+now carries the English beside it. That covers the picker's departments,
+discovery (addresses, departments, a session's doctor and hospital), the
+wallet's records, consents and access log, standby status, ER addresses,
+admin punctuality's departments, and the lab catalogue.
+`bilingual.routes.test.ts` checks each of these is really English. Lab test
+names moved to `@platform/i18n` (`LAB_TEST_NAMES`, keyed by code). An order
+row still stores the Bangla name it was ordered under, and a screen reading
+English names it by its code.
+
+**Found on the way, and fixed.** Reception's "called serial N" toast put a
+Latin digit inside a Bangla sentence. The lab console's clock used
+`toLocaleTimeString('bn-BD')`, which prints "১০:১৩ PM", the half-translated
+form `I18N-05` rules out. It now uses `formatClock`.
+
+**Deliberately not translated.** Anything a person typed is shown as written:
+a patient's or staff member's name, a diagnosis, advice. The database holds
+one version of each, and translating a name is not a translation task.
+**SMS stays in Bangla**: the preference belongs to an account (`FR-PAT-05`),
+and accounts are deferred (`CLAUDE.md` §4.1). See decision 73. A patient page
+is server-rendered in Bangla, so a phone that chose English sees one frame of
+Bangla before it switches. The console renders client-side only and has no
+such frame.
+
+**Docs.** `FRONTEND.md` `I18N-08` said the toggle lives in settings and the
+first-run screen. It now says the top of every screen, as the owner asked,
+and new `I18N-10` covers names. `APP_FLOW.md`: `GR-06`, `SEG-A00-LANG` on
+`S-A-02`, and where `SEG-B00-LANG` sits while `S-B-00` is deferred.
+
+**How to show it.** Any screen of either app → **English** at the top. The
+whole screen changes in place: the queue keeps its rows and the live serial
+keeps counting. Reload and it is still English. For the two-sided version,
+put the patient's phone in English and leave reception in Bangla: reception
+taps পরবর্তী রোগী ডাকুন and the English phone moves. `language-switch.spec.ts`
+runs exactly that.
 
 ### Bangla digits on every console (`fix/console-bangla-digits`)
 
@@ -2037,6 +2112,16 @@ Raised while building the national layer (step 20):
 72. **No `platform_admin` is seeded.** 0024 allows one, but `S-B-12` is not a
    build step and an account for a screen that does not exist would be a
    picker button to nowhere.
+
+73. **A guest's SMS is always Bangla.** The language switch changes the
+   screens (`feat/language-switch`), but `FR-NOT-04` picks the SMS language
+   from the account (`users.locale`, `FR-PAT-05`), and a guest has no account
+   (`CLAUDE.md` §4.1). The booking could carry the phone's language instead: a
+   `locale` column on the guest contact or the booking, sent with
+   `POST /bookings`, and read by `notification.repo` where it now falls back
+   to `bn`. That is a schema change and a product call: whether a patient who
+   reads the app in English should also be texted in English before accounts
+   exist. Implemented as: not yet — the SMS is Bangla.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository

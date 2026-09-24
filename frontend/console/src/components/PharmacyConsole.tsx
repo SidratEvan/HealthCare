@@ -40,17 +40,23 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { format, formatAge, t, type ConsoleKey, type Locale } from '@platform/i18n';
-import { Button, Card, Chip, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
+import { format, formatAge, t, type ConsoleKey, type Locale, numeralsFor } from '@platform/i18n';
+import {
+  Button,
+  Card,
+  Chip,
+  FreshnessLine,
+  ToastProvider,
+  useToast,
+  useLocale,
+} from '@platform/ui';
 
 import { ActionButton } from '@/components/ActionButton';
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { ConsoleRail } from '@/components/ConsoleRail';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { readDemoSession } from '@/lib/demo';
 import { failureOf, labApi, type ShelfResponse, type StockRow } from '@/lib/lab';
-
-const LOCALE: Locale = 'bn';
-const NUMERALS = 'bengali' as const;
 
 /** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
 function readToken(): string | null {
@@ -73,7 +79,8 @@ export function PharmacyConsole(): ReactNode {
 }
 
 function PharmacyBody(): ReactNode {
-  const locale = LOCALE;
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const { show } = useToast();
   const session = readDemoSession();
   const hospitalId = session?.hospitalId ?? '';
@@ -152,7 +159,7 @@ function PharmacyBody(): ReactNode {
     never: t('neverConfirmed', locale),
     stale: t('staleWarning', locale),
   };
-  const minutes = (value: number): string => formatAge(value, locale, NUMERALS);
+  const minutes = (value: number): string => formatAge(value, locale, numerals);
 
   if (hospitalId === '') return <Notice>{t('noSession', locale)}</Notice>;
 
@@ -223,6 +230,7 @@ function PharmacyBody(): ReactNode {
             labels={freshness}
             formatMinutes={minutes}
           />
+          <ConsoleLanguageSwitch className="" />
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 p-6">

@@ -101,3 +101,11 @@ export {
   type LiveSerialLabels,
   type LiveSerialTone,
 } from './components/LiveSerialCard.js';
+
+// --- Language (GR-06, I18N-08) ---------------------------------------------
+//
+// One store for the whole app, so that the switch at the top of a screen
+// changes every screen, sheet and toast in the same render.
+export { LOCALE_STORAGE_KEY, setLocale, useLocale } from './locale/store.js';
+export { LanguageSwitch, type LanguageSwitchProps } from './locale/LanguageSwitch.js';
+export { LocaleDocument, type LocaleDocumentProps } from './locale/LocaleDocument.js';

@@ -27,16 +27,13 @@
 import { useState, type ReactNode } from 'react';
 
 import { normaliseBdMobile, type EmergencyProblem } from '@platform/domain';
-import { bedKindName, formatNumber, tp, formatAge } from '@platform/i18n';
-import { Button, Chip, FreshnessLine, Input, Sheet } from '@platform/ui';
+import { bedKindName, formatNumber, tp, formatAge, numeralsFor, localName } from '@platform/i18n';
+import { Button, Chip, FreshnessLine, Input, Sheet, useLocale } from '@platform/ui';
 
 import { sendInbound } from '@/lib/api';
 import { directionsUrl, rememberAlert } from '@/lib/emergency';
 
 import type { EmergencyResult } from '@/lib/types';
-
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
 
 export interface EmergencyResultCardProps {
   readonly result: EmergencyResult;
@@ -59,10 +56,12 @@ export function EmergencyResultCard({
   offline,
   onSent,
 }: EmergencyResultCardProps): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const n = (value: number): string => formatNumber(value, NUMERALS);
+  const n = (value: number): string => formatNumber(value, numerals);
   const freshness = result.freshness;
 
   return (
@@ -76,15 +75,17 @@ export function EmergencyResultCard({
       }
     >
       <div className="flex items-start justify-between gap-3">
-        <h3 className="min-w-0 font-reading text-title-md text-ink">{result.nameBn}</h3>
+        <h3 className="min-w-0 font-reading text-title-md text-ink">
+          {localName(locale, result.nameBn, result.nameEn)}
+        </h3>
         {result.hasCapability === null ? null : (
           // Two words that must stay one label: a chip broken across lines
           // reads as two claims.
           <span className="shrink-0 whitespace-nowrap">
             <Chip tone={result.hasCapability ? 'positive' : 'neutral'}>
               {result.hasCapability
-                ? tp('emergencyCapable', LOCALE)
-                : tp('emergencyNotCapable', LOCALE)}
+                ? tp('emergencyCapable', locale)
+                : tp('emergencyNotCapable', locale)}
             </Chip>
           </span>
         )}
@@ -92,13 +93,13 @@ export function EmergencyResultCard({
 
       {result.distanceKm === null ? null : (
         <p className="text-body-md tabular-nums text-ink" data-testid="result-distance">
-          {tp('emergencyDistance', LOCALE).replace(
+          {tp('emergencyDistance', locale).replace(
             '{km}',
-            formatNumber(result.distanceKm, NUMERALS, { maximumFractionDigits: 1 }),
+            formatNumber(result.distanceKm, numerals, { maximumFractionDigits: 1 }),
           )}
           {result.travelMinutes === null
             ? ''
-            : ` · ${tp('emergencyTravel', LOCALE).replace('{minutes}', n(result.travelMinutes))}`}
+            : ` · ${tp('emergencyTravel', locale).replace('{minutes}', n(result.travelMinutes))}`}
         </p>
       )}
 
@@ -106,24 +107,24 @@ export function EmergencyResultCard({
         <li data-testid="result-beds">
           {result.freeBeds === null
             ? result.bedKind === null
-              ? tp('emergencyNoBeds', LOCALE)
-              : tp('emergencyNoKind', LOCALE).replace('{kind}', bedKindName(result.bedKind, LOCALE))
+              ? tp('emergencyNoBeds', locale)
+              : tp('emergencyNoKind', locale).replace('{kind}', bedKindName(result.bedKind, locale))
             : result.bedKind === null
-              ? tp('emergencyFreeBeds', LOCALE).replace('{free}', n(result.freeBeds))
-              : tp('emergencyFreeKind', LOCALE)
-                  .replace('{kind}', bedKindName(result.bedKind, LOCALE))
+              ? tp('emergencyFreeBeds', locale).replace('{free}', n(result.freeBeds))
+              : tp('emergencyFreeKind', locale)
+                  .replace('{kind}', bedKindName(result.bedKind, locale))
                   .replace('{free}', n(result.freeBeds))}
         </li>
         <li data-testid="result-icu">
           {result.icuTotal === null || result.icuFree === null
-            ? tp('cardNoIcu', LOCALE)
-            : tp('cardIcu', LOCALE)
+            ? tp('cardNoIcu', locale)
+            : tp('cardIcu', locale)
                 .replace('{free}', n(result.icuFree))
                 .replace('{total}', n(result.icuTotal))}
         </li>
         {/* FR-EMG-04: counted from cases, never typed. */}
         <li data-testid="result-load">
-          {tp('emergencyLoad', LOCALE).replace('{count}', n(result.erLoad))}
+          {tp('emergencyLoad', locale).replace('{count}', n(result.erLoad))}
         </li>
       </ul>
 
@@ -133,8 +134,8 @@ export function EmergencyResultCard({
           data-testid="result-stale"
         >
           {freshness.ageMinutes === null
-            ? tp('emergencyNeverConfirmed', LOCALE)
-            : tp('emergencyStale', LOCALE).replace('{time}', n(freshness.ageMinutes))}
+            ? tp('emergencyNeverConfirmed', locale)
+            : tp('emergencyStale', locale).replace('{time}', n(freshness.ageMinutes))}
         </p>
       ) : null}
       <FreshnessLine
@@ -142,12 +143,12 @@ export function EmergencyResultCard({
         now={now}
         staleAfterMinutes={result.staleAfterMinutes}
         labels={{
-          justNow: tp('updatedJustNow', LOCALE),
-          ago: tp('updatedAgo', LOCALE),
-          never: tp('updatedNever', LOCALE),
-          stale: tp('staleWarning', LOCALE),
+          justNow: tp('updatedJustNow', locale),
+          ago: tp('updatedAgo', locale),
+          never: tp('updatedNever', locale),
+          stale: tp('staleWarning', locale),
         }}
-        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+        formatMinutes={(value) => formatAge(value, locale, numerals)}
       />
 
       {/*
@@ -158,25 +159,25 @@ export function EmergencyResultCard({
       */}
       {result.icuTotal === null ? null : (
         <div className="flex items-baseline gap-2" data-testid="result-icu-freshness">
-          <span className="text-caption text-ink-muted">{bedKindName('icu', LOCALE)}</span>
+          <span className="text-caption text-ink-muted">{bedKindName('icu', locale)}</span>
           <FreshnessLine
             asOf={result.icuAsOf === null ? null : new Date(result.icuAsOf)}
             now={now}
             staleAfterMinutes={result.staleAfterMinutes}
             labels={{
-              justNow: tp('updatedJustNow', LOCALE),
-              ago: tp('updatedAgo', LOCALE),
-              never: tp('updatedNever', LOCALE),
-              stale: tp('staleWarning', LOCALE),
+              justNow: tp('updatedJustNow', locale),
+              ago: tp('updatedAgo', locale),
+              never: tp('updatedNever', locale),
+              stale: tp('staleWarning', locale),
             }}
-            formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+            formatMinutes={(value) => formatAge(value, locale, numerals)}
           />
         </div>
       )}
 
       {failed ? (
         <p role="alert" className="rounded-sm bg-alert-100 px-3 py-2 text-body-sm text-alert-700">
-          {tp('onWayFailed', LOCALE)}
+          {tp('onWayFailed', locale)}
         </p>
       ) : null}
 
@@ -192,7 +193,7 @@ export function EmergencyResultCard({
               setSheetOpen(true);
             }}
           >
-            {tp('emergencyOnWay', LOCALE)}
+            {tp('emergencyOnWay', locale)}
           </Button>
         )}
         <div className="grid grid-cols-2 gap-2">
@@ -204,7 +205,7 @@ export function EmergencyResultCard({
               data-testid={`directions-${result.hospitalId}`}
               className="flex min-h-touch items-center justify-center rounded-md border border-line-strong px-3 text-body-md text-ink"
             >
-              {tp('emergencyDirections', LOCALE)}
+              {tp('emergencyDirections', locale)}
             </a>
           )}
           {result.emergencyPhone === null ? null : (
@@ -213,7 +214,7 @@ export function EmergencyResultCard({
               data-testid={`call-${result.hospitalId}`}
               className="flex min-h-touch items-center justify-center rounded-md border border-line-strong px-3 text-body-md text-ink"
             >
-              {tp('emergencyCallEr', LOCALE)}
+              {tp('emergencyCallEr', locale)}
             </a>
           )}
         </div>
@@ -224,6 +225,7 @@ export function EmergencyResultCard({
         onOpenChange={setSheetOpen}
         hospitalId={result.hospitalId}
         hospitalNameBn={result.nameBn}
+        hospitalNameEn={result.nameEn}
         problem={problem}
         position={position}
         onSent={(token) => {
@@ -248,6 +250,7 @@ function OnWaySheet({
   onOpenChange,
   hospitalId,
   hospitalNameBn,
+  hospitalNameEn,
   problem,
   position,
   onSent,
@@ -257,11 +260,13 @@ function OnWaySheet({
   readonly onOpenChange: (open: boolean) => void;
   readonly hospitalId: string;
   readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
   readonly problem: EmergencyProblem;
   readonly position: { readonly lat: number; readonly lng: number } | null;
   readonly onSent: (token: string) => void;
   readonly onFailed: () => void;
 }): ReactNode {
+  const locale = useLocale();
   const [phone, setPhone] = useState('');
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<'male' | 'female' | 'other' | null>(null);
@@ -279,8 +284,11 @@ function OnWaySheet({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title={tp('onWayTitle', LOCALE).replace('{hospital}', hospitalNameBn)}
-      description={tp('onWayOptional', LOCALE)}
+      title={tp('onWayTitle', locale).replace(
+        '{hospital}',
+        localName(locale, hospitalNameBn, hospitalNameEn),
+      )}
+      description={tp('onWayOptional', locale)}
     >
       <form
         className="flex flex-col gap-4"
@@ -308,6 +316,7 @@ function OnWaySheet({
                 caseId: result.case.id,
                 token: result.token,
                 hospitalNameBn,
+                hospitalNameEn,
                 problem,
                 sentAt: new Date().toISOString(),
               });
@@ -324,27 +333,27 @@ function OnWaySheet({
         }}
       >
         <Input
-          label={tp('onWayPhone', LOCALE)}
+          label={tp('onWayPhone', locale)}
           kind="phone"
           value={phone}
           data-testid="onway-phone"
           onChange={(event) => {
             setPhone(event.target.value);
           }}
-          {...(tried && phoneError ? { error: tp('mobileInvalid', LOCALE) } : {})}
+          {...(tried && phoneError ? { error: tp('mobileInvalid', locale) } : {})}
         />
         <Input
-          label={tp('onWayAge', LOCALE)}
+          label={tp('onWayAge', locale)}
           kind="number"
           value={age}
           data-testid="onway-age"
           onChange={(event) => {
             setAge(event.target.value);
           }}
-          {...(tried && ageError ? { error: tp('onWayAge', LOCALE) } : {})}
+          {...(tried && ageError ? { error: tp('onWayAge', locale) } : {})}
         />
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-caption text-ink-muted">{tp('sex', LOCALE)}</legend>
+          <legend className="text-caption text-ink-muted">{tp('sex', locale)}</legend>
           <div className="grid grid-cols-3 gap-2">
             {(['male', 'female', 'other'] as const).map((value) => (
               <Button
@@ -356,7 +365,7 @@ function OnWaySheet({
                   setSex(sex === value ? null : value);
                 }}
               >
-                {tp(value, LOCALE)}
+                {tp(value, locale)}
               </Button>
             ))}
           </div>
@@ -370,7 +379,7 @@ function OnWaySheet({
           loading={sending}
           data-testid="onway-send"
         >
-          {sending ? tp('onWayNotifying', LOCALE) : tp('onWaySend', LOCALE)}
+          {sending ? tp('onWayNotifying', locale) : tp('onWaySend', locale)}
         </Button>
       </form>
     </Sheet>

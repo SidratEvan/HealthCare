@@ -26,12 +26,11 @@
 import { usePathname } from 'next/navigation';
 
 import { tp, type PatientKey } from '@platform/i18n';
+import { useLocale } from '@platform/ui';
 
 import { HomeIcon, ProfileIcon, RecordsIcon, SerialIcon } from '@/components/icons';
 
 import type { ReactNode } from 'react';
-
-const LOCALE = 'bn' as const;
 
 interface Tab {
   readonly href: string;
@@ -50,13 +49,14 @@ const TABS: readonly Tab[] = [
 ];
 
 export function BottomNav(): ReactNode {
+  const locale = useLocale();
   const pathname = usePathname();
 
   return (
     <nav
       // A11Y-01: a real <nav> with real links. A row of divs with onClick is
       // invisible to Tab and to a screen reader.
-      aria-label={tp('navHome', LOCALE)}
+      aria-label={tp('navHome', locale)}
       data-testid="bottom-nav"
       className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]"
     >
@@ -81,7 +81,7 @@ export function BottomNav(): ReactNode {
               >
                 <tab.Icon size={22} />
                 <span className={`text-caption ${active ? 'font-semibold' : ''}`}>
-                  {tp(tab.label, LOCALE)}
+                  {tp(tab.label, locale)}
                 </span>
               </a>
             </li>

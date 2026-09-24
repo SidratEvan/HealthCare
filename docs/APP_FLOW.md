@@ -48,7 +48,7 @@ Every control row reads:
 - `GR-03` Every screen has four defined states: loading (skeleton), empty, error (with retry), offline (with staleness banner).
 - `GR-04` Nothing blocks on the network: console writes go to the local queue first.
 - `GR-05` Every live number is rendered with its freshness line.
-- `GR-06` Bangla is the default language everywhere; English is a toggle (`FR-LOC-01`).
+- `GR-06` Bangla is the default language everywhere; English is a toggle (`FR-LOC-01`). The toggle is at the top of every screen of both apps — `SEG-A00-LANG` above every patient screen, `SEG-B00-LANG` in every console's header — and switches every screen at once, without a reload (`FRONTEND.md` `I18N-08`).
 - `GR-07` Emergency is always reachable: it is the first element of the app home and a persistent item in the app's navigation.
 - `GR-08` No screen requires login. Emergency search, hospital browse, and doctor browse are fully open (`FR-PAT-40`); booking, payments, bed requests, ambulance, and blood are available to **guests** with phone + name (`FR-GST-01`). Only the multi-device wallet and saved profiles require an account. All console screens require staff login.
 
@@ -216,6 +216,7 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 
 | Element | ID | Type | Wiring |
 |---|---|---|---|
+| Language switch | `SEG-A00-LANG` | two buttons, বাংলা / English, top-right above every screen of the app | Sets the locale for every screen at once, no reload → stored on the device (`FRONTEND.md` `I18N-08`) |
 | App header: name + area | — | — | Tap area → `MOD-A02-AREA` area picker |
 | Avatar | `BTN-A02-PROFILE` | icon button | → `S-A-06` profile switcher |
 | **জরুরি অবস্থা** card | `BTN-A02-EMERGENCY` | Full-width red card, top of screen | → `S-A-10` Emergency triage. **No auth check.** Preloads nearby hospital capacity on press-down for speed |
@@ -583,7 +584,7 @@ Accessed at `console.[domain]`. Designed for 1280px+ monitors, mouse and keyboar
 | Password | `INP-B00-PW` | |
 | লগ ইন | `BTN-B00-LOGIN` | → `POST /staff/login` → if 2FA enabled → `S-B-00b` OTP → else `S-B-01` |
 | পাসওয়ার্ড ভুলে গেছেন | `BTN-B00-FORGOT` | Admin-mediated reset request |
-| Language toggle | `SEG-B00-LANG` | Console defaults to Bangla |
+| Language toggle | `SEG-B00-LANG` | Console defaults to Bangla. While `S-B-00` is deferred (`CLAUDE.md` §4.1), it sits at the right end of the header of `S-B-01` and of every console: বাংলা / English, stored on the device |
 
 **Rules:** no self-signup (`FR-SUP-01` — accounts are created by hospital admin or platform), individual accounts only (`FR-SEC-06`), session timeout configurable per hospital with a re-auth modal that never loses queued work.
 

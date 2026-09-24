@@ -45,10 +45,11 @@ import {
   problemName,
   t,
   type Locale,
+  numeralsFor,
 } from '@platform/i18n';
 import { Button, Chip, Input } from '@platform/ui';
 
-import { NUMERALS, shownState, stateLabel } from '@/lib/bedCopy';
+import { shownState, stateLabel } from '@/lib/bedCopy';
 
 import type { BedBoard } from '@/hooks/useBedBoard';
 import type { PanelResponse, PendingHandoff, PendingRequest } from '@/lib/beds';
@@ -81,6 +82,7 @@ export interface BedPanelProps {
 
 export function BedPanel(props: BedPanelProps): ReactNode {
   const { bed, locale, now, connected, board, onClose } = props;
+  const numerals = numeralsFor(locale);
   const [mode, setMode] = useState<Mode>(
     props.admitCaseId === undefined || props.admitCaseId === null ? 'view' : 'admit',
   );
@@ -145,18 +147,18 @@ export function BedPanel(props: BedPanelProps): ReactNode {
       </header>
 
       <dl className="grid grid-cols-2 gap-2 font-ui text-body-sm">
-        <Fact label={t('factNightly', locale)} value={formatTaka(bed.nightlyPoisha, NUMERALS)} />
-        <Fact label={t('factSince', locale)} value={formatDateTime(bed.stateChangedAt, NUMERALS)} />
+        <Fact label={t('factNightly', locale)} value={formatTaka(bed.nightlyPoisha, numerals)} />
+        <Fact label={t('factSince', locale)} value={formatDateTime(bed.stateChangedAt, numerals)} />
         {bed.lastCleanedAt === null ? null : (
           <Fact
             label={t('factLastCleaned', locale)}
-            value={formatDateTime(bed.lastCleanedAt, NUMERALS)}
+            value={formatDateTime(bed.lastCleanedAt, numerals)}
           />
         )}
         {state === 'reserved' && bed.reservedUntil !== null ? (
           <Fact
             label={t('factHeldUntil', locale)}
-            value={format('bedUntil', locale, { time: formatClock(bed.reservedUntil, NUMERALS) })}
+            value={format('bedUntil', locale, { time: formatClock(bed.reservedUntil, numerals) })}
           />
         ) : null}
       </dl>
@@ -296,7 +298,7 @@ export function BedPanel(props: BedPanelProps): ReactNode {
                   void act('reserve', { minutes }, { action: 'reserve', holdMinutes: minutes });
                 }}
               >
-                {format('holdFor', locale, { minutes: formatNumber(minutes, NUMERALS) })}
+                {format('holdFor', locale, { minutes: formatNumber(minutes, numerals) })}
               </Button>
             ))}
           </div>
@@ -401,6 +403,7 @@ function Occupant({
   readonly locale: Locale;
   readonly board: BedBoard;
 }): ReactNode {
+  const numerals = numeralsFor(locale);
   const [occupant, setOccupant] = useState<PanelResponse['occupant'] | 'loading' | 'failed'>(
     'loading',
   );
@@ -450,10 +453,10 @@ function Occupant({
       <p className="text-body-sm tabular-nums text-ink-secondary">
         {occupant.ageYears === null
           ? t(sex, locale)
-          : `${format('ageYears', locale, { age: formatNumber(occupant.ageYears, NUMERALS) })} · ${t(sex, locale)}`}{' '}
+          : `${format('ageYears', locale, { age: formatNumber(occupant.ageYears, numerals) })} · ${t(sex, locale)}`}{' '}
         ·{' '}
         {format('occupantAdmitted', locale, {
-          time: formatDateTime(occupant.admittedAt, NUMERALS),
+          time: formatDateTime(occupant.admittedAt, numerals),
         })}
       </p>
       <p className="mt-1 text-caption text-ink-muted">{t('occupantViewLogged', locale)}</p>

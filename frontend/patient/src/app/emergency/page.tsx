@@ -17,24 +17,28 @@
  * Written for P6: panicked, one-handed, possibly in a moving car. The two
  * controls are the largest things below the call, and nothing needs typing.
  *
- * No client JavaScript at all: every control here is a link or a native
- * disclosure, so the screen works the instant it is painted, before
- * hydration, and on a phone where the script has not arrived.
+ * Every control here is a link or a native disclosure, so the screen works
+ * the instant it is painted, before hydration, and on a phone where the
+ * script has not arrived. It is a client component only so that it can read
+ * the language switch (`SEG-A00-LANG`): the server still renders it whole, in
+ * Bangla, and hydrating changes nothing but the language a phone chose.
  */
+
+'use client';
 
 import { EMERGENCY_PROBLEMS } from '@platform/domain';
 import { problemName, tp } from '@platform/i18n';
+import { useLocale } from '@platform/ui';
 
 import { AmbulanceIcon, EmergencyIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
 
 import type { ReactNode } from 'react';
 
-const LOCALE = 'bn' as const;
-
 export default function EmergencyPage(): ReactNode {
+  const locale = useLocale();
   return (
-    <TabScreen title={tp('emergencyTitle', LOCALE)}>
+    <TabScreen title={tp('emergencyTitle', locale)}>
       {/*
         A real `tel:` link, not a button with a handler: it works with the
         keyboard, from a screen reader's links list, and long-press offers to
@@ -50,9 +54,9 @@ export default function EmergencyPage(): ReactNode {
         </span>
         <span className="min-w-0">
           <span className="block font-reading text-title-md font-bold">
-            {tp('call999', LOCALE)}
+            {tp('call999', locale)}
           </span>
-          <span className="block text-body-sm opacity-90">{tp('call999Line', LOCALE)}</span>
+          <span className="block text-body-sm opacity-90">{tp('call999Line', locale)}</span>
         </span>
       </a>
 
@@ -64,9 +68,9 @@ export default function EmergencyPage(): ReactNode {
           className="flex min-h-[76px] flex-col justify-center rounded-lg border-2 border-alert-600 bg-alert-100 px-5 py-3 text-alert-700"
         >
           <span className="font-reading text-title-md font-bold">
-            {tp('emergencyCritical', LOCALE)}
+            {tp('emergencyCritical', locale)}
           </span>
-          <span className="text-body-sm">{tp('emergencyCriticalLine', LOCALE)}</span>
+          <span className="text-body-sm">{tp('emergencyCriticalLine', locale)}</span>
         </a>
 
         {/*
@@ -82,10 +86,10 @@ export default function EmergencyPage(): ReactNode {
             className="flex min-h-[76px] cursor-pointer list-none flex-col justify-center px-5 py-3 text-ink [&::-webkit-details-marker]:hidden"
           >
             <span className="font-reading text-title-md font-bold">
-              {tp('emergencyUrgent', LOCALE)}
+              {tp('emergencyUrgent', locale)}
             </span>
             <span className="text-body-sm text-ink-secondary">
-              {tp('emergencyUrgentLine', LOCALE)}
+              {tp('emergencyUrgentLine', locale)}
             </span>
           </summary>
 
@@ -95,7 +99,7 @@ export default function EmergencyPage(): ReactNode {
             className="flex flex-col gap-3 border-t border-line px-5 pb-5 pt-4"
           >
             <h2 id="problems-title" className="text-title-sm text-ink">
-              {tp('emergencyWhatHappened', LOCALE)}
+              {tp('emergencyWhatHappened', locale)}
             </h2>
             <ul className="grid grid-cols-2 gap-3">
               {EMERGENCY_PROBLEMS.map((problem) => (
@@ -105,7 +109,7 @@ export default function EmergencyPage(): ReactNode {
                     data-testid={`problem-${problem}`}
                     className="flex min-h-touch items-center justify-center rounded-md border border-line-strong bg-surface px-4 py-3 text-body-lg text-ink"
                   >
-                    {problemName(problem, LOCALE)}
+                    {problemName(problem, locale)}
                   </a>
                 </li>
               ))}
@@ -121,7 +125,7 @@ export default function EmergencyPage(): ReactNode {
         className="flex min-h-touch items-center gap-3 rounded-md border border-line bg-surface px-4 py-3 text-body-md text-ink"
       >
         <AmbulanceIcon size={22} />
-        {tp('emergencyAmbulance', LOCALE)}
+        {tp('emergencyAmbulance', locale)}
       </a>
     </TabScreen>
   );

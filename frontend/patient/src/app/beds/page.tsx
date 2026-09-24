@@ -33,8 +33,16 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { BED_KINDS, normaliseBdMobile, type BedKind } from '@platform/domain';
-import { bedKindName, formatNumber, formatTaka, tp, formatAge } from '@platform/i18n';
-import { Button, Card, FilterChip, FreshnessLine, Input, Sheet } from '@platform/ui';
+import {
+  bedKindName,
+  formatNumber,
+  formatTaka,
+  tp,
+  formatAge,
+  numeralsFor,
+  localName,
+} from '@platform/i18n';
+import { Button, Card, FilterChip, FreshnessLine, Input, Sheet, useLocale } from '@platform/ui';
 
 import { HospitalIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
@@ -45,9 +53,6 @@ import { rememberBedRequest, savedBedRequests, type SavedBedRequest } from '@/li
 
 import type { HospitalCard, Loadable } from '@/lib/types';
 
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
-
 /** How often the list is re-read while visible. */
 const REFRESH_MS = 30_000;
 
@@ -55,6 +60,7 @@ const REFRESH_MS = 30_000;
 const STALE_AFTER_MINUTES = 10;
 
 export default function Page(): ReactNode {
+  const locale = useLocale();
   const now = useNow(15_000);
   const online = useOnline();
   const [kind, setKind] = useState<BedKind>('general');
@@ -102,12 +108,12 @@ export default function Page(): ReactNode {
   }, [kind, load]);
 
   return (
-    <TabScreen title={tp('bedsTitle', LOCALE)}>
+    <TabScreen title={tp('bedsTitle', locale)}>
       <div className="flex flex-col gap-4" data-testid="bed-search">
         {mine.length === 0 ? null : (
           <section className="flex flex-col gap-2" aria-labelledby="my-requests">
             <h2 id="my-requests" className="text-title-sm">
-              {tp('yourRequests', LOCALE)}
+              {tp('yourRequests', locale)}
             </h2>
             {mine.map((request) => (
               <a
@@ -117,9 +123,10 @@ export default function Page(): ReactNode {
                 className="flex min-h-touch items-center justify-between rounded-md border border-line bg-surface px-4 text-body-md"
               >
                 <span>
-                  {request.hospitalNameBn} · {bedKindName(request.bedKind, LOCALE)}
+                  {localName(locale, request.hospitalNameBn, request.hospitalNameEn)} ·{' '}
+                  {bedKindName(request.bedKind, locale)}
                 </span>
-                <span className="text-brand-600">{tp('requestStatus', LOCALE)}</span>
+                <span className="text-brand-600">{tp('requestStatus', locale)}</span>
               </a>
             ))}
           </section>
@@ -128,7 +135,7 @@ export default function Page(): ReactNode {
         {/* CHIP-A11-<type> */}
         <fieldset className="flex flex-col gap-2">
           <legend className="text-body-md text-ink-secondary">
-            {tp('bedsChooseKind', LOCALE)}
+            {tp('bedsChooseKind', locale)}
           </legend>
           <div className="flex flex-wrap gap-2">
             {BED_KINDS.map((candidate) => (
@@ -139,13 +146,13 @@ export default function Page(): ReactNode {
                   setKind(candidate);
                 }}
               >
-                {bedKindName(candidate, LOCALE)}
+                {bedKindName(candidate, locale)}
               </FilterChip>
             ))}
           </div>
         </fieldset>
 
-        <p className="text-caption text-ink-muted">{tp('bedsHowItWorks', LOCALE)}</p>
+        <p className="text-caption text-ink-muted">{tp('bedsHowItWorks', locale)}</p>
 
         {!online && list.state === 'ready' ? (
           <p
@@ -153,7 +160,7 @@ export default function Page(): ReactNode {
             data-testid="beds-offline"
             className="rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
           >
-            {tp('bedsOfflineCached', LOCALE)}
+            {tp('bedsOfflineCached', locale)}
           </p>
         ) : null}
 
@@ -195,6 +202,7 @@ function Results({
   readonly onRetry: () => void;
   readonly onRequest: (hospital: HospitalCard) => void;
 }): ReactNode {
+  const locale = useLocale();
   const ordered = useMemo(() => {
     if (list.state !== 'ready') return [];
     // Fresh and free first, then free but unconfirmed, then none free — a
@@ -205,9 +213,14 @@ function Results({
       return isStale(entry.asOf, now) ? 1 : 0;
     };
     return [...list.items].sort(
-      (a, b) => rank(a) - rank(b) || a.nameBn.localeCompare(b.nameBn, 'bn'),
+      (a, b) =>
+        rank(a) - rank(b) ||
+        localName(locale, a.nameBn, a.nameEn).localeCompare(
+          localName(locale, b.nameBn, b.nameEn),
+          locale,
+        ),
     );
-  }, [list, kind, now]);
+  }, [list, kind, now, locale]);
 
   // GR-03: loading, failed and empty are three different sentences.
   if (list.state === 'loading') {
@@ -222,9 +235,9 @@ function Results({
   if (list.state === 'failed') {
     return (
       <div className="flex flex-col gap-3" role="alert" data-testid="beds-failed">
-        <p className="text-body-md text-ink-secondary">{tp('listFailed', LOCALE)}</p>
+        <p className="text-body-md text-ink-secondary">{tp('listFailed', locale)}</p>
         <Button variant="secondary" onClick={onRetry}>
-          {tp('tryAgain', LOCALE)}
+          {tp('tryAgain', locale)}
         </Button>
       </div>
     );
@@ -233,8 +246,8 @@ function Results({
   if (ordered.length === 0) {
     return (
       <div className="flex flex-col gap-2" data-testid="beds-empty">
-        <p className="text-body-md text-ink-secondary">{tp('bedsNoHospitals', LOCALE)}</p>
-        <p className="text-body-sm text-ink-muted">{tp('bedsNoHospitalsHint', LOCALE)}</p>
+        <p className="text-body-md text-ink-secondary">{tp('bedsNoHospitals', locale)}</p>
+        <p className="text-body-sm text-ink-muted">{tp('bedsNoHospitalsHint', locale)}</p>
       </div>
     );
   }
@@ -262,6 +275,8 @@ function HospitalBedCard({
   readonly now: Date;
   readonly onRequest: (hospital: HospitalCard) => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const entry = hospital.beds?.byKind.find((row) => row.kind === kind);
   if (entry === undefined) return null;
 
@@ -270,12 +285,12 @@ function HospitalBedCard({
     entry.nightlyMinPoisha === null
       ? null
       : entry.nightlyMinPoisha === entry.nightlyMaxPoisha
-        ? tp('bedsNightly', LOCALE).replace('{price}', formatTaka(entry.nightlyMinPoisha, NUMERALS))
-        : tp('bedsNightlyRange', LOCALE)
-            .replace('{min}', formatTaka(entry.nightlyMinPoisha, NUMERALS))
+        ? tp('bedsNightly', locale).replace('{price}', formatTaka(entry.nightlyMinPoisha, numerals))
+        : tp('bedsNightlyRange', locale)
+            .replace('{min}', formatTaka(entry.nightlyMinPoisha, numerals))
             .replace(
               '{max}',
-              formatTaka(entry.nightlyMaxPoisha ?? entry.nightlyMinPoisha, NUMERALS),
+              formatTaka(entry.nightlyMaxPoisha ?? entry.nightlyMinPoisha, numerals),
             );
 
   return (
@@ -290,7 +305,7 @@ function HospitalBedCard({
             <HospitalIcon size={22} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-title-sm">{hospital.nameBn}</p>
+            <p className="text-title-sm">{localName(locale, hospital.nameBn, hospital.nameEn)}</p>
             <p className="text-body-sm text-ink-muted">
               {hospital.thana === null
                 ? hospital.district
@@ -301,10 +316,10 @@ function HospitalBedCard({
 
         <p className="text-title-md tabular-nums" data-testid="bed-card-free">
           {entry.free > 0
-            ? tp('bedsFree', LOCALE).replace('{free}', formatNumber(entry.free, NUMERALS))
-            : tp('bedsNoneFree', LOCALE)}{' '}
+            ? tp('bedsFree', locale).replace('{free}', formatNumber(entry.free, numerals))
+            : tp('bedsNoneFree', locale)}{' '}
           <span className="text-body-sm text-ink-muted">
-            {tp('bedsOfTotal', LOCALE).replace('{total}', formatNumber(entry.total, NUMERALS))}
+            {tp('bedsOfTotal', locale).replace('{total}', formatNumber(entry.total, numerals))}
           </span>
         </p>
 
@@ -315,17 +330,17 @@ function HospitalBedCard({
           now={now}
           staleAfterMinutes={STALE_AFTER_MINUTES}
           labels={{
-            justNow: tp('updatedJustNow', LOCALE),
-            ago: tp('updatedAgo', LOCALE),
-            never: tp('updatedNever', LOCALE),
-            stale: tp('staleWarning', LOCALE),
+            justNow: tp('updatedJustNow', locale),
+            ago: tp('updatedAgo', locale),
+            never: tp('updatedNever', locale),
+            stale: tp('staleWarning', locale),
           }}
-          formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+          formatMinutes={(value) => formatAge(value, locale, numerals)}
         />
 
         {stale ? (
           <p className="text-body-sm text-warn-700" data-testid="bed-card-stale">
-            {tp('bedsStaleCaution', LOCALE)}
+            {tp('bedsStaleCaution', locale)}
           </p>
         ) : null}
 
@@ -336,7 +351,7 @@ function HospitalBedCard({
             onRequest(hospital);
           }}
         >
-          {tp('requestBed', LOCALE)}
+          {tp('requestBed', locale)}
         </Button>
       </div>
     </Card>
@@ -353,6 +368,8 @@ function RequestSheet({
   readonly kind: BedKind;
   readonly onClose: () => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [age, setAge] = useState('');
@@ -392,13 +409,14 @@ function RequestSheet({
         requestId: created.request.id,
         token: created.token,
         hospitalNameBn: hospital.nameBn,
+        hospitalNameEn: hospital.nameEn,
         bedKind: kind,
         savedAt: new Date().toISOString(),
       });
 
       globalThis.location.assign(`/beds/request?t=${encodeURIComponent(created.token)}`);
     } catch {
-      setFailure(tp('requestFailed', LOCALE));
+      setFailure(tp('requestFailed', locale));
     } finally {
       setSending(false);
     }
@@ -410,10 +428,10 @@ function RequestSheet({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={tp('requestTitle', LOCALE)
-        .replace('{hospital}', hospital.nameBn)
-        .replace('{kind}', bedKindName(kind, LOCALE))}
-      description={tp('requestNotAHold', LOCALE)}
+      title={tp('requestTitle', locale)
+        .replace('{hospital}', localName(locale, hospital.nameBn, hospital.nameEn))
+        .replace('{kind}', bedKindName(kind, locale))}
+      description={tp('requestNotAHold', locale)}
     >
       <form
         className="flex flex-col gap-4"
@@ -425,7 +443,7 @@ function RequestSheet({
         }}
       >
         <Input
-          label={tp('patientName', LOCALE)}
+          label={tp('patientName', locale)}
           value={name}
           data-testid="request-name"
           onChange={(event) => {
@@ -433,18 +451,18 @@ function RequestSheet({
           }}
         />
         <Input
-          label={tp('mobileNumber', LOCALE)}
+          label={tp('mobileNumber', locale)}
           kind="phone"
           value={phone}
-          helper={tp('requestMobileHelper', LOCALE)}
+          helper={tp('requestMobileHelper', locale)}
           data-testid="request-phone"
           onChange={(event) => {
             setPhone(event.target.value);
           }}
-          {...(tried && stored === null ? { error: tp('mobileInvalid', LOCALE) } : {})}
+          {...(tried && stored === null ? { error: tp('mobileInvalid', locale) } : {})}
         />
         <Input
-          label={tp('age', LOCALE)}
+          label={tp('age', locale)}
           kind="number"
           value={age}
           data-testid="request-age"
@@ -454,7 +472,7 @@ function RequestSheet({
         />
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-body-md text-ink-secondary">{tp('sex', LOCALE)}</legend>
+          <legend className="text-body-md text-ink-secondary">{tp('sex', locale)}</legend>
           <div className="flex gap-2">
             {(['male', 'female', 'other'] as const).map((value) => (
               <FilterChip
@@ -464,7 +482,7 @@ function RequestSheet({
                   setSex(value);
                 }}
               >
-                {tp(value, LOCALE)}
+                {tp(value, locale)}
               </FilterChip>
             ))}
           </div>
@@ -472,7 +490,7 @@ function RequestSheet({
 
         <fieldset className="flex flex-col gap-2">
           <legend className="text-body-md text-ink-secondary">
-            {tp('requestArrival', LOCALE)}
+            {tp('requestArrival', locale)}
           </legend>
           <div className="flex flex-wrap gap-2">
             {[30, 60, 120].map((minutes) => (
@@ -483,9 +501,9 @@ function RequestSheet({
                   setArrivalMinutes(minutes);
                 }}
               >
-                {tp('requestArrivalIn', LOCALE).replace(
+                {tp('requestArrivalIn', locale).replace(
                   '{minutes}',
-                  formatNumber(minutes, NUMERALS),
+                  formatNumber(minutes, numerals),
                 )}
               </FilterChip>
             ))}
@@ -493,7 +511,7 @@ function RequestSheet({
         </fieldset>
 
         <Input
-          label={tp('requestNote', LOCALE)}
+          label={tp('requestNote', locale)}
           value={note}
           data-testid="request-note"
           onChange={(event) => {
@@ -503,7 +521,7 @@ function RequestSheet({
 
         {tried && !complete ? (
           <p className="text-body-sm text-alert-700" role="alert">
-            {tp('requestFillAll', LOCALE)}
+            {tp('requestFillAll', locale)}
           </p>
         ) : null}
         {failure === null ? null : (
@@ -513,7 +531,7 @@ function RequestSheet({
         )}
 
         <Button type="submit" size="lg" loading={sending} data-testid="request-send">
-          {tp('requestSend', LOCALE)}
+          {tp('requestSend', locale)}
         </Button>
       </form>
     </Sheet>

@@ -23,8 +23,8 @@
 
 import { useEffect, useState } from 'react';
 
-import { formatDateTime, formatSerial, tp } from '@platform/i18n';
-import { Card } from '@platform/ui';
+import { formatDateTime, formatSerial, tp, numeralsFor, localName } from '@platform/i18n';
+import { Card, useLocale } from '@platform/ui';
 
 import { ChevronIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
@@ -32,10 +32,8 @@ import { recentBookings, type DatedBooking } from '@/lib/bookings';
 
 import type { ReactNode } from 'react';
 
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
-
 export default function SerialsPage(): ReactNode {
+  const locale = useLocale();
   const [bookings, setBookings] = useState<readonly DatedBooking[] | null>(null);
 
   // Read after mount: `localStorage` does not exist on the server, and reading
@@ -49,7 +47,7 @@ export default function SerialsPage(): ReactNode {
   const past = bookings?.filter((entry) => entry.isPast) ?? [];
 
   return (
-    <TabScreen title={tp('mySerials', LOCALE)}>
+    <TabScreen title={tp('mySerials', locale)}>
       {bookings === null ? (
         // GR-03 loading: the shape of the answer, never a spinner.
         <div className="flex flex-col gap-3" aria-busy="true">
@@ -61,22 +59,22 @@ export default function SerialsPage(): ReactNode {
           data-testid="serials-empty"
           className="flex flex-col gap-3 rounded-md border border-line bg-surface p-5"
         >
-          <p className="text-body-md text-ink-secondary">{tp('noSerials', LOCALE)}</p>
+          <p className="text-body-md text-ink-secondary">{tp('noSerials', locale)}</p>
           <a
             href="/"
             className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-semibold text-white"
           >
-            {tp('seeADoctor', LOCALE)}
+            {tp('seeADoctor', locale)}
           </a>
         </div>
       ) : (
         <>
-          <Section title={tp('serialsToday', LOCALE)} bookings={today} live />
-          <Section title={tp('serialsUpcoming', LOCALE)} bookings={upcoming} />
-          <Section title={tp('serialsPast', LOCALE)} bookings={past} />
+          <Section title={tp('serialsToday', locale)} bookings={today} live />
+          <Section title={tp('serialsUpcoming', locale)} bookings={upcoming} />
+          <Section title={tp('serialsPast', locale)} bookings={past} />
 
           {/* The honest caveat, on the screen rather than in a comment. */}
-          <p className="text-caption text-ink-muted">{tp('serialsOnThisDevice', LOCALE)}</p>
+          <p className="text-caption text-ink-muted">{tp('serialsOnThisDevice', locale)}</p>
         </>
       )}
     </TabScreen>
@@ -92,6 +90,8 @@ function Section({
   readonly bookings: readonly DatedBooking[];
   readonly live?: boolean;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   if (bookings.length === 0) return null;
 
   return (
@@ -109,14 +109,18 @@ function Section({
                       live ? 'bg-brand-600 text-white' : 'bg-sunken text-ink'
                     }`}
                   >
-                    {formatSerial(booking.serial, NUMERALS)}
+                    {formatSerial(booking.serial, numerals)}
                   </span>
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-body-lg font-semibold">{booking.doctorNameBn}</p>
-                    <p className="truncate text-body-sm text-ink-muted">{booking.hospitalNameBn}</p>
+                    <p className="truncate text-body-lg font-semibold">
+                      {localName(locale, booking.doctorNameBn, booking.doctorNameEn)}
+                    </p>
+                    <p className="truncate text-body-sm text-ink-muted">
+                      {localName(locale, booking.hospitalNameBn, booking.hospitalNameEn)}
+                    </p>
                     <p className="text-body-sm tabular-nums text-ink-secondary">
-                      {formatDateTime(booking.plannedStart, NUMERALS)}
+                      {formatDateTime(booking.plannedStart, numerals)}
                     </p>
                   </div>
 
