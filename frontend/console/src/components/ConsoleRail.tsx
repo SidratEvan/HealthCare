@@ -14,7 +14,7 @@
  * (`CLAUDE.md` §4.1), and a link that goes nowhere is worse than a label.
  */
 
-import { t, type ConsoleKey, type Locale } from '@platform/i18n';
+import { localName, t, type ConsoleKey, type Locale } from '@platform/i18n';
 
 import { readDemoSession } from '@/lib/demo';
 
@@ -55,7 +55,7 @@ export function ConsoleRail({
       <div className="px-2 pt-2">
         {session?.hospitalNameBn === undefined ? null : (
           <p className="text-title-sm font-bold" data-testid="rail-hospital">
-            {session.hospitalNameBn}
+            {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
           </p>
         )}
         {session === null ? null : (

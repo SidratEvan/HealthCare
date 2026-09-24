@@ -21,6 +21,7 @@ export interface DemoSessionRow {
   readonly doctorNameBn: string;
   readonly doctorNameEn: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   readonly room: string | null;
   readonly status: string;
   readonly plannedStart: string;
@@ -75,6 +76,7 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
     doctor_name_bn: string;
     doctor_name_en: string;
     department_name_bn: string;
+    department_name_en: string;
     room: string | null;
     status: string;
     planned_start: Date;
@@ -86,6 +88,7 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
            d.full_name_bn AS doctor_name_bn,
            d.full_name_en AS doctor_name_en,
            dep.name_bn    AS department_name_bn,
+           dep.name_en    AS department_name_en,
            s.room, s.status::text AS status, s.planned_start, s.planned_end,
            count(b.id) FILTER (WHERE b.status IN ('booked', 'waiting'))::text AS waiting,
            count(b.id)::text AS total
@@ -109,7 +112,7 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
              AND s.session_date >= (now() AT TIME ZONE 'Asia/Dhaka')::date - 1)
        )
      GROUP BY s.hospital_id, s.id, d.full_name_bn, d.full_name_en,
-              dep.name_bn, s.room, s.status, s.planned_start, s.planned_end
+              dep.name_bn, dep.name_en, s.room, s.status, s.planned_start, s.planned_end
      ORDER BY
        -- A chamber already mid-queue first: it is the one that demonstrates
        -- the product rather than describing it (FR-DEM-06).
@@ -125,6 +128,7 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
       doctorNameBn: row.doctor_name_bn,
       doctorNameEn: row.doctor_name_en,
       departmentNameBn: row.department_name_bn,
+      departmentNameEn: row.department_name_en,
       room: row.room,
       status: row.status,
       plannedStart: row.planned_start.toISOString(),

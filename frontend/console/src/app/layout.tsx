@@ -5,8 +5,12 @@
  * Bangla typesetting rules off it — the 1.65 line-height floor, no
  * letter-spacing, no conjunct breaking (`TYP-01`, `TYP-02`, `TYP-06`). Bangla
  * is the default language of this product, not a translation of it
- * (CLAUDE.md §11.5).
+ * (CLAUDE.md §11.5). English is the switch in each console's header
+ * (`SEG-B00-LANG`); `<LocaleDocument>` moves `lang` with it.
  */
+
+import { t } from '@platform/i18n';
+import { LocaleDocument } from '@platform/ui';
 
 import '@platform/ui/styles.css';
 
@@ -31,7 +35,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { readonly children: ReactNode }): ReactNode {
   return (
     <html lang="bn" className={fontVariables}>
-      <body className="min-h-screen bg-canvas text-ink">{children}</body>
+      <body className="min-h-screen bg-canvas text-ink">
+        {children}
+        <LocaleDocument title={{ bn: t('consoleTitle', 'bn'), en: t('consoleTitle', 'en') }} />
+      </body>
     </html>
   );
 }

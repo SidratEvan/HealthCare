@@ -173,7 +173,9 @@ export interface StandbyStatus {
   readonly sessionId: string;
   readonly state: StandbyState;
   readonly doctorNameBn: string | null;
+  readonly doctorNameEn: string | null;
   readonly hospitalNameBn: string | null;
+  readonly hospitalNameEn: string | null;
   readonly plannedStart: string | null;
   readonly feePoisha: number;
   /** Their place and how many are ahead, while they are waiting. */
@@ -249,7 +251,9 @@ export async function status(token: string): Promise<StandbyStatus> {
     sessionId: row.sessionId,
     state,
     doctorNameBn: chamber?.doctorNameBn ?? null,
+    doctorNameEn: chamber?.doctorNameEn ?? null,
     hospitalNameBn: chamber?.hospitalNameBn ?? null,
+    hospitalNameEn: chamber?.hospitalNameEn ?? null,
     plannedStart: session.plannedStart.toISOString(),
     feePoisha: session.feePoisha,
     position: row.position,

@@ -46,8 +46,18 @@ import {
   formatTaka,
   tp,
   formatAge,
+  numeralsFor,
+  type Locale,
+  localName,
 } from '@platform/i18n';
-import { Button, FreshnessLine, LiveSerialCard, Sheet, SheetActions } from '@platform/ui';
+import {
+  Button,
+  FreshnessLine,
+  LiveSerialCard,
+  Sheet,
+  SheetActions,
+  useLocale,
+} from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 import { useNow } from '@/hooks/useNow';
@@ -57,11 +67,6 @@ import { SOCKET_URL, cancelBooking, declareLate } from '@/lib/api';
 
 import type { BookingDetail, BookingView } from '@/lib/types';
 import type { ReactNode } from 'react';
-
-const LOCALE = 'bn' as const;
-
-/** Patient surfaces use Bengali numerals, always (`TYP-04`). */
-const NUMERALS = 'bengali' as const;
 
 /** How late a patient may say they will be (`MOD-A08-LATE` step 1). */
 const LATE_OPTIONS = [10, 20, 30, 45] as const;
@@ -137,6 +142,8 @@ function Ready({
   readonly stale: boolean;
   readonly token: string | null;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -172,12 +179,12 @@ function Ready({
   const act = useCallback(
     async (run: (input: { bookingId: string; token: string }) => Promise<void>, done: string) => {
       if (token === null) {
-        setFailure(tp('lateFailed', LOCALE));
+        setFailure(tp('lateFailed', locale));
         return;
       }
 
       setFailure(null);
-      setNotice(tp('lateSending', LOCALE));
+      setNotice(tp('lateSending', locale));
 
       try {
         await run({ bookingId: booking.id, token });
@@ -187,30 +194,34 @@ function Ready({
         // speak to the counter. A silent failure here means somebody stands in
         // a corridor believing the hospital knows something it does not.
         setNotice(null);
-        setFailure(tp('lateFailed', LOCALE));
+        setFailure(tp('lateFailed', locale));
       }
     },
-    [booking.id, token],
+    [booking.id, token, locale],
   );
 
   return (
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5">
         <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {tp('demoBanner', LOCALE)}
+          {tp('demoBanner', locale)}
         </p>
 
         <header className="flex flex-col gap-1">
-          <h1 className="font-reading text-title-lg">{booking.doctorNameBn}</h1>
-          <p className="text-body-sm text-ink-muted">{booking.hospitalNameBn}</p>
+          <h1 className="font-reading text-title-lg">
+            {localName(locale, booking.doctorNameBn, booking.doctorNameEn)}
+          </h1>
+          <p className="text-body-sm text-ink-muted">
+            {localName(locale, booking.hospitalNameBn, booking.hospitalNameEn)}
+          </p>
         </header>
 
         <LiveSerialCard
-          serial={formatSerial(booking.serial, NUMERALS)}
-          nowServing={serving === null ? null : formatSerial(serving.serial, NUMERALS)}
+          serial={formatSerial(booking.serial, numerals)}
+          nowServing={serving === null ? null : formatSerial(serving.serial, numerals)}
           seen={state.entries.filter((entry) => entry.status === 'done').length}
           total={state.entries.length}
-          etaText={etaText(eta)}
+          etaText={etaText(eta, locale)}
           confidence={eta?.confidence ?? 'unknown'}
           stale={stale}
           doctorArrived={state.doctorArrivedAt !== null}
@@ -218,21 +229,21 @@ function Ready({
           patientsAhead={ahead}
           called={called}
           labels={{
-            status: statusLine(state, called),
-            yourSerial: tp('liveSerialTitle', LOCALE),
-            nowServing: tp('nowServing', LOCALE),
-            nobodyCalledYet: tp('nobodyCalledYet', LOCALE),
-            progress: tp('sessionProgress', LOCALE),
-            eta: tp('estimatedTime', LOCALE),
-            etaUnknown: tp('etaUnknown', LOCALE),
+            status: statusLine(state, called, locale),
+            yourSerial: tp('liveSerialTitle', locale),
+            nowServing: tp('nowServing', locale),
+            nobodyCalledYet: tp('nobodyCalledYet', locale),
+            progress: tp('sessionProgress', locale),
+            eta: tp('estimatedTime', locale),
+            etaUnknown: tp('etaUnknown', locale),
             countdown:
               minutesUntil === null
                 ? null
-                : tp('countdown', LOCALE).replace(
+                : tp('countdown', locale).replace(
                     '{minutes}',
-                    formatMinutes(minutesUntil, NUMERALS),
+                    formatMinutes(minutesUntil, numerals),
                   ),
-            disconnected: tp('disconnected', LOCALE),
+            disconnected: tp('disconnected', locale),
           }}
           freshness={
             <FreshnessLine
@@ -240,12 +251,12 @@ function Ready({
               now={now}
               staleAfterMinutes={booking.staleThresholdMinutes}
               labels={{
-                justNow: tp('updatedJustNow', LOCALE),
-                ago: tp('updatedAgo', LOCALE),
-                never: tp('updatedNever', LOCALE),
-                stale: tp('staleWarning', LOCALE),
+                justNow: tp('updatedJustNow', locale),
+                ago: tp('updatedAgo', locale),
+                never: tp('updatedNever', locale),
+                stale: tp('staleWarning', locale),
               }}
-              formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+              formatMinutes={(value) => formatAge(value, locale, numerals)}
             />
           }
         />
@@ -274,7 +285,7 @@ function Ready({
             data-testid="leave-now"
             className="rounded-md bg-brand-100 px-4 py-3 text-body-md text-brand-900"
           >
-            {tp('leaveNow', LOCALE).replace('{minutes}', formatMinutes(TRAVEL_MINUTES, NUMERALS))}
+            {tp('leaveNow', locale).replace('{minutes}', formatMinutes(TRAVEL_MINUTES, numerals))}
           </p>
         ) : null}
 
@@ -285,8 +296,8 @@ function Ready({
             className="rounded-md bg-brand-600 px-4 py-3 text-body-lg font-semibold text-white"
           >
             {booking.room === null
-              ? tp('goToChamber', LOCALE)
-              : tp('goToRoom', LOCALE).replace('{room}', booking.room)}
+              ? tp('goToChamber', locale)
+              : tp('goToRoom', locale).replace('{room}', booking.room)}
           </p>
         ) : null}
 
@@ -326,13 +337,13 @@ function Ready({
                     clientEventId: crypto.randomUUID(),
                   });
                 },
-                tp('lateDone', LOCALE).replace('{count}', formatMinutes(3, NUMERALS)),
+                tp('lateDone', locale).replace('{count}', formatMinutes(3, numerals)),
               );
             }}
           />
 
           <CancelSheet
-            serial={formatSerial(booking.serial, NUMERALS)}
+            serial={formatSerial(booking.serial, numerals)}
             refund={cancellationRefund(booking, payment)}
             disabled={mine === null || mine.status === 'cancelled'}
             onConfirm={() => {
@@ -345,7 +356,7 @@ function Ready({
                     clientEventId: crypto.randomUUID(),
                   });
                 },
-                tp('cancelled', LOCALE),
+                tp('cancelled', locale),
               );
             }}
           />
@@ -367,21 +378,22 @@ function Ready({
  * in yet. Ordered the way `liveSerialTone` orders the surface, so the words
  * and the colour never describe different situations.
  */
-function statusLine(state: QueueState, called: boolean): string {
-  if (called) return tp('yourTurn', LOCALE);
-  if (state.status === 'ended') return tp('sessionEnded', LOCALE);
-  if (state.pausedAt !== null) return tp('sessionPaused', LOCALE);
+function statusLine(state: QueueState, called: boolean, locale: Locale): string {
+  const numerals = numeralsFor(locale);
+  if (called) return tp('yourTurn', locale);
+  if (state.status === 'ended') return tp('sessionEnded', locale);
+  if (state.pausedAt !== null) return tp('sessionPaused', locale);
   if (state.delayMinutes > 0) {
-    return tp('doctorDelayed', LOCALE).replace(
+    return tp('doctorDelayed', locale).replace(
       '{minutes}',
-      formatMinutes(state.delayMinutes, NUMERALS),
+      formatMinutes(state.delayMinutes, numerals),
     );
   }
-  if (state.doctorArrivedAt === null) return tp('doctorNotArrived', LOCALE);
+  if (state.doctorArrivedAt === null) return tp('doctorNotArrived', locale);
 
-  return tp('doctorArrivedAt', LOCALE).replace(
+  return tp('doctorArrivedAt', locale).replace(
     '{time}',
-    formatClock(state.doctorArrivedAt, NUMERALS),
+    formatClock(state.doctorArrivedAt, numerals),
   );
 }
 
@@ -402,6 +414,8 @@ function CounterQuote({
   readonly quotedWaitMinutes: number;
   readonly now: Date;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const promisedAt = Date.parse(arrivedAt) + quotedWaitMinutes * 60_000;
   const left = Math.ceil((promisedAt - now.getTime()) / 60_000);
 
@@ -410,27 +424,28 @@ function CounterQuote({
       data-testid="counter-quote"
       className="flex flex-col gap-1 rounded-md border border-line bg-surface px-4 py-3"
     >
-      <p className="text-caption text-ink-muted">{tp('quoteTitle', LOCALE)}</p>
+      <p className="text-caption text-ink-muted">{tp('quoteTitle', locale)}</p>
       <p className="text-body-md">
-        {tp('quoteSaid', LOCALE)
-          .replace('{minutes}', formatMinutes(quotedWaitMinutes, NUMERALS))
-          .replace('{time}', formatClock(arrivedAt, NUMERALS))}
+        {tp('quoteSaid', locale)
+          .replace('{minutes}', formatMinutes(quotedWaitMinutes, numerals))
+          .replace('{time}', formatClock(arrivedAt, numerals))}
       </p>
       <p className="text-body-sm text-ink-secondary" data-testid="counter-quote-left">
         {left > 0
-          ? tp('quoteLeft', LOCALE).replace('{minutes}', formatMinutes(left, NUMERALS))
-          : tp('quotePassed', LOCALE)}
+          ? tp('quoteLeft', locale).replace('{minutes}', formatMinutes(left, numerals))
+          : tp('quotePassed', locale)}
       </p>
     </section>
   );
 }
 
-function etaText(eta: Eta | null): string | null {
+function etaText(eta: Eta | null, locale: Locale): string | null {
+  const numerals = numeralsFor(locale);
   if (eta === null || eta.confidence === 'unknown') return null;
 
-  return tp('etaWithBand', LOCALE)
-    .replace('{time}', formatClock(eta.etaAt, NUMERALS))
-    .replace('{band}', formatMinutes(eta.bandMinutes, NUMERALS));
+  return tp('etaWithBand', locale)
+    .replace('{time}', formatClock(eta.etaAt, numerals))
+    .replace('{band}', formatMinutes(eta.bandMinutes, numerals));
 }
 
 /**
@@ -448,6 +463,8 @@ function QueuePreview({
   readonly state: QueueState;
   readonly mine: QueueEntry | null;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const active = state.entries.filter(
     (entry) => entry.status !== 'cancelled' && entry.status !== 'no_show',
   );
@@ -461,7 +478,7 @@ function QueuePreview({
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-title-sm">{tp('queuePreview', LOCALE)}</h2>
+      <h2 className="text-title-sm">{tp('queuePreview', locale)}</h2>
 
       <ul className="flex flex-col divide-y divide-line-hairline rounded-md border border-line bg-surface">
         {window.map((entry) => {
@@ -476,11 +493,11 @@ function QueuePreview({
               }`}
             >
               <span className="text-body-lg tabular-nums">
-                {formatSerial(entry.serial, NUMERALS)}
+                {formatSerial(entry.serial, numerals)}
               </span>
               <span className="text-body-sm text-ink-secondary">
                 {/* A11Y-03: state is a word, never a colour on its own. */}
-                {isMine ? tp('youMarker', LOCALE) : rowState(entry)}
+                {isMine ? tp('youMarker', locale) : rowState(entry, locale)}
               </span>
             </li>
           );
@@ -490,11 +507,11 @@ function QueuePreview({
   );
 }
 
-function rowState(entry: QueueEntry): string {
-  if (entry.status === 'in_chamber') return tp('inChamber', LOCALE);
-  if (entry.status === 'done') return tp('seenAlready', LOCALE);
-  if (entry.status === 'late') return tp('runningLate', LOCALE);
-  return tp('waitingHere', LOCALE);
+function rowState(entry: QueueEntry, locale: Locale): string {
+  if (entry.status === 'in_chamber') return tp('inChamber', locale);
+  if (entry.status === 'done') return tp('seenAlready', locale);
+  if (entry.status === 'late') return tp('runningLate', locale);
+  return tp('waitingHere', locale);
 }
 
 /** `MOD-A08-LATE` (`FR-PAT-33`). */
@@ -505,21 +522,23 @@ function LateSheet({
   readonly disabled: boolean;
   readonly onChoose: (minutes: number) => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [open, setOpen] = useState(false);
 
   return (
     <Sheet
       open={open}
       onOpenChange={setOpen}
-      title={tp('lateQuestion', LOCALE)}
+      title={tp('lateQuestion', locale)}
       trigger={
         disabled ? (
-          <Button variant="secondary" fullWidth disabled disabledReason={tp('etaUnknown', LOCALE)}>
-            {tp('declareLate', LOCALE)}
+          <Button variant="secondary" fullWidth disabled disabledReason={tp('etaUnknown', locale)}>
+            {tp('declareLate', locale)}
           </Button>
         ) : (
           <Button variant="secondary" fullWidth data-testid="declare-late">
-            {tp('declareLate', LOCALE)}
+            {tp('declareLate', locale)}
           </Button>
         )
       }
@@ -536,7 +555,7 @@ function LateSheet({
               onChoose(minutes);
             }}
           >
-            {tp('lateMinutes', LOCALE).replace('{minutes}', formatMinutes(minutes, NUMERALS))}
+            {tp('lateMinutes', locale).replace('{minutes}', formatMinutes(minutes, numerals))}
           </Button>
         ))}
       </div>
@@ -594,11 +613,12 @@ function cancellationRefund(
 }
 
 /** The refund, as a sentence somebody deciding can act on. */
-function refundSentence(refund: RefundDecision | null): string {
-  if (refund === null) return tp('refundNothingPaid', LOCALE);
-  if (!refund.stated) return tp('refundPolicyUnknown', LOCALE);
-  if (refund.refundPoisha <= 0) return tp('refundNone', LOCALE);
-  return tp('refundFull', LOCALE).replace('{amount}', formatTaka(refund.refundPoisha, NUMERALS));
+function refundSentence(refund: RefundDecision | null, locale: Locale): string {
+  const numerals = numeralsFor(locale);
+  if (refund === null) return tp('refundNothingPaid', locale);
+  if (!refund.stated) return tp('refundPolicyUnknown', locale);
+  if (refund.refundPoisha <= 0) return tp('refundNone', locale);
+  return tp('refundFull', locale).replace('{amount}', formatTaka(refund.refundPoisha, numerals));
 }
 
 function CancelSheet({
@@ -613,31 +633,32 @@ function CancelSheet({
   readonly disabled: boolean;
   readonly onConfirm: () => void;
 }): ReactNode {
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
 
   return (
     <Sheet
       open={open}
       onOpenChange={setOpen}
-      title={tp('cancelQuestion', LOCALE)}
-      description={tp('cancelConsequence', LOCALE).replace('{serial}', serial)}
+      title={tp('cancelQuestion', locale)}
+      description={tp('cancelConsequence', locale).replace('{serial}', serial)}
       // §5.6: no dismiss-by-accident on a destructive confirmation.
       dismissible={false}
       trigger={
         disabled ? (
-          <Button variant="quiet" fullWidth disabled disabledReason={tp('cancelFailed', LOCALE)}>
-            {tp('cancelBooking', LOCALE)}
+          <Button variant="quiet" fullWidth disabled disabledReason={tp('cancelFailed', locale)}>
+            {tp('cancelBooking', locale)}
           </Button>
         ) : (
           <Button variant="quiet" fullWidth data-testid="cancel-booking">
-            {tp('cancelBooking', LOCALE)}
+            {tp('cancelBooking', locale)}
           </Button>
         )
       }
     >
       <div className="flex flex-col gap-4">
         <p className="text-body-md text-ink-secondary" data-testid="refund-rule">
-          {refundSentence(refund)}
+          {refundSentence(refund, locale)}
         </p>
 
         <SheetActions destructive>
@@ -649,7 +670,7 @@ function CancelSheet({
               onConfirm();
             }}
           >
-            {tp('cancelConfirm', LOCALE)}
+            {tp('cancelConfirm', locale)}
           </Button>
           <Button
             variant="secondary"
@@ -657,7 +678,7 @@ function CancelSheet({
               setOpen(false);
             }}
           >
-            {tp('cancelKeep', LOCALE)}
+            {tp('cancelKeep', locale)}
           </Button>
         </SheetActions>
       </div>
@@ -673,6 +694,7 @@ function CancelSheet({
  * arrives, which makes the wait read as loading rather than as broken.
  */
 function LiveSerialSkeleton(): ReactNode {
+  const locale = useLocale();
   return (
     <main
       className="mx-auto flex max-w-[480px] flex-col gap-5 p-5"
@@ -686,7 +708,7 @@ function LiveSerialSkeleton(): ReactNode {
         <div className="h-1.5 w-full rounded-pill bg-sunken" />
         <div className="h-5 w-1/2 rounded-sm bg-sunken" />
       </div>
-      <span className="sr-only">{tp('loading', LOCALE)}</span>
+      <span className="sr-only">{tp('loading', locale)}</span>
     </main>
   );
 }
@@ -705,12 +727,13 @@ function LiveSerialProblem({
   readonly error: 'expired' | 'not-found' | 'failed';
   readonly onRetry: () => void;
 }): ReactNode {
+  const locale = useLocale();
   const message =
     error === 'expired'
-      ? tp('linkExpired', LOCALE)
+      ? tp('linkExpired', locale)
       : error === 'not-found'
-        ? tp('serialNotFound', LOCALE)
-        : tp('bookingFailed', LOCALE);
+        ? tp('serialNotFound', locale)
+        : tp('bookingFailed', locale);
 
   return (
     <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5" data-testid="live-serial-error">
@@ -718,14 +741,14 @@ function LiveSerialProblem({
 
       {error === 'failed' ? (
         <Button onClick={onRetry} data-testid="live-serial-retry">
-          {tp('tryAgain', LOCALE)}
+          {tp('tryAgain', locale)}
         </Button>
       ) : (
         <a
           href="/"
           className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-semibold text-white"
         >
-          {tp('backHome', LOCALE)}
+          {tp('backHome', locale)}
         </a>
       )}
     </main>

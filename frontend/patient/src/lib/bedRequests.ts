@@ -26,6 +26,12 @@ export interface SavedBedRequest {
   readonly requestId: string;
   readonly token: string;
   readonly hospitalNameBn: string;
+  /**
+   * English names, for the language switch (`SEG-A00-LANG`). Optional because
+   * a record saved on this phone before they existed does not have them, and
+   * `localName` falls back to the Bangla.
+   */
+  readonly hospitalNameEn?: string;
   readonly bedKind: BedKind;
   readonly savedAt: string;
 }

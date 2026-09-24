@@ -7,10 +7,15 @@
  */
 
 import { effectiveState, type BedState, type BedView, type Timestamp } from '@platform/domain';
-import { format, formatClock, formatNumber, t, type ConsoleKey, type Locale } from '@platform/i18n';
-
-/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
-export const NUMERALS = 'bengali' as const;
+import {
+  format,
+  formatClock,
+  formatNumber,
+  numeralsFor,
+  t,
+  type ConsoleKey,
+  type Locale,
+} from '@platform/i18n';
 
 const STATE_KEY: Record<BedState, ConsoleKey> = {
   free: 'bedStateFree',
@@ -37,6 +42,7 @@ export function shownState(bed: BedView, now: Date): BedState {
  * that state first.
  */
 export function tileDetail(bed: BedView, now: Date, locale: Locale): string | undefined {
+  const numerals = numeralsFor(locale);
   const since = new Date(bed.stateChangedAt).getTime();
 
   switch (shownState(bed, now)) {
@@ -44,16 +50,16 @@ export function tileDetail(bed: BedView, now: Date, locale: Locale): string | un
       const days = Math.floor((now.getTime() - since) / 86_400_000);
       return days <= 0
         ? t('bedSinceToday', locale)
-        : format('bedDaysIn', locale, { days: formatNumber(days, NUMERALS) });
+        : format('bedDaysIn', locale, { days: formatNumber(days, numerals) });
     }
     case 'cleaning':
       return format('bedCleaningFor', locale, {
-        minutes: formatNumber(Math.max(0, Math.floor((now.getTime() - since) / 60_000)), NUMERALS),
+        minutes: formatNumber(Math.max(0, Math.floor((now.getTime() - since) / 60_000)), numerals),
       });
     case 'reserved':
       return bed.reservedUntil === null
         ? undefined
-        : format('bedUntil', locale, { time: formatClock(bed.reservedUntil, NUMERALS) });
+        : format('bedUntil', locale, { time: formatClock(bed.reservedUntil, numerals) });
     case 'out_of_service':
       return bed.oosReason ?? undefined;
     case 'free':

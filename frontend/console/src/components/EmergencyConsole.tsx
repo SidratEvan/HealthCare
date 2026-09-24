@@ -43,9 +43,18 @@ import {
   type EmergencyProblem,
   type ReferralView,
 } from '@platform/domain';
-import { format, formatNumber, problemName, t, type Locale, formatAge } from '@platform/i18n';
-import { Button, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
+import {
+  format,
+  formatNumber,
+  problemName,
+  t,
+  formatAge,
+  numeralsFor,
+  localName,
+} from '@platform/i18n';
+import { Button, FreshnessLine, ToastProvider, useToast, useLocale } from '@platform/ui';
 
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { ConsoleRail } from '@/components/ConsoleRail';
 import { InboundCard, TriageTable } from '@/components/ErCases';
 import {
@@ -61,10 +70,7 @@ import { CapabilityPanel, ErBeds } from '@/components/ErSidebar';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { useEmergencyConsole } from '@/hooks/useEmergencyConsole';
 import { createAlarm, type Alarm } from '@/lib/alarm';
-import { NUMERALS } from '@/lib/bedCopy';
 import { readDemoSession } from '@/lib/demo';
-
-const LOCALE: Locale = 'bn';
 
 /** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
 function readToken(): string | null {
@@ -80,7 +86,8 @@ export function EmergencyConsole(): ReactNode {
 }
 
 function ConsoleBody(): ReactNode {
-  const locale = LOCALE;
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const { show } = useToast();
   const session = readDemoSession();
   const hospitalId = session?.hospitalId ?? '';
@@ -198,7 +205,7 @@ function ConsoleBody(): ReactNode {
     never: t('neverConfirmed', locale),
     stale: t('staleWarning', locale),
   };
-  const minutes = (value: number): string => formatAge(value, locale, NUMERALS);
+  const minutes = (value: number): string => formatAge(value, locale, numerals);
   const capabilitiesPending = er.pendingCount > 0 && er.pendingCaseIds.size < er.pendingCount;
 
   return (
@@ -225,7 +232,7 @@ function ConsoleBody(): ReactNode {
           <div className="min-w-0 flex-1">
             <h1 className="font-reading text-title-lg text-ink">{t('erTitle', locale)}</h1>
             <p className="text-body-sm text-ink-muted">
-              {loaded.hospitalNameBn}
+              {localName(locale, loaded.hospitalNameBn, loaded.hospitalNameEn)}
               {session?.staffName === undefined ? '' : ` · ${session.staffName}`}
             </p>
             <FreshnessLine
@@ -240,7 +247,7 @@ function ConsoleBody(): ReactNode {
           {/* FR-EMG-04: counted, and it says so. */}
           <div className="text-right" data-testid="er-load">
             <p className="font-reading text-title-lg tabular-nums text-ink">
-              {format('erLoad', locale, { count: formatNumber(er.load, NUMERALS) })}
+              {format('erLoad', locale, { count: formatNumber(er.load, numerals) })}
             </p>
             <p className="max-w-[16rem] text-caption text-ink-muted">{t('erLoadHint', locale)}</p>
           </div>
@@ -274,6 +281,7 @@ function ConsoleBody(): ReactNode {
           >
             {t('changeConsole', locale)}
           </a>
+          <ConsoleLanguageSwitch className="" />
         </header>
 
         {er.connected ? null : (

@@ -35,17 +35,14 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
-import { formatAge, formatSerial, tp } from '@platform/i18n';
-import { Button, Card, FreshnessLine, Input } from '@platform/ui';
+import { formatAge, formatSerial, tp, numeralsFor, localName } from '@platform/i18n';
+import { Button, Card, FreshnessLine, Input, useLocale } from '@platform/ui';
 
 import { TabScreen } from '@/components/TabScreen';
 import { useOnline } from '@/hooks/useOnline';
 import { searchMedicines } from '@/lib/api';
 
 import type { MedicineAvailability } from '@/lib/types';
-
-const LOCALE = 'bn' as const;
-const NUMERALS = 'bengali' as const;
 
 /** The shortest query the API accepts (`medicineSearchQuery`). */
 const MIN_QUERY = 2;
@@ -60,6 +57,7 @@ type State =
   | { readonly kind: 'ready'; readonly medicines: readonly MedicineAvailability[] };
 
 export default function MedicinesPage(): ReactNode {
+  const locale = useLocale();
   const online = useOnline();
   const [query, setQuery] = useState('');
   const [state, setState] = useState<State>({ kind: 'idle' });
@@ -99,12 +97,12 @@ export default function MedicinesPage(): ReactNode {
   }, []);
 
   return (
-    <TabScreen title={tp('medicinesTitle', LOCALE)}>
-      <p className="text-body-md text-ink-secondary">{tp('medicinesIntro', LOCALE)}</p>
+    <TabScreen title={tp('medicinesTitle', locale)}>
+      <p className="text-body-md text-ink-secondary">{tp('medicinesIntro', locale)}</p>
 
       <Input
-        label={tp('medicinesSearch', LOCALE)}
-        helper={tp('medicinesSearchHint', LOCALE)}
+        label={tp('medicinesSearch', locale)}
+        helper={tp('medicinesSearchHint', locale)}
         value={query}
         data-testid="medicine-search"
         onChange={(event) => {
@@ -117,7 +115,7 @@ export default function MedicinesPage(): ReactNode {
           data-testid="medicines-offline"
           className="rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
         >
-          {tp('medicinesOffline', LOCALE)}
+          {tp('medicinesOffline', locale)}
         </p>
       ) : null}
 
@@ -126,17 +124,17 @@ export default function MedicinesPage(): ReactNode {
         <div className="flex flex-col gap-3" aria-busy="true" data-testid="medicines-loading">
           <div className="h-28 rounded-md bg-sunken" />
           <div className="h-28 rounded-md bg-sunken" />
-          <span className="sr-only">{tp('medicinesSearching', LOCALE)}</span>
+          <span className="sr-only">{tp('medicinesSearching', locale)}</span>
         </div>
       ) : null}
 
       {state.kind === 'failed' ? (
         <div className="flex flex-col gap-3" data-testid="medicines-error">
           <p className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700">
-            {online ? tp('medicinesFailed', LOCALE) : tp('medicinesOffline', LOCALE)}
+            {online ? tp('medicinesFailed', locale) : tp('medicinesOffline', locale)}
           </p>
           <Button onClick={retry} data-testid="medicines-retry">
-            {tp('tryAgain', LOCALE)}
+            {tp('tryAgain', locale)}
           </Button>
         </div>
       ) : null}
@@ -146,7 +144,7 @@ export default function MedicinesPage(): ReactNode {
           data-testid="medicines-empty"
           className="rounded-md border border-line bg-surface p-5 text-body-md text-ink-secondary"
         >
-          {tp('medicinesNoMatch', LOCALE)}
+          {tp('medicinesNoMatch', locale)}
         </div>
       ) : null}
 
@@ -173,15 +171,17 @@ const ANSWER: Readonly<
 };
 
 function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [now] = useState(() => new Date());
 
   const freshness = {
-    justNow: tp('updatedJustNow', LOCALE),
-    ago: tp('updatedAgo', LOCALE),
-    never: tp('updatedNever', LOCALE),
-    stale: tp('staleWarning', LOCALE),
+    justNow: tp('updatedJustNow', locale),
+    ago: tp('updatedAgo', locale),
+    never: tp('updatedNever', locale),
+    stale: tp('staleWarning', locale),
   };
-  const minutes = (value: number): string => formatAge(value, LOCALE, NUMERALS);
+  const minutes = (value: number): string => formatAge(value, locale, numerals);
 
   return (
     <Card>
@@ -199,14 +199,14 @@ function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability })
 
         {/* `GR-05`: counts, never a verdict about the whole city. */}
         <p className="text-body-sm text-ink-secondary" data-testid="medicine-summary">
-          {tp('medicineSummary', LOCALE)
-            .replace('{inStock}', formatSerial(medicine.summary.inStock, NUMERALS))
-            .replace('{outOfStock}', formatSerial(medicine.summary.outOfStock, NUMERALS))
-            .replace('{unknown}', formatSerial(medicine.summary.unknown, NUMERALS))}
+          {tp('medicineSummary', locale)
+            .replace('{inStock}', formatSerial(medicine.summary.inStock, numerals))
+            .replace('{outOfStock}', formatSerial(medicine.summary.outOfStock, numerals))
+            .replace('{unknown}', formatSerial(medicine.summary.unknown, numerals))}
         </p>
 
         {medicine.pharmacies.length === 0 ? (
-          <p className="text-body-sm text-ink-muted">{tp('medicineNoPharmacies', LOCALE)}</p>
+          <p className="text-body-sm text-ink-muted">{tp('medicineNoPharmacies', locale)}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {medicine.pharmacies.map((pharmacy) => {
@@ -217,17 +217,19 @@ function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability })
                   className="flex flex-col gap-1 border-t border-line pt-2"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-body-md">{pharmacy.hospitalNameBn}</p>
+                    <p className="text-body-md">
+                      {localName(locale, pharmacy.hospitalNameBn, pharmacy.hospitalNameEn)}
+                    </p>
                     <p className={`text-body-md font-semibold ${answer?.className ?? ''}`}>
-                      {tp(answer?.key ?? 'medicineUnknown', LOCALE)}
+                      {tp(answer?.key ?? 'medicineUnknown', locale)}
                     </p>
                   </div>
 
                   {pharmacy.distanceKm === null ? null : (
                     <p className="text-caption text-ink-muted">
-                      {tp('emergencyDistance', LOCALE).replace(
+                      {tp('emergencyDistance', locale).replace(
                         '{km}',
-                        formatSerial(pharmacy.distanceKm, NUMERALS),
+                        formatSerial(pharmacy.distanceKm, numerals),
                       )}
                     </p>
                   )}
@@ -245,7 +247,7 @@ function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability })
 
                   {pharmacy.answer === 'unknown' ? (
                     <p className="text-caption text-ink-muted">
-                      {tp('medicineUnknownHint', LOCALE)}
+                      {tp('medicineUnknownHint', locale)}
                     </p>
                   ) : null}
                 </li>
@@ -254,7 +256,7 @@ function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability })
           </ul>
         )}
 
-        <p className="text-caption text-ink-muted">{tp('medicineCallFirst', LOCALE)}</p>
+        <p className="text-caption text-ink-muted">{tp('medicineCallFirst', locale)}</p>
       </div>
     </Card>
   );

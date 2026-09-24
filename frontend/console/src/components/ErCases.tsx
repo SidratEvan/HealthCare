@@ -29,11 +29,11 @@ import {
   t,
   triageName,
   type Locale,
+  numeralsFor,
 } from '@platform/i18n';
 import { Button, Chip, type ChipTone } from '@platform/ui';
 
 import { ReferralLine } from '@/components/ErReferrals';
-import { NUMERALS } from '@/lib/bedCopy';
 
 import type { CaseCommand } from '@/hooks/useEmergencyConsole';
 
@@ -72,7 +72,9 @@ export function whoLine(
         );
   if (entry.ageYears === null && sex === null) return t('erNoDetails', locale);
   if (entry.ageYears === null) return sex ?? '';
-  const age = format('ageYears', locale, { age: formatNumber(entry.ageYears, NUMERALS) });
+  const age = format('ageYears', locale, {
+    age: formatNumber(entry.ageYears, numeralsFor(locale)),
+  });
   return sex === null ? age : `${age} · ${sex}`;
 }
 
@@ -174,6 +176,7 @@ export function InboundCard({
   readonly onSeen: () => void;
   readonly fetchPhone: (caseId: string) => Promise<string | null>;
 }): ReactNode {
+  const numerals = numeralsFor(locale);
   const arrival = expectedArrival(entry);
   const acknowledged = entry.state === 'acknowledged';
 
@@ -207,7 +210,7 @@ export function InboundCard({
         <p className="text-right text-body-sm tabular-nums text-ink" data-testid="er-arrival">
           {arrival === null
             ? t('erNoEta', locale)
-            : format('erArrivesAt', locale, { time: formatClock(arrival, NUMERALS) })}
+            : format('erArrivesAt', locale, { time: formatClock(arrival, numerals) })}
         </p>
       </div>
 
@@ -303,6 +306,7 @@ export function TriageTable({
   /** `BTN-B07-REFER-CANCEL`. */
   readonly onCancelReferral: (referral: ReferralView) => void;
 }): ReactNode {
+  const numerals = numeralsFor(locale);
   const held = { disabled: true as const, disabledReason: t('erReferralHeld', locale) };
   return (
     <table className="w-full border-collapse font-ui text-body-sm" data-testid="er-triage">
@@ -351,7 +355,7 @@ export function TriageTable({
                   </div>
                 </td>
                 <td className="px-2 py-3 tabular-nums text-ink-secondary">
-                  {entry.arrivedAt === null ? '' : formatClock(entry.arrivedAt, NUMERALS)}
+                  {entry.arrivedAt === null ? '' : formatClock(entry.arrivedAt, numerals)}
                 </td>
                 <td className="px-2 py-3">
                   <TriageChip triage={entry.triage} locale={locale} />

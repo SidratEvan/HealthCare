@@ -40,6 +40,13 @@ export interface SavedBooking {
   readonly sessionId: string;
   readonly doctorNameBn: string;
   readonly hospitalNameBn: string;
+  /**
+   * English names, for the language switch (`SEG-A00-LANG`). Optional because
+   * a record saved on this phone before they existed does not have them, and
+   * `localName` falls back to the Bangla.
+   */
+  readonly doctorNameEn?: string;
+  readonly hospitalNameEn?: string;
   /** The session's planned start, ISO. */
   readonly plannedStart: string;
   /** `/s?b=…&t=…` — where the live screen opens. */

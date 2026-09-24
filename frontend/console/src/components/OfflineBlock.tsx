@@ -17,7 +17,7 @@
  * never an empty state that could be read as "all sent" (`FR-OFF-05`).
  */
 
-import { formatNumber, t, type Locale } from '@platform/i18n';
+import { formatNumber, numeralsFor, t, type Locale } from '@platform/i18n';
 import { Chip } from '@platform/ui';
 
 import type { ReactNode } from 'react';
@@ -41,7 +41,7 @@ export function OfflineBlock({
   locale,
   now,
 }: OfflineBlockProps): ReactNode {
-  const numerals = locale === 'bn' ? 'bengali' : 'latin';
+  const numerals = numeralsFor(locale);
 
   return (
     <section

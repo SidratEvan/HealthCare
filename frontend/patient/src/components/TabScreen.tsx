@@ -19,12 +19,11 @@
  */
 
 import { tp, type PatientKey } from '@platform/i18n';
+import { useLocale } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 
 import type { ReactNode } from 'react';
-
-const LOCALE = 'bn' as const;
 
 export function TabScreen({
   title,
@@ -33,11 +32,12 @@ export function TabScreen({
   readonly title: string;
   readonly children: ReactNode;
 }): ReactNode {
+  const locale = useLocale();
   return (
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 px-5 pt-4">
         <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {tp('demoBanner', LOCALE)}
+          {tp('demoBanner', locale)}
         </p>
 
         <h1 className="font-reading text-title-lg">{title}</h1>
@@ -62,24 +62,26 @@ export function NotBuiltYet({
   title,
   explanation,
 }: {
-  readonly title: string;
+  /** A key rather than a string, so the heading follows the language switch. */
+  readonly title: PatientKey;
   readonly explanation: PatientKey;
 }): ReactNode {
+  const locale = useLocale();
   return (
-    <TabScreen title={title}>
+    <TabScreen title={tp(title, locale)}>
       <div
         data-testid="not-built"
         className="flex flex-col gap-3 rounded-md border border-line bg-surface p-5"
       >
-        <p className="text-body-md text-ink-secondary">{tp(explanation, LOCALE)}</p>
-        <p className="text-caption text-ink-muted">{tp('comingSoon', LOCALE)}</p>
+        <p className="text-body-md text-ink-secondary">{tp(explanation, locale)}</p>
+        <p className="text-caption text-ink-muted">{tp('comingSoon', locale)}</p>
       </div>
 
       <a
         href="/"
         className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-semibold text-white"
       >
-        {tp('backHome', LOCALE)}
+        {tp('backHome', locale)}
       </a>
     </TabScreen>
   );

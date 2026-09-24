@@ -30,8 +30,10 @@ import {
   tp,
   formatAge,
   districtName,
+  numeralsFor,
+  localName,
 } from '@platform/i18n';
-import { Button, Card, Chip, FreshnessLine, Input } from '@platform/ui';
+import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 import { HospitalBeds } from '@/components/HospitalBeds';
@@ -58,11 +60,6 @@ import type {
 } from '@/lib/types';
 import type { ReactNode } from 'react';
 
-const LOCALE = 'bn' as const;
-
-/** Patient surfaces use Bengali numerals, always (`TYP-04`). */
-const NUMERALS = 'bengali' as const;
-
 /**
  * The flow, in the order `APP_FLOW.md` A3–A4 specifies.
  *
@@ -74,6 +71,7 @@ const NUMERALS = 'bengali' as const;
 type Step = 'hospital' | 'doctor' | 'session' | 'confirm' | 'standby' | 'done';
 
 export default function BookPage(): ReactNode {
+  const locale = useLocale();
   const [specialty, setSpecialty] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('hospital');
   const online = useOnline();
@@ -164,7 +162,7 @@ export default function BookPage(): ReactNode {
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5">
         <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {tp('demoBanner', LOCALE)}
+          {tp('demoBanner', locale)}
         </p>
 
         {/* GR-03: the fourth state. Announced, because a person who has just
@@ -175,7 +173,7 @@ export default function BookPage(): ReactNode {
             data-testid="offline-notice"
             className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
           >
-            {tp('offlineBooking', LOCALE)}
+            {tp('offlineBooking', locale)}
           </p>
         )}
 
@@ -246,7 +244,9 @@ export default function BookPage(): ReactNode {
                     serial: result.serial,
                     sessionId: result.sessionId,
                     doctorNameBn: doctor.nameBn,
+                    doctorNameEn: doctor.nameEn,
                     hospitalNameBn: place?.nameBn ?? '',
+                    hospitalNameEn: place?.nameEn ?? '',
                     plannedStart: session.plannedStart,
                     url: `/s?b=${result.bookingId}&t=${encodeURIComponent(token)}`,
                     token,
@@ -282,20 +282,22 @@ function HospitalList({
   readonly hospitals: Loadable<HospitalCard>;
   readonly onChoose: (hospital: HospitalCard) => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const now = useNow();
 
   // GR-03: all four are designed states, not the absence of one — and the
   // failed one never borrows the empty one's words.
   if (hospitals.state === 'loading')
-    return <p className="text-body-md text-ink-muted">{tp('loading', LOCALE)}</p>;
+    return <p className="text-body-md text-ink-muted">{tp('loading', locale)}</p>;
   if (hospitals.state === 'failed') return <LoadFailed />;
   if (hospitals.items.length === 0) {
-    return <p className="text-body-md text-ink-muted">{tp('noHospitals', LOCALE)}</p>;
+    return <p className="text-body-md text-ink-muted">{tp('noHospitals', locale)}</p>;
   }
 
   return (
     <section className="flex flex-col gap-3">
-      <h1 className="font-reading text-title-lg">{tp('chooseHospitalFirst', LOCALE)}</h1>
+      <h1 className="font-reading text-title-lg">{tp('chooseHospitalFirst', locale)}</h1>
 
       {/* DoD §5.8 and FR-PAT-14: "who is sitting now" is a live figure, so the
           list says how old it is rather than implying it is this instant. */}
@@ -319,17 +321,20 @@ function HospitalList({
                   </span>
 
                   <div className="min-w-0 flex-1">
-                    <p className="text-title-sm">{hospital.nameBn}</p>
+                    <p className="text-title-sm">
+                      {localName(locale, hospital.nameBn, hospital.nameEn)}
+                    </p>
                     <p className="text-body-sm text-ink-muted">
-                      {hospital.addressBn ?? districtName(hospital.district, LOCALE)}
+                      {(locale === 'en' ? hospital.addressEn : hospital.addressBn) ??
+                        districtName(hospital.district, locale)}
                     </p>
 
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       {hospital.doctorCount === null ? null : (
                         <Chip tone="neutral">
-                          {tp('doctorsHere', LOCALE).replace(
+                          {tp('doctorsHere', locale).replace(
                             '{count}',
-                            formatNumber(hospital.doctorCount, NUMERALS),
+                            formatNumber(hospital.doctorCount, numerals),
                           )}
                         </Chip>
                       )}
@@ -337,11 +342,11 @@ function HospitalList({
                       {/* A11Y-03: the state is a sentence, not a colour. */}
                       <Chip tone={hospital.sittingNow > 0 ? 'positive' : 'neutral'}>
                         {hospital.sittingNow > 0
-                          ? tp('sittingNowCount', LOCALE).replace(
+                          ? tp('sittingNowCount', locale).replace(
                               '{count}',
-                              formatNumber(hospital.sittingNow, NUMERALS),
+                              formatNumber(hospital.sittingNow, numerals),
                             )
-                          : tp('nobodySittingNow', LOCALE)}
+                          : tp('nobodySittingNow', locale)}
                       </Chip>
                     </div>
 
@@ -381,6 +386,8 @@ function DoctorList({
   readonly onChoose: (doctor: HospitalDoctorCard) => void;
   readonly onBack: () => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const now = useNow();
 
   return (
@@ -388,16 +395,18 @@ function DoctorList({
       <BackLink onBack={onBack} />
 
       <div>
-        <h1 className="font-reading text-title-lg">{hospital.nameBn}</h1>
-        <p className="text-body-sm text-ink-muted">{tp('chooseDoctor', LOCALE)}</p>
+        <h1 className="font-reading text-title-lg">
+          {localName(locale, hospital.nameBn, hospital.nameEn)}
+        </h1>
+        <p className="text-body-sm text-ink-muted">{tp('chooseDoctor', locale)}</p>
       </div>
 
       {doctors.state === 'loading' ? (
-        <p className="text-body-md text-ink-muted">{tp('loading', LOCALE)}</p>
+        <p className="text-body-md text-ink-muted">{tp('loading', locale)}</p>
       ) : doctors.state === 'failed' ? (
         <LoadFailed />
       ) : doctors.items.length === 0 ? (
-        <p className="text-body-md text-ink-muted">{tp('noDoctorsHere', LOCALE)}</p>
+        <p className="text-body-md text-ink-muted">{tp('noDoctorsHere', locale)}</p>
       ) : (
         <>
           {/* Who is in a chamber right now is the liveliest figure on the
@@ -418,7 +427,9 @@ function DoctorList({
                   <Card tone={doctor.sittingNow ? 'brand' : 'default'}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-title-sm">{doctor.nameBn}</p>
+                        <p className="text-title-sm">
+                          {localName(locale, doctor.nameBn, doctor.nameEn)}
+                        </p>
                         {doctor.degrees === null ? null : (
                           <p className="text-body-sm text-ink-muted">{doctor.degrees}</p>
                         )}
@@ -428,30 +439,30 @@ function DoctorList({
                             sit — never a bare "available". */}
                           <Chip tone={doctor.sittingNow ? 'positive' : 'neutral'}>
                             {doctor.sittingNow
-                              ? tp('inChamberNow', LOCALE)
+                              ? tp('inChamberNow', locale)
                               : doctor.nextSessionAt === null
-                                ? tp('notSittingSoon', LOCALE)
-                                : tp('nextSitting', LOCALE).replace(
+                                ? tp('notSittingSoon', locale)
+                                : tp('nextSitting', locale).replace(
                                     '{time}',
-                                    formatDateTime(doctor.nextSessionAt, NUMERALS),
+                                    formatDateTime(doctor.nextSessionAt, numerals),
                                   )}
                           </Chip>
 
                           {doctor.openSerials === null ? null : (
                             <Chip tone={doctor.openSerials > 0 ? 'neutral' : 'caution'}>
                               {doctor.openSerials > 0
-                                ? tp('serialsLeft', LOCALE).replace(
+                                ? tp('serialsLeft', locale).replace(
                                     '{count}',
-                                    formatNumber(doctor.openSerials, NUMERALS),
+                                    formatNumber(doctor.openSerials, numerals),
                                   )
-                                : tp('sessionFull', LOCALE)}
+                                : tp('sessionFull', locale)}
                             </Chip>
                           )}
                         </div>
                       </div>
 
                       <p className="shrink-0 text-body-md font-semibold tabular-nums">
-                        {formatTaka(doctor.feePoisha, NUMERALS)}
+                        {formatTaka(doctor.feePoisha, numerals)}
                       </p>
                     </div>
                   </Card>
@@ -474,19 +485,20 @@ function DoctorList({
  * state it was already in.
  */
 function LoadFailed(): ReactNode {
+  const locale = useLocale();
   return (
     <div
       role="status"
       data-testid="load-failed"
       className="flex flex-col gap-3 rounded-md border border-line bg-surface p-5"
     >
-      <p className="text-body-md text-ink-secondary">{tp('listFailed', LOCALE)}</p>
+      <p className="text-body-md text-ink-secondary">{tp('listFailed', locale)}</p>
       <Button
         onClick={() => {
           globalThis.location.reload();
         }}
       >
-        {tp('tryAgain', LOCALE)}
+        {tp('tryAgain', locale)}
       </Button>
     </div>
   );
@@ -501,23 +513,26 @@ function LoadFailed(): ReactNode {
  * rather than twice at each call site.
  */
 function Freshness({ asOf, now }: { readonly asOf: string; readonly now: Date }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <FreshnessLine
       asOf={new Date(asOf)}
       now={now}
       labels={{
-        justNow: tp('updatedJustNow', LOCALE),
-        ago: tp('updatedAgo', LOCALE),
-        never: tp('updatedNever', LOCALE),
-        stale: tp('staleWarning', LOCALE),
+        justNow: tp('updatedJustNow', locale),
+        ago: tp('updatedAgo', locale),
+        never: tp('updatedNever', locale),
+        stale: tp('staleWarning', locale),
       }}
-      formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+      formatMinutes={(value) => formatAge(value, locale, numerals)}
     />
   );
 }
 
 /** `BTN-A07-BACK` — one step back, never a dead end. */
 function BackLink({ onBack }: { readonly onBack: () => void }): ReactNode {
+  const locale = useLocale();
   return (
     <button
       type="button"
@@ -526,7 +541,7 @@ function BackLink({ onBack }: { readonly onBack: () => void }): ReactNode {
       className="flex min-h-touch items-center gap-1 self-start text-body-md text-ink-secondary"
     >
       <BackIcon size={18} />
-      {tp('back', LOCALE)}
+      {tp('back', locale)}
     </button>
   );
 }
@@ -545,16 +560,19 @@ function SessionList({
   readonly onStandby: (session: SessionCard) => void;
   readonly onBack: () => void;
 }): ReactNode {
+  const locale = useLocale();
   return (
     <section className="flex flex-col gap-3">
       <BackLink onBack={onBack} />
-      <h1 className="font-reading text-title-lg">{tp('chooseTime', LOCALE)}</h1>
-      <p className="text-body-sm text-ink-muted">{doctor.nameBn}</p>
+      <h1 className="font-reading text-title-lg">{tp('chooseTime', locale)}</h1>
+      <p className="text-body-sm text-ink-muted">
+        {localName(locale, doctor.nameBn, doctor.nameEn)}
+      </p>
 
       {sessions === null ? (
-        <p className="text-body-md text-ink-muted">{tp('loading', LOCALE)}</p>
+        <p className="text-body-md text-ink-muted">{tp('loading', locale)}</p>
       ) : sessions.length === 0 ? (
-        <p className="text-body-md text-ink-muted">{tp('noSessions', LOCALE)}</p>
+        <p className="text-body-md text-ink-muted">{tp('noSessions', locale)}</p>
       ) : (
         <SessionCards sessions={sessions} onChoose={onChoose} onStandby={onStandby} />
       )}
@@ -571,6 +589,8 @@ function SessionCards({
   readonly onChoose: (session: SessionCard) => void;
   readonly onStandby: (session: SessionCard) => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <>
       <ul className="flex flex-col gap-3">
@@ -594,19 +614,21 @@ function SessionCards({
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-title-sm tabular-nums">
-                        {formatDateTime(session.plannedStart, NUMERALS)}
+                        {formatDateTime(session.plannedStart, numerals)}
                       </p>
-                      <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
+                      <p className="text-body-sm text-ink-muted">
+                        {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
+                      </p>
                     </div>
 
                     <div className="text-right">
                       {full ? (
-                        <Chip tone="caution">{tp('sessionFull', LOCALE)}</Chip>
+                        <Chip tone="caution">{tp('sessionFull', locale)}</Chip>
                       ) : (
                         <p className="text-body-sm tabular-nums text-ink-secondary">
                           {remaining === null
                             ? ''
-                            : `${formatMinutes(remaining, NUMERALS)} ${tp('seatsLeft', LOCALE)}`}
+                            : `${formatMinutes(remaining, numerals)} ${tp('seatsLeft', locale)}`}
                         </p>
                       )}
                     </div>
@@ -625,7 +647,7 @@ function SessionCards({
                     }}
                     data-testid={`standby-join-${session.id}`}
                   >
-                    {tp('standbyJoin', LOCALE)}
+                    {tp('standbyJoin', locale)}
                   </Button>
                 </div>
               ) : null}
@@ -653,6 +675,8 @@ function Confirm({
   readonly onFailure: (message: string | null) => void;
   readonly onBooked: (booking: BookingResponse) => void;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [age, setAge] = useState('');
@@ -715,33 +739,49 @@ function Confirm({
       const code = (error as { code?: string }).code;
       onFailure(
         code === 'BOOKING_DUPLICATE'
-          ? tp('alreadyBooked', LOCALE)
+          ? tp('alreadyBooked', locale)
           : code === 'SESSION_FULL'
-            ? tp('chamberFull', LOCALE)
-            : tp('bookingFailed', LOCALE),
+            ? tp('chamberFull', locale)
+            : tp('bookingFailed', locale),
       );
     } finally {
       setBusy(false);
     }
-  }, [session.id, method, name, phone, age, sex, reason, idempotencyKey, onBooked, onFailure]);
+  }, [
+    session.id,
+    method,
+    name,
+    phone,
+    age,
+    sex,
+    reason,
+    idempotencyKey,
+    onBooked,
+    onFailure,
+    locale,
+  ]);
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="font-reading text-title-lg">{tp('confirmTitle', LOCALE)}</h1>
+      <h1 className="font-reading text-title-lg">{tp('confirmTitle', locale)}</h1>
 
       <Card>
         <p className="text-title-sm tabular-nums">
-          {formatDateTime(session.plannedStart, NUMERALS)}
+          {formatDateTime(session.plannedStart, numerals)}
         </p>
-        <p className="text-body-sm text-ink-muted">{session.doctorNameBn}</p>
-        <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
+        <p className="text-body-sm text-ink-muted">
+          {localName(locale, session.doctorNameBn, session.doctorNameEn)}
+        </p>
+        <p className="text-body-sm text-ink-muted">
+          {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
+        </p>
 
         {/* FR-PAT-13: unknown is a real answer, and not the same as zero. */}
         <p className="mt-2 text-body-sm text-ink-secondary">
-          {tp('expectedWait', LOCALE)}:{' '}
+          {tp('expectedWait', locale)}:{' '}
           {slots?.expectedWaitMinutes == null
-            ? tp('waitUnknown', LOCALE)
-            : `${formatMinutes(slots.expectedWaitMinutes, NUMERALS)} ${tp('minutesShort', LOCALE)}`}
+            ? tp('waitUnknown', locale)
+            : `${formatMinutes(slots.expectedWaitMinutes, numerals)} ${tp('minutesShort', locale)}`}
         </p>
 
         {/* DoD §5.8: the expected wait is a live figure, so it never appears
@@ -750,12 +790,12 @@ function Confirm({
           asOf={slots === null ? null : new Date(slots.asOf)}
           now={now}
           labels={{
-            justNow: tp('updatedJustNow', LOCALE),
-            ago: tp('updatedAgo', LOCALE),
-            never: tp('updatedNever', LOCALE),
-            stale: tp('staleWarning', LOCALE),
+            justNow: tp('updatedJustNow', locale),
+            ago: tp('updatedAgo', locale),
+            never: tp('updatedNever', locale),
+            stale: tp('staleWarning', locale),
           }}
-          formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+          formatMinutes={(value) => formatAge(value, locale, numerals)}
         />
       </Card>
 
@@ -763,7 +803,7 @@ function Confirm({
           (FR-GST-02) — a guest supplies only what the task needs. */}
       <div className="flex flex-col gap-4">
         <Input
-          label={tp('patientName', LOCALE)}
+          label={tp('patientName', locale)}
           required
           value={name}
           onChange={(event) => {
@@ -772,13 +812,13 @@ function Confirm({
         />
 
         <Input
-          label={tp('mobileNumber', LOCALE)}
+          label={tp('mobileNumber', locale)}
           kind="phone"
           required
           value={phone}
           placeholder="+8801XXXXXXXXX"
-          helper={tp('mobileHelper', LOCALE)}
-          {...(phoneTouched && !phoneValid ? { error: tp('mobileInvalid', LOCALE) } : {})}
+          helper={tp('mobileHelper', locale)}
+          {...(phoneTouched && !phoneValid ? { error: tp('mobileInvalid', locale) } : {})}
           onBlur={() => {
             setPhoneTouched(true);
           }}
@@ -788,7 +828,7 @@ function Confirm({
         />
 
         <Input
-          label={tp('age', LOCALE)}
+          label={tp('age', locale)}
           kind="number"
           required
           value={age}
@@ -799,7 +839,7 @@ function Confirm({
 
         <fieldset className="flex flex-col gap-2 border-0 p-0">
           <legend className="font-ui text-body-sm font-semibold text-ink">
-            {tp('sex', LOCALE)}
+            {tp('sex', locale)}
           </legend>
           <div className="flex gap-2">
             {(['female', 'male', 'other'] as const).map((value) => (
@@ -812,14 +852,14 @@ function Confirm({
                 }}
                 className="min-h-touch flex-1 rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
               >
-                {tp(value, LOCALE)}
+                {tp(value, locale)}
               </button>
             ))}
           </div>
         </fieldset>
 
         <Input
-          label={tp('reason', LOCALE)}
+          label={tp('reason', locale)}
           value={reason}
           onChange={(event) => {
             setReason(event.target.value);
@@ -832,18 +872,18 @@ function Confirm({
       <Card tone="brand">
         <dl className="flex flex-col gap-1 text-body-md">
           <Row
-            label={tp('feeConsultation', LOCALE)}
-            value={formatTaka(fee.consultation, NUMERALS)}
+            label={tp('feeConsultation', locale)}
+            value={formatTaka(fee.consultation, numerals)}
           />
           <Row
-            label={tp('feeTotal', LOCALE)}
-            value={formatTaka(fee.consultation, NUMERALS)}
+            label={tp('feeTotal', locale)}
+            value={formatTaka(fee.consultation, numerals)}
             strong
           />
           {method === 'at_hospital' ? (
             <Row
-              label={tp('feeDueAtHospital', LOCALE)}
-              value={formatTaka(fee.consultation, NUMERALS)}
+              label={tp('feeDueAtHospital', locale)}
+              value={formatTaka(fee.consultation, numerals)}
             />
           ) : null}
         </dl>
@@ -851,7 +891,7 @@ function Confirm({
 
       <fieldset className="flex flex-col gap-2 border-0 p-0">
         <legend className="font-ui text-body-sm font-semibold text-ink">
-          {tp('payWith', LOCALE)}
+          {tp('payWith', locale)}
         </legend>
         <div className="grid grid-cols-2 gap-2">
           {(
@@ -871,7 +911,7 @@ function Confirm({
               }}
               className="min-h-touch rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
             >
-              {tp(key, LOCALE)}
+              {tp(key, locale)}
             </button>
           ))}
         </div>
@@ -895,10 +935,10 @@ function Confirm({
           ? {}
           : {
               disabled: true as const,
-              disabledReason: online ? tp('yourDetails', LOCALE) : tp('offline', LOCALE),
+              disabledReason: online ? tp('yourDetails', locale) : tp('offline', locale),
             })}
       >
-        {tp('confirmBooking', LOCALE)}
+        {tp('confirmBooking', locale)}
       </Button>
     </section>
   );
@@ -912,48 +952,54 @@ function Success({
   readonly booking: BookingResponse;
   readonly session: SessionCard;
 }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5" data-testid="booking-success">
-        <h1 className="font-reading text-title-lg">{tp('bookingDone', LOCALE)}</h1>
+        <h1 className="font-reading text-title-lg">{tp('bookingDone', locale)}</h1>
 
         <Card tone="brand" hero>
-          <p className="text-body-sm text-ink-secondary">{tp('yourSerial', LOCALE)}</p>
+          <p className="text-body-sm text-ink-secondary">{tp('yourSerial', locale)}</p>
           <p className="font-reading text-display-xl tabular-nums" data-testid="serial">
-            {formatSerial(booking.serial, NUMERALS)}
+            {formatSerial(booking.serial, numerals)}
           </p>
-          <p className="mt-2 text-body-md">{session.doctorNameBn}</p>
-          <p className="text-body-sm text-ink-muted">{session.hospitalNameBn}</p>
+          <p className="mt-2 text-body-md">
+            {localName(locale, session.doctorNameBn, session.doctorNameEn)}
+          </p>
+          <p className="text-body-sm text-ink-muted">
+            {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
+          </p>
           <p className="text-body-sm text-ink-muted tabular-nums">
-            {formatDateTime(session.plannedStart, NUMERALS)}
+            {formatDateTime(session.plannedStart, numerals)}
           </p>
         </Card>
 
         <Card>
           <dl className="flex flex-col gap-1 text-body-md">
             <Row
-              label={tp('feeConsultation', LOCALE)}
-              value={formatTaka(booking.fee.consultationPoisha, NUMERALS)}
+              label={tp('feeConsultation', locale)}
+              value={formatTaka(booking.fee.consultationPoisha, numerals)}
             />
             <Row
-              label={tp('feePlatform', LOCALE)}
-              value={formatTaka(booking.fee.platformFeePoisha, NUMERALS)}
+              label={tp('feePlatform', locale)}
+              value={formatTaka(booking.fee.platformFeePoisha, numerals)}
             />
             <Row
-              label={tp('feeTotal', LOCALE)}
-              value={formatTaka(booking.fee.totalPoisha, NUMERALS)}
+              label={tp('feeTotal', locale)}
+              value={formatTaka(booking.fee.totalPoisha, numerals)}
               strong
             />
             <Row
-              label={tp('feeDueAtHospital', LOCALE)}
-              value={formatTaka(booking.fee.dueAtHospitalPoisha, NUMERALS)}
+              label={tp('feeDueAtHospital', locale)}
+              value={formatTaka(booking.fee.dueAtHospitalPoisha, numerals)}
             />
           </dl>
         </Card>
 
         {/* FR-GST-05: the SMS carries the tracking link. Shown here too, because
           in a demo there is no SMS to open and the link is the point. */}
-        <p className="text-body-sm text-ink-secondary">{tp('smsSent', LOCALE)}</p>
+        <p className="text-body-sm text-ink-secondary">{tp('smsSent', locale)}</p>
 
         {booking.trackingUrl === null ? null : (
           <a
@@ -961,7 +1007,7 @@ function Success({
             data-testid="tracking-link"
             className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-semibold text-white"
           >
-            {tp('viewLiveSerial', LOCALE)}
+            {tp('viewLiveSerial', locale)}
           </a>
         )}
 
@@ -969,7 +1015,7 @@ function Success({
           href="/"
           className="flex min-h-touch items-center justify-center rounded-md border border-line-strong bg-surface px-5 text-body-md"
         >
-          {tp('backHome', LOCALE)}
+          {tp('backHome', locale)}
         </a>
 
         <BottomNavSpacer />

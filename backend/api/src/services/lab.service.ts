@@ -58,6 +58,7 @@ import {
   type TestState,
   type TurnaroundSummary,
 } from '@platform/domain';
+import { LAB_TEST_NAMES, isLabTestCode, type LabTestCode } from '@platform/i18n';
 
 import { storage, verifyFileSignature } from '../adapters/storage.js';
 import { logger } from '../config/logger.js';
@@ -90,29 +91,37 @@ export interface LabResult {
  * `seed_02` have, and they exist so a `test_orders` row has a number to carry
  * for `FR-ADM-04`. A real hospital's catalogue arrives with its agreement.
  *
- * The names are Bangla because the patient reads them on a wallet row.
+ * The names live in `@platform/i18n` (`LAB_TEST_NAMES`), in both languages,
+ * so a screen switched to English can name any order by its code. The row
+ * stores the Bangla, which is what the patient's wallet was written in.
  */
-const DEMO_TEST_CATALOGUE: Readonly<Record<string, { nameBn: string; pricePoisha: number }>> = {
-  CBC: { nameBn: 'সম্পূর্ণ রক্ত পরীক্ষা (CBC)', pricePoisha: 45_000 },
-  'BLOOD-SUGAR': { nameBn: 'রক্তে শর্করা (FBS)', pricePoisha: 20_000 },
-  'LIPID-PROFILE': { nameBn: 'লিপিড প্রোফাইল', pricePoisha: 90_000 },
-  'SERUM-CREATININE': { nameBn: 'সিরাম ক্রিয়েটিনিন', pricePoisha: 50_000 },
-  LFT: { nameBn: 'লিভার ফাংশন টেস্ট', pricePoisha: 120_000 },
-  TSH: { nameBn: 'থাইরয়েড (TSH)', pricePoisha: 80_000 },
-  'URINE-RE': { nameBn: 'প্রস্রাব পরীক্ষা (R/E)', pricePoisha: 25_000 },
-  'XR-CHEST': { nameBn: 'বুকের এক্স-রে', pricePoisha: 60_000 },
-  ECG: { nameBn: 'ইসিজি', pricePoisha: 40_000 },
-  ECHO: { nameBn: 'ইকোকার্ডিওগ্রাম', pricePoisha: 250_000 },
-  'USG-ABDOMEN': { nameBn: 'পেটের আলট্রাসনোগ্রাম', pricePoisha: 150_000 },
-  HBA1C: { nameBn: 'HbA1c', pricePoisha: 110_000 },
+const DEMO_TEST_PRICES: Readonly<Record<LabTestCode, number>> = {
+  CBC: 45_000,
+  'BLOOD-SUGAR': 20_000,
+  'LIPID-PROFILE': 90_000,
+  'SERUM-CREATININE': 50_000,
+  LFT: 120_000,
+  TSH: 80_000,
+  'URINE-RE': 25_000,
+  'XR-CHEST': 60_000,
+  ECG: 40_000,
+  ECHO: 250_000,
+  'USG-ABDOMEN': 150_000,
+  HBA1C: 110_000,
 };
 
 /** The catalogue, for the chips `BTN-B05-TEST` renders. */
-export function testCatalogue(): { code: string; nameBn: string; pricePoisha: number }[] {
-  return Object.entries(DEMO_TEST_CATALOGUE).map(([code, entry]) => ({
+export function testCatalogue(): {
+  code: string;
+  nameBn: string;
+  nameEn: string;
+  pricePoisha: number;
+}[] {
+  return (Object.keys(DEMO_TEST_PRICES) as LabTestCode[]).map((code) => ({
     code,
-    nameBn: entry.nameBn,
-    pricePoisha: entry.pricePoisha,
+    nameBn: LAB_TEST_NAMES[code].bn,
+    nameEn: LAB_TEST_NAMES[code].en,
+    pricePoisha: DEMO_TEST_PRICES[code],
   }));
 }
 
@@ -169,8 +178,8 @@ export async function order(
       if (seen.has(code)) continue;
       seen.add(code);
 
-      const known = DEMO_TEST_CATALOGUE[code];
-      const testName = known?.nameBn ?? test.testName;
+      const known = isLabTestCode(code) ? code : null;
+      const testName = known === null ? test.testName : LAB_TEST_NAMES[known].bn;
       if (testName === undefined) {
         throw validationFailed({
           field: 'tests',
@@ -185,7 +194,7 @@ export async function order(
           hospitalId: visit.hospitalId,
           testCode: code,
           testName,
-          pricePoisha: known?.pricePoisha ?? 0,
+          pricePoisha: known === null ? 0 : DEMO_TEST_PRICES[known],
           orderedBy: actor.staffUserId,
           // Suffixed per test, so each row is unique and a replay finds them all.
           idempotencyKey: `${input.idempotencyKey}:${code}`,

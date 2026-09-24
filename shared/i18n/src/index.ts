@@ -23,7 +23,18 @@ export {
   type PatientKey,
 } from './messages.js';
 
+export {
+  DEFAULT_LOCALE,
+  LANGUAGE_NAMES,
+  LOCALES,
+  isLocale,
+  localName,
+  numeralsFor,
+} from './locale.js';
+
 export { BED_KIND_NAMES, bedKindName, type BedKindName } from './beds.js';
+
+export { LAB_TEST_NAMES, isLabTestCode, labTestName, type LabTestCode } from './lab.js';
 
 export {
   CAPABILITY_NAMES,

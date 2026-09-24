@@ -32,12 +32,20 @@ export interface DemoSession {
   /** The facility, as the rail names it. Absent for the national console. */
   readonly hospitalNameBn?: string;
   /**
+   * The same, in English, for a console switched to English (`SEG-B00-LANG`).
+   * Optional as well because a session stored before it existed lacks it;
+   * `localName` then falls back to the Bangla.
+   */
+  readonly hospitalNameEn?: string;
+  /**
    * The chamber a reception or doctor console was opened on, as the picker
    * listed it — so the console's header can say whose chamber it is.
    */
   readonly chamber?: {
     readonly doctorNameBn: string;
+    readonly doctorNameEn?: string;
     readonly departmentNameBn: string;
+    readonly departmentNameEn?: string;
     readonly room: string | null;
   };
 }

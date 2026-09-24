@@ -42,6 +42,7 @@ export interface SessionTiming {
   readonly doctorNameBn: string;
   readonly doctorNameEn: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   /** Minutes between planned and actual start; negative is early. Null if never started. */
   readonly startDeltaMinutes: number | null;
   /** Mean seconds per consultation in that session, or null if nobody was seen. */
@@ -56,6 +57,7 @@ export interface DoctorPunctuality {
   readonly doctorNameBn: string;
   readonly doctorNameEn: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   readonly sessions: number;
   /** Sessions with no `DOCTOR_ARRIVED` — neither punctual nor late. */
   readonly neverStarted: number;
@@ -137,6 +139,7 @@ function reduceDoctor(group: readonly SessionTiming[]): DoctorPunctuality {
     doctorNameBn: first.doctorNameBn,
     doctorNameEn: first.doctorNameEn,
     departmentNameBn: first.departmentNameBn,
+    departmentNameEn: first.departmentNameEn,
     sessions: group.length,
     neverStarted: group.length - deltas.length,
     onTime,

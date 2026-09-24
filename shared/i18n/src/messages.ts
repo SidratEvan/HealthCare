@@ -73,6 +73,10 @@ export const CONSOLE = {
     bn: 'এটি ডেমো — পাসওয়ার্ড ছাড়াই ঢোকা যায়। আসল সংস্করণে লগ ইন লাগবে।',
     en: 'This is a demonstration — no password is needed. The real version requires a login.',
   },
+  /** The browser tab's title, which the layout's metadata gives in `bn`. */
+  consoleTitle: { bn: 'হাসপাতাল কনসোল', en: 'Hospital console' },
+  /** `SEG-B00-LANG`: the group the two language buttons sit in. */
+  language: { bn: 'ভাষা', en: 'Language' },
   sessionRunning: { bn: 'চলছে', en: 'Running' },
   sessionScheduled: { bn: 'শুরু হয়নি', en: 'Not started' },
   sessionEnded: { bn: 'শেষ', en: 'Finished' },
@@ -101,7 +105,8 @@ export const CONSOLE = {
   reinstate: { bn: 'ফিরিয়ে আনুন', en: 'Reinstate' },
 
   // --- Check-in (FR-REC-18, BTN-B02-CHECKIN, MOD-B02-CHECKIN) ----------------
-  checkIn: { bn: 'এসেছেন', en: 'Checked in' },
+  // A button, so a verb in English as in Bangla (FRONTEND.md §5.1).
+  checkIn: { bn: 'এসেছেন', en: 'Check in' },
   checkInTitle: { bn: 'সিরিয়াল {serial} এসেছেন', en: 'Serial {serial} is here' },
   checkInDescription: {
     bn: 'রোগীকে আনুমানিক কতক্ষণ অপেক্ষা করতে হবে বলছেন?',
@@ -1263,6 +1268,8 @@ export const PATIENT = {
     en: 'See which nearby hospital has room, right now.',
   },
   mySerials: { bn: 'আমার সিরিয়াল', en: 'My serials' },
+  /** `SEG-A00-LANG`: the group the two language buttons sit in. */
+  language: { bn: 'ভাষা', en: 'Language' },
 
   // --- Bottom navigation (NAV-A, APP_FLOW.md S-A-02) ------------------------
   navHome: { bn: 'হোম', en: 'Home' },

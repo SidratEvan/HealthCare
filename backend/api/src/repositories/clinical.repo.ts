@@ -48,8 +48,11 @@ export interface VisitRecord {
   readonly followUpDate: string | null;
   readonly signedAt: string | null;
   readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
   /** The serial the patient held, so a record can be matched to a day. */
   readonly serial: number;
   readonly visitedAt: string;
@@ -197,16 +200,22 @@ export async function findVisits(patientId: string, limit = 20): Promise<VisitRe
     follow_up_date: Date | string | null;
     signed_at: Date | null;
     doctor_name_bn: string;
+    doctor_name_en: string;
     department_name_bn: string;
+    department_name_en: string;
     hospital_name_bn: string;
+    hospital_name_en: string;
     serial_number: number;
     visited_at: Date;
   }>`
     SELECT v.id, v.booking_id, v.diagnosis_text, v.advice_text_bn,
            v.follow_up_date, v.signed_at,
            d.full_name_bn  AS doctor_name_bn,
+           d.full_name_en  AS doctor_name_en,
            dep.name_bn     AS department_name_bn,
+           dep.name_en     AS department_name_en,
            h.name_bn       AS hospital_name_bn,
+           h.name_en       AS hospital_name_en,
            b.serial_number,
            coalesce(v.signed_at, v.created_at) AS visited_at
       FROM visits v
@@ -233,8 +242,11 @@ export async function findVisits(patientId: string, limit = 20): Promise<VisitRe
     followUpDate: row.follow_up_date === null ? null : toDateOnly(row.follow_up_date),
     signedAt: row.signed_at?.toISOString() ?? null,
     doctorNameBn: row.doctor_name_bn,
+    doctorNameEn: row.doctor_name_en,
     departmentNameBn: row.department_name_bn,
+    departmentNameEn: row.department_name_en,
     hospitalNameBn: row.hospital_name_bn,
+    hospitalNameEn: row.hospital_name_en,
     serial: row.serial_number,
     visitedAt: row.visited_at.toISOString(),
   }));
@@ -447,6 +459,7 @@ export interface ConsentRow {
   readonly id: string;
   readonly hospitalId: string;
   readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
   readonly scope: string;
   readonly grantedAt: string;
   readonly expiresAt: string | null;
@@ -567,13 +580,15 @@ export async function listConsents(patientId: string): Promise<ConsentRow[]> {
     id: string;
     hospital_id: string;
     hospital_name_bn: string;
+    hospital_name_en: string;
     scope: string;
     granted_at: Date;
     expires_at: Date | null;
     revoked_at: Date | null;
     granted_via: string;
   }>`
-    SELECT c.id, c.hospital_id, h.name_bn AS hospital_name_bn,
+    SELECT c.id, c.hospital_id,
+           h.name_bn AS hospital_name_bn, h.name_en AS hospital_name_en,
            c.scope::text AS scope, c.granted_at, c.expires_at, c.revoked_at, c.granted_via
       FROM consents c
       JOIN hospitals h ON h.id = c.hospital_id
@@ -585,6 +600,7 @@ export async function listConsents(patientId: string): Promise<ConsentRow[]> {
     id: row.id,
     hospitalId: row.hospital_id,
     hospitalNameBn: row.hospital_name_bn,
+    hospitalNameEn: row.hospital_name_en,
     scope: row.scope,
     grantedAt: row.granted_at.toISOString(),
     expiresAt: row.expires_at?.toISOString() ?? null,
@@ -597,6 +613,7 @@ export async function listConsents(patientId: string): Promise<ConsentRow[]> {
 export interface AccessEntry {
   readonly at: string;
   readonly hospitalNameBn: string | null;
+  readonly hospitalNameEn: string | null;
   readonly staffName: string | null;
   readonly action: string;
 }
@@ -613,10 +630,12 @@ export async function listAccessLog(patientId: string, limit = 50): Promise<Acce
   const result = await sql<{
     created_at: Date;
     hospital_name_bn: string | null;
+    hospital_name_en: string | null;
     staff_name: string | null;
     action: string;
   }>`
-    SELECT a.created_at, h.name_bn AS hospital_name_bn,
+    SELECT a.created_at,
+           h.name_bn AS hospital_name_bn, h.name_en AS hospital_name_en,
            su.full_name AS staff_name, a.action
       FROM audit_log a
       LEFT JOIN hospitals h    ON h.id = a.hospital_id
@@ -633,6 +652,7 @@ export async function listAccessLog(patientId: string, limit = 50): Promise<Acce
   return result.rows.map((row) => ({
     at: row.created_at.toISOString(),
     hospitalNameBn: row.hospital_name_bn,
+    hospitalNameEn: row.hospital_name_en,
     staffName: row.staff_name,
     action: row.action,
   }));
@@ -648,16 +668,22 @@ export async function findVisitForBooking(bookingId: string): Promise<VisitRecor
     follow_up_date: Date | string | null;
     signed_at: Date | null;
     doctor_name_bn: string;
+    doctor_name_en: string;
     department_name_bn: string;
+    department_name_en: string;
     hospital_name_bn: string;
+    hospital_name_en: string;
     serial_number: number;
     visited_at: Date;
   }>`
     SELECT v.id, v.booking_id, v.diagnosis_text, v.advice_text_bn,
            v.follow_up_date, v.signed_at,
            d.full_name_bn AS doctor_name_bn,
+           d.full_name_en AS doctor_name_en,
            dep.name_bn    AS department_name_bn,
+           dep.name_en    AS department_name_en,
            h.name_bn      AS hospital_name_bn,
+           h.name_en      AS hospital_name_en,
            b.serial_number,
            coalesce(v.signed_at, v.created_at) AS visited_at
       FROM visits v
@@ -682,8 +708,11 @@ export async function findVisitForBooking(bookingId: string): Promise<VisitRecor
     followUpDate: row.follow_up_date === null ? null : toDateOnly(row.follow_up_date),
     signedAt: row.signed_at?.toISOString() ?? null,
     doctorNameBn: row.doctor_name_bn,
+    doctorNameEn: row.doctor_name_en,
     departmentNameBn: row.department_name_bn,
+    departmentNameEn: row.department_name_en,
     hospitalNameBn: row.hospital_name_bn,
+    hospitalNameEn: row.hospital_name_en,
     serial: row.serial_number,
     visitedAt: row.visited_at.toISOString(),
   };

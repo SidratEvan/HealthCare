@@ -47,6 +47,7 @@ export interface ErHospital {
   readonly nameBn: string;
   readonly nameEn: string;
   readonly addressBn: string | null;
+  readonly addressEn: string | null;
   readonly lat: number | null;
   readonly lng: number | null;
   /** The ER desk's line; the switchboard when the facility gives none. */
@@ -69,11 +70,12 @@ export async function erHospitals(onlyIds?: readonly string[]): Promise<ErHospit
     name_bn: string;
     name_en: string;
     address_bn: string | null;
+    address_en: string | null;
     lat: number | null;
     lng: number | null;
     emergency_phone: string | null;
   }>`
-    SELECT h.id, h.name_bn, h.name_en, h.address_bn, h.lat, h.lng,
+    SELECT h.id, h.name_bn, h.name_en, h.address_bn, h.address_en, h.lat, h.lng,
            COALESCE(h.emergency_phone, h.phone) AS emergency_phone
       FROM hospitals h
      WHERE h.deleted_at IS NULL
@@ -96,6 +98,7 @@ export async function erHospitals(onlyIds?: readonly string[]): Promise<ErHospit
     nameBn: row.name_bn,
     nameEn: row.name_en,
     addressBn: row.address_bn,
+    addressEn: row.address_en,
     lat: row.lat,
     lng: row.lng,
     emergencyPhone: row.emergency_phone,
@@ -562,13 +565,14 @@ export async function caseStatus(caseId: string): Promise<CaseStatusRow | null> 
     name_bn: string;
     name_en: string;
     address_bn: string | null;
+    address_en: string | null;
     lat: number | null;
     lng: number | null;
     emergency_phone: string | null;
   }>`
     SELECT ec.id, ec.state::text AS state, ec.problem_type, ec.inbound_at,
            ec.inbound_eta_minutes, ec.acknowledged_at, ec.arrived_at, ec.closed_at,
-           ec.decline_reason, h.id AS hospital_id, h.name_bn, h.name_en, h.address_bn,
+           ec.decline_reason, h.id AS hospital_id, h.name_bn, h.name_en, h.address_bn, h.address_en,
            h.lat, h.lng, COALESCE(h.emergency_phone, h.phone) AS emergency_phone
       FROM emergency_cases ec
       JOIN hospitals h ON h.id = ec.hospital_id
@@ -592,6 +596,7 @@ export async function caseStatus(caseId: string): Promise<CaseStatusRow | null> 
       nameBn: row.name_bn,
       nameEn: row.name_en,
       addressBn: row.address_bn,
+      addressEn: row.address_en,
       lat: row.lat,
       lng: row.lng,
       emergencyPhone: row.emergency_phone,

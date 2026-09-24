@@ -53,9 +53,11 @@ import {
   type ConsoleKey,
   type Locale,
   formatAge,
+  numeralsFor,
 } from '@platform/i18n';
-import { Button, Card, Chip, FreshnessLine } from '@platform/ui';
+import { Button, Card, Chip, FreshnessLine, useLocale } from '@platform/ui';
 
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { failureOf } from '@/lib/admin';
 import { readDemoSession } from '@/lib/demo';
 import {
@@ -69,11 +71,6 @@ import {
   type SignalReading,
   type Signals,
 } from '@/lib/gov';
-
-const LOCALE: Locale = 'bn';
-
-/** Bangla digits, as on every surface (`TYP-04`, the owner's ruling of 2026-09-24). */
-const NUMERALS = 'bengali' as const;
 
 /**
  * How often the screen re-reads.
@@ -118,6 +115,7 @@ const NO_FAILURES: Readonly<Record<Tab, Failure>> = {
 };
 
 export function GovDashboard(): ReactNode {
+  const locale = useLocale();
   const [data, setData] = useState<Loaded>(NOTHING);
   const [failures, setFailures] = useState<Readonly<Record<Tab, Failure>>>(NO_FAILURES);
   const [loaded, setLoaded] = useState(false);
@@ -185,10 +183,10 @@ export function GovDashboard(): ReactNode {
           data-testid={offline ? 'gov-offline' : 'gov-error'}
         >
           <p className="text-body-md text-alert-700">
-            {t(offline ? 'govOffline' : 'govLoadFailed', LOCALE)}
+            {t(offline ? 'govOffline' : 'govLoadFailed', locale)}
           </p>
           <Button variant="secondary" onClick={() => void load()} data-testid="gov-retry">
-            {t('retry', LOCALE)}
+            {t('retry', locale)}
           </Button>
         </div>
       </Shell>
@@ -197,7 +195,7 @@ export function GovDashboard(): ReactNode {
 
   const retry = (
     <Button variant="secondary" onClick={() => void load()} data-testid="gov-retry">
-      {t('retry', LOCALE)}
+      {t('retry', locale)}
     </Button>
   );
 
@@ -209,7 +207,7 @@ export function GovDashboard(): ReactNode {
           className="rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
           data-testid="gov-offline-banner"
         >
-          {t('govOfflineStale', LOCALE)}
+          {t('govOfflineStale', locale)}
         </p>
       ) : null}
 
@@ -246,6 +244,7 @@ function SectionOrFailure({
   readonly retry: ReactNode;
   readonly children: ReactNode;
 }): ReactNode {
+  const locale = useLocale();
   if (section === null) return children;
 
   return (
@@ -255,7 +254,7 @@ function SectionOrFailure({
       data-testid="gov-section-failed"
     >
       <p className="text-body-md text-alert-700">
-        {t(section === 'offline' ? 'govOffline' : 'govLoadFailed', LOCALE)}
+        {t(section === 'offline' ? 'govOffline' : 'govLoadFailed', locale)}
       </p>
       {retry}
     </div>
@@ -270,6 +269,7 @@ function Tabs({
   readonly selected: Tab;
   readonly onSelect: (tab: Tab) => void;
 }): ReactNode {
+  const locale = useLocale();
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
     event.preventDefault();
@@ -286,7 +286,7 @@ function Tabs({
   return (
     <div
       role="tablist"
-      aria-label={t('govTitle', LOCALE)}
+      aria-label={t('govTitle', locale)}
       onKeyDown={onKeyDown}
       className="flex flex-wrap gap-1 border-b border-line pb-2 print:hidden"
     >
@@ -307,7 +307,7 @@ function Tabs({
             data-testid={`gov-tab-${entry.id}`}
             className="flex min-h-touch items-center rounded-sm px-3 text-body-md text-ink-secondary hover:bg-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 aria-selected:bg-brand-100 aria-selected:font-semibold aria-selected:text-ink"
           >
-            {t(entry.key, LOCALE)}
+            {t(entry.key, locale)}
           </button>
         );
       })}
@@ -326,29 +326,31 @@ function CapacitySection({
   readonly data: Capacity;
   readonly now: Date;
 }): ReactNode {
+  const locale = useLocale();
+  const { num, freeOfTotal, bedKind } = formattersFor(locale);
   const totals = data.totals;
 
   return (
     <Section testId="gov-section-capacity" asOf={totals.bedsAsOf} now={now}>
-      <h2 className="text-title-sm">{t('govNational', LOCALE)}</h2>
+      <h2 className="text-title-sm">{t('govNational', locale)}</h2>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat
-          label={t('govBedsFree', LOCALE)}
+          label={t('govBedsFree', locale)}
           value={num(totals.bedFree)}
-          note={format('govFreeOfTotal', LOCALE, { total: num(totals.bedTotal) })}
+          note={format('govFreeOfTotal', locale, { total: num(totals.bedTotal) })}
           testId="gov-beds-free"
         />
         <Stat
-          label={t('govIcuFree', LOCALE)}
+          label={t('govIcuFree', locale)}
           value={totals.icuFree === null ? '—' : num(totals.icuFree)}
           note={
             totals.icuTotal === null
-              ? t('govNoIcu', LOCALE)
-              : format('govFreeOfTotal', LOCALE, { total: num(totals.icuTotal) })
+              ? t('govNoIcu', locale)
+              : format('govFreeOfTotal', locale, { total: num(totals.icuTotal) })
           }
         />
-        <Stat label={t('govBurnUnits', LOCALE)} value={num(totals.burnUnitsOpen)} />
-        <Stat label={t('govErActive', LOCALE)} value={num(totals.erActive)} />
+        <Stat label={t('govBurnUnits', locale)} value={num(totals.burnUnitsOpen)} />
+        <Stat label={t('govErActive', locale)} value={num(totals.erActive)} />
       </div>
 
       {/* `FR-GOV-01` asks for ventilators and blood; nothing records either.
@@ -356,18 +358,18 @@ function CapacitySection({
       {data.unrecorded.length > 0 ? (
         <Card tone="warn" data-testid="gov-unrecorded">
           <p className="text-body-md text-warn-700">
-            {t('govUnrecorded', LOCALE)}:{' '}
+            {t('govUnrecorded', locale)}:{' '}
             {data.unrecorded
               .map((item) =>
                 t(
                   item === 'ventilators' ? 'govUnrecordedVentilators' : 'govUnrecordedBlood',
-                  LOCALE,
+                  locale,
                 ),
               )
               .join(', ')}
           </p>
           <p className="mt-1 max-w-prose text-body-sm text-ink-secondary">
-            {t('govUnrecordedWhy', LOCALE)}
+            {t('govUnrecordedWhy', locale)}
           </p>
         </Card>
       ) : null}
@@ -377,8 +379,8 @@ function CapacitySection({
           <table className="w-full text-body-sm" data-testid="gov-by-kind">
             <thead>
               <tr className="text-left text-caption text-ink-muted">
-                <th className="py-1 pr-4 font-normal">{t('govBedKind', LOCALE)}</th>
-                <th className="py-1 pr-4 text-right font-normal">{t('govBedsFree', LOCALE)}</th>
+                <th className="py-1 pr-4 font-normal">{t('govBedKind', locale)}</th>
+                <th className="py-1 pr-4 text-right font-normal">{t('govBedsFree', locale)}</th>
               </tr>
             </thead>
             <tbody>
@@ -395,7 +397,7 @@ function CapacitySection({
         </Card>
       ) : null}
 
-      <h2 className="text-title-sm">{t('govByDistrict', LOCALE)}</h2>
+      <h2 className="text-title-sm">{t('govByDistrict', locale)}</h2>
       {data.districts.length === 0 ? (
         <Empty />
       ) : (
@@ -418,33 +420,35 @@ function DistrictTile({
   readonly district: DistrictCapacity;
   readonly now: Date;
 }): ReactNode {
+  const locale = useLocale();
+  const { num, freeOfTotal } = formattersFor(locale);
   return (
     <Card data-testid={`gov-district-${district.district}`}>
       <div className="flex flex-col gap-2">
         <div>
-          <h3 className="text-title-sm">{districtName(district.district, LOCALE)}</h3>
+          <h3 className="text-title-sm">{districtName(district.district, locale)}</h3>
           <p className="text-caption text-ink-muted">
-            {divisionName(district.division, LOCALE)} ·{' '}
-            {format('govFacilities', LOCALE, { count: num(district.facilities) })}
+            {divisionName(district.division, locale)} ·{' '}
+            {format('govFacilities', locale, { count: num(district.facilities) })}
           </p>
         </div>
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-body-sm">
-          <dt className="text-ink-secondary">{t('govBedsFree', LOCALE)}</dt>
+          <dt className="text-ink-secondary">{t('govBedsFree', locale)}</dt>
           <dd className="text-right tabular-nums">
             {district.bedTotal === 0
-              ? t('govNoBeds', LOCALE)
+              ? t('govNoBeds', locale)
               : freeOfTotal(district.bedFree, district.bedTotal)}
           </dd>
-          <dt className="text-ink-secondary">{t('govIcuFree', LOCALE)}</dt>
+          <dt className="text-ink-secondary">{t('govIcuFree', locale)}</dt>
           <dd className="text-right tabular-nums">
             {district.icuTotal === null || district.icuFree === null
-              ? t('govNoIcu', LOCALE)
+              ? t('govNoIcu', locale)
               : freeOfTotal(district.icuFree, district.icuTotal)}
           </dd>
-          <dt className="text-ink-secondary">{t('govBurnUnits', LOCALE)}</dt>
+          <dt className="text-ink-secondary">{t('govBurnUnits', locale)}</dt>
           <dd className="text-right tabular-nums">{num(district.burnUnitsOpen)}</dd>
-          <dt className="text-ink-secondary">{t('govErActive', LOCALE)}</dt>
+          <dt className="text-ink-secondary">{t('govErActive', locale)}</dt>
           <dd className="text-right tabular-nums">{num(district.erActive)}</dd>
         </dl>
 
@@ -469,6 +473,9 @@ const HEAT_CLASS: Readonly<Record<0 | 1 | 2 | 3 | 4, string>> = {
 };
 
 function ErSection({ data, now }: { readonly data: ErLoad; readonly now: Date }): ReactNode {
+  const locale = useLocale();
+  const { num } = formattersFor(locale);
+  const numerals = numeralsFor(locale);
   const asOf = data.districts.reduce<string | null>(
     (age, district) =>
       district.asOf !== null && (age === null || district.asOf > age) ? district.asOf : age,
@@ -478,19 +485,19 @@ function ErSection({ data, now }: { readonly data: ErLoad; readonly now: Date })
   return (
     <Section testId="gov-section-er" asOf={asOf} now={now}>
       <div className="grid grid-cols-3 gap-4">
-        <Stat label={t('govErActive', LOCALE)} value={num(data.totals.open)} testId="gov-er-open" />
-        <Stat label={t('govErOnTheWay', LOCALE)} value={num(data.totals.onTheWay)} />
-        <Stat label={t('govErRed', LOCALE)} value={num(data.totals.red)} />
+        <Stat label={t('govErActive', locale)} value={num(data.totals.open)} testId="gov-er-open" />
+        <Stat label={t('govErOnTheWay', locale)} value={num(data.totals.onTheWay)} />
+        <Stat label={t('govErRed', locale)} value={num(data.totals.red)} />
       </div>
 
       {data.districts.length === 0 ? (
-        <Empty hint={t('govErNone', LOCALE)} />
+        <Empty hint={t('govErNone', locale)} />
       ) : (
         <Card>
           <h2 className="text-title-sm">
-            {format('govErCaption', LOCALE, { hours: num(data.windowHours) })}
+            {format('govErCaption', locale, { hours: num(data.windowHours) })}
           </h2>
-          <p className="mt-1 text-caption text-ink-muted">{t('govErLegend', LOCALE)}</p>
+          <p className="mt-1 text-caption text-ink-muted">{t('govErLegend', locale)}</p>
 
           <div className="mt-3 overflow-x-auto">
             <table
@@ -500,7 +507,7 @@ function ErSection({ data, now }: { readonly data: ErLoad; readonly now: Date })
               <thead>
                 <tr>
                   <th scope="col" className="pr-3 text-left font-normal text-ink-muted">
-                    {t('govDistrict', LOCALE)}
+                    {t('govDistrict', locale)}
                   </th>
                   {data.hours.map((hour, index) => (
                     <th
@@ -510,7 +517,7 @@ function ErSection({ data, now }: { readonly data: ErLoad; readonly now: Date })
                     >
                       {/* Every third hour is labelled: twenty-four clock times
                           in a row are unreadable at this size. */}
-                      {index % 3 === 0 ? formatClock(hour, NUMERALS) : ''}
+                      {index % 3 === 0 ? formatClock(hour, numerals) : ''}
                     </th>
                   ))}
                 </tr>
@@ -520,7 +527,7 @@ function ErSection({ data, now }: { readonly data: ErLoad; readonly now: Date })
                   <tr key={district.district} data-testid={`gov-heat-${district.district}`}>
                     <th scope="row" className="pr-3 text-left font-normal whitespace-nowrap">
                       <span className="text-body-sm text-ink">
-                        {districtName(district.district, LOCALE)}
+                        {districtName(district.district, locale)}
                       </span>{' '}
                       <span className="text-ink-muted tabular-nums">{num(district.open)}</span>
                     </th>
@@ -532,9 +539,9 @@ function ErSection({ data, now }: { readonly data: ErLoad; readonly now: Date })
                           className={`h-8 min-w-7 rounded-xs text-center tabular-nums ${
                             HEAT_CLASS[heatLevel(cell.cases, data.peak)]
                           }`}
-                          aria-label={format('govErCell', LOCALE, {
-                            district: districtName(district.district, LOCALE),
-                            hour: formatClock(hour, NUMERALS),
+                          aria-label={format('govErCell', locale, {
+                            district: districtName(district.district, locale),
+                            hour: formatClock(hour, numerals),
                             cases: num(cell.cases),
                             red: num(cell.red),
                           })}
@@ -567,22 +574,24 @@ const STATUS: Readonly<
 };
 
 function SignalsSection({ data, now }: { readonly data: Signals; readonly now: Date }): ReactNode {
+  const locale = useLocale();
+  const { num } = formattersFor(locale);
   const spikes = data.readings.filter((reading) => reading.status === 'spike');
 
   return (
     <Section testId="gov-section-signals" asOf={data.asOf} now={now}>
       <div className="flex flex-col gap-1">
         <p className="text-body-sm text-ink-secondary">
-          {format('govSignalsRule', LOCALE, {
+          {format('govSignalsRule', locale, {
             min: num(data.rule.minCases),
             ratio: num(data.rule.ratio),
           })}
         </p>
-        <p className="text-caption text-ink-muted">{t('govSignalsSource', LOCALE)}</p>
+        <p className="text-caption text-ink-muted">{t('govSignalsSource', locale)}</p>
       </div>
 
       {data.readings.length === 0 ? (
-        <Empty hint={t('govSignalsNone', LOCALE)} />
+        <Empty hint={t('govSignalsNone', locale)} />
       ) : (
         <>
           {spikes.map((reading) => (
@@ -593,15 +602,15 @@ function SignalsSection({ data, now }: { readonly data: Signals; readonly now: D
             <table className="w-full text-body-sm" data-testid="gov-signals">
               <thead>
                 <tr className="text-left text-caption text-ink-muted">
-                  <th className="py-1 pr-4 font-normal">{t('govDistrict', LOCALE)}</th>
-                  <th className="py-1 pr-4 font-normal">{t('govSignal', LOCALE)}</th>
+                  <th className="py-1 pr-4 font-normal">{t('govDistrict', locale)}</th>
+                  <th className="py-1 pr-4 font-normal">{t('govSignal', locale)}</th>
                   <th className="py-1 pr-4 text-right font-normal">
-                    {t('govSignalThisWeek', LOCALE)}
+                    {t('govSignalThisWeek', locale)}
                   </th>
                   <th className="py-1 pr-4 text-right font-normal">
-                    {t('govSignalUsual', LOCALE)}
+                    {t('govSignalUsual', locale)}
                   </th>
-                  <th className="py-1 font-normal">{t('govSignalStatus', LOCALE)}</th>
+                  <th className="py-1 font-normal">{t('govSignalStatus', locale)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -612,15 +621,15 @@ function SignalsSection({ data, now }: { readonly data: Signals; readonly now: D
                     data-testid={`gov-signal-${reading.district}-${reading.signal}`}
                     data-status={reading.status}
                   >
-                    <td className="py-2 pr-4">{districtName(reading.district, LOCALE)}</td>
-                    <td className="py-2 pr-4">{symptomSignalName(reading.signal, LOCALE)}</td>
+                    <td className="py-2 pr-4">{districtName(reading.district, locale)}</td>
+                    <td className="py-2 pr-4">{symptomSignalName(reading.signal, locale)}</td>
                     <td className="py-2 pr-4 text-right tabular-nums">{num(reading.thisWeek)}</td>
                     <td className="py-2 pr-4 text-right tabular-nums">
                       {reading.usualWeek === null ? '—' : num(reading.usualWeek)}
                     </td>
                     <td className="py-2">
                       <Chip tone={STATUS[reading.status].tone}>
-                        {t(STATUS[reading.status].key, LOCALE)}
+                        {t(STATUS[reading.status].key, locale)}
                       </Chip>
                     </td>
                   </tr>
@@ -642,6 +651,8 @@ function SignalsSection({ data, now }: { readonly data: Signals; readonly now: D
  * whether to call a district office needs to see for themselves.
  */
 function SpikeCard({ reading }: { readonly reading: SignalReading }): ReactNode {
+  const locale = useLocale();
+  const { num, shortDate } = formattersFor(locale);
   const points = reading.daily.map((point) => ({
     label: shortDate(point.day),
     cases: point.cases,
@@ -651,10 +662,10 @@ function SpikeCard({ reading }: { readonly reading: SignalReading }): ReactNode 
     <Card tone="alert" data-testid={`gov-spike-${reading.district}-${reading.signal}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-title-sm">
-          {districtName(reading.district, LOCALE)} · {symptomSignalName(reading.signal, LOCALE)}
+          {districtName(reading.district, locale)} · {symptomSignalName(reading.signal, locale)}
         </h2>
         <p className="text-body-sm tabular-nums">
-          {t('govSignalThisWeek', LOCALE)} {num(reading.thisWeek)} · {t('govSignalUsual', LOCALE)}{' '}
+          {t('govSignalThisWeek', locale)} {num(reading.thisWeek)} · {t('govSignalUsual', locale)}{' '}
           {reading.usualWeek === null ? '—' : num(reading.usualWeek)}
         </p>
       </div>
@@ -672,7 +683,7 @@ function SpikeCard({ reading }: { readonly reading: SignalReading }): ReactNode 
             />
             <Tooltip
               cursor={{ fill: 'var(--bg-sunken)' }}
-              formatter={(value) => [num(Number(value)), symptomSignalName(reading.signal, LOCALE)]}
+              formatter={(value) => [num(Number(value)), symptomSignalName(reading.signal, locale)]}
             />
             <Bar dataKey="cases" fill={SERIES} radius={[4, 4, 0, 0]} isAnimationActive={false} />
           </BarChart>
@@ -702,10 +713,12 @@ function BenchmarksSection({
   readonly data: Benchmarks;
   readonly now: Date;
 }): ReactNode {
+  const locale = useLocale();
+  const { num } = formattersFor(locale);
   return (
     <Section testId="gov-section-benchmarks" asOf={data.asOf} now={now}>
       <p className="text-body-sm text-ink-secondary">
-        {format('govBenchCaption', LOCALE, { days: num(data.windowDays) })}
+        {format('govBenchCaption', locale, { days: num(data.windowDays) })}
       </p>
       <div className="grid gap-4 md:grid-cols-2">
         {data.measures.map((measure) => (
@@ -717,23 +730,25 @@ function BenchmarksSection({
 }
 
 function MeasureCard({ measure }: { readonly measure: Benchmark }): ReactNode {
+  const locale = useLocale();
+  const { num, valueOf } = formattersFor(locale);
   const largest = Math.max(0, ...measure.entries.map((entry) => entry.value));
 
   return (
     <Card data-testid={`gov-measure-${measure.measure}`}>
       <div className="flex flex-col gap-3">
         <div>
-          <h2 className="text-title-sm">{t(MEASURE_KEY[measure.measure], LOCALE)}</h2>
+          <h2 className="text-title-sm">{t(MEASURE_KEY[measure.measure], locale)}</h2>
           <p className="text-caption text-ink-muted">
-            {t(measure.better === 'lower' ? 'govBenchLower' : 'govBenchHigher', LOCALE)}
+            {t(measure.better === 'lower' ? 'govBenchLower' : 'govBenchHigher', locale)}
             {measure.median === null
               ? ''
-              : ` · ${format('govBenchMedian', LOCALE, { value: valueOf(measure, measure.median) })}`}
+              : ` · ${format('govBenchMedian', locale, { value: valueOf(measure, measure.median) })}`}
           </p>
         </div>
 
         {measure.entries.length === 0 ? (
-          <p className="text-body-sm text-ink-secondary">{t('govBenchNone', LOCALE)}</p>
+          <p className="text-body-sm text-ink-secondary">{t('govBenchNone', locale)}</p>
         ) : (
           <ol className="flex flex-col gap-2">
             {measure.entries.map((entry, index) => (
@@ -743,12 +758,12 @@ function MeasureCard({ measure }: { readonly measure: Benchmark }): ReactNode {
                 <div className="flex items-baseline justify-between gap-2 text-body-sm">
                   <span>
                     <span className="text-ink-muted tabular-nums">{num(index + 1)}.</span>{' '}
-                    {facilityKindName(entry.kind, LOCALE)}
+                    {facilityKindName(entry.kind, locale)}
                   </span>
                   <span className="tabular-nums">
                     {valueOf(measure, entry.value)}{' '}
                     <span className="text-caption text-ink-muted">
-                      {format('govBenchSample', LOCALE, { count: num(entry.sample) })}
+                      {format('govBenchSample', locale, { count: num(entry.sample) })}
                     </span>
                   </span>
                 </div>
@@ -767,7 +782,7 @@ function MeasureCard({ measure }: { readonly measure: Benchmark }): ReactNode {
 
         {measure.tooFew > 0 ? (
           <p className="text-caption text-ink-muted">
-            {format('govBenchTooFew', LOCALE, { count: num(measure.tooFew) })}
+            {format('govBenchTooFew', locale, { count: num(measure.tooFew) })}
           </p>
         ) : null}
       </div>
@@ -775,44 +790,84 @@ function MeasureCard({ measure }: { readonly measure: Benchmark }): ReactNode {
   );
 }
 
-/** A measure's figure with its unit: minutes, hours, or a score out of five. */
-function valueOf(measure: Benchmark, value: number): string {
-  if (measure.measure === 'wait') return `${num(value)} ${t('minutesShort', LOCALE)}`;
-  if (measure.measure === 'turnaround') return `${num(value)} ${t('adminHours', LOCALE)}`;
-  return `${num(value)} ${t('govOutOfFive', LOCALE)}`;
-}
+/**
+ * The figures on this screen, in the language it is being read in.
+ *
+ * Built from the locale on each render, so a component destructures the
+ * ones it uses and every call site reads as it did when the screen was
+ * Bangla-only.
+ */
+function formattersFor(locale: Locale) {
+  const numerals = numeralsFor(locale);
 
+  /** A measure's figure with its unit: minutes, hours, or a score out of five. */
+  function valueOf(measure: Benchmark, value: number): string {
+    if (measure.measure === 'wait') return `${num(value)} ${t('minutesShort', locale)}`;
+    if (measure.measure === 'turnaround') return `${num(value)} ${t('adminHours', locale)}`;
+    return `${num(value)} ${t('govOutOfFive', locale)}`;
+  }
+
+  function num(value: number): string {
+    return formatNumber(value, numerals);
+  }
+
+  /**
+   * "২৮টির মধ্যে ৭টি" — the total first, the way the sentence runs in Bangla.
+   * Setting the free count before "২৮টির মধ্যে" read as "7 of-28", a number
+   * dropped in front of a phrase it does not belong to.
+   */
+  function freeOfTotal(free: number, total: number): string {
+    return format('govFreeOfTotalInline', locale, { free: num(free), total: num(total) });
+  }
+
+  /** `DD/MM`, which is as much as an axis tick can carry. */
+  function shortDate(iso: string): string {
+    const [, month, day] = iso.split('-');
+    if (month === undefined || day === undefined) return iso;
+    return `${num(Number(day))}/${num(Number(month))}`;
+  }
+
+  function bedKind(kind: string): string {
+    return kind in BED_KIND_NAMES ? bedKindName(kind as BedKindName, locale) : kind;
+  }
+
+  return { num, freeOfTotal, shortDate, bedKind, valueOf };
+}
 // ---------------------------------------------------------------------------
 // Pieces
 // ---------------------------------------------------------------------------
 
 function Shell({ children }: { readonly children: ReactNode }): ReactNode {
+  const locale = useLocale();
   const staffName = readDemoSession()?.staffName ?? null;
 
   return (
     <div className="min-h-screen">
       {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
       <p className="bg-warn-100 px-6 py-2 text-caption text-warn-700 print:hidden">
-        {t('demoBanner', LOCALE)}
+        {t('demoBanner', locale)}
       </p>
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 p-6" data-testid="gov-dashboard">
         <header className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <h1 className="text-title-lg">{t('govTitle', LOCALE)}</h1>
+            <h1 className="text-title-lg">{t('govTitle', locale)}</h1>
             {staffName === null ? null : <p className="text-body-sm text-ink-muted">{staffName}</p>}
           </div>
-          <a
-            href="/"
-            className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100 print:hidden"
-          >
-            {t('changeConsole', LOCALE)}
-          </a>
+          <div className="flex items-center gap-3 print:hidden">
+            <ConsoleLanguageSwitch className="" />
+            <a
+              href="/"
+              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
+            >
+              {t('changeConsole', locale)}
+            </a>
+          </div>
         </header>
 
         {/* FR-GOV-06, said where it is true: nothing below names anybody. */}
         <p className="text-body-sm text-ink-secondary" data-testid="gov-aggregate-only">
-          {t('govAggregateOnly', LOCALE)}
+          {t('govAggregateOnly', locale)}
         </p>
 
         {children}
@@ -842,17 +897,19 @@ function Section({
 }
 
 function Freshness({ asOf, now }: { readonly asOf: string | null; readonly now: Date }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <FreshnessLine
       asOf={asOf === null ? null : new Date(asOf)}
       now={now}
       labels={{
-        justNow: t('updatedJustNow', LOCALE),
-        ago: t('updatedAgo', LOCALE),
-        never: t('adminNeverRecorded', LOCALE),
-        stale: t('staleWarning', LOCALE),
+        justNow: t('updatedJustNow', locale),
+        ago: t('updatedAgo', locale),
+        never: t('adminNeverRecorded', locale),
+        stale: t('staleWarning', locale),
       }}
-      formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
+      formatMinutes={(value) => formatAge(value, locale, numerals)}
     />
   );
 }
@@ -883,9 +940,10 @@ function Stat({
 }
 
 function Empty({ hint }: { readonly hint?: string }): ReactNode {
+  const locale = useLocale();
   return (
     <Card data-testid="gov-empty">
-      <p className="text-body-md text-ink-secondary">{t('adminNothingYet', LOCALE)}</p>
+      <p className="text-body-md text-ink-secondary">{t('adminNothingYet', locale)}</p>
       {hint === undefined ? null : <p className="mt-1 text-body-sm text-ink-muted">{hint}</p>}
     </Card>
   );
@@ -915,27 +973,3 @@ function GovSkeleton(): ReactNode {
 // ---------------------------------------------------------------------------
 // Formatting
 // ---------------------------------------------------------------------------
-
-function num(value: number): string {
-  return formatNumber(value, NUMERALS);
-}
-
-/**
- * "২৮টির মধ্যে ৭টি" — the total first, the way the sentence runs in Bangla.
- * Setting the free count before "২৮টির মধ্যে" read as "7 of-28", a number
- * dropped in front of a phrase it does not belong to.
- */
-function freeOfTotal(free: number, total: number): string {
-  return format('govFreeOfTotalInline', LOCALE, { free: num(free), total: num(total) });
-}
-
-/** `DD/MM`, which is as much as an axis tick can carry. */
-function shortDate(iso: string): string {
-  const [, month, day] = iso.split('-');
-  if (month === undefined || day === undefined) return iso;
-  return `${num(Number(day))}/${num(Number(month))}`;
-}
-
-function bedKind(kind: string): string {
-  return kind in BED_KIND_NAMES ? bedKindName(kind as BedKindName, LOCALE) : kind;
-}

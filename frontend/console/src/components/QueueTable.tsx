@@ -23,7 +23,7 @@
  */
 
 import type { BookingStatus, QueueEntry, QueueState } from '@platform/domain';
-import { format, formatNumber, formatSerial, t, type Locale } from '@platform/i18n';
+import { format, formatNumber, formatSerial, t, type Locale, numeralsFor } from '@platform/i18n';
 import { Button, Chip, type ChipTone } from '@platform/ui';
 
 import type { ReactNode } from 'react';
@@ -85,6 +85,7 @@ export function QueueTable({
   onCheckIn,
   patientNames,
 }: QueueTableProps): ReactNode {
+  const numerals = numeralsFor(locale);
   if (state.entries.length === 0) {
     // GR-03: an empty state is a designed state. One plain Bangla sentence and
     // nothing else (FRONTEND.md §5.9).
@@ -137,7 +138,7 @@ export function QueueTable({
               className={serving ? 'border-b border-line bg-brand-100' : 'border-b border-line'}
             >
               <td className="h-14 px-4 font-semibold tabular-nums">
-                {formatSerial(entry.serial, locale === 'bn' ? 'bengali' : 'latin')}
+                {formatSerial(entry.serial, numeralsFor(locale))}
               </td>
 
               <td className="px-4">
@@ -162,7 +163,7 @@ export function QueueTable({
                   >
                     {format('quotedShort', locale, {
                       // Bengali, as the serial on the same row is.
-                      minutes: formatNumber(entry.quotedWaitMinutes, 'bengali'),
+                      minutes: formatNumber(entry.quotedWaitMinutes, numerals),
                     })}
                   </span>
                 ) : null}

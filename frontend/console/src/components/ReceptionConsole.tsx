@@ -43,12 +43,14 @@ import {
   formatNumber,
   formatSerial,
   t,
-  type Locale,
   formatAge,
+  numeralsFor,
+  localName,
 } from '@platform/i18n';
-import { Button, Card, FreshnessLine, ToastProvider, useToast } from '@platform/ui';
+import { Button, Card, FreshnessLine, ToastProvider, useToast, useLocale } from '@platform/ui';
 
 import { CheckInSheet } from '@/components/CheckInSheet';
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { ConsoleRail } from '@/components/ConsoleRail';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
@@ -58,25 +60,6 @@ import { readDemoSession } from '@/lib/demo';
 import { fetchPatientNames } from '@/lib/roster';
 
 import type { ReactNode } from 'react';
-
-const CONSOLE_LOCALE: Locale = 'bn';
-
-/**
- * Bangla digits, as on every surface (`TYP-04`, the owner's ruling of
- * 2026-09-24): the serials, the quoted waits, the counts.
- */
-const CONSOLE_NUMERALS = 'bengali' as const;
-
-/**
- * The chamber's own hours are Bangla, day period and numerals — "বিকাল ৫:০০",
- * never "5:00 PM".
- *
- * These times used to be `plannedStart.slice(11, 16)` — the hour and minute cut
- * straight out of the ISO string, which is UTC (`DB-P4`). A chamber running
- * 18:00–21:00 in Dhaka therefore showed as 12:00–15:00 on the console, six
- * hours out, on the one line of the screen that says when the session is.
- */
-const CHAMBER_NUMERALS = 'bengali' as const;
 
 const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 
@@ -105,7 +88,8 @@ export function ReceptionConsole(): ReactNode {
 }
 
 function ConsoleBody(): ReactNode {
-  const locale = CONSOLE_LOCALE;
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const { show } = useToast();
 
   const sessionId = useSessionId();
@@ -192,7 +176,7 @@ function ConsoleBody(): ReactNode {
     await queue.act('PATIENT_CALLED', { bookingId: next.bookingId, serial: next.serial });
 
     show({
-      title: t('calledPatient', locale).replace('{serial}', String(next.serial)),
+      title: format('calledPatient', locale, { serial: formatSerial(next.serial, numerals) }),
       tone: 'positive',
       // GR-02: undo appends a compensating event, never deletes history.
       action: {
@@ -263,21 +247,27 @@ function ConsoleBody(): ReactNode {
 
         {/* --- session bar (B1.2) ------------------------------------------ */}
         {/* Whose chamber, then when: the doctor's name is what a receptionist
-            and a patient at the counter both check first. Times in Bangla day
-            periods and numerals, as the rest of this screen's numbers are. */}
+            and a patient at the counter both check first. Times through
+            `formatClock`, in the reading language's day periods and digits —
+            never sliced out of the ISO string, which is UTC (`DB-P4`) and once
+            put an 18:00 Dhaka chamber on this line as 12:00. */}
         <header className="flex items-center gap-3 border-b border-line bg-surface px-6 py-4">
           <div className="min-w-0 flex-1">
             <h1 className="text-title-md font-bold" data-testid="chamber-title">
               {chamber === null
                 ? t('navQueue', locale)
-                : `${chamber.doctorNameBn} · ${chamber.departmentNameBn}`}
+                : `${localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)} · ${localName(
+                    locale,
+                    chamber.departmentNameBn,
+                    chamber.departmentNameEn,
+                  )}`}
             </h1>
             <p className="text-body-sm text-ink-secondary tabular-nums">
-              {t('chamberHours', locale)} {formatClock(state.plan.plannedStart, CHAMBER_NUMERALS)} –{' '}
-              {formatClock(state.plan.plannedEnd, CHAMBER_NUMERALS)} ·{' '}
+              {t('chamberHours', locale)} {formatClock(state.plan.plannedStart, numerals)} –{' '}
+              {formatClock(state.plan.plannedEnd, numerals)} ·{' '}
               {state.doctorArrivedAt === null
                 ? t('notStarted', locale)
-                : `${t('actualStart', locale)} ${formatClock(state.doctorArrivedAt, CHAMBER_NUMERALS)}`}
+                : `${t('actualStart', locale)} ${formatClock(state.doctorArrivedAt, numerals)}`}
             </p>
           </div>
 
@@ -312,6 +302,8 @@ function ConsoleBody(): ReactNode {
           >
             {serving === null ? t('callNext', locale) : t('finishAndCallNext', locale)}
           </Button>
+
+          <ConsoleLanguageSwitch />
         </header>
 
         {/* --- queue table (B1.4) ------------------------------------------ */}
@@ -375,8 +367,8 @@ function ConsoleBody(): ReactNode {
                 });
                 show({
                   title: format('checkedIn', locale, {
-                    serial: formatSerial(entry.serial, 'bengali'),
-                    minutes: formatNumber(quotedWaitMinutes, CONSOLE_NUMERALS),
+                    serial: formatSerial(entry.serial, numerals),
+                    minutes: formatNumber(quotedWaitMinutes, numerals),
                   }),
                   tone: 'positive',
                 });
@@ -399,7 +391,7 @@ function ConsoleBody(): ReactNode {
               ) : (
                 <>
                   <p className="text-display-lg font-bold tabular-nums" data-testid="now-serving">
-                    {formatNumber(serving.serial, 'bengali')}
+                    {formatNumber(serving.serial, numerals)}
                   </p>
                   <p className="mt-1 text-body-lg" data-testid="now-serving-name">
                     {names.get(serving.patientId) ?? ''}
@@ -408,7 +400,7 @@ function ConsoleBody(): ReactNode {
               )}
               <p className="mt-3 text-body-sm text-brand-100">
                 {format('waitingCount', locale, {
-                  count: formatNumber(waiting.length, 'bengali'),
+                  count: formatNumber(waiting.length, numerals),
                 })}
               </p>
             </section>
@@ -428,7 +420,7 @@ function ConsoleBody(): ReactNode {
                   never: t('neverSynced', locale),
                   stale: t('staleWarning', locale),
                 }}
-                formatMinutes={(value) => formatAge(value, locale, 'bengali')}
+                formatMinutes={(value) => formatAge(value, locale, numerals)}
               />
             </div>
 
@@ -461,10 +453,12 @@ function ConsoleBody(): ReactNode {
 }
 
 function Counter({ label, value }: { readonly label: string; readonly value: number }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   return (
     <div>
       <dt className="text-caption text-ink-muted">{label}</dt>
-      <dd className="text-title-sm tabular-nums">{formatNumber(value, 'bengali')}</dd>
+      <dd className="text-title-sm tabular-nums">{formatNumber(value, numerals)}</dd>
     </div>
   );
 }

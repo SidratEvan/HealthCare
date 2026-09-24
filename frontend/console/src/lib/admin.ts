@@ -88,6 +88,7 @@ export interface DoctorPunctuality {
   readonly doctorNameBn: string;
   readonly doctorNameEn: string;
   readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
   readonly sessions: number;
   readonly neverStarted: number;
   readonly onTime: number;
