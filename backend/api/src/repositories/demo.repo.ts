@@ -156,6 +156,49 @@ function runningFirst(hospital: { sessions: readonly DemoSessionRow[] }): number
 }
 
 /**
+ * The national roles a seeded account holds (`FR-ROLE-01`, 0024).
+ *
+ * Both halves of "national" are checked: the role row has no hospital *and*
+ * the account has none. A hospital's staff member given a national role by
+ * mistake would otherwise surface here and be offered as a government viewer.
+ */
+export async function nationalRoles(): Promise<string[]> {
+  const result = await sql<{ role: string }>`
+    SELECT DISTINCT sr.role::text AS role
+      FROM staff_roles sr
+      JOIN staff_users su ON su.id = sr.staff_user_id
+     WHERE sr.hospital_id IS NULL
+       AND su.hospital_id IS NULL
+       AND sr.deleted_at IS NULL
+       AND su.deleted_at IS NULL
+     ORDER BY 1
+  `.execute(db);
+
+  return result.rows.map((row) => row.role);
+}
+
+/** A real national account holding this role — real for `nationalRoles`' reason. */
+export async function nationalStaffFor(
+  role: string,
+): Promise<{ readonly id: string; readonly fullName: string } | null> {
+  const result = await sql<{ id: string; full_name: string }>`
+    SELECT su.id, su.full_name
+      FROM staff_users su
+      JOIN staff_roles sr ON sr.staff_user_id = su.id
+     WHERE su.hospital_id IS NULL
+       AND sr.hospital_id IS NULL
+       AND sr.role = ${role}::staff_role
+       AND su.deleted_at IS NULL
+       AND sr.deleted_at IS NULL
+     ORDER BY su.full_name
+     LIMIT 1
+  `.execute(db);
+
+  const row = result.rows[0];
+  return row === undefined ? null : { id: row.id, fullName: row.full_name };
+}
+
+/**
  * A real staff account at this hospital holding this role.
  *
  * Real, not invented: `queue_events.actor_staff_id` is a foreign key, so a

@@ -42,6 +42,19 @@ export async function staffToken(
   });
 }
 
+/**
+ * A national account's token: roles and no hospital (`FR-ROLE-01`, 0024).
+ *
+ * The shape `demo.service` mints for `gov_viewer`, and the one `toPrincipal`
+ * reads as `kind: 'national'` — only because every role on it is national.
+ */
+export async function nationalToken(roles: readonly StaffRole[] = ['gov_viewer']): Promise<string> {
+  return await signToken({
+    kind: 'access',
+    claims: { sub: IDS.staff, kind: 'staff', roles },
+  });
+}
+
 /** A tracking link: scoped to exactly one booking (FR-GST-05). */
 export async function trackingLink(
   bookingId: string = IDS.booking,

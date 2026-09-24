@@ -45,9 +45,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { nowServing, queueCounts, waitingQueue } from '@platform/domain';
+import { nowServing, queueCounts, SYMPTOM_SIGNALS, waitingQueue } from '@platform/domain';
 import type { QueueEntry } from '@platform/domain';
-import { format, formatClock, formatNumber, formatTaka, t, type Locale } from '@platform/i18n';
+import {
+  format,
+  formatClock,
+  formatNumber,
+  formatTaka,
+  symptomSignalName,
+  t,
+  type Locale,
+} from '@platform/i18n';
 import {
   Button,
   Card,
@@ -575,6 +583,41 @@ function VisitNote({
           </fieldset>
         ) : null}
 
+        {/* `CHIP-B05-SIGNAL` (`FR-GOV-03`): the one thing about this visit the
+            district counts. Optional and single — most consultations are none
+            of the three, and "none" is the first choice so that is the easy
+            tap. It is a reporting flag, not a diagnosis: the text above stays
+            the record, and the patient's wallet does not show this. */}
+        <fieldset className="flex flex-col gap-2" data-testid="visit-signal">
+          <legend className="font-ui text-body-sm font-semibold text-ink">
+            {t('visitSignal', LOCALE)}
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            <FollowUpChoice
+              label={t('visitSignalNone', LOCALE)}
+              active={draft.symptomSignal === null}
+              disabled={disabled}
+              testId="visit-signal-none"
+              onSelect={() => {
+                onChange({ ...draft, symptomSignal: null });
+              }}
+            />
+            {SYMPTOM_SIGNALS.map((signal) => (
+              <FollowUpChoice
+                key={signal}
+                label={symptomSignalName(signal, LOCALE)}
+                active={draft.symptomSignal === signal}
+                disabled={disabled}
+                testId={`visit-signal-${signal}`}
+                onSelect={() => {
+                  onChange({ ...draft, symptomSignal: signal });
+                }}
+              />
+            ))}
+          </div>
+          <p className="text-caption text-ink-muted">{t('visitSignalHint', LOCALE)}</p>
+        </fieldset>
+
         <fieldset className="flex flex-col gap-2">
           <legend className="font-ui text-body-sm font-semibold text-ink">
             {t('followUp', LOCALE)}
@@ -652,11 +695,13 @@ function FollowUpChoice({
   active,
   disabled,
   onSelect,
+  testId,
 }: {
   readonly label: string;
   readonly active: boolean;
   readonly disabled: boolean;
   readonly onSelect: () => void;
+  readonly testId?: string;
 }): ReactNode {
   return (
     <button
@@ -665,6 +710,7 @@ function FollowUpChoice({
       aria-pressed={active}
       disabled={disabled}
       onClick={onSelect}
+      data-testid={testId}
       className={`min-h-touch rounded-pill border px-4 text-body-sm ${
         active
           ? 'border-brand-600 bg-brand-100 font-semibold text-brand-700'
@@ -697,7 +743,13 @@ function UpNext({ waiting }: { readonly waiting: readonly QueueEntry[] }): React
 }
 
 function emptyDraft(): VisitDraft {
-  return { diagnosisText: '', adviceTextBn: '', followUpDays: null, testCodes: [] };
+  return {
+    diagnosisText: '',
+    adviceTextBn: '',
+    followUpDays: null,
+    testCodes: [],
+    symptomSignal: null,
+  };
 }
 
 /**

@@ -1,7 +1,8 @@
 /**
  * `/` — the console: reception (`S-B-02`), the doctor (`S-B-05`), the ward
  * board (`S-B-06`), the emergency department (`S-B-07`), the lab (`S-B-08`),
- * the pharmacy (`S-B-09`) or the hospital dashboard (`S-B-10`).
+ * the pharmacy (`S-B-09`), the hospital dashboard (`S-B-10`) or the national
+ * dashboard (`S-B-13`).
  *
  * A client component in full. Every part of these screens is live: state
  * arrives over a socket, actions are applied optimistically against a local
@@ -19,6 +20,7 @@ import { AdminDashboard } from '@/components/AdminDashboard';
 import { ConsolePicker, type ConsoleChoice } from '@/components/ConsolePicker';
 import { DoctorConsole } from '@/components/DoctorConsole';
 import { EmergencyConsole } from '@/components/EmergencyConsole';
+import { GovDashboard } from '@/components/GovDashboard';
 import { LabConsole } from '@/components/LabConsole';
 import { PharmacyConsole } from '@/components/PharmacyConsole';
 import { ReceptionConsole } from '@/components/ReceptionConsole';
@@ -33,7 +35,15 @@ import type { ReactNode } from 'react';
  * A principal holding one of these has no chamber to open, so the picker is
  * what it gets when the URL names none.
  */
-const HOSPITAL_ROLES = new Set(['ward', 'emergency', 'lab', 'pharmacy', 'hospital_admin']);
+const HOSPITAL_ROLES = new Set([
+  'ward',
+  'emergency',
+  'lab',
+  'pharmacy',
+  'hospital_admin',
+  // Not a hospital's at all, but the same answer: no chamber to open (`S-B-13`).
+  'gov_viewer',
+]);
 
 /**
  * What each of those is called in the URL.
@@ -48,6 +58,7 @@ const VIEW_OF: Readonly<Record<Exclude<ConsoleChoice['kind'], 'chamber'>, string
   lab: 'lab',
   pharmacy: 'pharmacy',
   admin: 'admin',
+  gov: 'gov',
 };
 
 export default function Page(): ReactNode {
@@ -97,6 +108,9 @@ export default function Page(): ReactNode {
   if (view === 'lab' && session?.role === 'lab') return <LabConsole />;
   if (view === 'pharmacy' && session?.role === 'pharmacy') return <PharmacyConsole />;
   if (view === 'admin' && session?.role === 'hospital_admin') return <AdminDashboard />;
+
+  // The national layer (`S-B-13`, step 20): no hospital, no chamber.
+  if (view === 'gov' && session?.role === 'gov_viewer') return <GovDashboard />;
 
   // A chamber in the URL *and* a chamber principal in storage is a console
   // ready to open. Anything else means the picker, which is `S-B-01` standing

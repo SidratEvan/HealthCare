@@ -6,7 +6,7 @@
  * silently renders nothing.
  */
 
-import type { QueueState } from '@platform/domain';
+import type { QueueState, SymptomSignal } from '@platform/domain';
 
 /** What the doctor has typed but not necessarily filed. */
 export interface VisitDraft {
@@ -16,6 +16,11 @@ export interface VisitDraft {
   readonly followUpDays: number | null;
   /** `BTN-B05-TEST`: the chips ticked, by catalogue code (`FR-DOC-06`). */
   readonly testCodes: readonly string[];
+  /**
+   * `CHIP-B05-SIGNAL`: dengue, diarrhoeal or fever, for the district's early
+   * warning (`FR-GOV-03`). Null — the common case — means none of the three.
+   */
+  readonly symptomSignal: SymptomSignal | null;
 }
 
 /** One chip on `BTN-B05-TEST`, from the hospital's catalogue. */
@@ -198,6 +203,7 @@ export async function saveVisit(input: {
       ...(input.draft.followUpDays === null
         ? {}
         : { followUpDate: dhakaDateIn(input.draft.followUpDays) }),
+      ...(input.draft.symptomSignal === null ? {} : { symptomSignal: input.draft.symptomSignal }),
       sign: input.sign,
       idempotencyKey: key,
     }),

@@ -7,15 +7,14 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/standby-self-serve`, after step 19 — patients join a full
-chamber's standby list from the app; prepaid are seated automatically,
-everybody else answers on their phone (decision 62, ruled 2026-09-23). Before
-that, `feat/check-in` — reception checks a patient in and quotes a wait
-(decision 61). Before that, `feat/admin-dashboard` — step 19. A hospital administrator opens
-`S-B-10` from the picker and sees what the facility did, what empty chairs
-cost and what the standby list won back — and reception can now give a freed
-chair to the standby list and record the yes, which is the tap that moves that
-figure.
+Last updated: `feat/gov-dashboard` — **step 20, the last step in the build
+plan**. A government viewer opens `S-B-13` from the picker and sees capacity
+by district, the emergency heat map, disease signals and an anonymised
+benchmark, read as a database role that cannot open a single patient row.
+Decision 5 (a national role has no facility) is implemented one way and needs
+the owner's ruling, with six more listed under open decisions (66–72).
+Before that, `feat/standby-self-serve` (decision 62) and `feat/check-in`
+(decision 61), after step 19.
 
 ---
 
@@ -43,7 +42,11 @@ figure.
 | 17 | `feat/lab-pharmacy` | merged — migrations 0011 + 0018, `S-B-08`, the stock half of `S-B-09`, `BTN-B05-TEST`, `TAB-A12-REP`, the medicine search, `lab-report.spec.ts`. **Dispensing dropped**; `PRD.md` §12 and `APP_FLOW.md` B5 edited to match |
 | 18 | `feat/payments` | merged — migrations 0009 + 0019, the refund and settlement domain, the provider seam, `seed_08_money`, the refund statement on `MOD-A08-CANCEL`. **bKash and Nagad are not implemented**; the mock is the working provider (`CLAUDE.md` §1.1) |
 | 19 | `feat/admin-dashboard` | merged — migration 0020, `S-B-10`, the standby card on `S-B-02` (`BTN-B02-OFFER`), CSV export with audit, `no-show-recovery.spec.ts`. **Average wait is not measured**: nothing records a patient arriving (decision 61) |
-| 20 | `feat/gov-dashboard` | **next** — aggregate-only national layer. Needs decision 5 answered first |
+| 20 | `feat/gov-dashboard` | merged — migrations 0024–0026, `S-B-13`, `gov_reader`, `CHIP-B05-SIGNAL`, `seed_09_signals`, `gov-dashboard.spec.ts`. **Decision 5 implemented, not ruled**: national roles hold a null hospital. `FR-GOV-05` (shared health record) waits for a counterparty |
+
+**Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design). What
+remains is the owner's: the open decisions below, applying migrations to
+Supabase, and whether `mvp` goes to `main`.
 
 Four unplanned branches after step 11:
 
@@ -97,20 +100,104 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 3469, in about a minute and a half.
-`pnpm test:e2e` reports 98, in Chromium, against the real API and the seeded
+`pnpm test` reports 3712, in about a minute and a half.
+`pnpm test:e2e` reports 108, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`. The last full run took eight minutes.
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`. The
+last full run took twelve minutes.
 
 `pnpm verify` — typecheck, lint, `format:check`, test — is clean, and so is
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Step 20 — the national layer, and what a government viewer can reach
+
+**The definition of done is "no identifiable row reachable", and it is held
+three ways, each tested.**
+
+1. **The principal.** A staff token with no hospital whose every role is
+   national (`platform_admin`, `gov_viewer`) becomes `kind: 'national'`
+   (`middleware/auth.ts`). Every hospital guard asks `kind === 'staff'` first,
+   so a government viewer fails all of them without any having to know it
+   exists. `requireNationalRole` is the only door the other way. A hospital-less
+   token with any hospital role on it is refused as incomplete.
+   `gov.routes.test.ts` runs the matrix both ways, including a government viewer
+   against a queue, a ward, an ER, a lab bench, the admin dashboard and a
+   patient record.
+2. **The database.** The four `/gov/*` reads run read-only as `gov_reader`
+   (migration 0026, `SET LOCAL ROLE`). That role has SELECT on the six `v_gov_*`
+   views and on nothing else in the schema. From inside it, `SELECT` on
+   `patients`, `bookings`, `visits`, `hospitals` and even
+   `v_public_hospital_capacity` is "permission denied". `gov_views.test.ts`
+   asserts that the set of relations it can read is exactly those six, so a
+   view added later is unreadable until somebody grants it on purpose.
+3. **The wire.** `gov.service` walks every payload with `findIdentifiers` (an
+   id-, name-, phone- or token-shaped key, or a UUID or mobile number in any
+   value) and sends a 500 rather than the payload. The API test and the E2E
+   both scan the actual responses for UUIDs, phone numbers, patient names and
+   every facility name.
+
+**Decision 5, implemented one way.** `staff_users.hospital_id` and
+`staff_roles.hospital_id` are nullable (0024), and a CHECK ties null to exactly
+the two national roles. Partial unique indexes cover what a null slips through.
+The seeds write one national account, a `gov_viewer` with no facility. They
+write no `platform_admin`, because `S-B-12` is not built. See decision 5.
+
+**`FR-GOV-03` needed a category, and nothing recorded one.** The booking
+reason and the diagnosis are free text, and classifying free text is the
+diagnostic inference `PRD.md` §27 rules out. So the doctor's visit form gains
+`CHIP-B05-SIGNAL`: কোনোটি নয় / ডেঙ্গু / ডায়রিয়া / জ্বর, none selected by
+default, stored as `visits.symptom_signal` (0025). It is counted by district
+and day only, and not shown in the wallet. `PRD.md` §15 and `APP_FLOW.md` B2
+carry the note. See decision 66.
+
+**A spike is this week at least double the usual week, and at least five
+cases** (`shared/domain/gov/signals.ts`). "Usual" is the average week over up
+to fourteen days before this one. A district with less than a week of
+reporting before this one says যথেষ্ট তথ্য নেই rather than "normal". See
+decision 67.
+
+**The screen.** `S-B-13` has four tabs:
+
+- **Capacity:** national totals, free beds by kind, one tile per district, and
+  ventilators and blood named as not recorded.
+- **ER heat map:** districts × the last 24 hours on the brand ramp.
+- **Signals:** a table of every district × category, with a bar chart for
+  each spike.
+- **Benchmarks:** six measures, each ranked on its own, facilities shown by
+  kind only, and a figure resting on fewer than five observations left out
+  and counted.
+
+Every section has its own `<FreshnessLine>` and fails on its own, and the
+screen re-reads every minute. Offline keeps the last figures with their ages.
+
+**Demo data.** `seed_09_signals` tags a few dozen past visits per district per
+week by fixed targets, not by chance. The history is weekday-scheduled, so a
+per-visit probability manufactured spikes in whichever district had a busy
+week. Dhaka's dengue is nine this week against about one a week before it;
+nothing else reaches five. A planted dengue or diarrhoeal case is re-labelled
+whole from `DEMO_SIGNAL_CASES` — complaint, assessment, advice and tag — so the
+record reads as one consultation.
+
+**How to show it.** Console → **জাতীয় ড্যাশবোর্ড খুলুন** (below the
+hospitals). রোগ-সংকেত opens on ঢাকা · ডেঙ্গু with its three weeks drawn. For
+the live half, open a chamber's ডাক্তার console in a second window, type a
+diagnosis, tap **ডেঙ্গু**, sign, then reload the national screen: that
+district's dengue count has gone up by one. `gov-dashboard.spec.ts` runs
+exactly that.
+
+**Supabase does not have 0024, 0025 or 0026** (nor 0021–0023). 0026's `GRANT
+gov_reader TO CURRENT_USER` has only run where the migrating user is a
+superuser. On Supabase the migrating user is `postgres`, which is not one.
+Creating the role should work there, but whether the grant lets that user
+`SET ROLE` has not been tried. If it does not, every `/gov/*` read fails with
+a permission error, loudly, and nothing else is affected.
 
 ### The demo API sleeps, and the console now says so
 
@@ -1374,14 +1461,20 @@ raised them, so the numbering is not contiguous in the file.
 
 Raised while building the seeds (step 5):
 
-5. **A national role has no home facility.** `staff_users.hospital_id` and
-   `staff_roles.hospital_id` are both NOT NULL, but `FR-ROLE-01` says every
-   role is hospital-scoped *except* the platform and government ones. The seeds
-   therefore write no `platform_admin` and no `gov_viewer` rather than invent a
-   facility for them. Steps 19 and 20 need this answered — either those columns
-   become nullable, or those roles live somewhere else. Step 19 did not need
-   it (a hospital administrator has a facility); **step 20 cannot start
-   without it**, because `gov_viewer` is the only role that reads its screen.
+5. **A national role has no home facility — implemented at step 20, awaiting
+   a ruling.** `FR-ROLE-01` says every role is hospital-scoped *except* the
+   platform and government ones, and `staff_users.hospital_id` and
+   `staff_roles.hospital_id` were both NOT NULL. The two options were: make
+   those columns nullable, or keep national roles somewhere else. **Built as
+   the first** (migration 0024). A null hospital is allowed only for
+   `platform_admin` and `gov_viewer`, enforced by a CHECK on `staff_roles`.
+   The API reads a hospital-less token as a separate `national` principal,
+   which every hospital guard refuses. Kept in `staff_roles` because
+   `FR-ROLE-02` makes holding several roles normal and `staff_role` already
+   lists both. What the table cannot check (a CHECK sees one row) is that a
+   null-hospital *account* holds only national roles; `toPrincipal` holds that
+   line. If the ruling is "somewhere else", 0024 is superseded by a migration
+   that moves one seeded row, and the `national` principal stays.
 6. **`db:reset` truncates; migration 0006's comment says it drops the schema.**
    The comment predates Supabase, where dropping `public` would take Supabase's
    own objects with it. `DATABASE.md` §7 ("truncate + reseed in one command")
@@ -1817,6 +1910,50 @@ Raised while building the dashboard (step 19):
    reception decides whether a chair is worth offering this late in the
    chamber.
 
+Raised while building the national layer (step 20):
+
+66. **The symptom category comes from a tag the doctor sets.** `FR-GOV-03`
+   needs dengue / diarrhoeal / fever counted by area, and nothing recorded a
+   category. Built as `CHIP-B05-SIGNAL` on the doctor's visit form: optional,
+   one of the three `FR-GOV-03` names, `visits.symptom_signal`. It is a new
+   control on `S-B-05`, recorded in `APP_FLOW.md` B2 and `PRD.md` §15. The
+   alternatives were a category on the patient's booking (self-reported, and
+   "dengue" is not something a patient reports) or saying the signal is
+   unmeasured, as step 19 once did for the wait. **Needs the owner's yes.**
+
+67. **What a spike is.** At least five cases this week *and* at least double
+   the usual week, where "usual" is the average week over up to fourteen days
+   before this one, and at least seven days of reporting are required. No
+   document gives a rule; this is the plainest one the screen can state in a
+   sentence. The constants are `SPIKE_MIN_CASES`, `SPIKE_RATIO` and
+   `BASELINE_MIN_DAYS` in `shared/domain/src/gov/signals.ts`.
+
+68. **The "map" is district tiles.** `FR-GOV-01` says capacity *map*. A
+   drawn map of Bangladesh needs district boundary data and a mapping library
+   (e.g. MapLibre) — a new dependency (`CLAUDE.md` §7). The tiles carry the
+   same figures, each with its age. Say the word and it becomes a map; the API
+   is already per district.
+
+69. **Benchmarking names a facility's kind, and nothing else.** "Anonymised
+   facility benchmarking" is read as: no facility named, each measure ranked on
+   its own so a reader cannot follow one facility across every column. In the
+   demo set the one government hospital is unique by kind, so its rows are
+   identifiable as "the government one". With a real national set that stops
+   being true. If a ministry is meant to see names, this is the decision to
+   change.
+
+70. **A benchmark figure needs five observations** (`MIN_BENCHMARK_SAMPLE`).
+   Below that, the facility is left out of that measure and counted as "too
+   few", rather than ranked on luck.
+
+71. **Ventilators and blood are "not recorded".** `FR-GOV-01` names both; no
+   table holds either (`bed_kind` has no ventilator, and blood stock is
+   decision 47). The capacity tab says so rather than showing zero.
+
+72. **No `platform_admin` is seeded.** 0024 allows one, but `S-B-12` is not a
+   build step and an account for a screen that does not exist would be a
+   picker button to nowhere.
+
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
 visibility and credential rotation. The owner knows the facts and the
@@ -1894,6 +2031,11 @@ home screen's live strip, both of which read what this device booked.
 
 That is `PRD.md` §24 step 6, minus the prescription the owner removed from this
 version.
+
+5. **The national dashboard** (`S-B-13`): on the picker, below the hospitals,
+   **জাতীয় ড্যাশবোর্ড খুলুন**. রোগ-সংকেত opens on dengue rising in Dhaka.
+   On the doctor's screen, tapping **ডেঙ্গু** before signing adds one to that
+   district's count on the next reload.
 
 The patient screen also carries **আমি দেরি করছি** and **বাতিল করুন**, both of
 which write real events the console sees.

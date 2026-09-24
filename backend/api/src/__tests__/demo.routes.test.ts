@@ -251,6 +251,66 @@ describe('POST /demo/token', () => {
   });
 });
 
+describe('the national console (S-B-13, step 20)', () => {
+  it('is offered once, beside the hospitals, for the seeded government viewer', async () => {
+    const response = await request(app).get(`${BASE}/demo/consoles`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.national).toEqual(['gov_viewer']);
+  });
+
+  it('mints a token with no hospital, which the API reads as national', async () => {
+    const response = await request(app).post(`${BASE}/demo/token`).send({ role: 'gov_viewer' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.hospitalId).toBeNull();
+    expect(response.body.data.staffName).toBeTruthy();
+
+    const verified = await verifyToken(response.body.data.token as string, 'access');
+    expect(verified.ok).toBe(true);
+    if (!verified.ok) return;
+    expect(verified.claims.hospitalId).toBeUndefined();
+    expect(verified.claims.roles).toEqual(['gov_viewer']);
+
+    // The subject is the seeded national account, which has no facility.
+    const account = await sql<{ hospital_id: string | null }>`
+      SELECT hospital_id FROM staff_users WHERE id = ${verified.claims.sub}::uuid
+    `.execute(db);
+    expect(account.rows[0]).toEqual({ hospital_id: null });
+  });
+
+  it('opens the national layer and nothing else', async () => {
+    const minted = await request(app).post(`${BASE}/demo/token`).send({ role: 'gov_viewer' });
+    const token = minted.body.data.token as string;
+
+    const national = await request(app)
+      .get(`${BASE}/gov/capacity`)
+      .set('authorization', `Bearer ${token}`);
+    expect(national.status).toBe(200);
+
+    const dashboard = await request(app)
+      .get(`${BASE}/admin/dashboard`)
+      .set('authorization', `Bearer ${token}`);
+    expect(dashboard.status).toBe(403);
+  });
+
+  it('refuses a government viewer "at" a hospital', async () => {
+    const hospital = await sql<{ id: string }>`SELECT id FROM hospitals LIMIT 1`.execute(db);
+    const hospitalId = hospital.rows[0]?.id;
+
+    const response = await request(app)
+      .post(`${BASE}/demo/token`)
+      .send({ hospitalId, role: 'gov_viewer' });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('refuses a hospital role with no hospital', async () => {
+    const response = await request(app).post(`${BASE}/demo/token`).send({ role: 'receptionist' });
+    expect(response.status).toBe(400);
+  });
+});
+
 describe('the door is shut when DEMO_MODE is off', () => {
   it('refuses to list consoles', async () => {
     const env = await import('../env.js');

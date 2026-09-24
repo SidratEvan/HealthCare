@@ -14,7 +14,11 @@
 /** Where the token comes from today. Replaced wholesale by Supabase Auth. */
 export interface DemoSession {
   readonly token: string;
-  readonly hospitalId: string;
+  /**
+   * Null for the national console (`S-B-13`): a government viewer works for
+   * no facility (`FR-ROLE-01`, migration 0024).
+   */
+  readonly hospitalId: string | null;
   readonly staffName: string;
   /**
    * Which console to open.

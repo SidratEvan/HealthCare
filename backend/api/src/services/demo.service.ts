@@ -28,7 +28,7 @@
  * holds in the demo too.
  */
 
-import type { StaffRole } from '@platform/domain';
+import type { NationalRole, StaffRole } from '@platform/domain';
 
 import { signToken } from '../config/jwt.js';
 import { env } from '../env.js';
@@ -105,8 +105,64 @@ export async function listConsoles(): Promise<readonly DemoConsole[]> {
 export interface DemoPrincipal {
   readonly token: string;
   readonly staffName: string;
-  readonly hospitalId: string;
+  /** Null for a national account, which works for no facility (0024). */
+  readonly hospitalId: string | null;
   readonly role: string;
+}
+
+/**
+ * National roles the demo console offers (`S-B-13`, step 20).
+ *
+ * `gov_viewer` alone. `platform_admin` has no screen in this version —
+ * `S-B-12` is not a build step — and offering a door to nothing would be the
+ * dead button the picker exists to avoid.
+ */
+const OFFERED_NATIONAL: readonly NationalRole[] = ['gov_viewer'];
+
+/**
+ * `GET /demo/consoles`' national half: the national roles there is a seeded
+ * account for. Empty on a database seeded before step 20, which the picker
+ * reads as "nothing to offer" rather than as an error.
+ */
+export async function listNationalConsoles(): Promise<readonly NationalRole[]> {
+  assertDemoMode();
+
+  const present = await demoRepo.nationalRoles();
+  return OFFERED_NATIONAL.filter((role) => present.includes(role));
+}
+
+/**
+ * `POST /demo/token` for a national role — a token with no hospital.
+ *
+ * The same signed access token as a hospital console's, less the one claim a
+ * national account cannot have. `toPrincipal` reads a hospital-less token as a
+ * national principal only when every role on it is national, so this cannot be
+ * used to mint a receptionist who belongs nowhere.
+ */
+export async function mintNationalPrincipal(input: {
+  readonly role: NationalRole;
+}): Promise<DemoPrincipal> {
+  assertDemoMode();
+
+  if (!OFFERED_NATIONAL.includes(input.role)) {
+    throw new AppError('AUTH_FORBIDDEN_SCOPE', {
+      message: 'That console is not built in this version.',
+      details: { reason: 'role_not_offered', role: input.role },
+    });
+  }
+
+  const staff = await demoRepo.nationalStaffFor(input.role);
+  if (staff === null) throw notFound('staff account');
+
+  return {
+    token: await signToken({
+      kind: 'access',
+      claims: { sub: staff.id, kind: 'staff', roles: [input.role] },
+    }),
+    staffName: staff.fullName,
+    hospitalId: null,
+    role: input.role,
+  };
 }
 
 /** `POST /demo/token` — the console's stand-in for `S-B-00`. */

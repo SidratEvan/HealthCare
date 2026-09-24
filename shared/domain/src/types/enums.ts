@@ -222,6 +222,28 @@ export type CapabilityKind = (typeof CAPABILITY_KINDS)[number];
 export const CONSENT_SCOPES = ['visit', 'hospital', 'doctor', 'full'] as const;
 export type ConsentScope = (typeof CONSENT_SCOPES)[number];
 
+/**
+ * The public-health tag a doctor may put on a visit (0025, `CHIP-B05-SIGNAL`).
+ *
+ * Exactly the three categories `FR-GOV-03` names, and deliberately not a
+ * diagnosis vocabulary: the free-text diagnosis stays the record, and this is
+ * what a district counts.
+ */
+export const SYMPTOM_SIGNALS = ['dengue', 'diarrhoeal', 'fever'] as const;
+export type SymptomSignal = (typeof SYMPTOM_SIGNALS)[number];
+
+/**
+ * The roles that belong to no facility (`FR-ROLE-01`: R10, R11).
+ *
+ * A `staff_roles` row holding one of these has no hospital, and every other
+ * role must have one (0024, `staff_roles_national_has_no_hospital`).
+ */
+export const NATIONAL_ROLES = [
+  'platform_admin',
+  'gov_viewer',
+] as const satisfies readonly StaffRole[];
+export type NationalRole = (typeof NATIONAL_ROLES)[number];
+
 /** Locales. bn is the product, en is the toggle (FR-LOC-01, I18N-01). */
 export const LOCALES = ['bn', 'en'] as const;
 export type Locale = (typeof LOCALES)[number];
@@ -258,6 +280,7 @@ export const DATABASE_ENUMS = {
   notif_state: NOTIF_STATES,
   capability_kind: CAPABILITY_KINDS,
   consent_scope: CONSENT_SCOPES,
+  symptom_signal: SYMPTOM_SIGNALS,
 } as const satisfies Record<string, readonly string[]>;
 
 /** Booking statuses that still occupy a place in the queue. */

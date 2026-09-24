@@ -13,14 +13,19 @@
 
 import express, { json, type Express, type RequestHandler } from 'express';
 
-import type { StaffRole } from '@platform/domain';
+import type { NationalRole, StaffRole } from '@platform/domain';
 
 import { attachPrincipal, requireAuth } from '../../middleware/auth.js';
 import { errorHandler, notFoundHandler } from '../../middleware/error.js';
 import { attachGuestFromLink, requireBookingScope } from '../../middleware/guestAuth.js';
 import { idempotency } from '../../middleware/idempotency.js';
 import { requestLog } from '../../middleware/requestLog.js';
-import { requireHospitalScope, requireOwner, requireRole } from '../../middleware/requireRole.js';
+import {
+  requireHospitalScope,
+  requireNationalRole,
+  requireOwner,
+  requireRole,
+} from '../../middleware/requireRole.js';
 
 /** Echoes the principal, so a test can assert on who the chain identified. */
 const whoami: RequestHandler = (req, res) => {
@@ -64,6 +69,9 @@ export const apps = {
   /** A role, scoped to the hospital in the path. */
   hospitalScoped: (...roles: StaffRole[]): Express =>
     probeApp([requireAuth, requireRole(...roles), requireHospitalScope()]),
+  /** A national role: no hospital at all (`FR-ROLE-01`, step 20). */
+  national: (...roles: NationalRole[]): Express =>
+    probeApp([requireAuth, requireNationalRole(...roles)]),
   /** A patient or guest acting on their own booking. */
   owner: (): Express => probeApp([requireAuth, requireOwner()]),
   /** A tracking link, scoped to one booking (FR-GST-05). */

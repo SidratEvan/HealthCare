@@ -20,6 +20,8 @@
 
 import { sql } from 'kysely';
 
+import type { SymptomSignal } from '@platform/domain';
+
 import { db } from '../config/db.js';
 
 import type { Tx } from './transaction.js';
@@ -355,6 +357,8 @@ export interface VisitWrite {
   readonly diagnosisText: string | null;
   readonly adviceTextBn: string | null;
   readonly followUpDate: string | null;
+  /** `CHIP-B05-SIGNAL` (`FR-GOV-03`). Counted by district only (0026). */
+  readonly symptomSignal: SymptomSignal | null;
   readonly sign: boolean;
   readonly staffUserId: string | null;
 }
@@ -375,12 +379,14 @@ export async function upsertVisit(trx: Tx, write: VisitWrite): Promise<{ id: str
   const result = await sql<{ id: string }>`
     INSERT INTO visits
       (booking_id, patient_id, hospital_id, doctor_id,
-       diagnosis_text, advice_text_bn, follow_up_date, signed_at, created_by)
+       diagnosis_text, advice_text_bn, follow_up_date, symptom_signal,
+       signed_at, created_by)
     VALUES (
       ${write.bookingId}::uuid, ${write.patientId}::uuid,
       ${write.hospitalId}::uuid, ${write.doctorId}::uuid,
       ${write.diagnosisText}, ${write.adviceTextBn},
       ${write.followUpDate}::date,
+      ${write.symptomSignal}::symptom_signal,
       ${write.sign ? sql`now()` : sql`NULL`},
       ${write.staffUserId}::uuid
     )
@@ -388,6 +394,7 @@ export async function upsertVisit(trx: Tx, write: VisitWrite): Promise<{ id: str
        SET diagnosis_text = EXCLUDED.diagnosis_text,
            advice_text_bn = EXCLUDED.advice_text_bn,
            follow_up_date = EXCLUDED.follow_up_date,
+           symptom_signal = EXCLUDED.symptom_signal,
            signed_at      = coalesce(visits.signed_at, EXCLUDED.signed_at)
     RETURNING id
   `.execute(trx);

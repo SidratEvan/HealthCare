@@ -15,6 +15,8 @@
 
 import { z } from 'zod';
 
+import { SYMPTOM_SIGNALS } from '../types/enums.js';
+
 /** A UUID as it arrives on the wire, before it is branded. */
 const uuid = z.string().uuid();
 
@@ -47,6 +49,17 @@ export const createVisitBody = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'must be a date as YYYY-MM-DD')
     .optional(),
+
+  /**
+   * `CHIP-B05-SIGNAL` — whether this visit was a case of dengue, diarrhoeal
+   * disease or fever, for the district's early-warning count (`FR-GOV-03`,
+   * migration 0025).
+   *
+   * One of the three `FR-GOV-03` names, or nothing; most visits are none of
+   * them, and absent means "not tagged". It is not a diagnosis and is not
+   * shown back to the patient — the free-text diagnosis stays the record.
+   */
+  symptomSignal: z.enum(SYMPTOM_SIGNALS).nullable().optional(),
 
   /**
    * True for `BTN-B05-SIGN`, false for `BTN-B05-DRAFT`.
