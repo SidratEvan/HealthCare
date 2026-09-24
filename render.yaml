@@ -32,15 +32,19 @@ services:
     # build output to produce — `tsx` runs them directly. That is a known
     # trade (docs/STATUS.md): fine for a pitch, and a bundler decision before a
     # pilot. `--frozen-lockfile` keeps a deploy reproducible.
-    # `npm i -g pnpm@…` rather than `corepack enable`, which fails on a build
-    # host two ways: it needs write access to Node's bin directory, and from
-    # corepack 0.20 it prompts before downloading a package manager it has not
-    # seen — a prompt nothing answers in a non-interactive build.
+    # pnpm is installed into `.render/` inside the checkout, not globally.
+    # Node's own directories are read-only on Render when NODE_VERSION names
+    # the Node it ships with, as "24" does, so `npm i -g` fails with EROFS
+    # (`corepack enable` fails the same way, and from corepack 0.20 it also
+    # prompts before downloading — a prompt nothing answers in a
+    # non-interactive build). The checkout is writable and is what Render
+    # carries from the build to the running service, so the start command finds
+    # the same pnpm the build used.
     #
     # The version is pinned to `packageManager` in the root package.json. They
     # have to agree: pnpm refuses to run when they do not.
-    buildCommand: npm install -g pnpm@12.4.2 && pnpm install --frozen-lockfile
-    startCommand: pnpm --filter @platform/api start
+    buildCommand: npm install --prefix .render --no-audit --no-fund pnpm@12.4.2 && .render/node_modules/.bin/pnpm install --frozen-lockfile
+    startCommand: .render/node_modules/.bin/pnpm --filter @platform/api start
 
     healthCheckPath: /healthz
 
