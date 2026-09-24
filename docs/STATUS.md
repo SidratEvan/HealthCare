@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/pitch-design`, after step 20 — the design pass the owner
+Last updated: `fix/render-pnpm`, after `fix/pitch-design` and step 20 — the design pass the owner
 asked for after seeing the live demo, and the bugs found on it (below). Before
 that, `fix/ci-node` (CI green again on Node 24) and `feat/gov-dashboard` —
 **step 20, the last step in the build plan**. A government viewer opens `S-B-13` from the picker and sees capacity
@@ -155,7 +155,19 @@ that not everything worked. Both were fair. What was found and done:
 before steps 17–19 (no payments, lab orders or feedback), and the pitch
 chamber was built at 03:40 Dhaka, so it read "3:40 AM – 6:40 AM" and the
 patient app could not book onto it. A reseed about an hour before a pitch
-fixes both; see *Running the pitch demo*.
+fixes both; see *Running the pitch demo*. **Done on 2026-09-24 at about 06:15
+UTC** (12:15 Dhaka): migrations 0024–0026 applied to Supabase, `db:verify`
+clean, and the demo reseeded, payments, lab orders and feedback included.
+
+**The release build then failed on Render** (`fix/render-pnpm`). `NODE_VERSION
+"24"` names the Node Render ships with, whose global directory is read-only,
+so the build's `npm install -g pnpm` failed with EROFS. On `"20"` Render had
+installed Node itself into a writable directory, which is why it had worked.
+pnpm is now installed into `.render/` in the checkout, and both the build and
+the start command run it from there. Checked in a `node:24-slim` container with
+the global directory made read-only: the global install is refused, as on
+Render, and the new command installs and starts the API. While the build was
+red, Render kept serving the previous release.
 
 ### Step 20 — the national layer, and what a government viewer can reach
 
@@ -2027,6 +2039,9 @@ repeating here:
   origin every booking's tracking link is built from. Wrong, and every SMS in
   the demo points at localhost.
 - **Supabase's session pooler, port 5432**, with the password percent-encoded.
+- **Never `npm install -g` in Render's build.** On the Node it ships with
+  (`NODE_VERSION "24"`), the global directory is read-only. `render.yaml`
+  installs pnpm into `.render/` in the checkout instead.
 
 **The console has a way in now.** `ConsolePicker` is `S-B-01` standing in for
 the login this version does not have (`CLAUDE.md` §4.1): pick a hospital, a
