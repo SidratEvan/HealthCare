@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 .pnpm-store/
+# Render's build installs pnpm here (render.yaml).
+.render/
 
 # Environment — never commit real secrets (FR-SEC-08)
 .env
