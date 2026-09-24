@@ -46,7 +46,9 @@ services:
 
     envVars:
       - key: NODE_VERSION
-        value: "20"
+        # What CI and development run (BACKEND.md §0). Node 20 left support in
+        # April 2026, and the test tooling already needs 22.19 or later.
+        value: "24"
 
       # Belt and braces: if anything still reaches for corepack, do not let it
       # stop on a confirmation prompt.

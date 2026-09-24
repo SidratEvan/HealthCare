@@ -28,8 +28,15 @@ permissions:
   contents: read
 
 env:
-  # Node 20 is the deployment runtime (BACKEND.md §0); CI matches production.
-  NODE_VERSION: "20"
+  # Node 24 is the deployment runtime (BACKEND.md §0); CI matches production.
+  #
+  # It was 20 until the test run failed on every push from step 7 onward:
+  # jsdom 30 depends on undici 8, which requires Node 22.19 or later, so the
+  # four jsdom-backed UI test files could not even start their worker. Every
+  # test that did run passed, which is why it looked like noise rather than a
+  # red build. Node 20 also left support in April 2026. `engines` in
+  # package.json states the real floor.
+  NODE_VERSION: "24"
 
 jobs:
   verify:
