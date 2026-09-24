@@ -69,7 +69,8 @@ test.describe('checking a patient in (FR-REC-18)', () => {
     // The row says the patient is here, and what they were told.
     const row = reception.getByTestId('queue-row-9');
     await expect(row).toContainText('এসেছেন');
-    await expect(reception.getByTestId('quoted-9')).toContainText(String(suggested + 5));
+    // In Bengali digits, as the serial on the same row is.
+    await expect(reception.getByTestId('quoted-9')).toContainText(bengali(suggested + 5));
     await expect(reception.getByTestId('check-in-9')).toHaveCount(0);
 
     // The phone, on the other device, has the counter's word within the
@@ -103,3 +104,8 @@ test.describe('checking a patient in (FR-REC-18)', () => {
     await expect(second.getByTestId('queue-row-4')).toContainText('এসেছেন', { timeout: 10_000 });
   });
 });
+
+/** A number in Bengali digits, as the console's queue rows set it. */
+function bengali(value: number): string {
+  return String(value).replace(/\d/g, (digit) => '০১২৩৪৫৬৭৮৯'[Number(digit)] ?? digit);
+}
