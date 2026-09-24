@@ -16,7 +16,7 @@
  * checks, which is the state real leaks live in.
  */
 
-import { type StaffRole, STAFF_ROLES } from '@platform/domain';
+import { NATIONAL_ROLES, STAFF_ROLES, type NationalRole, type StaffRole } from '@platform/domain';
 
 import { verifyToken, type TokenClaims } from '../config/jwt.js';
 import { authRequired, tokenInvalid } from '../errors/AppError.js';
@@ -90,6 +90,10 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
  * filling in a default. A staff member with no hospital scope would pass every
  * scope check in `requireRole`, which is the opposite of what those checks are
  * for (FR-ROLE-01).
+ *
+ * The one staff token that legitimately has no hospital is a national
+ * account's (R10, R11), and it becomes a `national` principal — a different
+ * kind, which every hospital guard refuses without having to know about it.
  */
 export function toPrincipal(claims: TokenClaims): Principal | null {
   switch (claims.kind) {
@@ -104,15 +108,29 @@ export function toPrincipal(claims: TokenClaims): Principal | null {
       };
 
     case 'staff': {
-      const hospitalId = claims.hospitalId;
-      if (typeof hospitalId !== 'string' || hospitalId === '') return null;
-
       const roles = toStaffRoles(claims.roles);
       if (roles.length === 0) return null;
+
+      const hospitalId = claims.hospitalId;
+      if (typeof hospitalId !== 'string' || hospitalId === '') {
+        // No facility is right for exactly one kind of account: one whose
+        // every role is national (`FR-ROLE-01`, migration 0024). Anything
+        // else without a hospital is an incomplete token, and a receptionist
+        // with nothing to compare against would pass every scope check.
+        const national = toNationalRoles(roles);
+        return national === null ? null : { kind: 'national', id: claims.sub, roles: national };
+      }
 
       return { kind: 'staff', id: claims.sub, hospitalId, roles };
     }
   }
+}
+
+/** The roles, if every one of them belongs to no facility; otherwise null. */
+function toNationalRoles(roles: readonly StaffRole[]): readonly NationalRole[] | null {
+  const national: readonly string[] = NATIONAL_ROLES;
+  const kept = roles.filter((role): role is NationalRole => national.includes(role));
+  return kept.length === roles.length ? kept : null;
 }
 
 /**

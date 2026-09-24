@@ -14,7 +14,11 @@
 /** Where the token comes from today. Replaced wholesale by Supabase Auth. */
 export interface DemoSession {
   readonly token: string;
-  readonly hospitalId: string;
+  /**
+   * Null for the national console (`S-B-13`): a government viewer works for
+   * no facility (`FR-ROLE-01`, migration 0024).
+   */
+  readonly hospitalId: string | null;
   readonly staffName: string;
   /**
    * Which console to open.
@@ -25,6 +29,17 @@ export interface DemoSession {
    * chamber, so the role has to survive the picker.
    */
   readonly role: string;
+  /** The facility, as the rail names it. Absent for the national console. */
+  readonly hospitalNameBn?: string;
+  /**
+   * The chamber a reception or doctor console was opened on, as the picker
+   * listed it — so the console's header can say whose chamber it is.
+   */
+  readonly chamber?: {
+    readonly doctorNameBn: string;
+    readonly departmentNameBn: string;
+    readonly room: string | null;
+  };
 }
 
 const STORAGE_KEY = 'console.demo-session';

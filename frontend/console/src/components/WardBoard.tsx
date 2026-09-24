@@ -29,7 +29,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { BED_KINDS, forecastTomorrow, tallyByKind, type Timestamp } from '@platform/domain';
-import { bedKindName, format, formatNumber, t, type Locale } from '@platform/i18n';
+import { bedKindName, format, formatNumber, t, type Locale, formatAge } from '@platform/i18n';
 import {
   BedTile,
   Button,
@@ -42,6 +42,7 @@ import {
 } from '@platform/ui';
 
 import { BedPanel } from '@/components/BedPanel';
+import { ConsoleRail } from '@/components/ConsoleRail';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { PendingAdmissions } from '@/components/PendingAdmissions';
 import { useBedBoard } from '@/hooks/useBedBoard';
@@ -49,17 +50,6 @@ import { NUMERALS, shownState, stateLabel, tileDetail } from '@/lib/bedCopy';
 import { readDemoSession } from '@/lib/demo';
 
 const LOCALE: Locale = 'bn';
-
-/** `APP_FLOW.md` B1.1's rail. Beds is this screen; the rest are other consoles. */
-const NAV_ITEMS = [
-  'navQueue',
-  'navRegistration',
-  'navBeds',
-  'navEmergency',
-  'navTests',
-  'navBilling',
-  'navDashboard',
-] as const;
 
 /** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
 function readToken(): string | null {
@@ -183,37 +173,21 @@ function BoardBody(): ReactNode {
     never: t('neverConfirmed', locale),
     stale: t('staleWarning', locale),
   };
-  const minutes = (value: number): string =>
-    `${formatNumber(value, NUMERALS)} ${t('minutesShort', locale)}`;
+  const minutes = (value: number): string => formatAge(value, locale, NUMERALS);
 
   return (
     <div className="flex min-h-screen" data-testid="ward-board">
       {/* --- navigation rail ------------------------------------------------- */}
-      <nav aria-label={t('navBeds', locale)} className="w-52 shrink-0 border-r border-line p-4">
-        <ul className="flex flex-col gap-1">
-          {NAV_ITEMS.map((key) => (
-            <li key={key}>
-              <span
-                aria-current={key === 'navBeds' ? 'page' : undefined}
-                className="flex min-h-touch items-center rounded-sm px-3 text-body-md aria-[current=page]:bg-brand-100 aria-[current=page]:font-semibold"
-              >
-                {t(key, locale)}
-              </span>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-6">
-          <OfflineBlock
-            connected={board.connected}
-            pendingCount={board.pendingCount}
-            lastServerTs={board.lastServerTs}
-            stuckCount={0}
-            locale={locale}
-            now={now}
-          />
-        </div>
-      </nav>
+      <ConsoleRail current="navBeds" locale={locale}>
+        <OfflineBlock
+          connected={board.connected}
+          pendingCount={board.pendingCount}
+          lastServerTs={board.lastServerTs}
+          stuckCount={0}
+          locale={locale}
+          now={now}
+        />
+      </ConsoleRail>
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}

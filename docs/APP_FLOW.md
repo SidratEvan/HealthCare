@@ -703,6 +703,7 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 | + ওষুধ | `BTN-B05-ADDRX` | Adds a row; keyboard-first entry |
 | Test chips | `BTN-B05-TEST` | Adds test orders → pushed to lab queue on save (`FR-DOC-06`). The chips are the hospital's own catalogue (`GET /lab/catalogue`), so the name and price a doctor ticks are the ones the lab and the wallet show. Ticking writes nothing: the orders go with the record, because an order hangs off the visit and there is no visit until it is filed |
 | Advice box | `INP-B05-ADVICE` | Printed in Bangla for the patient (`FR-DOC-07`) |
+| Public health signal | `CHIP-B05-SIGNAL` | কোনোটি নয় / ডেঙ্গু / ডায়রিয়া / জ্বর — one or none, "none" first and selected by default. Filed with the visit as `visits.symptom_signal` and counted by district only (`FR-GOV-03`, `v_gov_symptom_daily`). Not a diagnosis and not shown in the patient's wallet: `INP-B05-DX` stays the record. Added at step 20, because a spike needs a category to count and nothing else in the product records one |
 | Follow-up | `SEL-B05-FOLLOWUP` | 7/14/30 days or date → schedules patient reminder (`FR-PAT-80`) |
 | খসড়া রাখুন | `BTN-B05-DRAFT` | Saves without finishing the consultation |
 | **রেকর্ড দিন ও পরবর্তী** | `BTN-B05-SIGN` | Signs the visit → writes the record to the patient wallet → `EVT-PATIENT_DONE` + `EVT-PATIENT_CALLED` for the next patient (`FR-DOC-08`). Printing is part of the prescribing scope this version does not have |
@@ -901,6 +902,29 @@ Hospital onboarding wizard (steps: facility → departments → doctors → sess
 ## B8. Government viewer — `S-B-13`
 
 Read-only national/district capacity map, ER load heat map, symptom spike signals, anonymised benchmarking. No drill-down to an identifiable patient exists in the UI or the API for this role (`FR-GOV-06`).
+
+> **Built in this version** (step 20): all four sections below, opened from
+> `S-B-01` as **জাতীয় ড্যাশবোর্ড খুলুন** — offered once, beside the hospitals
+> rather than on one, because a government viewer belongs to no facility
+> (`FR-ROLE-01`, `DATABASE.md` 0024). The API reads as `gov_reader`, a
+> database role that can open the six `v_gov_*` views and no table
+> (`DATABASE.md` §5).
+>
+> **The map is district tiles, not a drawn map.** A drawn map needs district
+> boundary data and a mapping library, and a new dependency is the owner's
+> call. The tiles carry the same figures a map would colour, each with its age.
+
+| Section | ID | Wiring |
+|---|---|---|
+| Tabs | `TAB-B13-CAPACITY` / `-ER` / `-SIGNALS` / `-BENCH` | Arrow keys move between them (`A11Y-05`). Each section loads on its own (`GET /gov/capacity`, `/gov/er-load`, `/gov/signals`, `/gov/benchmarks`) and fails on its own with a retry; the screen re-reads every minute |
+| Capacity | — | Nationwide: free beds of total, free ICU of total, burn units open, people in emergency now; then free beds by kind; then one tile per district with the same figures. Ages are the **oldest** ward's in the district, and the nation's the oldest district's (`PRD.md` §3.2). Ventilators and blood stock are named as **not recorded** rather than shown as zero — nothing in this version holds either (`FR-GOV-01`) |
+| ER heat map | — | Districts down, the last twenty-four hours across; a cell is the people an ER recorded arriving (or an "I'm on my way" alert) in that hour, shaded on the brand ramp against the day's busiest cell, with the critical count in its accessible label. Beside each district, the cases open now (`FR-GOV-02`) |
+| Signals | — | Every reporting district × ডেঙ্গু / ডায়রিয়া / জ্বর: this week, the usual week, and a status — হঠাৎ বৃদ্ধি when this week is at least five and at least double the usual week, যথেষ্ট তথ্য নেই when the district has reported for less than a week before this one. A spike is drawn as a bar chart of its three weeks. Counted from `CHIP-B05-SIGNAL` (`FR-GOV-03`) |
+| Benchmarks | — | The last thirty days, one card per measure — check-in-to-call wait, lab turnaround, the four feedback scores — each ranked on its own, best first, with the median. A facility is shown by its **kind** only (বেসরকারি হাসপাতাল, সরকারি হাসপাতাল, ক্লিনিক, ডায়াগনস্টিক সেন্টার), never its name, and a figure resting on fewer than five observations is left out and counted (`FR-GOV-04`) |
+
+**Four states** (`GR-03`): loading is the screen's shape; each section that
+did not arrive says so with a retry; offline keeps the last figures with their
+ages ageing and a banner saying so; an empty section says what would fill it.
 
 ---
 

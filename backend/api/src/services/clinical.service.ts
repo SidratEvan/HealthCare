@@ -163,6 +163,7 @@ export async function saveVisit(input: {
         diagnosisText: blankToNull(body.diagnosisText),
         adviceTextBn: blankToNull(body.adviceTextBn),
         followUpDate: body.followUpDate ?? null,
+        symptomSignal: body.symptomSignal ?? null,
         sign: body.sign,
         staffUserId: input.principal.id,
       }),
@@ -228,6 +229,11 @@ async function assertMayRead(principal: Principal, patientId: string): Promise<v
 
     case 'guest':
       throw forbiddenScope({ reason: 'guest_link_is_not_consent' });
+
+    case 'national':
+      // `FR-ROLE-04`: R11 never reaches a row that identifies a patient, and
+      // R10's work is onboarding facilities, not reading their patients.
+      throw forbiddenScope({ reason: 'aggregate_only' });
   }
 }
 

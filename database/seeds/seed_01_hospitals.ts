@@ -124,8 +124,8 @@ const ROLE_CODES: Readonly<Record<string, string>> = {
 
 export const seed01Hospitals: SeedModule = {
   name: 'seed_01_hospitals',
-  title: 'six demo facilities, departments, capabilities and staff',
-  requirements: ['FR-DEM-01', 'FR-DEM-07', 'FR-EMG-05'],
+  title: 'six demo facilities, departments, capabilities, staff and the national viewer',
+  requirements: ['FR-DEM-01', 'FR-DEM-07', 'FR-EMG-05', 'FR-ROLE-01'],
   writes: [
     'hospitals',
     'hospital_settings',
@@ -290,6 +290,34 @@ export const seed01Hospitals: SeedModule = {
       ]);
     }
 
+    // --- the national account (step 20) ------------------------------------
+    //
+    // One government viewer, belonging to no facility (`FR-ROLE-01`, R11;
+    // migration 0024). It is what `S-B-13` is opened as. No `platform_admin`:
+    // `S-B-12` is not built, and an account for a screen that does not exist
+    // is a door to nothing. Its own name stream, so adding it moved no
+    // hospital's staff names.
+    const nationalNames = rng.stream('national-staff-names');
+    const nationalIds = await insertRows<{ id: string }>(
+      client,
+      'staff_users',
+      {
+        columns: ['hospital_id', 'email', 'staff_code', 'full_name', 'password_hash'],
+      },
+      [
+        [
+          null,
+          demoEmail('gov', 'national'),
+          'NAT-GOV-01',
+          labelBn(composeName(nationalNames, nationalNames.chance(0.5) ? 'female' : 'male')),
+          DISABLED_PASSWORD,
+        ],
+      ],
+    );
+    const nationalId = nationalIds[0]?.id;
+    if (nationalId === undefined) throw new Error('staff_users returned no id for gov_viewer.');
+    roleRows.push([nationalId, null, 'gov_viewer', JSON.stringify(DEMO_MARKER)]);
+
     await insertRows(
       client,
       'staff_roles',
@@ -403,7 +431,7 @@ export const seed01Hospitals: SeedModule = {
       hospital_settings: settingsRows.length,
       departments: departmentRows.length,
       capabilities: capabilityRows.length,
-      staff_users: staffRows.length,
+      staff_users: staffRows.length + nationalIds.length,
       staff_roles: roleRows.length,
     };
   },

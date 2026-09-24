@@ -48,10 +48,24 @@ export {
   type TemplateKey,
 } from './templates.js';
 
+export {
+  DISTRICT_NAMES,
+  DIVISION_NAMES,
+  FACILITY_KIND_NAMES,
+  SYMPTOM_SIGNAL_NAMES,
+  districtName,
+  divisionName,
+  facilityKindName,
+  symptomSignalName,
+  type FacilityKindName,
+  type SymptomSignalName,
+} from './gov.js';
+
 export { DAY_PERIODS, DHAKA, dayPeriod, formatClock, formatDateTime } from './datetime.js';
 
 export {
   NUMERAL_STYLE_BY_SURFACE,
+  formatAge,
   formatMinutes,
   formatNumber,
   formatPhone,

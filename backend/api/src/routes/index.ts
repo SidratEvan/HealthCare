@@ -21,6 +21,7 @@ import { consentRoutes } from './consent.routes.js';
 import { demoRoutes } from './demo.routes.js';
 import { discoveryRoutes } from './discovery.routes.js';
 import { emergencyRoutes } from './emergency.routes.js';
+import { govRoutes } from './gov.routes.js';
 import { guestRoutes } from './guest.routes.js';
 import { healthRoutes } from './health.routes.js';
 import { labRoutes } from './lab.routes.js';
@@ -83,6 +84,9 @@ export function buildApiRouter(): Router {
   // everything about a facility at once, so the scope comes off the principal
   // and a caller cannot name a facility at all.
   router.use(adminRoutes);
+  // The national layer (step 20). Districts and facility kinds only, read as a
+  // database role that can open nothing else (FR-GOV-06).
+  router.use(govRoutes);
   // Provider callbacks. No token, because a provider has none of ours — the
   // signature is the authentication, and it is checked before anything else.
   router.use(webhookRoutes);

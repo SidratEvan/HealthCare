@@ -245,6 +245,39 @@ export const DEMO_ASSESSMENTS: readonly {
 ];
 
 /**
+ * The two surveillance cases `seed_09_signals` writes (`FR-GOV-03`).
+ *
+ * The rest of `FR-GOV-03`'s vocabulary is already here: a child's fever is a
+ * fever. These two are not, and they are **not added to `DEMO_COMPLAINTS`**
+ * on purpose — the ordinary history draws from that list, and lengthening it
+ * would change which complaint every one of the five hundred past visits
+ * drew. `seed_09_signals` instead re-labels a chosen few fever and weakness
+ * visits as these, in the district and week it plants them in, so the record
+ * a director opens reads as one coherent consultation: the complaint, the
+ * assessment and the tag agree.
+ *
+ * Ordinary outpatient findings, as conservative as the list above — no drug is
+ * named, and the advice is the standard first-contact advice for each. Every
+ * row written from them also carries `demo: true` (`FR-DEM-07`).
+ */
+export const DEMO_SIGNAL_CASES = {
+  dengue: {
+    complaintBn: 'জ্বর ও শরীরে ব্যথা',
+    complaintEn: 'Fever with body ache',
+    diagnosisBn: 'ডেঙ্গু সন্দেহ — NS1 ও রক্তের পরীক্ষা প্রয়োজন',
+    adviceBn:
+      'প্রচুর তরল পান করুন ও বিশ্রাম নিন। ব্যথার ওষুধ নিজে থেকে খাবেন না। পেটে ব্যথা, বারবার বমি বা রক্তপাত হলে সঙ্গে সঙ্গে হাসপাতালে আসুন।',
+  },
+  diarrhoeal: {
+    complaintBn: 'পাতলা পায়খানা',
+    complaintEn: 'Loose motions',
+    diagnosisBn: 'ডায়রিয়া — পানিশূন্যতা নেই',
+    adviceBn:
+      'খাবার স্যালাইন খান, স্বাভাবিক খাবার চালিয়ে যান। প্রস্রাব কমে গেলে বা পায়খানায় রক্ত গেলে সঙ্গে সঙ্গে আসুন।',
+  },
+} as const;
+
+/**
  * The assessment that follows from a complaint.
  *
  * Throws rather than falling back: a complaint with no declared assessment means

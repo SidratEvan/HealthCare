@@ -323,6 +323,35 @@ export {
   type QuoteCounts,
 } from './admin/quotes.js';
 
+// --- The national layer ------------------------------------------------------
+//
+// `S-B-13` (FR-GOV-01..06): spike detection, anonymised benchmarking, and the
+// identifier check every government payload passes before it is sent.
+export {
+  readSignals,
+  statusOf,
+  BASELINE_MAX_DAYS,
+  BASELINE_MIN_DAYS,
+  SIGNAL_WINDOW_DAYS,
+  SPIKE_MIN_CASES,
+  SPIKE_RATIO,
+  type DistrictReporting,
+  type SignalDay,
+  type SignalReading,
+  type SignalStatus,
+} from './gov/signals.js';
+
+export {
+  benchmark,
+  MIN_BENCHMARK_SAMPLE,
+  type Benchmark,
+  type BenchmarkEntry,
+  type BenchmarkMeasure,
+  type FacilityFigures,
+} from './gov/benchmark.js';
+
+export { findIdentifiers } from './gov/identifiers.js';
+
 // --- Validation schemas ----------------------------------------------------
 //
 // Shared with the client (BACKEND.md §0): the console builds its offline queue

@@ -95,6 +95,9 @@ interface DemoConsole {
   readonly sessions: readonly DemoSessionCard[];
 }
 
+/** A national role the API has a seeded account for (step 20). */
+type NationalRole = 'gov_viewer';
+
 /**
  * What the picker opened: a chamber, or a hospital's ward board.
  *
@@ -107,7 +110,8 @@ export type ConsoleChoice =
   | { readonly kind: 'emergency' }
   | { readonly kind: 'lab' }
   | { readonly kind: 'pharmacy' }
-  | { readonly kind: 'admin' };
+  | { readonly kind: 'admin' }
+  | { readonly kind: 'gov' };
 
 export function ConsolePicker({
   onChosen,
@@ -116,6 +120,7 @@ export function ConsolePicker({
   readonly onChosen: (choice: ConsoleChoice) => void;
 }): ReactNode {
   const [consoles, setConsoles] = useState<DemoConsole[] | null>(null);
+  const [national, setNational] = useState<readonly NationalRole[]>([]);
   const [failed, setFailed] = useState(false);
   /** True once an attempt has timed out and another is running. */
   const [waking, setWaking] = useState(false);
@@ -140,10 +145,15 @@ export function ConsolePicker({
           });
           if (!response.ok) throw new Error(String(response.status));
 
-          const body = (await response.json()) as { data: { consoles: DemoConsole[] } };
+          const body = (await response.json()) as {
+            data: { consoles: DemoConsole[]; national?: NationalRole[] };
+          };
           if (cancelled) return;
 
           setConsoles(body.data.consoles);
+          // Absent from an API older than step 20, which offers nothing
+          // national rather than failing the picker.
+          setNational(body.data.national ?? []);
           // One facility is the common case in a demo; skipping a choice that
           // has one answer is not a shortcut, it is one fewer tap before the
           // thing being demonstrated.
@@ -169,28 +179,50 @@ export function ConsolePicker({
     };
   }, []);
 
-  /** Takes a principal for this hospital and role, then opens the chamber. */
+  /**
+   * Takes a principal for this hospital and role, then opens the chamber.
+   *
+   * A null hospital is the national console: the token is asked for with a
+   * role alone, because naming a facility for a government viewer is refused
+   * (`demoTokenBody`, migration 0024).
+   */
   const open = useCallback(
-    async (hospitalId: string, role: string, choice: ConsoleChoice) => {
+    async (hospitalId: string | null, role: string, choice: ConsoleChoice) => {
       setBusy(true);
       try {
         const response = await fetch(`${API}/demo/token`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ hospitalId, role }),
+          body: JSON.stringify(hospitalId === null ? { role } : { hospitalId, role }),
         });
 
         if (!response.ok) throw new Error(String(response.status));
 
         const body = (await response.json()) as {
-          data: { token: string; staffName: string; hospitalId: string };
+          data: { token: string; staffName: string; hospitalId: string | null };
         };
+
+        const picked = consoles?.find((entry) => entry.hospitalId === hospitalId);
+        const chamber =
+          choice.kind === 'chamber'
+            ? picked?.sessions.find((session) => session.id === choice.sessionId)
+            : undefined;
 
         writeDemoSession({
           token: body.data.token,
           hospitalId: body.data.hospitalId,
           staffName: body.data.staffName,
           role,
+          ...(picked === undefined ? {} : { hospitalNameBn: picked.nameBn }),
+          ...(chamber === undefined
+            ? {}
+            : {
+                chamber: {
+                  doctorNameBn: chamber.doctorNameBn,
+                  departmentNameBn: chamber.departmentNameBn,
+                  room: chamber.room,
+                },
+              }),
         });
 
         onChosen(choice);
@@ -200,7 +232,7 @@ export function ConsolePicker({
         setBusy(false);
       }
     },
-    [onChosen],
+    [onChosen, consoles],
   );
 
   if (failed) {
@@ -250,12 +282,35 @@ export function ConsolePicker({
     );
   }
 
+  // `S-B-13` belongs to no hospital, so it is offered whether or not any
+  // hospital is running something today.
+  const nationalSection =
+    national.length === 0 ? null : (
+      <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+        <h2 className="text-title-sm">{t('govSection', LOCALE)}</h2>
+        <p className="text-body-sm text-ink-secondary">{t('govSectionHint', LOCALE)}</p>
+        <div>
+          <Button
+            variant="secondary"
+            loading={busy}
+            data-testid="open-gov"
+            onClick={() => {
+              void open(null, 'gov_viewer', { kind: 'gov' });
+            }}
+          >
+            {t('openGov', LOCALE)}
+          </Button>
+        </div>
+      </section>
+    );
+
   if (consoles.length === 0) {
     return (
       <Shell>
         <p className="text-body-md text-ink-secondary" data-testid="picker-empty">
           {t('noConsoles', LOCALE)}
         </p>
+        {nationalSection}
       </Shell>
     );
   }
@@ -283,111 +338,28 @@ export function ConsolePicker({
         </ul>
       </section>
 
-      {/* `S-B-06` belongs to the hospital, not to a chamber, so it is offered
-          once per hospital rather than on every chamber card. */}
-      {hospital?.roles.includes('ward') === true ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-title-sm">{t('wardBoardSection', LOCALE)}</h2>
-          <div>
-            <Button
-              variant="secondary"
-              loading={busy}
-              data-testid={`open-ward-${hospital.hospitalId}`}
-              onClick={() => {
-                void open(hospital.hospitalId, 'ward', { kind: 'ward' });
-              }}
-            >
-              {t('openWardBoard', LOCALE)}
-            </Button>
-          </div>
-        </section>
-      ) : null}
-
-      {/* `S-B-07` is the hospital's too (step 15). */}
-      {hospital?.roles.includes('emergency') === true ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-title-sm">{t('erSection', LOCALE)}</h2>
-          <div>
-            <Button
-              variant="secondary"
-              loading={busy}
-              data-testid={`open-er-${hospital.hospitalId}`}
-              onClick={() => {
-                void open(hospital.hospitalId, 'emergency', { kind: 'emergency' });
-              }}
-            >
-              {t('openEr', LOCALE)}
-            </Button>
-          </div>
-        </section>
-      ) : null}
-
-      {/* `S-B-08` and `S-B-09` belong to the hospital rather than to a
-          chamber, like the ward board and the ER (step 17). A facility with
-          no lab or no dispensary is not offered one: the seeded roster gives
-          a diagnostic centre a lab and no pharmacy, and a clinic the reverse
-          (`data/people.ts`), which is what a director would expect to see. */}
-      {hospital?.roles.includes('lab') === true ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-title-sm">{t('labSection', LOCALE)}</h2>
-          <div>
-            <Button
-              variant="secondary"
-              loading={busy}
-              data-testid={`open-lab-${hospital.hospitalId}`}
-              onClick={() => {
-                void open(hospital.hospitalId, 'lab', { kind: 'lab' });
-              }}
-            >
-              {t('openLab', LOCALE)}
-            </Button>
-          </div>
-        </section>
-      ) : null}
-
-      {hospital?.roles.includes('pharmacy') === true ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-title-sm">{t('pharmacySection', LOCALE)}</h2>
-          <div>
-            <Button
-              variant="secondary"
-              loading={busy}
-              data-testid={`open-pharmacy-${hospital.hospitalId}`}
-              onClick={() => {
-                void open(hospital.hospitalId, 'pharmacy', { kind: 'pharmacy' });
-              }}
-            >
-              {t('openPharmacy', LOCALE)}
-            </Button>
-          </div>
-        </section>
-      ) : null}
-
-      {/* `S-B-10` is the hospital's too (step 19). An administrator reads the
-          whole facility, so there is no chamber to pick. */}
-      {hospital?.roles.includes('hospital_admin') === true ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-title-sm">{t('adminSection', LOCALE)}</h2>
-          <div>
-            <Button
-              variant="secondary"
-              loading={busy}
-              data-testid={`open-admin-${hospital.hospitalId}`}
-              onClick={() => {
-                void open(hospital.hospitalId, 'hospital_admin', { kind: 'admin' });
-              }}
-            >
-              {t('openAdmin', LOCALE)}
-            </Button>
-          </div>
-        </section>
-      ) : null}
+      {/* The hospital's own consoles — the ward board (`S-B-06`), the ER
+          (`S-B-07`), the lab and the pharmacy (`S-B-08`, `S-B-09`) and the
+          dashboard (`S-B-10`) — belong to the facility rather than to a
+          chamber, so they are offered once, side by side, above the chambers.
+          A facility is offered only what its roster staffs: a diagnostic
+          centre gets a lab and no pharmacy, a clinic the reverse
+          (`data/people.ts`). */}
+      {hospital === null ? null : (
+        <FacilityConsoles
+          hospital={hospital}
+          busy={busy}
+          onOpen={(role, choice) => {
+            void open(hospital.hospitalId, role, choice);
+          }}
+        />
+      )}
 
       {hospital === null ? null : (
         <section className="flex flex-col gap-3">
           <h2 className="text-title-sm">{t('chooseChamber', LOCALE)}</h2>
 
-          <ul className="flex flex-col gap-3">
+          <ul className="grid gap-3 md:grid-cols-2">
             {hospital.sessions.map((session) => (
               <li key={session.id}>
                 <Card tone={session.status === 'running' ? 'brand' : 'default'}>
@@ -432,7 +404,90 @@ export function ConsolePicker({
           </ul>
         </section>
       )}
+
+      {nationalSection}
     </Shell>
+  );
+}
+
+/** The consoles that belong to a facility rather than to one chamber. */
+const FACILITY_CONSOLES: readonly {
+  readonly role: string;
+  /** What the open button's test id calls it, which predates this list. */
+  readonly id: string;
+  readonly choice: ConsoleChoice;
+  readonly title: ConsoleKey;
+  readonly action: ConsoleKey;
+}[] = [
+  {
+    role: 'ward',
+    id: 'ward',
+    choice: { kind: 'ward' },
+    title: 'wardBoardSection',
+    action: 'openWardBoard',
+  },
+  {
+    role: 'emergency',
+    id: 'er',
+    choice: { kind: 'emergency' },
+    title: 'erSection',
+    action: 'openEr',
+  },
+  { role: 'lab', id: 'lab', choice: { kind: 'lab' }, title: 'labSection', action: 'openLab' },
+  {
+    role: 'pharmacy',
+    id: 'pharmacy',
+    choice: { kind: 'pharmacy' },
+    title: 'pharmacySection',
+    action: 'openPharmacy',
+  },
+  {
+    role: 'hospital_admin',
+    id: 'admin',
+    choice: { kind: 'admin' },
+    title: 'adminSection',
+    action: 'openAdmin',
+  },
+];
+
+function FacilityConsoles({
+  hospital,
+  busy,
+  onOpen,
+}: {
+  readonly hospital: DemoConsole;
+  readonly busy: boolean;
+  readonly onOpen: (role: string, choice: ConsoleChoice) => void;
+}): ReactNode {
+  const offered = FACILITY_CONSOLES.filter((entry) => hospital.roles.includes(entry.role));
+  if (offered.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-title-sm">{t('facilityConsoles', LOCALE)}</h2>
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {offered.map((entry) => (
+          <li key={entry.id}>
+            <Card>
+              <CardTitle>{t(entry.title, LOCALE)}</CardTitle>
+              <div className="mt-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={busy}
+                  data-testid={`open-${entry.id}-${hospital.hospitalId}`}
+                  onClick={() => {
+                    onOpen(entry.role, entry.choice);
+                  }}
+                >
+                  {t(entry.action, LOCALE)}
+                </Button>
+              </div>
+            </Card>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -444,18 +499,25 @@ function statusKey(status: string): ConsoleKey {
 
 function Shell({ children }: { readonly children: ReactNode }): ReactNode {
   return (
-    <main className="mx-auto flex max-w-[720px] flex-col gap-6 p-8" data-testid="console-picker">
-      <header className="flex flex-col gap-2">
-        <h1 className="font-reading text-title-lg">{t('chooseConsole', LOCALE)}</h1>
+    <div className="min-h-screen">
+      {/* The institution's colour across the top, as the consoles' rail is:
+          the first screen a director sees should look like the product, not
+          like a form in front of it. */}
+      <header className="bg-brand-700 text-ink-inverse">
+        <div className="mx-auto max-w-[1040px] px-8 py-8">
+          <h1 className="font-reading text-title-lg">{t('chooseConsole', LOCALE)}</h1>
+        </div>
+      </header>
 
+      <main className="mx-auto flex max-w-[1040px] flex-col gap-6 p-8" data-testid="console-picker">
         {/* The console has no login. Saying so is the honest state, and it is
             the same reason every demo row carries its label (`FR-DEM-07`). */}
         <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
           {t('demoSignIn', LOCALE)}
         </p>
-      </header>
 
-      {children}
-    </main>
+        {children}
+      </main>
+    </div>
   );
 }

@@ -530,6 +530,10 @@ export function actorOf(req: Request): QueueActor {
       return { kind: 'patient', userId: principal.id as never };
     case 'guest':
       return { kind: 'guest', bookingId: (principal.bookingId ?? '') as never };
+    case 'national':
+      // Unreachable through any queue route, every one of which requires a
+      // hospital role. Refused rather than attributed to nobody (`FR-QUE-04`).
+      throw forbiddenScope({ reason: 'national_role', was: principal.kind });
   }
 }
 

@@ -27,7 +27,7 @@
 import { useState, type ReactNode } from 'react';
 
 import { normaliseBdMobile, type EmergencyProblem } from '@platform/domain';
-import { bedKindName, formatNumber, tp } from '@platform/i18n';
+import { bedKindName, formatNumber, tp, formatAge } from '@platform/i18n';
 import { Button, Chip, FreshnessLine, Input, Sheet } from '@platform/ui';
 
 import { sendInbound } from '@/lib/api';
@@ -147,7 +147,7 @@ export function EmergencyResultCard({
           never: tp('updatedNever', LOCALE),
           stale: tp('staleWarning', LOCALE),
         }}
-        formatMinutes={(minutes) => `${n(minutes)} ${tp('minutesShort', LOCALE)}`}
+        formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
       />
 
       {/*
@@ -169,7 +169,7 @@ export function EmergencyResultCard({
               never: tp('updatedNever', LOCALE),
               stale: tp('staleWarning', LOCALE),
             }}
-            formatMinutes={(minutes) => `${n(minutes)} ${tp('minutesShort', LOCALE)}`}
+            formatMinutes={(value) => formatAge(value, LOCALE, NUMERALS)}
           />
         </div>
       )}

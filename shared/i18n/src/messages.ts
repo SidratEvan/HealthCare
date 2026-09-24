@@ -77,12 +77,14 @@ export const CONSOLE = {
   sessionScheduled: { bn: 'শুরু হয়নি', en: 'Not started' },
   sessionEnded: { bn: 'শেষ', en: 'Finished' },
   waitingCount: { bn: '{count} জন অপেক্ষায়', en: '{count} waiting' },
+  chamberHours: { bn: 'চেম্বার', en: 'Chamber' },
   openConsole: { bn: 'কনসোল খুলুন', en: 'Open the console' },
   noConsoles: {
     bn: 'আজ কোনো চেম্বার চলছে না। ডেমো তথ্য আবার তৈরি করুন।',
     en: 'No chambers are running today. Rebuild the demo data.',
   },
   changeConsole: { bn: 'কনসোল বদলান', en: 'Change console' },
+  facilityConsoles: { bn: 'হাসপাতালের কনসোল', en: 'Hospital consoles' },
   consoleLoadFailed: { bn: 'কনসোলের তালিকা আনা যায়নি', en: 'Could not load the consoles' },
 
   // --- Queue table (B1.4) --------------------------------------------------
@@ -933,6 +935,15 @@ export const CONSOLE = {
     en: '{kept} of {quoted}',
   },
   adminQuoteOver: { bn: 'বলা সময়ের চেয়ে গড় দেরি', en: 'Average past the quote' },
+  adminQuoteNoOverrun: { bn: 'দেরি হয়নি', en: 'No overrun' },
+  adminQuoteEarlyBy: {
+    bn: 'গড়ে {minutes} মিনিট আগেই ডাকা হয়েছে',
+    en: 'Called {minutes} min early on average',
+  },
+  adminNothingCollected: {
+    bn: 'এই সময়ে এখনো কোনো টাকা আদায় হয়নি।',
+    en: 'Nothing has been collected in this period yet.',
+  },
 
   adminAdoption: { bn: 'লাইভ সিরিয়াল চালু', en: 'Live queue went live' },
   adminTrendCaption: {
@@ -1090,6 +1101,131 @@ export const CONSOLE = {
     bn: 'সংযোগ নেই — প্রস্তাব পাঠাতে সংযোগ লাগবে',
     en: 'Offline — an offer needs a connection',
   },
+
+  // --- The public-health tag on a visit (CHIP-B05-SIGNAL, FR-GOV-03) -------
+  visitSignal: { bn: 'জনস্বাস্থ্য সংকেত', en: 'Public health signal' },
+  visitSignalNone: { bn: 'কোনোটি নয়', en: 'None of these' },
+  visitSignalHint: {
+    bn: 'ডেঙ্গু, ডায়রিয়া বা জ্বরের রোগী হলে বাছুন — জেলার হিসাবে যোগ হয়, রোগীর নাম যায় না।',
+    en: "Choose if this was dengue, diarrhoeal disease or fever — it counts towards the district, without the patient's name.",
+  },
+
+  // --- The national layer (S-B-13, FR-GOV-01..06) --------------------------
+  govSection: { bn: 'জাতীয় পর্যায়', en: 'National level' },
+  govSectionHint: {
+    bn: 'কোনো হাসপাতালের নয় — জেলা ও সারা দেশের সমষ্টিগত হিসাব।',
+    en: 'Belongs to no hospital — district and national totals.',
+  },
+  openGov: { bn: 'জাতীয় ড্যাশবোর্ড খুলুন', en: 'Open the national dashboard' },
+
+  govTitle: { bn: 'জাতীয় ড্যাশবোর্ড', en: 'National dashboard' },
+  govAggregateOnly: {
+    bn: 'এখানে শুধু জেলা ও দেশের সমষ্টিগত হিসাব — কোনো রোগী বা প্রতিষ্ঠানের নাম নেই।',
+    en: 'District and national totals only — no patient and no facility is named here.',
+  },
+  govTabCapacity: { bn: 'ধারণক্ষমতা', en: 'Capacity' },
+  govTabEr: { bn: 'জরুরি চাপ', en: 'Emergency load' },
+  govTabSignals: { bn: 'রোগ-সংকেত', en: 'Disease signals' },
+  govTabBenchmarks: { bn: 'তুলনা', en: 'Benchmarks' },
+  govLoadFailed: { bn: 'জাতীয় ড্যাশবোর্ড আসেনি', en: 'The national dashboard did not load' },
+  govOffline: {
+    bn: 'সংযোগ নেই — জাতীয় ড্যাশবোর্ড খুলতে সংযোগ লাগবে।',
+    en: 'Offline — the national dashboard needs a connection.',
+  },
+  govOfflineStale: {
+    bn: 'সংযোগ নেই — শেষ পাওয়া হিসাব দেখানো হচ্ছে, কত পুরোনো তা সহ।',
+    en: 'Offline — showing the last figures received, with their age.',
+  },
+
+  govNational: { bn: 'সারা দেশ', en: 'Nationwide' },
+  govByDistrict: { bn: 'জেলা অনুযায়ী', en: 'By district' },
+  govFacilities: { bn: '{count}টি প্রতিষ্ঠান', en: '{count} facilities' },
+  govBedsFree: { bn: 'খালি বেড', en: 'Free beds' },
+  govBedKind: { bn: 'বেডের ধরন', en: 'Bed type' },
+  govIcuFree: { bn: 'খালি আইসিইউ', en: 'Free ICU' },
+  govBurnUnits: { bn: 'বার্ন ইউনিট চালু', en: 'Burn units open' },
+  govErActive: { bn: 'জরুরি বিভাগে এখন', en: 'In emergency now' },
+  govFreeOfTotal: { bn: '{total}টির মধ্যে', en: 'of {total}' },
+  govFreeOfTotalInline: { bn: '{total}টির মধ্যে {free}টি', en: '{free} of {total}' },
+  govNoIcu: { bn: 'আইসিইউ নেই', en: 'No ICU' },
+  govNoBeds: { bn: 'ভর্তির বেড নেই', en: 'No inpatient beds' },
+  govUnrecorded: { bn: 'হিসাব রাখা হয় না', en: 'Not recorded' },
+  govUnrecordedVentilators: { bn: 'ভেন্টিলেটর', en: 'Ventilators' },
+  govUnrecordedBlood: { bn: 'রক্তের মজুত', en: 'Blood stock' },
+  govUnrecordedWhy: {
+    bn: 'এই সংস্করণে কোনো প্রতিষ্ঠান এগুলোর হিসাব দেয় না, তাই শূন্য না লিখে ফাঁকা রাখা হয়েছে।',
+    en: 'No facility reports these in this version, so they are left blank rather than shown as zero.',
+  },
+
+  govErCaption: {
+    bn: 'গত {hours} ঘণ্টায় জরুরি বিভাগে আসা রোগী, ঘণ্টা অনুযায়ী',
+    en: 'Emergency arrivals in the last {hours} hours, hour by hour',
+  },
+  govErLegend: {
+    bn: 'ঘর যত গাঢ়, সেই ঘণ্টায় তত বেশি রোগী এসেছেন।',
+    en: 'The darker the cell, the more people arrived that hour.',
+  },
+  govErCell: {
+    bn: '{district}, {hour}: {cases} জন, এর মধ্যে {red} জন সংকটাপন্ন',
+    en: '{district}, {hour}: {cases} arrived, {red} critical',
+  },
+  govErOnTheWay: { bn: 'পথে আছেন', en: 'On the way' },
+  govErRed: { bn: 'সংকটাপন্ন', en: 'Critical' },
+  govErNone: {
+    bn: 'কোনো জেলার জরুরি বিভাগ এখনো কোনো রোগী লেখেনি।',
+    en: 'No district emergency department has recorded anybody yet.',
+  },
+  govDistrict: { bn: 'জেলা', en: 'District' },
+
+  govSignalsRule: {
+    bn: 'এই সপ্তাহে অন্তত {min}টি রোগী এবং স্বাভাবিক সপ্তাহের অন্তত {ratio} গুণ হলে সতর্কতা।',
+    en: 'Flagged at {min} or more cases this week and at least {ratio}× the usual week.',
+  },
+  govSignalsSource: {
+    bn: 'ডাক্তার ভিজিটে যে সংকেত দেন, তা থেকে গোনা — সংকেত না দিলে গোনা হয় না।',
+    en: 'Counted from the tag a doctor puts on a visit — an untagged visit is not counted.',
+  },
+  govSignal: { bn: 'রোগ', en: 'Signal' },
+  govSignalThisWeek: { bn: 'এই সপ্তাহে', en: 'This week' },
+  govSignalUsual: { bn: 'স্বাভাবিক সপ্তাহে', en: 'Usual week' },
+  govSignalStatus: { bn: 'অবস্থা', en: 'Status' },
+  govSignalSpike: { bn: 'হঠাৎ বৃদ্ধি', en: 'Spike' },
+  govSignalNormal: { bn: 'স্বাভাবিক', en: 'Normal' },
+  govSignalThin: { bn: 'যথেষ্ট তথ্য নেই', en: 'Too little history' },
+  govSignalsNone: {
+    bn: 'কোনো জেলা এখনো ভিজিটের তথ্য পাঠায়নি।',
+    en: 'No district is reporting visits yet.',
+  },
+
+  govBenchCaption: {
+    bn: 'গত {days} দিন — প্রতিষ্ঠানের নাম ছাড়া, প্রতিটি মাপ আলাদাভাবে সাজানো।',
+    en: 'The last {days} days — no facility named, each measure ranked on its own.',
+  },
+  govBenchMedian: { bn: 'মাঝামাঝি: {value}', en: 'Median: {value}' },
+  govBenchTooFew: {
+    bn: '{count}টি প্রতিষ্ঠানের তথ্য তুলনার জন্য যথেষ্ট নয়',
+    en: '{count} facilities had too little data to compare',
+  },
+  govBenchNone: { bn: 'তুলনা করার মতো তথ্য নেই', en: 'Nothing to compare yet' },
+  govBenchLower: { bn: 'কম হলে ভালো', en: 'Lower is better' },
+  govBenchHigher: { bn: 'বেশি হলে ভালো', en: 'Higher is better' },
+  govBenchSample: { bn: '{count}টি থেকে', en: 'from {count}' },
+  govMeasureWait: {
+    bn: 'চেক-ইন থেকে ডাক পর্যন্ত গড় অপেক্ষা',
+    en: 'Average wait, check-in to call',
+  },
+  govMeasureTurnaround: { bn: 'ল্যাব রিপোর্ট পেতে সময় (মাঝামাঝি)', en: 'Lab turnaround (median)' },
+  govMeasureScoreWait: { bn: 'রোগীর মতামত: অপেক্ষা', en: 'Patient rating: waiting' },
+  govMeasureScoreDoctor: { bn: 'রোগীর মতামত: ডাক্তার', en: 'Patient rating: doctor' },
+  govMeasureScoreCleanliness: {
+    bn: 'রোগীর মতামত: পরিচ্ছন্নতা',
+    en: 'Patient rating: cleanliness',
+  },
+  govMeasureScoreBilling: {
+    bn: 'রোগীর মতামত: বিলের স্বচ্ছতা',
+    en: 'Patient rating: billing honesty',
+  },
+  govOutOfFive: { bn: '৫-এর মধ্যে', en: 'out of 5' },
 
   // --- Demo mode (FR-DEM-07, CLAUDE.md §1.1) -------------------------------
   demoBanner: {

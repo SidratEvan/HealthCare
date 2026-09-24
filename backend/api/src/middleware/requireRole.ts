@@ -12,7 +12,7 @@
  * another hospital get in" is not a question to answer by reading code.
  */
 
-import type { StaffRole } from '@platform/domain';
+import type { NationalRole, StaffRole } from '@platform/domain';
 
 import { authRequired, forbiddenScope } from '../errors/AppError.js';
 
@@ -94,6 +94,44 @@ export function requireHospitalScope(param = 'hospitalId'): RequestHandler {
 
     if (target !== principal.hospitalId) {
       next(forbiddenScope({ reason: 'wrong_hospital' }));
+      return;
+    }
+
+    next();
+  };
+}
+
+/**
+ * Requires a national principal holding at least one of `roles` (`FR-ROLE-01`).
+ *
+ * The only door into the national layer. `requireRole('gov_viewer')` would not
+ * do: it admits `kind === 'staff'` alone, and a national account is not a
+ * hospital's staff. Keeping the two guards apart means no route can admit both
+ * a receptionist and a government viewer by listing their roles side by side —
+ * the routes that answer "what happened in Dhaka district this week" and the
+ * ones that answer "who is waiting in this chamber" never share a guard.
+ */
+export function requireNationalRole(...roles: NationalRole[]): RequestHandler {
+  if (roles.length === 0) {
+    throw new Error(
+      'requireNationalRole needs at least one role; an empty list would allow everyone.',
+    );
+  }
+
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    const principal = req.principal;
+    if (principal === undefined) {
+      next(authRequired());
+      return;
+    }
+
+    if (principal.kind !== 'national') {
+      next(forbiddenScope({ needed: roles, was: principal.kind }));
+      return;
+    }
+
+    if (!roles.some((role) => principal.roles.includes(role))) {
+      next(forbiddenScope({ needed: roles }));
       return;
     }
 

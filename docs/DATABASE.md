@@ -53,6 +53,7 @@ CREATE TYPE notif_channel     AS ENUM ('push','sms','ivr','in_app');
 CREATE TYPE notif_state       AS ENUM ('queued','sent','delivered','failed','skipped');
 CREATE TYPE capability_kind   AS ENUM ('burn_unit','cardiac','cath_lab','stroke','dialysis','nicu','trauma_ot','blood_bank','ambulance','isolation');
 CREATE TYPE consent_scope     AS ENUM ('visit','hospital','doctor','full');
+CREATE TYPE symptom_signal    AS ENUM ('dengue','diarrhoeal','fever');   -- 0025, FR-GOV-03
 ```
 
 ---
@@ -117,7 +118,7 @@ CONSTRAINT patients_one_owner CHECK (num_nonnulls(owner_user_id, owner_guest_id)
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | **PK** |
-| `hospital_id` | uuid | **FK** → `hospitals.id` |
+| `hospital_id` | uuid | **FK** → `hospitals.id`; **null only for a national account** (`platform_admin`, `gov_viewer`), which works for no facility (`FR-ROLE-01`, 0024) |
 | `email` | text | **U** with `hospital_id` |
 | `staff_code` | text | printed on the ID card |
 | `full_name` | text | |
@@ -131,11 +132,11 @@ CONSTRAINT patients_one_owner CHECK (num_nonnulls(owner_user_id, owner_guest_id)
 |---|---|---|
 | `id` | uuid | **PK** |
 | `staff_user_id` | uuid | **FK** |
-| `hospital_id` | uuid | **FK** |
+| `hospital_id` | uuid | **FK**; null **exactly** when `role` is `platform_admin` or `gov_viewer` (`staff_roles_national_has_no_hospital`, 0024) |
 | `role` | staff_role | |
 | `scope` | jsonb | e.g. `{"wards":["3F"],"counters":["R2"]}` |
 
-**U:** `(staff_user_id, hospital_id, role)`
+**U:** `(staff_user_id, hospital_id, role)`, and `(staff_user_id, role)` where `hospital_id` is null — two nulls are distinct to a unique index, so the national half needs its own (0024). A national account's email is unique across national accounts for the same reason.
 
 #### `sessions_auth` (login sessions)
 `id`, `subject_id`, `subject_kind` (`user`/`guest`/`staff`), `token_hash`, `device_fingerprint`, `ip`, `expires_at`, `revoked_at`.
@@ -283,7 +284,9 @@ Rebuildable with `SELECT rebuild_queue_state(session_id)`.
 ### 2.4 Clinical records
 
 #### `visits`
-One completed consultation: `id`, `booking_id` **FK U**, `patient_id`, `hospital_id`, `doctor_id`, `diagnosis_text`, `advice_text_bn`, `follow_up_date`, `signed_at`, `created_by`.
+One completed consultation: `id`, `booking_id` **FK U**, `patient_id`, `hospital_id`, `doctor_id`, `diagnosis_text`, `advice_text_bn`, `follow_up_date`, `symptom_signal` (nullable, 0025), `signed_at`, `created_by`.
+
+`symptom_signal` is the tag `CHIP-B05-SIGNAL` sets — dengue, diarrhoeal or fever, the three categories `FR-GOV-03` names, or nothing. It is a reporting flag for the district, not a diagnosis: `diagnosis_text` stays the record, the wallet does not show it, and the government layer reads it only as a count by district and day (`v_gov_symptom_daily`).
 
 #### `prescriptions` / `prescription_items`
 `prescriptions`: `id`, `visit_id` **FK**, `pdf_url`, `qr_token_hash`, `dispensed_at`.
@@ -456,6 +459,12 @@ ACTION_UNDONE       { "undoneEventId": "…" }
 | `v_admin_daily` | materialised view | Daily aggregates per hospital for the dashboard; refreshed every 5 min |
 | `v_no_show_loss` | view | No-show count × fee, and recovered value from `slot_offers` (`FR-ADM-03`) |
 | `v_referral_flow` | view | Sent / accepted / leaked per hospital |
+| `v_gov_capacity` | view | Per district: facilities, beds free/total and by kind, ICU, burn units open, ER load, and the **oldest** facility's `beds_as_of` — summed from `v_public_hospital_capacity`, so the ministry and a family are never told different numbers (`FR-GOV-01`). Migration 0026 |
+| `v_gov_er_hourly` | view | Per district per hour: emergency arrivals (or alerts), and how many were triaged red (`FR-GOV-02`). 0026 |
+| `v_gov_er_now` | view | Per district: open cases, on the way, critical, and the newest update's time (`FR-GOV-02`). 0026 |
+| `v_gov_symptom_daily` | view | Per district, signal and Dhaka day: signed visits tagged `symptom_signal` (`FR-GOV-03`). 0026 |
+| `v_gov_reporting` | view | Per district: the first Dhaka day any visit was signed, and the newest signature — what a symptom baseline rests on (`FR-GOV-03`). 0026 |
+| `v_gov_benchmark` | view | Per live facility, **unnamed**: 30-day check-in-to-call wait, lab turnaround median, the four feedback scores, each with its sample size, and the facility's kind only (`FR-GOV-04`). 0026 |
 | `fn_rebuild_queue_state(session_id)` | function | Replays `queue_events` → writes `queue_state` (`DB-P1`) |
 | `fn_next_serial(session_id)` | function | Allocates the next serial atomically |
 | `fn_recalc_etas(session_id)` | function | Returns `[{bookingId, etaAt, bandMinutes}]` (`FR-QUE-11`) |
@@ -478,7 +487,7 @@ Enabled on every table. Core policies:
 | `visits`, `prescriptions`, `reports` | Patient reads own; treating doctor reads with consent; hospital admin reads aggregate only |
 | `beds`, `capabilities` | Staff writes in scope; public reads through `v_public_hospital_capacity` only |
 | `audit_log` | Insert-only for services; readable by `hospital_admin` (own hospital) and `platform_admin` |
-| Everything gov | `gov_viewer` may read only the aggregate views, never base tables (`FR-GOV-06`) |
+| Everything gov | `gov_viewer` may read only the aggregate views, never base tables (`FR-GOV-06`). Enforced by a database role, not a policy: `gov_reader` (NOLOGIN, 0026) holds SELECT on the six `v_gov_*` views and nothing else, and the API switches to it for each government read (`SET LOCAL ROLE`). A view runs with its owner's rights, which is what lets it aggregate tables the role cannot open; a new view is unreadable by the government layer until somebody grants it on purpose |
 
 Service-role key is used only by backend workers, never exposed to any client.
 
@@ -541,15 +550,22 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- constraint extended to PATIENT_ARRIVED
     0023_standby_self_serve.sql    -- payments.standby_id as a fifth subject; standby_list
                                    -- guest_id, seated_booking_id, idempotency_key (FR-PAT-25..27)
+    0024_national_roles.sql        -- step 20: staff_users/staff_roles.hospital_id nullable, null
+                                   -- tied to platform_admin/gov_viewer (FR-ROLE-01)
+    0025_symptom_signal.sql        -- step 20: symptom_signal enum, visits.symptom_signal (FR-GOV-03)
+    0026_gov_views.sql             -- step 20: the six v_gov_* views and gov_reader, which can read
+                                   -- them and no table (FR-GOV-01..06, §5)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
-    seed_01_hospitals.ts           -- 6 facilities (FR-DEM-01)
+    seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)
     seed_02_doctors_sessions.ts    -- 40 doctors, templates, today's sessions (FR-DEM-02)
     seed_03_patients.ts            -- 200 profiles + guest identities (FR-DEM-03)
     seed_04_history.ts             -- 500 past visits, prescriptions, reports
     seed_05_beds.ts                -- wards, beds, occupancy (FR-DEM-04)
     seed_06_ancillary.ts           -- ambulances, donors, pharmacy stock (FR-DEM-05)
     seed_07_demo_live.ts           -- puts one session mid-queue for the pitch (FR-DEM-06)
+    seed_08_money.ts               -- payments against every booking, counter shifts (FR-PAY-01)
+    seed_09_signals.ts             -- symptom tags on past visits; dengue rising in Dhaka (FR-GOV-03)
     reset.ts                       -- truncate + reseed in one command
   /scripts
     rebuild_queue_state.ts

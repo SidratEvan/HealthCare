@@ -51,7 +51,7 @@ imports nothing at all.
 
 ## Getting started
 
-Requires Node 20+ and Docker.
+Requires Node 22.19+ (24 recommended, and what CI runs) and Docker.
 
 ```bash
 corepack enable                 # pnpm version comes from package.json

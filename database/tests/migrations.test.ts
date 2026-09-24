@@ -74,6 +74,10 @@ describe('migration files (DATABASE.md §7)', () => {
     // will not let a transaction use an enum value it added itself. 0023 is
     // the standby list's self-serve half: a payment can now be for a standby
     // row until the person is seated.
+    //
+    // 0024, 0025 and 0026 arrived with step 20, the national layer: a
+    // national role with no home facility, the symptom tag `FR-GOV-03`
+    // counts, and the aggregate views with the one role allowed to read them.
     expect(migrations.map((m) => m.version)).toEqual([
       '0001',
       '0002',
@@ -96,6 +100,9 @@ describe('migration files (DATABASE.md §7)', () => {
       '0021',
       '0022',
       '0023',
+      '0024',
+      '0025',
+      '0026',
     ]);
   });
 

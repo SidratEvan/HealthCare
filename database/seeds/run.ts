@@ -42,6 +42,7 @@ import { seed05Beds } from './seed_05_beds.js';
 import { seed06Ancillary } from './seed_06_ancillary.js';
 import { seed07DemoLive } from './seed_07_demo_live.js';
 import { seed08Money } from './seed_08_money.js';
+import { seed09Signals } from './seed_09_signals.js';
 
 import type { Client } from 'pg';
 
@@ -56,6 +57,9 @@ export const SEED_MODULES: readonly SeedModule[] = [
   // Last: a payment needs its booking, and `seed_07` is what makes the pitch
   // session's bookings (`FR-PAY-01`).
   seed08Money,
+  // After seed_04, whose visits it tags (`FR-GOV-03`), and on its own stream,
+  // so planting the national signal moved none of the history's draws.
+  seed09Signals,
 ];
 
 /** `seed_00_reference.sql`, resolved from this file rather than the cwd. */
