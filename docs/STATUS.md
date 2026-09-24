@@ -169,6 +169,16 @@ the global directory made read-only: the global install is refused, as on
 Render, and the new command installs and starts the API. While the build was
 red, Render kept serving the previous release.
 
+**That fix did not reach the live service** (`fix/render-node`). It was created
+as a plain Web Service (`DEPLOY.md` §2), not from the blueprint, so its build
+command lives in the dashboard and `render.yaml` is never read. It still runs
+`npm install -g pnpm`. With no `NODE_VERSION` set there, Render takes the
+version from `.nvmrc`: `20` had it download Node into a writable directory, and
+`24` (from `fix/ci-node`) put it on Render's own read-only Node. `.nvmrc` is now
+`22`, above the 22.19 floor, and CI stays on 24 through `ci.yml`. To run the API
+on 24, change the dashboard's build and start commands to the ones in
+`DEPLOY.md` §2 first, then `.nvmrc`.
+
 ### Step 20 — the national layer, and what a government viewer can reach
 
 **The definition of done is "no identifiable row reachable", and it is held
@@ -2039,9 +2049,10 @@ repeating here:
   origin every booking's tracking link is built from. Wrong, and every SMS in
   the demo points at localhost.
 - **Supabase's session pooler, port 5432**, with the password percent-encoded.
-- **Never `npm install -g` in Render's build.** On the Node it ships with
-  (`NODE_VERSION "24"`), the global directory is read-only. `render.yaml`
-  installs pnpm into `.render/` in the checkout instead.
+- **Never `npm install -g` in Render's build.** On the Node it ships with (24),
+  the global directory is read-only. The live service's dashboard still does
+  it, so `.nvmrc` holds Render on 22 until the dashboard commands are changed
+  to the ones in `DEPLOY.md` §2.
 
 **The console has a way in now.** `ConsolePicker` is `S-B-01` standing in for
 the login this version does not have (`CLAUDE.md` §4.1): pick a hospital, a
