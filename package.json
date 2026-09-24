@@ -6,7 +6,7 @@
   "description": "National healthcare platform for Bangladesh — patient PWA, hospital consoles, and the live queue engine.",
   "packageManager": "pnpm@12.4.2",
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
