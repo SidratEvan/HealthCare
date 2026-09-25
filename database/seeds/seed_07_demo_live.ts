@@ -73,16 +73,24 @@ import type { SeedContext, SeedModule, SeedSummary } from './lib/runner.js';
 import type { Client } from 'pg';
 
 /**
- * How full each of the next three days is, as a fraction of capacity.
+ * How full each day's sessions are, as a fraction of capacity: one entry per
+ * day `seed_02` materialises (`SESSION_DAYS`), today first.
  *
  * Nearer days are fuller, which is both true of real booking behaviour and
  * necessary for the discovery screen to be worth looking at: a demo where
- * every session is equally empty says nothing about availability.
+ * every session is equally empty says nothing about availability. The far end
+ * of the week still has a few serials taken, because a chamber a week out with
+ * nobody booked reads as a doctor nobody sees.
  */
-const FILL_BY_DAY: readonly [number, number][] = [
+export const FILL_BY_DAY: readonly (readonly [number, number])[] = [
   [0.4, 0.75],
   [0.2, 0.5],
   [0.05, 0.25],
+  [0.05, 0.2],
+  [0.04, 0.18],
+  [0.03, 0.15],
+  [0.02, 0.12],
+  [0.02, 0.1],
 ];
 
 /** Patients waiting for a freed slot on the demo session (`FR-PAT-25`). */
@@ -133,7 +141,7 @@ export const seed07DemoLive: SeedModule = {
       throw new Error('Not enough seeded profiles for the demo session; seed_03 must run first.');
     }
 
-    // --- the rest of today, and the two days after it -----------------------
+    // --- the rest of today, and the week after it ----------------------------
     const upcoming = await loadUpcomingSessions(client, now);
     let bookings = 0;
     let filledSessions = 0;
@@ -141,7 +149,12 @@ export const seed07DemoLive: SeedModule = {
     for (const session of upcoming) {
       if (session.id === demoSessionId) continue;
 
-      const range = FILL_BY_DAY[session.dayOffset] ?? [0.1, 0.3];
+      const range = FILL_BY_DAY[session.dayOffset];
+      if (range === undefined) {
+        throw new Error(
+          `No fill declared for day ${String(session.dayOffset)}: FILL_BY_DAY needs one entry per SESSION_DAYS.`,
+        );
+      }
       const capacity = session.capacity ?? 25;
       const wanted = Math.max(
         1,
