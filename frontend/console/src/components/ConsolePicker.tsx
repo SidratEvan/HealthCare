@@ -364,6 +364,15 @@ export function ConsolePicker({
         <section className="flex flex-col gap-3">
           <h2 className="text-title-sm">{t('chooseChamber', locale)}</h2>
 
+          {/* A Friday at a hospital with no weekend chamber: the facility's
+              own consoles are still offered above, so say why this is empty
+              rather than draw nothing. */}
+          {hospital.sessions.length === 0 ? (
+            <p className="text-body-md text-ink-secondary" data-testid="picker-no-chambers">
+              {t('noChambersToday', locale)}
+            </p>
+          ) : null}
+
           <ul className="grid gap-3 md:grid-cols-2">
             {hospital.sessions.map((session) => (
               <li key={session.id}>
