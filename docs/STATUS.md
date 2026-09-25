@@ -177,7 +177,40 @@ tweak, and was not made. What grew is the forward week of bookings.
 
 **What a daily reset costs.** It wipes whatever people did the day before —
 their bookings, the queue taps on a console. For people exploring that is the
-right trade: each morning is a known, fresh state.
+right trade: each morning is a known, fresh state. A reset also leaves the
+demo empty for the five or six minutes it takes to seed across to Singapore
+(`seed_07` alone is about four), which is why it runs at 08:00 Dhaka.
+
+**Done, on the owner's word (2026-09-25).** `ALLOW_REMOTE_DB=1
+ALLOW_DESTRUCTIVE_DB=1 pnpm db:reset` rebuilt Supabase from `mvp` at 06:59
+UTC (12:59 Dhaka): 294 sessions, 1,560 bookings, 500 past visits, 966
+payments, 170 beds. Read back afterwards, every day from Friday 25 September
+to Friday 2 October has booked chambers — 40 sessions at all six hospitals
+Saturday to Thursday, and the Friday chambers at the college and the clinic.
+
+**The scheduled task** is on the owner's Windows machine, not in the repo:
+`HealthCare demo refresh`, daily at **08:00 Dhaka**, which is **20:00 the
+evening before on that machine** (Canada Central, UTC−6, no daylight saving).
+Seven runs, Saturday 26 September to Friday 2 October; the trigger ends after
+the last and the task deletes itself a day later. It starts when the machine
+next wakes if it was off, needs a network, and runs on battery. It only runs
+the reset if the checkout is on `mvp` (or a branch whose `database/` and
+`shared/` match it) — **leave the repository on `mvp` this week**, or the day's
+refresh is skipped and says so in the log.
+
+**Proven unattended**: started once through the scheduler at 07:12 UTC on
+2026-09-25, it verified, reset and reseeded in seven minutes (exit 0, 294
+sessions, 1,532 bookings), from a docs-only branch whose `database/` and
+`shared/` matched `mvp`, as the guard allows.
+
+```powershell
+Start-ScheduledTask -TaskName 'HealthCare demo refresh'          # refresh now
+Get-Content "$env:LOCALAPPDATA\HealthCareDemo\refresh.log" -Tail 20
+Unregister-ScheduledTask -TaskName 'HealthCare demo refresh' -Confirm:$false   # stop early
+```
+
+After 2 October the last reset's sessions run to 9 October, then the picker
+empties day by day. A further week is another owner's-word decision.
 
 ### The design pass (`fix/pitch-design`, after step 20)
 
