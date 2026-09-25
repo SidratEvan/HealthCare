@@ -18,7 +18,10 @@ emergency and admin dashboard are later build steps.
 ## 0. Before you start
 
 You need accounts on Supabase, Render and Vercel, and the repository pushed to
-GitHub. Render and Vercel both deploy from a branch — use `mvp`.
+GitHub. Render and Vercel both deploy from **`main`**, the release branch
+(`render.yaml`, CLAUDE.md §3.1). A change reaches the live demo only once
+`mvp` is merged into `main` and `main` is pushed; pushing `mvp` alone deploys
+nothing.
 
 Have these to hand:
 
@@ -81,7 +84,7 @@ hour before the meeting puts the chamber in exactly the right state.
 
 ## 2. Render — the API
 
-**New → Web Service**, from the repository, branch `mvp`.
+**New → Web Service**, from the repository, branch `main`.
 
 `render.yaml` at the repository root carries the settings. If Render does not
 pick it up, the four that matter are:
