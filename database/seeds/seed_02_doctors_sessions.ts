@@ -1,16 +1,21 @@
 /**
  * `FR-DEM-02` — forty doctors, their chambers, their recurring schedules, and
- * the sessions those schedules produce for today and the next two days.
+ * the sessions those schedules produce for today and the seven days after it.
  *
- * ## Why three days and not one
+ * ## Why eight days and not one
  *
  * DATABASE.md §7 calls this file "40 doctors, templates, today's sessions".
  * Today alone is not enough for a demo that has to work on any day it is run:
  * Friday is the weekend in Bangladesh, so a reset on a Thursday evening would
  * leave the "book for tomorrow" screen empty and the presenter explaining the
- * calendar instead of the product. Three days always contains a working
- * evening. Materialising further ahead is the nightly worker's job
- * (BACKEND.md §8, `sessions.materialise` at 02:00), not a seed's.
+ * calendar instead of the product.
+ *
+ * The session picker offers seven days (`S-A-07b`, `BOOKABLE_DAYS` in
+ * `discovery.service`), and in a real deployment the nightly worker keeps it
+ * full (BACKEND.md §8, `sessions.materialise` at 02:00). That worker is not
+ * built, so after a reset nothing adds a day. Seven days fills the picker on
+ * the day of the reset; the eighth keeps it full the day after, so a demo left
+ * with people to explore for a week survives one missed daily reset.
  *
  * ## Why a doctor never sits in two chambers at once
  *
@@ -75,12 +80,15 @@ const CHAMBER_HOURS: Readonly<Record<string, { start: [number, number]; end: [nu
 /** The largest serial a facility of each size will issue for one chamber. */
 const CAPACITY_CEILING: Readonly<Record<string, number>> = { large: 45, mid: 35, small: 25 };
 
-/** How many days of sessions a reset produces, starting today. */
-export const SESSION_DAYS = 3;
+/**
+ * How many days of sessions a reset produces, starting today: the picker's
+ * seven (`S-A-07b`) and one more (see the header).
+ */
+export const SESSION_DAYS = 8;
 
 export const seed02DoctorsSessions: SeedModule = {
   name: 'seed_02_doctors_sessions',
-  title: 'forty doctors, chambers, recurring schedules, three days of sessions',
+  title: 'forty doctors, chambers, recurring schedules, eight days of sessions',
   requirements: ['FR-DEM-02', 'FR-DEM-07', 'FR-QUE-01'],
   writes: ['doctors', 'doctor_hospitals', 'session_templates', 'sessions'],
 

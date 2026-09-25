@@ -7,8 +7,12 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/language-switch` — **English, everywhere, behind a switch at
-the top of both apps** (below). Before that, `fix/console-bangla-digits`, the
+Last updated: `feat/demo-week` — **a week of demo for people to explore**:
+eight days of booked sessions, and a daily reset of the deployed demo from
+26 September to 2 October (below). With it, `fix/console-picker-friday`: the
+picker hid four hospitals' ward, ER, lab and office every Friday. Before that,
+`feat/language-switch` — **English, everywhere, behind a switch at the top of
+both apps**. Before that, `fix/console-bangla-digits`, the
 Render fixes, `fix/pitch-design` and step 20 — the design pass the owner
 asked for after seeing the live demo, and the bugs found on it. Before
 that, `fix/ci-node` (CI green again on Node 24) and `feat/gov-dashboard` —
@@ -104,7 +108,7 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 3762, in about a minute and a half.
+`pnpm test` reports 3767, in about a minute and a half.
 `pnpm test:e2e` reports 114, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
@@ -115,20 +119,98 @@ demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`
 `check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`. The last full
 run took twelve minutes.
 
-**Two API tests fail between midnight and early morning, Dhaka time, on `mvp`
-as well.** `demo.routes.test.ts` expects the ER console and the ward board to
-be offered at four or more facilities. Shortly after midnight the seeded
-"today" has sessions at only two of them, so both assertions read 2. Seen at
-02:00 Dhaka on 2026-09-25; not caused by `feat/language-switch`, and not fixed
-there. Once in the same run, `standby.routes.test.ts` "writes an SMS to the
-number on the standby row" read the wrong phone. It passed alone and on the
-next two full runs, so it looks like an ordering interaction on the shared API
-database.
+**The two `demo.routes.test.ts` failures were Fridays, not early mornings —
+fixed in `fix/console-picker-friday`.** They expect the ER console and the ward
+board at four or more facilities. On a Friday only the government college and
+the clinic sit chambers (`seed_02`, `FRIDAY_CHAMBERS`), and the picker
+(`demo.repo` `listConsoles`) hid every facility with no chamber today, so four
+hospitals' ward boards, ER consoles, labs and dashboards vanished all day.
+Both sightings (02:00 and 12:30 Dhaka, 2026-09-25) were a Friday. A facility
+that staffs a facility-level console is now listed whatever the day, the
+picker says when a hospital has no chambers (`noChambersToday`), and a third
+test hides one facility's chambers to prove it on any weekday. Separately,
+once, `standby.routes.test.ts` "writes an SMS to the number on the standby
+row" read the wrong phone. It passed alone and on the next two full runs, so
+it looks like an ordering interaction on the shared API database.
 
-`pnpm verify` — typecheck, lint, `format:check`, test — is clean outside those
-early-morning hours, and so is `pnpm build`. `format:check` had been failing on five files since before step
+`pnpm verify` — typecheck, lint, `format:check`, test — is clean, and so is
+`pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### A week of demo for people to explore (`feat/demo-week`)
+
+**The owner asked on 2026-09-25** for the demo to be refilled with as much
+data as it can hold and kept that way for the whole of the next week: he is
+giving the deployed links to doctors in his family to explore, not pitching.
+
+**Why a single reset could not do it.** Everything live is anchored to the
+moment of the reset: the mid-queue chamber is built backwards from "now"
+(`seed_07`, ±90 minutes), bed and ER figures carry freshness stamps that age
+honestly, and "today" on every dashboard is the reset's day. Nothing moves the
+demo forward afterwards, because the nightly worker that materialises sessions
+(`BACKEND.md` §8) is still a stub. And the seed wrote only three days of
+sessions while the patient app's picker offers seven (`S-A-07b`,
+`BOOKABLE_DAYS`), so four days of every doctor's picker were empty.
+
+**What changed.**
+
+- `seed_02` writes **eight days** of sessions (`SESSION_DAYS`): the picker's
+  seven, and one more so a missed daily reset still leaves a full picker.
+- `seed_07` books every one of them, from `FILL_BY_DAY`: one declared range
+  per day, 40–75 % of capacity today thinning to 2–10 % a week out. A seed
+  test pins that every one of the eight days has booked sessions and that
+  the fill table matches `SESSION_DAYS`.
+- `database/scripts/demo-refresh.ps1` runs `db:verify`, then `db:reset`,
+  against the remote demo, logging to `%LOCALAPPDATA%\HealthCareDemo\refresh.log`.
+  It **refuses unless the checkout's `database/` and `shared/` are exactly
+  `mvp`'s**, so a half-finished branch cannot truncate the demo and then fail
+  on a schema Supabase lacks. A scheduled task on the owner's machine calls
+  it once a day (below).
+- `fix/console-picker-friday`, found on the way: the Friday picker bug above.
+  Next week's Friday (2 October) would otherwise have shown two hospitals.
+
+**Volume.** Hospitals, doctors, patients and past visits stay at the declared
+demo set (`FR-DEM-01`–`03`: six facilities, forty doctors, two hundred
+profiles, five hundred visits). Raising them is a PRD change, not a seed
+tweak, and was not made. What grew is the forward week of bookings.
+
+**What a daily reset costs.** It wipes whatever people did the day before —
+their bookings, the queue taps on a console. For people exploring that is the
+right trade: each morning is a known, fresh state. A reset also leaves the
+demo empty for the five or six minutes it takes to seed across to Singapore
+(`seed_07` alone is about four), which is why it runs at 08:00 Dhaka.
+
+**Done, on the owner's word (2026-09-25).** `ALLOW_REMOTE_DB=1
+ALLOW_DESTRUCTIVE_DB=1 pnpm db:reset` rebuilt Supabase from `mvp` at 06:59
+UTC (12:59 Dhaka): 294 sessions, 1,560 bookings, 500 past visits, 966
+payments, 170 beds. Read back afterwards, every day from Friday 25 September
+to Friday 2 October has booked chambers — 40 sessions at all six hospitals
+Saturday to Thursday, and the Friday chambers at the college and the clinic.
+
+**The scheduled task** is on the owner's Windows machine, not in the repo:
+`HealthCare demo refresh`, daily at **08:00 Dhaka**, which is **20:00 the
+evening before on that machine** (Canada Central, UTC−6, no daylight saving).
+Seven runs, Saturday 26 September to Friday 2 October; the trigger ends after
+the last and the task deletes itself a day later. It starts when the machine
+next wakes if it was off, needs a network, and runs on battery. It only runs
+the reset if the checkout is on `mvp` (or a branch whose `database/` and
+`shared/` match it) — **leave the repository on `mvp` this week**, or the day's
+refresh is skipped and says so in the log.
+
+**Proven unattended**: started once through the scheduler at 07:12 UTC on
+2026-09-25, it verified, reset and reseeded in seven minutes (exit 0, 294
+sessions, 1,532 bookings), from a docs-only branch whose `database/` and
+`shared/` matched `mvp`, as the guard allows.
+
+```powershell
+Start-ScheduledTask -TaskName 'HealthCare demo refresh'          # refresh now
+Get-Content "$env:LOCALAPPDATA\HealthCareDemo\refresh.log" -Tail 20
+Unregister-ScheduledTask -TaskName 'HealthCare demo refresh' -Confirm:$false   # stop early
+```
+
+After 2 October the last reset's sessions run to 9 October, then the picker
+empties day by day. A further week is another owner's-word decision.
 
 ### The design pass (`fix/pitch-design`, after step 20)
 
