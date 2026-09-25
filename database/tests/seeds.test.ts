@@ -27,10 +27,12 @@ import {
   DEMO_LIVE,
   DEMO_REFERRALS,
   DEMO_SEED,
+  FILL_BY_DAY,
   GUEST_COUNT,
   HISTORY_VISIT_TARGET,
   PATIENT_COUNT,
   SEED_MODULES,
+  SESSION_DAYS,
   SPECIALTIES,
   doctor,
   facility,
@@ -246,6 +248,48 @@ describe('FR-DEM-02: forty doctors, realistically Bangladeshi, evening chambers'
     },
     SEED_TIMEOUT,
   );
+
+  it(
+    'books every day of the seven-day picker, and one more',
+    async () => {
+      await seeded(async (client) => {
+        // S-A-07b offers seven days and no worker adds one after a reset, so a
+        // demo left for a week needs the whole horizon seeded. Counted from the
+        // seed's own first day, not from the clock, so a run that straddles
+        // midnight Dhaka reads the same answer.
+        const { rows } = await client.query<{ day: string; booked: number }>(
+          `SELECT s.session_date::text AS day, count(DISTINCT s.id)::int AS booked
+             FROM sessions s
+             JOIN bookings b ON b.session_id = s.id
+            WHERE s.status = 'scheduled'
+            GROUP BY s.session_date
+            ORDER BY s.session_date`,
+        );
+
+        const first = rows[0]?.day;
+        if (first === undefined) throw new Error('no upcoming sessions with bookings');
+        const expected = Array.from({ length: SESSION_DAYS }, (_, offset) => {
+          const date = new Date(`${first}T00:00:00Z`);
+          date.setUTCDate(date.getUTCDate() + offset);
+          return date.toISOString().slice(0, 10);
+        });
+
+        expect(rows.map((row) => row.day).slice(0, SESSION_DAYS)).toEqual(expected);
+        expect(SESSION_DAYS).toBeGreaterThanOrEqual(8);
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it('declares a fill for every seeded day, emptier further out', () => {
+    expect(FILL_BY_DAY).toHaveLength(SESSION_DAYS);
+    for (const [index, [low, high]] of FILL_BY_DAY.entries()) {
+      expect(low).toBeGreaterThan(0);
+      expect(low).toBeLessThan(high);
+      const next = FILL_BY_DAY[index + 1];
+      if (next !== undefined) expect(next[1]).toBeLessThanOrEqual(high);
+    }
+  });
 });
 
 describe('FR-DEM-03: two hundred profiles and five hundred past visits', () => {

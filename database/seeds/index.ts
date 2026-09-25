@@ -29,6 +29,7 @@ export { DEMO_LIVE, SPECIALTIES } from './data/reference.js';
 export { ACCOUNT_COUNT, GUEST_COUNT, PATIENT_COUNT } from './seed_03_patients.js';
 export { HISTORY_VISIT_TARGET } from './seed_04_history.js';
 export { SESSION_DAYS } from './seed_02_doctors_sessions.js';
+export { FILL_BY_DAY } from './seed_07_demo_live.js';
 
 export { DEMO_LABEL_BN, DEMO_LABEL_EN, DEMO_MARKER, isLabelled } from './lib/demo.js';
 export { DEMO_SEED } from './lib/random.js';
