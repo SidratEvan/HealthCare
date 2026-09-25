@@ -41,6 +41,19 @@ export interface DemoConsoleRow {
 }
 
 /**
+ * Roles whose console opens on the facility rather than on one chamber: the
+ * ward board, the ER, the lab, the pharmacy and the dashboard (`S-B-06` to
+ * `S-B-10`). Such a console is worth offering on a day with no chambers.
+ */
+const FACILITY_ROLES: ReadonlySet<string> = new Set([
+  'ward',
+  'emergency',
+  'lab',
+  'pharmacy',
+  'hospital_admin',
+]);
+
+/**
  * Every live facility with a staff account, and what it is running now.
  *
  * "Now" rather than "today": a session still running from the previous Dhaka
@@ -149,8 +162,16 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
         roles: [...row.roles].sort(),
         sessions: byHospital.get(row.hospital_id) ?? [],
       }))
-      // A facility with nothing running today has no console worth opening.
-      .filter((hospital) => hospital.sessions.length > 0)
+      // A facility is worth opening if a chamber sits there today, or if it
+      // staffs a console that belongs to the building rather than to a
+      // chamber. A ward, an ER, a lab or a pharmacy does not close for the
+      // weekend: on a Friday only the government college and the clinic sit
+      // chambers (`seed_02`, FRIDAY_CHAMBERS), and filtering on sessions alone
+      // hid the other four facilities' ward boards and ER consoles all day.
+      .filter(
+        (hospital) =>
+          hospital.sessions.length > 0 || hospital.roles.some((role) => FACILITY_ROLES.has(role)),
+      )
       .sort((a, b) => runningFirst(b) - runningFirst(a))
   );
 }

@@ -138,6 +138,51 @@ describe('GET /demo/consoles', () => {
     );
   });
 
+  it('offers a facility its ward board on a day it sits no chamber (S-B-06, S-B-07)', async () => {
+    // Friday: only the government college and the clinic sit chambers, and the
+    // picker used to hide every other facility — ward, ER, lab and office with
+    // it. The two tests above failed every Friday for that reason. This one
+    // takes a staffed facility's chambers out of today on any day of the week.
+    const picked = await sql<{ id: string }>`
+      SELECT h.id
+        FROM hospitals h
+       WHERE h.is_live AND h.deleted_at IS NULL
+         AND EXISTS (SELECT 1 FROM staff_users su
+                       JOIN staff_roles sr ON sr.staff_user_id = su.id
+                      WHERE su.hospital_id = h.id AND sr.role = 'ward')
+         AND NOT EXISTS (SELECT 1 FROM sessions s
+                          WHERE s.hospital_id = h.id AND s.status = 'running')
+       ORDER BY h.name_en
+       LIMIT 1
+    `.execute(db);
+    const hospitalId = picked.rows[0]?.id;
+    if (hospitalId === undefined) throw new Error('no staffed ward without a running chamber');
+
+    const hidden = await sql<{ id: string }>`
+      UPDATE sessions SET deleted_at = now()
+       WHERE hospital_id = ${hospitalId}::uuid
+         AND deleted_at IS NULL
+         AND session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
+      RETURNING id
+    `.execute(db);
+
+    try {
+      const response = await request(app).get(`${BASE}/demo/consoles`);
+      const consoles = response.body.data.consoles as {
+        hospitalId: string;
+        roles: string[];
+        sessions: unknown[];
+      }[];
+      const entry = consoles.find((candidate) => candidate.hospitalId === hospitalId);
+
+      expect(entry?.sessions).toEqual([]);
+      expect(entry?.roles).toEqual(expect.arrayContaining(['ward', 'hospital_admin']));
+    } finally {
+      const ids = hidden.rows.map((row) => row.id);
+      await sql`UPDATE sessions SET deleted_at = NULL WHERE id = ANY(${ids}::uuid[])`.execute(db);
+    }
+  });
+
   it('names no patient', async () => {
     const response = await request(app).get(`${BASE}/demo/consoles`);
     const serialised = JSON.stringify(response.body);

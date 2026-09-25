@@ -87,6 +87,11 @@ export const CONSOLE = {
     bn: 'আজ কোনো চেম্বার চলছে না। ডেমো তথ্য আবার তৈরি করুন।',
     en: 'No chambers are running today. Rebuild the demo data.',
   },
+  /** A facility with no chamber today still has its ward, ER, lab and office. */
+  noChambersToday: {
+    bn: 'আজ এখানে কোনো চেম্বার নেই। ওপরের কনসোলগুলো খোলা আছে।',
+    en: 'No chambers here today. The consoles above are open.',
+  },
   changeConsole: { bn: 'কনসোল বদলান', en: 'Change console' },
   facilityConsoles: { bn: 'হাসপাতালের কনসোল', en: 'Hospital consoles' },
   consoleLoadFailed: { bn: 'কনসোলের তালিকা আনা যায়নি', en: 'Could not load the consoles' },
