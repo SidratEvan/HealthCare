@@ -7,7 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/demo-week` — **a week of demo for people to explore**:
+Last updated: `fix/console-rail-links` and `fix/demo-refresh-retry` — **the
+first scheduled refresh emptied the demo, and the console rail did nothing
+when clicked** (below, *The first scheduled refresh*). Before that,
+`feat/demo-week` — **a week of demo for people to explore**:
 eight days of booked sessions, and a daily reset of the deployed demo from
 26 September to 2 October (below). With it, `fix/console-picker-friday`: the
 picker hid four hospitals' ward, ER, lab and office every Friday. Before that,
@@ -108,15 +111,15 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 3767, in about a minute and a half.
-`pnpm test:e2e` reports 114, in Chromium, against the real API and the seeded
+`pnpm test` reports 3775, in about two minutes.
+`pnpm test:e2e` reports 118, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`. The last full
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`. The last full
 run took twelve minutes.
 
 **The two `demo.routes.test.ts` failures were Fridays, not early mornings —
@@ -211,6 +214,46 @@ Unregister-ScheduledTask -TaskName 'HealthCare demo refresh' -Confirm:$false   #
 
 After 2 October the last reset's sessions run to 9 October, then the picker
 empties day by day. A further week is another owner's-word decision.
+
+### The first scheduled refresh, and the rail (`fix/demo-refresh-retry`, `fix/console-rail-links`)
+
+**What the owner saw on 2026-09-26 (Dhaka morning):** every hospital's bed
+board said it had no wards, and clicking সিরিয়াল, রেজিস্ট্রেশন, জরুরি, টেস্ট,
+বিল or ড্যাশবোর্ড on the rail did nothing.
+
+**The empty demo.** The machine was off at 20:00, booted at 22:21 local, and
+the task caught up at 22:26 (`StartWhenAvailable`). It truncated all 51
+tables, seeded hospitals and staff, and was killed seconds later: the log ends
+in `^C` and the task in `0xC000013A`. This machine is Windows 11 25H2 with
+Windows Terminal as the default terminal, which **ignores
+`-WindowStyle Hidden`**, so the run opened a visible window of pnpm output
+just after login, and closing it killed the reset. Hospitals and staff
+existed, nothing else did. Re-run by hand at 04:46 UTC, complete at 04:54: 328
+sessions, 2,000 bookings, 29 wards, 170 beds. Read back through the deployed
+API afterwards.
+
+**What changed.** `demo-refresh.ps1` retries a failed verify-and-reset three
+times, two minutes apart, so a dropped connection no longer leaves the demo
+empty for a day. A closed window kills the script too, so the retry does not
+cover that. **Awaiting the owner:** point the task at a window that cannot be
+closed. Changing a scheduled task is his to do. A throwaway task proved
+`conhost.exe --headless` runs with no window here:
+
+```powershell
+Set-ScheduledTask -TaskName 'HealthCare demo refresh' -Action (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument '--headless powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -File "D:\Projects\HealthCare\database\scripts\demo-refresh.ps1"' -WorkingDirectory 'D:\Projects\HealthCare')
+```
+
+**The rail.** `ConsoleRail` was labels styled as a menu, by design ("a link
+that goes nowhere is worse than a label"). To somebody exploring, it was a
+menu that ignored clicks. Every item now opens its console **for the same
+facility**, minting a principal the way the picker does (`mintDemoToken`,
+shared by both). সিরিয়াল returns to the chamber last opened in the tab, or to
+the picker. বিল opens the pharmacy, which has sat under it since step 17.
+রেজিস্ট্রেশন (`S-B-03` not built) and any console a facility does not run (a
+clinic has no ward) are switched off with the reason beneath. The picker now
+stores the facility's `roles` and the `chamberSessionId` in the demo session.
+`APP_FLOW.md` B1.1 says so. `e2e/console-rail.spec.ts`, four tests.
+**Live only once `main` is pushed**: Vercel builds from `main`.
 
 ### The design pass (`fix/pitch-design`, after step 20)
 
