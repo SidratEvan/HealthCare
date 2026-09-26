@@ -19,6 +19,13 @@
 
   Writes a log to %LOCALAPPDATA%\HealthCareDemo\refresh.log. The log holds
   what the reset prints (row counts, the host) and never the connection string.
+
+  A reset that stops after its truncate leaves the demo empty, so a failed
+  attempt is retried. That covers a dropped connection, not a killed process:
+  on 2026-09-26 the task's window was closed seconds into seeding, which ends
+  this script too. The task should therefore start it through
+  `conhost.exe --headless`: with Windows Terminal as the default terminal,
+  `-WindowStyle Hidden` is ignored and the run opens a visible window.
 #>
 
 # 'Continue', not 'Stop': Windows PowerShell 5.1 turns a native command's
@@ -68,17 +75,30 @@ function Invoke-Logged([string[]] $arguments) {
 
 $env:ALLOW_REMOTE_DB = '1'
 
-# Read-only, and first: a dead connection or a schema that has drifted fails
-# here, before anything is truncated.
-if ((Invoke-Logged @('db:verify')) -ne 0) {
-  Write-Log 'stopped: db:verify failed, so nothing was truncated.'
-  exit 1
+# Three attempts, two minutes apart: about half an hour at worst, inside the
+# task's 45-minute limit.
+$attempts = 3
+for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+  if ($attempt -gt 1) {
+    Write-Log "retrying in two minutes (attempt $attempt of $attempts)"
+    Start-Sleep -Seconds 120
+  }
+
+  # Read-only, and first: a dead connection or a schema that has drifted fails
+  # here, before anything is truncated.
+  $env:ALLOW_DESTRUCTIVE_DB = $null
+  if ((Invoke-Logged @('db:verify')) -ne 0) {
+    Write-Log 'db:verify failed, so nothing was truncated.'
+    continue
+  }
+
+  $env:ALLOW_DESTRUCTIVE_DB = '1'
+  if ((Invoke-Logged @('db:reset')) -eq 0) {
+    Write-Log 'refresh complete'
+    exit 0
+  }
+  Write-Log 'db:reset did not finish; the demo may be empty until the next attempt.'
 }
 
-$env:ALLOW_DESTRUCTIVE_DB = '1'
-if ((Invoke-Logged @('db:reset')) -ne 0) {
-  Write-Log 'FAILED: db:reset did not finish. The demo may be empty; run it again by hand.'
-  exit 1
-}
-
-Write-Log 'refresh complete'
+Write-Log "FAILED after $attempts attempts. The demo may be empty; run this again by hand."
+exit 1
