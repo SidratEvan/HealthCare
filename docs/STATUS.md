@@ -235,9 +235,10 @@ API afterwards.
 **What changed.** `demo-refresh.ps1` retries a failed verify-and-reset three
 times, two minutes apart, so a dropped connection no longer leaves the demo
 empty for a day. A closed window kills the script too, so the retry does not
-cover that. **Awaiting the owner:** point the task at a window that cannot be
-closed. Changing a scheduled task is his to do. A throwaway task proved
-`conhost.exe --headless` runs with no window here:
+cover that, so **the task now starts it through `conhost.exe --headless`**,
+which has no window to close (done on the owner's word, 2026-09-26; a
+throwaway task proved it first). If the task is ever re-registered, keep that
+action:
 
 ```powershell
 Set-ScheduledTask -TaskName 'HealthCare demo refresh' -Action (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument '--headless powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -File "D:\Projects\HealthCare\database\scripts\demo-refresh.ps1"' -WorkingDirectory 'D:\Projects\HealthCare')
@@ -253,7 +254,7 @@ the picker. বিল opens the pharmacy, which has sat under it since step 17.
 clinic has no ward) are switched off with the reason beneath. The picker now
 stores the facility's `roles` and the `chamberSessionId` in the demo session.
 `APP_FLOW.md` B1.1 says so. `e2e/console-rail.spec.ts`, four tests.
-**Live only once `main` is pushed**: Vercel builds from `main`.
+Released to `main` and pushed on 2026-09-26, with `mvp`.
 
 ### The design pass (`fix/pitch-design`, after step 20)
 
