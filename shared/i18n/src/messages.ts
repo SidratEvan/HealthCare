@@ -42,6 +42,12 @@ export const CONSOLE = {
   navTests: { bn: 'টেস্ট', en: 'Tests' },
   navBilling: { bn: 'বিল', en: 'Billing' },
   navDashboard: { bn: 'ড্যাশবোর্ড', en: 'Dashboard' },
+  /** Under an item whose screen this version does not have (`S-B-03`). */
+  navNotInVersion: { bn: 'এই সংস্করণে নেই', en: 'Not in this version' },
+  /** Under an item whose console this facility does not run. */
+  navNotHere: { bn: 'এই প্রতিষ্ঠানে নেই', en: 'Not at this facility' },
+  navOpening: { bn: 'খোলা হচ্ছে…', en: 'Opening…' },
+  navOpenFailed: { bn: 'খোলা যায়নি। আবার চাপুন।', en: 'Could not open. Tap again.' },
 
   // --- Session bar (B1.2) --------------------------------------------------
   sessionSelector: { bn: 'চেম্বার নির্বাচন', en: 'Select chamber' },

@@ -48,9 +48,55 @@ export interface DemoSession {
     readonly departmentNameEn?: string;
     readonly room: string | null;
   };
+  /**
+   * The consoles the facility offers, as the picker listed them, so the rail
+   * can open the others (`APP_FLOW.md` B1.1) and say which it lacks. Absent
+   * from a session stored before the rail went anywhere.
+   */
+  readonly roles?: readonly string[];
+  /**
+   * The chamber this tab last opened, kept when the rail moves to a facility
+   * console so that its সিরিয়াল item can come back to the same queue.
+   */
+  readonly chamberSessionId?: string;
 }
 
 const STORAGE_KEY = 'console.demo-session';
+
+const API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
+
+/** What `POST /demo/token` hands back. */
+export interface DemoToken {
+  readonly token: string;
+  readonly staffName: string;
+  readonly hospitalId: string | null;
+}
+
+/**
+ * Takes a principal for a facility and role from the demo endpoint.
+ *
+ * The picker and the rail both open consoles, and both do it through this, so
+ * the two cannot drift into asking for a token differently. A null hospital is
+ * the national console: naming a facility for a government viewer is refused
+ * (`demoTokenBody`, migration 0024).
+ */
+export async function mintDemoToken(
+  hospitalId: string | null,
+  role: string,
+  signal?: AbortSignal,
+): Promise<DemoToken> {
+  const response = await fetch(`${API}/demo/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(hospitalId === null ? { role } : { hospitalId, role }),
+    ...(signal === undefined ? {} : { signal }),
+  });
+
+  if (!response.ok) throw new Error(String(response.status));
+
+  const body = (await response.json()) as { data: DemoToken };
+  return body.data;
+}
 
 /**
  * Reads the session this browser last selected.

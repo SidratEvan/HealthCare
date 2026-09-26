@@ -32,7 +32,7 @@ import { format, formatNumber, localName, numeralsFor, t, type ConsoleKey } from
 import { Button, Card, CardMeta, CardTitle, useLocale } from '@platform/ui';
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
-import { writeDemoSession } from '@/lib/demo';
+import { mintDemoToken, writeDemoSession } from '@/lib/demo';
 
 import type { ReactNode } from 'react';
 
@@ -191,17 +191,7 @@ export function ConsolePicker({
     async (hospitalId: string | null, role: string, choice: ConsoleChoice) => {
       setBusy(true);
       try {
-        const response = await fetch(`${API}/demo/token`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(hospitalId === null ? { role } : { hospitalId, role }),
-        });
-
-        if (!response.ok) throw new Error(String(response.status));
-
-        const body = (await response.json()) as {
-          data: { token: string; staffName: string; hospitalId: string | null };
-        };
+        const minted = await mintDemoToken(hospitalId, role);
 
         const picked = consoles?.find((entry) => entry.hospitalId === hospitalId);
         const chamber =
@@ -210,13 +200,19 @@ export function ConsolePicker({
             : undefined;
 
         writeDemoSession({
-          token: body.data.token,
-          hospitalId: body.data.hospitalId,
-          staffName: body.data.staffName,
+          token: minted.token,
+          hospitalId: minted.hospitalId,
+          staffName: minted.staffName,
           role,
           ...(picked === undefined
             ? {}
-            : { hospitalNameBn: picked.nameBn, hospitalNameEn: picked.nameEn }),
+            : {
+                hospitalNameBn: picked.nameBn,
+                hospitalNameEn: picked.nameEn,
+                // So the rail can offer this facility's other consoles.
+                roles: picked.roles,
+              }),
+          ...(choice.kind === 'chamber' ? { chamberSessionId: choice.sessionId } : {}),
           ...(chamber === undefined
             ? {}
             : {
