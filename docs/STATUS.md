@@ -157,6 +157,14 @@ a number one digit short now, a new case books with `019XX-XXXXXX` and reads
 `+88019…` back from `guest_identities`, and `joinStandbyAsGuest` types `019…`
 so every standby spec exercises the same path.
 
+**The demo console expired mid-meeting.** `POST /demo/token` signed an
+ordinary fifteen-minute access token, and the picker has no refresh, so every
+console tab opened in preparation stopped answering a quarter of an hour
+later. Driving the show found it: reception, the doctor and the ER all failed
+on their first action after that. Demo principals now last twelve hours
+(`DEMO_TOKEN_TTL` in `demo.service.ts`), still only under `DEMO_MODE`; a
+`demo.routes.test.ts` case pins the lifetime.
+
 **Three things a presenter has to do, learned by driving the whole show.**
 
 - **The no-show step needs a setup tap, soon after a reset.** Reception can
