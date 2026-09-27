@@ -186,13 +186,15 @@ on their first action after that. Demo principals now last twelve hours
 **Scheduled for the pitch (owner's machine, Monday 28 September).**
 `HealthCare pitch reset` resets the deployed demo once at 11:10 Dhaka (23:10
 on the machine), and `HealthCare pitch prep` runs
-`%LOCALAPPDATA%\HealthCareDemo\pitch-prep.ps1` at 11:24 and every 20 minutes
+`%LOCALAPPDATA%\HealthCareDemo\pitch-prep.ps1` at 11:24 and every 5 minutes
 until 14:54: it starts the API on the machine against the demo database, marks
 serial 6 seen if it is still in the chamber (the setup tap), confirms Padma's
 capability list and cycles BU-01 through cleaning, then stops the API. Its log
 is `pitch-prep.log` beside it. `HealthCare demo refresh` no longer catches up a
 missed run (`StartWhenAvailable` off, so a reset can never start mid-meeting)
-and may wake the machine. All three are outside the repository.
+and may wake the machine. All three are outside the repository. Five minutes, because
+the deployed demo calls a figure stale after ten (`staleAfterMinutes: 10`),
+and a stale Padma drops below the nearer, equally stale Jamuna.
 
 **Known bug, not fixed before the pitch: a patient left in the chamber for
 three hours cannot be finished.** `bookings_consult_seconds_plausible` allows
