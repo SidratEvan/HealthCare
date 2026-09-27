@@ -14,6 +14,7 @@
 
 import { useCallback, useState } from 'react';
 
+import { normaliseBdMobile } from '@platform/domain';
 import { formatDateTime, formatTaka, tp, numeralsFor, localName } from '@platform/i18n';
 import { Button, Card, Input, useLocale } from '@platform/ui';
 
@@ -47,17 +48,20 @@ export function StandbyJoin({
   // One key per attempt, reused across its retries (`FR-QUE-51`).
   const [idempotencyKey] = useState(() => crypto.randomUUID());
 
-  const phoneValid = /^\+8801[3-9]\d{8}$/.test(phone);
+  // Normalised as typed (`DB-P6`), as the booking form does.
+  const phoneStored = normaliseBdMobile(phone);
+  const phoneValid = phoneStored !== null;
   const ready = online && name.trim().length >= 2 && phoneValid && age !== '';
 
   const submit = useCallback(async () => {
+    if (phoneStored === null) return;
     setBusy(true);
     setFailure(null);
     try {
       onJoined(
         await joinStandby({
           sessionId: session.id,
-          guest: { name: name.trim(), phone, ageYears: Number(age), sex },
+          guest: { name: name.trim(), phone: phoneStored, ageYears: Number(age), sex },
           prepay,
           idempotencyKey,
         }),
@@ -74,7 +78,7 @@ export function StandbyJoin({
     } finally {
       setBusy(false);
     }
-  }, [session.id, name, phone, age, sex, prepay, idempotencyKey, onJoined, locale]);
+  }, [session.id, name, phoneStored, age, sex, prepay, idempotencyKey, onJoined, locale]);
 
   return (
     <section className="flex flex-col gap-4" data-testid="standby-join">
@@ -107,7 +111,7 @@ export function StandbyJoin({
           kind="phone"
           required
           value={phone}
-          placeholder="+8801XXXXXXXXX"
+          placeholder="01XXXXXXXXX"
           helper={tp('mobileHelper', locale)}
           {...(phoneTouched && !phoneValid ? { error: tp('mobileInvalid', locale) } : {})}
           onBlur={() => {

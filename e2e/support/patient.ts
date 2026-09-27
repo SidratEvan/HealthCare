@@ -69,7 +69,9 @@ export async function joinStandbyAsGuest(
   const form = page.getByTestId('standby-join');
   await expect(form).toBeVisible();
   await form.getByLabel('রোগীর নাম').fill('জাহানারা বেগম');
-  await form.getByLabel('মোবাইল নম্বর').fill(guestPhone());
+  // Typed the way people write it, 019…, not the stored +88019… (`DB-P6`):
+  // the form normalises, and every standby spec exercises that.
+  await form.getByLabel('মোবাইল নম্বর').fill(guestPhone().replace(/^\+88/, ''));
   await form.getByLabel('বয়স').fill('52');
   await form.getByTestId(prepay ? 'standby-choice-prepay' : 'standby-choice-ask').click();
   await form.getByTestId('standby-confirm').click();
