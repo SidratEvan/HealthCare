@@ -19,6 +19,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   bookingBySerial,
   createConsoleSession,
+  guestPhoneOf,
   queueAction,
   revokeTrackingLink,
   type ConsoleSession,
@@ -166,7 +167,9 @@ test.describe('a guest books with no account (FR-GST-01)', () => {
   test('rejects a malformed phone with an instructive message (§5.2)', async ({ page }) => {
     await reachConfirm(page);
 
-    await page.getByLabel('মোবাইল নম্বর').fill('01712345678');
+    // One digit short. (01712345678 is not malformed: it is eleven digits,
+    // exactly what the message asks for, and the form accepts it.)
+    await page.getByLabel('মোবাইল নম্বর').fill('0171234567');
     await page.getByLabel('বয়স').click();
 
     // "১১ সংখ্যার মোবাইল নম্বর দিন", never "Invalid input".
@@ -214,6 +217,24 @@ test.describe('the booking completes, end to end', () => {
     const booking = await bookingBySerial(demo.sessionId, 4);
     expect(booking).not.toBeNull();
     expect(booking?.source).toBe('guest_link');
+  });
+
+  test('accepts a number typed the way people write it, stored normalised (DB-P6)', async ({
+    page,
+  }) => {
+    const tail = String(Math.floor(Math.random() * 90_000_000) + 10_000_000);
+    await reachConfirm(page);
+
+    await page.getByLabel('রোগীর নাম').fill('রহিমা খাতুন');
+    // 019XX-XXXXXX: eleven digits and a dash, as a number is written here.
+    await page.getByLabel('মোবাইল নম্বর').fill(`019${tail.slice(0, 2)}-${tail.slice(2)}`);
+    await page.getByLabel('বয়স').fill('34');
+    await expect(page.getByText('১১ সংখ্যার মোবাইল নম্বর দিন')).toHaveCount(0);
+
+    await page.getByTestId('confirm-booking').click();
+    await expect(page.getByTestId('booking-success')).toBeVisible();
+
+    expect(await guestPhoneOf(demo.sessionId, 4)).toBe(`+88019${tail}`);
   });
 
   test('refuses a second booking with the same doctor the same day (FR-PAT-24)', async ({

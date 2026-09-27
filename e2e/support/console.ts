@@ -493,6 +493,19 @@ export async function bookingBySerial(
   });
 }
 
+/** The phone a guest booking is stored under (`DB-P6`), or null. */
+export async function guestPhoneOf(sessionId: string, serial: number): Promise<string | null> {
+  return await withClient(async (client) => {
+    const result = await client.query<{ phone: string }>(
+      `SELECT g.phone FROM bookings b
+         JOIN guest_identities g ON g.id = b.booked_by_guest_id
+        WHERE b.session_id = $1 AND b.serial_number = $2 AND b.status <> 'cancelled'`,
+      [sessionId, serial],
+    );
+    return result.rows[0]?.phone ?? null;
+  });
+}
+
 /**
  * Revokes a booking's tracking link (`FR-GST-05`).
  *

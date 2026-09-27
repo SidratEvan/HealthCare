@@ -158,12 +158,25 @@ export async function mintNationalPrincipal(input: {
     token: await signToken({
       kind: 'access',
       claims: { sub: staff.id, kind: 'staff', roles: [input.role] },
+      expiresIn: DEMO_TOKEN_TTL,
     }),
     staffName: staff.fullName,
     hospitalId: null,
     role: input.role,
   };
 }
+
+/**
+ * How long a demo principal lasts.
+ *
+ * Longer than an access token's fifteen minutes on purpose. A real login
+ * (`S-B-00`, deferred to Supabase Auth, CLAUDE.md §4.1) would refresh its
+ * token; the picker has no refresh, so a console opened before a meeting
+ * stopped answering fifteen minutes later — mid-demo, on whichever tab was used
+ * last. Twelve hours covers a day of meetings. `assertDemoMode` keeps this to
+ * `DEMO_MODE`, which production refuses to boot with.
+ */
+export const DEMO_TOKEN_TTL = '12h';
 
 /** `POST /demo/token` — the console's stand-in for `S-B-00`. */
 export async function mintPrincipal(input: {
@@ -191,6 +204,7 @@ export async function mintPrincipal(input: {
         hospitalId: input.hospitalId,
         roles: [input.role],
       },
+      expiresIn: DEMO_TOKEN_TTL,
     }),
     staffName: staff.fullName,
     hospitalId: input.hospitalId,

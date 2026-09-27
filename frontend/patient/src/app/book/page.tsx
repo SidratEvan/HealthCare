@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { normaliseBdMobile } from '@platform/domain';
 import {
   formatDateTime,
   formatMinutes,
@@ -707,7 +708,12 @@ function Confirm({
    */
   const [idempotencyKey] = useState(() => crypto.randomUUID());
 
-  const phoneValid = /^\+8801[3-9]\d{8}$/.test(phone);
+  // The number as people type it — 01712-345678, 8801712345678, +8801712345678 —
+  // normalised to the stored shape (`DB-P6`), as the bed request and the
+  // emergency form already do. Refusing everything but `+880…` lost people
+  // who typed their number the way they say it.
+  const phoneStored = normaliseBdMobile(phone);
+  const phoneValid = phoneStored !== null;
   // Offline is part of readiness, not a separate guard: the button then
   // carries "no connection" as its reason rather than silently doing nothing
   // when tapped (`FRONTEND.md` §5.1).
@@ -721,6 +727,7 @@ function Confirm({
   }, [session.feePoisha]);
 
   const confirm = useCallback(async () => {
+    if (phoneStored === null) return;
     setBusy(true);
     onFailure(null);
 
@@ -728,7 +735,7 @@ function Confirm({
       const result = await book({
         sessionId: session.id,
         method,
-        guest: { name: name.trim(), phone, ageYears: Number(age), sex },
+        guest: { name: name.trim(), phone: phoneStored, ageYears: Number(age), sex },
         reason,
         idempotencyKey,
       });
@@ -751,7 +758,7 @@ function Confirm({
     session.id,
     method,
     name,
-    phone,
+    phoneStored,
     age,
     sex,
     reason,
@@ -816,7 +823,7 @@ function Confirm({
           kind="phone"
           required
           value={phone}
-          placeholder="+8801XXXXXXXXX"
+          placeholder="01XXXXXXXXX"
           helper={tp('mobileHelper', locale)}
           {...(phoneTouched && !phoneValid ? { error: tp('mobileInvalid', locale) } : {})}
           onBlur={() => {

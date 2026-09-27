@@ -236,6 +236,26 @@ describe('POST /demo/token', () => {
     expect(verified.claims.roles).toEqual(['receptionist']);
   });
 
+  it('lasts a day of meetings, not fifteen minutes (CLAUDE.md §4.1)', async () => {
+    // The picker has no refresh, so a fifteen-minute token stopped a console
+    // opened before a meeting partway through it.
+    const { hospitalId } = await anyHospital();
+    const hospitalToken = await request(app)
+      .post(`${BASE}/demo/token`)
+      .send({ hospitalId, role: 'receptionist' });
+    const nationalToken = await request(app)
+      .post(`${BASE}/demo/token`)
+      .send({ role: 'gov_viewer' });
+
+    for (const response of [hospitalToken, nationalToken]) {
+      const token = response.body.data.token as string;
+      const payload = JSON.parse(
+        Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8'),
+      ) as { iat: number; exp: number };
+      expect(payload.exp - payload.iat).toBe(12 * 60 * 60);
+    }
+  });
+
   it('names a real seeded staff account, not an invented id (FR-QUE-04)', async () => {
     const { hospitalId } = await anyHospital();
 
