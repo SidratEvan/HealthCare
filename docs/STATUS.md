@@ -183,6 +183,26 @@ on their first action after that. Demo principals now last twelve hours
 - **After “I'm on my way” there is a send step** (জানান ও রওনা দিন), and the
   lab needs নমুনা নেওয়া হয়েছে → প্রসেসিং before রিপোর্ট দিন.
 
+**Scheduled for the pitch (owner's machine, Monday 28 September).**
+`HealthCare pitch reset` resets the deployed demo once at 11:10 Dhaka (23:10
+on the machine), and `HealthCare pitch prep` runs
+`%LOCALAPPDATA%\HealthCareDemo\pitch-prep.ps1` at 11:24 and every 20 minutes
+until 14:54: it starts the API on the machine against the demo database, marks
+serial 6 seen if it is still in the chamber (the setup tap), confirms Padma's
+capability list and cycles BU-01 through cleaning, then stops the API. Its log
+is `pitch-prep.log` beside it. `HealthCare demo refresh` no longer catches up a
+missed run (`StartWhenAvailable` off, so a reset can never start mid-meeting)
+and may wake the machine. All three are outside the repository.
+
+**Known bug, not fixed before the pitch: a patient left in the chamber for
+three hours cannot be finished.** `bookings_consult_seconds_plausible` allows
+0–10800 seconds, and the projection writes the raw consultation length, so
+`done` or `next` on somebody called more than three hours ago fails with a
+500. The pitch chamber's serial 6 is called four minutes before every reset,
+so from three hours after a reset the demo chamber cannot move until the next
+one. The fix is to store an implausible length as NULL (or clamp it) in the
+projection; the event log is right as it is.
+
 The presenters' material lives outside the repository (it is pitch material,
 not product): a slide deck, a text guide and a screenshot walkthrough built by
 driving the local demo with Playwright.
