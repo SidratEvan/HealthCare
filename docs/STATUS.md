@@ -7,7 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/console-rail-links` and `fix/demo-refresh-retry` — **the
+Last updated: `fix/phone-entry-normalise` — **the booking and standby forms
+refused a mobile number typed as 01…**, found rehearsing the first hospital
+pitch (28 September), with what that rehearsal taught about preparing the
+demo (below, *Preparing the demo for a
+meeting*). Before that, `fix/console-rail-links` and `fix/demo-refresh-retry` — **the
 first scheduled refresh emptied the demo, and the console rail did nothing
 when clicked** (below, *The first scheduled refresh*). Before that,
 `feat/demo-week` — **a week of demo for people to explore**:
@@ -112,7 +116,7 @@ by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
 `pnpm test` reports 3775, in about two minutes.
-`pnpm test:e2e` reports 118, in Chromium, against the real API and the seeded
+`pnpm test:e2e` reports 119, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
@@ -140,6 +144,48 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Preparing the demo for a meeting (`fix/phone-entry-normalise`)
+
+**The phone bug.** `book/page.tsx` and `StandbyJoin.tsx` validated the raw
+input against `^\+8801[3-9]\d{8}$`, so `01712345678` — the eleven digits the
+error message asks for — was refused and the confirm button never enabled.
+The bed request and the emergency form already used `normaliseBdMobile`; now
+all four do, and send the normalised number (`DB-P6`, `INP-GST-PHONE`). The
+e2e case that called `01712345678` "malformed" was asserting the bug; it uses
+a number one digit short now, a new case books with `019XX-XXXXXX` and reads
+`+88019…` back from `guest_identities`, and `joinStandbyAsGuest` types `019…`
+so every standby spec exercises the same path.
+
+**The demo console expired mid-meeting.** `POST /demo/token` signed an
+ordinary fifteen-minute access token, and the picker has no refresh, so every
+console tab opened in preparation stopped answering a quarter of an hour
+later. Driving the show found it: reception, the doctor and the ER all failed
+on their first action after that. Demo principals now last twelve hours
+(`DEMO_TOKEN_TTL` in `demo.service.ts`), still only under `DEMO_MODE`; a
+`demo.routes.test.ts` case pins the lifetime.
+
+**Three things a presenter has to do, learned by driving the whole show.**
+
+- **The no-show step needs a setup tap, soon after a reset.** Reception can
+  mark absent only the patient at the front, and only after the grace window:
+  the longer of 15 minutes and two patients at the current pace
+  (`graceWindowMinutes`). The pitch chamber opens with serial 6 in the
+  chamber, so nothing is markable. Tapping দেখা শেষ on serial 6 starts the
+  clock for serial 7 — but serial 6's consultation is measured from its call,
+  which the seed puts four minutes before the reset, and it feeds the rate
+  (`RATE_ALPHA` 0.3, clamped at an hour). Tapped within five minutes of a
+  reset the window is about 22 minutes; tapped hours later it is about 50.
+- **Padma has to be made fresh within the hour.** The emergency ranking
+  de-ranks stale facilities, and every figure ages from the reset. Confirming
+  the ER's capability list and cycling burn bed BU-01 through cleaning renews
+  both, which is what `freshenPadma` does in `emergency-burn.spec.ts`.
+- **After “I'm on my way” there is a send step** (জানান ও রওনা দিন), and the
+  lab needs নমুনা নেওয়া হয়েছে → প্রসেসিং before রিপোর্ট দিন.
+
+The presenters' material lives outside the repository (it is pitch material,
+not product): a slide deck, a text guide and a screenshot walkthrough built by
+driving the local demo with Playwright.
 
 ### A week of demo for people to explore (`feat/demo-week`)
 
@@ -235,9 +281,10 @@ API afterwards.
 **What changed.** `demo-refresh.ps1` retries a failed verify-and-reset three
 times, two minutes apart, so a dropped connection no longer leaves the demo
 empty for a day. A closed window kills the script too, so the retry does not
-cover that. **Awaiting the owner:** point the task at a window that cannot be
-closed. Changing a scheduled task is his to do. A throwaway task proved
-`conhost.exe --headless` runs with no window here:
+cover that, so **the task now starts it through `conhost.exe --headless`**,
+which has no window to close (done on the owner's word, 2026-09-26; a
+throwaway task proved it first). If the task is ever re-registered, keep that
+action:
 
 ```powershell
 Set-ScheduledTask -TaskName 'HealthCare demo refresh' -Action (New-ScheduledTaskAction -Execute 'conhost.exe' -Argument '--headless powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -File "D:\Projects\HealthCare\database\scripts\demo-refresh.ps1"' -WorkingDirectory 'D:\Projects\HealthCare')
@@ -253,7 +300,7 @@ the picker. বিল opens the pharmacy, which has sat under it since step 17.
 clinic has no ward) are switched off with the reason beneath. The picker now
 stores the facility's `roles` and the `chamberSessionId` in the demo session.
 `APP_FLOW.md` B1.1 says so. `e2e/console-rail.spec.ts`, four tests.
-**Live only once `main` is pushed**: Vercel builds from `main`.
+Released to `main` and pushed on 2026-09-26, with `mvp`.
 
 ### The design pass (`fix/pitch-design`, after step 20)
 
