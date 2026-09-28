@@ -8,10 +8,12 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { addMinutes, fromDate } from '../../util/time.js';
 import {
   clampConsultSeconds,
   currentRateSeconds,
   isMeasured,
+  measuredConsultSeconds,
   observeConsult,
   rateSpreadSeconds,
   seedRate,
@@ -172,5 +174,27 @@ describe('determinism', () => {
     const replayed = observe(480, [300, 420, 360]);
 
     expect(currentRateSeconds(incremental)).toBe(currentRateSeconds(replayed));
+  });
+});
+
+describe('the length a PATIENT_DONE event carries (FR-REC-11)', () => {
+  const now = fromDate(new Date('2026-09-28T12:00:00Z'));
+
+  it('is the time since the call, when that is believable', () => {
+    expect(measuredConsultSeconds(addMinutes(now, -7), now)).toBe(420);
+  });
+
+  it('is zero for a patient who was never called, which is "not measured"', () => {
+    expect(measuredConsultSeconds(null, now)).toBe(0);
+  });
+
+  it('caps a patient forgotten in the chamber for hours at the plausible maximum', () => {
+    // Four hours in the chamber is a missed "done" tap, and the booking row
+    // refuses more than three (bookings_consult_seconds_plausible).
+    expect(measuredConsultSeconds(addMinutes(now, -240), now)).toBe(MAX_CONSULT_SECONDS);
+  });
+
+  it('never goes below the plausible minimum, even with a skewed clock', () => {
+    expect(measuredConsultSeconds(addMinutes(now, 5), now)).toBe(MIN_CONSULT_SECONDS);
   });
 });
