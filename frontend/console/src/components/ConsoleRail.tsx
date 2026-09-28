@@ -20,7 +20,8 @@
  *
  * An item with no console behind it is shown switched off with the reason
  * under it (`FRONTEND.md` §5.1): রেজিস্ট্রেশন because `S-B-03` is not built,
- * and any console the facility does not run (a clinic has no ward).
+ * বিল because `S-B-04` is not, and any console the facility does not run (a
+ * clinic has no ward).
  */
 
 import { useState } from 'react';
@@ -38,6 +39,7 @@ const NAV_ITEMS = [
   'navBeds',
   'navEmergency',
   'navTests',
+  'navPharmacy',
   'navBilling',
   'navDashboard',
 ] as const satisfies readonly ConsoleKey[];
@@ -58,9 +60,11 @@ const TARGET: Readonly<
   navBeds: { role: 'ward', view: 'ward' },
   navEmergency: { role: 'emergency', view: 'er' },
   navTests: { role: 'lab', view: 'lab' },
-  // `S-B-04` is not built. The pharmacy console has sat under বিল since
-  // step 17, so the item opens it rather than going dark.
-  navBilling: { role: 'pharmacy', view: 'pharmacy' },
+  navPharmacy: { role: 'pharmacy', view: 'pharmacy' },
+  // `S-B-04` is not built. The pharmacy console used to sit under বিল, and a
+  // person who clicked "Billing" landed on medicine stock; it has its own
+  // item now, and বিল says it is not in this version.
+  navBilling: null,
   navDashboard: { role: 'hospital_admin', view: 'admin' },
 };
 

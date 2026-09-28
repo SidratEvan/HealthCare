@@ -7,8 +7,9 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/consult-overflow` — **a patient forgotten in the chamber no
-longer freezes it** (below, under *Preparing the demo*). Before that,
+Last updated: `fix/console-rail-billing` — **the rail's বিল no longer opens
+the pharmacy; ফার্মেসি has its own item**. Before that, `fix/consult-overflow` —
+**a patient forgotten in the chamber no longer freezes it** (below, under *Preparing the demo*). Before that,
 `chore/status-marks-handbook` — **a Bangla handbook for Marks
 Group, and what a real (non-demo) version for them would need** (below, *The
 Marks handbook*). No product code changed. Before that, `fix/phone-entry-normalise` — **the booking and standby forms
@@ -197,9 +198,13 @@ undo per batch.
   packaging for a Bangladeshi server with backups.
 
 **Found while checking the handbook against the build:** the console rail's
-**বিল** (Billing) item opens the pharmacy stock screen (`navBilling` →
-`view: 'pharmacy'` in `ConsoleRail.tsx`). The handbook describes the screen
-by its own title. Not fixed.
+**বিল** (Billing) item opened the pharmacy stock screen. `APP_FLOW.md` B1.1
+said so on purpose ("while `S-B-04` is not built"), but a person clicking
+Billing landed on medicine stock. **Changed in `fix/console-rail-billing`**, and
+B1.1 edited to match: ফার্মেসি is its own rail item, and বিল is switched off
+with "এই সংস্করণে নেই", the way রেজিস্ট্রেশন is. `console-rail.spec.ts`
+asserts both. **Decision 74 (owner may reverse):** the rail gains an eighth
+item rather than keeping a mislabelled one.
 
 ### Preparing the demo for a meeting (`fix/phone-entry-normalise`)
 
@@ -2384,6 +2389,12 @@ Raised while building the national layer (step 20):
    to `bn`. That is a schema change and a product call: whether a patient who
    reads the app in English should also be texted in English before accounts
    exist. Implemented as: not yet — the SMS is Bangla.
+74. **The rail has eight items, not seven.** `APP_FLOW.md` B1.1 listed seven
+   and sent বিল to the pharmacy while `S-B-04` (billing) is not built, so a
+   person clicking Billing landed on medicine stock. Implemented as: ফার্মেসি
+   is its own item and বিল is switched off with its reason (`fix/console-rail-billing`),
+   B1.1 edited. The alternative is to drop বিল from the rail until `S-B-04`
+   exists.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository

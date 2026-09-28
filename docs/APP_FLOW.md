@@ -606,8 +606,8 @@ The highest-traffic screen in the system. Every primary action must be reachable
 
 ### B1.1 Layout
 
-- Left: navigation rail (সিরিয়াল, রেজিস্ট্রেশন, বেড, জরুরি, টেস্ট, বিল, ড্যাশবোর্ড) + offline/sync status block.
-  Shared by every hospital console. Each item opens its console **for the same facility**; সিরিয়াল returns to the chamber last opened in that tab, or to `S-B-01` if none was. বিল opens the pharmacy console while `S-B-04` is not built. An item with no screen behind it — রেজিস্ট্রেশন while `S-B-03` is not built, or a console the facility does not run — is shown switched off with the reason beneath it (`FRONTEND.md` §5.1), never as a label that ignores a click.
+- Left: navigation rail (সিরিয়াল, রেজিস্ট্রেশন, বেড, জরুরি, টেস্ট, ফার্মেসি, বিল, ড্যাশবোর্ড) + offline/sync status block.
+  Shared by every hospital console. Each item opens its console **for the same facility**; সিরিয়াল returns to the chamber last opened in that tab, or to `S-B-01` if none was. ফার্মেসি opens the pharmacy console (`S-B-09`). An item with no screen behind it — রেজিস্ট্রেশন while `S-B-03` is not built, বিল while `S-B-04` is not, or a console the facility does not run — is shown switched off with the reason beneath it (`FRONTEND.md` §5.1), never as a label that ignores a click. (বিল used to open the pharmacy console, so a person who clicked Billing landed on medicine stock; changed after the Marks handbook check, 2026-09-28.)
 - Top: session bar (doctor, department, planned window, actual arrival) + primary actions.
 - Centre: the queue table.
 - Right: now-serving card, today's counters, waitlist recovery card, last broadcast log.
