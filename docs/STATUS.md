@@ -7,7 +7,9 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/phone-entry-normalise` — **the booking and standby forms
+Last updated: `chore/status-marks-handbook` — **a Bangla handbook for Marks
+Group, and what a real (non-demo) version for them would need** (below, *The
+Marks handbook*). No product code changed. Before that, `fix/phone-entry-normalise` — **the booking and standby forms
 refused a mobile number typed as 01…**, found rehearsing the first hospital
 pitch (28 September), with what that rehearsal taught about preparing the
 demo (below, *Preparing the demo for a
@@ -144,6 +146,58 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### The Marks handbook, and the real version they asked about
+
+**What was asked (28 September).** After the pitch, Marks Group's COO asked
+for full documentation of the app and whether their existing hospital
+database can be imported. The owner chose: the real version runs **on a server
+in Bangladesh** (their server room or a Bangladeshi data centre), and the
+document comes first so Marks can decide from it.
+
+**The handbook is pitch material and lives outside the repository**, in
+`%LOCALAPPDATA%\HealthCareDemo\handbook\` (`README.txt` there says how to
+rebuild it for another hospital: copy `config.json`, change the names,
+`node build.mjs <config>`). 26 A4 pages, all Bangla, every screenshot from the
+current build with numbered markers, every feature badged *আজই চালু* /
+*পাইলটে যোগ হবে* / *পরের ধাপে*. It states no price and no legal
+compliance claim, and calls itself a description, not a contract. A copy is in
+the owner's Downloads as `MARKS-handbook-bn.pdf`. If the product changes, the
+three status lists in `build.mjs` and the screenshots must change before a
+new copy is sent. Fresh screenshots were taken against the local
+`healthcare_dev`, which was reset for it (demo data only).
+
+**What it proposes for importing their data** — four sets Marks approves one
+by one, and nothing outside them: (ক) hospital structure — departments,
+doctors, schedules, wards/beds, staff; (খ) patient register — their patient
+number, name, DOB or age, sex, mobile, blood group; (গ) upcoming
+appointments; (ঘ) past lab reports and visit summaries, proposed for later.
+Never taken: NID, address, photos, billing, HR, stock, OT, nursing charts,
+imaging originals. Bed occupancy is not imported (the ward sets it on go-live
+day). Three routes: Excel/CSV template first, a read-only database link,
+FHIR. Five steps: export, validate, preview and approve, all-or-nothing save,
+undo per batch.
+
+**None of that is built, and none of it is in `PRD.md` yet.** Before building:
+
+- `FR-IMP-*` requirements need adding to `PRD.md` (import is new scope;
+  §27 only says the Platform runs alongside an HMS).
+- `patients_one_owner` requires every patient to belong to a user or a guest,
+  and there is no column for a hospital's own patient number — an imported
+  register needs a schema change (`DATABASE.md`).
+- A server in Bangladesh means our own staff login, not Supabase Auth, which
+  reverses `CLAUDE.md` §4.1; that section needs the owner's edit.
+- The rest of the pilot list, as the handbook states it: staff logins and
+  staff management (`FR-ADM-11`), hospital setup screens (`FR-SUP-01`), the
+  nightly session materialiser (`backend/workers` is still a stub, so no
+  chamber exists after the seeded days), counter registration and walk-ins
+  (`FR-REC-14`, `FR-REC-20`), patient OTP, a live SMS aggregator, and
+  packaging for a Bangladeshi server with backups.
+
+**Found while checking the handbook against the build:** the console rail's
+**বিল** (Billing) item opens the pharmacy stock screen (`navBilling` →
+`view: 'pharmacy'` in `ConsoleRail.tsx`). The handbook describes the screen
+by its own title. Not fixed.
 
 ### Preparing the demo for a meeting (`fix/phone-entry-normalise`)
 
