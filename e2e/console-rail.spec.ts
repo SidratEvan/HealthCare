@@ -89,7 +89,7 @@ test.describe('the console rail (APP_FLOW.md B1.1)', () => {
     for (const [item, view, root] of [
       ['navEmergency', 'er', 'er-console'],
       ['navTests', 'lab', 'lab-console'],
-      ['navBilling', 'pharmacy', 'pharmacy-console'],
+      ['navPharmacy', 'pharmacy', 'pharmacy-console'],
     ] as const) {
       await page.getByTestId(`rail-${item}`).click();
       await expect(page).toHaveURL(new RegExp(`view=${view}`));
@@ -140,8 +140,17 @@ test.describe('the console rail (APP_FLOW.md B1.1)', () => {
     await expect(registration).toHaveAttribute('aria-disabled', 'true');
     await expect(registration).toContainText('এই সংস্করণে নেই');
 
+    // বিল is the counter's billing screen (S-B-04), which is not built. It
+    // used to open the pharmacy, so "Billing" landed on medicine stock; the
+    // pharmacy has its own item, and it is the one marked current here.
+    const billing = page.getByTestId('rail-navBilling');
+    await expect(billing).toHaveAttribute('aria-disabled', 'true');
+    await expect(billing).toContainText('এই সংস্করণে নেই');
+    await expect(page.getByTestId('rail-navPharmacy')).toHaveAttribute('aria-current', 'page');
+
     await beds.click();
     await registration.click();
+    await billing.click();
     await expect(page).toHaveURL(/view=pharmacy/);
     await expect(page.getByTestId('pharmacy-console')).toBeVisible();
   });

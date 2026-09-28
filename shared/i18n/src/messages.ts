@@ -40,9 +40,10 @@ export const CONSOLE = {
   navBeds: { bn: 'বেড', en: 'Beds' },
   navEmergency: { bn: 'জরুরি', en: 'Emergency' },
   navTests: { bn: 'টেস্ট', en: 'Tests' },
+  navPharmacy: { bn: 'ফার্মেসি', en: 'Pharmacy' },
   navBilling: { bn: 'বিল', en: 'Billing' },
   navDashboard: { bn: 'ড্যাশবোর্ড', en: 'Dashboard' },
-  /** Under an item whose screen this version does not have (`S-B-03`). */
+  /** Under an item whose screen this version does not have (`S-B-03`, `S-B-04`). */
   navNotInVersion: { bn: 'এই সংস্করণে নেই', en: 'Not in this version' },
   /** Under an item whose console this facility does not run. */
   navNotHere: { bn: 'এই প্রতিষ্ঠানে নেই', en: 'Not at this facility' },
