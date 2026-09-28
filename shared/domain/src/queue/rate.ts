@@ -20,7 +20,10 @@
  * what lets a replay reproduce `avg_consult_seconds` exactly.
  */
 
+import { differenceInSeconds } from '../util/time.js';
+
 import type { RateState } from './state.js';
+import type { Timestamp } from '../types/ids.js';
 
 /**
  * Weight given to the newest observation.
@@ -62,6 +65,25 @@ export function seedRate(defaultConsultSeconds: number): RateState {
 export function clampConsultSeconds(seconds: number): number {
   if (!Number.isFinite(seconds)) return MIN_CONSULT_SECONDS;
   return Math.min(MAX_CONSULT_SECONDS, Math.max(MIN_CONSULT_SECONDS, Math.round(seconds)));
+}
+
+/**
+ * The length a `PATIENT_DONE` event carries: measured from the call, never
+ * typed (`FR-REC-11`), and brought into the believable range.
+ *
+ * Every producer of the event uses this — the counter's "done", "next" and the
+ * doctor's sign-and-next online, and the offline batch — so the event log, the
+ * booking's `consult_seconds` and the rate all hold the same number. Before it,
+ * only the offline path clamped: a patient left in the chamber for more than
+ * three hours made "done" or "next" fail on `bookings_consult_seconds_plausible`
+ * and froze the chamber until somebody reset it.
+ *
+ * Zero when the patient was never called, which is "not measured", not a
+ * consultation; the rate clamps that on its own.
+ */
+export function measuredConsultSeconds(calledAt: Timestamp | null, now: Timestamp): number {
+  if (calledAt === null) return 0;
+  return clampConsultSeconds(Math.max(0, differenceInSeconds(now, calledAt)));
 }
 
 /**

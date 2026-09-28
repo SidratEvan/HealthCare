@@ -12,7 +12,7 @@
  * reading of the state.
  */
 
-import { time } from '@platform/domain';
+import { measuredConsultSeconds, time } from '@platform/domain';
 import type { QueueActor } from '@platform/domain';
 
 import { AppError, forbiddenScope, notFound } from '../errors/AppError.js';
@@ -190,10 +190,7 @@ export async function markDone(req: Request, res: Response): Promise<void> {
       type: 'PATIENT_DONE',
       payload: {
         bookingId: booking.id,
-        consultSeconds:
-          calledAt === null
-            ? 0
-            : Math.max(0, time.differenceInSeconds(time.fromDate(new Date()), calledAt)),
+        consultSeconds: measuredConsultSeconds(calledAt, time.fromDate(new Date())),
       },
       actor: actorOf(req),
       ...envelope(req),

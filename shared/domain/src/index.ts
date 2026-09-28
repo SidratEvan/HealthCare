@@ -56,6 +56,7 @@ export {
   clampConsultSeconds,
   currentRateSeconds,
   isMeasured,
+  measuredConsultSeconds,
   observeConsult,
   rateSpreadSeconds,
   seedRate,

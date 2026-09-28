@@ -64,6 +64,7 @@ import {
   canResume,
   id,
   lapsedOffers,
+  measuredConsultSeconds,
   recoveredValueFor,
   time,
   DEFAULT_QUEUE_SETTINGS,
@@ -236,10 +237,7 @@ export async function callNext(input: {
           // Measured from the call, never typed (`FR-REC-11`). This is what
           // the rolling rate learns from, so a typed number would be a guess
           // entering the ETA maths as a fact.
-          consultSeconds:
-            serving.calledAt === null
-              ? 0
-              : Math.max(0, time.differenceInSeconds(nowTs(), serving.calledAt)),
+          consultSeconds: measuredConsultSeconds(serving.calledAt, nowTs()),
         },
         actor: input.actor,
         clientEventId: derive(input.clientEventId ?? null, 'd'),

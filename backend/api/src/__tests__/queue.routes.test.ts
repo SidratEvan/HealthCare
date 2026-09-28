@@ -15,9 +15,9 @@
  */
 
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { time } from '@platform/domain';
+import { time, MAX_CONSULT_SECONDS } from '@platform/domain';
 import type { StaffRole } from '@platform/domain';
 
 import { createApp } from '../app.js';
@@ -29,6 +29,7 @@ import * as queueService from '../services/queue.service.js';
 import {
   bookingStatusOf,
   cachedStateOf,
+  consultSecondsOf,
   createQueueFixture,
   eventTypesOf,
   otherHospitalId,
@@ -365,6 +366,45 @@ describe('every event type appends, reduces and broadcasts', () => {
       'PATIENT_CALLED',
       'ACTION_UNDONE',
     ]);
+  });
+});
+
+describe('a patient left in the chamber for hours', () => {
+  // The known bug: reception forgets "done", the patient stays in_chamber,
+  // and three hours later "done" or "next" failed on
+  // bookings_consult_seconds_plausible with a 500 — the chamber could not move
+  // until somebody reset the demo. Only Date is faked, so the database driver's
+  // own timers are untouched.
+  const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('can still be finished, and the booking stores the plausible maximum', async () => {
+    await startSession();
+    await post(`/sessions/${fixture.sessionId}/next`);
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + FOUR_HOURS_MS);
+    const response = await post(`/bookings/${fixture.bookingIds[0] ?? ''}/done`);
+
+    expect(response.status).toBe(200);
+    expect(await bookingStatusOf(fixture.bookingIds[0] ?? '')).toBe('done');
+    expect(await consultSecondsOf(fixture.bookingIds[0] ?? '')).toBe(MAX_CONSULT_SECONDS);
+  });
+
+  it('does not stop "next" from calling the following patient', async () => {
+    await startSession();
+    await post(`/sessions/${fixture.sessionId}/next`);
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + FOUR_HOURS_MS);
+    const response = await post(`/sessions/${fixture.sessionId}/next`);
+
+    expect(response.status).toBe(200);
+    expect((await cachedStateOf(fixture.sessionId))?.now_serving_serial).toBe(2);
+    expect(await consultSecondsOf(fixture.bookingIds[0] ?? '')).toBe(MAX_CONSULT_SECONDS);
   });
 });
 

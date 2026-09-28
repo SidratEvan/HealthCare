@@ -7,7 +7,9 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/status-marks-handbook` — **a Bangla handbook for Marks
+Last updated: `fix/consult-overflow` — **a patient forgotten in the chamber no
+longer freezes it** (below, under *Preparing the demo*). Before that,
+`chore/status-marks-handbook` — **a Bangla handbook for Marks
 Group, and what a real (non-demo) version for them would need** (below, *The
 Marks handbook*). No product code changed. Before that, `fix/phone-entry-normalise` — **the booking and standby forms
 refused a mobile number typed as 01…**, found rehearsing the first hospital
@@ -250,14 +252,16 @@ and may wake the machine. All three are outside the repository. Five minutes, be
 the deployed demo calls a figure stale after ten (`staleAfterMinutes: 10`),
 and a stale Padma drops below the nearer, equally stale Jamuna.
 
-**Known bug, not fixed before the pitch: a patient left in the chamber for
-three hours cannot be finished.** `bookings_consult_seconds_plausible` allows
-0–10800 seconds, and the projection writes the raw consultation length, so
-`done` or `next` on somebody called more than three hours ago fails with a
-500. The pitch chamber's serial 6 is called four minutes before every reset,
-so from three hours after a reset the demo chamber cannot move until the next
-one. The fix is to store an implausible length as NULL (or clamp it) in the
-projection; the event log is right as it is.
+~~**Known bug: a patient left in the chamber for three hours cannot be
+finished.**~~ **Fixed in `fix/consult-overflow`.** Only the offline batch
+clamped the measured length; the counter's "done" and "next" wrote the raw
+number, and `bookings_consult_seconds_plausible` (0–10800 s) refused it with a
+500. Every producer of `PATIENT_DONE` now measures through the domain's
+`measuredConsultSeconds` — the same clamp the rate already used (30 s to one
+hour) — so the event, the booking row and the rate hold one number. The event
+records the plausible bound, not the four hours, which is what the offline path
+already did. `queue.routes.test.ts` moves the clock four hours past a call and
+finishes the patient both ways; both tests fail with the 500 on the old code.
 
 The presenters' material lives outside the repository (it is pitch material,
 not product): a slide deck, a text guide and a screenshot walkthrough built by
