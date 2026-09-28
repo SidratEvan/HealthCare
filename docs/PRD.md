@@ -31,6 +31,7 @@
 12. Functional requirements — Diagnostics and pharmacy
 13. Functional requirements — Hospital admin dashboard
 14. Functional requirements — Platform super-admin
+14b. Data import from a hospital's existing system
 15. Functional requirements — Government / national layer
 16. The Live Queue Engine (the moat, specified in detail)
 17. Notifications and messaging
@@ -144,6 +145,8 @@ Everything is clickable with seeded demo data. Real logic is required only where
 ### 4.2 v1 — Pilot (1–3 hospitals, real patients)
 
 Queue, booking, notifications (push + SMS), health wallet, diagnostics report delivery, bed board, admin dashboard, real payments, offline console, audit logging, consent.
+
+Added on 2026-09-28, when the first hospital (Marks Group) asked for a real version: individual staff logins (`FR-SEC-06`), hospital settings run by the hospital itself (`FR-SUP-01`, `FR-ADM-11`), counter registration and walk-ins (`FR-REC-14`, `FR-REC-20`), import of the hospital's existing data (§14b, `FR-IMP-*`), patient phone verification (`FR-PAT-01`, `FR-GST-03`), and deployment on a server in Bangladesh (`FR-SEC-07`).
 
 ### 4.3 v2 — Scale
 
@@ -455,6 +458,25 @@ change when `S-A-13` lands.
 
 ---
 
+## 14b. Data import from a hospital's existing system (`FR-IMP`)
+
+A hospital that already runs a hospital management system keeps it. The Platform takes only what it runs on, and the hospital decides, set by set, what that is (§27: the Platform runs alongside an HMS, never replaces it).
+
+- `FR-IMP-01` Existing data is brought in as four **sets**, each approved separately by the hospital: **(A) structure** — departments, doctors, chamber schedules, wards and beds, staff; **(B) patient register**; **(C) upcoming appointments**; **(D) past lab reports and visit summaries**.
+- `FR-IMP-02` Only these fields are taken. **A:** department name (Bangla and English); doctor name, BMDC number, degrees, specialties, department, room, fee; schedule — doctor, weekday, start, end, serials per day; ward name, floor, bed kind, bed label, nightly price; staff name, role, counter or ward, login email. **B:** the hospital's own patient number, name, date of birth or age, sex, mobile number, blood group. **C:** patient number, doctor, date, start time, serial number, paid or not. **D:** report file, test name, date; visit diagnosis, advice, follow-up date. Never imported: national ID, address, photographs, guardian or emergency contacts, insurance, billing and accounts, payroll and HR, stock and procurement, OT lists, nursing charts, original imaging files, and any password.
+- `FR-IMP-03` Bed occupancy is never imported. The ward sets each bed's state on the day the hospital goes live, because a count copied from another system is already stale (§3.1, `FR-OFF-05`).
+- `FR-IMP-04` Every imported row keeps the hospital's own identifier for it. Importing the same row again updates it and never duplicates it.
+- `FR-IMP-05` An import is checked row by row before anything is written: required fields, mobile numbers normalised (`DB-P6`), dates, allowed values, and duplicates within the file. The result is a preview — rows to add, update and skip, and every error with its row number and reason, in Bangla and English.
+- `FR-IMP-06` Nothing is written until a hospital administrator approves the preview. An approved batch is written all or nothing.
+- `FR-IMP-07` A committed batch can be undone as a whole by a hospital administrator, as long as nothing has since been built on its rows (a booking against an imported session, a visit for an imported patient); the undo names the rows that stop it.
+- `FR-IMP-08` Every batch is audited: who uploaded it and when, the file's name and fingerprint, the set, the row counts, and who approved or undid it. The uploaded rows themselves are kept only as long as the batch is open, and cleared 30 days after it is committed.
+- `FR-IMP-09` The first route is one CSV file per set, against a published template (column names, what each means in Bangla, allowed values, an example row). A spreadsheet is saved as CSV. A read-only connection to the hospital's database and FHIR R4 resources feed the same checks later; until then, re-importing a set is how the two systems are kept in step.
+- `FR-IMP-10` Imported patients belong to the hospital, not to a patient account. They are visible only to that hospital's staff under the usual role rules, and never appear in a patient's app until the patient verifies the same mobile number and claims them (`FR-GST-09`, `FR-PAT-04`).
+- `FR-IMP-11` Real imported data exists only on the hospital's own production deployment. Development, test and demo environments use synthetic files only (`FR-SEC-08`); building an importer for a hospital needs its column headers, never its rows.
+- `FR-IMP-12` Set D is not in the first import release. It follows once a pilot is running and the hospital's legal adviser has agreed it.
+
+---
+
 ## 15. Functional requirements — Government / national layer
 
 - `FR-GOV-01` District and national live capacity map: beds, ICU, ventilators, burn units, blood availability.
@@ -582,7 +604,7 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-SEC-04` Consent is explicit, per hospital, revocable, and visible to the patient.
 - `FR-SEC-05` OTP rate limiting and device binding to prevent account takeover.
 - `FR-SEC-06` Staff accounts require individual logins; shared counter accounts are prohibited by design (each counter session identifies the operator).
-- `FR-SEC-07` Data residency in Bangladesh where required; cloud region choice is a deployment decision recorded in `BACKEND.md`.
+- `FR-SEC-07` Data residency in Bangladesh where required; cloud region choice is a deployment decision recorded in `BACKEND.md`. **Decided 2026-09-28:** a deployment holding real patients runs on a server in Bangladesh — the hospital's own or a Bangladeshi data centre. The demo stays where it is, because it holds no real data (`FR-SEC-08`).
 - `FR-SEC-08` Demo and prototype environments contain no real patient data, ever.
 - `FR-SEC-09` Deletion and export requests are supported per profile.
 
@@ -676,7 +698,7 @@ This is the heart of the system. Specified tightly because everything else depen
 | 2 | Legal entity in Bangladesh and contract signatory | Founders | First agreement |
 | 3 | Whether to pursue national record integration before or after private traction | Founders | v2 |
 | 4 | SMS aggregator | Tech | Pilot |
-| 5 | Hosting region and data residency | Tech | Pilot |
+| 5 | ~~Hosting region and data residency~~ — decided 2026-09-28: Bangladesh (`FR-SEC-07`) | Tech | Pilot |
 
 > Commercial terms — what the Platform charges, which modules are sold
 > together, and what data terms are offered to a hospital — are deliberately

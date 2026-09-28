@@ -155,44 +155,48 @@ Do not jump ahead. Do not start step N+1 until step N is merged into `mvp`.
 
 **Step 10 is the milestone.** When it passes, tell me — that is the pitch demo.
 
-### 4.1 Authentication is deferred (step 4 is not built)
+**Steps 21 onward are the pilot build** (§4.2), added after the pitch.
 
-**Do not build OTP flows, staff passwords, argon2id, or account management.**
-Authentication will be handled by Supabase Auth when this goes beyond the pitch.
-Writing our own now would be code thrown away.
+### 4.1 Authentication — deferred for the pitch, built for the pilot
 
-What that means concretely:
+**Until 2026-09-28** authentication was deferred to Supabase Auth, and step 4
+was not built: under `DEMO_MODE=true` the console picks a hospital and a role
+without a password, and a booking hands back a signed guest link (`FR-GST-05`).
+That remains the demo, and it stays correct for the demo.
 
-- **Skipped:** `POST /auth/otp`, `/auth/verify`, `/auth/refresh`, `/staff/login`,
-  `/staff/2fa`, `/guest/start`, `/guest/verify`, `/guest/claim`, the argon2id
-  dependency, and any write to `sessions_auth`.
-- **Kept, because it already exists and Supabase will not replace it:** the
-  middleware from step 3 — `attachPrincipal`, `requireAuth`, `requireRole`,
-  `requireHospitalScope`, `guestAuth` — plus `config/jwt.ts`. These *verify* a
-  token. When Supabase Auth issues the tokens, verification is a configuration
-  change, not a rewrite. Deleting them now would be waste.
-- **Kept, because the demo depends on it:** the **guest tracking link**
-  (`FR-GST-05`). It is not a login — it is how a patient opens an SMS and sees
-  their live serial, and both the pitch script (`PRD.md` §24) and the required
-  `e2e/guest-booking.spec.ts` need it. Minting one is a single call to
-  `signToken({ kind: 'guest', … })`, which already works. Build it when step 9
-  or 10 needs it, not as an auth step.
-- **How the demo gets a principal:** under `DEMO_MODE=true`, the console picks a
-  hospital and a role without a password, and a booking hands back a signed
-  guest link. That is the correct implementation for a pitch version (§1.1), not
-  a shortcut to apologise for.
+**On 2026-09-28 the owner decided** that a real deployment — the first for
+Marks Group — runs on a server in Bangladesh (`PRD.md` `FR-SEC-07`), where
+Supabase Auth does not run. So authentication is built here, as pilot steps
+(§4.2), not as step 4:
 
-Requirements consequently not implemented in this version: `FR-PAT-01`,
-`FR-PAT-04`, `FR-GST-03`, `FR-GST-04`, `FR-GST-09`, `FR-GST-12`, `FR-SEC-05`,
-`FR-SEC-06`, and the 2FA half of `FR-SUP-01`. They stay in `PRD.md` because they
-are still requirements of the product — they are simply not this version's
-scope. Do not delete them from the document; do not build them either.
+- **Staff login** (`S-B-00`, `POST /staff/login`, refresh, logout) is step 21.
+  Passwords are hashed with **scrypt from `node:crypto`**, not Argon2id, so no
+  native dependency is added (§7). `BACKEND.md` §0 records the parameters.
+- **Patient phone verification** (`POST /auth/otp`, `/auth/verify`, claiming —
+  `FR-PAT-01`, `FR-PAT-04`, `FR-GST-03`, `FR-GST-04`, `FR-GST-09`,
+  `FR-GST-12`, `FR-SEC-05`) is step 25.
+- **Kept as they are:** the step-3 middleware (`attachPrincipal`,
+  `requireAuth`, `requireRole`, `requireHospitalScope`, `guestAuth`) and
+  `config/jwt.ts` — the new login issues the tokens they already verify.
+- **`DEMO_MODE=true` keeps the password-less picker**; with it off, the
+  picker's endpoint refuses and the console shows the login screen.
+- **2FA** (the 2FA half of `FR-SUP-01`, `FR-SEC-06`) is step 28.
 
-**The build plan therefore runs 0, 1, 2, 3, 5, 6, 7 …** Step numbering is left
-alone so that every requirement ID, branch name and commit message already
-written still points at the same thing.
+### 4.2 The pilot build — after the pitch
 
----
+Added 2026-09-28. Same rules as §4: one branch per step, in order, merged into
+`mvp` only when §5 is met.
+
+| # | Branch | Contents | Done when |
+|---|---|---|---|
+| 21 | `feat/staff-auth` | `S-B-00` login, refresh, logout, lockout, first-password change, a CLI that creates a hospital's first admin; `DEMO_MODE` off shows the login | A staff member logs in with their own account and reaches only their role's consoles (`FR-SEC-06`, `FR-ROLE-01`) |
+| 22 | `feat/hospital-settings` | `S-B-11`: departments, doctors, schedules, fees, wards and beds, capabilities, staff and roles (`FR-ADM-11`, `FR-SUP-01`); the worker that creates each day's sessions from the schedules | A hospital with no seed data can be set up from the screen and its chambers appear for the next seven days |
+| 23 | `feat/counter-registration` | `S-B-03` registration, `BTN-B02-WALKIN` (`FR-REC-14`, `FR-REC-20`) | A walk-in is registered and inserted into a running chamber from the counter |
+| 24 | `feat/data-import` | `S-B-14`: CSV sets A–C, check, preview, approve, undo, audit (`FR-IMP-01`–`11`) | Each set imports from its template, re-imports without duplicates, and undoes |
+| 25 | `feat/patient-otp` | Patient OTP, sign-in, claiming guest and imported records (§4.1) | A patient verifies a phone and sees records made under it |
+| 26 | `chore/self-host` | Docker images and compose for a Bangladeshi server, local file storage, backups, `DEPLOY.md` | The whole stack starts from one command on a clean machine and a backup restores |
+| 27 | `feat/sms-live` | A real SMS aggregator behind the adapter | Needs an aggregator account — built when one exists (§1.1) |
+| 28 | `feat/staff-2fa` | TOTP for staff, required for administrators | An administrator cannot sign in without the second factor |
 
 ## 5. Definition of Done (every branch)
 

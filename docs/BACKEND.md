@@ -17,10 +17,10 @@
 | Database | **PostgreSQL (Supabase)** | See `DATABASE.md` |
 | DB access | **Kysely** (typed query builder) + raw SQL for hot paths | No heavy ORM hiding the event log |
 | Realtime | **Socket.IO** over WebSocket | Rooms map cleanly to sessions and hospitals; auto-reconnect built in |
-| Background jobs | **pg-boss** (Postgres-backed) | No Redis dependency at launch; Upstash Redis + BullMQ only if load demands |
+| Background jobs | **pg-boss** (Postgres-backed) | No Redis dependency at launch; Upstash Redis + BullMQ only if load demands. **Not installed yet:** the pilot's first timed job (`sessions.materialise`, step 22) runs on a plain interval in `backend/workers` and is idempotent, so a missed or doubled run is harmless (§8) |
 | Validation | **Zod**, schemas shared with the client | One contract, both sides |
-| Auth | JWT access (15 min) + refresh (30 days), Argon2id for staff passwords | |
-| Files | Supabase Storage (reports, prescriptions, uploads) | Signed URLs only |
+| Auth | JWT access (15 min) + refresh (30 days); staff passwords hashed with **scrypt** from `node:crypto` (N = 2^17, r = 8, p = 1, 16-byte salt, 64-byte key) | Changed from Argon2id on 2026-09-28: a real deployment runs on a Bangladeshi server rather than behind Supabase Auth (`CLAUDE.md` §4.1), and scrypt needs no native dependency. The parameters are OWASP's minimum for scrypt |
+| Files | Supabase Storage (reports, prescriptions, uploads) | Signed URLs only. A self-hosted deployment uses `STORAGE_PROVIDER=local` — a disk volume on the same server (§12b) |
 | SMS | Aggregator behind an adapter interface | Provider is swappable |
 | Push | Web Push (VAPID) for the PWA | |
 | Logging | Pino → structured JSON | |
@@ -342,8 +342,12 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/auth/verify` | none | `{phone, code}` → `{access, refresh, isNew}` | |
 | POST | `/auth/refresh` | refresh | → `{access}` | |
 | POST | `/auth/logout` | user | | revokes |
-| POST | `/staff/login` | none | `{hospitalCode, email, password}` → `{access, refresh, roles, requires2fa}` | |
-| POST | `/staff/2fa` | partial | `{code}` → tokens | |
+| POST | `/staff/login` | none | `{hospitalCode?, email, password}` → `{access, refresh, roles, hospital, staff, mustChangePassword, requires2fa}` | `hospitalCode` only when the email exists at more than one facility. Five consecutive failures lock the account for fifteen minutes (`AUTH_LOCKED`). The same answer for an unknown email and a wrong password (`AUTH_INVALID_CREDENTIALS`) |
+| POST | `/staff/refresh` | refresh | → `{access, refresh}` | rotates: the old refresh row is revoked (`DATABASE.md` §2.1) |
+| POST | `/staff/logout` | staff | | revokes this refresh token |
+| GET | `/staff/me` | staff | → `{staff, hospital, roles, mustChangePassword}` | |
+| POST | `/staff/password` | staff | `{current, next}` | clears `must_change_password`; revokes the account's other refresh tokens |
+| POST | `/staff/2fa` | partial | `{code}` → tokens | step 28 |
 | POST | `/guest/start` | none | `{phone, name}` → `{needsOtp, guestToken?}` | returning guest skips OTP (`FR-GST-12`) |
 | POST | `/guest/verify` | none | `{phone, code}` → `{guestToken}` | creates no account (`FR-GST-04`) |
 | GET | `/guest/link/:token` | link | → `{booking, session, queueState, etas, record}` | powers the SMS tracking link (`FR-GST-05`); `record` is that booking's signed visit once there is one, else null (`FR-GST-08`) |
@@ -493,6 +497,12 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 | GET | `/admin/dashboard?from&to` | aggregates from `v_admin_daily`, `v_no_show_loss`, `v_referral_flow` |
 | GET | `/admin/export?view=` | CSV/PDF (audited) |
 | CRUD | `/hospital/doctors`, `/hospital/sessions`, `/hospital/templates`, `/hospital/beds`, `/hospital/staff`, `/hospital/settings` | hospital_admin |
+| GET | `/hospital/imports/templates/:set` | hospital_admin. The CSV template for a set: header row, then one example row marked as an example (`FR-IMP-09`) |
+| POST | `/hospital/imports` | hospital_admin. `{set, fileName, csv}` — the file as UTF-8 text, at most 5 MB, no multipart dependency. Checks every row and writes nothing but the batch and its rows (`FR-IMP-05`) → the preview |
+| GET | `/hospital/imports`, `/hospital/imports/:id` | hospital_admin. History, and one batch's counts and error rows |
+| POST | `/hospital/imports/:id/commit` | hospital_admin. All or nothing (`FR-IMP-06`); a batch not in `checked` is `IMPORT_STATE` |
+| POST | `/hospital/imports/:id/undo` | hospital_admin. Refused with the blocking rows while anything outside the batch refers to them (`FR-IMP-07`) |
+| POST | `/hospital/imports/:id/discard` | hospital_admin. Drops a checked batch and its rows |
 | CRUD | `/platform/hospitals`, `/platform/verify-doctor`, `/platform/flags`, `/platform/subscriptions` | platform_admin |
 | GET | `/gov/capacity`, `/gov/er-load`, `/gov/signals`, `/gov/benchmarks` | gov_viewer, aggregate only (`FR-GOV-06`). No parameters: no hospital, no patient, no range to widen. Guarded by `requireNationalRole('gov_viewer')`, which admits a `national` principal and nothing else — the mirror of every hospital route, which refuses that kind. Each read runs read-only as the `gov_reader` database role (DATABASE.md §5), and the payload is walked for identifiers before it is sent (`findIdentifiers`). `/gov/benchmarks` is `FR-GOV-04`, which `S-B-13` shows and this table had not yet routed |
 
@@ -520,6 +530,8 @@ backend/workers/src/
 │   └── retention.enforce.ts     # applies DATABASE.md §8 retention rules
 └── cron.ts                      # schedule table
 ```
+
+**In the pilot** (`CLAUDE.md` §4.2) `backend/workers` runs one loop with no scheduler dependency: `sessions.materialise` at start-up and then hourly, writing `sessions` for today and the next seven days (`BOOKABLE_DAYS`) from `session_templates`. It inserts only a session that does not exist for that template and date, so running it twice, or after a missed night, is harmless. The rest of this table waits for pg-boss.
 
 **Schedule**
 
@@ -565,6 +577,12 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `AUTH_OTP_RATE_LIMIT` | 429 | too many OTP requests |
 | `AUTH_OTP_INVALID` | 401 | wrong/expired code |
 | `AUTH_FORBIDDEN_SCOPE` | 403 | staff outside hospital scope |
+| `AUTH_INVALID_CREDENTIALS` | 401 | staff email or password wrong — one answer for both, so an address cannot be tested for existence |
+| `AUTH_LOCKED` | 423 | five consecutive failures; `details.until` says when it opens |
+| `AUTH_HOSPITAL_REQUIRED` | 409 | the email exists at more than one facility; ask for the hospital code |
+| `AUTH_PASSWORD_WEAK` | 422 | a new staff password shorter than 10 characters or the same as the old one |
+| `IMPORT_STATE` | 409 | the batch is not in the state that action needs |
+| `IMPORT_UNDO_BLOCKED` | 409 | rows outside the batch refer to its rows; `details.blocking` lists them |
 | `GUEST_LINK_EXPIRED` | 410 | tracking link past expiry |
 | `BOOKING_SLOT_TAKEN` | 409 | serial no longer available |
 | `BOOKING_DUPLICATE` | 409 | same patient, same doctor, same day |
@@ -600,6 +618,8 @@ TRAVEL_TIME_MODE=static|api, MAPS_API_KEY
 STALE_THRESHOLD_MINUTES=10
 SENTRY_DSN, LOG_LEVEL
 DEMO_MODE=true|false        # true seeds/reset allowed, mock payments, banner in UI
+STORAGE_PROVIDER=mock|supabase|local, STORAGE_LOCAL_DIR   # local: a disk volume (§12b)
+STAFF_LOCKOUT_ATTEMPTS=5, STAFF_LOCKOUT_MINUTES=15
 ```
 
 `env.ts` validates all of these with zod at boot and refuses to start if any required key is missing.
@@ -633,6 +653,21 @@ CI gates: typecheck, lint (layering rule), unit, API, one E2E smoke, and `db:ver
 | Migrations | CI step before API deploy | forward-only, never destructive in one release |
 
 **Rollout rule:** schema change → deploy migration → deploy API → deploy clients. Never reverse.
+
+### 12b. Self-hosted in Bangladesh (pilot, step 26)
+
+A deployment holding real patients runs on one server in Bangladesh — the hospital's own server room or a Bangladeshi data centre (`PRD.md` `FR-SEC-07`). The same repository, packaged as containers:
+
+| Container | What |
+|---|---|
+| `db` | PostgreSQL 16, data on a named volume |
+| `api` | `backend/api`, `NODE_ENV=production`, `DEMO_MODE=false` |
+| `workers` | `backend/workers` (§8) |
+| `patient`, `console` | the two Next.js apps, built |
+| `proxy` | TLS termination for one public domain; patient app, console and API behind it |
+| `backup` | nightly `pg_dump` plus the file volume, copied to a second location in Bangladesh |
+
+Files use `STORAGE_PROVIDER=local`. The public domain is required because patients' phones reach the server over the internet; the consoles may also be reached on the hospital's own network. `DEPLOY.md` gains the runbook with step 26.
 
 ---
 

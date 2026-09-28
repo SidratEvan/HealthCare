@@ -588,6 +588,8 @@ Accessed at `console.[domain]`. Designed for 1280px+ monitors, mouse and keyboar
 
 **Rules:** no self-signup (`FR-SUP-01` — accounts are created by hospital admin or platform), individual accounts only (`FR-SEC-06`), session timeout configurable per hospital with a re-auth modal that never loses queued work.
 
+**In the pilot build (step 21, `CLAUDE.md` §4.2):** `S-B-00` is what the console shows whenever `DEMO_MODE` is off; the picker (`S-B-01` as built) remains the demo's way in. The hospital code field appears only when the server answers `AUTH_HOSPITAL_REQUIRED`. Wrong email and wrong password get one message. After five failures the screen says when the account opens again (`AUTH_LOCKED`). An account whose password an administrator set shows `S-B-00c` — set your own password, twice, at least ten characters — before any console. A person holding several roles chooses one on `S-B-01` (role cards only, no counter selector yet); a person with one role goes straight to it. The rail's foot gains **লগ আউট**.
+
 ### `S-B-01` Role & counter selection
 
 Shown when a user holds multiple roles or the hospital has multiple counters.
@@ -894,6 +896,24 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 | Export | `BTN-B10-EXPORT` | CSV / PDF (`FR-ADM-10`) |
 
 **`S-B-11` Hospital settings**: departments, doctors (with BMDC verification status), sessions and recurrence, fees, counters, beds and wards, capabilities, notification budget, no-show grace period, refund policy, staff users and roles (`FR-ADM-11`).
+
+---
+
+**`S-B-14` Import** (step 24, `PRD.md` §14b). Opened from `S-B-11` by a hospital administrator.
+
+| Element | ID | Wiring |
+|---|---|---|
+| Set | `SEL-B14-SET` | ক কাঠামো / খ রোগীর তালিকা / গ আগামী অ্যাপয়েন্টমেন্ট. ঘ is shown switched off with its reason (`FR-IMP-12`) |
+| Template | `BTN-B14-TEMPLATE` | Downloads the set's CSV template (`GET /hospital/imports/templates/:set`) |
+| File | `INP-B14-FILE` | A `.csv` file, read in the browser as UTF-8 text |
+| যাচাই করুন | `BTN-B14-CHECK` | `POST /hospital/imports` → the preview. Nothing is written but the batch |
+| Preview | `TBL-B14-PREVIEW` | Four counts — যোগ, হালনাগাদ, বাদ, ভুল — then every error row: row number, field, reason in the chosen language |
+| অনুমোদন করে সংরক্ষণ | `BTN-B14-COMMIT` | Confirm (`GR-01`) → `POST …/commit`. Disabled while any row is an error |
+| বাতিল | `BTN-B14-DISCARD` | `POST …/discard` |
+| History | `TBL-B14-HISTORY` | Every batch: set, file, who, when, counts, state |
+| ফিরিয়ে নিন | `BTN-B14-UNDO` | On a committed batch: confirm → `POST …/undo`; a refusal lists the rows that stop it (`FR-IMP-07`) |
+
+**States:** loading, empty (no batch yet — the three templates are the call to action), error, offline (import needs the server; the screen says so and keeps the chosen file).
 
 ---
 
