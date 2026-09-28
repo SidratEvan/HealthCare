@@ -7,8 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/console-rail-billing` — **the rail's বিল no longer opens
-the pharmacy; ফার্মেসি has its own item**. Before that, `fix/consult-overflow` —
+Last updated: `chore/pilot-scope` — **the pilot build is in the documents**:
+import requirements, auth un-deferred, steps 21–28 (below, *The Marks
+handbook*). Before that, `fix/console-rail-billing` — **the rail's বিল no
+longer opens the pharmacy; ফার্মেসি has its own item**. Before that, `fix/consult-overflow` —
 **a patient forgotten in the chamber no longer freezes it** (below, under *Preparing the demo*). Before that,
 `chore/status-marks-handbook` — **a Bangla handbook for Marks
 Group, and what a real (non-demo) version for them would need** (below, *The
@@ -181,7 +183,12 @@ day). Three routes: Excel/CSV template first, a read-only database link,
 FHIR. Five steps: export, validate, preview and approve, all-or-nothing save,
 undo per batch.
 
-**None of that is built, and none of it is in `PRD.md` yet.** Before building:
+**In the documents as of `chore/pilot-scope`; built as pilot steps 21–28**
+(`CLAUDE.md` §4.2): `PRD.md` §14b (`FR-IMP-01`–`12`), §4.2 and `FR-SEC-07`;
+`CLAUDE.md` §4.1 rewritten (auth built here, scrypt, demo picker kept);
+`DATABASE.md` migrations 0027–0030 planned; `BACKEND.md` staff auth, import
+routes, the worker loop, §12b self-hosting; `APP_FLOW.md` `S-B-00` pilot rules
+and `S-B-14`. What the documents had to change, for the record:
 
 - `FR-IMP-*` requirements need adding to `PRD.md` (import is new scope;
   §27 only says the Platform runs alongside an HMS).
@@ -2395,6 +2402,22 @@ Raised while building the national layer (step 20):
    is its own item and বিল is switched off with its reason (`fix/console-rail-billing`),
    B1.1 edited. The alternative is to drop বিল from the rail until `S-B-04`
    exists.
+75. **Staff passwords use scrypt, not Argon2id.** `BACKEND.md` §0 named
+   Argon2id; that is a native dependency, and `CLAUDE.md` §7 asks before any
+   new one. `node:crypto` scrypt at OWASP's minimum (N = 2^17, r = 8, p = 1)
+   needs none. Implemented as: scrypt, recorded in `BACKEND.md` §0 and
+   `DATABASE.md` §2.1. Switching later means rehashing at each next login.
+76. **Import reads CSV only.** Reading `.xlsx` needs a library. Excel's
+   "Save as CSV (UTF-8)" covers it, and the templates are CSV. Implemented as:
+   CSV (`FR-IMP-09`).
+77. **Imported patients belong to the hospital; counter registrations are
+   guests.** `FR-GST-13` already makes a counter registration a guest
+   identity. An imported register is the hospital's record, not the patient's,
+   so it gets `patients.owner_hospital_id` (0029) and stays out of any patient
+   app until claimed (`FR-IMP-10`). Implemented as: both, as described.
+78. **Set D (old records) is not in the first import release**
+   (`FR-IMP-12`) — it is the most sensitive set and the hospital's legal
+   adviser should agree it first.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository

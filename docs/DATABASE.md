@@ -32,7 +32,8 @@ CREATE TYPE staff_role        AS ENUM ('receptionist','doctor','ward','emergency
 CREATE TYPE facility_kind     AS ENUM ('hospital','clinic','diagnostic','government');
 CREATE TYPE session_status    AS ENUM ('scheduled','running','paused','ended','cancelled');
 CREATE TYPE booking_status    AS ENUM ('booked','waiting','in_chamber','done','late','no_show','cancelled','rescheduled');
-CREATE TYPE booking_source    AS ENUM ('app','guest_link','counter','phone','walkin');
+CREATE TYPE booking_source    AS ENUM ('app','guest_link','counter','phone','walkin',
+                                       'import');   -- 0027, FR-IMP-01 set C
 CREATE TYPE queue_event_type  AS ENUM (
   'SESSION_OPENED','DOCTOR_ARRIVED','DELAY_DECLARED','SESSION_PAUSED','SESSION_RESUMED',
   'PATIENT_CALLED','PATIENT_DONE','PATIENT_LATE','PATIENT_NO_SHOW','PATIENT_REINSERTED',
@@ -54,6 +55,9 @@ CREATE TYPE notif_state       AS ENUM ('queued','sent','delivered','failed','ski
 CREATE TYPE capability_kind   AS ENUM ('burn_unit','cardiac','cath_lab','stroke','dialysis','nicu','trauma_ot','blood_bank','ambulance','isolation');
 CREATE TYPE consent_scope     AS ENUM ('visit','hospital','doctor','full');
 CREATE TYPE symptom_signal    AS ENUM ('dengue','diarrhoeal','fever');   -- 0025, FR-GOV-03
+CREATE TYPE import_set        AS ENUM ('structure','patients','appointments','records');   -- 0030, FR-IMP-01
+CREATE TYPE import_state      AS ENUM ('checked','committed','undone','discarded');        -- 0030, FR-IMP-05..07
+CREATE TYPE external_kind     AS ENUM ('patient','appointment','department','doctor','schedule','ward','bed','staff');  -- 0029, FR-IMP-04
 ```
 
 ---
@@ -109,10 +113,15 @@ A clinical subject. Belongs to a `user` **or** a `guest_identity` — never both
 | `relationship` | text | `self`,`mother`,`father`,`child`,`spouse`,`other` |
 | `is_primary` | boolean | the owner's own profile |
 
+| `owner_hospital_id` | uuid | **FK** → `hospitals.id`, nullable — a patient the hospital holds because it imported them (`FR-IMP-10`), until the patient claims them. A patient registered at the counter is a guest identity instead (`FR-GST-13`). 0029 |
+
 ```sql
-CONSTRAINT patients_one_owner CHECK (num_nonnulls(owner_user_id, owner_guest_id) = 1)
+-- 0029 widens the rule from two owners to three (FR-IMP-10)
+CONSTRAINT patients_one_owner CHECK (num_nonnulls(owner_user_id, owner_guest_id, owner_hospital_id) = 1)
 ```
-**IX:** `(owner_user_id)`, `(owner_guest_id)`, `(phone)`
+**IX:** `(owner_user_id)`, `(owner_guest_id)`, `(owner_hospital_id)`, `(phone)`
+
+A hospital-held patient is visible only to that hospital's staff under the usual role rules, and never to a patient app until claimed by the same verified mobile number (`FR-GST-09`, `FR-PAT-04`).
 
 #### `staff_users`
 | Column | Type | Notes |
@@ -122,10 +131,14 @@ CONSTRAINT patients_one_owner CHECK (num_nonnulls(owner_user_id, owner_guest_id)
 | `email` | text | **U** with `hospital_id` |
 | `staff_code` | text | printed on the ID card |
 | `full_name` | text | |
-| `password_hash` | text | argon2id |
+| `password_hash` | text | scrypt via `node:crypto`, stored as `scrypt$<N>$<r>$<p>$<salt>$<hash>` (base64); null until a password is set. Changed from argon2id on 2026-09-28 (`CLAUDE.md` §4.1) |
 | `totp_secret` | text | nullable, encrypted |
 | `is_active` | boolean | |
 | `last_login_at` | timestamptz | |
+| `must_change_password` | boolean | true after an administrator sets or resets it; the first login asks for a new one. 0028 |
+| `failed_login_count` | integer | consecutive failures; reset on success. 0028 |
+| `locked_until` | timestamptz | set after five consecutive failures, for fifteen minutes. 0028 |
+| `password_changed_at` | timestamptz | 0028 |
 
 #### `staff_roles`
 | Column | Type | Notes |
@@ -140,6 +153,20 @@ CONSTRAINT patients_one_owner CHECK (num_nonnulls(owner_user_id, owner_guest_id)
 
 #### `sessions_auth` (login sessions)
 `id`, `subject_id`, `subject_kind` (`user`/`guest`/`staff`), `token_hash`, `device_fingerprint`, `ip`, `expires_at`, `revoked_at`.
+
+One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it: the old row is revoked and a new one written, so a stolen refresh token works once at most.
+
+#### `external_refs` (`FR-IMP-04`) — 0029
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | **PK** |
+| `hospital_id` | uuid | **FK** |
+| `kind` | external_kind | what the row stands for |
+| `external_ref` | text | the hospital's own identifier, as its system prints it |
+| `entity_id` | uuid | the Platform row it maps to |
+| `batch_id` | uuid | **FK** → `import_batches.id`, the batch that first wrote it |
+
+**U:** `(hospital_id, kind, external_ref)` — importing the same row again finds it and updates rather than duplicating.
 
 #### `guest_links` (`FR-GST-05`)
 | Column | Type | Notes |
@@ -192,6 +219,8 @@ reduce it.
 #### `doctor_hospitals`
 `id`, `doctor_id` **FK**, `hospital_id` **FK**, `department_id` **FK**, `fee_poisha` int, `room` text, `is_active`.
 **U:** `(doctor_id, hospital_id, department_id)`
+
+Added by 0028: `hospitals.code` — text, **U**, a short upper-case code (`MARKS`) that `S-B-00` accepts beside an email when one deployment serves several facilities.
 
 #### `capabilities`
 `id`, `hospital_id` **FK**, `kind` capability_kind, `is_available` boolean, `updated_by` **FK** → `staff_users.id`, `updated_at`.
@@ -393,6 +422,37 @@ report computed from rows that could disagree with themselves is fiction.
 
 ---
 
+### 2.6b Imports (`FR-IMP`) — 0030
+
+#### `import_batches`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | **PK** |
+| `hospital_id` | uuid | **FK** |
+| `set_kind` | import_set | A, B, C or D (`FR-IMP-01`) |
+| `file_name` | text | as uploaded |
+| `file_sha256` | text | fingerprint (`FR-IMP-08`) |
+| `state` | import_state | `checked` → `committed` → `undone`, or `checked` → `discarded` |
+| `counts` | jsonb | `{add, update, skip, error}` |
+| `created_by` | uuid | **FK** → `staff_users.id` |
+| `committed_by`, `committed_at` | uuid, timestamptz | who approved (`FR-IMP-06`) |
+| `undone_by`, `undone_at` | uuid, timestamptz | `FR-IMP-07` |
+| `rows_purged_at` | timestamptz | when `import_rows.raw` was cleared (`FR-IMP-08`) |
+
+#### `import_rows`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | **PK** |
+| `batch_id` | uuid | **FK** |
+| `row_number` | integer | as in the file, header = 1 |
+| `raw` | jsonb | the row as read; cleared 30 days after commit or on discard (`FR-IMP-08`) |
+| `action` | text | `add` `update` `skip` `error` |
+| `errors` | jsonb | `[{field, code}]` — messages come from i18n, never stored |
+| `target_kind` | external_kind | nullable |
+| `target_id` | uuid | the row written, once committed |
+
+**U:** `(batch_id, row_number)`. Committing writes every target in one transaction; undoing refuses while any target is referenced by a row the batch did not write (`FR-IMP-07`).
+
 ### 2.7 Messaging, feedback, audit
 
 #### `notification_templates`
@@ -555,6 +615,13 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0025_symptom_signal.sql        -- step 20: symptom_signal enum, visits.symptom_signal (FR-GOV-03)
     0026_gov_views.sql             -- step 20: the six v_gov_* views and gov_reader, which can read
                                    -- them and no table (FR-GOV-01..06, §5)
+    -- The pilot build (CLAUDE.md §4.2). Each lands with its step:
+    0027_import_enum.sql           -- step 24: booking_source 'import' alone (see 0021 for why)
+    0028_staff_auth.sql            -- step 21: staff_users lockout and first-password columns,
+                                   -- hospitals.code (§2.1, §2.2)
+    0029_hospital_patients.sql     -- step 24: patients.owner_hospital_id, patients_one_owner widened,
+                                   -- external_kind, external_refs (§2.1)
+    0030_imports.sql               -- step 24: import_set, import_state, import_batches, import_rows (§2.6b)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)
@@ -587,6 +654,7 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
 | Unclaimed guest records | 24 months, then anonymised | phone hashed, clinical content retained for the hospital |
 | `notifications` bodies | 90 days | metadata kept |
 | Demo/prototype DB | contains no real data, ever (`FR-SEC-08`) | separate project |
+| `import_rows.raw` | 30 days after commit; at once on discard | counts, errors and `external_refs` kept (`FR-IMP-08`) |
 
 Deletion request: `fn_erase_patient(patient_id)` nulls identifiers, retains financial and audit rows with a tombstone reference (legal requirement), and writes an `audit_log` entry.
 
