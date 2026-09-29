@@ -11,7 +11,14 @@
 
 import { Router } from 'express';
 
-import { claimBody, otpRequestBody, otpVerifyBody, patientRefreshBody } from '@platform/domain';
+import {
+  claimBody,
+  guestStartBody,
+  guestVerifyBody,
+  otpRequestBody,
+  otpVerifyBody,
+  patientRefreshBody,
+} from '@platform/domain';
 
 import * as patientAuth from '../controllers/patientAuth.controller.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -54,6 +61,20 @@ patientAuthRoutes.post(
   patientAuth.refresh,
 );
 patientAuthRoutes.post('/auth/logout', validate({ body: patientRefreshBody }), patientAuth.logout);
+
+// A guest's one phone check before a booking (FR-GST-03, FR-GST-12).
+patientAuthRoutes.post(
+  '/guest/start',
+  sendLimit,
+  validate({ body: guestStartBody }),
+  patientAuth.startGuest,
+);
+patientAuthRoutes.post(
+  '/guest/verify',
+  verifyLimit,
+  validate({ body: guestVerifyBody }),
+  patientAuth.verifyGuest,
+);
 
 patientAuthRoutes.get('/me/profiles', requireAuth, patientAuth.profiles);
 patientAuthRoutes.post(

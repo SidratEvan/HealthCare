@@ -12,6 +12,7 @@ import { cancelBookingBody, createBookingBody, idParams } from '@platform/domain
 
 import { validationFailed } from '../errors/AppError.js';
 import * as booking from '../services/booking.service.js';
+import * as patientAuth from '../services/patientAuth.service.js';
 
 import { actorOf, assertBookingScope } from './queue.controller.js';
 
@@ -20,6 +21,10 @@ import type { Request, Response } from 'express';
 
 export async function createBooking(req: Request, res: Response): Promise<void> {
   const body = createBookingBody.parse(req.body);
+  // FR-GST-03: a guest booking proves its phone first, where that is required.
+  if (req.principal?.kind !== 'patient' && body.guest !== undefined) {
+    await patientAuth.assertGuestPhoneProven(req.principal, body.guest.phone);
+  }
 
   const result = await booking.createBooking({
     sessionId: body.sessionId,

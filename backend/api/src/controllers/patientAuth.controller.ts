@@ -3,7 +3,14 @@
  * §7.1). Thin: parse, call the service, send.
  */
 
-import { claimBody, otpRequestBody, otpVerifyBody, patientRefreshBody } from '@platform/domain';
+import {
+  claimBody,
+  guestStartBody,
+  guestVerifyBody,
+  otpRequestBody,
+  otpVerifyBody,
+  patientRefreshBody,
+} from '@platform/domain';
 
 import { authRequired, forbiddenScope } from '../errors/AppError.js';
 import * as patientAuth from '../services/patientAuth.service.js';
@@ -50,4 +57,14 @@ export async function profiles(req: Request, res: Response): Promise<void> {
 export async function claim(req: Request, res: Response): Promise<void> {
   const { confirm } = claimBody.parse(req.body);
   res.json({ ok: true, data: await patientAuth.claim(userIdOf(req), confirm) });
+}
+
+export async function startGuest(req: Request, res: Response): Promise<void> {
+  const { phone, name } = guestStartBody.parse(req.body);
+  res.json({ ok: true, data: await patientAuth.startGuest(phone, name, client(req)) });
+}
+
+export async function verifyGuest(req: Request, res: Response): Promise<void> {
+  const { phone, name, code } = guestVerifyBody.parse(req.body);
+  res.json({ ok: true, data: await patientAuth.verifyGuest(phone, code, name) });
 }

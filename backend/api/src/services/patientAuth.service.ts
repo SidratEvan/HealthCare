@@ -143,7 +143,16 @@ export async function verify(
   client: Client,
 ): Promise<PatientSession> {
   const phone = phoneOf(typedPhone);
+  await checkCode(phone, code);
+  const user = await repo.signInUser(phone);
+  return await issue({ id: user.id, phone }, user.isNew, client);
+}
 
+/**
+ * Proves a code against the number's open challenge, once. Shared by an
+ * account's sign-in and a guest's phone check: one code, one lock, one rate.
+ */
+async function checkCode(phone: string, code: string): Promise<void> {
   const locked = await repo.lockedUntil(phone);
   if (locked !== null)
     throw new AppError('AUTH_LOCKED', { details: { until: locked.toISOString() } });
@@ -165,9 +174,6 @@ export async function verify(
   if (!(await repo.consume(challenge.id))) {
     throw new AppError('AUTH_OTP_INVALID', { details: { reason: 'used' } });
   }
-
-  const user = await repo.signInUser(phone);
-  return await issue({ id: user.id, phone }, user.isNew, client);
 }
 
 async function issue(
@@ -266,4 +272,75 @@ export async function claim(
     return moved;
   });
   return { claimable: [], claimed };
+}
+
+// ---------------------------------------------------------------------------
+// A guest's one phone check (POST /guest/start, /guest/verify, FR-GST-03/04/12)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a guest booking must prove its phone first (`FR-GST-03`: money and
+ * an SMS thread follow a booking). On by default everywhere but a
+ * demonstration, which keeps its one-tap booking the way it keeps its
+ * password-less console picker (CLAUDE.md §4.1); `GUEST_BOOKING_OTP` says
+ * otherwise either way.
+ */
+export function guestPhoneCheckRequired(): boolean {
+  return env.GUEST_BOOKING_OTP ?? !env.DEMO_MODE;
+}
+
+async function guestTokenFor(identityId: string): Promise<string> {
+  return await signToken({ kind: 'access', claims: { sub: identityId, kind: 'guest' } });
+}
+
+/**
+ * `MOD-A07-GUEST`'s next step. A number that has already proved itself is not
+ * asked again (`FR-GST-12`); a new one is sent a code; with the check off,
+ * nothing is needed.
+ */
+export async function startGuest(
+  typedPhone: string,
+  name: string,
+  client: Client,
+): Promise<
+  | { needsOtp: false; guestToken: string | null }
+  | { needsOtp: true; ttlSeconds: number; resendAfterSeconds: number; demoCode?: string }
+> {
+  const phone = phoneOf(typedPhone);
+  if (!guestPhoneCheckRequired()) return { needsOtp: false, guestToken: null };
+  const known = await repo.verifiedGuest(phone);
+  if (known !== null) return { needsOtp: false, guestToken: await guestTokenFor(known) };
+  void name;
+  return { needsOtp: true, ...(await requestCode(phone, client)) };
+}
+
+/**
+ * `MOD-GST-OTP`: the code proves the number, and the answer is a guest token
+ * for it. No account is made and nothing more is asked (`FR-GST-04`).
+ */
+export async function verifyGuest(
+  typedPhone: string,
+  code: string,
+  name: string,
+): Promise<{ guestToken: string }> {
+  const phone = phoneOf(typedPhone);
+  await checkCode(phone, code);
+  const identityId = await repo.markGuestVerified(phone, name);
+  return { guestToken: await guestTokenFor(identityId) };
+}
+
+/**
+ * The booking's half: a guest booking names a phone, and with the check on
+ * the caller must hold a guest token for that same number.
+ */
+export async function assertGuestPhoneProven(
+  principal: { readonly kind: string; readonly id: string } | undefined,
+  typedPhone: string,
+): Promise<void> {
+  if (!guestPhoneCheckRequired()) return;
+  const phone = phoneOf(typedPhone);
+  const identity = await repo.verifiedGuest(phone);
+  if (principal?.kind !== 'guest' || identity === null || identity !== principal.id) {
+    throw new AppError('AUTH_REQUIRED', { details: { reason: 'phone_unverified' } });
+  }
 }

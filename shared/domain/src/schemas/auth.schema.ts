@@ -62,6 +62,19 @@ export const patientRefreshBody = z.strictObject({ refresh: z.string().min(20).m
 /** `POST /guest/claim`: without `confirm`, the preview; with it, the claim (`FR-GST-09`). */
 export const claimBody = z.strictObject({ confirm: z.boolean().default(false) });
 
+/** `POST /guest/start` — the phone and name from `MOD-A07-GUEST`. */
+export const guestStartBody = z.strictObject({
+  phone: typedPhone,
+  name: z.string().trim().min(1).max(120),
+});
+
+/** `POST /guest/verify` — the code from `MOD-GST-OTP`. */
+export const guestVerifyBody = z.strictObject({
+  phone: typedPhone,
+  name: z.string().trim().min(1).max(120),
+  code: z.string().regex(/^\d{6}$/),
+});
+
 export type StaffLoginBody = z.infer<typeof staffLoginBody>;
 export type StaffRefreshBody = z.infer<typeof staffRefreshBody>;
 export type StaffPasswordBody = z.infer<typeof staffPasswordBody>;

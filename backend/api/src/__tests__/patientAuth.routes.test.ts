@@ -18,6 +18,7 @@ import { resetSmsAdapter, setSmsAdapter, type SmsMessage } from '../adapters/sms
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
+import { env } from '../env.js';
 
 import { bearer, staffToken } from './support/tokens.js';
 
@@ -253,5 +254,67 @@ describe('claiming what the number holds (FR-GST-09, FR-IMP-10, FR-PAT-04)', () 
       .set('Idempotency-Key', randomUUID())
       .send({ confirm: true });
     expect(response.status).toBe(403);
+  });
+});
+
+describe("a guest's one phone check before booking (FR-GST-03, FR-GST-04, FR-GST-12)", () => {
+  const mutable = env as { GUEST_BOOKING_OTP?: boolean | undefined };
+
+  afterAll(() => {
+    delete mutable.GUEST_BOOKING_OTP;
+  });
+
+  it('is off on a demonstration unless switched on', async () => {
+    const phone = freshPhone();
+    const response = await request(app)
+      .post(`${BASE}/guest/start`)
+      .send({ phone: phone.typed, name: 'অতিথি (ডেমো)' });
+    expect(response.body.data).toEqual({ needsOtp: false, guestToken: null });
+  });
+
+  it('sends a new number a code, proves it, and asks a returning number nothing', async () => {
+    mutable.GUEST_BOOKING_OTP = true;
+    const phone = freshPhone();
+    const start = await request(app)
+      .post(`${BASE}/guest/start`)
+      .send({ phone: phone.typed, name: 'অতিথি (ডেমো)' });
+    expect(start.body.data.needsOtp).toBe(true);
+
+    const verified = await request(app)
+      .post(`${BASE}/guest/verify`)
+      .send({
+        phone: phone.typed,
+        name: 'অতিথি (ডেমো)',
+        code: start.body.data.demoCode as string,
+      });
+    expect(typeof verified.body.data.guestToken).toBe('string');
+    // No account was made (FR-GST-04).
+    const accounts = await sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM users WHERE phone = ${phone.stored}
+    `.execute(db);
+    expect(accounts.rows[0]?.n).toBe(0);
+
+    const again = await request(app)
+      .post(`${BASE}/guest/start`)
+      .send({ phone: phone.typed, name: 'অতিথি (ডেমো)' });
+    expect(again.body.data.needsOtp).toBe(false);
+    expect(typeof again.body.data.guestToken).toBe('string');
+  });
+
+  it('refuses a guest booking whose phone was not proved', async () => {
+    mutable.GUEST_BOOKING_OTP = true;
+    const session = await sql<{ id: string }>`
+      SELECT id FROM sessions WHERE status = 'scheduled' AND deleted_at IS NULL LIMIT 1
+    `.execute(db);
+    const response = await request(app)
+      .post(`${BASE}/bookings`)
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        sessionId: session.rows[0]?.id,
+        method: 'at_hospital',
+        guest: { phone: freshPhone().stored, name: 'কেউ (ডেমো)', ageYears: 30, sex: 'female' },
+      });
+    expect(response.status).toBe(401);
+    expect(response.body.error.details.reason).toBe('phone_unverified');
   });
 });

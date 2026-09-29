@@ -116,8 +116,12 @@ export async function book(input: {
   };
   readonly reason?: string;
   readonly idempotencyKey: string;
+  /** From `MOD-GST-OTP`, when the deployment asks a guest to prove the phone (`FR-GST-03`). */
+  readonly guestToken?: string | null;
 }): Promise<BookingResponse> {
-  return await api.post<BookingResponse>(
+  const token = input.guestToken ?? null;
+  const caller = token === null ? api : new ApiClient({ baseUrl: BASE, getToken: () => token });
+  return await caller.post<BookingResponse>(
     '/bookings',
     {
       sessionId: input.sessionId,
@@ -127,6 +131,30 @@ export async function book(input: {
     },
     input.idempotencyKey,
   );
+}
+
+/**
+ * `MOD-A07-GUEST`'s next step (`FR-GST-03`, `FR-GST-12`): whether this number
+ * must prove itself with a code before the booking. A number that already has
+ * comes back with its guest token; a demonstration asks nothing.
+ */
+export async function startGuest(input: {
+  readonly phone: string;
+  readonly name: string;
+}): Promise<
+  | { readonly needsOtp: false; readonly guestToken: string | null }
+  | { readonly needsOtp: true; readonly demoCode?: string }
+> {
+  return await api.post('/guest/start', input);
+}
+
+/** `MOD-GST-OTP`: the code for the guest token. No account is made (`FR-GST-04`). */
+export async function verifyGuest(input: {
+  readonly phone: string;
+  readonly name: string;
+  readonly code: string;
+}): Promise<{ readonly guestToken: string }> {
+  return await api.post('/guest/verify', input);
 }
 
 // ---------------------------------------------------------------------------

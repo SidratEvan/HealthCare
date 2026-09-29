@@ -325,3 +325,28 @@ export async function auditClaim(
             ${JSON.stringify({ change: 'claimed_records', moved: input.moved })}::jsonb)
   `.execute(trx);
 }
+
+// --- a guest's proved number (FR-GST-03, FR-GST-12) ----------------------------
+
+/** The guest identity for a number that has proved itself with a code, if any. */
+export async function verifiedGuest(phone: string): Promise<string | null> {
+  const result = await sql<{ id: string }>`
+    SELECT id FROM guest_identities
+     WHERE phone = ${phone} AND phone_verified_at IS NOT NULL AND deleted_at IS NULL
+  `.execute(db);
+  return result.rows[0]?.id ?? null;
+}
+
+/** Records that the number proved itself, making its guest identity if it has none. */
+export async function markGuestVerified(phone: string, displayName: string): Promise<string> {
+  const result = await sql<{ id: string }>`
+    INSERT INTO guest_identities (phone, display_name, phone_verified_at)
+    VALUES (${phone}, ${displayName}, now())
+    ON CONFLICT (phone) WHERE deleted_at IS NULL
+      DO UPDATE SET phone_verified_at = now()
+    RETURNING id
+  `.execute(db);
+  const id = result.rows[0]?.id;
+  if (id === undefined) throw new Error('guest_identities returned no id');
+  return id;
+}

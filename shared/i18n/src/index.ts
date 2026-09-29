@@ -15,6 +15,7 @@ export {
   CONSOLE,
   PATIENT,
   format,
+  formatPatient,
   t,
   tp,
   type ConsoleKey,

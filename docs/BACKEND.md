@@ -338,20 +338,21 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 
 | Method | Path | Auth | Body → Result | Notes |
 |---|---|---|---|---|
-| POST | `/auth/otp` | none | `{phone}` → `{ttlSeconds}` | rate-limited (`FR-SEC-05`) |
-| POST | `/auth/verify` | none | `{phone, code}` → `{access, refresh, isNew}` | |
-| POST | `/auth/refresh` | refresh | → `{access}` | |
-| POST | `/auth/logout` | user | | revokes |
+| POST | `/auth/otp` | none | `{phone}` → `{ttlSeconds, resendAfterSeconds, demoCode?}` | pilot step 25. Six digits by SMS, marked sensitive so no provider prints it; `demoCode` only under `DEMO_MODE`. At most `OTP_MAX_PER_HOUR` per number and 30 per address per ten minutes (`FR-SEC-05`); a locked number is `AUTH_LOCKED` |
+| POST | `/auth/verify` | none | `{phone, code}` → `{access, refresh, accessExpiresAt, user, isNew, claimable}` | makes or finds the account. Five wrong codes lock the number fifteen minutes. `claimable` counts the patients the number holds that no account owns (`S-A-20`) |
+| POST | `/auth/refresh` | refresh | `{refresh}` → the same as verify | rotates; a reused token ends every session of the account; a refresh from another device than the one that signed in is refused (`FR-SEC-05`) |
+| POST | `/auth/logout` | refresh | `{refresh}` | revokes that session |
+| GET | `/me/profiles` | user | → `{profiles}` | the account's own patients, with booking and record counts. Records are `GET /patients/:id/records` |
 | POST | `/staff/login` | none | `{hospitalCode?, email, password}` → `{access, refresh, roles, hospital, staff, mustChangePassword, requires2fa}` | `hospitalCode` only when the email exists at more than one facility. Five consecutive failures lock the account for fifteen minutes (`AUTH_LOCKED`). The same answer for an unknown email and a wrong password (`AUTH_INVALID_CREDENTIALS`) |
 | POST | `/staff/refresh` | refresh | → `{access, refresh}` | rotates: the old refresh row is revoked (`DATABASE.md` §2.1) |
 | POST | `/staff/logout` | staff | | revokes this refresh token |
 | GET | `/staff/me` | staff | → `{staff, hospital, roles, mustChangePassword}` | |
 | POST | `/staff/password` | staff | `{current, next}` | clears `must_change_password`; revokes the account's other refresh tokens |
 | POST | `/staff/2fa` | partial | `{code}` → tokens | step 28 |
-| POST | `/guest/start` | none | `{phone, name}` → `{needsOtp, guestToken?}` | returning guest skips OTP (`FR-GST-12`) |
-| POST | `/guest/verify` | none | `{phone, code}` → `{guestToken}` | creates no account (`FR-GST-04`) |
+| POST | `/guest/start` | none | `{phone, name}` → `{needsOtp: false, guestToken}` or `{needsOtp: true, ttlSeconds, …}` | a number that has proved itself skips the code (`FR-GST-12`). With `GUEST_BOOKING_OTP` off — the default on a demonstration — `{needsOtp: false, guestToken: null}` |
+| POST | `/guest/verify` | none | `{phone, name, code}` → `{guestToken}` | creates no account (`FR-GST-04`). `POST /bookings` with guest details then needs this token for the same number, where the check is on (`AUTH_REQUIRED`, `reason: phone_unverified`) |
 | GET | `/guest/link/:token` | link | → `{booking, session, queueState, etas, record}` | powers the SMS tracking link (`FR-GST-05`); `record` is that booking's signed visit once there is one, else null (`FR-GST-08`) |
-| POST | `/guest/claim` | user | `{phone}` → `{claimable: […]}` then `{confirm:true}` | (`FR-GST-09`) |
+| POST | `/guest/claim` | user | `{confirm?}` → `{claimable: […], claimed}` | (`FR-GST-09`, `FR-PAT-04`, `FR-IMP-10`). The number is the account's own verified one, never one in the body. Without `confirm`, the preview; with it, every patient held for the number as a guest or imported by a hospital becomes the account's, in one transaction, audited |
 
 ### 7.2 Discovery (public, no auth)
 
@@ -626,6 +627,7 @@ DATABASE_URL, DATABASE_POOL_MAX
 SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET
 JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, JWT_ACCESS_TTL=15m, JWT_REFRESH_TTL=30d
 GUEST_LINK_SECRET, GUEST_LINK_TTL_DAYS=30
+GUEST_BOOKING_OTP=true|false # a guest proves the phone before booking (FR-GST-03); unset: on unless DEMO_MODE
 OTP_TTL_SECONDS=300, OTP_MAX_PER_HOUR=5
 SMS_PROVIDER=local|log, SMS_API_KEY, SMS_SENDER_ID, SMS_MONTHLY_CAP
 VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT

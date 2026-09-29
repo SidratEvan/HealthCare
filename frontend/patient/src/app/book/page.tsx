@@ -28,13 +28,14 @@ import {
   formatNumber,
   formatSerial,
   formatTaka,
+  formatPatient,
   tp,
   formatAge,
   districtName,
   numeralsFor,
   localName,
 } from '@platform/i18n';
-import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/ui';
+import { Button, Card, Chip, FreshnessLine, Input, OtpInput, useLocale } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 import { HospitalBeds } from '@/components/HospitalBeds';
@@ -48,6 +49,8 @@ import {
   doctorSessions,
   doctorsAtHospital,
   hospitalsForSpecialty,
+  startGuest,
+  verifyGuest,
 } from '@/lib/api';
 import { rememberBooking } from '@/lib/bookings';
 
@@ -726,20 +729,67 @@ function Confirm({
     return { consultation: session.feePoisha };
   }, [session.feePoisha]);
 
-  const confirm = useCallback(async () => {
-    if (phoneStored === null) return;
-    setBusy(true);
-    onFailure(null);
+  /**
+   * `MOD-GST-OTP` (`FR-GST-03`): open when this deployment asks a new number
+   * to prove itself before booking. A demonstration never opens it; a number
+   * that has proved itself before is not asked again (`FR-GST-12`).
+   */
+  const [phoneCheck, setPhoneCheck] = useState<{ readonly demoCode: string | null } | null>(null);
+  const [codeWrong, setCodeWrong] = useState(false);
 
-    try {
+  const finish = useCallback(
+    async (guestToken: string | null) => {
+      if (phoneStored === null) return;
       const result = await book({
         sessionId: session.id,
         method,
         guest: { name: name.trim(), phone: phoneStored, ageYears: Number(age), sex },
         reason,
         idempotencyKey,
+        guestToken,
       });
       onBooked(result);
+    },
+    [session.id, method, name, phoneStored, age, sex, reason, idempotencyKey, onBooked],
+  );
+
+  const proveCode = useCallback(
+    async (code: string) => {
+      if (phoneStored === null) return;
+      setBusy(true);
+      setCodeWrong(false);
+      try {
+        const proved = await verifyGuest({ phone: phoneStored, name: name.trim(), code });
+        await finish(proved.guestToken);
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        setCodeWrong(code === 'AUTH_OTP_INVALID');
+        onFailure(
+          code === 'AUTH_OTP_INVALID'
+            ? tp('accountCodeWrong', locale)
+            : code === 'AUTH_LOCKED'
+              ? tp('accountLocked', locale)
+              : tp('bookingFailed', locale),
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [phoneStored, name, finish, onFailure, locale],
+  );
+
+  const confirm = useCallback(async () => {
+    if (phoneStored === null) return;
+    setBusy(true);
+    onFailure(null);
+
+    try {
+      const start = await startGuest({ phone: phoneStored, name: name.trim() });
+      if (start.needsOtp) {
+        setPhoneCheck({ demoCode: start.demoCode ?? null });
+        return;
+      }
+      await finish(start.guestToken);
     } catch (error) {
       // Stated in Bangla, by cause. "Something went wrong" tells a person
       // nothing they can act on (BACKEND.md §9 maps codes to copy).
@@ -754,19 +804,7 @@ function Confirm({
     } finally {
       setBusy(false);
     }
-  }, [
-    session.id,
-    method,
-    name,
-    phoneStored,
-    age,
-    sex,
-    reason,
-    idempotencyKey,
-    onBooked,
-    onFailure,
-    locale,
-  ]);
+  }, [phoneStored, name, finish, onFailure, locale]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -923,6 +961,27 @@ function Confirm({
           ))}
         </div>
       </fieldset>
+
+      {phoneCheck === null ? null : (
+        <Card data-testid="guest-otp">
+          <p className="text-body-md">{formatPatient('accountCodeSent', locale, { phone })}</p>
+          <div className="mt-3">
+            <OtpInput
+              label={tp('accountCode', locale)}
+              invalid={codeWrong}
+              disabled={busy}
+              onComplete={(code) => {
+                void proveCode(code);
+              }}
+            />
+          </div>
+          {phoneCheck.demoCode === null ? null : (
+            <p className="mt-3 rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700">
+              {formatPatient('accountDemoCode', locale, { code: phoneCheck.demoCode })}
+            </p>
+          )}
+        </Card>
+      )}
 
       {failure === null ? null : (
         <p role="alert" className="rounded-sm bg-alert-100 p-3 text-body-md text-alert-700">
