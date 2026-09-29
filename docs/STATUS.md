@@ -258,7 +258,7 @@ undo per batch.
 **In the documents as of `chore/pilot-scope`; built as pilot steps 21–28**
 (`CLAUDE.md` §4.2): `PRD.md` §14b (`FR-IMP-01`–`12`), §4.2 and `FR-SEC-07`;
 `CLAUDE.md` §4.1 rewritten (auth built here, scrypt, demo picker kept);
-`DATABASE.md` migrations 0027–0030 planned (0027 staff auth, 0028–0030 import); `BACKEND.md` staff auth, import
+`DATABASE.md` migrations 0027–0031 planned (0027 staff auth, 0028 schedules, 0029–0031 import); `BACKEND.md` staff auth, import
 routes, the worker loop, §12b self-hosting; `APP_FLOW.md` `S-B-00` pilot rules
 and `S-B-14`. What the documents had to change, for the record:
 
@@ -2485,7 +2485,7 @@ Raised while building the national layer (step 20):
 77. **Imported patients belong to the hospital; counter registrations are
    guests.** `FR-GST-13` already makes a counter registration a guest
    identity. An imported register is the hospital's record, not the patient's,
-   so it gets `patients.owner_hospital_id` (0029) and stays out of any patient
+   so it gets `patients.owner_hospital_id` (0030) and stays out of any patient
    app until claimed (`FR-IMP-10`). Implemented as: both, as described.
 78. **Set D (old records) is not in the first import release**
    (`FR-IMP-12`) — it is the most sensitive set and the hospital's legal

@@ -41,6 +41,16 @@ export const ERROR_CODES = {
    */
   AUTH_PASSWORD_CHANGE_REQUIRED: { status: 403, message: 'Set a new password first.' },
 
+  // --- Hospital settings (pilot step 22, FR-SUP-01, FR-ADM-11) -------------
+  //
+  // Split the way the queue's are. Something with that code, number, label or
+  // email already exists here: 409, and `details.field` names which. A change
+  // the rules do not allow — an administrator removing their own access, a
+  // verified doctor's identity, going live with nothing to publish — is a
+  // 422 that fails however often it is sent; `details.reason` names the rule.
+  SETTINGS_DUPLICATE: { status: 409, message: 'Something with that value already exists here.' },
+  SETTINGS_NOT_ALLOWED: { status: 422, message: 'That change is not allowed.' },
+
   // --- Guest (FR-GST-05) ---------------------------------------------------
   GUEST_LINK_EXPIRED: { status: 410, message: 'This tracking link has expired.' },
 

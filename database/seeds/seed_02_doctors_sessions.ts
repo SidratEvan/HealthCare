@@ -181,6 +181,8 @@ export const seed02DoctorsSessions: SeedModule = {
     // that the first admin report would surface.
     const activeFrom = dhakaDate(now, -90);
     const templateRows: unknown[][] = [];
+    /** `doctor_hospital_id:weekday` for each template row, in insert order. */
+    const templateKeys: string[] = [];
     const sessionRows: unknown[][] = [];
 
     for (const chamber of seededChambers) {
@@ -202,15 +204,57 @@ export const seed02DoctorsSessions: SeedModule = {
           activeFrom,
           admins.get(chamber.hospitalSlug) ?? null,
         ]);
+        templateKeys.push(`${chamber.id}:${String(weekday)}`);
       }
+    }
+
+    const templateIds = await insertRows<{ id: string }>(
+      client,
+      'session_templates',
+      {
+        columns: [
+          'doctor_hospital_id',
+          'weekday',
+          'start_time',
+          'end_time',
+          'capacity',
+          'active_from',
+          'created_by',
+        ],
+      },
+      templateRows,
+    );
+    /** Which template made a day's chamber — `sessions.template_id` (0028). */
+    const templateFor = new Map<string, string>();
+    for (const [index, key] of templateKeys.entries()) {
+      const id = templateIds[index]?.id;
+      if (id === undefined) throw new Error(`session_templates returned no id for ${key}.`);
+      templateFor.set(key, id);
+    }
+
+    for (const chamber of seededChambers) {
+      const hours = CHAMBER_HOURS[chamber.hospitalSlug];
+      if (hours === undefined) {
+        throw new Error(`No chamber hours declared for ${chamber.hospitalSlug}.`);
+      }
+      const weekdays = chamberWeekdays(chamber.doctorSlug, chamber.hospitalSlug);
+      const capacity = capacityFor(chamber.hospitalSlug, hours, chamber.consultMinutes);
 
       // --- sessions, materialised from those templates ---------------------
+      //
+      // Each carries the template it came from, so the job that makes each
+      // day's chambers (pilot step 22) finds these and writes none twice.
       for (let offset = 0; offset < SESSION_DAYS; offset += 1) {
         const date = dhakaDate(now, offset);
         const plannedStart = time.fromDhakaWallClock(date, hours.start[0], hours.start[1]);
-        if (!weekdays.includes(time.dhakaWeekday(plannedStart))) continue;
+        const weekday = time.dhakaWeekday(plannedStart);
+        if (!weekdays.includes(weekday)) continue;
+        const templateId = templateFor.get(`${chamber.id}:${String(weekday)}`);
+        if (templateId === undefined)
+          throw new Error(`No template for ${chamber.id} on weekday ${String(weekday)}.`);
 
         sessionRows.push([
+          templateId,
           chamber.hospitalId,
           chamber.doctorId,
           chamber.departmentId,
@@ -234,27 +278,10 @@ export const seed02DoctorsSessions: SeedModule = {
 
     await insertRows(
       client,
-      'session_templates',
-      {
-        columns: [
-          'doctor_hospital_id',
-          'weekday',
-          'start_time',
-          'end_time',
-          'capacity',
-          'active_from',
-          'created_by',
-        ],
-      },
-      templateRows,
-      '',
-    );
-
-    await insertRows(
-      client,
       'sessions',
       {
         columns: [
+          'template_id',
           'hospital_id',
           'doctor_id',
           'department_id',
@@ -272,7 +299,7 @@ export const seed02DoctorsSessions: SeedModule = {
     );
 
     const today = dhakaDate(now, 0);
-    const todayCount = sessionRows.filter((row) => row[4] === today).length;
+    const todayCount = sessionRows.filter((row) => row[5] === today).length;
     log(
       `      ${String(todayCount)} sessions today (${today}), ${String(sessionRows.length)} across ${String(SESSION_DAYS)} days`,
     );

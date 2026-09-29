@@ -112,6 +112,9 @@ export async function rolesOf(staffId: string, hospitalId: string | null): Promi
       FROM staff_roles
      WHERE staff_user_id = ${staffId}
        AND hospital_id IS NOT DISTINCT FROM ${hospitalId}::uuid
+       -- A role an administrator removed (pilot step 22) is kept for the record
+       -- and opens nothing.
+       AND deleted_at IS NULL
      ORDER BY role
   `.execute(db);
   return result.rows.map((row) => row.role);

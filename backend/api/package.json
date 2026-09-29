@@ -8,7 +8,8 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
-    "staff:create": "tsx src/scripts/createStaff.ts"
+    "staff:create": "tsx src/scripts/createStaff.ts",
+    "doctor:verify": "tsx src/scripts/verifyDoctor.ts"
   },
   "dependencies": {
     "@platform/domain": "workspace:*",

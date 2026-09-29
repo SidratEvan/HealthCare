@@ -79,7 +79,7 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
            array_agg(DISTINCT sr.role::text) AS roles
       FROM hospitals h
       JOIN staff_users su ON su.hospital_id = h.id AND su.deleted_at IS NULL
-      JOIN staff_roles sr ON sr.staff_user_id = su.id
+      JOIN staff_roles sr ON sr.staff_user_id = su.id AND sr.deleted_at IS NULL
      WHERE h.is_live AND h.deleted_at IS NULL
      GROUP BY h.id, h.name_bn, h.name_en, h.district
      ORDER BY h.name_en
@@ -155,6 +155,7 @@ export async function nationalStaffFor(
      WHERE su.hospital_id IS NULL
        AND sr.hospital_id IS NULL
        AND sr.role = ${role}::staff_role
+       AND sr.deleted_at IS NULL
        AND su.deleted_at IS NULL
        AND sr.deleted_at IS NULL
      ORDER BY su.full_name
@@ -183,6 +184,7 @@ export async function staffFor(
       JOIN staff_roles sr ON sr.staff_user_id = su.id
      WHERE su.hospital_id = ${hospitalId}::uuid
        AND sr.role = ${role}::staff_role
+       AND sr.deleted_at IS NULL
        AND su.deleted_at IS NULL
      ORDER BY su.full_name
      LIMIT 1
