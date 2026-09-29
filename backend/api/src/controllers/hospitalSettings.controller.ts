@@ -10,6 +10,7 @@
 import {
   bedPatchBody,
   bedsBody,
+  declaredCapabilitiesBody,
   departmentBody,
   departmentPatchBody,
   doctorBody,
@@ -112,6 +113,11 @@ export async function patchStaff(req: Request, res: Response): Promise<void> {
 
 export async function postResetPassword(req: Request, res: Response): Promise<void> {
   done(res, await settings.resetStaffPassword(actorOf(req), idOf(req)));
+}
+
+export async function putCapabilities(req: Request, res: Response): Promise<void> {
+  await settings.declareCapabilities(actorOf(req), declaredCapabilitiesBody.parse(req.body));
+  done(res);
 }
 
 export async function postGoLive(req: Request, res: Response): Promise<void> {

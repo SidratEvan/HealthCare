@@ -76,6 +76,11 @@ export class ApiClient {
     return await this.send<T>('PUT', path, body, idempotencyKey);
   }
 
+  /** `DELETE /hospital/templates/:id` — ending a weekly schedule (pilot step 22). */
+  async delete<T>(path: string, idempotencyKey?: string): Promise<T> {
+    return await this.send<T>('DELETE', path, undefined, idempotencyKey);
+  }
+
   private async send<T>(
     method: string,
     path: string,

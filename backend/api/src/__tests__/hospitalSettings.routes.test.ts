@@ -75,7 +75,7 @@ async function newFacility(): Promise<Facility> {
 }
 
 function send(
-  method: 'post' | 'patch' | 'delete',
+  method: 'post' | 'patch' | 'put' | 'delete',
   path: string,
   token: string,
   body: object = {},
@@ -172,6 +172,7 @@ describe('who may open S-B-11 (FR-ROLE-01)', () => {
       noShowGraceMinutes: 15,
       lateReinsertAfter: 3,
       staleThresholdMinutes: 10,
+      smsBudgetMonthly: null,
     });
     expect(data.staff).toHaveLength(1);
     expect(data.staff[0].roles).toEqual(['hospital_admin']);
@@ -228,7 +229,12 @@ describe('a facility with no seed data, set up from the screen (FR-SUP-01)', () 
       ).status,
     ).toBe(200);
     expect(
-      (await send('patch', '/hospital/rules', facility.token, { lateReinsertAfter: 4 })).status,
+      (
+        await send('patch', '/hospital/rules', facility.token, {
+          lateReinsertAfter: 4,
+          smsBudgetMonthly: 5000,
+        })
+      ).status,
     ).toBe(200);
 
     const setup = await request(app)
@@ -236,6 +242,8 @@ describe('a facility with no seed data, set up from the screen (FR-SUP-01)', () 
       .set('Authorization', bearer(facility.token));
     expect(setup.body.data.hospital.lat).toBeCloseTo(23.75);
     expect(setup.body.data.rules.lateReinsertAfter).toBe(4);
+    // FR-NOT-06: the cap the notification worker reads.
+    expect(setup.body.data.rules.smsBudgetMonthly).toBe(5000);
 
     const audit = await sql<{ n: number }>`
       SELECT count(*)::int AS n FROM audit_log
@@ -568,5 +576,50 @@ describe('staff accounts (FR-ADM-11, FR-SEC-06)', () => {
       after.body.data.staff as { id: string; isActive: boolean; roles: string[] }[]
     ).find((entry) => entry.id === staffId);
     expect(account).toMatchObject({ isActive: false, roles: ['ward'] });
+  });
+});
+
+describe('what the facility offers in an emergency (FR-EMG-05)', () => {
+  let facility: Facility;
+
+  beforeAll(async () => {
+    facility = await newFacility();
+  });
+
+  it('declares kinds unavailable until the ER says otherwise, and withdraws one', async () => {
+    const declared = await send('put', '/hospital/capabilities', facility.token, {
+      kinds: ['burn_unit', 'cardiac'],
+    });
+    expect(declared.status).toBe(200);
+
+    const setup = await request(app)
+      .get(`${BASE}/hospital/setup`)
+      .set('Authorization', bearer(facility.token));
+    expect(
+      (setup.body.data.capabilities as { kind: string; isAvailable: boolean }[]).map((entry) => [
+        entry.kind,
+        entry.isAvailable,
+      ]),
+    ).toEqual([
+      ['burn_unit', false],
+      ['cardiac', false],
+    ]);
+
+    // The ER's half now accepts the declared kind.
+    const confirmed = await request(app)
+      .put(`${BASE}/hospitals/${facility.hospitalId}/capabilities`)
+      .set('Authorization', bearer(facility.token))
+      .set('Idempotency-Key', randomUUID())
+      .send({ capabilities: [{ kind: 'cardiac', available: true }] });
+    expect(confirmed.status).toBe(200);
+
+    expect(
+      (await send('put', '/hospital/capabilities', facility.token, { kinds: ['cardiac'] })).status,
+    ).toBe(200);
+    const rows = await sql<{ kind: string; is_available: boolean }>`
+      SELECT kind::text AS kind, is_available FROM capabilities WHERE hospital_id = ${facility.hospitalId}
+    `.execute(db);
+    // Still offered keeps its state; withdrawn is gone.
+    expect(rows.rows).toEqual([{ kind: 'cardiac', is_available: true }]);
   });
 });

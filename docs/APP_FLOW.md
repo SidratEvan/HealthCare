@@ -897,6 +897,20 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 **`S-B-11` Hospital settings**: departments, doctors (with BMDC verification status), sessions and recurrence, fees, counters, beds and wards, capabilities, notification budget, no-show grace period, refund policy, staff users and roles (`FR-ADM-11`).
 
+Built in pilot step 22 (`FR-SUP-01`), opened by `LNK-B10-SETTINGS` in the dashboard's header (`/?view=settings`). The tabs follow the onboarding order in B6; above them, a status card says whether patients can see the facility, counts what is set up, and carries `BTN-B11-GOLIVE`.
+
+| Element | ID | Wiring |
+|---|---|---|
+| Status card | `BTN-B11-GOLIVE` | `POST /hospital/go-live` → `is_live`, `onboarded_at`. Refused with no department or no active doctor. Only verified doctors are then shown to patients |
+| Facility | `FRM-B11-PROFILE`, `FRM-B11-RULES` | `PATCH /hospital/profile` (names, address, phones, coordinates both-or-neither); `PATCH /hospital/rules` (no-show grace in patients and minutes, late re-insert, stale threshold, SMS a month) |
+| Departments | `FRM-B11-DEPT` | `POST /hospital/departments` — names in both languages and a short code |
+| Doctors and chambers | `FRM-B11-DOCTOR`, `FRM-B11-FEE`, `BTN-B11-DOCTOR-ACTIVE`, `FRM-B11-SCHEDULE`, `BTN-B11-SCHEDULE-REMOVE` | `POST /hospital/doctors` (a known BMDC number is linked, and the toast says so); `PATCH /hospital/doctors/:id` (fee and room, with the note that bookings keep their fee; activate or deactivate); `POST /hospital/templates` → the chambers of the coming eight days, counted in the toast; `DELETE /hospital/templates/:id` → says how many booked chambers were kept for the counter |
+| Wards and beds | `FRM-B11-WARD`, `FRM-B11-BEDS` | `POST /hospital/wards`; `POST /hospital/beds` takes `301-320` or a comma list. New beds show out of service, "added in settings — not yet confirmed by the ward", until `BTN-B06-OOS`'s restore |
+| Emergency services | `FRM-B11-CAPABILITIES` | `PUT /hospital/capabilities`; each declared kind shows whether the ER last said it is available, with its `<FreshnessLine>` |
+| Staff | `FRM-B11-STAFF`, `BTN-B11-ROLES`, `BTN-B11-RESET`, `BTN-B11-STAFF-ACTIVE` | `POST /hospital/staff` → the temporary password on a card, once, to hand over in person; `PATCH /hospital/staff/:id` (roles, deactivate); `POST /hospital/staff/:id/reset-password`. Reset and deactivate are not offered on one's own row |
+
+**Rules:** online only — with the connection gone the screen keeps the last snapshot under a banner, its freshness line ages, and every save is disabled with "saving needs a connection". A save always re-reads the snapshot. Counters and the refund policy are not on this screen yet: counters arrive with counter registration (step 23), and the refund policy stays the agreed default (`STATUS.md`).
+
 ---
 
 **`S-B-14` Import** (step 24, `PRD.md` §14b). Opened from `S-B-11` by a hospital administrator.

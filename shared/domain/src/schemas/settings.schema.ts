@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 
-import { BED_KINDS } from '../types/enums.js';
+import { BED_KINDS, CAPABILITY_KINDS } from '../types/enums.js';
 
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(120);
@@ -83,6 +83,8 @@ export const rulesBody = z
     noShowGraceMinutes: z.number().int().min(0).max(120).optional(),
     lateReinsertAfter: z.number().int().min(1).max(20).optional(),
     staleThresholdMinutes: z.number().int().min(1).max(1_440).optional(),
+    /** `FR-NOT-06`: SMS a month; null means no cap. */
+    smsBudgetMonthly: z.number().int().min(0).max(10_000_000).nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'change at least one field');
 
@@ -221,6 +223,19 @@ export const staffPatchBody = z
   })
   .refine((body) => Object.keys(body).length > 0, 'change at least one field');
 
+// --- what the facility offers in an emergency (FR-EMG-05) ------------------
+
+/**
+ * `PUT /hospital/capabilities` — the kinds this facility offers. Whether one
+ * is available right now is the ER's to say, not the administrator's.
+ */
+export const declaredCapabilitiesBody = z.strictObject({
+  kinds: z
+    .array(z.enum(CAPABILITY_KINDS))
+    .max(CAPABILITY_KINDS.length)
+    .refine((list) => new Set(list).size === list.length, 'each kind once'),
+});
+
 /** `POST /hospital/go-live` and `POST /hospital/staff/:id/reset-password` carry nothing. */
 export const emptyBody = z.strictObject({});
 
@@ -236,6 +251,7 @@ export type BedsBody = z.infer<typeof bedsBody>;
 export type BedPatchBody = z.infer<typeof bedPatchBody>;
 export type StaffBody = z.infer<typeof staffBody>;
 export type StaffPatchBody = z.infer<typeof staffPatchBody>;
+export type DeclaredCapabilitiesBody = z.infer<typeof declaredCapabilitiesBody>;
 
 /**
  * The out-of-service reason on a bed added from settings. A reason is

@@ -41,6 +41,7 @@ export interface SetupSnapshot {
     readonly noShowGraceMinutes: number;
     readonly lateReinsertAfter: number;
     readonly staleThresholdMinutes: number;
+    readonly smsBudgetMonthly: number | null;
   };
   readonly departments: readonly {
     readonly id: string;
@@ -96,6 +97,14 @@ export interface SetupSnapshot {
     readonly lastLoginAt: string | null;
     readonly roles: readonly string[];
   }[];
+  /** What the facility offers in an emergency, and when each was last confirmed. */
+  readonly capabilities: readonly {
+    readonly kind: string;
+    readonly isAvailable: boolean;
+    readonly updatedAt: string;
+  }[];
+  /** When this answer was read, for the screen's freshness line. */
+  readonly serverTs: string;
 }
 
 export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null> {
@@ -120,12 +129,13 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     no_show_grace_minutes: number | null;
     late_reinsert_after: number | null;
     stale_threshold_minutes: number | null;
+    sms_budget_monthly: number | null;
   }>`
     SELECT h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
            h.thana, h.address_bn, h.address_en, h.phone, h.emergency_phone,
            h.lat::float8 AS lat, h.lng::float8 AS lng, h.is_live, h.onboarded_at,
            s.no_show_grace_patients, s.no_show_grace_minutes, s.late_reinsert_after,
-           s.stale_threshold_minutes
+           s.stale_threshold_minutes, s.sms_budget_monthly
       FROM hospitals h
       LEFT JOIN hospital_settings s ON s.hospital_id = h.id
      WHERE h.id = ${hospitalId} AND h.deleted_at IS NULL
@@ -258,6 +268,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       noShowGraceMinutes: row.no_show_grace_minutes ?? 15,
       lateReinsertAfter: row.late_reinsert_after ?? 3,
       staleThresholdMinutes: row.stale_threshold_minutes ?? 10,
+      smsBudgetMonthly: row.sms_budget_monthly,
     },
     departments: departments.rows.map((d) => ({
       id: d.id,
@@ -315,6 +326,8 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       lastLoginAt: s.last_login_at?.toISOString() ?? null,
       roles: s.roles ?? [],
     })),
+    capabilities: await capabilitiesOf(hospitalId),
+    serverTs: new Date().toISOString(),
   };
 }
 
@@ -360,6 +373,7 @@ export interface RuleFields {
   readonly noShowGraceMinutes?: number | undefined;
   readonly lateReinsertAfter?: number | undefined;
   readonly staleThresholdMinutes?: number | undefined;
+  readonly smsBudgetMonthly?: number | null | undefined;
 }
 
 export async function updateRules(trx: Tx, hospitalId: string, fields: RuleFields): Promise<void> {
@@ -373,6 +387,8 @@ export async function updateRules(trx: Tx, hospitalId: string, fields: RuleField
       no_show_grace_minutes = coalesce(${fields.noShowGraceMinutes ?? null}::int, no_show_grace_minutes),
       late_reinsert_after = coalesce(${fields.lateReinsertAfter ?? null}::int, late_reinsert_after),
       stale_threshold_minutes = coalesce(${fields.staleThresholdMinutes ?? null}::int, stale_threshold_minutes),
+      sms_budget_monthly = CASE WHEN ${fields.smsBudgetMonthly !== undefined}
+                                THEN ${fields.smsBudgetMonthly ?? null}::int ELSE sms_budget_monthly END,
       updated_at = now()
     WHERE hospital_id = ${hospitalId}
   `.execute(trx);
@@ -918,4 +934,44 @@ export async function markDoctorVerified(bmdcNumber: string): Promise<string | n
     RETURNING full_name_en
   `.execute(db);
   return result.rows[0]?.full_name_en ?? null;
+}
+
+// --- capabilities the facility offers (FR-EMG-05) ------------------------------
+
+export async function capabilitiesOf(
+  hospitalId: string,
+): Promise<{ kind: string; isAvailable: boolean; updatedAt: string }[]> {
+  const result = await sql<{ kind: string; is_available: boolean; updated_at: Date }>`
+    SELECT kind::text AS kind, is_available, updated_at FROM capabilities
+     WHERE hospital_id = ${hospitalId} ORDER BY kind
+  `.execute(db);
+  return result.rows.map((row) => ({
+    kind: row.kind,
+    isAvailable: row.is_available,
+    updatedAt: row.updated_at.toISOString(),
+  }));
+}
+
+/**
+ * Makes the facility offer exactly `kinds`. A kind newly offered starts
+ * unavailable: saying "we have a burn unit" is not saying it has a bed free
+ * now, and only the ER confirms that (`PUT /hospitals/:id/capabilities`). A
+ * kind no longer offered is removed, so emergency search stops considering
+ * it. A kind still offered keeps its state and its age.
+ */
+export async function declareCapabilities(
+  trx: Tx,
+  input: { hospitalId: string; kinds: readonly string[]; by: string },
+): Promise<void> {
+  await sql`
+    DELETE FROM capabilities
+     WHERE hospital_id = ${input.hospitalId} AND NOT (kind::text = ANY(${[...input.kinds]}::text[]))
+  `.execute(trx);
+  for (const kind of input.kinds) {
+    await sql`
+      INSERT INTO capabilities (hospital_id, kind, is_available, updated_by)
+      VALUES (${input.hospitalId}, ${kind}::capability_kind, false, ${input.by})
+      ON CONFLICT (hospital_id, kind) DO NOTHING
+    `.execute(trx);
+  }
 }

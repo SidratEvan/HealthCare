@@ -1,8 +1,8 @@
 /**
  * `/` — the console: reception (`S-B-02`), the doctor (`S-B-05`), the ward
  * board (`S-B-06`), the emergency department (`S-B-07`), the lab (`S-B-08`),
- * the pharmacy (`S-B-09`), the hospital dashboard (`S-B-10`) or the national
- * dashboard (`S-B-13`).
+ * the pharmacy (`S-B-09`), the hospital dashboard (`S-B-10`) and its settings
+ * (`S-B-11`), or the national dashboard (`S-B-13`).
  *
  * A client component in full. Every part of these screens is live: state
  * arrives over a socket, actions are applied optimistically against a local
@@ -33,6 +33,7 @@ import { ConsoleStarting } from '@/components/ConsoleStarting';
 import { DoctorConsole } from '@/components/DoctorConsole';
 import { EmergencyConsole } from '@/components/EmergencyConsole';
 import { GovDashboard } from '@/components/GovDashboard';
+import { HospitalSettings } from '@/components/HospitalSettings';
 import { LabConsole } from '@/components/LabConsole';
 import { PharmacyConsole } from '@/components/PharmacyConsole';
 import { ReceptionConsole } from '@/components/ReceptionConsole';
@@ -191,6 +192,8 @@ export default function Page(): ReactNode {
   if (view === 'lab' && session?.role === 'lab') return <LabConsole />;
   if (view === 'pharmacy' && session?.role === 'pharmacy') return <PharmacyConsole />;
   if (view === 'admin' && session?.role === 'hospital_admin') return <AdminDashboard />;
+  // Opened from the dashboard's header (pilot step 22).
+  if (view === 'settings' && session?.role === 'hospital_admin') return <HospitalSettings />;
 
   // The national layer (`S-B-13`, step 20): no hospital, no chamber.
   if (view === 'gov' && session?.role === 'gov_viewer') return <GovDashboard />;

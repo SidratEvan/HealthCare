@@ -9,8 +9,10 @@
  * (a department's code, a doctor's BMDC number, a bed's label, an email),
  * which answer a replay with `SETTINGS_DUPLICATE`.
  *
- * Capabilities are not here: `PUT /hospitals/:id/capabilities` already
- * admits a hospital administrator (§7.5), and `S-B-11` calls it.
+ * Capabilities come in two halves. Which kinds this facility offers is set
+ * here (`PUT /hospital/capabilities`); whether each is available right now
+ * is the ER's `PUT /hospitals/:id/capabilities` (§7.5), which refuses a kind
+ * the facility never declared.
  */
 
 import { Router } from 'express';
@@ -18,6 +20,7 @@ import { Router } from 'express';
 import {
   bedPatchBody,
   bedsBody,
+  declaredCapabilitiesBody,
   departmentBody,
   departmentPatchBody,
   doctorBody,
@@ -148,6 +151,14 @@ hospitalSettingsRoutes.post(
   write,
   validate({ ...byId, body: emptyBody }),
   settings.postResetPassword,
+);
+
+hospitalSettingsRoutes.put(
+  '/hospital/capabilities',
+  ...admin,
+  write,
+  validate({ body: declaredCapabilitiesBody }),
+  settings.putCapabilities,
 );
 
 hospitalSettingsRoutes.post(

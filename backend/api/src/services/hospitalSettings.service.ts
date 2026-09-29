@@ -34,6 +34,7 @@ import {
   type FacilityRole,
   type BedPatchBody,
   type BedsBody,
+  type DeclaredCapabilitiesBody,
   type DepartmentBody,
   type DepartmentPatchBody,
   type DoctorBody,
@@ -441,6 +442,22 @@ export async function resetStaffPassword(
   });
   await staffAuthRepo.revokeOtherSessions(staffId, null);
   return { temporaryPassword: password };
+}
+
+// --- capabilities (FR-EMG-05) ----------------------------------------------------
+
+export async function declareCapabilities(
+  actor: Actor,
+  body: DeclaredCapabilitiesBody,
+): Promise<void> {
+  await change(actor, { table: 'capabilities', change: 'capabilities_declared' }, async (trx) => {
+    await repo.declareCapabilities(trx, {
+      hospitalId: actor.hospitalId,
+      kinds: body.kinds,
+      by: actor.staffId,
+    });
+    return { result: undefined, subjectId: actor.hospitalId };
+  });
 }
 
 // --- going live ----------------------------------------------------------------

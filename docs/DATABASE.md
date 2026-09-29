@@ -365,7 +365,7 @@ Patient-uploaded paper records (`FR-PAT-62`): `id`, `patient_id`, `file_url`, `d
 `id`, `hospital_id`, `ward_id`, `label` (`301`), `kind` bed_kind, `state` bed_state, `nightly_poisha`, `last_cleaned_at`, `expected_discharge_date`, `current_admission_id`, `reserved_until`, `oos_reason`, `state_changed_at`.
 **IX:** `(hospital_id, kind, state)` — powers public bed counts.
 `(ward_id, hospital_id)` references `wards (id, hospital_id)`, so a bed cannot be filed under another hospital's ward. CHECKs make each state say what it must: occupied ⇔ `current_admission_id`, reserved ⇔ `reserved_until`, out of service ⇔ a non-blank `oos_reason`; a discharge forecast only on an occupied bed.
-`reserved_until` and `oos_reason` exist because `BTN-B06-RESERVE` ("hold with expiry") and `BTN-B06-OOS` ("with reason") need them somewhere a query can read — the public view counts a lapsed hold as free. `state_changed_at` drives the cleaning timer and "occupied for N days".
+A bed added from `S-B-11` (pilot step 22) starts `out_of_service` with `oos_reason = 'setup:unconfirmed'`, a code the board translates, so a bed nobody at the ward has looked at never counts as free. `reserved_until` and `oos_reason` exist because `BTN-B06-RESERVE` ("hold with expiry") and `BTN-B06-OOS` ("with reason") need them somewhere a query can read — the public view counts a lapsed hold as free. `state_changed_at` drives the cleaning timer and "occupied for N days".
 
 #### `bed_events`
 Append-only like the queue: `id`, `hospital_id`, `bed_id`, `type` (`ADMIT`,`DISCHARGE`,`TRANSFER`,`RESERVE`,`RELEASE`,`CLEAN_START`,`CLEAN_DONE`,`OOS`,`RESTORE`), `from_state`, `to_state`, `admission_id`, `bed_request_id`, `actor_staff_id`, `payload`, `client_event_id` **U** (partial), `client_ts`, `server_ts`.

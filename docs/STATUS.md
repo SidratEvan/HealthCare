@@ -7,8 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/staff-auth` — **staff sign in with their own accounts**
-(pilot step 21; below, *Step 21*). Before that, `chore/pilot-scope` — **the
+Last updated: `feat/hospital-settings` — **a hospital sets itself up from
+`S-B-11`** (pilot step 22; below, *Step 22*). Before that, `feat/staff-auth` —
+**staff sign in with their own accounts** (pilot step 21; below, *Step 21*).
+Before that, `chore/pilot-scope` — **the
 pilot build is in the documents**:
 import requirements, auth un-deferred, steps 21–28 (below, *The Marks
 handbook*). Before that, `fix/console-rail-billing` — **the rail's বিল no
@@ -68,8 +70,9 @@ Before that, `feat/standby-self-serve` (decision 62) and `feat/check-in`
 | 19 | `feat/admin-dashboard` | merged — migration 0020, `S-B-10`, the standby card on `S-B-02` (`BTN-B02-OFFER`), CSV export with audit, `no-show-recovery.spec.ts`. **Average wait is not measured**: nothing records a patient arriving (decision 61) |
 | 20 | `feat/gov-dashboard` | merged — migrations 0024–0026, `S-B-13`, `gov_reader`, `CHIP-B05-SIGNAL`, `seed_09_signals`, `gov-dashboard.spec.ts`. **Decision 5 implemented, not ruled**: national roles hold a null hospital. `FR-GOV-05` (shared health record) waits for a counterparty |
 | **21** | **`feat/staff-auth`** | **merged — the pilot's first step** (`CLAUDE.md` §4.2). Migration 0027, `S-B-00` sign-in, `S-B-00c` first password, the picker narrowed to the person's own facility and roles, refresh rotation, lockout, `pnpm staff:create`, `staff-login.spec.ts` |
-| 22 | `feat/hospital-settings` | next |
-| 23–28 | pilot steps | not started — see `CLAUDE.md` §4.2 |
+| **22** | **`feat/hospital-settings`** | **merged** — migration 0028, `S-B-11`, `/hospital/*`, the hourly session materialiser in the API, `pnpm doctor:verify`, `hospital-settings.spec.ts` |
+| 23 | `feat/counter-registration` | next |
+| 24–28 | pilot steps | not started — see `CLAUDE.md` §4.2 |
 
 **Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design). What
 remains is the owner's: the open decisions below, applying migrations to
@@ -156,6 +159,60 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Step 22 — a hospital sets itself up (`feat/hospital-settings`)
+
+**What a real deployment now does.** After `pnpm staff:create`, the facility's
+administrator signs in, opens the dashboard, and **সেটিংস খুলুন** leads to
+`S-B-11`: facility details and queue rules (with the SMS budget), departments,
+doctors and their weekly chambers, wards and beds, the emergency services
+offered, and staff accounts. A status card counts what is set up and carries
+**লাইভ করুন**. `hospital-settings.spec.ts` does all of it through the browser
+on a facility that starts with nothing but a name and an administrator, and a
+receptionist the screen created then signs in with the temporary password it
+showed once.
+
+**Chambers come from schedules now.** Migration 0028 gives `sessions` a
+`template_id` and a unique (template, date) index. The API process writes
+today plus seven days from every schedule at start-up, hourly, and straight
+after a schedule is added (`sessionMaterialise.service`, `SESSION_MATERIALISE`).
+It is idempotent by the index, so it cannot double a chamber. The seeds link
+their sessions to their templates, so the job writes nothing on a fresh demo;
+on the deployed demo it writes the eighth day after midnight, which the daily
+reset used to be the only thing doing.
+
+**Rules a reader would not guess** (all in `hospitalSettings.service.ts`):
+- A BMDC number already known **links that doctor** instead of making a second
+  record. A doctor's names and degrees change only while unverified and sat at
+  no other facility; after that they are the register's.
+- **`pnpm doctor:verify --bmdc A-12345`** is the platform's half of
+  `FR-SUP-02`. A hospital cannot verify its own doctors. Discovery shows only
+  verified doctors, so a facility can go live before its doctors appear.
+- A fee or room change reaches chambers **still scheduled from today**; a
+  booking keeps its own fee.
+- Removing a schedule removes its future chambers **nobody booked**; booked ones
+  stay for the counter, and the toast says how many.
+- **A new bed is out of service** with the reason code `setup:unconfirmed`
+  (the board shows "added in settings — not yet confirmed by the ward") until
+  the ward restores it. A public count never includes a bed nobody checked.
+- **Declaring a capability makes it unavailable** until the ER says otherwise;
+  the ER's own endpoint still refuses a kind never declared.
+- An administrator **cannot deactivate themself, drop their own admin role, or
+  reset their own password** here. Deactivating or changing roles ends that
+  account's refresh tokens.
+- **Soft-deleted roles are no longer issued.** `staffAuth.repo.rolesOf` and
+  the demo picker's queries ignored `staff_roles.deleted_at`; removing a role
+  from `S-B-11` would otherwise have done nothing until the row was deleted.
+
+**Not on the screen, deliberately.** *Counters* have nothing to configure
+until counter registration (step 23) gives them a use: nothing reads
+`staff_roles.scope` yet. The *refund policy* stays the agreed default (see the
+payment decisions); it is not a setting a facility edits. *A doctor account
+linked to its `doctors` row* (so a doctor sees only their own chambers, see
+*Step 21*) still has no column; it needs a migration and is open.
+
+**Before this reaches the deployed demo:** apply 0028 to Supabase before the
+API deploys — the materialiser and the seeds read `sessions.template_id`.
 
 ### Step 21 — staff sign in with their own accounts (`feat/staff-auth`)
 
