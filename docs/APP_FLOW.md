@@ -111,6 +111,8 @@ Every control row reads:
 
 **Failures:** wrong code → shake + inline "কোড মেলেনি"; expired → offer resend; 5 wrong attempts → lock 15 min with countdown.
 
+> **Built in pilot step 25, on the Profile tab** (`/profile`), not as a first-launch wall: the app never asks for a sign-in before it is useful (`FR-GST-01`). `S-A-03` and `S-A-04` are one screen in two stages; the six boxes auto-submit. On a demonstration the code is also shown under the boxes ("ডেমো: …"). After verifying, `S-A-20` opens when the number holds anything to claim; otherwise the account's profiles, each with its records. `S-A-05` (creating a profile by hand) and `S-A-06` are not built: in this version a profile comes from a booking or a claim.
+
 ### `S-A-05` Create first profile (`FR-PAT-02`)
 
 Progressive disclosure: one question per screen-block, all required fields visible in one scroll.
@@ -172,6 +174,8 @@ Shown only when money or an SMS thread follows (`FR-GST-03`). Not shown for emer
 | 6-digit input | `INP-GST-OTP` | Auto-submit; SMS autofill |
 | যাচাই করুন | `BTN-GST-VERIFY` | → `POST /guest/verify` → returns a **guest token** bound to phone + device. Creates no account, asks nothing further (`FR-GST-04`) |
 
+> **Built in pilot step 25** on the confirm step: **সিরিয়াল নিন** first asks `POST /guest/start`; a new number gets the six boxes inline, then the booking goes with the guest token. On a demonstration (`GUEST_BOOKING_OTP` unset with `DEMO_MODE`) nothing is asked, as before.
+
 ### Guest booking completion
 
 1. `BTN-A07C-CONFIRM` runs the normal booking chain with the guest token in place of a user token.
@@ -198,6 +202,8 @@ Triggered automatically after an account is created with a phone that has guest 
 |---|---|---|
 | List of past bookings and records | — | Read-only preview |
 | যোগ করুন | `BTN-A20-CLAIM` | Links all guest records to the new account under a chosen profile; one confirmation, no re-entry of any detail |
+
+> **Built in pilot step 25.** Lists each patient with their serial and record counts, and names the hospital for one a hospital imported (`FR-IMP-10`). **যোগ করুন** takes them all; **এখন না** leaves them to be claimed at the next sign-in.
 | না, থাক | `BTN-A20-SKIP` | Leaves them unlinked; offer reappears in settings |
 
 ### Guest in emergency (`FR-GST-03`)

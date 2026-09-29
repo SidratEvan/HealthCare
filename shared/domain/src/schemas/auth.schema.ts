@@ -42,6 +42,39 @@ export const staffPasswordBody = z.strictObject({
   next: password,
 });
 
+// --- Patients: phone and a one-time code (pilot step 25, FR-PAT-01) ---------
+
+/** A phone as the patient types it; the server normalises it or refuses it (`DB-P6`). */
+const typedPhone = z.string().trim().min(10).max(20);
+
+/** `POST /auth/otp`. */
+export const otpRequestBody = z.strictObject({ phone: typedPhone });
+
+/** `POST /auth/verify`. Six Latin digits; the app converts Bengali ones as typed. */
+export const otpVerifyBody = z.strictObject({
+  phone: typedPhone,
+  code: z.string().regex(/^\d{6}$/),
+});
+
+/** `POST /auth/refresh` and `POST /auth/logout`. */
+export const patientRefreshBody = z.strictObject({ refresh: z.string().min(20).max(200) });
+
+/** `POST /guest/claim`: without `confirm`, the preview; with it, the claim (`FR-GST-09`). */
+export const claimBody = z.strictObject({ confirm: z.boolean().default(false) });
+
+/** `POST /guest/start` — the phone and name from `MOD-A07-GUEST`. */
+export const guestStartBody = z.strictObject({
+  phone: typedPhone,
+  name: z.string().trim().min(1).max(120),
+});
+
+/** `POST /guest/verify` — the code from `MOD-GST-OTP`. */
+export const guestVerifyBody = z.strictObject({
+  phone: typedPhone,
+  name: z.string().trim().min(1).max(120),
+  code: z.string().regex(/^\d{6}$/),
+});
+
 export type StaffLoginBody = z.infer<typeof staffLoginBody>;
 export type StaffRefreshBody = z.infer<typeof staffRefreshBody>;
 export type StaffPasswordBody = z.infer<typeof staffPasswordBody>;

@@ -105,15 +105,15 @@ test.describe('NAV-A the bottom navigation', () => {
     }
   });
 
-  test('a tab this version does not have says what will be there', async ({ page }) => {
+  test('the Profile tab offers sign-in, and says booking never needs it (FR-GST-01)', async ({
+    page,
+  }) => {
+    // Profile was the "not built yet" tab until pilot step 25 gave patients a
+    // phone sign-in; `patient-account.spec.ts` walks the rest of it.
     await page.goto(`${PATIENT}/profile`);
-
-    // Profile is `S-A-19`, which needs the accounts `CLAUDE.md` §4.1 defers.
-    // Greying it out would say "broken"; hiding it would move the bar as the
-    // product grows. (Records was this test's subject until step 13 built it.)
-    const explanation = page.getByTestId('not-built');
-    await expect(explanation).toBeVisible();
-    await expect(explanation).toContainText('শীঘ্রই আসছে');
+    await expect(page.getByTestId('signin-phone')).toBeVisible();
+    await expect(page.getByTestId('signin-phone')).toContainText('বুকিংয়ের জন্য লগ ইন লাগে না');
+    await expect(page.getByTestId('not-built')).toHaveCount(0);
   });
 
   test('the quick tiles all reach a screen (S-A-02)', async ({ page }) => {

@@ -2562,6 +2562,69 @@ export const PATIENT = {
     bn: 'এটি একটি ডেমো। সব তথ্য প্রদর্শনের জন্য তৈরি।',
     en: 'This is a demonstration. All data here is for display only.',
   },
+  // --- Signing in and claiming (S-A-03, S-A-04, S-A-20, pilot step 25) -------------
+  accountIntro: {
+    bn: 'মোবাইল নম্বর দিয়ে লগ ইন করলে এই নম্বরে আগে নেওয়া সিরিয়াল আর রেকর্ড এক জায়গায় দেখতে পাবেন। বুকিংয়ের জন্য লগ ইন লাগে না।',
+    en: 'Sign in with your mobile number to see the serials and records this number already holds, in one place. Booking never needs it.',
+  },
+  accountSendCode: { bn: 'কোড পাঠান', en: 'Send code' },
+  accountCode: { bn: '৬ অঙ্কের কোড', en: '6-digit code' },
+  accountCodeSent: {
+    bn: '{phone} নম্বরে একটি কোড পাঠানো হয়েছে।',
+    en: 'A code was sent to {phone}.',
+  },
+  accountDemoCode: {
+    bn: 'ডেমো: এসএমএস ছাড়াই দেখানো হচ্ছে — কোড {code}',
+    en: 'Demo: shown here without an SMS — code {code}',
+  },
+  accountResendIn: {
+    bn: '{seconds} সেকেন্ড পর আবার পাঠানো যাবে',
+    en: 'Can send again in {seconds} seconds',
+  },
+  accountResend: { bn: 'আবার পাঠান', en: 'Send again' },
+  accountChangeNumber: { bn: 'নম্বর বদলান', en: 'Change number' },
+  accountOffline: { bn: 'ইন্টারনেট সংযোগ লাগবে', en: 'This needs a connection' },
+  accountPhoneInvalid: {
+    bn: 'এটি বাংলাদেশের মোবাইল নম্বর নয়। যেমন ০১৭১২৩৪৫৬৭৮।',
+    en: 'That is not a Bangladeshi mobile number, such as 01712345678.',
+  },
+  accountTooMany: {
+    bn: 'এই নম্বরে অনেকবার কোড পাঠানো হয়েছে। এক ঘণ্টা পর আবার চেষ্টা করুন।',
+    en: 'Too many codes sent to this number. Try again in an hour.',
+  },
+  accountLocked: {
+    bn: 'অনেকবার ভুল কোড দেওয়া হয়েছে। ১৫ মিনিট পর আবার চেষ্টা করুন।',
+    en: 'Too many wrong codes. Try again in 15 minutes.',
+  },
+  accountCodeWrong: {
+    bn: 'কোড মেলেনি। আবার লিখুন।',
+    en: 'That code is not right. Enter it again.',
+  },
+  accountCodeExpired: {
+    bn: 'কোডের মেয়াদ শেষ। আবার পাঠান।',
+    en: 'The code has expired. Send a new one.',
+  },
+  accountSignedOut: { bn: 'আবার লগ ইন করুন।', en: 'Please sign in again.' },
+  accountFailed: { bn: 'করা যায়নি। আবার চেষ্টা করুন।', en: 'That did not work. Try again.' },
+  accountSignedInAs: { bn: 'লগ ইন করা নম্বর', en: 'Signed in as' },
+  accountSignOut: { bn: 'লগ আউট', en: 'Sign out' },
+  accountNoProfiles: {
+    bn: 'এই অ্যাকাউন্টে এখনো কোনো রোগীর তথ্য নেই। এই নম্বরে সিরিয়াল নিলে এখানে দেখা যাবে।',
+    en: 'No patients in this account yet. A serial booked with this number will appear here.',
+  },
+  accountNoDiagnosis: { bn: 'রোগনির্ণয় লেখা হয়নি', en: 'No diagnosis written' },
+  claimTitle: { bn: 'আপনার আগের সিরিয়াল ও রেকর্ড', en: 'Your earlier serials and records' },
+  claimIntro: {
+    bn: 'এই নম্বরে আগে যাঁদের নামে সিরিয়াল নেওয়া হয়েছে বা কোনো হাসপাতাল তথ্য রেখেছে, তাঁরা নিচে আছেন। একবারে আপনার অ্যাকাউন্টে যোগ করুন।',
+    en: 'These are the people this number booked for, or that a hospital holds with it. Add them all to your account at once.',
+  },
+  claimCounts: {
+    bn: '{bookings}টি সিরিয়াল · {visits}টি রেকর্ড',
+    en: '{bookings} serials · {visits} records',
+  },
+  claimHeldBy: { bn: '{hospital}-এর খাতায়', en: "In {hospital}'s register" },
+  claimConfirm: { bn: 'যোগ করুন', en: 'Add them' },
+  claimLater: { bn: 'এখন না', en: 'Not now' },
 } as const satisfies Record<string, Message>;
 
 export type PatientKey = keyof typeof PATIENT;
@@ -2592,5 +2655,21 @@ export function format(
   return Object.entries(values).reduce(
     (message, [name, value]) => message.replaceAll(`{${name}}`, value),
     t(key, locale),
+  );
+}
+
+/**
+ * The patient catalogue's `format`: a message with its `{placeholders}` filled
+ * (pilot step 25, `S-A-04`'s "a code was sent to {phone}"). Same rules as the
+ * console's — an unfilled placeholder stays visible rather than blank.
+ */
+export function formatPatient(
+  key: PatientKey,
+  locale: Locale,
+  values: Readonly<Record<string, string>>,
+): string {
+  return Object.entries(values).reduce(
+    (message, [name, value]) => message.replaceAll(`{${name}}`, value),
+    tp(key, locale),
   );
 }

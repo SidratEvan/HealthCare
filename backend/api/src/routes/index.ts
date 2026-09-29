@@ -27,6 +27,7 @@ import { healthRoutes } from './health.routes.js';
 import { hospitalSettingsRoutes } from './hospitalSettings.routes.js';
 import { importRoutes } from './import.routes.js';
 import { labRoutes } from './lab.routes.js';
+import { patientAuthRoutes } from './patientAuth.routes.js';
 import { paymentRoutes } from './payment.routes.js';
 import { queueRoutes } from './queue.routes.js';
 import { referralRoutes } from './referral.routes.js';
@@ -62,6 +63,9 @@ export function buildApiRouter(): Router {
   // Staff sign-in (pilot step 21). Login and refresh are public because the
   // credential is in the body; the rest need the token they hand out.
   router.use(staffAuthRoutes);
+  // A patient's phone and one-time code (pilot step 25); the code routes are
+  // public, profiles and claiming need the account.
+  router.use(patientAuthRoutes);
   router.use(bookingRoutes);
   router.use(queueRoutes);
   // Finding and registering a patient at the counter (pilot step 23, S-B-03);

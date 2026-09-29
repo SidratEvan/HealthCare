@@ -150,6 +150,11 @@ A hospital-held patient is visible only to that hospital's staff under the usual
 
 **U:** `(staff_user_id, hospital_id, role)`, and `(staff_user_id, role)` where `hospital_id` is null — two nulls are distinct to a unique index, so the national half needs its own (0024). A national account's email is unique across national accounts for the same reason.
 
+#### `otp_challenges` (`FR-PAT-01`, `FR-SEC-05`) — 0032
+`id`, `phone` (normalised), `code_hash` (HMAC-SHA256 of phone and code — never the code), `attempts`, `expires_at`, `consumed_at`, `locked_until`, `ip`, `created_at`.
+
+One row per code sent. A new code consumes any open one for the number, so only the latest works. Five wrong entries consume it and set `locked_until` fifteen minutes ahead, which refuses both sending and verifying for that number. The send limit (`OTP_MAX_PER_HOUR`) counts these rows. Shared by an account's sign-in and a guest's phone check (`FR-GST-03`).
+
 #### `sessions_auth` (login sessions)
 `id`, `subject_id`, `subject_kind` (`user`/`guest`/`staff`), `token_hash`, `device_fingerprint`, `ip`, `expires_at`, `revoked_at`.
 
@@ -623,6 +628,7 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0030_hospital_patients.sql     -- step 24: patients.owner_hospital_id, patients_one_owner widened,
                                    -- external_kind, external_refs (§2.1)
     0031_imports.sql               -- step 24: import_set, import_state, import_batches, import_rows (§2.6b)
+    0032_patient_otp.sql           -- step 25: otp_challenges (§2.1)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

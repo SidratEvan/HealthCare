@@ -238,6 +238,12 @@ const schema = z.object({
   SESSION_MATERIALISE: boolish.default(true),
 
   /**
+   * Whether a guest booking must prove its phone with a code first (pilot
+   * step 25, `FR-GST-03`). Unset means: on, except on a demonstration.
+   */
+  GUEST_BOOKING_OTP: boolish.optional(),
+
+  /**
    * How many reverse proxies sit in front of this process.
    *
    * Render terminates TLS and forwards the caller's address in

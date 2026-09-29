@@ -7,8 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/data-import` — **a hospital imports what it already
-holds** (pilot step 24; below, *Step 24*). Before that, `feat/counter-registration`
+Last updated: `feat/patient-otp` — **a patient proves a phone and finds what
+it holds** (pilot step 25; below, *Step 25*). Before that, `feat/data-import`
+— **a hospital imports what it already holds** (pilot step 24; below, *Step
+24*). Before that, `feat/counter-registration`
 — **walk-ins and the registration desk** (pilot step 23; below, *Step 23*).
 Before that, `feat/hospital-settings`
 — **a hospital sets itself up from `S-B-11`** (pilot step 22; below, *Step
@@ -77,8 +79,9 @@ Before that, `feat/standby-self-serve` (decision 62) and `feat/check-in`
 | **22** | **`feat/hospital-settings`** | **merged** — migration 0028, `S-B-11`, `/hospital/*`, the hourly session materialiser in the API, `pnpm doctor:verify`, `hospital-settings.spec.ts` |
 | **23** | **`feat/counter-registration`** | **merged** — `S-B-03`, `MOD-B02-WALKIN`, `/registration/patients`, the walk-in replay fix, `counter-registration.spec.ts` |
 | **24** | **`feat/data-import`** | **merged** — migrations 0029–0031, `S-B-14`, `/hospital/imports`, sets A–C, undo, the body-limit fix, `data-import.spec.ts` |
-| 25 | `feat/patient-otp` | next |
-| 26–28 | pilot steps | not started — see `CLAUDE.md` §4.2 |
+| **25** | **`feat/patient-otp`** | **merged** — migration 0032, `/auth/*`, `/guest/start`, `/guest/verify`, `/guest/claim`, the Profile tab, `patient-account.spec.ts` |
+| 26 | `chore/self-host` | next |
+| 27–28 | pilot steps | not started — see `CLAUDE.md` §4.2 |
 
 **Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design). What
 remains is the owner's: the open decisions below, applying migrations to
@@ -136,15 +139,15 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 4407, in about two and a half minutes.
-`pnpm test:e2e` reports 131, in Chromium, against the real API and the seeded
+`pnpm test` reports 4470, in about two and a half minutes.
+`pnpm test:e2e` reports 132, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 5 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`, 1 in `data-import.spec.ts`. The last full
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`, 1 in `data-import.spec.ts`, 1 in `patient-account.spec.ts`. The last full
 run took twenty-three minutes.
 
 **The two `demo.routes.test.ts` failures were Fridays, not early mornings —
@@ -165,6 +168,43 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Step 25 — a patient proves a phone and finds what it holds (`feat/patient-otp`)
+
+**What a patient now does.** The Profile tab (a placeholder until now) signs
+in with a mobile number and a six-digit code (`S-A-03`, `S-A-04`). If the
+number holds anything no account owns — bookings made as a guest, patients a
+hospital imported — `S-A-20` lists them and **যোগ করুন** takes them over in
+one step (`FR-GST-09`); then the account's profiles show, each with its
+records. `patient-account.spec.ts`: a guest books, is seen and signed off,
+then on another device signs in and reads the record.
+
+**The code** (migration 0032, `otp_challenges`): six digits, five minutes,
+only a keyed hash stored, the latest the only one that works, five an hour
+per number, five wrong entries lock the number fifteen minutes (`FR-SEC-05`).
+It is sent marked sensitive, so **no provider prints it** — the log provider
+writes "withheld" where the body would be. **On a demonstration the code comes
+back in the response and the app shows it** under the boxes; `DEMO_MODE`
+cannot run in production, so a real deployment never does this.
+
+**The session** is step 21's shape for patients: fifteen-minute access, a
+rotating refresh token, reuse ends every session — and the refresh token is
+**bound to the browser that signed in**; carried elsewhere it is refused. It
+lives in `localStorage` (a patient app that forgets its person on every tab
+close is not one people keep), guarded for private windows.
+
+**A guest proves the phone before booking (`FR-GST-03`) — on a real
+deployment.** `POST /guest/start` answers whether a code is needed: a number
+that has proved itself before is not asked again (`FR-GST-12`). The booking
+then needs the guest token for that number. **`GUEST_BOOKING_OTP` unset means
+on, except under `DEMO_MODE`**, where the demo keeps its one-tap booking the
+way it keeps the password-less picker; that is why every booking e2e spec is
+unchanged, and why the code path is covered by API tests rather than the
+browser. Set it to `true` on a demo to show the check.
+
+**Not built.** `S-A-05`/`S-A-06` (making and switching profiles by hand):
+in this version a profile comes from a booking or a claim. The NID is not asked
+for anywhere (see *Step 23*).
 
 ### Step 24 — a hospital imports what it already holds (`feat/data-import`)
 
