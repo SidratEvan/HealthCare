@@ -36,6 +36,11 @@ export interface SmsMessage {
   /** The notification row this belongs to, for correlation. */
   readonly notificationId: string;
   readonly templateKey: string;
+  /**
+   * The body holds a secret — a sign-in code (pilot step 25). Sent as written;
+   * never printed or logged, not even by the log provider (CLAUDE.md §7).
+   */
+  readonly sensitive?: boolean;
 }
 
 /** What it reports back. Recorded verbatim onto the notification row. */
@@ -83,7 +88,9 @@ export class LogSmsAdapter implements SmsAdapter {
     // terminal *is* the recipient's handset — a demo operator reads the
     // message here. The structured line below carries no content.
     // eslint-disable-next-line no-console -- the log provider's entire purpose (CLAUDE.md §1.1)
-    console.log(`\n  SMS → ${message.to}\n  ${message.body}\n`);
+    console.log(
+      `\n  SMS → ${message.to}\n  ${message.sensitive === true ? '[a sign-in code — withheld from the log]' : message.body}\n`,
+    );
 
     logger.info(
       { notificationId: message.notificationId, templateKey: message.templateKey, channel: 'sms' },
