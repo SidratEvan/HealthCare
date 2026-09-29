@@ -1,0 +1,21 @@
+# The three addresses a hospital's server answers (pilot step 26).
+#
+# Each origin in deploy/.env is a site here. Given as https://… (or a bare
+# name) Caddy obtains and renews its certificate itself; given as http://… it
+# is served plainly, for trying the stack on a machine with no public name.
+
+{$APP_ORIGIN} {
+	encode gzip
+	reverse_proxy patient:3000
+}
+
+{$CONSOLE_ORIGIN} {
+	encode gzip
+	reverse_proxy console:3100
+}
+
+{$API_ORIGIN} {
+	encode gzip
+	# The realtime socket upgrades on this same address (BACKEND.md §6).
+	reverse_proxy api:4000
+}

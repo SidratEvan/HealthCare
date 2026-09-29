@@ -155,6 +155,8 @@ export const ERROR_CODES = {
 
   // --- Payments (FR-PAY-03, FR-PAY-06) -------------------------------------
   PAYMENT_FAILED: { status: 402, message: 'The payment provider declined the transaction.' },
+  /** `PAYMENT_PROVIDER=off`: this deployment takes payment at the hospital only (pilot step 26). */
+  PAYMENT_UNAVAILABLE: { status: 422, message: 'Only paying at the hospital is available here.' },
   /**
    * The hospital has set no cancellation terms, so there is no rule to
    * enforce (`FR-PAY-03`). A 409 rather than a 500: nothing is broken, and

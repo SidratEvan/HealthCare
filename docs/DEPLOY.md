@@ -238,3 +238,152 @@ the demo would have sent.
   stands in for it. Share the link accordingly.
 - **Not holding real data, ever** (`FR-SEC-08`). If a real patient's details
   are ever typed into this deployment, reset it.
+
+
+---
+
+# Part S — On a hospital's own server in Bangladesh
+
+The pilot build (`CLAUDE.md` §4.2, pilot step 26). Everything above deploys
+the **demonstration**; this part deploys the **real** thing for one
+hospital, on a machine the hospital controls, in Bangladesh (`FR-SEC-07`).
+Real patient data lives here and nowhere else — not on Supabase, Render or
+Vercel, and never in a development or demo database (`FR-SEC-08`,
+`FR-IMP-11`).
+
+One command starts the whole stack: the database, the migrations, the API,
+the two web apps, a web server that holds the TLS certificates, and a nightly
+backup (`deploy/docker-compose.yml`, built from the root `Dockerfile`).
+
+## S1. The machine
+
+- A Linux server (Ubuntu 24.04 LTS is what this was written against) with
+  **Docker Engine and the compose plugin**. 4 CPU cores, 8 GB of memory and
+  100 GB of disk is comfortable for one hospital; the database grows by
+  roughly a gigabyte a year of queues and visits.
+- **Three DNS names** pointing at it — for example `app.hospital.com.bd`
+  (patients), `console.hospital.com.bd` (staff) and `api.hospital.com.bd` —
+  and ports **80 and 443** open to the internet. Certificates are obtained and
+  renewed automatically.
+- The repository checked out on it (`git clone`, then `git checkout main`).
+
+## S2. Configure
+
+```bash
+cp deploy/.env.example deploy/.env
+```
+
+Fill in `deploy/.env`:
+
+| Value | What to put |
+|---|---|
+| `APP_ORIGIN`, `CONSOLE_ORIGIN`, `API_ORIGIN` | The three names, as `https://…` |
+| `POSTGRES_PASSWORD` | A long random password (the command is in the file) |
+| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GUEST_LINK_SECRET` | Three **different** random values of 64 hex characters |
+| `PAYMENT_PROVIDER` | `off` — patients pay at the hospital. bKash and Nagad arrive with merchant accounts (`CLAUDE.md` §1.1) |
+| `SMS_PROVIDER` | `log` until an SMS aggregator is arranged (pilot step 27). Patients then follow their serial from the link on the booking screen |
+| `BACKUP_AT_UTC_HOUR`, `BACKUP_KEEP_DAYS` | When the nightly backup runs (20 UTC is 02:00 Dhaka) and how many days are kept |
+
+`deploy/.env` holds the hospital's secrets. It is ignored by git and by the
+image build; keep a copy somewhere safe off the machine, because a backup is
+useless without the password that opens it.
+
+## S3. Start, and the first administrator
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+```
+
+The first build takes ten to fifteen minutes. Then the facility and its first
+administrator — nobody can be given an account from a screen until one exists
+(`FR-SUP-01`):
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
+  pnpm staff:create --hospital-code MARKS --email admin@hospital.com.bd --name "Full Name" \
+  --hospital-name-bn "…" --hospital-name-en "…" --kind hospital --division Dhaka --district Dhaka
+```
+
+It prints a temporary password once. Sign in at the console address; the
+first sign-in asks for the person's own password. From there, **সেটিংস খুলুন**
+on the dashboard sets up departments, doctors, schedules, wards and staff
+(`S-B-11`), and **পুরোনো তথ্য আমদানি করুন** brings in what the hospital's
+own system already holds (`S-B-14`). A doctor appears to patients once their
+BMDC number is verified:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
+  pnpm doctor:verify --bmdc A-12345
+```
+
+Then **লাইভ করুন** in settings publishes the facility.
+
+## S4. Updating
+
+```bash
+git pull
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+```
+
+The `migrate` service runs on every `up` and applies only migrations the
+database has not seen; the API waits for it to finish. Take a backup first
+(`S5`) — migrations are forward-only.
+
+## S5. Backups, and putting one back
+
+Every night the `backup` service writes two files to `deploy/backups/`:
+`db-<stamp>.dump` (the whole database) and `files-<stamp>.tar.gz` (uploaded
+lab reports), and removes those older than `BACKUP_KEEP_DAYS`.
+
+**Copy `deploy/backups/` to a second machine the hospital controls** — a
+backup on the same disk does not survive the disk. They hold patient data:
+not to a service outside Bangladesh without the hospital's agreement.
+
+A backup on demand:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm backup once
+```
+
+Putting one back **replaces everything** with the backup's contents:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env stop api console patient
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --entrypoint sh backup \
+  /deploy/restore.sh /backups/db-<stamp>.dump /backups/files-<stamp>.tar.gz
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+```
+
+Practise this once on a spare machine before the pilot starts; a restore
+nobody has run is a hope, not a backup.
+
+Trying this on Windows in Git Bash: run `export MSYS_NO_PATHCONV=1` first, or
+Git Bash rewrites `/deploy/restore.sh` and `/backups/…` into Windows paths
+before Docker sees them. A Linux server needs nothing.
+
+## S6. What runs how on this server
+
+- **`NODE_ENV=production`, `DEMO_MODE=false`.** No demonstration banner data,
+  no password-less picker, no seeding: `db:seed` and `db:reset` refuse to run
+  unless `DEMO_MODE=true` is set on purpose. Staff sign in with their own
+  accounts (`FR-SEC-06`).
+- **Files on the server's disk** (`STORAGE_PROVIDER=local`, a named volume),
+  served only through signed, expiring links.
+- **No online payment** (`PAYMENT_PROVIDER=off`): the patient app offers
+  paying at the hospital only, and the API refuses any other method before
+  writing anything. It never pretends a payment was taken.
+- **SMS recorded, not sent** (`SMS_PROVIDER=log`) until pilot step 27. Sign-in
+  codes are never printed, even here.
+- **A guest proves the phone with a code** before booking (`FR-GST-03`) — on by
+  default whenever `DEMO_MODE` is off.
+- **Errors go to the containers' logs** (`docker compose logs api`); nothing is
+  sent to an error-reporting service.
+
+## S7. When something is wrong
+
+| Symptom | Look at |
+|---|---|
+| A site shows a certificate error | DNS for that name does not point at this server yet, or port 80 is blocked (Let's Encrypt needs it): `docker compose … logs web` |
+| The API never becomes healthy | `docker compose … logs migrate api` — usually a value missing from `deploy/.env`; the API lists every problem at once |
+| The console signs in but shows nothing | The facility has no departments or doctors yet: `S-B-11` |
+| A patient cannot find the hospital | Not live yet, or no doctor's BMDC number verified (`S3`) |

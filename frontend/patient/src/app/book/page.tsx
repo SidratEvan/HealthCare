@@ -41,6 +41,7 @@ import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 import { HospitalBeds } from '@/components/HospitalBeds';
 import { BackIcon, ChevronIcon, HospitalIcon } from '@/components/icons';
 import { StandbyJoin } from '@/components/StandbyJoin';
+import { useDeployment } from '@/hooks/useDeployment';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
 import {
@@ -687,6 +688,12 @@ function Confirm({
   const [sex, setSex] = useState<'male' | 'female' | 'other'>('female');
   const [reason, setReason] = useState('');
   const [method, setMethod] = useState<'bkash' | 'nagad' | 'card' | 'at_hospital'>('bkash');
+  // A deployment with no online payment offers the counter only (pilot step 26).
+  const deployment = useDeployment();
+  const onlinePayments = deployment?.onlinePayments !== false;
+  useEffect(() => {
+    if (!onlinePayments) setMethod('at_hospital');
+  }, [onlinePayments]);
   const [busy, setBusy] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
 
@@ -946,19 +953,21 @@ function Confirm({
               ['card', 'payCard'],
               ['at_hospital', 'payAtHospital'],
             ] as const
-          ).map(([value, key]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={method === value}
-              onClick={() => {
-                setMethod(value);
-              }}
-              className="min-h-touch rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
-            >
-              {tp(key, locale)}
-            </button>
-          ))}
+          )
+            .filter(([value]) => onlinePayments || value === 'at_hospital')
+            .map(([value, key]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={method === value}
+                onClick={() => {
+                  setMethod(value);
+                }}
+                className="min-h-touch rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
+              >
+                {tp(key, locale)}
+              </button>
+            ))}
         </div>
       </fieldset>
 

@@ -165,7 +165,13 @@ const schema = z.object({
    * `PAYMENT_PROVIDER=mock` have. `supabase` is the real bucket, and needs the
    * three keys above.
    */
-  STORAGE_PROVIDER: z.enum(['mock', 'supabase']).default('mock'),
+  STORAGE_PROVIDER: z.enum(['mock', 'local', 'supabase']).default('mock'),
+  /**
+   * Where `STORAGE_PROVIDER=local` keeps files (pilot step 26): a directory on
+   * the hospital's own server, mounted as a volume and backed up with the
+   * database (DEPLOY.md). Relative paths are from the API's working directory.
+   */
+  STORAGE_DIR: z.string().min(1).default('./storage'),
   /** How long a report's signed URL lasts, in seconds. */
   STORAGE_URL_TTL_SECONDS: positiveInt.max(86_400).default(900),
 
@@ -202,7 +208,14 @@ const schema = z.object({
   VAPID_SUBJECT: z.string().default(''),
 
   // --- Payments -----------------------------------------------------------
-  PAYMENT_PROVIDER: z.enum(['mock', 'live']).default('mock'),
+  /**
+   * `off` (pilot step 26): no online payment at all — only paying at the
+   * hospital is offered, and an online method is refused before anything is
+   * written. What a hospital's own server runs until it has merchant accounts
+   * (CLAUDE.md §1.1), because the mock approves everything and must never
+   * face a real patient.
+   */
+  PAYMENT_PROVIDER: z.enum(['mock', 'live', 'off']).default('mock'),
   BKASH_BASE_URL: z.string().default(''),
   BKASH_APP_KEY: z.string().default(''),
   BKASH_APP_SECRET: z.string().default(''),
@@ -273,10 +286,15 @@ const PRODUCTION_REQUIREMENTS: readonly {
   readonly because: string;
   readonly unless?: (env: Env) => boolean;
 }[] = [
-  { key: 'SUPABASE_URL', because: 'reports and prescriptions have nowhere to be stored' },
+  {
+    key: 'SUPABASE_URL',
+    because: 'reports and prescriptions have nowhere to be stored',
+    unless: (env) => env.STORAGE_PROVIDER !== 'supabase',
+  },
   {
     key: 'SUPABASE_SERVICE_ROLE_KEY',
     because: 'signed URLs cannot be issued, so no patient could open a report',
+    unless: (env) => env.STORAGE_PROVIDER !== 'supabase',
   },
   {
     key: 'SMS_API_KEY',
@@ -289,15 +307,12 @@ const PRODUCTION_REQUIREMENTS: readonly {
     because: 'the aggregator rejects messages without a registered sender',
     unless: (env) => env.SMS_PROVIDER === 'log',
   },
-  {
-    key: 'VAPID_PUBLIC_KEY',
-    because: 'push is half the notification policy for app users (FR-NOT-02)',
-  },
-  { key: 'VAPID_PRIVATE_KEY', because: 'push notifications cannot be signed' },
-  {
-    key: 'SENTRY_DSN',
-    because: 'a crash in a live chamber would go unreported',
-  },
+  // VAPID keys are not required either: no adapter sends Web Push yet
+  // (`adapters/push.ts` has only the unconfigured one), so notifications go by
+  // SMS until one does (FR-NOT-02).
+  // SENTRY_DSN is not required: nothing reports to Sentry yet, and a
+  // required variable with no consumer is one a deploy fails on for no
+  // benefit (see API_BASE_URL). A self-hosted server's errors are in its logs.
 ];
 
 /**
@@ -351,7 +366,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     if (env.PAYMENT_PROVIDER === 'mock') {
       problems.push({
         key: 'PAYMENT_PROVIDER',
-        message: 'must be "live" in production — the mock adapter approves every payment',
+        message: 'must be "live" or "off" in production — the mock adapter approves every payment',
       });
     }
 
@@ -359,7 +374,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       problems.push({
         key: 'STORAGE_PROVIDER',
         message:
-          'must be "supabase" in production — the mock store keeps report files in process memory, so a restart loses every report a lab uploaded (FR-LAB-03)',
+          'must be "local" or "supabase" in production — the mock store keeps report files in process memory, so a restart loses every report a lab uploaded (FR-LAB-03)',
       });
     }
 

@@ -12,12 +12,13 @@
  * the label.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { normaliseBdMobile } from '@platform/domain';
 import { formatDateTime, formatTaka, tp, numeralsFor, localName } from '@platform/i18n';
 import { Button, Card, Input, useLocale } from '@platform/ui';
 
+import { useDeployment } from '@/hooks/useDeployment';
 import { joinStandby } from '@/lib/api';
 
 import type { SessionCard, StandbyJoined } from '@/lib/types';
@@ -41,6 +42,13 @@ export function StandbyJoin({
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<'male' | 'female' | 'other'>('female');
   const [prepay, setPrepay] = useState<Prepay | null>('bkash');
+  // With no online payment here there is nothing to prepay with (pilot step 26):
+  // the standby list is joined on the phone-answer terms only.
+  const deployment = useDeployment();
+  const onlinePayments = deployment?.onlinePayments !== false;
+  useEffect(() => {
+    if (!onlinePayments) setPrepay(null);
+  }, [onlinePayments]);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [phoneTouched, setPhoneTouched] = useState(false);
@@ -158,20 +166,22 @@ export function StandbyJoin({
           {tp('standbyHowTitle', locale)}
         </legend>
 
-        <button
-          type="button"
-          aria-pressed={prepay !== null}
-          onClick={() => {
-            setPrepay((current) => current ?? 'bkash');
-          }}
-          data-testid="standby-choice-prepay"
-          className="flex flex-col gap-1 rounded-md border border-line-strong bg-surface p-4 text-left aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
-        >
-          <span className="text-body-md font-semibold">{tp('standbyPrepayOption', locale)}</span>
-          <span className="text-body-sm text-ink-secondary">
-            {formatTaka(session.feePoisha, numerals)} · {tp('standbyPrepayNote', locale)}
-          </span>
-        </button>
+        {onlinePayments ? (
+          <button
+            type="button"
+            aria-pressed={prepay !== null}
+            onClick={() => {
+              setPrepay((current) => current ?? 'bkash');
+            }}
+            data-testid="standby-choice-prepay"
+            className="flex flex-col gap-1 rounded-md border border-line-strong bg-surface p-4 text-left aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
+          >
+            <span className="text-body-md font-semibold">{tp('standbyPrepayOption', locale)}</span>
+            <span className="text-body-sm text-ink-secondary">
+              {formatTaka(session.feePoisha, numerals)} · {tp('standbyPrepayNote', locale)}
+            </span>
+          </button>
+        ) : null}
 
         {prepay === null ? null : (
           <div className="grid grid-cols-3 gap-2" data-testid="standby-prepay-methods">
