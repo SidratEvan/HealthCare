@@ -7,8 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/patient-otp` — **a patient proves a phone and finds what
-it holds** (pilot step 25; below, *Step 25*). Before that, `feat/data-import`
+Last updated: `chore/self-host` — **the whole stack on a hospital's own
+server, from one command** (pilot step 26; below, *Step 26*). Before that,
+`feat/patient-otp` — **a patient proves a phone and finds what it holds**
+(pilot step 25; below, *Step 25*). Before that, `feat/data-import`
 — **a hospital imports what it already holds** (pilot step 24; below, *Step
 24*). Before that, `feat/counter-registration`
 — **walk-ins and the registration desk** (pilot step 23; below, *Step 23*).
@@ -80,8 +82,9 @@ Before that, `feat/standby-self-serve` (decision 62) and `feat/check-in`
 | **23** | **`feat/counter-registration`** | **merged** — `S-B-03`, `MOD-B02-WALKIN`, `/registration/patients`, the walk-in replay fix, `counter-registration.spec.ts` |
 | **24** | **`feat/data-import`** | **merged** — migrations 0029–0031, `S-B-14`, `/hospital/imports`, sets A–C, undo, the body-limit fix, `data-import.spec.ts` |
 | **25** | **`feat/patient-otp`** | **merged** — migration 0032, `/auth/*`, `/guest/start`, `/guest/verify`, `/guest/claim`, the Profile tab, `patient-account.spec.ts` |
-| 26 | `chore/self-host` | next |
-| 27–28 | pilot steps | not started — see `CLAUDE.md` §4.2 |
+| **26** | **`chore/self-host`** | **merged** — `Dockerfile`, `deploy/` (compose, Caddy, backup, restore), local file storage, `PAYMENT_PROVIDER=off`, `GET /config`, `DEPLOY.md` Part S, `self-host.spec.ts` |
+| 27 | `feat/sms-live` | **waits for an SMS aggregator account** (`CLAUDE.md` §4.2) |
+| 28 | `feat/staff-2fa` | next |
 
 **Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design). What
 remains is the owner's: the open decisions below, applying migrations to
@@ -139,15 +142,15 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 4470, in about two and a half minutes.
-`pnpm test:e2e` reports 132, in Chromium, against the real API and the seeded
+`pnpm test` reports 4476, in about three minutes.
+`pnpm test:e2e` reports 134, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 5 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`, 1 in `data-import.spec.ts`, 1 in `patient-account.spec.ts`. The last full
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`, 1 in `data-import.spec.ts`, 1 in `patient-account.spec.ts`, 2 in `self-host.spec.ts`. The last full
 run took twenty-three minutes.
 
 **The two `demo.routes.test.ts` failures were Fridays, not early mornings —
@@ -168,6 +171,46 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Step 26 — the whole stack on a hospital's own server (`chore/self-host`)
+
+**What exists.** A root `Dockerfile` (targets `api`, `console`, `patient`)
+and `deploy/docker-compose.yml`: PostGIS, a one-shot `migrate`, the API
+(with the hourly jobs), the two apps, Caddy for three names with automatic
+certificates, and a nightly `backup` (database dump and the files volume,
+`BACKUP_KEEP_DAYS` kept) with `restore.sh` to put one back. `DEPLOY.md`
+**Part S** is the runbook: configure `deploy/.env`, one `up`, `staff:create`
+for the first administrator, `doctor:verify`, backups off the machine.
+**Proved on this machine (2026-09-29).** From a clean project and empty volumes: one `up --build` built the three images (about fifteen minutes cold) and started everything; the migrations applied all 30; `/healthz`, `GET /config` (`demo: false, onlinePayments: false, guestPhoneCheck: true`), the console and the patient app answered through Caddy; `staff:create` made the facility and its administrator, who signed in. A backup was taken, an account and a file were added after it, and `restore.sh` put the backup back: the later account and file were gone, the earlier file was back, the API healthy, the migrations up to date. `db:reset` in the API container refused (`DEMO_MODE is not true`). The first attempt failed on a real race — the database health check passed on Postgres's temporary first-boot server — and the check now goes over TCP.
+
+**What had to change for a real server to boot at all.** `NODE_ENV=production`
+refused anything but a live payment provider (which needs merchant accounts
+nobody has yet), Supabase storage, a Sentry DSN and VAPID keys — the last two
+wired to nothing. Now:
+- **`STORAGE_PROVIDER=local`** keeps files on the server's disk
+  (`LocalStorageAdapter`, a named volume), served through the same signed,
+  expiring links; a key that would leave the directory is refused.
+- **`PAYMENT_PROVIDER=off`**: pay at the hospital only. The API refuses an
+  online method before writing anything (`PAYMENT_UNAVAILABLE`), and the
+  patient app asks `GET /config` and offers only the counter, and no standby
+  prepayment. Production accepts `off` or `live`, never `mock`.
+- **Sentry and VAPID are no longer demanded** until something uses them; a
+  self-hosted server's errors are in its container logs.
+- `db:seed`/`db:reset` already refuse without `DEMO_MODE=true`, so the
+  migration guard treating host `db` as local is not a way to wipe a
+  hospital's data.
+
+**Decided here, worth the owner's eye.** The patient app, the console and the
+API are three names (`app.`, `console.`, `api.`), not paths under one, because
+the apps are separate Next deployments with their own origins (CORS lists
+them). Backups land in `deploy/backups/` on the same disk; copying them to a
+second machine in Bangladesh is the hospital's side of the runbook.
+
+**Tests.** `deployment.test.ts` (local storage, the escape refusal, `GET
+/config`, `PAYMENT_UNAVAILABLE`), the production cases in `env.test.ts`, and
+`e2e/self-host.spec.ts`: with `GET /config` answering `onlinePayments: false`
+(stubbed — the suite's API runs the demo), the booking form offers the
+counter only and books, and the standby form has no prepayment.
 
 ### Step 25 — a patient proves a phone and finds what it holds (`feat/patient-otp`)
 

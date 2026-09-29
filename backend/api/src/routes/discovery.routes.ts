@@ -20,6 +20,7 @@ import { validate } from '../middleware/validate.js';
 
 export const discoveryRoutes: Router = Router();
 
+discoveryRoutes.get('/config', discovery.getConfig);
 discoveryRoutes.get('/hospitals', validate({ query: hospitalQuery }), discovery.listHospitals);
 discoveryRoutes.get('/hospitals/:id', validate({ params: idParams }), discovery.getHospital);
 

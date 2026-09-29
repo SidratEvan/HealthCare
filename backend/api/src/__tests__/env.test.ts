@@ -192,13 +192,32 @@ describe('production', () => {
     expect(problems).not.toContain('SMS_SENDER_ID');
   });
 
-  it('refuses missing push keys, which are half the notification policy', () => {
-    // FR-NOT-02: app users get push and SMS for material events.
-    expect(problemsOf({ ...PROD, VAPID_PRIVATE_KEY: '' })).toContain('VAPID_PRIVATE_KEY');
+  it('does not demand push keys while nothing sends Web Push (pilot step 26)', () => {
+    // FR-NOT-02's push half waits for an adapter; SMS carries the messages.
+    expect(problemsOf({ ...PROD, VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '' })).toEqual([]);
   });
 
-  it('refuses a missing Sentry DSN, so a crash in a live chamber is reported', () => {
-    expect(problemsOf({ ...PROD, SENTRY_DSN: '' })).toContain('SENTRY_DSN');
+  it('does not demand a Sentry DSN nothing reports to yet (pilot step 26)', () => {
+    expect(problemsOf({ ...PROD, SENTRY_DSN: '' })).not.toContain('SENTRY_DSN');
+  });
+
+  it('boots a hospital’s own server: local files, no online payment, no Supabase (FR-SEC-07)', () => {
+    expect(
+      problemsOf({
+        ...PROD,
+        STORAGE_PROVIDER: 'local',
+        STORAGE_DIR: '/var/lib/healthwealthbd/files',
+        PAYMENT_PROVIDER: 'off',
+        SUPABASE_URL: '',
+        SUPABASE_SERVICE_ROLE_KEY: '',
+      }),
+    ).toEqual([]);
+  });
+
+  it('still refuses the mock payment and storage adapters in production', () => {
+    const problems = problemsOf({ ...PROD, PAYMENT_PROVIDER: 'mock', STORAGE_PROVIDER: 'mock' });
+    expect(problems).toContain('PAYMENT_PROVIDER');
+    expect(problems).toContain('STORAGE_PROVIDER');
   });
 });
 

@@ -607,6 +607,7 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `QUEUE_GUARD_FAILED` | 422 | rule violation (e.g. no-show before grace) |
 | `QUEUE_EVENT_DUPLICATE` | 200 | idempotent replay — returns stored result |
 | `PAYMENT_FAILED` | 402 | provider declined |
+| `PAYMENT_UNAVAILABLE` | 422 | an online method on a deployment with `PAYMENT_PROVIDER=off`; refused before the booking is written (step 26) |
 | `CONSENT_REQUIRED` | 403 | doctor lacks record consent |
 | `CAPACITY_STALE` | 200 + flag | data returned but marked stale |
 | `BED_TRANSITION_INVALID` | 422 | the bed's state does not allow that action (the shared `canApply` guard); `details.guard` names the rule |
@@ -624,14 +625,15 @@ Rule: an error never returns a raw SQL or provider message to a client.
 ```
 NODE_ENV, PORT, API_BASE_URL, WEB_BASE_URL
 DATABASE_URL, DATABASE_POOL_MAX
-SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET
+SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET   # only with STORAGE_PROVIDER=supabase
+STORAGE_PROVIDER=mock|local|supabase, STORAGE_DIR   # local: files on this server's disk (step 26)
 JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, JWT_ACCESS_TTL=15m, JWT_REFRESH_TTL=30d
 GUEST_LINK_SECRET, GUEST_LINK_TTL_DAYS=30
 GUEST_BOOKING_OTP=true|false # a guest proves the phone before booking (FR-GST-03); unset: on unless DEMO_MODE
 OTP_TTL_SECONDS=300, OTP_MAX_PER_HOUR=5
 SMS_PROVIDER=local|log, SMS_API_KEY, SMS_SENDER_ID, SMS_MONTHLY_CAP
 VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
-PAYMENT_PROVIDER=mock|live, BKASH_*, NAGAD_*
+PAYMENT_PROVIDER=mock|live|off, BKASH_*, NAGAD_*   # off: pay at the hospital only (step 26)
 TRAVEL_TIME_MODE=static|api, MAPS_API_KEY
 STALE_THRESHOLD_MINUTES=10
 SENTRY_DSN, LOG_LEVEL
@@ -677,16 +679,18 @@ CI gates: typecheck, lint (layering rule), unit, API, one E2E smoke, and `db:ver
 
 A deployment holding real patients runs on one server in Bangladesh — the hospital's own server room or a Bangladeshi data centre (`PRD.md` `FR-SEC-07`). The same repository, packaged as containers:
 
+Built in step 26 as `deploy/docker-compose.yml` from the root `Dockerfile`; one command starts it:
+
 | Container | What |
 |---|---|
-| `db` | PostgreSQL 16, data on a named volume |
-| `api` | `backend/api`, `NODE_ENV=production`, `DEMO_MODE=false` |
-| `workers` | `backend/workers` (§8) |
-| `patient`, `console` | the two Next.js apps, built |
-| `proxy` | TLS termination for one public domain; patient app, console and API behind it |
-| `backup` | nightly `pg_dump` plus the file volume, copied to a second location in Bangladesh |
+| `db` | PostGIS 16 (the image the schema's extensions need), data on a named volume |
+| `migrate` | one-shot `pnpm db:migrate` on every `up`; the API waits for it to succeed |
+| `api` | `backend/api`, `NODE_ENV=production`, `DEMO_MODE=false`, files on a named volume (`STORAGE_PROVIDER=local`), and the hourly jobs (§8) — there is no separate `workers` container while `backend/workers` has nothing to run |
+| `patient`, `console` | the two Next.js apps, built with the API's address baked in |
+| `web` | Caddy: three names (patient app, console, API), certificates obtained and renewed on their own, the realtime socket upgraded through |
+| `backup` | nightly `pg_dump` and a tarball of the file volume into `deploy/backups`, the last `BACKUP_KEEP_DAYS` kept; `restore.sh` puts one back |
 
-Files use `STORAGE_PROVIDER=local`. The public domain is required because patients' phones reach the server over the internet; the consoles may also be reached on the hospital's own network. `DEPLOY.md` gains the runbook with step 26.
+Until merchant accounts and an SMS aggregator exist it runs `PAYMENT_PROVIDER=off` (pay at the hospital only; the patient app asks `GET /config` and offers nothing else) and `SMS_PROVIDER=log`. Production's boot checks accept both, and no longer demand Sentry or VAPID keys that nothing uses yet. `DEPLOY.md` Part S is the runbook.
 
 ---
 

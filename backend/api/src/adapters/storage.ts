@@ -31,6 +31,8 @@
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve, sep } from 'node:path';
 
 import { logger } from '../config/logger.js';
 import { env } from '../env.js';
@@ -227,6 +229,57 @@ export class MockStorageAdapter implements StorageAdapter {
  * first use, this fails the upload with a named reason the route turns into
  * an error the lab can read — the same honesty `UnconfiguredSmsAdapter` has.
  */
+/**
+ * Files on this server's own disk, under `STORAGE_DIR` (pilot step 26).
+ *
+ * For a hospital's own server in Bangladesh (`FR-SEC-07`), where there is no
+ * cloud bucket and a report must still be there after a restart. The URL is
+ * the same signed, expiring `/files/…` link the mock hands out, served by the
+ * same route after the same signature check — no file is ever reachable
+ * without one. The directory is what the backup job copies (DEPLOY.md).
+ *
+ * A key is a path the API built (`reports/<id>.pdf`), never one a caller sent,
+ * and it is still refused if it would resolve outside the directory.
+ */
+export class LocalStorageAdapter implements StorageAdapter {
+  readonly name = 'local';
+
+  constructor(private readonly root: string) {}
+
+  private pathOf(key: string): string {
+    const base = resolve(this.root);
+    const full = resolve(base, key);
+    if (!full.startsWith(base + sep)) throw new Error('storage_key_outside_directory');
+    return full;
+  }
+
+  async put(file: StoredFile): Promise<StoredFileRef> {
+    const path = this.pathOf(file.key);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, file.bytes);
+    await writeFile(`${path}.type`, file.contentType, 'utf8');
+    logger.info({ key: file.key, bytes: file.bytes.length }, 'file stored');
+    return { key: file.key, url: mockUrlFor(file.key), bytes: file.bytes.length };
+  }
+
+  async signedUrl(key: string): Promise<string> {
+    return await Promise.resolve(mockUrlFor(key));
+  }
+
+  async get(key: string): Promise<{ contentType: string; bytes: Buffer } | null> {
+    try {
+      const path = this.pathOf(key);
+      const [bytes, contentType] = await Promise.all([
+        readFile(path),
+        readFile(`${path}.type`, 'utf8'),
+      ]);
+      return { contentType, bytes };
+    } catch {
+      return null;
+    }
+  }
+}
+
 export class UnconfiguredStorageAdapter implements StorageAdapter {
   readonly name = 'unconfigured';
 
@@ -248,7 +301,11 @@ let current: StorageAdapter | null = null;
 /** The store this process writes to. */
 export function storage(): StorageAdapter {
   current ??=
-    env.STORAGE_PROVIDER === 'mock' ? new MockStorageAdapter() : new UnconfiguredStorageAdapter();
+    env.STORAGE_PROVIDER === 'mock'
+      ? new MockStorageAdapter()
+      : env.STORAGE_PROVIDER === 'local'
+        ? new LocalStorageAdapter(env.STORAGE_DIR)
+        : new UnconfiguredStorageAdapter();
   return current;
 }
 

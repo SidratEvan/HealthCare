@@ -55,3 +55,8 @@ pnpm-debug.log*
 /test-results/
 /playwright-report/
 /blob-report/
+
+# A self-hosted server's backups and local files (pilot step 26): patient data,
+# never committed (FR-SEC-08).
+deploy/backups/
+storage/

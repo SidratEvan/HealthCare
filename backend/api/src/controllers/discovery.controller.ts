@@ -7,6 +7,7 @@
 
 import { doctorQuery, hospitalQuery, idParams, sessionQuery } from '@platform/domain';
 
+import * as deployment from '../services/deployment.service.js';
 import * as discovery from '../services/discovery.service.js';
 
 import type { Request, Response } from 'express';
@@ -52,4 +53,13 @@ export async function listSessions(req: Request, res: Response): Promise<void> {
 export async function getAvailability(req: Request, res: Response): Promise<void> {
   const { id } = idParams.parse(req.params);
   res.json({ ok: true, data: await discovery.availability(id) });
+}
+
+/**
+ * `GET /config` — what this deployment offers (pilot step 26): whether it is a
+ * demonstration, whether online payment exists, whether a guest proves the
+ * phone before booking. Public; nothing in it is a secret.
+ */
+export function getConfig(_req: Request, res: Response): void {
+  res.json({ ok: true, data: deployment.publicConfig() });
 }
