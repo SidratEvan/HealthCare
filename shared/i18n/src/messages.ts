@@ -103,6 +103,86 @@ export const CONSOLE = {
   facilityConsoles: { bn: 'হাসপাতালের কনসোল', en: 'Hospital consoles' },
   consoleLoadFailed: { bn: 'কনসোলের তালিকা আনা যায়নি', en: 'Could not load the consoles' },
 
+  // --- Staff sign-in (S-B-00, S-B-00c, pilot step 21) ------------------------
+  //
+  // Wrong email and wrong password get one message: saying which would tell a
+  // stranger which addresses have accounts (`AUTH_INVALID_CREDENTIALS`).
+  loginTitle: { bn: 'লগ ইন', en: 'Sign in' },
+  loginIntro: {
+    bn: 'আপনার নিজের ইমেইল ও পাসওয়ার্ড দিন। একজনের অ্যাকাউন্ট অন্যজন ব্যবহার করবেন না।',
+    en: 'Use your own email and password. Never use somebody else’s account.',
+  },
+  loginEmail: { bn: 'ইমেইল', en: 'Email' },
+  loginPassword: { bn: 'পাসওয়ার্ড', en: 'Password' },
+  loginHospitalCode: { bn: 'হাসপাতালের কোড', en: 'Hospital code' },
+  loginHospitalCodeHint: {
+    bn: 'এই ইমেইলে একাধিক প্রতিষ্ঠানে অ্যাকাউন্ট আছে। কোনটিতে ঢুকবেন, তার কোড লিখুন (যেমন MARKS)।',
+    en: 'This email has accounts at more than one facility. Enter the code of the one you want (for example MARKS).',
+  },
+  loginSubmit: { bn: 'লগ ইন করুন', en: 'Sign in' },
+  loginSubmitting: { bn: 'যাচাই হচ্ছে…', en: 'Checking…' },
+  /** Why `BTN-B00-LOGIN` is off (§5.1: a disabled control says why). */
+  loginNeedsFields: { bn: 'ইমেইল ও পাসওয়ার্ড দিন', en: 'Enter your email and password' },
+  passwordNeedsFields: {
+    bn: 'এখনকার পাসওয়ার্ড দিন, আর নতুনটি দুবার — অন্তত ১০ অক্ষর',
+    en: 'Enter the current password, and the new one twice — at least 10 characters',
+  },
+  loginInvalid: { bn: 'ইমেইল বা পাসওয়ার্ড মেলেনি।', en: 'The email or password is wrong.' },
+  loginLocked: {
+    bn: 'বারবার ভুল হওয়ায় অ্যাকাউন্টটি {time} পর্যন্ত বন্ধ আছে।',
+    en: 'Too many wrong attempts. The account is locked until {time}.',
+  },
+  loginNoRoles: {
+    bn: 'এই অ্যাকাউন্টে কোনো দায়িত্ব দেওয়া নেই। হাসপাতালের প্রশাসককে বলুন।',
+    en: 'This account has no role yet. Ask the hospital administrator.',
+  },
+  loginOffline: {
+    bn: 'ইন্টারনেট সংযোগ নেই। সংযোগ ফিরলে আবার চেষ্টা করুন।',
+    en: 'No internet connection. Try again when it is back.',
+  },
+  loginFailed: {
+    bn: 'এখন লগ ইন করা গেল না। একটু পরে আবার চেষ্টা করুন।',
+    en: 'Could not sign in just now. Try again shortly.',
+  },
+  loginForgot: {
+    bn: 'পাসওয়ার্ড ভুলে গেলে হাসপাতালের প্রশাসককে বলুন — তিনি নতুন একটি দেবেন।',
+    en: 'Forgotten your password? Ask the hospital administrator for a new one.',
+  },
+  loginDemoLink: { bn: 'স্টাফ অ্যাকাউন্টে লগ ইন', en: 'Sign in with a staff account' },
+  loginDemoNote: {
+    bn: 'ডেমোর সব অ্যাকাউন্টের পাসওয়ার্ড: demo-password-2026',
+    en: 'Every demo account’s password: demo-password-2026',
+  },
+  signOut: { bn: 'লগ আউট', en: 'Sign out' },
+  signedInAs: { bn: 'লগ ইন: {name}', en: 'Signed in: {name}' },
+  sessionExpired: {
+    bn: 'অনেকক্ষণ কিছু না হওয়ায় আবার লগ ইন করতে হবে।',
+    en: 'Your session has ended. Please sign in again.',
+  },
+  staffPickerNote: {
+    bn: 'আপনার দায়িত্ব অনুযায়ী কনসোলগুলো দেখানো হচ্ছে।',
+    en: 'These are the consoles your roles open.',
+  },
+  passwordTitle: { bn: 'নিজের পাসওয়ার্ড দিন', en: 'Set your own password' },
+  passwordIntro: {
+    bn: 'এই পাসওয়ার্ড প্রশাসক দিয়েছিলেন। কোনো কনসোল খোলার আগে নিজের একটি পাসওয়ার্ড দিন — অন্তত ১০ অক্ষর।',
+    en: 'An administrator set this password. Before any console opens, choose your own — at least 10 characters.',
+  },
+  passwordCurrent: { bn: 'এখনকার পাসওয়ার্ড', en: 'Current password' },
+  passwordNew: { bn: 'নতুন পাসওয়ার্ড', en: 'New password' },
+  passwordRepeat: { bn: 'নতুন পাসওয়ার্ড আবার', en: 'New password again' },
+  passwordMismatch: {
+    bn: 'দুটি নতুন পাসওয়ার্ড মেলেনি।',
+    en: 'The two new passwords do not match.',
+  },
+  passwordShort: { bn: 'অন্তত ১০ অক্ষরের পাসওয়ার্ড দিন।', en: 'Use at least 10 characters.' },
+  passwordUnchanged: {
+    bn: 'নতুন পাসওয়ার্ড আগেরটির চেয়ে আলাদা হতে হবে।',
+    en: 'The new password must differ from the current one.',
+  },
+  passwordWrong: { bn: 'এখনকার পাসওয়ার্ড মেলেনি।', en: 'The current password is wrong.' },
+  passwordSubmit: { bn: 'পাসওয়ার্ড রাখুন', en: 'Save the password' },
+
   // --- Queue table (B1.4) --------------------------------------------------
   colSerial: { bn: 'সিরিয়াল', en: 'Serial' },
   colPatient: { bn: 'রোগী', en: 'Patient' },

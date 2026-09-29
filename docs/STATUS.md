@@ -7,7 +7,9 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/pilot-scope` — **the pilot build is in the documents**:
+Last updated: `feat/staff-auth` — **staff sign in with their own accounts**
+(pilot step 21; below, *Step 21*). Before that, `chore/pilot-scope` — **the
+pilot build is in the documents**:
 import requirements, auth un-deferred, steps 21–28 (below, *The Marks
 handbook*). Before that, `fix/console-rail-billing` — **the rail's বিল no
 longer opens the pharmacy; ফার্মেসি has its own item**. Before that, `fix/consult-overflow` —
@@ -65,6 +67,9 @@ Before that, `feat/standby-self-serve` (decision 62) and `feat/check-in`
 | 18 | `feat/payments` | merged — migrations 0009 + 0019, the refund and settlement domain, the provider seam, `seed_08_money`, the refund statement on `MOD-A08-CANCEL`. **bKash and Nagad are not implemented**; the mock is the working provider (`CLAUDE.md` §1.1) |
 | 19 | `feat/admin-dashboard` | merged — migration 0020, `S-B-10`, the standby card on `S-B-02` (`BTN-B02-OFFER`), CSV export with audit, `no-show-recovery.spec.ts`. **Average wait is not measured**: nothing records a patient arriving (decision 61) |
 | 20 | `feat/gov-dashboard` | merged — migrations 0024–0026, `S-B-13`, `gov_reader`, `CHIP-B05-SIGNAL`, `seed_09_signals`, `gov-dashboard.spec.ts`. **Decision 5 implemented, not ruled**: national roles hold a null hospital. `FR-GOV-05` (shared health record) waits for a counterparty |
+| **21** | **`feat/staff-auth`** | **merged — the pilot's first step** (`CLAUDE.md` §4.2). Migration 0027, `S-B-00` sign-in, `S-B-00c` first password, the picker narrowed to the person's own facility and roles, refresh rotation, lockout, `pnpm staff:create`, `staff-login.spec.ts` |
+| 22 | `feat/hospital-settings` | next |
+| 23–28 | pilot steps | not started — see `CLAUDE.md` §4.2 |
 
 **Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design). What
 remains is the owner's: the open decisions below, applying migrations to
@@ -122,16 +127,16 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 3775, in about two minutes.
-`pnpm test:e2e` reports 119, in Chromium, against the real API and the seeded
+`pnpm test` reports 3870, in about three minutes.
+`pnpm test:e2e` reports 124, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
-`doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
+`doctor-console.spec.ts`, 5 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`. The last full
-run took twelve minutes.
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`. The last full
+run took seventeen minutes.
 
 **The two `demo.routes.test.ts` failures were Fridays, not early mornings —
 fixed in `fix/console-picker-friday`.** They expect the ER console and the ward
@@ -151,6 +156,73 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Step 21 — staff sign in with their own accounts (`feat/staff-auth`)
+
+**What a real deployment now does.** With `DEMO_MODE` off, the console shows
+`S-B-00`: email and password, one message for any wrong combination, a
+fifteen-minute lock after five failures in a row (`STAFF_LOCKOUT_*`). The
+access token is the same shape the demo picker's is — every role the person
+holds at their own facility — so no guard written since step 3 changed. It
+lasts fifteen minutes and the console renews it in the background
+(`keepSessionFresh`); the refresh token is opaque, stored hashed in
+`sessions_auth`, and rotates on every use. A rotated token used again means
+two parties hold it, and every session of that account is revoked. The picker
+after sign-in shows only the person's facility, only their roles, and today's
+chambers there (`GET /staff/chambers`, one query shared with the demo picker
+in `chamber.repo`). The rail's foot gains **লগ আউট**.
+
+**A password an administrator set** (`must_change_password`, 0027) signs in,
+but the token carries `mcp` and `attachPrincipal` refuses it everywhere except
+`/staff/me`, `/staff/password` and `/staff/logout`
+(`AUTH_PASSWORD_CHANGE_REQUIRED`) — the server's rule, not only the screen's.
+`S-B-00c` asks for the current password and the new one twice.
+
+**Starting a fresh deployment:** `pnpm staff:create --hospital-code MARKS
+--email … --name … [--hospital-name-bn … --hospital-name-en … --kind hospital
+--division … --district …]` creates the facility if the code is new (not
+live) and its first administrator, and prints a temporary password once.
+Accounts for everybody else come from `S-B-11` (step 22).
+
+**The demo is unchanged, and gains the sign-in.** `DEMO_MODE=true` still opens
+the picker without a password (`GET /demo/status` tells the console which it
+is; not knowing is treated as "not a demo"). The picker links to `S-B-00`
+(`?login=1`). **Every seeded account's password is `demo-password-2026`**
+(`DEMO_STAFF_PASSWORD`) — documented, and shown on the sign-in screen only on
+a demo: it opens nothing the picker did not already open. Demo hospitals now
+have codes: SHAPLA, PADMA, KARNAPHULI, JAMUNA, MEGHNA, BURIGANGA.
+
+**Things worth knowing.**
+- **scrypt, not Argon2id** (decision 75), at OWASP's minimum; the stored hash
+  names its parameters, so raising them later rehashes at the next sign-in.
+- **The per-address limits are generous on purpose** (300 sign-ins per ten
+  minutes): every counter in a hospital usually reaches the server from one
+  public address, and a shift change is a hundred sign-ins. The per-account
+  lock is what stops guessing.
+- **One email at two facilities** is resolved by the password; the hospital
+  code is asked for only when the password opens both
+  (`AUTH_HOSPITAL_REQUIRED`), so the question reveals nothing to somebody who
+  does not know it.
+- **Sessions live in the tab** (`sessionStorage`), as the demo's did: a new tab
+  signs in again, and closing the browser signs out.
+- **A doctor still chooses among all the facility's chambers.** No column joins
+  an account to a `doctors` row (see *Step 12*), so "only my own chambers"
+  waits for step 22's staff screen to record it.
+- `seeds.test.ts` now asserts the opposite of what it did: every seeded
+  account carries the one scrypt hash of the demo password, and nothing else.
+- **Before the console knows whether it is a demo, it says it is starting.**
+  The first cut treated an unanswered `GET /demo/status` as "not a demo" and
+  showed sign-in — which is what the deployed demo's API does for thirty
+  seconds after sleeping, and what a full e2e run hit when the API was slow.
+  `askDemoMode` now asks four times at twelve seconds, says the server is
+  waking after the first miss (`ConsoleStarting`), and ends on "could not
+  reach the server" with a retry — never on sign-in by default. A session
+  already in the tab does not wait for the answer. `console-cold-start.spec.ts`
+  holds both cases.
+- **Before this reaches the deployed demo:** apply 0027 to Supabase
+  (`ALLOW_REMOTE_DB=1 pnpm db:migrate`) before the API deploys — the login
+  and the picker's chamber query read its columns. The demo's accounts can sign
+  in only after the next `db:reset`; until then the picker works as before.
 
 ### The Marks handbook, and the real version they asked about
 
@@ -186,7 +258,7 @@ undo per batch.
 **In the documents as of `chore/pilot-scope`; built as pilot steps 21–28**
 (`CLAUDE.md` §4.2): `PRD.md` §14b (`FR-IMP-01`–`12`), §4.2 and `FR-SEC-07`;
 `CLAUDE.md` §4.1 rewritten (auth built here, scrypt, demo picker kept);
-`DATABASE.md` migrations 0027–0030 planned; `BACKEND.md` staff auth, import
+`DATABASE.md` migrations 0027–0030 planned (0027 staff auth, 0028–0030 import); `BACKEND.md` staff auth, import
 routes, the worker loop, §12b self-hosting; `APP_FLOW.md` `S-B-00` pilot rules
 and `S-B-14`. What the documents had to change, for the record:
 
@@ -2537,11 +2609,11 @@ Turbopack is substantially faster and this is the only thing holding it off.
   `@utility` because Tailwind has no such thing. The `@source` line at the top
   is load-bearing — see the note under "things learned the hard way".
 
-- **No authentication is implemented, by decision** (`CLAUDE.md` §4.1). Under
-  `DEMO_MODE=true` the console selects a hospital and role without a password,
-  and a booking returns a signed guest tracking link. Requirements not covered
-  in this version: `FR-PAT-01`, `FR-PAT-04`, `FR-GST-03/04/09/12`, `FR-SEC-05`,
-  `FR-SEC-06`.
+- ~~**No authentication is implemented, by decision.**~~ **Staff sign-in is
+  built** (step 21, `FR-SEC-06`). Patient phone verification is not yet —
+  step 25 (`FR-PAT-01`, `FR-PAT-04`, `FR-GST-03/04/09/12`, `FR-SEC-05`). Under
+  `DEMO_MODE=true` the picker still opens any console without a password, and
+  a booking returns a signed guest tracking link.
 - ~~**`FR-DEM-05` is not covered.**~~ **Covered as of step 17.** Migration
   0011 landed and `seed_06_ancillary` runs: eight ambulances, thirty blood
   donors, fifty pharmacy items. **No seed module is waiting on a migration any

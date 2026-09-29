@@ -15,6 +15,10 @@ import type { Request, Response } from 'express';
  * `GET /demo/consoles` — the hospitals and chambers `S-B-01` offers, and the
  * national consoles, which belong to no hospital (`S-B-13`).
  */
+export function status(_req: Request, res: Response): void {
+  res.json({ ok: true, data: demo.status() });
+}
+
 export async function listConsoles(_req: Request, res: Response): Promise<void> {
   const [consoles, national] = await Promise.all([
     demo.listConsoles(),

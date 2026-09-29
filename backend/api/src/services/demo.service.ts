@@ -74,6 +74,11 @@ function assertDemoMode(): void {
   }
 }
 
+/** `GET /demo/status`: whether the password-less picker is on here. */
+export function status(): { readonly demoMode: boolean } {
+  return { demoMode: env.DEMO_MODE };
+}
+
 export interface DemoConsole {
   readonly hospitalId: string;
   readonly nameBn: string;

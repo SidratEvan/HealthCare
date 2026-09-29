@@ -590,7 +590,7 @@ describe('FR-SEC-08: no real patient data, ever', () => {
   );
 
   it(
-    'stores no national id and no usable credential',
+    'stores no national id, and only the documented demo credential',
     async () => {
       await seeded(async (client) => {
         expect(
@@ -600,15 +600,19 @@ describe('FR-SEC-08: no real patient data, ever', () => {
           ),
         ).toBe(0);
 
-        // CLAUDE.md §4.1: authentication is deferred, so nothing may write a
-        // login session and no password_hash may be a hash of anything.
+        // No login session is seeded. Every demo account carries the same
+        // scrypt hash of the one documented demo password (pilot step 21,
+        // DEMO_STAFF_PASSWORD) — no other credential, and nobody's own.
         expect(await count(client, 'SELECT count(*)::text AS n FROM sessions_auth')).toBe(0);
         expect(
           await count(
             client,
-            `SELECT count(*)::text AS n FROM staff_users WHERE password_hash NOT LIKE '!disabled:%'`,
+            `SELECT count(*)::text AS n FROM staff_users WHERE password_hash NOT LIKE 'scrypt$131072$8$1$%'`,
           ),
         ).toBe(0);
+        expect(
+          await count(client, 'SELECT count(DISTINCT password_hash)::text AS n FROM staff_users'),
+        ).toBe(1);
         expect(
           await count(
             client,

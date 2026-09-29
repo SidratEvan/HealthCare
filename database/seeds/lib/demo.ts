@@ -100,16 +100,65 @@ export function demoEmail(local: string, facilitySlug: string): string {
 }
 
 /**
- * The value written to `staff_users.password_hash`.
+ * A `staff_users.password_hash` that verifies nothing.
  *
- * Authentication is deferred to Supabase Auth (CLAUDE.md §4.1), so there is no
- * argon2id dependency and nothing that could verify a password. The column is
- * NOT NULL, so it gets a value that is deliberately **not a hash of anything**
- * — no verifier can match it, and it cannot be mistaken for a credential in a
- * screenshot. The leading `!` is the long-standing Unix convention for an
- * account with no usable password.
+ * For the test fixtures' accounts, which must never sign in. The leading `!`
+ * is the long-standing Unix convention for an account with no usable password,
+ * and the API's verifier answers false for anything that is not a scrypt hash
+ * (`backend/api/src/config/password.ts`).
  */
-export const DISABLED_PASSWORD = '!disabled:supabase-auth-issues-tokens';
+export const DISABLED_PASSWORD = '!disabled:no-password';
+
+/**
+ * The one password every seeded demo account signs in with at `S-B-00`
+ * (pilot step 21). Documented, not secret: under `DEMO_MODE` the picker
+ * already opens any console without one, so this adds no access the demo did
+ * not have — it lets the sign-in screen itself be shown and tested. A
+ * deployment with real patients is never seeded (`FR-SEC-08`; `db:reset`
+ * needs `DEMO_MODE`, which production refuses to boot with).
+ */
+export const DEMO_STAFF_PASSWORD = 'demo-password-2026';
+
+/**
+ * `DEMO_STAFF_PASSWORD` hashed in the API's own format,
+ * `scrypt$<N>$<r>$<p>$<salt>$<hash>` with OWASP's minimum parameters. The seeds
+ * may not import the API (the layering rule), so the format is written out
+ * here; `staffAuth.routes.test.ts` signs a seeded account in with the demo
+ * password, which fails the moment the two disagree. Hashed once per run and
+ * shared: every demo account has the same password anyway.
+ */
+export async function demoPasswordHash(): Promise<string> {
+  const { randomBytes, scrypt } = await import('node:crypto');
+  const N = 2 ** 17;
+  const r = 8;
+  const p = 1;
+  const salt = randomBytes(16);
+  const key = await new Promise<Buffer>((resolve, reject) => {
+    scrypt(
+      DEMO_STAFF_PASSWORD.normalize('NFKC'),
+      salt,
+      64,
+      { N, r, p, maxmem: 128 * N * r + 1024 * 1024 },
+      (error, derived) => {
+        if (error === null) resolve(derived);
+        else reject(error);
+      },
+    );
+  });
+  return [
+    'scrypt',
+    String(N),
+    String(r),
+    String(p),
+    salt.toString('base64'),
+    key.toString('base64'),
+  ].join('$');
+}
+
+/** `hospitals.code` for a demo facility (0027): its slug's first word, upper-case. */
+export function demoHospitalCode(slug: string): string {
+  return (slug.split('-')[0] ?? slug).toUpperCase();
+}
 
 /** A BMDC number that no real registration takes (`doctors.bmdc_number`). */
 export function demoBmdc(index: number): string {

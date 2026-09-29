@@ -24,6 +24,22 @@ export const ERROR_CODES = {
   AUTH_OTP_INVALID: { status: 401, message: 'The code is wrong or has expired.' },
   AUTH_TOKEN_INVALID: { status: 401, message: 'The token is invalid or has expired.' },
   AUTH_FORBIDDEN_SCOPE: { status: 403, message: 'Outside this hospital or role scope.' },
+  /**
+   * Staff sign-in (pilot step 21). One answer for an unknown email and a wrong
+   * password, so an address cannot be tested for an account.
+   */
+  AUTH_INVALID_CREDENTIALS: { status: 401, message: 'The email or password is wrong.' },
+  /** Too many consecutive failures; `details.until` says when it opens. */
+  AUTH_LOCKED: { status: 423, message: 'This account is locked for a while.' },
+  /** The email exists at more than one facility on this deployment. */
+  AUTH_HOSPITAL_REQUIRED: { status: 409, message: 'Enter the hospital code as well.' },
+  /** A new password is too short or the same as the old one. */
+  AUTH_PASSWORD_WEAK: { status: 422, message: 'Choose a different password.' },
+  /**
+   * The account's password was set by an administrator. Until the person sets
+   * their own, the token opens nothing but `POST /staff/password`.
+   */
+  AUTH_PASSWORD_CHANGE_REQUIRED: { status: 403, message: 'Set a new password first.' },
 
   // --- Guest (FR-GST-05) ---------------------------------------------------
   GUEST_LINK_EXPIRED: { status: 410, message: 'This tracking link has expired.' },
