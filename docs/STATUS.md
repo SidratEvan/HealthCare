@@ -204,6 +204,24 @@ reset used to be the only thing doing.
   the demo picker's queries ignored `staff_roles.deleted_at`; removing a role
   from `S-B-11` would otherwise have done nothing until the row was deleted.
 
+**The queue now follows the facility's rules.** Until this step every guard
+ran on `DEFAULT_QUEUE_SETTINGS` and the late route wrote `reinsertAfter: 3`,
+so the no-show grace and late re-insert saved in `S-B-11` would have changed
+nothing. `queue.service.applyOne` reads `hospital_settings` for every event,
+checks the guards against it, and writes the facility's `k` into a
+`PATIENT_LATE` payload whatever the console sent (`queueRules.routes.test.ts`).
+The console still sends 3 optimistically; the server's event corrects it.
+
+**A screen could roll back to an older queue** (found by
+`lab-report.spec.ts` failing once in three runs, on this branch and not
+because of it). Joining a session room and reading the catch-up state are two
+steps on the server; an action committed between them was broadcast first,
+then the older catch-up arrived and replaced it, and the screen sat on the
+previous patient until the next action. `shared/client` `foldUpdate` now
+keeps the newer state (`FR-QUE-05`). This affected every console and every
+patient phone, most visibly a doctor's screen opened a second before the
+queue moved.
+
 **Not on the screen, deliberately.** *Counters* have nothing to configure
 until counter registration (step 23) gives them a use: nothing reads
 `staff_roles.scope` yet. The *refund policy* stays the agreed default (see the

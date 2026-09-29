@@ -218,9 +218,8 @@ export async function markLate(req: Request, res: Response): Promise<void> {
       payload: {
         bookingId: booking.id,
         expectedMinutes: body.expectedMinutes,
-        // The hospital's configured k (`FR-QUE-21`). Per-facility settings land
-        // with the hospital service; the documented default holds until then.
-        reinsertAfter: 3,
+        // `reinsertAfter` is the facility's k (`FR-QUE-21`), written by
+        // `queue.service` from `hospital_settings` — never the caller's.
       },
       actor: actorOf(req),
       ...envelope(req),

@@ -67,7 +67,6 @@ import {
   measuredConsultSeconds,
   recoveredValueFor,
   time,
-  DEFAULT_QUEUE_SETTINGS,
   SLOT_OFFER_WINDOW_MINUTES,
   type Eta,
   type GuardResult,
@@ -78,6 +77,7 @@ import {
   type SessionId,
   type Timestamp,
   type QueueActor,
+  type QueueSettings,
 } from '@platform/domain';
 
 import { logger } from '../config/logger.js';
@@ -782,12 +782,21 @@ async function applyOne(
   state: QueueState,
   input: AppendEventInput,
 ): Promise<{ readonly event: QueueEvent; readonly state: QueueState }> {
-  assertAllowed(state, input, session);
+  // The facility's own rules (pilot step 22). A late patient's `k` is the
+  // facility's, not whatever the counter sent: the reducer places the row by
+  // the payload, so the payload is where the rule has to be written.
+  const rules = await sessionRepo.queueRulesFor(trx, session.hospitalId);
+  const payload =
+    input.type === 'PATIENT_LATE'
+      ? { ...input.payload, reinsertAfter: rules.lateReinsertAfter }
+      : input.payload;
+
+  assertAllowed(state, { ...input, payload }, session, rules);
 
   const event = await eventRepo.append(trx, {
     sessionId: input.sessionId,
     type: input.type,
-    payload: input.payload,
+    payload,
     actor: input.actor,
     clientEventId: input.clientEventId ?? null,
     clientTs:
@@ -1145,8 +1154,8 @@ function assertAllowed(
   state: QueueState,
   input: AppendEventInput,
   session: sessionRepo.SessionRow,
+  settings: QueueSettings,
 ): void {
-  const settings = { ...DEFAULT_QUEUE_SETTINGS };
   const now = nowTs();
   let result: GuardResult | null = null;
 
