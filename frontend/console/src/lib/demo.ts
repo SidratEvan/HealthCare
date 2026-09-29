@@ -59,6 +59,18 @@ export interface DemoSession {
    * console so that its সিরিয়াল item can come back to the same queue.
    */
   readonly chamberSessionId?: string;
+  /**
+   * How this session began (pilot step 21). `staff` is a real sign-in at
+   * `S-B-00`: its token already carries every role the person holds, so
+   * switching console needs no new token, and it is kept fresh from
+   * `refresh` before `accessExpiresAt` (`lib/staffAuth.ts`). Absent means
+   * the demo picker minted it.
+   */
+  readonly authKind?: 'demo' | 'staff';
+  readonly refresh?: string;
+  readonly accessExpiresAt?: string;
+  /** The administrator set this password; `S-B-00c` comes before any console. */
+  readonly mustChangePassword?: boolean;
 }
 
 const STORAGE_KEY = 'console.demo-session';
@@ -112,6 +124,15 @@ export function readDemoSession(): DemoSession | null {
     // Private windows and locked-down browsers both throw here. A console that
     // cannot remember the selection still works; it just asks again.
     return null;
+  }
+}
+
+/** Forgets the session — signing out, or a refresh the server refused. */
+export function clearDemoSession(): void {
+  try {
+    globalThis.sessionStorage?.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage refused (a private window): there is nothing stored to forget.
   }
 }
 

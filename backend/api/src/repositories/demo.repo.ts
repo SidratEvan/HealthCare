@@ -15,6 +15,8 @@ import { sql } from 'kysely';
 
 import { db } from '../config/db.js';
 
+import { todaysChambers } from './chamber.repo.js';
+
 /** A chamber a demo console can open. */
 export interface DemoSessionRow {
   readonly id: string;
@@ -83,73 +85,13 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
      ORDER BY h.name_en
   `.execute(db);
 
-  const sessions = await sql<{
-    hospital_id: string;
-    id: string;
-    doctor_name_bn: string;
-    doctor_name_en: string;
-    department_name_bn: string;
-    department_name_en: string;
-    room: string | null;
-    status: string;
-    planned_start: Date;
-    planned_end: Date;
-    waiting: string;
-    total: string;
-  }>`
-    SELECT s.hospital_id, s.id,
-           d.full_name_bn AS doctor_name_bn,
-           d.full_name_en AS doctor_name_en,
-           dep.name_bn    AS department_name_bn,
-           dep.name_en    AS department_name_en,
-           s.room, s.status::text AS status, s.planned_start, s.planned_end,
-           count(b.id) FILTER (WHERE b.status IN ('booked', 'waiting'))::text AS waiting,
-           count(b.id)::text AS total
-      FROM sessions s
-      JOIN doctors d       ON d.id = s.doctor_id
-      JOIN departments dep ON dep.id = s.department_id
-      LEFT JOIN bookings b ON b.session_id = s.id AND b.deleted_at IS NULL
-     WHERE s.deleted_at IS NULL
-       AND s.room IS DISTINCT FROM 'E2E'
-       AND (
-         s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
-         -- A chamber that opened at half past eleven and is still going at one
-         -- in the morning belongs to the console somebody is standing at right
-         -- now, whatever date it is filed under. Filtering on the date alone
-         -- hid it, and hid it worst in the demo: FR-DEM-06 builds the pitch
-         -- session by walking a mid-queue log backwards from the present, so a
-         -- reset between midnight and about 01:20 Dhaka dates the one session
-         -- that demonstrates the product to yesterday and the picker then
-         -- offered nothing running.
-         OR (s.status = 'running'
-             AND s.session_date >= (now() AT TIME ZONE 'Asia/Dhaka')::date - 1)
-       )
-     GROUP BY s.hospital_id, s.id, d.full_name_bn, d.full_name_en,
-              dep.name_bn, dep.name_en, s.room, s.status, s.planned_start, s.planned_end
-     ORDER BY
-       -- A chamber already mid-queue first: it is the one that demonstrates
-       -- the product rather than describing it (FR-DEM-06).
-       CASE s.status WHEN 'running' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
-       s.planned_start
-  `.execute(db);
+  const sessions = await todaysChambers(null);
 
   const byHospital = new Map<string, DemoSessionRow[]>();
-  for (const row of sessions.rows) {
-    const list = byHospital.get(row.hospital_id) ?? [];
-    list.push({
-      id: row.id,
-      doctorNameBn: row.doctor_name_bn,
-      doctorNameEn: row.doctor_name_en,
-      departmentNameBn: row.department_name_bn,
-      departmentNameEn: row.department_name_en,
-      room: row.room,
-      status: row.status,
-      plannedStart: row.planned_start.toISOString(),
-      plannedEnd: row.planned_end.toISOString(),
-      waiting: Number(row.waiting),
-      total: Number(row.total),
-    });
-    byHospital.set(row.hospital_id, list);
+  for (const { hospitalId, ...session } of sessions) {
+    const list = byHospital.get(hospitalId) ?? [];
+    list.push(session);
+    byHospital.set(hospitalId, list);
   }
 
   return (

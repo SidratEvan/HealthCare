@@ -28,6 +28,7 @@ import { labRoutes } from './lab.routes.js';
 import { paymentRoutes } from './payment.routes.js';
 import { queueRoutes } from './queue.routes.js';
 import { referralRoutes } from './referral.routes.js';
+import { staffAuthRoutes } from './staffAuth.routes.js';
 import { standbyRoutes } from './standby.routes.js';
 import { syncRoutes } from './sync.routes.js';
 import { webhookRoutes } from './webhooks.routes.js';
@@ -55,6 +56,9 @@ export function buildApiRouter(): Router {
   // Public, and only while `DEMO_MODE` is on: how the console gets a
   // principal without a password (CLAUDE.md §4.1).
   router.use(demoRoutes);
+  // Staff sign-in (pilot step 21). Login and refresh are public because the
+  // credential is in the body; the rest need the token they hand out.
+  router.use(staffAuthRoutes);
   router.use(bookingRoutes);
   router.use(queueRoutes);
   // The patient's half of the standby list (`FR-PAT-25`…`27`): joining is

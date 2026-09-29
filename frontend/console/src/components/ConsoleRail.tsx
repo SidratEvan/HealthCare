@@ -29,6 +29,7 @@ import { useState } from 'react';
 import { localName, t, type ConsoleKey, type Locale } from '@platform/i18n';
 
 import { mintDemoToken, readDemoSession, writeDemoSession, type DemoSession } from '@/lib/demo';
+import { signOut } from '@/lib/staffAuth';
 
 import type { ReactNode } from 'react';
 
@@ -114,7 +115,12 @@ export function ConsoleRail({
     setOpening(key);
     setFailed(null);
     try {
-      const minted = await mintDemoToken(hospitalId, target.role, AbortSignal.timeout(20_000));
+      // A signed-in person's token already carries every role they hold
+      // (pilot step 21); only the demo mints one per console.
+      const minted =
+        session.authKind === 'staff'
+          ? { token: session.token, staffName: session.staffName, hospitalId: session.hospitalId }
+          : await mintDemoToken(hospitalId, target.role, AbortSignal.timeout(20_000));
       // Everything the picker knew about the facility carries over; only the
       // principal and the role change.
       writeDemoSession({
@@ -212,6 +218,20 @@ export function ConsoleRail({
 
       <div className="mt-auto flex flex-col gap-3">
         {children}
+        {session?.authKind === 'staff' ? (
+          <button
+            type="button"
+            className="flex min-h-touch items-center rounded-sm px-3 text-left text-body-sm text-brand-100 hover:bg-white/10 hover:text-ink-inverse"
+            data-testid="rail-sign-out"
+            onClick={() => {
+              void signOut().then(() => {
+                globalThis.location.assign('/');
+              });
+            }}
+          >
+            {t('signOut', locale)}
+          </button>
+        ) : null}
         <a
           href="/"
           className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-100 hover:bg-white/10 hover:text-ink-inverse"

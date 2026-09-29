@@ -174,6 +174,13 @@ const schema = z.object({
   JWT_REFRESH_SECRET: secret,
   JWT_ACCESS_TTL: duration.default('15m'),
   JWT_REFRESH_TTL: duration.default('30d'),
+  /**
+   * Staff lockout (pilot step 21, BACKEND.md §7.1): this many consecutive
+   * failed sign-ins lock an account for this many minutes. Counted per
+   * account, so guessing from many machines is stopped as surely as from one.
+   */
+  STAFF_LOCKOUT_ATTEMPTS: positiveInt.max(50).default(5),
+  STAFF_LOCKOUT_MINUTES: positiveInt.max(1_440).default(15),
 
   // --- Guest tracking links (FR-GST-05) -----------------------------------
   GUEST_LINK_SECRET: secret,

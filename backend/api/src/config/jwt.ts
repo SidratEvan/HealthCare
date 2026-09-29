@@ -101,6 +101,12 @@ export interface TokenClaims extends JWTPayload {
   emergencyCaseId?: string;
   /** Present for a standby status link: the one place on a list it may act on. */
   standbyId?: string;
+  /**
+   * Set on a staff access token issued while `must_change_password` holds
+   * (0027): `attachPrincipal` then admits it to the password change and
+   * nothing else.
+   */
+  mcp?: boolean;
 }
 
 export interface SignOptions {
@@ -199,4 +205,15 @@ function classify(error: unknown): Exclude<VerifyResult, { ok: true }>['reason']
     if (code === 'ERR_JWS_INVALID' || code === 'ERR_JWT_INVALID') return 'malformed';
   }
   return 'invalid';
+}
+
+/** A TTL in the form the env accepts (`15m`, `24h`, `30d`), in milliseconds. */
+export function durationMs(value: string): number {
+  const match = /^(\d+)([smhd])$/.exec(value);
+  if (match === null) throw new Error(`Not a duration: ${value}`);
+  const amount = Number(match[1]);
+  const unit = match[2];
+  const scale =
+    unit === 's' ? 1_000 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 86_400_000;
+  return amount * scale;
 }

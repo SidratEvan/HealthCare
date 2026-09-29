@@ -103,6 +103,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0024',
       '0025',
       '0026',
+      // Pilot step 21 (CLAUDE.md §4.2): staff sign-in.
+      '0027',
     ]);
   });
 

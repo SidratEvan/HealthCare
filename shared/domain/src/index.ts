@@ -360,6 +360,7 @@ export { findIdentifiers } from './gov/identifiers.js';
 // construct is an action the server will accept.
 export * from './schemas/queue.schema.js';
 export * from './schemas/sync.schema.js';
+export * from './schemas/auth.schema.js';
 export * from './schemas/booking.schema.js';
 export * from './schemas/clinical.schema.js';
 export * from './schemas/bed.schema.js';

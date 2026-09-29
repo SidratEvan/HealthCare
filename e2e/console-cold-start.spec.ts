@@ -85,3 +85,45 @@ test.describe('S-B-01 when the API is waking', () => {
     await expect(page.getByRole('button', { name: 'আবার চেষ্টা করুন' })).toBeVisible();
   });
 });
+
+/**
+ * The question before the picker (pilot step 21): is this a demonstration?
+ * `GET /demo/status` decides between the picker and sign-in, and a sleeping
+ * API must not be read as "not a demo" — that put a password in front of a
+ * demo that needs none.
+ */
+test.describe('before the picker, when the API is waking (pilot step 21)', () => {
+  test.setTimeout(120_000);
+
+  test('waits and says so, then opens the demo picker — never sign-in', async ({ page }) => {
+    let seen = 0;
+    await page.route('**/demo/status', async (route) => {
+      seen += 1;
+      // The first attempts time out, as a waking API's do. Four, not two: the
+      // dev server runs React in strict mode, which mounts the page twice and
+      // so asks twice at once — two slow answers would only cover one of them.
+      if (seen <= 4) await new Promise((resolve) => setTimeout(resolve, 14_000));
+      await route.continue();
+    });
+    await page.goto(CONSOLE);
+
+    await expect(page.getByTestId('console-starting-waking')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('console-picker')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('staff-login')).toHaveCount(0);
+  });
+
+  test('says it could not reach the server when it never answers, with a way to retry', async ({
+    page,
+  }) => {
+    await page.route('**/demo/status', async () => {
+      await new Promise(() => {
+        // Deliberately never settles.
+      });
+    });
+    await page.goto(CONSOLE);
+
+    await expect(page.getByTestId('console-starting-failed')).toBeVisible({ timeout: 70_000 });
+    await expect(page.getByTestId('console-starting-retry')).toBeVisible();
+    await expect(page.getByTestId('staff-login')).toHaveCount(0);
+  });
+});

@@ -20,7 +20,14 @@
 import { DEMO_FACILITIES } from './data/hospitals.js';
 import { composeName, rosterFor } from './data/people.js';
 import { isDeclaredDistrict, specialty } from './data/reference.js';
-import { DEMO_MARKER, DISABLED_PASSWORD, demoEmail, labelBn, labelEn } from './lib/demo.js';
+import {
+  DEMO_MARKER,
+  demoEmail,
+  demoHospitalCode,
+  demoPasswordHash,
+  labelBn,
+  labelEn,
+} from './lib/demo.js';
 import { insertRows } from './lib/insert.js';
 import { facilityIds } from './lib/lookup.js';
 
@@ -156,6 +163,7 @@ export const seed01Hospitals: SeedModule = {
     // before the facility does, and more honestly: a seeded facility was not
     // created by a person. DB-P3 asks for `created_by` on rows a human made.
     const hospitalRows = DEMO_FACILITIES.map((facility) => [
+      demoHospitalCode(facility.slug),
       labelBn(facility.nameBn),
       labelEn(facility.nameEn),
       facility.kind,
@@ -175,6 +183,7 @@ export const seed01Hospitals: SeedModule = {
       'hospitals',
       {
         columns: [
+          'code',
           'name_bn',
           'name_en',
           'kind',
@@ -212,10 +221,11 @@ export const seed01Hospitals: SeedModule = {
 
     // --- staff_users and staff_roles ---------------------------------------
     //
-    // No authentication is built in this version (CLAUDE.md §4.1), so
-    // `password_hash` gets a value that is deliberately not a hash and
-    // `totp_secret` stays null. Nothing can authenticate as these people;
-    // under `DEMO_MODE=true` the console selects a hospital and a role.
+    // Every demo account signs in with the one documented demo password at
+    // `S-B-00` (pilot step 21, `DEMO_STAFF_PASSWORD`); under `DEMO_MODE=true`
+    // the picker still opens any console without it. `totp_secret` stays
+    // null: 2FA is step 28.
+    const passwordHash = await demoPasswordHash();
     const staffRows: unknown[][] = [];
     const staffKeys: { slug: string; role: string; counter: number }[] = [];
 
@@ -236,7 +246,7 @@ export const seed01Hospitals: SeedModule = {
             demoEmail(local, facility.slug),
             `${prefix}-${code}-${String(n).padStart(2, '0')}`,
             labelBn(composeName(names, names.chance(0.55) ? 'female' : 'male')),
-            DISABLED_PASSWORD,
+            passwordHash,
           ]);
           staffKeys.push({ slug: facility.slug, role, counter: n });
         }
@@ -310,7 +320,7 @@ export const seed01Hospitals: SeedModule = {
           demoEmail('gov', 'national'),
           'NAT-GOV-01',
           labelBn(composeName(nationalNames, nationalNames.chance(0.5) ? 'female' : 'male')),
-          DISABLED_PASSWORD,
+          passwordHash,
         ],
       ],
     );

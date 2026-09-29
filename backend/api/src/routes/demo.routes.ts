@@ -20,6 +20,10 @@ import { validate } from '../middleware/validate.js';
 
 export const demoRoutes: Router = Router();
 
+// Whether this deployment is a demonstration — asked by the console before it
+// decides between the picker and the sign-in screen (pilot step 21). Answers
+// on every deployment, unlike the two routes below.
+demoRoutes.get('/demo/status', demo.status);
 demoRoutes.get('/demo/consoles', demo.listConsoles);
 
 demoRoutes.post('/demo/token', validate({ body: demoTokenBody }), demo.mintToken);

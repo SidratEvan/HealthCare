@@ -19,7 +19,7 @@
 import { NATIONAL_ROLES, STAFF_ROLES, type NationalRole, type StaffRole } from '@platform/domain';
 
 import { verifyToken, type TokenClaims } from '../config/jwt.js';
-import { authRequired, tokenInvalid } from '../errors/AppError.js';
+import { AppError, authRequired, tokenInvalid } from '../errors/AppError.js';
 
 import type { Principal } from '../types/express.js';
 import type { NextFunction, Request, Response } from 'express';
@@ -70,8 +70,30 @@ export async function attachPrincipal(
     return;
   }
 
+  // A password an administrator set is a password somebody else knows. Until
+  // the person sets their own, the token opens the change and nothing else —
+  // enforced here, not only by the console, so a script holding the token
+  // cannot skip the screen (0027, pilot step 21).
+  if (result.claims.mcp === true && !PASSWORD_CHANGE_ALLOWED.has(pathOf(req))) {
+    next(new AppError('AUTH_PASSWORD_CHANGE_REQUIRED'));
+    return;
+  }
+
   req.principal = principal;
   next();
+}
+
+/** What a token with `mcp` may still reach. */
+const PASSWORD_CHANGE_ALLOWED = new Set([
+  '/api/v1/staff/password',
+  '/api/v1/staff/me',
+  '/api/v1/staff/logout',
+]);
+
+function pathOf(req: Request): string {
+  const url = req.originalUrl;
+  const query = url.indexOf('?');
+  return (query === -1 ? url : url.slice(0, query)).replace(/\/+$/, '');
 }
 
 /** Refuses the request unless a principal was attached. */

@@ -33,7 +33,7 @@ CREATE TYPE facility_kind     AS ENUM ('hospital','clinic','diagnostic','governm
 CREATE TYPE session_status    AS ENUM ('scheduled','running','paused','ended','cancelled');
 CREATE TYPE booking_status    AS ENUM ('booked','waiting','in_chamber','done','late','no_show','cancelled','rescheduled');
 CREATE TYPE booking_source    AS ENUM ('app','guest_link','counter','phone','walkin',
-                                       'import');   -- 0027, FR-IMP-01 set C
+                                       'import');   -- 0028, FR-IMP-01 set C
 CREATE TYPE queue_event_type  AS ENUM (
   'SESSION_OPENED','DOCTOR_ARRIVED','DELAY_DECLARED','SESSION_PAUSED','SESSION_RESUMED',
   'PATIENT_CALLED','PATIENT_DONE','PATIENT_LATE','PATIENT_NO_SHOW','PATIENT_REINSERTED',
@@ -135,10 +135,10 @@ A hospital-held patient is visible only to that hospital's staff under the usual
 | `totp_secret` | text | nullable, encrypted |
 | `is_active` | boolean | |
 | `last_login_at` | timestamptz | |
-| `must_change_password` | boolean | true after an administrator sets or resets it; the first login asks for a new one. 0028 |
-| `failed_login_count` | integer | consecutive failures; reset on success. 0028 |
-| `locked_until` | timestamptz | set after five consecutive failures, for fifteen minutes. 0028 |
-| `password_changed_at` | timestamptz | 0028 |
+| `must_change_password` | boolean | true after an administrator sets or resets it; the first login asks for a new one. 0027 |
+| `failed_login_count` | integer | consecutive failures; reset on success. 0027 |
+| `locked_until` | timestamptz | set after five consecutive failures, for fifteen minutes. 0027 |
+| `password_changed_at` | timestamptz | 0027 |
 
 #### `staff_roles`
 | Column | Type | Notes |
@@ -220,7 +220,7 @@ reduce it.
 `id`, `doctor_id` **FK**, `hospital_id` **FK**, `department_id` **FK**, `fee_poisha` int, `room` text, `is_active`.
 **U:** `(doctor_id, hospital_id, department_id)`
 
-Added by 0028: `hospitals.code` — text, **U**, a short upper-case code (`MARKS`) that `S-B-00` accepts beside an email when one deployment serves several facilities.
+Added by 0027: `hospitals.code` — text, **U**, a short upper-case code (`MARKS`) that `S-B-00` accepts beside an email when one deployment serves several facilities.
 
 #### `capabilities`
 `id`, `hospital_id` **FK**, `kind` capability_kind, `is_available` boolean, `updated_by` **FK** → `staff_users.id`, `updated_at`.
@@ -616,9 +616,9 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0026_gov_views.sql             -- step 20: the six v_gov_* views and gov_reader, which can read
                                    -- them and no table (FR-GOV-01..06, §5)
     -- The pilot build (CLAUDE.md §4.2). Each lands with its step:
-    0027_import_enum.sql           -- step 24: booking_source 'import' alone (see 0021 for why)
-    0028_staff_auth.sql            -- step 21: staff_users lockout and first-password columns,
+    0027_staff_auth.sql            -- step 21: staff_users lockout and first-password columns,
                                    -- hospitals.code (§2.1, §2.2)
+    0028_import_enum.sql           -- step 24: booking_source 'import' alone (see 0021 for why)
     0029_hospital_patients.sql     -- step 24: patients.owner_hospital_id, patients_one_owner widened,
                                    -- external_kind, external_refs (§2.1)
     0030_imports.sql               -- step 24: import_set, import_state, import_batches, import_rows (§2.6b)
