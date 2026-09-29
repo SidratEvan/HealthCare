@@ -100,7 +100,10 @@ describe('the error envelope', () => {
       .send('{"broken":');
 
     expect(response.body.ok).toBe(false);
-    expect(response.body.error.code).toBe('INTERNAL');
+    // The caller's mistake, so a 400 — it was a 500 until pilot step 24 taught
+    // the error handler the body parser's own refusals.
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_FAILED');
     // The parse error's message would name the offending byte offset of a
     // request body; nothing about it reaches the client (BACKEND.md §9).
     expect(JSON.stringify(response.body)).not.toContain('JSON');
@@ -266,5 +269,26 @@ describe('CORS allows exactly the verbs the routers use', () => {
       .set('Access-Control-Request-Method', 'GET');
 
     expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
+describe('request bodies (a report file, an import file, and everything else)', () => {
+  it('lets a report the size of a real PDF reach its route, rather than a 500', async () => {
+    // Before this, the global 256 KB parser refused it first and the error
+    // surfaced as INTERNAL: every lab report over a few hundred kilobytes.
+    const response = await request(app)
+      .post('/api/v1/test-orders/00000000-0000-7000-8000-000000000000/report')
+      .set('content-type', 'application/json')
+      .send(JSON.stringify({ fileBase64: 'A'.repeat(1_000_000) }));
+    expect(response.status).toBe(401);
+  });
+
+  it('refuses an oversized body elsewhere as too large, not as a failure of ours', async () => {
+    const response = await request(app)
+      .post('/api/v1/bookings')
+      .set('content-type', 'application/json')
+      .send(JSON.stringify({ padding: 'A'.repeat(400_000) }));
+    expect(response.status).toBe(413);
+    expect(response.body.error.code).toBe('PAYLOAD_TOO_LARGE');
   });
 });

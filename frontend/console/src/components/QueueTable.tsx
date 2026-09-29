@@ -57,6 +57,8 @@ const SOURCE_LABEL = {
   counter: 'sourceCounter',
   phone: 'sourcePhone',
   walkin: 'sourceWalkin',
+  // An appointment brought in from the hospital's own system (pilot step 24).
+  import: 'sourceImport',
 } as const;
 
 export interface QueueTableProps {

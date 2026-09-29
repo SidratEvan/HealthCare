@@ -5,8 +5,8 @@
  * Before this, every chamber was a seeded row, and a hospital set up from the
  * settings screen would have had doctors and schedules and nothing to book.
  * This writes today and the next seven days (`MATERIALISE_DAYS`) from the
- * schedules, at start-up and then every hour, and once more straight after a
- * schedule is added so its chambers appear at once.
+ * schedules, at start-up and then every hour (`jobs.service`), and once more
+ * straight after a schedule is added so its chambers appear at once.
  *
  * It runs inside the API process. `backend/workers` has no database access
  * yet, and a single server in Bangladesh (`FR-SEC-07`) runs one API; the
@@ -16,7 +16,6 @@
 
 import { MATERIALISE_DAYS, id, plannedSessions, time, type DhakaDate } from '@platform/domain';
 
-import { logger } from '../config/logger.js';
 import * as repo from '../repositories/sessionMaterialise.repo.js';
 
 /** How often the loop runs. Hourly, so a missed midnight is caught within the hour. */
@@ -65,28 +64,4 @@ export async function materialise(
     });
   }
   return await repo.insertMissing(rows);
-}
-
-/**
- * Starts the hourly loop and runs it once now. Returns a stop function.
- *
- * A failed run is logged and the next hour tries again: a chamber missing for
- * an hour is a nuisance, a crashed API is a stopped queue.
- */
-export function startMaterialiseLoop(): () => void {
-  const run = (): void => {
-    materialise()
-      .then((written) => {
-        if (written > 0) logger.info({ written }, 'sessions materialised from schedules');
-      })
-      .catch((error: unknown) => {
-        logger.error({ err: error }, 'session materialisation failed; retrying next hour');
-      });
-  };
-  run();
-  const timer = setInterval(run, MATERIALISE_INTERVAL_MS);
-  timer.unref();
-  return () => {
-    clearInterval(timer);
-  };
 }

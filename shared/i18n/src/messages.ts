@@ -240,6 +240,7 @@ export const CONSOLE = {
   sourceCounter: { bn: 'কাউন্টার', en: 'Counter' },
   sourcePhone: { bn: 'ফোন', en: 'Phone' },
   sourceWalkin: { bn: 'ওয়াক-ইন', en: 'Walk-in' },
+  sourceImport: { bn: 'হাসপাতালের খাতা থেকে', en: "From the hospital's register" },
 
   // --- Right column (B1.5) -------------------------------------------------
   nowServing: { bn: 'এখন চলছে', en: 'Now serving' },
@@ -1635,6 +1636,159 @@ export const CONSOLE = {
   registrationAddHere: { bn: 'এই চেম্বারে যোগ করুন', en: 'Add to this chamber' },
   registrationWaiting: { bn: '{count} জন অপেক্ষায়', en: '{count} waiting' },
   registrationChooseFirst: { bn: 'আগে রোগী বেছে নিন', en: 'Choose the patient first' },
+
+  // --- Importing a hospital's own data (S-B-14, pilot step 24, FR-IMP) ---------
+  importTitle: { bn: 'তথ্য আমদানি', en: 'Import data' },
+  importOpen: { bn: 'পুরোনো তথ্য আমদানি করুন', en: 'Import existing data' },
+  importIntro: {
+    bn: 'আপনার হাসপাতালের নিজের সিস্টেমের তথ্য, একটি একটি সেট করে। অনুমোদনের আগে কিছুই সংরক্ষণ হয় না।',
+    en: "Your hospital's own records, one set at a time. Nothing is saved until you approve it.",
+  },
+  importBack: { bn: 'সেটিংসে ফিরুন', en: 'Back to settings' },
+  importChooseSet: { bn: 'কোন সেট আমদানি করবেন', en: 'Which set to import' },
+  importSetStructure: { bn: 'ক কাঠামো', en: 'A Structure' },
+  importSetPatients: { bn: 'খ রোগীর তালিকা', en: 'B Patient register' },
+  importSetAppointments: { bn: 'গ আগামী অ্যাপয়েন্টমেন্ট', en: 'C Upcoming appointments' },
+  importSetRecords: { bn: 'ঘ পুরোনো রিপোর্ট ও ভিজিট', en: 'D Past reports and visits' },
+  importRecordsLater: {
+    bn: 'পাইলট চালু হওয়ার পর, আইনি পরামর্শের পরে',
+    en: "After the pilot starts, once the hospital's legal adviser agrees",
+  },
+  importSetStructureHelp: {
+    bn: 'বিভাগ, ডাক্তার, সাপ্তাহিক চেম্বার, ওয়ার্ড ও বেড, এবং কর্মী — প্রতিটি সারির type কলামে লেখা থাকে সেটি কী।',
+    en: 'Departments, doctors, weekly chambers, wards and beds, and staff — each row says which in its type column.',
+  },
+  importSetPatientsHelp: {
+    bn: 'হাসপাতালের রোগী নম্বর, নাম, জন্মতারিখ বা বয়স, লিঙ্গ, মোবাইল ও রক্তের গ্রুপ। জাতীয় পরিচয়পত্র বা ঠিকানা নেওয়া হয় না।',
+    en: "The hospital's patient number, name, date of birth or age, sex, mobile and blood group. No national ID or address is taken.",
+  },
+  importSetAppointmentsHelp: {
+    bn: 'রোগী ও ডাক্তার আগে আমদানি হয়ে থাকতে হবে। তারিখটিতে ওই ডাক্তারের চেম্বার থাকতে হবে।',
+    en: 'Its patients and doctors must be imported first, and the doctor must have a chamber on the date.',
+  },
+  importTemplate: { bn: 'টেমপ্লেট নামান', en: 'Download the template' },
+  importTemplateFailed: { bn: 'টেমপ্লেট নামানো যায়নি।', en: 'Could not download the template.' },
+  importFile: { bn: 'CSV ফাইল', en: 'CSV file' },
+  importChooseFileFirst: { bn: 'আগে একটি CSV ফাইল বেছে নিন', en: 'Choose a CSV file first' },
+  importCheck: { bn: 'যাচাই করুন', en: 'Check' },
+  importPreviewOf: { bn: 'যাচাইয়ের ফল: {file}', en: 'Check result: {file}' },
+  importCountAdd: { bn: 'যোগ', en: 'Add' },
+  importCountUpdate: { bn: 'হালনাগাদ', en: 'Update' },
+  importCountSkip: { bn: 'বাদ', en: 'Skip' },
+  importCountError: { bn: 'ভুল', en: 'Errors' },
+  importCountsLine: {
+    bn: 'যোগ {add}, হালনাগাদ {update}, বাদ {skip}, ভুল {error}',
+    en: 'add {add}, update {update}, skip {skip}, errors {error}',
+  },
+  importErrorsHeading: { bn: 'যে সারিগুলো ঠিক করতে হবে', en: 'Rows to correct' },
+  importRow: { bn: 'সারি', en: 'Row' },
+  importColumn: { bn: 'কলাম', en: 'Column' },
+  importReason: { bn: 'কারণ', en: 'Reason' },
+  importCommit: { bn: 'অনুমোদন করে সংরক্ষণ করুন', en: 'Approve and save' },
+  importCommitHasErrors: {
+    bn: 'ভুল থাকা অবস্থায় সংরক্ষণ করা যায় না — ফাইল ঠিক করে আবার যাচাই করুন',
+    en: 'It cannot be saved with errors — correct the file and check it again',
+  },
+  importCommitTitle: { bn: 'আমদানি অনুমোদন করবেন?', en: 'Approve this import?' },
+  importCommitBody: {
+    bn: 'সব সারি একসঙ্গে সংরক্ষণ হবে। পরে দরকার হলে পুরো আমদানি ফিরিয়ে নেওয়া যাবে, যদি এর ওপর এরপর কোনো কাজ না হয়ে থাকে।',
+    en: 'Every row is saved together. The whole import can be taken back later, as long as nothing has been built on it.',
+  },
+  importDiscard: { bn: 'বাতিল করুন', en: 'Discard' },
+  importCommitted: { bn: 'আমদানি সংরক্ষণ করা হয়েছে', en: 'Import saved' },
+  importDiscarded: { bn: 'আমদানি বাতিল করা হয়েছে', en: 'Import discarded' },
+  importUndo: { bn: 'ফিরিয়ে নিন', en: 'Take back' },
+  importUndoTitle: { bn: 'এই আমদানি ফিরিয়ে নেবেন?', en: 'Take back this import?' },
+  importUndoBody: {
+    bn: 'এই আমদানিতে যা যোগ হয়েছিল তা সরানো হবে, আর যা বদলানো হয়েছিল তা আগের মতো হবে।',
+    en: 'What it added is removed, and what it changed is put back.',
+  },
+  importUndone: { bn: 'আমদানি ফিরিয়ে নেওয়া হয়েছে', en: 'Import taken back' },
+  importUndoBlocked: {
+    bn: 'ফিরিয়ে নেওয়া যায়নি: এই সারিগুলোর ওপর এরপর কাজ হয়েছে — {rows}',
+    en: 'Could not take it back: something has been built on these rows since — {rows}',
+  },
+  importCommitConflict: {
+    bn: 'সংরক্ষণ করা যায়নি: সারি {row}-এর তথ্য এর মধ্যে বদলে গেছে। আবার যাচাই করুন।',
+    en: 'Could not save: the data behind row {row} changed meanwhile. Check the file again.',
+  },
+  importWrongState: {
+    bn: 'এই আমদানি এখন এই অবস্থায় নেই। তালিকাটি নতুন করে দেখুন।',
+    en: 'This import is no longer in that state. Look at the list again.',
+  },
+  importHistory: { bn: 'আগের আমদানি', en: 'Earlier imports' },
+  importHistoryEmpty: {
+    bn: 'এখনো কোনো আমদানি হয়নি। একটি সেট বেছে টেমপ্লেট নামিয়ে শুরু করুন।',
+    en: 'Nothing imported yet. Choose a set and download its template to begin.',
+  },
+  importBy: { bn: '{name}-এর আমদানি, {when}', en: 'Imported by {name}, {when}' },
+  importStateChecked: { bn: 'যাচাই হয়েছে, অনুমোদন বাকি', en: 'Checked, awaiting approval' },
+  importStateCommitted: { bn: 'সংরক্ষিত', en: 'Saved' },
+  importStateUndone: { bn: 'ফিরিয়ে নেওয়া', en: 'Taken back' },
+  importStateDiscarded: { bn: 'বাতিল', en: 'Discarded' },
+  importOffline: { bn: 'আমদানি করতে ইন্টারনেট সংযোগ লাগবে', en: 'Importing needs a connection' },
+  importOfflineKept: {
+    bn: 'ইন্টারনেট সংযোগ নেই। বেছে নেওয়া ফাইলটি থাকবে; সংযোগ ফিরলে যাচাই করুন।',
+    en: 'No connection. The chosen file stays chosen; check it when the connection returns.',
+  },
+  importLoadFailed: {
+    bn: 'আগের আমদানির তালিকা আনা যায়নি।',
+    en: 'Could not load the earlier imports.',
+  },
+  importFileUnreadable: {
+    bn: 'ফাইলটি পড়া যায়নি। স্প্রেডশিট থেকে CSV (UTF-8) হিসেবে আবার সংরক্ষণ করুন।',
+    en: 'The file could not be read. Save it again from the spreadsheet as CSV (UTF-8).',
+  },
+  importFileMissingColumns: {
+    bn: 'এই সেটের টেমপ্লেটের কলাম নেই: {columns}',
+    en: "This set's template columns are missing: {columns}",
+  },
+  importFileTooManyRows: {
+    bn: 'একবারে সর্বোচ্চ বিশ হাজার সারি। ফাইলটি ভাগ করে আমদানি করুন।',
+    en: 'At most twenty thousand rows at a time. Split the file and import each part.',
+  },
+  importFileTooLarge: {
+    bn: 'ফাইলটি পাঁচ মেগাবাইটের বেশি।',
+    en: 'The file is over five megabytes.',
+  },
+  importErrRequired: { bn: 'ঘরটি খালি', en: 'Empty' },
+  importErrInvalid: { bn: 'লেখাটি ঠিক নেই', en: 'Not written correctly' },
+  importErrUnknownType: {
+    bn: 'type হতে হবে department, doctor, schedule, ward, bed বা staff',
+    en: 'type must be department, doctor, schedule, ward, bed or staff',
+  },
+  importErrUnknownValue: { bn: 'এই মান চেনা নেই', en: 'Not a value this column takes' },
+  importErrMobile: { bn: 'বাংলাদেশের মোবাইল নম্বর নয়', en: 'Not a Bangladeshi mobile number' },
+  importErrDate: {
+    bn: 'তারিখ পড়া যায়নি (দিন/মাস/বছর)',
+    en: 'Could not read the date (day/month/year)',
+  },
+  importErrTime: {
+    bn: 'সময় পড়া যায়নি (যেমন ১৭:০০)',
+    en: 'Could not read the time (such as 17:00)',
+  },
+  importErrRange: { bn: 'সীমার বাইরে', en: 'Out of range' },
+  importErrEndBeforeStart: { bn: 'শেষের সময় শুরুর আগে', en: 'Ends before it starts' },
+  importErrDuplicate: {
+    bn: 'একই নম্বর ফাইলে দুবার আছে',
+    en: 'The same identifier appears twice in the file',
+  },
+  importErrUnknownRef: {
+    bn: 'এই নম্বরের কিছু ফাইলে বা আগের আমদানিতে নেই',
+    en: 'Nothing with this identifier in the file or an earlier import',
+  },
+  importErrNoChamber: {
+    bn: 'ওই তারিখে এই ডাক্তারের কোনো চেম্বার নেই',
+    en: 'This doctor has no chamber on that date',
+  },
+  importErrSerialTaken: {
+    bn: 'এই সিরিয়াল আগেই দেওয়া হয়েছে',
+    en: 'That serial is already taken',
+  },
+  importErrConflict: {
+    bn: 'এই হাসপাতালে আগেই অন্য কিছুর এই নাম বা নম্বর',
+    en: 'Something else here already has this label or number',
+  },
 
   // --- Demo mode (FR-DEM-07, CLAUDE.md §1.1) -------------------------------
   demoBanner: {

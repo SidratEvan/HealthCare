@@ -27,7 +27,7 @@ export interface CounterPatient {
   readonly sex: 'male' | 'female' | 'other';
   readonly relationship: string;
   readonly isPrimary: boolean;
-  readonly owner: 'account' | 'guest';
+  readonly owner: 'account' | 'guest' | 'hospital';
 }
 
 /** Why a counter call failed, in the words the screen has copy for. */

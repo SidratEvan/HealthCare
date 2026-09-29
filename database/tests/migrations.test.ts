@@ -107,6 +107,10 @@ describe('migration files (DATABASE.md §7)', () => {
       '0027',
       // Pilot step 22: each day's chambers linked to their schedule.
       '0028',
+      // Pilot step 24: importing a hospital's own data (FR-IMP).
+      '0029',
+      '0030',
+      '0031',
     ]);
   });
 

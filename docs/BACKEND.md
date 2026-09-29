@@ -543,7 +543,7 @@ backend/workers/src/
 └── cron.ts                      # schedule table
 ```
 
-**In the pilot** (`CLAUDE.md` §4.2) one job runs, with no scheduler dependency, **inside the API process** rather than in `backend/workers`: `sessions.materialise` (`services/sessionMaterialise.service.ts`) at start-up and then hourly, writing `sessions` for today and the next seven days (`MATERIALISE_DAYS` = 8) from `session_templates`, and once more straight after `POST /hospital/templates`. `backend/workers` has no database access yet and a single Bangladeshi server runs one API, so a second process would be a second deployment for one query. It inserts `ON CONFLICT DO NOTHING` against `sessions_template_date_key` (0028), so running it twice, from two processes, or after a missed night is harmless. It skips an inactive doctor and a removed schedule. `SESSION_MATERIALISE=false` switches it off in a process that must never write. The rest of this table waits for pg-boss.
+**In the pilot** (`CLAUDE.md` §4.2) one job runs, with no scheduler dependency, **inside the API process** rather than in `backend/workers`: `sessions.materialise` (`services/sessionMaterialise.service.ts`) at start-up and then hourly, writing `sessions` for today and the next seven days (`MATERIALISE_DAYS` = 8) from `session_templates`, and once more straight after `POST /hospital/templates`. `backend/workers` has no database access yet and a single Bangladeshi server runs one API, so a second process would be a second deployment for one query. It inserts `ON CONFLICT DO NOTHING` against `sessions_template_date_key` (0028), so running it twice, from two processes, or after a missed night is harmless. It skips an inactive doctor and a removed schedule. `SESSION_MATERIALISE=false` switches it off in a process that must never write. The same hourly tick (`services/jobs.service.ts`) clears `import_rows.raw` 30 days after a batch closes (`FR-IMP-08`, step 24). The rest of this table waits for pg-boss.
 
 **Schedule**
 
@@ -595,6 +595,8 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `AUTH_PASSWORD_WEAK` | 422 | a new staff password shorter than 10 characters or the same as the old one |
 | `SETTINGS_DUPLICATE` | 409 | a department code, a doctor already in that department, an overlapping weekly chamber, a bed label, an email or a staff code already exists at this facility; `details.field` says which (and `details.labels` for beds) |
 | `SETTINGS_NOT_ALLOWED` | 422 | a settings change the rules refuse; `details.reason` is `own_access`, `own_password`, `doctor_verified`, `doctor_shared` or `nothing_to_publish` |
+| `IMPORT_FILE` | 422 | the file cannot be read as the set at all — empty, an unclosed quote, the template's columns missing (`details.columns`), more than 20,000 rows; refused before any batch exists |
+| `PAYLOAD_TOO_LARGE` | 413 | a body over its route's limit: 256 KB, or the report (14 MB) and import (6 MB) routes' own |
 | `IMPORT_STATE` | 409 | the batch is not in the state that action needs |
 | `IMPORT_UNDO_BLOCKED` | 409 | rows outside the batch refer to its rows; `details.blocking` lists them |
 | `GUEST_LINK_EXPIRED` | 410 | tracking link past expiry |

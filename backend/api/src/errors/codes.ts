@@ -51,6 +51,20 @@ export const ERROR_CODES = {
   SETTINGS_DUPLICATE: { status: 409, message: 'Something with that value already exists here.' },
   SETTINGS_NOT_ALLOWED: { status: 422, message: 'That change is not allowed.' },
 
+  // --- Imports (pilot step 24, FR-IMP-05..07) -------------------------------
+  //
+  // A file that cannot be read as the set at all — empty, a quote never
+  // closed, the template's columns missing, too many rows — is refused before
+  // any batch exists: 422, `details.reason`. A batch asked to do what its state
+  // does not allow (commit twice, commit with errors, undo a discarded one) is
+  // 409. An undo something has been built on names the rows that stop it.
+  IMPORT_FILE: { status: 422, message: 'That file cannot be read as this set.' },
+  IMPORT_STATE: { status: 409, message: 'That import is not in a state that allows this.' },
+  IMPORT_UNDO_BLOCKED: {
+    status: 409,
+    message: 'Something has been built on rows from this import since.',
+  },
+
   // --- Guest (FR-GST-05) ---------------------------------------------------
   GUEST_LINK_EXPIRED: { status: 410, message: 'This tracking link has expired.' },
 
@@ -172,6 +186,8 @@ export const ERROR_CODES = {
     message: 'This endpoint requires an Idempotency-Key header.',
   },
   RATE_LIMITED: { status: 429, message: 'Too many requests.' },
+  /** A body over its route's limit (256kb, or the report and import routes' own). */
+  PAYLOAD_TOO_LARGE: { status: 413, message: 'The request body is too large.' },
   NOT_FOUND: { status: 404, message: 'No such resource.' },
 
   // --- Server --------------------------------------------------------------

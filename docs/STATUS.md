@@ -7,8 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/counter-registration` — **walk-ins and the registration
-desk** (pilot step 23; below, *Step 23*). Before that, `feat/hospital-settings`
+Last updated: `feat/data-import` — **a hospital imports what it already
+holds** (pilot step 24; below, *Step 24*). Before that, `feat/counter-registration`
+— **walk-ins and the registration desk** (pilot step 23; below, *Step 23*).
+Before that, `feat/hospital-settings`
 — **a hospital sets itself up from `S-B-11`** (pilot step 22; below, *Step
 22*). Before that, `feat/staff-auth` —
 **staff sign in with their own accounts** (pilot step 21; below, *Step 21*).
@@ -74,8 +76,9 @@ Before that, `feat/standby-self-serve` (decision 62) and `feat/check-in`
 | **21** | **`feat/staff-auth`** | **merged — the pilot's first step** (`CLAUDE.md` §4.2). Migration 0027, `S-B-00` sign-in, `S-B-00c` first password, the picker narrowed to the person's own facility and roles, refresh rotation, lockout, `pnpm staff:create`, `staff-login.spec.ts` |
 | **22** | **`feat/hospital-settings`** | **merged** — migration 0028, `S-B-11`, `/hospital/*`, the hourly session materialiser in the API, `pnpm doctor:verify`, `hospital-settings.spec.ts` |
 | **23** | **`feat/counter-registration`** | **merged** — `S-B-03`, `MOD-B02-WALKIN`, `/registration/patients`, the walk-in replay fix, `counter-registration.spec.ts` |
-| 24 | `feat/data-import` | next |
-| 25–28 | pilot steps | not started — see `CLAUDE.md` §4.2 |
+| **24** | **`feat/data-import`** | **merged** — migrations 0029–0031, `S-B-14`, `/hospital/imports`, sets A–C, undo, the body-limit fix, `data-import.spec.ts` |
+| 25 | `feat/patient-otp` | next |
+| 26–28 | pilot steps | not started — see `CLAUDE.md` §4.2 |
 
 **Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design). What
 remains is the owner's: the open decisions below, applying migrations to
@@ -133,15 +136,15 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 4234, in about two and a half minutes.
-`pnpm test:e2e` reports 130, in Chromium, against the real API and the seeded
+`pnpm test` reports 4407, in about two and a half minutes.
+`pnpm test:e2e` reports 131, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 5 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`. The last full
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`, 1 in `data-import.spec.ts`. The last full
 run took twenty-three minutes.
 
 **The two `demo.routes.test.ts` failures were Fridays, not early mornings —
@@ -162,6 +165,63 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Step 24 — a hospital imports what it already holds (`feat/data-import`)
+
+**What an administrator now does.** `S-B-11` → **পুরোনো তথ্য আমদানি করুন**
+opens `S-B-14`. Choose a set (ক কাঠামো, খ রোগীর তালিকা, গ আগামী
+অ্যাপয়েন্টমেন্ট; ঘ is shown off, `FR-IMP-12`), download its template, choose
+the CSV saved from the hospital's own system, **যাচাই করুন**. The preview
+counts add, update, skip and errors, and lists every error by row and column.
+**অনুমোদন করে সংরক্ষণ** writes it all or nothing; the history lists every
+batch; a committed one can be taken back. `data-import.spec.ts` does all of
+it on a facility that starts empty.
+
+**How the data is held.** Migrations 0029–0031: `booking_source 'import'`,
+patients a hospital holds (`owner_hospital_id`, a third owner under
+`patients_one_owner`), `external_refs` for the hospital's own identifiers,
+and `import_batches`/`import_rows` (with `previous`, for undo). Row
+reading is pure and tested in `shared/domain/src/imports`: day-first dates,
+either clock, weekday names in both languages, Bengali digits, taka with
+commas.
+
+**Rules a reader would not guess** (`import.service.ts`):
+- **Re-importing updates.** Every row keeps the hospital's identifier; a
+  department whose code already exists, or a doctor whose BMDC number is
+  known, is adopted rather than duplicated.
+- **Beds arrive out of service** (`FR-IMP-03`: occupancy is never imported).
+- **An imported staff account has no password** — none is ever imported —
+  until an administrator issues a temporary one from `S-B-11`. An email that
+  already has an account here is skipped: an import never changes a signed-in
+  person's access.
+- **Appointments** need their patients and doctors imported first, a chamber
+  that day (a date in the past is refused), and a free serial. "Paid" is kept
+  on the booking as the hospital's word (`intake.import.paid`): a payment row
+  needs a payer, and an imported patient has none until they claim the record.
+- **Undo** removes what the batch added and restores what it changed, unless
+  something outside the batch has been built on it since — a booking, a
+  visit, a bed the ward has used, an account somebody signed in with — and
+  then it names those rows and changes nothing.
+- **Imported patients are their hospital's alone** (`FR-IMP-10`): the
+  counter lookup from step 23 now shows another hospital's imported patients to
+  nobody.
+- **Rows are cleared 30 days after a batch closes** by the hourly jobs
+  (`jobs.service`, which now also runs the materialiser); counts, errors and
+  `external_refs` stay (`FR-IMP-08`).
+
+**Found on the way: lab reports over 256 KB failed.** The global JSON parser
+runs before the lab route's own 14 MB one and refused any real PDF (as base64)
+with a **500**; every test uploaded a few bytes. Routes with their own limit
+are now skipped by the global parser, an oversized body is `PAYLOAD_TOO_LARGE`
+(413) and a malformed one `VALIDATION_FAILED` (400) instead of `INTERNAL`.
+
+**Not in this step.** A read-only connection to a hospital's database or FHIR
+(`FR-IMP-09`: "later"); set D (`FR-IMP-12`). Before a real import, the
+hospital's column headers — never its rows — are what an importer needs
+(`FR-IMP-11`).
+
+**Before this reaches the deployed demo:** apply 0029, then 0030 and 0031
+(0029 must commit first, as 0021 did).
 
 ### Step 23 — somebody walks up to the counter (`feat/counter-registration`)
 

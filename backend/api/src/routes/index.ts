@@ -25,6 +25,7 @@ import { govRoutes } from './gov.routes.js';
 import { guestRoutes } from './guest.routes.js';
 import { healthRoutes } from './health.routes.js';
 import { hospitalSettingsRoutes } from './hospitalSettings.routes.js';
+import { importRoutes } from './import.routes.js';
 import { labRoutes } from './lab.routes.js';
 import { paymentRoutes } from './payment.routes.js';
 import { queueRoutes } from './queue.routes.js';
@@ -96,6 +97,8 @@ export function buildApiRouter(): Router {
   // A facility's own setup (pilot step 22, S-B-11): the administrator's own
   // facility, from the principal, like the dashboard.
   router.use(hospitalSettingsRoutes);
+  // The hospital's own data, set by set (pilot step 24, S-B-14).
+  router.use(importRoutes);
   // The national layer (step 20). Districts and facility kinds only, read as a
   // database role that can open nothing else (FR-GOV-06).
   router.use(govRoutes);

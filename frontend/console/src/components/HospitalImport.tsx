@@ -1,0 +1,575 @@
+'use client';
+
+/**
+ * `S-B-14` Import (pilot step 24, `APP_FLOW.md` B6, `PRD.md` §14b,
+ * `FR-IMP-01`…`09`).
+ *
+ * A hospital brings in what it already holds, one set at a time: choose the
+ * set, download its template, choose the CSV saved from the hospital's own
+ * system, and **যাচাই করুন** — which writes nothing but a preview: how many
+ * rows add, update and are skipped, and every error with its row number,
+ * column and reason. **অনুমোদন করে সংরক্ষণ** writes it all or nothing; the
+ * history below lists every batch, and a committed one can be taken back.
+ *
+ * ## The four states (`GR-03`)
+ *
+ * Loading is the shape of the screen. With no batch yet, the three templates
+ * are the call to action. A failed load says so with a retry. Offline, the
+ * chosen file stays chosen and every action says it needs the connection.
+ */
+
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+
+import type { ImportSet } from '@platform/domain';
+import {
+  format,
+  formatDateTime,
+  formatNumber,
+  numeralsFor,
+  t,
+  type ConsoleKey,
+} from '@platform/i18n';
+import {
+  Button,
+  Card,
+  Chip,
+  FilterChip,
+  Sheet,
+  SheetActions,
+  ToastProvider,
+  useLocale,
+  useToast,
+} from '@platform/ui';
+
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
+import {
+  downloadTemplate,
+  importApi,
+  type ImportBatch,
+  type ImportBatchView,
+  type ImportFailure,
+} from '@/lib/imports';
+
+const SETS: readonly {
+  readonly set: ImportSet;
+  readonly key: ConsoleKey;
+  readonly help: ConsoleKey;
+}[] = [
+  { set: 'structure', key: 'importSetStructure', help: 'importSetStructureHelp' },
+  { set: 'patients', key: 'importSetPatients', help: 'importSetPatientsHelp' },
+  { set: 'appointments', key: 'importSetAppointments', help: 'importSetAppointmentsHelp' },
+];
+
+const SET_NAME: Readonly<Record<string, ConsoleKey>> = {
+  structure: 'importSetStructure',
+  patients: 'importSetPatients',
+  appointments: 'importSetAppointments',
+  records: 'importSetRecords',
+};
+
+const STATE_NAME: Readonly<Record<string, ConsoleKey>> = {
+  checked: 'importStateChecked',
+  committed: 'importStateCommitted',
+  undone: 'importStateUndone',
+  discarded: 'importStateDiscarded',
+};
+
+const ERROR_NAME: Readonly<Record<string, ConsoleKey>> = {
+  required: 'importErrRequired',
+  invalid: 'importErrInvalid',
+  unknown_type: 'importErrUnknownType',
+  unknown_value: 'importErrUnknownValue',
+  not_bd_mobile: 'importErrMobile',
+  bad_date: 'importErrDate',
+  bad_time: 'importErrTime',
+  out_of_range: 'importErrRange',
+  end_before_start: 'importErrEndBeforeStart',
+  duplicate_in_file: 'importErrDuplicate',
+  unknown_ref: 'importErrUnknownRef',
+  no_chamber: 'importErrNoChamber',
+  serial_taken: 'importErrSerialTaken',
+  conflict: 'importErrConflict',
+};
+
+type Load = 'loading' | 'ready' | 'error' | 'offline';
+
+export function HospitalImport(): ReactNode {
+  return (
+    <ToastProvider placement="console">
+      <ImportScreen />
+    </ToastProvider>
+  );
+}
+
+function ImportScreen(): ReactNode {
+  const locale = useLocale();
+  const { show } = useToast();
+  const numerals = numeralsFor(locale);
+  const [history, setHistory] = useState<readonly ImportBatch[]>([]);
+  const [load, setLoad] = useState<Load>('loading');
+  const [online, setOnline] = useState(true);
+  const [set, setSet] = useState<ImportSet>('structure');
+  const [file, setFile] = useState<{ readonly name: string; readonly text: string } | null>(null);
+  const [preview, setPreview] = useState<ImportBatchView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<{
+    readonly kind: 'commit' | 'undo';
+    readonly batch: ImportBatch;
+  } | null>(null);
+
+  const reload = useCallback(async () => {
+    const result = await importApi.history();
+    if (result.ok) {
+      setHistory(result.value);
+      setLoad('ready');
+    } else {
+      setLoad((current) =>
+        current === 'ready' ? current : result.failure.kind === 'offline' ? 'offline' : 'error',
+      );
+      if (result.failure.kind === 'offline') setOnline(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setOnline(globalThis.navigator.onLine);
+    void reload();
+    const up = (): void => {
+      setOnline(true);
+      void reload();
+    };
+    const down = (): void => {
+      setOnline(false);
+    };
+    globalThis.addEventListener('online', up);
+    globalThis.addEventListener('offline', down);
+    return () => {
+      globalThis.removeEventListener('online', up);
+      globalThis.removeEventListener('offline', down);
+    };
+  }, [reload]);
+
+  function failureText(failure: ImportFailure): string {
+    switch (failure.kind) {
+      case 'offline':
+        return t('importOffline', locale);
+      case 'tooLarge':
+        return t('importFileTooLarge', locale);
+      case 'file':
+        if (failure.reason === 'missing_columns') {
+          return format('importFileMissingColumns', locale, {
+            columns: failure.columns.join(', '),
+          });
+        }
+        if (failure.reason === 'too_many_rows') return t('importFileTooManyRows', locale);
+        return t('importFileUnreadable', locale);
+      case 'state':
+        if (failure.reason === 'conflict' && failure.rowNumber !== null) {
+          return format('importCommitConflict', locale, {
+            row: formatNumber(failure.rowNumber, numerals),
+          });
+        }
+        return t('importWrongState', locale);
+      case 'blocked':
+        return format('importUndoBlocked', locale, {
+          rows: failure.rows.map((row) => formatNumber(row, numerals)).join(', '),
+        });
+      case 'failed':
+        return t('settingsSaveFailed', locale);
+    }
+  }
+
+  async function check(): Promise<void> {
+    if (file === null || busy) return;
+    setBusy(true);
+    setProblem(null);
+    const result = await importApi.check(set, file.name, file.text);
+    setBusy(false);
+    if (!result.ok) {
+      if (result.failure.kind === 'offline') setOnline(false);
+      setProblem(failureText(result.failure));
+      return;
+    }
+    setPreview(result.value);
+    void reload();
+  }
+
+  async function run(kind: 'commit' | 'undo' | 'discard', batch: ImportBatch): Promise<void> {
+    setBusy(true);
+    const result =
+      kind === 'commit'
+        ? await importApi.commit(batch.id)
+        : kind === 'undo'
+          ? await importApi.undo(batch.id)
+          : await importApi.discard(batch.id);
+    setBusy(false);
+    setConfirming(null);
+    if (!result.ok) {
+      if (result.failure.kind === 'offline') setOnline(false);
+      show({ title: failureText(result.failure), tone: 'alert' });
+      return;
+    }
+    const done: Record<typeof kind, ConsoleKey> = {
+      commit: 'importCommitted',
+      undo: 'importUndone',
+      discard: 'importDiscarded',
+    };
+    show({ title: t(done[kind], locale), tone: 'positive' });
+    if (preview?.id === batch.id) setPreview(kind === 'commit' ? result.value : null);
+    void reload();
+  }
+
+  const offlineReason = online ? null : t('importOffline', locale);
+
+  return (
+    <div className="min-h-screen">
+      {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
+      <p className="bg-warn-100 px-6 py-2 text-caption text-warn-700">{t('demoBanner', locale)}</p>
+
+      <main className="mx-auto flex max-w-6xl flex-col gap-6 p-6" data-testid="hospital-import">
+        <header className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <h1 className="text-title-lg">{t('importTitle', locale)}</h1>
+            <p className="text-body-sm text-ink-muted">{t('importIntro', locale)}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <ConsoleLanguageSwitch className="" />
+            <a
+              href="/?view=settings"
+              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
+            >
+              {t('importBack', locale)}
+            </a>
+          </div>
+        </header>
+
+        {online ? null : (
+          <p
+            role="status"
+            className="rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
+            data-testid="import-offline"
+          >
+            {t('importOfflineKept', locale)}
+          </p>
+        )}
+
+        {/* --- SEL-B14-SET, BTN-B14-TEMPLATE, INP-B14-FILE, BTN-B14-CHECK --- */}
+        <Card>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-body-md font-semibold">
+              {t('importChooseSet', locale)}
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {SETS.map((entry) => (
+                <FilterChip
+                  key={entry.set}
+                  selected={set === entry.set}
+                  onToggle={() => {
+                    setSet(entry.set);
+                    setPreview(null);
+                    setProblem(null);
+                  }}
+                >
+                  {t(entry.key, locale)}
+                </FilterChip>
+              ))}
+              <span className="flex flex-col" aria-disabled="true">
+                <Chip tone="neutral">{t('importSetRecords', locale)}</Chip>
+                <span className="mt-1 text-caption text-ink-muted">
+                  {t('importRecordsLater', locale)}
+                </span>
+              </span>
+            </div>
+          </fieldset>
+          <p className="mt-3 text-body-sm text-ink-secondary">
+            {t(SETS.find((entry) => entry.set === set)?.help ?? 'importSetStructureHelp', locale)}
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <Button
+              variant="secondary"
+              data-testid="import-template"
+              onClick={() => {
+                void downloadTemplate(set).then((saved) => {
+                  if (!saved) show({ title: t('importTemplateFailed', locale), tone: 'alert' });
+                });
+              }}
+            >
+              {t('importTemplate', locale)}
+            </Button>
+            <label className="flex flex-col gap-2 text-body-sm font-semibold text-ink">
+              {t('importFile', locale)}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                data-testid="import-file"
+                className="text-body-sm"
+                onChange={(event) => {
+                  const chosen = event.target.files?.[0];
+                  setPreview(null);
+                  setProblem(null);
+                  if (chosen === undefined) {
+                    setFile(null);
+                    return;
+                  }
+                  void chosen.text().then((text) => {
+                    setFile({ name: chosen.name, text });
+                  });
+                }}
+              />
+            </label>
+            {offlineReason !== null ? (
+              <Button disabled disabledReason={offlineReason} data-testid="import-check">
+                {t('importCheck', locale)}
+              </Button>
+            ) : file === null ? (
+              <Button
+                disabled
+                disabledReason={t('importChooseFileFirst', locale)}
+                data-testid="import-check"
+              >
+                {t('importCheck', locale)}
+              </Button>
+            ) : (
+              <Button loading={busy} onClick={() => void check()} data-testid="import-check">
+                {t('importCheck', locale)}
+              </Button>
+            )}
+          </div>
+          {problem === null ? null : (
+            <p
+              role="alert"
+              className="mt-3 text-body-sm text-alert-700"
+              data-testid="import-problem"
+            >
+              {problem}
+            </p>
+          )}
+        </Card>
+
+        {/* --- TBL-B14-PREVIEW, BTN-B14-COMMIT, BTN-B14-DISCARD ------------------- */}
+        {preview === null ? null : (
+          <Card data-testid="import-preview">
+            <h2 className="text-title-md">
+              {format('importPreviewOf', locale, { file: preview.fileName })}
+            </h2>
+            <dl className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+              {(
+                [
+                  ['add', 'importCountAdd'],
+                  ['update', 'importCountUpdate'],
+                  ['skip', 'importCountSkip'],
+                  ['error', 'importCountError'],
+                ] as const
+              ).map(([field, key]) => (
+                <div
+                  key={field}
+                  className="rounded-md bg-sunken p-3"
+                  data-testid={`import-count-${field}`}
+                >
+                  <dt className="text-caption text-ink-muted">{t(key, locale)}</dt>
+                  <dd className="text-title-md tabular-nums">
+                    {formatNumber(preview.counts[field], numerals)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+
+            {preview.errors.length === 0 ? null : (
+              <table className="mt-4 w-full text-left text-body-sm" data-testid="import-errors">
+                <caption className="mb-2 text-left text-body-md font-semibold">
+                  {t('importErrorsHeading', locale)}
+                </caption>
+                <thead>
+                  <tr className="border-b border-line text-ink-secondary">
+                    <th className="py-2 pr-3">{t('importRow', locale)}</th>
+                    <th className="py-2 pr-3">{t('importColumn', locale)}</th>
+                    <th className="py-2">{t('importReason', locale)}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.errors.slice(0, 500).map((error) => (
+                    <tr
+                      key={`${String(error.rowNumber)}-${error.field}-${error.code}`}
+                      className="border-b border-line"
+                    >
+                      <td className="py-2 pr-3 tabular-nums">
+                        {formatNumber(error.rowNumber, numerals)}
+                      </td>
+                      <td className="py-2 pr-3 font-mono">{error.field}</td>
+                      <td className="py-2">
+                        {t(ERROR_NAME[error.code] ?? 'importErrInvalid', locale)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {preview.state === 'checked' ? (
+              <div className="mt-4 flex flex-wrap gap-3">
+                {offlineReason !== null ? (
+                  <Button disabled disabledReason={offlineReason} data-testid="import-commit">
+                    {t('importCommit', locale)}
+                  </Button>
+                ) : preview.counts.error > 0 ? (
+                  <Button
+                    disabled
+                    disabledReason={t('importCommitHasErrors', locale)}
+                    data-testid="import-commit"
+                  >
+                    {t('importCommit', locale)}
+                  </Button>
+                ) : (
+                  <Button
+                    data-testid="import-commit"
+                    onClick={() => {
+                      setConfirming({ kind: 'commit', batch: preview });
+                    }}
+                  >
+                    {t('importCommit', locale)}
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  data-testid="import-discard"
+                  {...(offlineReason === null
+                    ? { onClick: () => void run('discard', preview) }
+                    : { disabled: true as const, disabledReason: offlineReason })}
+                >
+                  {t('importDiscard', locale)}
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-4 text-body-sm text-ink-secondary">
+                {t(STATE_NAME[preview.state] ?? 'importStateChecked', locale)}
+              </p>
+            )}
+          </Card>
+        )}
+
+        {/* --- TBL-B14-HISTORY, BTN-B14-UNDO --------------------------------------- */}
+        <section className="flex flex-col gap-3" data-testid="import-history">
+          <h2 className="text-title-md">{t('importHistory', locale)}</h2>
+          {load === 'loading' ? (
+            <div className="flex flex-col gap-3" aria-busy="true" data-testid="import-loading">
+              <div className="h-16 rounded-md bg-sunken" />
+              <div className="h-16 rounded-md bg-sunken" />
+            </div>
+          ) : load === 'error' || (load === 'offline' && history.length === 0) ? (
+            <div
+              role="alert"
+              className="flex flex-col items-start gap-3 rounded-md bg-alert-100 p-4"
+              data-testid="import-load-failed"
+            >
+              <p className="text-body-md text-alert-700">
+                {t(load === 'offline' ? 'importOffline' : 'importLoadFailed', locale)}
+              </p>
+              <Button variant="secondary" onClick={() => void reload()}>
+                {t('retry', locale)}
+              </Button>
+            </div>
+          ) : history.length === 0 ? (
+            <Card data-testid="import-empty">
+              <p className="text-body-md text-ink-secondary">{t('importHistoryEmpty', locale)}</p>
+            </Card>
+          ) : (
+            history.map((batch) => (
+              <Card key={batch.id} data-testid={`import-batch-${batch.id}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-body-md font-semibold">
+                      {t(SET_NAME[batch.setKind] ?? 'importSetStructure', locale)} ·{' '}
+                      {batch.fileName}
+                    </p>
+                    <p className="text-body-sm text-ink-muted">
+                      {format('importBy', locale, {
+                        name: batch.createdByName ?? '—',
+                        when: formatDateTime(batch.createdAt, numerals),
+                      })}
+                      {' · '}
+                      {format('importCountsLine', locale, {
+                        add: formatNumber(batch.counts.add, numerals),
+                        update: formatNumber(batch.counts.update, numerals),
+                        skip: formatNumber(batch.counts.skip, numerals),
+                        error: formatNumber(batch.counts.error, numerals),
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Chip
+                      tone={
+                        batch.state === 'committed'
+                          ? 'positive'
+                          : batch.state === 'checked'
+                            ? 'caution'
+                            : 'neutral'
+                      }
+                    >
+                      {t(STATE_NAME[batch.state] ?? 'importStateChecked', locale)}
+                    </Chip>
+                    {batch.state === 'committed' ? (
+                      offlineReason === null ? (
+                        <Button
+                          variant="secondary"
+                          data-testid={`import-undo-${batch.id}`}
+                          onClick={() => {
+                            setConfirming({ kind: 'undo', batch });
+                          }}
+                        >
+                          {t('importUndo', locale)}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          disabled
+                          disabledReason={offlineReason}
+                          data-testid={`import-undo-${batch.id}`}
+                        >
+                          {t('importUndo', locale)}
+                        </Button>
+                      )
+                    ) : null}
+                  </div>
+                </div>
+              </Card>
+            ))
+          )}
+        </section>
+      </main>
+
+      {/* GR-01: approving and taking back are both confirmed. */}
+      <Sheet
+        open={confirming !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirming(null);
+        }}
+        variant="modal"
+        title={t(confirming?.kind === 'undo' ? 'importUndoTitle' : 'importCommitTitle', locale)}
+        description={t(confirming?.kind === 'undo' ? 'importUndoBody' : 'importCommitBody', locale)}
+      >
+        <div data-testid="import-confirm">
+          <SheetActions>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setConfirming(null);
+              }}
+            >
+              {t('checkInCancel', locale)}
+            </Button>
+            <Button
+              loading={busy}
+              data-testid="import-confirm-yes"
+              onClick={() => {
+                if (confirming !== null) void run(confirming.kind, confirming.batch);
+              }}
+            >
+              {t(confirming?.kind === 'undo' ? 'importUndo' : 'importCommit', locale)}
+            </Button>
+          </SheetActions>
+        </div>
+      </Sheet>
+    </div>
+  );
+}
