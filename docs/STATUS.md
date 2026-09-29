@@ -130,16 +130,16 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 3870, in about three minutes.
-`pnpm test:e2e` reports 124, in Chromium, against the real API and the seeded
+`pnpm test` reports 4153, in about two and a half minutes.
+`pnpm test:e2e` reports 126, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 5 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`. The last full
-run took seventeen minutes.
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`. The last full
+run took twenty-three minutes.
 
 **The two `demo.routes.test.ts` failures were Fridays, not early mornings —
 fixed in `fix/console-picker-friday`.** They expect the ER console and the ward
