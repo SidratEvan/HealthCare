@@ -40,7 +40,7 @@ export async function lookup(
   typedPhone: string,
 ): Promise<{ phone: string; patients: registrationRepo.CounterPatient[] }> {
   const phone = phoneOf(typedPhone);
-  const patients = await registrationRepo.patientsForPhone(phone);
+  const patients = await registrationRepo.patientsForPhone(phone, actor.hospitalId);
   if (patients.length > 0) {
     await withTransaction(async (trx) => {
       await registrationRepo.recordLookup(trx, {

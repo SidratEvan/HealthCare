@@ -240,6 +240,7 @@ export const CONSOLE = {
   sourceCounter: { bn: 'কাউন্টার', en: 'Counter' },
   sourcePhone: { bn: 'ফোন', en: 'Phone' },
   sourceWalkin: { bn: 'ওয়াক-ইন', en: 'Walk-in' },
+  sourceImport: { bn: 'হাসপাতালের খাতা থেকে', en: "From the hospital's register" },
 
   // --- Right column (B1.5) -------------------------------------------------
   nowServing: { bn: 'এখন চলছে', en: 'Now serving' },

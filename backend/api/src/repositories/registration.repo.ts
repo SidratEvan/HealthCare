@@ -23,11 +23,18 @@ export interface CounterPatient {
   readonly sex: string;
   readonly relationship: string;
   readonly isPrimary: boolean;
-  /** Whether the record belongs to an account holder or a guest (`FR-GST-01`). */
-  readonly owner: 'account' | 'guest';
+  /**
+   * Whose record it is: an account holder's, a guest's (`FR-GST-01`), or this
+   * hospital's own, imported from its register (`FR-IMP-10`).
+   */
+  readonly owner: 'account' | 'guest' | 'hospital';
 }
 
-export async function patientsForPhone(phone: string): Promise<CounterPatient[]> {
+/**
+ * A patient another hospital imported is that hospital's alone (`FR-IMP-10`),
+ * so only this facility's own imported patients are ever shown here.
+ */
+export async function patientsForPhone(phone: string, hospitalId: string): Promise<CounterPatient[]> {
   const result = await sql<{
     id: string;
     full_name: string;
@@ -35,17 +42,19 @@ export async function patientsForPhone(phone: string): Promise<CounterPatient[]>
     sex: string;
     relationship: string;
     is_primary: boolean;
-    owner: 'account' | 'guest';
+    owner: 'account' | 'guest' | 'hospital';
   }>`
     SELECT p.id, p.full_name,
            coalesce(p.age_years, date_part('year', age(p.date_of_birth))::int) AS age_years,
            p.sex::text AS sex, p.relationship, p.is_primary,
-           CASE WHEN p.owner_user_id IS NOT NULL THEN 'account' ELSE 'guest' END AS owner
+           CASE WHEN p.owner_user_id IS NOT NULL THEN 'account'
+                WHEN p.owner_hospital_id IS NOT NULL THEN 'hospital' ELSE 'guest' END AS owner
       FROM patients p
       LEFT JOIN guest_identities g ON g.id = p.owner_guest_id AND g.deleted_at IS NULL
       LEFT JOIN users u ON u.id = p.owner_user_id AND u.deleted_at IS NULL
      WHERE p.deleted_at IS NULL
        AND (g.phone = ${phone} OR u.phone = ${phone} OR p.phone = ${phone})
+       AND (p.owner_hospital_id IS NULL OR p.owner_hospital_id = ${hospitalId})
      ORDER BY p.is_primary DESC, p.full_name
      LIMIT 20
   `.execute(db);

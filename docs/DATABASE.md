@@ -32,8 +32,7 @@ CREATE TYPE staff_role        AS ENUM ('receptionist','doctor','ward','emergency
 CREATE TYPE facility_kind     AS ENUM ('hospital','clinic','diagnostic','government');
 CREATE TYPE session_status    AS ENUM ('scheduled','running','paused','ended','cancelled');
 CREATE TYPE booking_status    AS ENUM ('booked','waiting','in_chamber','done','late','no_show','cancelled','rescheduled');
-CREATE TYPE booking_source    AS ENUM ('app','guest_link','counter','phone','walkin',
-                                       'import');   -- 0029, FR-IMP-01 set C
+CREATE TYPE booking_source    AS ENUM ('app','guest_link','counter','phone','walkin','import');   -- 'import': 0029, FR-IMP-01 set C
 CREATE TYPE queue_event_type  AS ENUM (
   'SESSION_OPENED','DOCTOR_ARRIVED','DELAY_DECLARED','SESSION_PAUSED','SESSION_RESUMED',
   'PATIENT_CALLED','PATIENT_DONE','PATIENT_LATE','PATIENT_NO_SHOW','PATIENT_REINSERTED',

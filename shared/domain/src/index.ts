@@ -371,6 +371,7 @@ export * from './schemas/lab.schema.js';
 export * from './schemas/payment.schema.js';
 export * from './schemas/settings.schema.js';
 export * from './schemas/registration.schema.js';
+export * from './schemas/import.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';
@@ -384,3 +385,29 @@ export {
   type ScheduleTemplate,
 } from './sessions/materialise.js';
 export { BD_MOBILE, normaliseBdMobile } from './util/phone.js';
+
+// --- Importing a hospital's own data (pilot step 24, FR-IMP) ---------------
+export { csvField, csvLine, parseCsv, type CsvProblem, type CsvTable } from './imports/csv.js';
+export {
+  IMPORT_COLUMNS,
+  IMPORT_SETS,
+  columnIndex,
+  latinDigits,
+  missingColumns,
+  readDate,
+  readRow,
+  readTime,
+  readWeekday,
+  refKindOf,
+  takaToPoisha as importTakaToPoisha,
+  templateCsv,
+  type AppointmentRecord,
+  type ImportError,
+  type ImportErrorCode,
+  type ImportRecord,
+  type ImportSet,
+  type ImportedRole,
+  type PatientRecord,
+  type RowResult,
+  type StructureRecord,
+} from './imports/sets.js';

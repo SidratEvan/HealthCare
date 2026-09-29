@@ -53,7 +53,15 @@ export const BOOKING_STATUSES = [
 ] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 
-export const BOOKING_SOURCES = ['app', 'guest_link', 'counter', 'phone', 'walkin'] as const;
+/** 'import' is an appointment brought in from a hospital's own system (0029, FR-IMP-01 set C). */
+export const BOOKING_SOURCES = [
+  'app',
+  'guest_link',
+  'counter',
+  'phone',
+  'walkin',
+  'import',
+] as const;
 export type BookingSource = (typeof BOOKING_SOURCES)[number];
 
 /**
@@ -255,6 +263,27 @@ export type Locale = (typeof LOCALES)[number];
  * types that exist in the database belong here — `LOCALES` is a `text` column
  * with a CHECK, not an enum, and is deliberately absent.
  */
+/** The four sets a hospital's data arrives in (0031, FR-IMP-01); 'records' waits (FR-IMP-12). */
+export const IMPORT_SET_KINDS = ['structure', 'patients', 'appointments', 'records'] as const;
+export type ImportSetKind = (typeof IMPORT_SET_KINDS)[number];
+
+/** An import batch's life (0031, FR-IMP-05..07). */
+export const IMPORT_STATES = ['checked', 'committed', 'undone', 'discarded'] as const;
+export type ImportState = (typeof IMPORT_STATES)[number];
+
+/** What a hospital's own identifier stands for (0030, FR-IMP-04). */
+export const EXTERNAL_KINDS = [
+  'patient',
+  'appointment',
+  'department',
+  'doctor',
+  'schedule',
+  'ward',
+  'bed',
+  'staff',
+] as const;
+export type ExternalKind = (typeof EXTERNAL_KINDS)[number];
+
 export const DATABASE_ENUMS = {
   user_kind: USER_KINDS,
   sex: SEXES,
@@ -281,6 +310,9 @@ export const DATABASE_ENUMS = {
   capability_kind: CAPABILITY_KINDS,
   consent_scope: CONSENT_SCOPES,
   symptom_signal: SYMPTOM_SIGNALS,
+  import_set: IMPORT_SET_KINDS,
+  import_state: IMPORT_STATES,
+  external_kind: EXTERNAL_KINDS,
 } as const satisfies Record<string, readonly string[]>;
 
 /** Booking statuses that still occupy a place in the queue. */

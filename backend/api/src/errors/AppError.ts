@@ -77,6 +77,14 @@ export const guardFailed = (code: string, detail: string): AppError =>
  */
 export function asAppError(thrown: unknown): AppError {
   if (thrown instanceof AppError) return thrown;
+  // The body parser's own refusals are the caller's doing, not ours: a body
+  // over the limit or one that is not JSON. Answered as such, not as a 500.
+  const type =
+    typeof thrown === 'object' && thrown !== null ? (thrown as { type?: unknown }).type : undefined;
+  if (type === 'entity.too.large') return new AppError('PAYLOAD_TOO_LARGE', { cause: thrown });
+  if (type === 'entity.parse.failed') {
+    return new AppError('VALIDATION_FAILED', { details: { body: 'not_json' }, cause: thrown });
+  }
   return new AppError('INTERNAL', { cause: thrown });
 }
 

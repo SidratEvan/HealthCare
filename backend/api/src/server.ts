@@ -23,7 +23,7 @@ import { closeDatabase } from './config/db.js';
 import { logger } from './config/logger.js';
 import { env } from './env.js';
 import { attachRealtime } from './realtime/server.js';
-import { startMaterialiseLoop } from './services/sessionMaterialise.service.js';
+import { startHourlyJobs } from './services/jobs.service.js';
 
 import type { Server as SocketServer } from 'socket.io';
 
@@ -53,13 +53,9 @@ export function startServer(): Server {
     );
   });
 
-  // Each day's chambers from the weekly schedules (pilot step 22): now, and
-  // hourly after, so a facility set up from S-B-11 always has eight days to book.
-  const stopJobs = env.SESSION_MATERIALISE
-    ? startMaterialiseLoop()
-    : () => {
-        // Nothing started, nothing to stop.
-      };
+  // Each day's chambers from the weekly schedules (pilot step 22) and the
+  // 30-day clearing of imported rows (step 24): now, and hourly after.
+  const stopJobs = startHourlyJobs();
 
   installShutdownHandlers(server, io, stopJobs);
   return server;
