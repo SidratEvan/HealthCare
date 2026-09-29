@@ -933,6 +933,8 @@ Built in pilot step 22 (`FR-SUP-01`), opened by `LNK-B10-SETTINGS` in the dashbo
 
 **States:** loading, empty (no batch yet — the three templates are the call to action), error, offline (import needs the server; the screen says so and keeps the chosen file).
 
+> **Built in pilot step 24**, opened from `S-B-11`'s header (**পুরোনো তথ্য আমদানি করুন**, `/?view=imports`). Each set has a line saying what it takes and what it never does (no NID, no address). Errors are listed row by row with the column as the file names it and the reason in the reading language; **অনুমোদন করে সংরক্ষণ** stays switched off while any row is an error. A refused undo lists the row numbers that stop it. Template example rows (`ref` beginning `EXAMPLE`) are skipped, so a template imported as downloaded writes nothing. Accounts an import creates hold no password until an administrator issues one from `S-B-11`.
+
 ---
 
 ## B7. Platform super-admin — `S-B-12`

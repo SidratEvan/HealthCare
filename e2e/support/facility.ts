@@ -103,7 +103,14 @@ export async function bedStates(hospitalId: string): Promise<string[]> {
 export async function removeFacility(hospitalId: string): Promise<void> {
   await withClient(async (client) => {
     const ids = [hospitalId];
+    await client.query(
+      'DELETE FROM bookings WHERE session_id IN (SELECT id FROM sessions WHERE hospital_id = ANY($1::uuid[]))',
+      [ids],
+    );
     await client.query('DELETE FROM sessions WHERE hospital_id = ANY($1::uuid[])', [ids]);
+    await client.query('DELETE FROM external_refs WHERE hospital_id = ANY($1::uuid[])', [ids]);
+    await client.query('DELETE FROM import_batches WHERE hospital_id = ANY($1::uuid[])', [ids]);
+    await client.query('DELETE FROM patients WHERE owner_hospital_id = ANY($1::uuid[])', [ids]);
     await client.query('DELETE FROM beds WHERE hospital_id = ANY($1::uuid[])', [ids]);
     await client.query('DELETE FROM wards WHERE hospital_id = ANY($1::uuid[])', [ids]);
     await client.query(

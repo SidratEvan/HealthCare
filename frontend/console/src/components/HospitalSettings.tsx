@@ -308,6 +308,13 @@ function Shell({
             >
               {t('settingsBackToDashboard', locale)}
             </a>
+            <a
+              href="/?view=imports"
+              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
+              data-testid="settings-open-import"
+            >
+              {t('importOpen', locale)}
+            </a>
           </div>
         </header>
 

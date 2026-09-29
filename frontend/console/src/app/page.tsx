@@ -33,6 +33,7 @@ import { ConsoleStarting } from '@/components/ConsoleStarting';
 import { DoctorConsole } from '@/components/DoctorConsole';
 import { EmergencyConsole } from '@/components/EmergencyConsole';
 import { GovDashboard } from '@/components/GovDashboard';
+import { HospitalImport } from '@/components/HospitalImport';
 import { HospitalSettings } from '@/components/HospitalSettings';
 import { LabConsole } from '@/components/LabConsole';
 import { PharmacyConsole } from '@/components/PharmacyConsole';
@@ -197,6 +198,8 @@ export default function Page(): ReactNode {
   if (view === 'registration' && session?.role === 'receptionist') return <RegistrationConsole />;
   // Opened from the dashboard's header (pilot step 22).
   if (view === 'settings' && session?.role === 'hospital_admin') return <HospitalSettings />;
+  // And the import, opened from the settings (pilot step 24, S-B-14).
+  if (view === 'imports' && session?.role === 'hospital_admin') return <HospitalImport />;
 
   // The national layer (`S-B-13`, step 20): no hospital, no chamber.
   if (view === 'gov' && session?.role === 'gov_viewer') return <GovDashboard />;

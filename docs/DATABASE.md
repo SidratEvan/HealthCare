@@ -449,6 +449,7 @@ report computed from rows that could disagree with themselves is fiction.
 | `errors` | jsonb | `[{field, code}]` — messages come from i18n, never stored |
 | `target_kind` | external_kind | nullable |
 | `target_id` | uuid | the row written, once committed |
+| `previous` | jsonb | what an updated row held before, so an undo can put it back (`FR-IMP-07`); for a replaced schedule, `{replacedTemplateId}`. Cleared with `raw` |
 
 **U:** `(batch_id, row_number)`. Committing writes every target in one transaction; undoing refuses while any target is referenced by a row the batch did not write (`FR-IMP-07`).
 
@@ -468,7 +469,7 @@ report computed from rows that could disagree with themselves is fiction.
 `id`, `visit_id`, `patient_id`, `hospital_id`, `wait_score`, `doctor_score`, `cleanliness_score`, `billing_score`, `comment`, `created_at`.
 
 #### `audit_log` (`DB-P7`)
-`id`, `actor_staff_id`/`actor_user_id`, `hospital_id`, `action` (`RECORD_VIEW`,`QUEUE_ACTION`,`SETTINGS_CHANGE`,`EXPORT`,`LOGIN`), `subject_table`, `subject_id`, `patient_id` nullable, `ip`, `user_agent`, `meta` jsonb, `created_at`.
+`id`, `actor_staff_id`/`actor_user_id`, `hospital_id`, `action` (`RECORD_VIEW`,`QUEUE_ACTION`,`SETTINGS_CHANGE`,`EXPORT`,`LOGIN`,`IMPORT` — the last added by 0031, `FR-IMP-08`), `subject_table`, `subject_id`, `patient_id` nullable, `ip`, `user_agent`, `meta` jsonb, `created_at`.
 **IX:** `(patient_id, created_at)`, `(hospital_id, created_at)`
 
 #### `sync_cursors`
