@@ -308,6 +308,16 @@ export async function addWalkin(req: Request, res: Response): Promise<void> {
   const principal = req.principal;
   if (principal?.kind !== 'staff') throw forbiddenScope({ reason: 'staff_only' });
 
+  // A counter that lost the answer sends the walk-in again with the same key.
+  // `appendEvent` would recognise the event — but only after a second booking
+  // had been made for it, a serial nobody holds. So a replay is answered
+  // before anything is written (`FR-QUE-51`, pilot step 23).
+  const replayed = await queueService.findReplay(envelope(req).clientEventId);
+  if (replayed !== null) {
+    send(res, replayed);
+    return;
+  }
+
   const bookingId = await queueService.createWalkinBooking({
     sessionId,
     patientId: body.patientId,

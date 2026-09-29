@@ -37,6 +37,7 @@ import { HospitalSettings } from '@/components/HospitalSettings';
 import { LabConsole } from '@/components/LabConsole';
 import { PharmacyConsole } from '@/components/PharmacyConsole';
 import { ReceptionConsole } from '@/components/ReceptionConsole';
+import { RegistrationConsole } from '@/components/RegistrationConsole';
 import { StaffLogin } from '@/components/StaffLogin';
 import { WardBoard } from '@/components/WardBoard';
 import { readDemoSession } from '@/lib/demo';
@@ -192,6 +193,8 @@ export default function Page(): ReactNode {
   if (view === 'lab' && session?.role === 'lab') return <LabConsole />;
   if (view === 'pharmacy' && session?.role === 'pharmacy') return <PharmacyConsole />;
   if (view === 'admin' && session?.role === 'hospital_admin') return <AdminDashboard />;
+  // The registration desk (`S-B-03`, pilot step 23), from the rail.
+  if (view === 'registration' && session?.role === 'receptionist') return <RegistrationConsole />;
   // Opened from the dashboard's header (pilot step 22).
   if (view === 'settings' && session?.role === 'hospital_admin') return <HospitalSettings />;
 
