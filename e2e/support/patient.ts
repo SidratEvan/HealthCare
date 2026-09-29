@@ -76,6 +76,10 @@ export async function joinStandbyAsGuest(
   await form.getByTestId(prepay ? 'standby-choice-prepay' : 'standby-choice-ask').click();
   await form.getByTestId('standby-confirm').click();
 
-  await expect(page).toHaveURL(/\/standby\?t=/);
-  await expect(page.getByTestId('standby-status')).toBeVisible();
+  // The first spec to land here pays for the dev server compiling `/standby`:
+  // in a full run that navigation has taken longer than the default ten
+  // seconds, with the URL already chosen and the page still building. Waiting
+  // longer for that one navigation is not a retry — it asserts the same thing.
+  await expect(page).toHaveURL(/\/standby\?t=/, { timeout: 45_000 });
+  await expect(page.getByTestId('standby-status')).toBeVisible({ timeout: 20_000 });
 }
