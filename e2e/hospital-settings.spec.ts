@@ -122,14 +122,14 @@ test.describe('S-B-11: a facility with no seed data sets itself up', () => {
     await expect(card).toBeVisible();
     await expect(card).toContainText('যাচাই বাকি');
 
+    const day = DAY_NAME[tomorrow.weekday];
+    if (day === undefined) throw new Error(`no day name for weekday ${tomorrow.weekday}`);
     const schedule = card.locator('[data-testid^="settings-add-schedule-"]').first();
-    await schedule.getByRole('button', { name: DAY_NAME[tomorrow.weekday] }).click();
+    await schedule.getByRole('button', { name: day }).click();
     await schedule.getByLabel(/^শুরু/).fill('17:00');
     await schedule.getByLabel(/^শেষ/).fill('21:00');
     await card.locator('[data-testid^="settings-add-schedule-submit-"]').click();
-    await expect(card.locator('[data-testid^="settings-schedules-"]')).toContainText(
-      DAY_NAME[tomorrow.weekday] ?? '',
-    );
+    await expect(card.locator('[data-testid^="settings-schedules-"]')).toContainText(day);
 
     // Its chambers exist at once, not at the next hourly run: tomorrow is the
     // one day of the coming eight on that weekday.
