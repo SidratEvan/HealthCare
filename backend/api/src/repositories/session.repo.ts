@@ -252,3 +252,36 @@ function toSessionRow(row: SessionQueryRow): SessionRow {
 export async function setCapacity(sessionId: string, capacity: number): Promise<void> {
   await sql`UPDATE sessions SET capacity = ${capacity} WHERE id = ${sessionId}`.execute(db);
 }
+
+/**
+ * The queue rules a facility set in `S-B-11` (pilot step 22, `FR-QUE-20`,
+ * `FR-QUE-21`, `FR-OFF-04`), or the documented defaults for a facility
+ * that never opened its settings — the same values migration 0004 gives the
+ * columns, so the two cannot disagree.
+ */
+export async function queueRulesFor(
+  trx: Tx,
+  hospitalId: string,
+): Promise<{
+  readonly noShowGracePatients: number;
+  readonly noShowGraceMinutes: number;
+  readonly lateReinsertAfter: number;
+  readonly staleThresholdMinutes: number;
+}> {
+  const result = await sql<{
+    no_show_grace_patients: number;
+    no_show_grace_minutes: number;
+    late_reinsert_after: number;
+    stale_threshold_minutes: number;
+  }>`
+    SELECT no_show_grace_patients, no_show_grace_minutes, late_reinsert_after, stale_threshold_minutes
+      FROM hospital_settings WHERE hospital_id = ${hospitalId}
+  `.execute(trx);
+  const row = result.rows[0];
+  return {
+    noShowGracePatients: row?.no_show_grace_patients ?? 2,
+    noShowGraceMinutes: row?.no_show_grace_minutes ?? 15,
+    lateReinsertAfter: row?.late_reinsert_after ?? 3,
+    staleThresholdMinutes: row?.stale_threshold_minutes ?? 10,
+  };
+}

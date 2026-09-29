@@ -1259,6 +1259,13 @@ function Shell({ children }: { readonly children: ReactNode }): ReactNode {
           <div className="flex items-center gap-3 print:hidden">
             <ConsoleLanguageSwitch className="" />
             <a
+              href="/?view=settings"
+              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
+              data-testid="admin-open-settings"
+            >
+              {t('settingsOpen', locale)}
+            </a>
+            <a
               href="/"
               className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
             >

@@ -47,6 +47,45 @@ export interface SessionChannelOptions {
   readonly staleAfterMs?: number;
 }
 
+/** A `queue.updated` as the server sends it. */
+export interface QueueUpdatedMessage {
+  readonly seq: number;
+  readonly serverTs: string;
+  readonly data: { readonly state: QueueState; readonly etas: readonly Eta[] };
+}
+
+/**
+ * Folds a `queue.updated` into the snapshot, or refuses it when it is older
+ * than the state already held.
+ *
+ * Two messages can arrive out of order on one socket. Joining a room and
+ * reading the state to catch the client up are two steps on the server, and
+ * a queue action that commits between them is broadcast to the room *before*
+ * the catch-up — which was read a moment earlier and describes the queue
+ * without it. Taken last-wins, the older state replaced the newer one and the
+ * screen sat on the patient already sent out, until the next action happened
+ * to correct it (`FR-QUE-05`: every device converges on the log). The state's
+ * own sequence says which is newer, so the older one is dropped; its
+ * `lastSeq` still counts, since it is never higher than what is held.
+ */
+export function foldUpdate(
+  snapshot: SessionSnapshot,
+  stateSeq: number,
+  message: QueueUpdatedMessage,
+): { readonly snapshot: SessionSnapshot; readonly stateSeq: number } | null {
+  if (snapshot.state !== null && message.seq < stateSeq) return null;
+  return {
+    stateSeq: message.seq,
+    snapshot: {
+      ...snapshot,
+      state: message.data.state,
+      etas: message.data.etas,
+      lastServerTs: message.serverTs,
+      lastSeq: Math.max(snapshot.lastSeq, message.seq),
+    },
+  };
+}
+
 /**
  * Opens the channel and keeps a snapshot current.
  *
@@ -67,6 +106,9 @@ export function openSessionChannel(options: SessionChannelOptions): {
     lastSeq: 0,
     connected: false,
   };
+
+  /** The sequence the held `state` describes — not `lastSeq`, which events also raise. */
+  let stateSeq = -1;
 
   const publish = (next: Partial<SessionSnapshot>): void => {
     snapshot = { ...snapshot, ...next };
@@ -117,17 +159,13 @@ export function openSessionChannel(options: SessionChannelOptions): {
     publish({ connected: false });
   });
 
-  socket.on(
-    'queue.updated',
-    (message: { seq: number; serverTs: string; data: { state: QueueState; etas: Eta[] } }) => {
-      publish({
-        state: message.data.state,
-        etas: message.data.etas,
-        lastServerTs: message.serverTs,
-        lastSeq: Math.max(snapshot.lastSeq, message.seq),
-      });
-    },
-  );
+  socket.on('queue.updated', (message: QueueUpdatedMessage) => {
+    const folded = foldUpdate(snapshot, stateSeq, message);
+    if (folded === null) return;
+    stateSeq = folded.stateSeq;
+    snapshot = folded.snapshot;
+    options.onSnapshot(snapshot);
+  });
 
   // Replayed events from the resume handshake. The authoritative state follows
   // them in a `queue.updated`, so what these advance is the cursor — which is

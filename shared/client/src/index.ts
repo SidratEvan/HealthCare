@@ -71,8 +71,10 @@ export {
 
 export {
   DEFAULT_STALE_AFTER_MS,
+  foldUpdate,
   isStale,
   openSessionChannel,
+  type QueueUpdatedMessage,
   type SessionChannelOptions,
   type SessionSnapshot,
 } from './realtime/session.js';

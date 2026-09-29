@@ -20,6 +20,7 @@
     "db:reset": "pnpm --filter @platform/database reset",
     "db:verify": "pnpm --filter @platform/database verify",
     "staff:create": "pnpm --filter @platform/api staff:create",
+    "doctor:verify": "pnpm --filter @platform/api doctor:verify",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

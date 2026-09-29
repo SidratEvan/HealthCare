@@ -369,8 +369,17 @@ export * from './schemas/emergency.schema.js';
 export * from './schemas/referral.schema.js';
 export * from './schemas/lab.schema.js';
 export * from './schemas/payment.schema.js';
+export * from './schemas/settings.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';
 export * as time from './util/time.js';
+
+export {
+  addDhakaDays,
+  MATERIALISE_DAYS,
+  plannedSessions,
+  type PlannedSession,
+  type ScheduleTemplate,
+} from './sessions/materialise.js';
 export { BD_MOBILE, normaliseBdMobile } from './util/phone.js';

@@ -17,7 +17,7 @@
 | Database | **PostgreSQL (Supabase)** | See `DATABASE.md` |
 | DB access | **Kysely** (typed query builder) + raw SQL for hot paths | No heavy ORM hiding the event log |
 | Realtime | **Socket.IO** over WebSocket | Rooms map cleanly to sessions and hospitals; auto-reconnect built in |
-| Background jobs | **pg-boss** (Postgres-backed) | No Redis dependency at launch; Upstash Redis + BullMQ only if load demands. **Not installed yet:** the pilot's first timed job (`sessions.materialise`, step 22) runs on a plain interval in `backend/workers` and is idempotent, so a missed or doubled run is harmless (§8) |
+| Background jobs | **pg-boss** (Postgres-backed) | No Redis dependency at launch; Upstash Redis + BullMQ only if load demands. **Not installed yet:** the pilot's first timed job (`sessions.materialise`, step 22) runs on a plain interval inside the API process and is idempotent, so a missed or doubled run is harmless (§8) |
 | Validation | **Zod**, schemas shared with the client | One contract, both sides |
 | Auth | JWT access (15 min) + refresh (30 days); staff passwords hashed with **scrypt** from `node:crypto` (N = 2^17, r = 8, p = 1, 16-byte salt, 64-byte key) | Changed from Argon2id on 2026-09-28: a real deployment runs on a Bangladeshi server rather than behind Supabase Auth (`CLAUDE.md` §4.1), and scrypt needs no native dependency. The parameters are OWASP's minimum for scrypt |
 | Files | Supabase Storage (reports, prescriptions, uploads) | Signed URLs only. A self-hosted deployment uses `STORAGE_PROVIDER=local` — a disk volume on the same server (§12b) |
@@ -496,7 +496,17 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 | POST | `/webhooks/sms-dlr` | delivery receipts → `notifications.state` |
 | GET | `/admin/dashboard?from&to` | aggregates from `v_admin_daily`, `v_no_show_loss`, `v_referral_flow` |
 | GET | `/admin/export?view=` | CSV/PDF (audited) |
-| CRUD | `/hospital/doctors`, `/hospital/sessions`, `/hospital/templates`, `/hospital/beds`, `/hospital/staff`, `/hospital/settings` | hospital_admin |
+| GET | `/hospital/setup` | hospital_admin. Everything `S-B-11` draws, for the administrator's own facility (step 22). No path in this group names a facility: it comes off the principal (`FR-ROLE-01`) |
+| PATCH | `/hospital/profile`, `/hospital/rules` | hospital_admin. Names, address, phones, coordinates (both or neither); the queue rules and the SMS budget (`FR-QUE-20`, `FR-QUE-21`, `FR-OFF-04`, `FR-NOT-06`) |
+| POST, PATCH | `/hospital/departments`, `/hospital/departments/:id` | hospital_admin. A code twice is `SETTINGS_DUPLICATE` |
+| POST, PATCH | `/hospital/doctors`, `/hospital/doctors/:id` | hospital_admin. A BMDC number already known links that doctor rather than making a second. Names and degrees change only while unverified and sat nowhere else (`FR-SUP-02`); a fee or room change reaches chambers still scheduled from today, never a booking already made (DB-P5) |
+| POST, DELETE | `/hospital/templates`, `/hospital/templates/:id` | hospital_admin. Adding a weekly chamber writes its sessions at once (§8); an overlap with the doctor's own is `SETTINGS_DUPLICATE`. Removing one removes its future chambers nobody booked and reports how many booked ones stayed |
+| POST | `/hospital/wards`, `/hospital/beds` | hospital_admin. Beds come several at a time and start `out_of_service` with the reason code `setup:unconfirmed`, so no public count includes a bed the ward has not looked at; the ward brings each into service from the board |
+| PATCH | `/hospital/beds/:id` | hospital_admin. Label and nightly charge |
+| PUT | `/hospital/capabilities` | hospital_admin. The kinds this facility offers (`FR-EMG-05`). A newly offered kind starts unavailable; whether it is available now is `PUT /hospitals/:id/capabilities`, which refuses a kind never declared |
+| POST, PATCH | `/hospital/staff`, `/hospital/staff/:id` | hospital_admin (`FR-ADM-11`). Creating answers with a temporary password, once; roles are the facility's seven, never `platform_admin` or `gov_viewer`. Deactivating or changing roles ends the account's refresh tokens. An administrator cannot deactivate themself or drop their own `hospital_admin` (`SETTINGS_NOT_ALLOWED`) |
+| POST | `/hospital/staff/:id/reset-password` | hospital_admin. A new temporary password; not for one's own account |
+| POST | `/hospital/go-live` | hospital_admin. Sets `is_live` and `onboarded_at`; refused while there is no department or no active doctor. Doctors still appear only once verified |
 | GET | `/hospital/imports/templates/:set` | hospital_admin. The CSV template for a set: header row, then one example row marked as an example (`FR-IMP-09`) |
 | POST | `/hospital/imports` | hospital_admin. `{set, fileName, csv}` — the file as UTF-8 text, at most 5 MB, no multipart dependency. Checks every row and writes nothing but the batch and its rows (`FR-IMP-05`) → the preview |
 | GET | `/hospital/imports`, `/hospital/imports/:id` | hospital_admin. History, and one batch's counts and error rows |
@@ -531,7 +541,7 @@ backend/workers/src/
 └── cron.ts                      # schedule table
 ```
 
-**In the pilot** (`CLAUDE.md` §4.2) `backend/workers` runs one loop with no scheduler dependency: `sessions.materialise` at start-up and then hourly, writing `sessions` for today and the next seven days (`BOOKABLE_DAYS`) from `session_templates`. It inserts only a session that does not exist for that template and date, so running it twice, or after a missed night, is harmless. The rest of this table waits for pg-boss.
+**In the pilot** (`CLAUDE.md` §4.2) one job runs, with no scheduler dependency, **inside the API process** rather than in `backend/workers`: `sessions.materialise` (`services/sessionMaterialise.service.ts`) at start-up and then hourly, writing `sessions` for today and the next seven days (`MATERIALISE_DAYS` = 8) from `session_templates`, and once more straight after `POST /hospital/templates`. `backend/workers` has no database access yet and a single Bangladeshi server runs one API, so a second process would be a second deployment for one query. It inserts `ON CONFLICT DO NOTHING` against `sessions_template_date_key` (0028), so running it twice, from two processes, or after a missed night is harmless. It skips an inactive doctor and a removed schedule. `SESSION_MATERIALISE=false` switches it off in a process that must never write. The rest of this table waits for pg-boss.
 
 **Schedule**
 
@@ -581,6 +591,8 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `AUTH_LOCKED` | 423 | five consecutive failures; `details.until` says when it opens |
 | `AUTH_HOSPITAL_REQUIRED` | 409 | the email exists at more than one facility; ask for the hospital code |
 | `AUTH_PASSWORD_WEAK` | 422 | a new staff password shorter than 10 characters or the same as the old one |
+| `SETTINGS_DUPLICATE` | 409 | a department code, a doctor already in that department, an overlapping weekly chamber, a bed label, an email or a staff code already exists at this facility; `details.field` says which (and `details.labels` for beds) |
+| `SETTINGS_NOT_ALLOWED` | 422 | a settings change the rules refuse; `details.reason` is `own_access`, `own_password`, `doctor_verified`, `doctor_shared` or `nothing_to_publish` |
 | `IMPORT_STATE` | 409 | the batch is not in the state that action needs |
 | `IMPORT_UNDO_BLOCKED` | 409 | rows outside the batch refer to its rows; `details.blocking` lists them |
 | `GUEST_LINK_EXPIRED` | 410 | tracking link past expiry |
@@ -618,6 +630,7 @@ TRAVEL_TIME_MODE=static|api, MAPS_API_KEY
 STALE_THRESHOLD_MINUTES=10
 SENTRY_DSN, LOG_LEVEL
 DEMO_MODE=true|false        # true seeds/reset allowed, mock payments, banner in UI
+SESSION_MATERIALISE=true    # write each day's chambers from the weekly schedules (§8)
 STORAGE_PROVIDER=mock|supabase|local, STORAGE_LOCAL_DIR   # local: a disk volume (§12b)
 STAFF_LOCKOUT_ATTEMPTS=5, STAFF_LOCKOUT_MINUTES=15
 ```

@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import {
+  BED_UNCONFIRMED_REASON,
   HOLD_MINUTE_CHOICES,
   canApply,
   canReceiveTransfer,
@@ -175,7 +176,8 @@ export function BedPanel(props: BedPanelProps): ReactNode {
 
       {state === 'out_of_service' && bed.oosReason !== null ? (
         <p className="rounded-sm bg-sunken px-3 py-2 font-ui text-body-sm text-ink">
-          {bed.oosReason}
+          {/* A bed added from S-B-11 carries a code, not typed words (pilot step 22). */}
+          {bed.oosReason === BED_UNCONFIRMED_REASON ? t('bedUnconfirmed', locale) : bed.oosReason}
         </p>
       ) : null}
 

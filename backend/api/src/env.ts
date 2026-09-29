@@ -229,6 +229,15 @@ const schema = z.object({
   DEMO_MODE: boolish.default(false),
 
   /**
+   * Whether this process writes each day's chambers from the weekly schedules
+   * (pilot step 22, BACKEND.md §8). On by default: a facility set up from
+   * `S-B-11` has nothing to book without it. The write is idempotent, so a
+   * second API instance may leave it on; it is here to switch off in a
+   * process that should never write.
+   */
+  SESSION_MATERIALISE: boolish.default(true),
+
+  /**
    * How many reverse proxies sit in front of this process.
    *
    * Render terminates TLS and forwards the caller's address in

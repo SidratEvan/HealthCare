@@ -105,6 +105,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0026',
       // Pilot step 21 (CLAUDE.md §4.2): staff sign-in.
       '0027',
+      // Pilot step 22: each day's chambers linked to their schedule.
+      '0028',
     ]);
   });
 

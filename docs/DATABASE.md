@@ -33,7 +33,7 @@ CREATE TYPE facility_kind     AS ENUM ('hospital','clinic','diagnostic','governm
 CREATE TYPE session_status    AS ENUM ('scheduled','running','paused','ended','cancelled');
 CREATE TYPE booking_status    AS ENUM ('booked','waiting','in_chamber','done','late','no_show','cancelled','rescheduled');
 CREATE TYPE booking_source    AS ENUM ('app','guest_link','counter','phone','walkin',
-                                       'import');   -- 0028, FR-IMP-01 set C
+                                       'import');   -- 0029, FR-IMP-01 set C
 CREATE TYPE queue_event_type  AS ENUM (
   'SESSION_OPENED','DOCTOR_ARRIVED','DELAY_DECLARED','SESSION_PAUSED','SESSION_RESUMED',
   'PATIENT_CALLED','PATIENT_DONE','PATIENT_LATE','PATIENT_NO_SHOW','PATIENT_REINSERTED',
@@ -55,9 +55,9 @@ CREATE TYPE notif_state       AS ENUM ('queued','sent','delivered','failed','ski
 CREATE TYPE capability_kind   AS ENUM ('burn_unit','cardiac','cath_lab','stroke','dialysis','nicu','trauma_ot','blood_bank','ambulance','isolation');
 CREATE TYPE consent_scope     AS ENUM ('visit','hospital','doctor','full');
 CREATE TYPE symptom_signal    AS ENUM ('dengue','diarrhoeal','fever');   -- 0025, FR-GOV-03
-CREATE TYPE import_set        AS ENUM ('structure','patients','appointments','records');   -- 0030, FR-IMP-01
-CREATE TYPE import_state      AS ENUM ('checked','committed','undone','discarded');        -- 0030, FR-IMP-05..07
-CREATE TYPE external_kind     AS ENUM ('patient','appointment','department','doctor','schedule','ward','bed','staff');  -- 0029, FR-IMP-04
+CREATE TYPE import_set        AS ENUM ('structure','patients','appointments','records');   -- 0031, FR-IMP-01
+CREATE TYPE import_state      AS ENUM ('checked','committed','undone','discarded');        -- 0031, FR-IMP-05..07
+CREATE TYPE external_kind     AS ENUM ('patient','appointment','department','doctor','schedule','ward','bed','staff');  -- 0030, FR-IMP-04
 ```
 
 ---
@@ -113,10 +113,10 @@ A clinical subject. Belongs to a `user` **or** a `guest_identity` — never both
 | `relationship` | text | `self`,`mother`,`father`,`child`,`spouse`,`other` |
 | `is_primary` | boolean | the owner's own profile |
 
-| `owner_hospital_id` | uuid | **FK** → `hospitals.id`, nullable — a patient the hospital holds because it imported them (`FR-IMP-10`), until the patient claims them. A patient registered at the counter is a guest identity instead (`FR-GST-13`). 0029 |
+| `owner_hospital_id` | uuid | **FK** → `hospitals.id`, nullable — a patient the hospital holds because it imported them (`FR-IMP-10`), until the patient claims them. A patient registered at the counter is a guest identity instead (`FR-GST-13`). 0030 |
 
 ```sql
--- 0029 widens the rule from two owners to three (FR-IMP-10)
+-- 0030 widens the rule from two owners to three (FR-IMP-10)
 CONSTRAINT patients_one_owner CHECK (num_nonnulls(owner_user_id, owner_guest_id, owner_hospital_id) = 1)
 ```
 **IX:** `(owner_user_id)`, `(owner_guest_id)`, `(owner_hospital_id)`, `(phone)`
@@ -156,7 +156,7 @@ A hospital-held patient is visible only to that hospital's staff under the usual
 
 One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it: the old row is revoked and a new one written, so a stolen refresh token works once at most.
 
-#### `external_refs` (`FR-IMP-04`) — 0029
+#### `external_refs` (`FR-IMP-04`) — 0030
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | **PK** |
@@ -255,7 +255,7 @@ The central operational object (`FR-QUE-01`).
 **IX:** `(hospital_id, session_date)`, `(doctor_id, session_date)`, `(status)`
 
 #### `session_templates`
-Recurring chamber schedules: `id`, `doctor_hospital_id` **FK**, `weekday` int, `start_time` time, `end_time` time, `capacity`, `active_from`, `active_to`. A nightly job materialises `sessions` from templates.
+Recurring chamber schedules: `id`, `doctor_hospital_id` **FK**, `weekday` int, `start_time` time, `end_time` time, `capacity`, `active_from`, `active_to`. A job materialises `sessions` from templates — today and the next seven days, hourly and whenever a schedule is added (pilot step 22). 0028 adds `sessions.template_id` (**FK**, nullable) and **U** `(template_id, session_date)` among live sessions, so each schedule makes each day's chamber once.
 
 #### `bookings`
 | Column | Type | Notes |
@@ -365,7 +365,7 @@ Patient-uploaded paper records (`FR-PAT-62`): `id`, `patient_id`, `file_url`, `d
 `id`, `hospital_id`, `ward_id`, `label` (`301`), `kind` bed_kind, `state` bed_state, `nightly_poisha`, `last_cleaned_at`, `expected_discharge_date`, `current_admission_id`, `reserved_until`, `oos_reason`, `state_changed_at`.
 **IX:** `(hospital_id, kind, state)` — powers public bed counts.
 `(ward_id, hospital_id)` references `wards (id, hospital_id)`, so a bed cannot be filed under another hospital's ward. CHECKs make each state say what it must: occupied ⇔ `current_admission_id`, reserved ⇔ `reserved_until`, out of service ⇔ a non-blank `oos_reason`; a discharge forecast only on an occupied bed.
-`reserved_until` and `oos_reason` exist because `BTN-B06-RESERVE` ("hold with expiry") and `BTN-B06-OOS` ("with reason") need them somewhere a query can read — the public view counts a lapsed hold as free. `state_changed_at` drives the cleaning timer and "occupied for N days".
+A bed added from `S-B-11` (pilot step 22) starts `out_of_service` with `oos_reason = 'setup:unconfirmed'`, a code the board translates, so a bed nobody at the ward has looked at never counts as free. `reserved_until` and `oos_reason` exist because `BTN-B06-RESERVE` ("hold with expiry") and `BTN-B06-OOS` ("with reason") need them somewhere a query can read — the public view counts a lapsed hold as free. `state_changed_at` drives the cleaning timer and "occupied for N days".
 
 #### `bed_events`
 Append-only like the queue: `id`, `hospital_id`, `bed_id`, `type` (`ADMIT`,`DISCHARGE`,`TRANSFER`,`RESERVE`,`RELEASE`,`CLEAN_START`,`CLEAN_DONE`,`OOS`,`RESTORE`), `from_state`, `to_state`, `admission_id`, `bed_request_id`, `actor_staff_id`, `payload`, `client_event_id` **U** (partial), `client_ts`, `server_ts`.
@@ -422,7 +422,7 @@ report computed from rows that could disagree with themselves is fiction.
 
 ---
 
-### 2.6b Imports (`FR-IMP`) — 0030
+### 2.6b Imports (`FR-IMP`) — 0031
 
 #### `import_batches`
 | Column | Type | Notes |
@@ -618,10 +618,11 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     -- The pilot build (CLAUDE.md §4.2). Each lands with its step:
     0027_staff_auth.sql            -- step 21: staff_users lockout and first-password columns,
                                    -- hospitals.code (§2.1, §2.2)
-    0028_import_enum.sql           -- step 24: booking_source 'import' alone (see 0021 for why)
-    0029_hospital_patients.sql     -- step 24: patients.owner_hospital_id, patients_one_owner widened,
+    0028_session_templates_link.sql -- step 22: sessions.template_id, one session per schedule per day
+    0029_import_enum.sql           -- step 24: booking_source 'import' alone (see 0021 for why)
+    0030_hospital_patients.sql     -- step 24: patients.owner_hospital_id, patients_one_owner widened,
                                    -- external_kind, external_refs (§2.1)
-    0030_imports.sql               -- step 24: import_set, import_state, import_batches, import_rows (§2.6b)
+    0031_imports.sql               -- step 24: import_set, import_state, import_batches, import_rows (§2.6b)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)
