@@ -55,6 +55,7 @@ import { ConsoleRail } from '@/components/ConsoleRail';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
 import { StandbyCard } from '@/components/StandbyCard';
+import { WalkInSheet } from '@/components/WalkInSheet';
 import { useSessionQueue } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 import { fetchPatientNames } from '@/lib/roster';
@@ -96,6 +97,8 @@ function ConsoleBody(): ReactNode {
   const [now, setNow] = useState(() => new Date());
   /** The row `MOD-B02-CHECKIN` is open for (`FR-REC-18`). */
   const [checkingIn, setCheckingIn] = useState<QueueEntry | null>(null);
+  /** `MOD-B02-WALKIN` (pilot step 23). */
+  const [walkingIn, setWalkingIn] = useState(false);
 
   // The freshness line has to age on screen without anything else happening —
   // that is the whole point of it (FR-OFF-03). One tick a second is enough for
@@ -198,6 +201,11 @@ function ConsoleBody(): ReactNode {
         event.preventDefault();
         void callNext();
       }
+      // B1.2: W opens the walk-in modal — online only, like the button.
+      if ((event.key === 'w' || event.key === 'W') && queue.connected) {
+        event.preventDefault();
+        setWalkingIn(true);
+      }
       if (event.key === 'a' || event.key === 'A') {
         void queue.act('DOCTOR_ARRIVED', { arrivedAt: new Date().toISOString(), minutesLate: 0 });
       }
@@ -292,6 +300,30 @@ function ConsoleBody(): ReactNode {
             {t('pause', locale)}
           </Button>
 
+          {/* BTN-B02-WALKIN (pilot step 23). A serial needs the server, so
+              offline it says so instead of queueing a number two counters
+              could both hand out (lib/registration.ts). */}
+          {queue.connected ? (
+            <Button
+              variant="secondary"
+              data-testid="add-walkin"
+              onClick={() => {
+                setWalkingIn(true);
+              }}
+            >
+              {t('addWalkin', locale)}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              data-testid="add-walkin"
+              disabled
+              disabledReason={t('walkInOffline', locale)}
+            >
+              {t('addWalkin', locale)}
+            </Button>
+          )}
+
           {/* The single most-used control in the system (B1.3). */}
           <Button
             size="lg"
@@ -341,6 +373,20 @@ function ConsoleBody(): ReactNode {
               }}
               onCheckIn={(entry) => {
                 setCheckingIn(entry);
+              }}
+            />
+
+            <WalkInSheet
+              sessionId={sessionId}
+              open={walkingIn}
+              online={queue.connected}
+              waiting={waiting.length}
+              onAdded={(message) => {
+                setWalkingIn(false);
+                show({ title: message, tone: 'positive' });
+              }}
+              onClose={() => {
+                setWalkingIn(false);
               }}
             />
 

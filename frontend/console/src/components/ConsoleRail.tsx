@@ -56,8 +56,8 @@ const TARGET: Readonly<
   Record<ConsoleNavKey, { readonly role: string; readonly view: string | null } | null>
 > = {
   navQueue: { role: 'receptionist', view: null },
-  // `S-B-03` is not built; reception's walk-in is the registration there is.
-  navRegistration: null,
+  // `S-B-03` (pilot step 23): the registration desk, a receptionist's.
+  navRegistration: { role: 'receptionist', view: 'registration' },
   navBeds: { role: 'ward', view: 'ward' },
   navEmergency: { role: 'emergency', view: 'er' },
   navTests: { role: 'lab', view: 'lab' },

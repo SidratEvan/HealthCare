@@ -1567,6 +1567,75 @@ export const CONSOLE = {
   settingsStaffYou: { bn: 'আপনি', en: 'You' },
   settingsSaveRoles: { bn: 'দায়িত্ব সংরক্ষণ করুন', en: 'Save roles' },
 
+  // --- Counter registration and walk-ins (S-B-03, MOD-B02-WALKIN, pilot step 23) --
+  counterPhone: { bn: 'রোগীর মোবাইল নম্বর', en: "Patient's mobile number" },
+  counterFind: { bn: 'খুঁজুন', en: 'Find' },
+  counterPhoneInvalid: {
+    bn: 'এটি বাংলাদেশের মোবাইল নম্বর নয়। যেমন ০১৭১২৩৪৫৬৭৮।',
+    en: 'That is not a Bangladeshi mobile number, such as 01712345678.',
+  },
+  counterFound: { bn: 'এই নম্বরে যাঁরা আছেন', en: 'Registered under this number' },
+  counterNoneFound: {
+    bn: 'এই নম্বরে কেউ নেই — নিচে নতুন রোগী হিসেবে রেজিস্টার করুন।',
+    en: 'Nobody under this number — register a new patient below.',
+  },
+  counterChoose: { bn: 'বেছে নিন', en: 'Choose' },
+  counterChooseNamed: { bn: '{name} — বেছে নিন', en: 'Choose {name}' },
+  counterNewPatient: { bn: 'নতুন রোগী', en: 'New patient' },
+  counterName: { bn: 'রোগীর নাম', en: "Patient's name" },
+  counterAge: { bn: 'বয়স', en: 'Age' },
+  counterSex: { bn: 'লিঙ্গ', en: 'Sex' },
+  counterRegister: { bn: 'রেজিস্টার করুন', en: 'Register' },
+  counterAgeYears: { bn: '{age} বছর', en: '{age} years' },
+  counterAccount: { bn: 'অ্যাপে অ্যাকাউন্ট আছে', en: 'Has an app account' },
+  counterChangePatient: { bn: 'অন্য রোগী বেছে নিন', en: 'Choose someone else' },
+  counterNeedFields: { bn: 'নাম, বয়স ও লিঙ্গ দিন', en: 'Enter the name, age and sex' },
+  counterFailed: { bn: 'করা যায়নি। আবার চেষ্টা করুন।', en: 'That did not work. Try again.' },
+  counterRefused: {
+    bn: 'এই চেম্বারে এখন ওয়াক-ইন যোগ করা যাচ্ছে না।',
+    en: 'This chamber cannot take a walk-in right now.',
+  },
+  walkInDescription: {
+    bn: 'মোবাইল নম্বর দিয়ে খুঁজুন; না পেলে নতুন রোগী হিসেবে রেজিস্টার করুন।',
+    en: 'Find them by mobile number; register a new patient if there is nobody.',
+  },
+  walkInWhere: { bn: 'লাইনে কোথায় বসবেন', en: 'Where in the line' },
+  walkInPositionEnd: { bn: 'শেষে যোগ', en: 'At the end' },
+  walkInPositionAt: { bn: 'নির্দিষ্ট অবস্থানে', en: 'At a set place' },
+  walkInPlace: { bn: 'লাইনে কত নম্বরে', en: 'Place in the line' },
+  walkInReason: { bn: 'কারণ', en: 'Reason' },
+  walkInReasonHelper: {
+    bn: 'লাইনের মাঝে বসাতে কারণ লিখতে হবে; এটি রেকর্ডে থাকবে',
+    en: 'Seating someone mid-line needs a reason; it is kept on record',
+  },
+  walkInNeedReason: { bn: 'স্থান ও কারণ দিন', en: 'Enter the place and the reason' },
+  walkInConfirm: { bn: 'সিরিয়াল দিন', en: 'Give a serial' },
+  walkInAdded: {
+    bn: '{name}-কে সিরিয়াল {serial} দেওয়া হয়েছে',
+    en: '{name} was given serial {serial}',
+  },
+  walkInOffline: {
+    bn: 'সিরিয়াল দিতে ইন্টারনেট সংযোগ লাগবে',
+    en: 'Giving a serial needs a connection',
+  },
+  registrationTitle: { bn: 'রোগী রেজিস্ট্রেশন', en: 'Patient registration' },
+  registrationIntro: {
+    bn: 'মোবাইল নম্বর দিয়ে শুরু করুন। আগে এসে থাকলে তাঁর তথ্য এখানেই পাবেন।',
+    en: 'Start with the mobile number. If they have been before, their details are here.',
+  },
+  registrationChambers: { bn: 'আজকের চেম্বারে যোগ করুন', en: "Add to one of today's chambers" },
+  registrationNoChambers: {
+    bn: 'আজ এই প্রতিষ্ঠানে কোনো চেম্বার নেই।',
+    en: 'There are no chambers at this facility today.',
+  },
+  registrationChambersFailed: {
+    bn: 'আজকের চেম্বারগুলো আনা যায়নি।',
+    en: "Could not load today's chambers.",
+  },
+  registrationAddHere: { bn: 'এই চেম্বারে যোগ করুন', en: 'Add to this chamber' },
+  registrationWaiting: { bn: '{count} জন অপেক্ষায়', en: '{count} waiting' },
+  registrationChooseFirst: { bn: 'আগে রোগী বেছে নিন', en: 'Choose the patient first' },
+
   // --- Demo mode (FR-DEM-07, CLAUDE.md §1.1) -------------------------------
   demoBanner: {
     bn: 'এটি একটি ডেমো। সব তথ্য প্রদর্শনের জন্য তৈরি।',

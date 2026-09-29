@@ -7,8 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/hospital-settings` — **a hospital sets itself up from
-`S-B-11`** (pilot step 22; below, *Step 22*). Before that, `feat/staff-auth` —
+Last updated: `feat/counter-registration` — **walk-ins and the registration
+desk** (pilot step 23; below, *Step 23*). Before that, `feat/hospital-settings`
+— **a hospital sets itself up from `S-B-11`** (pilot step 22; below, *Step
+22*). Before that, `feat/staff-auth` —
 **staff sign in with their own accounts** (pilot step 21; below, *Step 21*).
 Before that, `chore/pilot-scope` — **the
 pilot build is in the documents**:
@@ -71,8 +73,9 @@ Before that, `feat/standby-self-serve` (decision 62) and `feat/check-in`
 | 20 | `feat/gov-dashboard` | merged — migrations 0024–0026, `S-B-13`, `gov_reader`, `CHIP-B05-SIGNAL`, `seed_09_signals`, `gov-dashboard.spec.ts`. **Decision 5 implemented, not ruled**: national roles hold a null hospital. `FR-GOV-05` (shared health record) waits for a counterparty |
 | **21** | **`feat/staff-auth`** | **merged — the pilot's first step** (`CLAUDE.md` §4.2). Migration 0027, `S-B-00` sign-in, `S-B-00c` first password, the picker narrowed to the person's own facility and roles, refresh rotation, lockout, `pnpm staff:create`, `staff-login.spec.ts` |
 | **22** | **`feat/hospital-settings`** | **merged** — migration 0028, `S-B-11`, `/hospital/*`, the hourly session materialiser in the API, `pnpm doctor:verify`, `hospital-settings.spec.ts` |
-| 23 | `feat/counter-registration` | next |
-| 24–28 | pilot steps | not started — see `CLAUDE.md` §4.2 |
+| **23** | **`feat/counter-registration`** | **merged** — `S-B-03`, `MOD-B02-WALKIN`, `/registration/patients`, the walk-in replay fix, `counter-registration.spec.ts` |
+| 24 | `feat/data-import` | next |
+| 25–28 | pilot steps | not started — see `CLAUDE.md` §4.2 |
 
 **Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design). What
 remains is the owner's: the open decisions below, applying migrations to
@@ -130,15 +133,15 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 4153, in about two and a half minutes.
-`pnpm test:e2e` reports 126, in Chromium, against the real API and the seeded
+`pnpm test` reports 4234, in about two and a half minutes.
+`pnpm test:e2e` reports 130, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 5 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`. The last full
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`. The last full
 run took twenty-three minutes.
 
 **The two `demo.routes.test.ts` failures were Fridays, not early mornings —
@@ -159,6 +162,37 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Step 23 — somebody walks up to the counter (`feat/counter-registration`)
+
+**What a counter now does.** On `S-B-02`, **ওয়াক-ইন যোগ** (key `W`) opens
+`MOD-B02-WALKIN`: type the number the patient says (`০১৭…`, `017 …`,
+`+88017…` all work), pick the person from everybody registered under it, or
+register somebody new in four fields, choose the end of the line or a place
+with a reason, and **সিরিয়াল দিন**. The rail's **রেজিস্ট্রেশন** now opens
+`S-B-03`, a registration desk with the same finder and today's chambers
+beside it. `counter-registration.spec.ts` does both; `console-rail.spec.ts`
+now expects রেজিস্ট্রেশন to open.
+
+**How it is stored.** Registration makes exactly what a guest booking makes —
+a guest identity for the phone and a patient under it (`FR-GST-13`) — so a
+counter patient can later verify the phone in the app and find their records
+(step 25). The same name under the same number is one person; a child on a
+parent's phone is a second patient. Every lookup that shows somebody writes
+one `RECORD_VIEW` audit row per patient (`DB-P7`). The serial is the
+queue's own `POST /sessions/:id/walkin`, issued under the session lock.
+
+**A walk-in sent twice was two bookings.** `addWalkin` created the booking
+before `appendEvent` noticed a replayed `clientEventId`, so a counter that
+lost the answer and sent again left an orphan booking holding a serial.
+The controller now answers a replay from the log first
+(`registration.routes.test.ts`).
+
+**Deliberately not built.** *Offline walk-ins*: every other reception action
+queues offline, but a serial issued offline by two counters could be the same
+number, so the controls say a connection is needed. *The printed token slip*
+(`FR-REC-21`, not in this step). *The NID* on `S-B-03`: the column is to be
+encrypted by the application first, and nothing encrypts it yet.
 
 ### Step 22 — a hospital sets itself up (`feat/hospital-settings`)
 

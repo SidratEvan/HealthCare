@@ -136,9 +136,12 @@ test.describe('the console rail (APP_FLOW.md B1.1)', () => {
     await expect(beds).toHaveAttribute('aria-disabled', 'true');
     await expect(beds).toContainText('এই প্রতিষ্ঠানে নেই');
 
-    const registration = page.getByTestId('rail-navRegistration');
-    await expect(registration).toHaveAttribute('aria-disabled', 'true');
-    await expect(registration).toContainText('এই সংস্করণে নেই');
+    // রেজিস্ট্রেশন is built (pilot step 23, `S-B-03`) and every facility has a
+    // counter, so it is an item that opens rather than one that explains.
+    await expect(page.getByTestId('rail-navRegistration')).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
 
     // বিল is the counter's billing screen (S-B-04), which is not built. It
     // used to open the pharmacy, so "Billing" landed on medicine stock; the
@@ -149,9 +152,28 @@ test.describe('the console rail (APP_FLOW.md B1.1)', () => {
     await expect(page.getByTestId('rail-navPharmacy')).toHaveAttribute('aria-current', 'page');
 
     await beds.click();
-    await registration.click();
     await billing.click();
     await expect(page).toHaveURL(/view=pharmacy/);
     await expect(page.getByTestId('pharmacy-console')).toBeVisible();
+  });
+
+  test('রেজিস্ট্রেশন opens the registration desk for the same facility (S-B-03)', async ({
+    page,
+    request,
+  }) => {
+    const all = await offers(request);
+    const clinic = all.find(
+      (entry) => entry.roles.includes('pharmacy') && entry.roles.includes('receptionist'),
+    );
+    if (clinic === undefined) throw new Error('No seeded facility with a counter (FR-DEM-01).');
+
+    await pick(page, clinic.hospitalId);
+    await page.getByTestId(`open-pharmacy-${clinic.hospitalId}`).click();
+    await expect(page.getByTestId('pharmacy-console')).toBeVisible();
+
+    await page.getByTestId('rail-navRegistration').click();
+    await expect(page).toHaveURL(/view=registration/);
+    await expect(page.getByTestId('registration-console')).toBeVisible();
+    await expect(page.getByTestId('rail-navRegistration')).toHaveAttribute('aria-current', 'page');
   });
 });

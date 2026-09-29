@@ -609,7 +609,7 @@ The highest-traffic screen in the system. Every primary action must be reachable
 ### B1.1 Layout
 
 - Left: navigation rail (সিরিয়াল, রেজিস্ট্রেশন, বেড, জরুরি, টেস্ট, ফার্মেসি, বিল, ড্যাশবোর্ড) + offline/sync status block.
-  Shared by every hospital console. Each item opens its console **for the same facility**; সিরিয়াল returns to the chamber last opened in that tab, or to `S-B-01` if none was. ফার্মেসি opens the pharmacy console (`S-B-09`). An item with no screen behind it — রেজিস্ট্রেশন while `S-B-03` is not built, বিল while `S-B-04` is not, or a console the facility does not run — is shown switched off with the reason beneath it (`FRONTEND.md` §5.1), never as a label that ignores a click. (বিল used to open the pharmacy console, so a person who clicked Billing landed on medicine stock; changed after the Marks handbook check, 2026-09-28.)
+  Shared by every hospital console. Each item opens its console **for the same facility**; সিরিয়াল returns to the chamber last opened in that tab, or to `S-B-01` if none was. ফার্মেসি opens the pharmacy console (`S-B-09`). রেজিস্ট্রেশন opens `S-B-03` (pilot step 23). An item with no screen behind it — বিল while `S-B-04` is not built, or a console the facility does not run — is shown switched off with the reason beneath it (`FRONTEND.md` §5.1), never as a label that ignores a click. (বিল used to open the pharmacy console, so a person who clicked Billing landed on medicine stock; changed after the Marks handbook check, 2026-09-28.)
 - Top: session bar (doctor, department, planned window, actual arrival) + primary actions.
 - Centre: the queue table.
 - Right: now-serving card, today's counters, waitlist recovery card, last broadcast log.
@@ -655,6 +655,8 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 **`MOD-B02-WALKIN`**: phone → if existing, profile auto-fills (duplicate detection by phone, `FR-REC-20`); else quick-create (name, age, sex). Position: শেষে যোগ (default) or নির্দিষ্ট অবস্থানে (reason required). Confirm → `EVT-WALKIN_ADDED` → token print (`FR-REC-21`).
 
+> **Built in pilot step 23**, with `W` as its key. The finder lists everybody registered under the number (a household shares one phone) with **বেছে নিন** on each; nobody, or somebody new, is four fields under it. The serial comes back in the toast ("… সিরিয়াল ৫ দেওয়া হয়েছে"); the row arrives on the session channel. **Online only**: a serial issued offline by two counters could be the same number, so offline the button is switched off with "সিরিয়াল দিতে ইন্টারনেট সংযোগ লাগবে". **The printed token slip (`FR-REC-21`) is not built** — the serial is said at the counter and shown on the queue.
+
 ### B1.5 Right column
 
 | Element | ID | Wiring |
@@ -668,6 +670,8 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 ### B1.6 Registration & billing screens
 
 `S-B-03` Registration: phone-first search → existing patient or create → optional NID → save → immediate booking option.
+
+> **Built in pilot step 23**, from the rail's রেজিস্ট্রেশন (`/?view=registration`), a receptionist's. The same finder as `MOD-B02-WALKIN` on the left; on the right, today's chambers at the facility with **এই চেম্বারে যোগ করুন** on each — a walk-in at the end, the serial in the toast — and the desk clears for the next person. States: a skeleton while the chambers load, "no chambers today", the failure with a retry, and offline with the finder and the buttons switched off and the reason given. **The NID is not asked for**: `patients.national_id` is to be encrypted by the application before it is stored, and nothing encrypts it yet; `FR-REC-20` does not need it.
 `S-B-04` Billing: collect fee, method, print/SMS receipt (`FR-REC-22`); shift reconciliation view with expected vs collected and a variance note field (`FR-REC-23`).
 
 ---

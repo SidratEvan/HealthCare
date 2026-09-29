@@ -370,6 +370,7 @@ export * from './schemas/referral.schema.js';
 export * from './schemas/lab.schema.js';
 export * from './schemas/payment.schema.js';
 export * from './schemas/settings.schema.js';
+export * from './schemas/registration.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';

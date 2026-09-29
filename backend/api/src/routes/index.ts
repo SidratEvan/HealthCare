@@ -29,6 +29,7 @@ import { labRoutes } from './lab.routes.js';
 import { paymentRoutes } from './payment.routes.js';
 import { queueRoutes } from './queue.routes.js';
 import { referralRoutes } from './referral.routes.js';
+import { registrationRoutes } from './registration.routes.js';
 import { staffAuthRoutes } from './staffAuth.routes.js';
 import { standbyRoutes } from './standby.routes.js';
 import { syncRoutes } from './sync.routes.js';
@@ -62,6 +63,9 @@ export function buildApiRouter(): Router {
   router.use(staffAuthRoutes);
   router.use(bookingRoutes);
   router.use(queueRoutes);
+  // Finding and registering a patient at the counter (pilot step 23, S-B-03);
+  // the serial itself is the queue's walk-in, above.
+  router.use(registrationRoutes);
   // The patient's half of the standby list (`FR-PAT-25`…`27`): joining is
   // public like a guest booking, and the status token in the path answers
   // everything after it.

@@ -380,6 +380,8 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/standby/:token/decline` | the token | no; `SLOT_EXPIRED`, then the slot is offered to the next patient (`FR-QUE-30`) |
 | POST | `/standby/:token/leave` | the token | off the list; a prepayment is marked owed (`standby_unseated`) |
 | POST | `/offers/:id/accept` | receptionist | a yes rung in to the counter (`FR-REC-30`) — see §7.4 |
+| GET | `/registration/patients?phone=` | receptionist | pilot step 23 (`FR-REC-20`). Everybody the number reaches — through the guest identity or account it owns, or as a patient's own contact number — for the counter to pick the person standing there. The phone is normalised (`DB-P6`) or refused. One `RECORD_VIEW` audit row per patient shown (`DB-P7`) |
+| POST | `/registration/patients` | receptionist | `{phone, fullName, ageYears, sex}` → a guest identity for the phone and a patient under it, as a guest booking makes (`FR-GST-13`: no account). The same name under the same number is the same person. Idempotency-Key required. The serial is then `POST /sessions/:id/walkin` |
 
 ### 7.4 Queue (console)
 
@@ -395,7 +397,7 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/bookings/:id/no-show` | receptionist | `PATIENT_NO_SHOW` + auto slot offer |
 | POST | `/bookings/:id/reinstate` | receptionist | `PATIENT_REINSERTED` |
 | POST | `/bookings/:id/check-in` | receptionist | `PATIENT_ARRIVED` — body `{ quotedWaitMinutes }` 0–480; the arrival is the server's clock (`FR-REC-18`) |
-| POST | `/sessions/:id/walkin` | receptionist | `WALKIN_ADDED` |
+| POST | `/sessions/:id/walkin` | receptionist | `WALKIN_ADDED`. The booking is created under the session lock, so the serial is the chamber's next; a request replayed with the same `clientEventId` is answered from the log before any booking is written (pilot step 23) |
 | POST | `/sessions/:id/reorder` | receptionist | `PRIORITY_REORDERED` (reason required) |
 | GET | `/sessions/:id/standby` | receptionist, hospital_admin | — (who is waiting and what was offered, no phone numbers; records any lapsed offer as `SLOT_EXPIRED` as it answers) |
 | POST | `/bookings/:id/offer-slot` | receptionist | `SLOT_OFFERED` — `BTN-B02-OFFER`: the freed chair to the next person on the standby list, ten-minute window (`FR-QUE-30`, `FR-REC-30`) |
