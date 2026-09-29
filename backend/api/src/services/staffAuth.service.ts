@@ -25,11 +25,26 @@
  * A password an administrator set (`must_change_password`, 0027) signs in,
  * but its token carries `mcp` and opens only the password change
  * (`attachPrincipal`).
+ *
+ * ## The second factor (pilot step 28, FR-SEC-10)
+ *
+ * An account with one on gets no tokens for a right password: it gets a
+ * five-minute challenge, and `POST /staff/2fa` exchanges that and a code from
+ * the app (or a recovery code) for the session. A wrong code counts towards
+ * the same lock as a wrong password, and the count is not cleared by the
+ * password alone — otherwise a known password would buy unlimited guesses at
+ * the code, five at a time.
+ *
+ * An administrator (`TWO_FACTOR_REQUIRED_ROLES`) with none yet signs in on the
+ * password once more, but the token carries `tfa: 'setup'` and opens only the
+ * setup (`attachPrincipal`), so no administrator reaches a console without it.
  */
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
-import { durationMs, signToken } from '../config/jwt.js';
+import { TWO_FACTOR_REQUIRED_ROLES } from '@platform/domain';
+
+import { durationMs, signToken, verifyToken } from '../config/jwt.js';
 import { logger } from '../config/logger.js';
 import {
   burnVerification,
@@ -39,6 +54,17 @@ import {
   temporaryPassword,
   verifyPassword,
 } from '../config/password.js';
+import {
+  RECOVERY_CODE_COUNT,
+  matchStep,
+  newRecoveryCodes,
+  newTotpSecret,
+  normaliseRecoveryCode,
+  openSecret,
+  otpauthUri,
+  recoveryHash,
+  sealSecret,
+} from '../config/totp.js';
 import { env } from '../env.js';
 import { AppError } from '../errors/AppError.js';
 import * as chamberRepo from '../repositories/chamber.repo.js';
@@ -61,7 +87,22 @@ export interface StaffSession {
   } | null;
   readonly roles: readonly string[];
   readonly mustChangePassword: boolean;
+  /**
+   * The second factor: whether it is on, whether this account must have it,
+   * and how many recovery codes are left. `required && !enabled` means the
+   * token opens only the setup (`tfa: 'setup'`).
+   */
+  readonly twoFactor: {
+    readonly enabled: boolean;
+    readonly required: boolean;
+    readonly recoveryCodesLeft: number;
+  };
 }
+
+/** What `POST /staff/login` answers: a session, or a challenge for the second factor. */
+export type StaffLoginResult =
+  | (StaffSession & { readonly requires2fa: false })
+  | { readonly requires2fa: true; readonly challenge: string; readonly challengeExpiresAt: string };
 
 interface Client {
   readonly ip: string | null;
@@ -81,12 +122,30 @@ function isLocked(account: StaffAccount, now: Date): boolean {
   return account.lockedUntil !== null && account.lockedUntil.getTime() > now.getTime();
 }
 
+const REQUIRED: readonly string[] = TWO_FACTOR_REQUIRED_ROLES;
+
+/** Whether these roles may sign in only with a second factor (`FR-SEC-10`). */
+export function requiresTwoFactor(roles: readonly string[]): boolean {
+  return roles.some((role) => REQUIRED.includes(role));
+}
+
+function twoFactorOf(account: StaffAccount, roles: readonly string[]): StaffSession['twoFactor'] {
+  return {
+    enabled: account.totpEnabled,
+    required: requiresTwoFactor(roles),
+    recoveryCodesLeft: account.totpEnabled ? account.recoveryCodesLeft : 0,
+  };
+}
+
 async function issue(
   account: StaffAccount,
   roles: readonly string[],
   client: Client,
 ): Promise<StaffSession> {
   const accessTtl = durationMs(env.JWT_ACCESS_TTL);
+  const twoFactor = twoFactorOf(account, roles);
+  // The password change comes first; its fresh token then carries `tfa`.
+  const setupOnly = twoFactor.required && !twoFactor.enabled && !account.mustChangePassword;
   const access = await signToken({
     kind: 'access',
     claims: {
@@ -95,6 +154,7 @@ async function issue(
       ...(account.hospitalId === null ? {} : { hospitalId: account.hospitalId }),
       roles,
       ...(account.mustChangePassword ? { mcp: true } : {}),
+      ...(setupOnly ? { tfa: 'setup' as const } : {}),
     },
   });
 
@@ -125,6 +185,7 @@ async function issue(
           },
     roles,
     mustChangePassword: account.mustChangePassword,
+    twoFactor,
   };
 }
 
@@ -155,7 +216,7 @@ export async function login(
     readonly hospitalCode?: string | undefined;
   },
   client: Client,
-): Promise<StaffSession> {
+): Promise<StaffLoginResult> {
   const now = new Date();
   const accounts = await staffAuthRepo.findByEmail(input.email, input.hospitalCode ?? null);
 
@@ -194,13 +255,204 @@ export async function login(
   }
 
   const roles = await rolesOrRefuse(account);
-  await staffAuthRepo.recordSuccess(account.id);
   if (account.passwordHash !== null && needsRehash(account.passwordHash)) {
     await staffAuthRepo.upgradeHash(account.id, await hashPassword(input.password));
   }
 
+  if (account.totpEnabled) {
+    // Half a sign-in. The failure count stays as it is until the code is right.
+    const challenge = await signToken({
+      kind: 'staff_2fa',
+      claims: { sub: account.id, kind: 'staff' },
+    });
+    return {
+      requires2fa: true,
+      challenge,
+      challengeExpiresAt: new Date(Date.now() + CHALLENGE_TTL_MS).toISOString(),
+    };
+  }
+
+  await staffAuthRepo.recordSuccess(account.id);
   logger.info({ staffId: account.id, hospitalId: account.hospitalId }, 'staff signed in');
-  return await issue(account, roles, client);
+  return { ...(await issue(account, roles, client)), requires2fa: false };
+}
+
+/** `staff_2fa` tokens' lifetime (`config/jwt.ts`). */
+const CHALLENGE_TTL_MS = 5 * 60_000;
+
+const codeInvalid = (): AppError => new AppError('AUTH_2FA_INVALID');
+
+/** A wrong code: counted with wrong passwords, towards the same lock. */
+async function failCode(account: StaffAccount): Promise<AppError> {
+  const refused = await fail(account);
+  return refused.code === 'AUTH_LOCKED' ? refused : codeInvalid();
+}
+
+/**
+ * Checks a code from the app or a recovery code, and spends it. The shape
+ * says which: six digits, or twelve letters and digits.
+ */
+async function spendCode(account: StaffAccount, code: string): Promise<boolean> {
+  if (!account.totpEnabled || account.totpSecret === null) return false;
+  if (/^\d{6}$/.test(code)) {
+    let secret: string;
+    try {
+      secret = openSecret(account.totpSecret);
+    } catch {
+      // Sealed with another key: no code can match it. Said in the log,
+      // because the fix is on the server (TOTP_ENCRYPTION_KEY), not the phone.
+      logger.error({ staffId: account.id }, 'TOTP secret does not open with this key');
+      return false;
+    }
+    const step = matchStep(secret, code, Date.now(), account.totpLastStep);
+    return step !== null && (await staffAuthRepo.acceptTotpStep(account.id, step));
+  }
+  const recovery = normaliseRecoveryCode(code);
+  if (recovery === null) return false;
+  const used = await staffAuthRepo.useRecoveryCode(account.id, recoveryHash(recovery));
+  if (used) logger.warn({ staffId: account.id }, 'staff signed in with a recovery code');
+  return used;
+}
+
+/** `POST /staff/2fa`: the challenge from `login` and a code → the session. */
+export async function verifySecondFactor(
+  input: { readonly challenge: string; readonly code: string },
+  client: Client,
+): Promise<StaffSession> {
+  const verified = await verifyToken(input.challenge, 'staff_2fa');
+  if (!verified.ok) throw refreshInvalid(`challenge_${verified.reason}`);
+
+  const account = await staffAuthRepo.findById(verified.claims.sub);
+  if (account?.isActive !== true) throw refreshInvalid('account');
+  if (isLocked(account, new Date()) && account.lockedUntil !== null) {
+    throw lockedUntil(account.lockedUntil);
+  }
+  // Reset by an administrator since the password was typed: sign in again.
+  if (!account.totpEnabled) throw refreshInvalid('challenge_stale');
+
+  if (!(await spendCode(account, input.code.trim()))) throw await failCode(account);
+
+  const roles = await rolesOrRefuse(account);
+  await staffAuthRepo.recordSuccess(account.id);
+  logger.info({ staffId: account.id, hospitalId: account.hospitalId }, 'staff signed in');
+  const updated = await accountOf(account.id);
+  return await issue(updated, roles, client);
+}
+
+/** What `POST /staff/2fa/setup` hands the person, once, to put into their app. */
+export interface TwoFactorSetup {
+  readonly secret: string;
+  readonly otpauthUri: string;
+}
+
+/**
+ * `POST /staff/2fa/setup`. A new secret each time, replacing any unconfirmed
+ * one — the person may have closed the screen before scanning — but never
+ * one that is on.
+ */
+export async function startTwoFactorSetup(staffId: string): Promise<TwoFactorSetup> {
+  const account = await accountOf(staffId);
+  if (account.totpEnabled) throw new AppError('AUTH_2FA_ALREADY_ON');
+  const secret = newTotpSecret();
+  if (!(await staffAuthRepo.setPendingTotp(account.id, sealSecret(secret)))) {
+    throw new AppError('AUTH_2FA_ALREADY_ON');
+  }
+  return {
+    secret,
+    otpauthUri: otpauthUri({
+      secret,
+      account: account.email,
+      // What the app lists the entry under: the facility, so somebody with
+      // accounts at two can tell them apart.
+      issuer: account.hospitalNameEn ?? 'Healthcare',
+    }),
+  };
+}
+
+/**
+ * `POST /staff/2fa/enable`. A code from the app proves it holds the secret;
+ * the second factor is then on, the ten recovery codes are shown once, every
+ * other session of the account — each issued without it — is ended, and this
+ * one is replaced by a session without `tfa`.
+ */
+export async function enableTwoFactor(
+  staffId: string,
+  code: string,
+  client: Client,
+): Promise<{ readonly recoveryCodes: readonly string[]; readonly session: StaffSession }> {
+  const account = await accountOf(staffId);
+  if (account.totpEnabled) throw new AppError('AUTH_2FA_ALREADY_ON');
+  if (account.totpSecret === null) throw codeInvalid();
+
+  let secret: string;
+  try {
+    secret = openSecret(account.totpSecret);
+  } catch {
+    throw codeInvalid();
+  }
+  // Not counted towards the lock: the person is signed in, and the secret
+  // being checked is the one they were just shown.
+  const step = matchStep(secret, code, Date.now(), null);
+  if (step === null) throw codeInvalid();
+
+  const recoveryCodes = newRecoveryCodes(RECOVERY_CODE_COUNT);
+  const enabled = await withTransaction(async (trx) => {
+    const done = await staffAuthRepo.enableTotp(trx, {
+      staffId: account.id,
+      step,
+      recoveryHashes: recoveryCodes.map(recoveryHash),
+    });
+    if (done) {
+      await staffAuthRepo.recordSecurityChange(trx, {
+        actorStaffId: account.id,
+        hospitalId: account.hospitalId,
+        staffId: account.id,
+        change: 'two_factor_enabled',
+        ip: client.ip,
+        userAgent: client.userAgent === null ? null : client.userAgent.slice(0, 300),
+      });
+    }
+    return done;
+  });
+  if (!enabled) throw new AppError('AUTH_2FA_ALREADY_ON');
+
+  await staffAuthRepo.revokeOtherSessions(account.id, null);
+  const updated = await accountOf(account.id);
+  return {
+    recoveryCodes,
+    session: await issue(updated, await rolesOrRefuse(updated), client),
+  };
+}
+
+/**
+ * `pnpm staff:reset-2fa` — for a facility's only administrator, whose phone
+ * and recovery codes are both gone, so nobody is left to reset it from
+ * `S-B-11`. Run by platform staff on the server, audited with no actor.
+ * Returns the account's name, or null when no account matches.
+ */
+export async function resetTwoFactorFromServer(input: {
+  readonly email: string;
+  readonly hospitalCode: string | null;
+}): Promise<{ readonly fullName: string; readonly hospitalCode: string | null } | null> {
+  const accounts = await staffAuthRepo.findByEmail(input.email, input.hospitalCode);
+  if (accounts.length > 1) {
+    throw new Error(`${input.email} has accounts at more than one facility; give --hospital-code.`);
+  }
+  const account = accounts[0];
+  if (account === undefined) return null;
+  await withTransaction(async (trx) => {
+    await staffAuthRepo.clearTwoFactor(account.id, trx);
+    await staffAuthRepo.recordSecurityChange(trx, {
+      actorStaffId: null,
+      hospitalId: account.hospitalId,
+      staffId: account.id,
+      change: 'two_factor_reset_from_server',
+      ip: null,
+      userAgent: null,
+    });
+  });
+  await staffAuthRepo.revokeOtherSessions(account.id, null);
+  return { fullName: account.fullName, hospitalCode: account.hospitalCode };
 }
 
 function parseRefresh(token: string): { readonly id: string; readonly secret: string } | null {
@@ -272,6 +524,7 @@ export type StaffProfile = Omit<StaffSession, 'access' | 'accessExpiresAt' | 're
 /** `GET /staff/me`. */
 export async function me(staffId: string): Promise<StaffProfile> {
   const account = await accountOf(staffId);
+  const roles = await staffAuthRepo.rolesOf(account.id, account.hospitalId);
   return {
     staff: { id: account.id, fullName: account.fullName, email: account.email },
     hospital:
@@ -283,8 +536,9 @@ export async function me(staffId: string): Promise<StaffProfile> {
             nameBn: account.hospitalNameBn ?? '',
             nameEn: account.hospitalNameEn ?? '',
           },
-    roles: await staffAuthRepo.rolesOf(account.id, account.hospitalId),
+    roles,
     mustChangePassword: account.mustChangePassword,
+    twoFactor: twoFactorOf(account, roles),
   };
 }
 

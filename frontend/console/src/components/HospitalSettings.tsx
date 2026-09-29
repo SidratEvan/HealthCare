@@ -1528,6 +1528,13 @@ function StaffCard({
           {member.mustChangePassword ? (
             <Chip tone="caution">{t('settingsStaffMustChange', locale)}</Chip>
           ) : null}
+          {member.twoFactorEnabled ? (
+            <Chip tone="positive">{t('settingsStaffTwoFactorOn', locale)}</Chip>
+          ) : member.roles.includes('hospital_admin') ? (
+            // An administrator without it signs in to the setup and nothing
+            // else (FR-SEC-10); the chip says why they may not be at work yet.
+            <Chip tone="caution">{t('settingsStaffTwoFactorMissing', locale)}</Chip>
+          ) : null}
         </div>
       </div>
 
@@ -1575,6 +1582,22 @@ function StaffCard({
             >
               {t('settingsResetPassword', locale)}
             </SaveButton>
+            {member.twoFactorEnabled ? (
+              <SaveButton
+                variant="secondary"
+                offline={offline}
+                busy={false}
+                testId={`settings-staff-reset-2fa-${member.id}`}
+                onClick={() => {
+                  void run(
+                    () => settingsApi.resetTwoFactor(member.id),
+                    () => t('settingsSaved', locale),
+                  );
+                }}
+              >
+                {t('settingsResetTwoFactor', locale)}
+              </SaveButton>
+            ) : null}
             <SaveButton
               variant="quiet"
               offline={offline}
@@ -1776,6 +1799,7 @@ function failureText(failure: SaveFailure, locale: Locale): string {
       const byReason: Readonly<Record<string, ConsoleKey>> = {
         own_access: 'settingsNotAllowedOwnAccess',
         own_password: 'settingsNotAllowedOwnPassword',
+        own_two_factor: 'settingsNotAllowedOwnTwoFactor',
         doctor_verified: 'settingsNotAllowedVerified',
         doctor_shared: 'settingsNotAllowedShared',
         nothing_to_publish: 'settingsNotAllowedNothing',

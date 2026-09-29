@@ -27,7 +27,14 @@ import { env } from '../env.js';
 
 /** Which secret a token is signed with, and therefore what it may authorise. */
 export type TokenKind =
-  'access' | 'refresh' | 'guest' | 'consent' | 'bed_request' | 'emergency_case' | 'standby';
+  | 'access'
+  | 'refresh'
+  | 'guest'
+  | 'consent'
+  | 'bed_request'
+  | 'emergency_case'
+  | 'standby'
+  | 'staff_2fa';
 
 const ISSUER = 'healthcare-api';
 
@@ -65,6 +72,12 @@ const SECRETS: Record<TokenKind, Uint8Array> = {
   // And for a place on a standby list (`FR-PAT-27`): the link a patient
   // answers an offer from. One row, useless as a tracking link or a bearer.
   standby: encoder.encode(env.GUEST_LINK_SECRET),
+
+  // Between a right password and the second factor (pilot step 28,
+  // `POST /staff/2fa`): the access secret, a different signed audience, so the
+  // challenge cannot be presented as a bearer token — `attachPrincipal`
+  // verifies only `access` — and opens nothing but the code check.
+  staff_2fa: encoder.encode(env.JWT_ACCESS_SECRET),
 };
 
 const AUDIENCES: Record<TokenKind, string> = {
@@ -75,6 +88,7 @@ const AUDIENCES: Record<TokenKind, string> = {
   bed_request: 'bed-request',
   emergency_case: 'emergency-case',
   standby: 'standby',
+  staff_2fa: 'staff-2fa',
 };
 
 /**
@@ -107,6 +121,12 @@ export interface TokenClaims extends JWTPayload {
    * nothing else.
    */
   mcp?: boolean;
+  /**
+   * Set on a staff access token for an account that must have a second factor
+   * and has none yet (pilot step 28, `FR-SEC-10`): `attachPrincipal` then
+   * admits it to setting one up and nothing else.
+   */
+  tfa?: 'setup';
 }
 
 export interface SignOptions {
@@ -143,6 +163,10 @@ function defaultLifetime(kind: TokenKind): string {
       // As long as a tracking link: an offer can come at the end of the
       // chamber, and a seated patient opens their serial from this link.
       return `${String(env.GUEST_LINK_TTL_DAYS)}d`;
+    case 'staff_2fa':
+      // Long enough to find the phone and open the app, short enough that a
+      // password typed on a shared counter is not a standing half of a login.
+      return '5m';
   }
 }
 

@@ -17,8 +17,9 @@
  * without a password, as it always has; `?login=1` shows `S-B-00` instead.
  * Anywhere else — once `GET /demo/status` has said so — the console shows
  * `S-B-00` until somebody signs in, then `S-B-00c` if their password
- * was set by an administrator, then the picker limited to their own facility
- * and roles. A signed-in session is kept fresh in the background, and one the
+ * was set by an administrator, then `S-B-00d` if they are an administrator
+ * with no second factor yet (pilot step 28), then the picker limited to their
+ * own facility and roles. A signed-in session is kept fresh in the background, and one the
  * server stops accepting returns here to `S-B-00`.
  */
 
@@ -40,6 +41,7 @@ import { PharmacyConsole } from '@/components/PharmacyConsole';
 import { ReceptionConsole } from '@/components/ReceptionConsole';
 import { RegistrationConsole } from '@/components/RegistrationConsole';
 import { StaffLogin } from '@/components/StaffLogin';
+import { TwoFactorSetup } from '@/components/TwoFactorSetup';
 import { WardBoard } from '@/components/WardBoard';
 import { readDemoSession } from '@/lib/demo';
 import { askDemoMode, keepSessionFresh } from '@/lib/staffAuth';
@@ -99,6 +101,12 @@ export default function Page(): ReactNode {
   const [loginAsked, setLoginAsked] = useState(false);
   /** A signed-in session the server stopped accepting. */
   const [ended, setEnded] = useState(false);
+  /**
+   * The second factor was just turned on and the recovery codes are showing.
+   * The stored session already says it is on, so without this the page would
+   * move to the console before the person has seen the codes.
+   */
+  const [enrolling, setEnrolling] = useState(false);
   /** Bumped when the stored session changes, so this page reads it again. */
   const [, setSessionVersion] = useState(0);
   const sessionChanged = useCallback(() => {
@@ -141,6 +149,24 @@ export default function Page(): ReactNode {
     globalThis.location.assign('/');
   }, []);
 
+  const enrolled = useCallback(() => {
+    setEnrolling(false);
+    if (view === '2fa') {
+      const url = new URL(globalThis.location.href);
+      url.searchParams.delete('view');
+      globalThis.history.replaceState(null, '', url.toString());
+      setView(null);
+    }
+    sessionChanged();
+  }, [sessionChanged, view]);
+
+  const leaveSetup = useCallback(() => {
+    const url = new URL(globalThis.location.href);
+    url.searchParams.delete('view');
+    globalThis.history.replaceState(null, '', url.toString());
+    setView(null);
+  }, []);
+
   const chosen = useCallback((choice: ConsoleChoice) => {
     // What was opened lives in the URL, so the console is linkable and a
     // reload keeps it — a chamber by its session, the ward board by name,
@@ -169,6 +195,29 @@ export default function Page(): ReactNode {
   // `S-B-00c`: a password an administrator set comes before any console.
   if (staff && session?.mustChangePassword === true) {
     return <ChangePassword onChanged={sessionChanged} onSignedOut={signedOut} />;
+  }
+
+  // `S-B-00d`: an administrator's second factor comes before any console; and
+  // anybody may open it from the picker (`?view=2fa`) while theirs is off.
+  const twoFactor = staff ? session?.twoFactor : undefined;
+  const setupRequired = twoFactor?.required === true && !twoFactor.enabled;
+  if (
+    staff &&
+    (enrolling ||
+      setupRequired ||
+      (view === '2fa' && twoFactor !== undefined && !twoFactor.enabled))
+  ) {
+    return (
+      <TwoFactorSetup
+        required={setupRequired}
+        onEnabled={() => {
+          setEnrolling(true);
+        }}
+        onDone={enrolled}
+        {...(setupRequired ? {} : { onCancel: leaveSetup })}
+        onSignedOut={signedOut}
+      />
+    );
   }
 
   // `S-B-00`: always off the demo, and on it when asked for.

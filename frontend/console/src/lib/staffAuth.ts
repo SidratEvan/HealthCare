@@ -11,6 +11,11 @@
  *   A refresh the server refuses ends the session and returns to `S-B-00`.
  * - The token already carries every role the person holds, so moving between
  *   consoles changes the stored role and nothing on the server.
+ *
+ * The second factor (pilot step 28, `FR-SEC-10`): a right password for an
+ * account with one on is answered with a challenge, not a session, and
+ * `verifySecondFactor` exchanges it and the code for one (`S-B-00b`). An
+ * administrator without one gets a session that opens only `S-B-00d`.
  */
 
 import { clearDemoSession, readDemoSession, writeDemoSession, type DemoSession } from './demo';
@@ -31,10 +36,22 @@ export interface StaffSessionPayload {
   } | null;
   readonly roles: readonly string[];
   readonly mustChangePassword: boolean;
+  readonly twoFactor: {
+    readonly enabled: boolean;
+    readonly required: boolean;
+    readonly recoveryCodesLeft: number;
+  };
+}
+
+/** The half of a sign-in that waits for the code (`S-B-00b`). */
+export interface Challenge {
+  readonly token: string;
+  readonly expiresAt: string;
 }
 
 export type SignInOutcome =
   | { readonly ok: true; readonly session: StaffSessionPayload }
+  | { readonly ok: true; readonly challenge: Challenge }
   | {
       readonly ok: false;
       readonly reason:
@@ -95,7 +112,17 @@ export async function signIn(input: {
   }
 
   if (response.ok) {
-    const body = (await response.json()) as { data: StaffSessionPayload };
+    const body = (await response.json()) as {
+      data:
+        | (StaffSessionPayload & { requires2fa: false })
+        | { requires2fa: true; challenge: string; challengeExpiresAt: string };
+    };
+    if (body.data.requires2fa) {
+      return {
+        ok: true,
+        challenge: { token: body.data.challenge, expiresAt: body.data.challengeExpiresAt },
+      };
+    }
     return { ok: true, session: body.data };
   }
 
@@ -151,6 +178,7 @@ export function adoptStaffSession(
     refresh: payload.refresh,
     accessExpiresAt: payload.accessExpiresAt,
     mustChangePassword: payload.mustChangePassword,
+    twoFactor: payload.twoFactor,
   };
   writeDemoSession(session);
   return session;
@@ -260,6 +288,105 @@ export async function changePassword(current: string, next: string): Promise<Pas
   if (code === 'AUTH_PASSWORD_WEAK') {
     return { ok: false, reason: details['reason'] === 'unchanged' ? 'unchanged' : 'short' };
   }
+  return { ok: false, reason: 'failed' };
+}
+
+// --- The second factor (pilot step 28, FR-SEC-10) ------------------------------
+
+export type CodeOutcome =
+  | { readonly ok: true; readonly session: StaffSessionPayload }
+  | {
+      readonly ok: false;
+      readonly reason: 'invalid' | 'locked' | 'expired' | 'offline' | 'failed';
+      readonly until?: string;
+    };
+
+/**
+ * `POST /staff/2fa` (`S-B-00b`). A code from the app or a recovery code; the
+ * server tells them apart. `expired` means the challenge ran out or was
+ * withdrawn — the password is asked for again.
+ */
+export async function verifySecondFactor(challenge: string, code: string): Promise<CodeOutcome> {
+  if (isOffline()) return { ok: false, reason: 'offline' };
+  let response: Response;
+  try {
+    response = await post('/staff/2fa', { challenge, code: code.trim() });
+  } catch {
+    return { ok: false, reason: isOffline() ? 'offline' : 'failed' };
+  }
+  if (response.ok) {
+    const body = (await response.json()) as { data: StaffSessionPayload };
+    return { ok: true, session: body.data };
+  }
+  const { code: errorCode, details } = await errorOf(response);
+  if (errorCode === 'AUTH_2FA_INVALID' || response.status === 400) {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (errorCode === 'AUTH_LOCKED') {
+    return {
+      ok: false,
+      reason: 'locked',
+      ...(typeof details['until'] === 'string' ? { until: details['until'] } : {}),
+    };
+  }
+  if (errorCode === 'AUTH_TOKEN_INVALID') return { ok: false, reason: 'expired' };
+  return { ok: false, reason: 'failed' };
+}
+
+export type SetupOutcome =
+  | { readonly ok: true; readonly secret: string; readonly otpauthUri: string }
+  | { readonly ok: false; readonly reason: 'on' | 'offline' | 'failed' };
+
+/** `POST /staff/2fa/setup` (`S-B-00d`): a new secret for the app, shown once. */
+export async function startTwoFactorSetup(): Promise<SetupOutcome> {
+  const session = readDemoSession();
+  if (session === null) return { ok: false, reason: 'failed' };
+  if (isOffline()) return { ok: false, reason: 'offline' };
+  let response: Response;
+  try {
+    response = await post('/staff/2fa/setup', {}, session.token);
+  } catch {
+    return { ok: false, reason: isOffline() ? 'offline' : 'failed' };
+  }
+  if (response.ok) {
+    const body = (await response.json()) as { data: { secret: string; otpauthUri: string } };
+    return { ok: true, secret: body.data.secret, otpauthUri: body.data.otpauthUri };
+  }
+  const { code } = await errorOf(response);
+  return { ok: false, reason: code === 'AUTH_2FA_ALREADY_ON' ? 'on' : 'failed' };
+}
+
+export type EnableOutcome =
+  | { readonly ok: true; readonly recoveryCodes: readonly string[] }
+  | { readonly ok: false; readonly reason: 'invalid' | 'on' | 'offline' | 'failed' };
+
+/**
+ * `POST /staff/2fa/enable`. A success replaces the session at once: the
+ * server ended every earlier one, this tab's included, so the old refresh
+ * token is already dead.
+ */
+export async function enableTwoFactor(code: string): Promise<EnableOutcome> {
+  const session = readDemoSession();
+  if (session === null) return { ok: false, reason: 'failed' };
+  if (isOffline()) return { ok: false, reason: 'offline' };
+  let response: Response;
+  try {
+    response = await post('/staff/2fa/enable', { code }, session.token);
+  } catch {
+    return { ok: false, reason: isOffline() ? 'offline' : 'failed' };
+  }
+  if (response.ok) {
+    const body = (await response.json()) as {
+      data: { recoveryCodes: string[]; session: StaffSessionPayload };
+    };
+    adoptStaffSession(body.data.session, session);
+    return { ok: true, recoveryCodes: body.data.recoveryCodes };
+  }
+  const { code: errorCode } = await errorOf(response);
+  if (errorCode === 'AUTH_2FA_INVALID' || response.status === 400) {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (errorCode === 'AUTH_2FA_ALREADY_ON') return { ok: false, reason: 'on' };
   return { ok: false, reason: 'failed' };
 }
 

@@ -7,11 +7,22 @@
  * generous on purpose: every counter in a hospital usually reaches the server
  * from one public address, and a shift change is a hundred sign-ins at once.
  * Everything else needs the access token.
+ *
+ * The second factor (pilot step 28, FR-SEC-10): `POST /staff/2fa` is public
+ * like `login` — its credential is the challenge `login` handed back, in the
+ * body — and shares its limit. Setting one up needs the access token, which
+ * for an administrator without one opens only these two (`attachPrincipal`).
  */
 
 import { Router } from 'express';
 
-import { staffLoginBody, staffPasswordBody, staffRefreshBody } from '@platform/domain';
+import {
+  staffLoginBody,
+  staffPasswordBody,
+  staffRefreshBody,
+  staffTwoFactorBody,
+  staffTwoFactorEnableBody,
+} from '@platform/domain';
 
 import * as staffAuth from '../controllers/staffAuth.controller.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -43,5 +54,19 @@ staffAuthRoutes.post(
   signInLimit,
   validate({ body: staffPasswordBody }),
   staffAuth.changePassword,
+);
+staffAuthRoutes.post(
+  '/staff/2fa',
+  signInLimit,
+  validate({ body: staffTwoFactorBody }),
+  staffAuth.secondFactor,
+);
+staffAuthRoutes.post('/staff/2fa/setup', requireAuth, signInLimit, staffAuth.twoFactorSetup);
+staffAuthRoutes.post(
+  '/staff/2fa/enable',
+  requireAuth,
+  signInLimit,
+  validate({ body: staffTwoFactorEnableBody }),
+  staffAuth.twoFactorEnable,
 );
 staffAuthRoutes.get('/staff/chambers', requireAuth, staffAuth.chambers);

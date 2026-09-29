@@ -71,6 +71,16 @@ export interface DemoSession {
   readonly accessExpiresAt?: string;
   /** The administrator set this password; `S-B-00c` comes before any console. */
   readonly mustChangePassword?: boolean;
+  /**
+   * The second factor (pilot step 28, `FR-SEC-10`). `required` and not
+   * `enabled` means `S-B-00d` comes before any console — the server allows the
+   * token nothing else (`AUTH_2FA_SETUP_REQUIRED`).
+   */
+  readonly twoFactor?: {
+    readonly enabled: boolean;
+    readonly required: boolean;
+    readonly recoveryCodesLeft: number;
+  };
 }
 
 const STORAGE_KEY = 'console.demo-session';

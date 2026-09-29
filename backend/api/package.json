@@ -9,7 +9,8 @@
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "staff:create": "tsx src/scripts/createStaff.ts",
-    "doctor:verify": "tsx src/scripts/verifyDoctor.ts"
+    "doctor:verify": "tsx src/scripts/verifyDoctor.ts",
+    "staff:reset-2fa": "tsx src/scripts/resetTwoFactor.ts"
   },
   "dependencies": {
     "@platform/domain": "workspace:*",

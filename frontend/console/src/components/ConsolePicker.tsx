@@ -594,16 +594,44 @@ function Shell({
               {format('signedInAs', locale, { name: session?.staffName ?? '' })} ·{' '}
               {t('staffPickerNote', locale)}
             </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              data-testid="picker-sign-out"
-              onClick={() => {
-                void signOut().then(() => onSignedOut?.());
-              }}
-            >
-              {t('signOut', locale)}
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              {session?.twoFactor === undefined ? null : session.twoFactor.enabled ? (
+                <span className="text-body-sm text-ink-secondary" data-testid="picker-tfa-on">
+                  {t('tfaOnNote', locale)}
+                </span>
+              ) : (
+                <a
+                  href="/?view=2fa"
+                  className="text-body-sm text-brand-600 underline"
+                  data-testid="picker-tfa-setup"
+                >
+                  {t('tfaSetupTitle', locale)}
+                </a>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                data-testid="picker-sign-out"
+                onClick={() => {
+                  void signOut().then(() => onSignedOut?.());
+                }}
+              >
+                {t('signOut', locale)}
+              </Button>
+            </div>
+            {/* A recovery code was used for a lost phone: say when few are
+                left, while an administrator can still reset it in time. */}
+            {session?.twoFactor?.enabled === true && session.twoFactor.recoveryCodesLeft <= 3 ? (
+              <p
+                role="status"
+                className="w-full rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
+                data-testid="picker-tfa-low"
+              >
+                {format('tfaRecoveryLow', locale, {
+                  count: formatNumber(session.twoFactor.recoveryCodesLeft, numeralsFor(locale)),
+                })}
+              </p>
+            ) : null}
           </div>
         ) : (
           // The demo picker needs no password. Saying so is the honest state,

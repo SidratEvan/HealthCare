@@ -42,6 +42,27 @@ export const staffPasswordBody = z.strictObject({
   next: password,
 });
 
+// --- Staff: the second factor (pilot step 28, FR-SEC-10) ----------------------
+
+/** Six digits from an authenticator app. */
+export const totpCode = z
+  .string()
+  .trim()
+  .regex(/^\d{6}$/);
+
+/**
+ * `POST /staff/2fa`: the challenge `POST /staff/login` handed back, and a code
+ * from the app — or one of the recovery codes (`xxxx-xxxx-xxxx`), which the
+ * server tells apart by shape.
+ */
+export const staffTwoFactorBody = z.strictObject({
+  challenge: z.string().min(20).max(2_000),
+  code: z.string().trim().min(6).max(24),
+});
+
+/** `POST /staff/2fa/enable`: a code from the app, proving it holds the secret. */
+export const staffTwoFactorEnableBody = z.strictObject({ code: totpCode });
+
 // --- Patients: phone and a one-time code (pilot step 25, FR-PAT-01) ---------
 
 /** A phone as the patient types it; the server normalises it or refuses it (`DB-P6`). */
@@ -78,3 +99,5 @@ export const guestVerifyBody = z.strictObject({
 export type StaffLoginBody = z.infer<typeof staffLoginBody>;
 export type StaffRefreshBody = z.infer<typeof staffRefreshBody>;
 export type StaffPasswordBody = z.infer<typeof staffPasswordBody>;
+export type StaffTwoFactorBody = z.infer<typeof staffTwoFactorBody>;
+export type StaffTwoFactorEnableBody = z.infer<typeof staffTwoFactorEnableBody>;

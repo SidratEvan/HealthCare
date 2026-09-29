@@ -3,7 +3,13 @@
  * here: parse, call the service, send.
  */
 
-import { staffLoginBody, staffPasswordBody, staffRefreshBody } from '@platform/domain';
+import {
+  staffLoginBody,
+  staffPasswordBody,
+  staffRefreshBody,
+  staffTwoFactorBody,
+  staffTwoFactorEnableBody,
+} from '@platform/domain';
 
 import { authRequired, forbiddenScope } from '../errors/AppError.js';
 import * as staffAuth from '../services/staffAuth.service.js';
@@ -47,6 +53,26 @@ export async function me(req: Request, res: Response): Promise<void> {
 export async function changePassword(req: Request, res: Response): Promise<void> {
   const body = staffPasswordBody.parse(req.body);
   res.json({ ok: true, data: await staffAuth.changePassword(staffIdOf(req), body, client(req)) });
+}
+
+/** `POST /staff/2fa` — the challenge from the login and a code (pilot step 28). */
+export async function secondFactor(req: Request, res: Response): Promise<void> {
+  const body = staffTwoFactorBody.parse(req.body);
+  res.json({ ok: true, data: await staffAuth.verifySecondFactor(body, client(req)) });
+}
+
+/** `POST /staff/2fa/setup` — a new secret for the person's app, shown once. */
+export async function twoFactorSetup(req: Request, res: Response): Promise<void> {
+  res.json({ ok: true, data: await staffAuth.startTwoFactorSetup(staffIdOf(req)) });
+}
+
+/** `POST /staff/2fa/enable` — a code from the app turns it on. */
+export async function twoFactorEnable(req: Request, res: Response): Promise<void> {
+  const body = staffTwoFactorEnableBody.parse(req.body);
+  res.json({
+    ok: true,
+    data: await staffAuth.enableTwoFactor(staffIdOf(req), body.code, client(req)),
+  });
 }
 
 export async function chambers(req: Request, res: Response): Promise<void> {

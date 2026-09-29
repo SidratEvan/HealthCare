@@ -30,6 +30,12 @@ export interface StaffAccount {
   readonly hospitalCode: string | null;
   readonly hospitalNameBn: string | null;
   readonly hospitalNameEn: string | null;
+  /** The sealed secret (`config/totp.ts`), pending or confirmed. Never leaves the service. */
+  readonly totpSecret: string | null;
+  /** The second factor is confirmed: every sign-in asks for a code (0033). */
+  readonly totpEnabled: boolean;
+  readonly totpLastStep: number | null;
+  readonly recoveryCodesLeft: number;
 }
 
 interface AccountRow {
@@ -45,6 +51,10 @@ interface AccountRow {
   hospital_code: string | null;
   hospital_name_bn: string | null;
   hospital_name_en: string | null;
+  totp_secret: string | null;
+  totp_enabled_at: Date | null;
+  totp_last_step: string | null;
+  recovery_left: number;
 }
 
 function toAccount(row: AccountRow): StaffAccount {
@@ -61,13 +71,19 @@ function toAccount(row: AccountRow): StaffAccount {
     hospitalCode: row.hospital_code,
     hospitalNameBn: row.hospital_name_bn,
     hospitalNameEn: row.hospital_name_en,
+    totpSecret: row.totp_secret,
+    totpEnabled: row.totp_enabled_at !== null,
+    totpLastStep: row.totp_last_step === null ? null : Number(row.totp_last_step),
+    recoveryCodesLeft: row.recovery_left,
   };
 }
 
 const ACCOUNT_COLUMNS = sql`
   su.id, su.hospital_id, su.email, su.full_name, su.password_hash, su.is_active,
   su.must_change_password, su.failed_login_count, su.locked_until,
-  h.code AS hospital_code, h.name_bn AS hospital_name_bn, h.name_en AS hospital_name_en
+  h.code AS hospital_code, h.name_bn AS hospital_name_bn, h.name_en AS hospital_name_en,
+  su.totp_secret, su.totp_enabled_at, su.totp_last_step,
+  cardinality(su.totp_recovery_hashes)::int AS recovery_left
 `;
 
 /**
@@ -174,6 +190,99 @@ export async function upgradeHash(staffId: string, passwordHash: string): Promis
   await sql`UPDATE staff_users SET password_hash = ${passwordHash}, updated_at = now() WHERE id = ${staffId}`.execute(
     db,
   );
+}
+
+// --- The second factor (pilot step 28, FR-SEC-10, 0033) ------------------------
+
+/**
+ * Stores a new, unconfirmed secret — only while the second factor is off, so
+ * starting setup again cannot replace one that is in use.
+ */
+export async function setPendingTotp(staffId: string, sealedSecret: string): Promise<boolean> {
+  const result = await sql`
+    UPDATE staff_users
+       SET totp_secret = ${sealedSecret}, totp_last_step = NULL, totp_recovery_hashes = '{}',
+           updated_at = now()
+     WHERE id = ${staffId} AND totp_enabled_at IS NULL AND deleted_at IS NULL
+  `.execute(db);
+  return Number(result.numAffectedRows ?? 0) === 1;
+}
+
+/** Confirms the pending secret, with the step that proved it and the recovery codes' hashes. */
+export async function enableTotp(
+  trx: Tx,
+  input: {
+    readonly staffId: string;
+    readonly step: number;
+    readonly recoveryHashes: readonly string[];
+  },
+): Promise<boolean> {
+  const result = await sql`
+    UPDATE staff_users
+       SET totp_enabled_at = now(), totp_last_step = ${input.step},
+           totp_recovery_hashes = ${sql.val([...input.recoveryHashes])}::text[],
+           updated_at = now()
+     WHERE id = ${input.staffId} AND totp_enabled_at IS NULL AND totp_secret IS NOT NULL
+  `.execute(trx);
+  return Number(result.numAffectedRows ?? 0) === 1;
+}
+
+/**
+ * Records the step of an accepted code — only if it is later than the last
+ * one, so two sign-ins racing with the same code cannot both pass.
+ */
+export async function acceptTotpStep(staffId: string, step: number): Promise<boolean> {
+  const result = await sql`
+    UPDATE staff_users SET totp_last_step = ${step}, updated_at = now()
+     WHERE id = ${staffId} AND totp_enabled_at IS NOT NULL
+       AND (totp_last_step IS NULL OR totp_last_step < ${step})
+  `.execute(db);
+  return Number(result.numAffectedRows ?? 0) === 1;
+}
+
+/** Spends one recovery code: true only for the call that removed it. */
+export async function useRecoveryCode(staffId: string, hash: string): Promise<boolean> {
+  const result = await sql`
+    UPDATE staff_users
+       SET totp_recovery_hashes = array_remove(totp_recovery_hashes, ${hash}), updated_at = now()
+     WHERE id = ${staffId} AND totp_enabled_at IS NOT NULL AND ${hash} = ANY(totp_recovery_hashes)
+  `.execute(db);
+  return Number(result.numAffectedRows ?? 0) === 1;
+}
+
+/** Turns the second factor off: the next sign-in sets it up again if the account needs one. */
+export async function clearTwoFactor(staffId: string, executor: Executor = db): Promise<boolean> {
+  const result = await sql`
+    UPDATE staff_users
+       SET totp_secret = NULL, totp_enabled_at = NULL, totp_last_step = NULL,
+           totp_recovery_hashes = '{}', updated_at = now()
+     WHERE id = ${staffId} AND deleted_at IS NULL
+  `.execute(executor);
+  return Number(result.numAffectedRows ?? 0) === 1;
+}
+
+/**
+ * An audit row for a change to an account's own security (`DB-P7`): the
+ * second factor turned on, or reset from the server. `actorStaffId` is null
+ * for `pnpm staff:reset-2fa`, which platform staff run on the machine.
+ */
+export async function recordSecurityChange(
+  executor: Executor,
+  input: {
+    readonly actorStaffId: string | null;
+    readonly hospitalId: string | null;
+    readonly staffId: string;
+    readonly change: string;
+    readonly ip: string | null;
+    readonly userAgent: string | null;
+  },
+): Promise<void> {
+  await sql`
+    INSERT INTO audit_log (actor_staff_id, hospital_id, action, subject_table, subject_id, ip, user_agent, meta)
+    VALUES (${input.actorStaffId}, ${input.hospitalId}, 'SETTINGS_CHANGE', 'staff_users',
+            ${input.staffId}, ${input.ip}::inet, ${input.userAgent},
+            ${JSON.stringify({ change: input.change })}::jsonb)
+  `.execute(executor);
 }
 
 // --- Refresh sessions (sessions_auth) -----------------------------------------

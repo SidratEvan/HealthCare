@@ -94,6 +94,8 @@ export interface SetupSnapshot {
     readonly staffCode: string | null;
     readonly isActive: boolean;
     readonly mustChangePassword: boolean;
+    /** The second factor is on (pilot step 28, 0033). */
+    readonly twoFactorEnabled: boolean;
     readonly lastLoginAt: string | null;
     readonly roles: readonly string[];
   }[];
@@ -230,11 +232,12 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     staff_code: string | null;
     is_active: boolean;
     must_change_password: boolean;
+    two_factor_enabled: boolean;
     last_login_at: Date | null;
     roles: string[] | null;
   }>`
     SELECT su.id, su.full_name, su.email, su.staff_code, su.is_active, su.must_change_password,
-           su.last_login_at,
+           su.totp_enabled_at IS NOT NULL AS two_factor_enabled, su.last_login_at,
            array_agg(sr.role::text ORDER BY sr.role) FILTER (WHERE sr.id IS NOT NULL) AS roles
       FROM staff_users su
       LEFT JOIN staff_roles sr
@@ -323,6 +326,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       staffCode: s.staff_code,
       isActive: s.is_active,
       mustChangePassword: s.must_change_password,
+      twoFactorEnabled: s.two_factor_enabled,
       lastLoginAt: s.last_login_at?.toISOString() ?? null,
       roles: s.roles ?? [],
     })),

@@ -252,6 +252,17 @@ export const NATIONAL_ROLES = [
 ] as const satisfies readonly StaffRole[];
 export type NationalRole = (typeof NATIONAL_ROLES)[number];
 
+/**
+ * The roles that cannot sign in without a second factor (pilot step 28,
+ * `FR-SEC-10`): the accounts that create other accounts, reset their
+ * passwords, set fees and see a whole facility's figures. Any other account
+ * may turn it on for itself.
+ */
+export const TWO_FACTOR_REQUIRED_ROLES = [
+  'hospital_admin',
+  'platform_admin',
+] as const satisfies readonly StaffRole[];
+
 /** Locales. bn is the product, en is the toggle (FR-LOC-01, I18N-01). */
 export const LOCALES = ['bn', 'en'] as const;
 export type Locale = (typeof LOCALES)[number];

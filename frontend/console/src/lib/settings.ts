@@ -131,6 +131,8 @@ export interface SettingsStaff {
   readonly staffCode: string | null;
   readonly isActive: boolean;
   readonly mustChangePassword: boolean;
+  /** The second factor is on (pilot step 28, FR-SEC-10). */
+  readonly twoFactorEnabled: boolean;
   readonly lastLoginAt: string | null;
   readonly roles: readonly string[];
 }
@@ -252,6 +254,9 @@ export const settingsApi = {
     save((api, key) =>
       api.post<{ temporaryPassword: string }>(`/hospital/staff/${staffId}/reset-password`, {}, key),
     ),
+  /** A lost phone (pilot step 28): the second factor off, every session ended. */
+  resetTwoFactor: (staffId: string) =>
+    save((api, key) => api.post(`/hospital/staff/${staffId}/reset-2fa`, {}, key)),
   capabilities: (kinds: readonly string[]) =>
     save((api, key) => api.put('/hospital/capabilities', { kinds }, key)),
   goLive: () => save((api, key) => api.post('/hospital/go-live', {}, key)),

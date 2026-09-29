@@ -115,6 +115,12 @@ export async function postResetPassword(req: Request, res: Response): Promise<vo
   done(res, await settings.resetStaffPassword(actorOf(req), idOf(req)));
 }
 
+/** Pilot step 28 (FR-SEC-10): a lost phone, reset by an administrator. */
+export async function postResetTwoFactor(req: Request, res: Response): Promise<void> {
+  await settings.resetStaffTwoFactor(actorOf(req), idOf(req));
+  done(res, { reset: true });
+}
+
 export async function putCapabilities(req: Request, res: Response): Promise<void> {
   await settings.declareCapabilities(actorOf(req), declaredCapabilitiesBody.parse(req.body));
   done(res);

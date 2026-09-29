@@ -187,6 +187,15 @@ const schema = z.object({
    */
   STAFF_LOCKOUT_ATTEMPTS: positiveInt.max(50).default(5),
   STAFF_LOCKOUT_MINUTES: positiveInt.max(1_440).default(15),
+  /**
+   * The key the staff second factor's secrets and recovery codes are
+   * protected with (pilot step 28, FR-SEC-10, `config/totp.ts`). Required in
+   * production. Blank elsewhere derives one from `JWT_REFRESH_SECRET`, so a
+   * development machine and the pitch demo need no new variable — but a
+   * derived key dies with that secret, and every enrolled authenticator with
+   * it, which is why a real server must have its own.
+   */
+  TOTP_ENCRYPTION_KEY: z.union([z.literal(''), secret]).default(''),
 
   // --- Guest tracking links (FR-GST-05) -----------------------------------
   GUEST_LINK_SECRET: secret,
@@ -306,6 +315,11 @@ const PRODUCTION_REQUIREMENTS: readonly {
     key: 'SMS_SENDER_ID',
     because: 'the aggregator rejects messages without a registered sender',
     unless: (env) => env.SMS_PROVIDER === 'log',
+  },
+  {
+    key: 'TOTP_ENCRYPTION_KEY',
+    because:
+      "administrators' second factors would be encrypted with a key derived from JWT_REFRESH_SECRET, and rotating that secret would lock every one of them out (FR-SEC-10)",
   },
   // VAPID keys are not required either: no adapter sends Web Push yet
   // (`adapters/push.ts` has only the unconfigured one), so notifications go by
