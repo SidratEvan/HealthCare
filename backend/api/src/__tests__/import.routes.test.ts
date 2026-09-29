@@ -11,10 +11,11 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { time } from '@platform/domain';
 import { sql } from 'kysely';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import { time } from '@platform/domain';
 
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';

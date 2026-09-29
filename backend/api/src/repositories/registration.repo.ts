@@ -34,7 +34,10 @@ export interface CounterPatient {
  * A patient another hospital imported is that hospital's alone (`FR-IMP-10`),
  * so only this facility's own imported patients are ever shown here.
  */
-export async function patientsForPhone(phone: string, hospitalId: string): Promise<CounterPatient[]> {
+export async function patientsForPhone(
+  phone: string,
+  hospitalId: string,
+): Promise<CounterPatient[]> {
   const result = await sql<{
     id: string;
     full_name: string;
