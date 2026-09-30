@@ -413,7 +413,7 @@ export async function raiseRefundsForEndedSession(sessionId: string): Promise<{
   });
 }
 
-/** `GET /payments/:id` and the booking's own list. */
+/** `GET /bookings/:id/payments`. Who may ask is the controller's question. */
 export async function forBooking(bookingId: string): Promise<PaymentView[]> {
   return await paymentRepo.listForBooking(bookingId);
 }
