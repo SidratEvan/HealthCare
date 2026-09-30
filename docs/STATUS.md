@@ -93,6 +93,19 @@ every pilot step in §4.2 but 27, which waits for an SMS aggregator account.
 What remains is the owner's: the open decisions below, applying migrations to
 Supabase, and whether `mvp` goes to `main`.
 
+**Next, in the order suggested to the owner (2026-09-30), none started:**
+1. **A security review of the whole codebase** — free, before any real
+   patient data; the owner was told a paid penetration test should follow
+   before a pilot holds real data.
+2. **Server sizing for Marks** — measure the `deploy/` stack's CPU, memory and
+   disk on this machine, so Marks' IT can say whether they can host it.
+3. **Releasing `mvp` to `main`** — `main` is still the pitch release of
+   27 September (what Marks saw); Supabase already has 0027–0033, so a release
+   would not break the demo. The owner decides when.
+Step 27 waits for an SMS account; push notifications wait for a signed
+hospital (decision 84). Company registration (HealthWealthBD Limited, via
+BanglaBiz) is outside the repo and paused; see the owner's notes.
+
 Four unplanned branches after step 11:
 
 - `chore/deploy` — the `S-B-01` console picker, `render.yaml`, Vercel configs
