@@ -22,6 +22,7 @@ import {
   verifyDoctor,
   type NewFacility,
 } from './support/facility.js';
+import { passSecondFactor } from './support/twoFactor.js';
 
 const CONSOLE = 'http://localhost:3100';
 const API = 'http://localhost:4000/api/v1';
@@ -75,6 +76,8 @@ test.afterAll(async () => {
 
 async function openSettings(page: Page, facility: NewFacility): Promise<void> {
   await signIn(page, facility.adminEmail, PASSWORD);
+  // An administrator: the second factor, set up the first time (pilot step 28).
+  await passSecondFactor(page, facility.adminEmail);
   await page.getByTestId(`open-admin-${facility.hospitalId}`).click();
   await expect(page.getByTestId('admin-dashboard')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('admin-open-settings').click();

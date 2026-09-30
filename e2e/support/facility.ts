@@ -66,6 +66,30 @@ export async function newFacility(password: string): Promise<NewFacility> {
   });
 }
 
+/** One more account at the facility, with its own password already set (pilot step 28). */
+export async function addStaffMember(
+  hospitalId: string,
+  role: string,
+  password: string,
+): Promise<{ readonly id: string; readonly email: string }> {
+  const hash = await hashPassword(password);
+  const email = `${role}-${randomUUID().slice(0, 8)}@settings.demo.invalid`;
+  return await withClient(async (client) => {
+    const staff = await client.query<{ id: string }>(
+      `INSERT INTO staff_users (hospital_id, email, full_name, password_hash)
+       VALUES ($1, $2, 'কর্মী (ডেমো)', $3) RETURNING id`,
+      [hospitalId, email, hash],
+    );
+    const id = staff.rows[0]?.id;
+    if (id === undefined) throw new Error('staff_users returned no id');
+    await client.query(
+      `INSERT INTO staff_roles (staff_user_id, hospital_id, role) VALUES ($1, $2, $3::staff_role)`,
+      [id, hospitalId, role],
+    );
+    return { id, email };
+  });
+}
+
 /** `pnpm doctor:verify`: platform staff, after checking the register (`FR-SUP-02`). */
 export async function verifyDoctor(bmdcNumber: string): Promise<void> {
   await withClient(async (client) => {

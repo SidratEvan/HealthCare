@@ -13,6 +13,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { newFacility, removeFacility, type NewFacility } from './support/facility.js';
+import { passSecondFactor } from './support/twoFactor.js';
 
 const CONSOLE = 'http://localhost:3100';
 const PASSWORD = 'import-e2e-password';
@@ -43,6 +44,8 @@ async function openImport(page: Page, facility: NewFacility): Promise<void> {
   await page.getByTestId('login-email').fill(facility.adminEmail);
   await page.getByTestId('login-password').fill(PASSWORD);
   await page.getByTestId('login-submit').click();
+  // An administrator: the second factor, set up the first time (pilot step 28).
+  await passSecondFactor(page, facility.adminEmail);
   await page.getByTestId(`open-admin-${facility.hospitalId}`).click();
   await page.getByTestId('admin-open-settings').click();
   await page.getByTestId('settings-open-import').click();

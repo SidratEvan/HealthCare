@@ -279,7 +279,7 @@ Fill in `deploy/.env`:
 |---|---|
 | `APP_ORIGIN`, `CONSOLE_ORIGIN`, `API_ORIGIN` | The three names, as `https://…` |
 | `POSTGRES_PASSWORD` | A long random password (the command is in the file) |
-| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GUEST_LINK_SECRET` | Three **different** random values of 64 hex characters |
+| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GUEST_LINK_SECRET`, `TOTP_ENCRYPTION_KEY` | Four **different** random values of 64 hex characters. The last encrypts every administrator's two-step verification (pilot step 28): a restored database needs the same value, so keep it with the other secrets |
 | `PAYMENT_PROVIDER` | `off` — patients pay at the hospital. bKash and Nagad arrive with merchant accounts (`CLAUDE.md` §1.1) |
 | `SMS_PROVIDER` | `log` until an SMS aggregator is arranged (pilot step 27). Patients then follow their serial from the link on the booking screen |
 | `BACKUP_AT_UTC_HOUR`, `BACKUP_KEEP_DAYS` | When the nightly backup runs (20 UTC is 02:00 Dhaka) and how many days are kept |
@@ -305,7 +305,13 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
 ```
 
 It prints a temporary password once. Sign in at the console address; the
-first sign-in asks for the person's own password. From there, **সেটিংস খুলুন**
+first sign-in asks for the person's own password, and then — because this is
+an administrator — sets up **two-step verification** (`FR-SEC-10`): an
+authenticator app on their phone (Google Authenticator, Microsoft
+Authenticator or any like them) scans the QR code on the screen, and ten
+recovery codes are shown once, to write down or print. No console opens until
+that is done, and every sign-in after asks for the code from the app. From
+there, **সেটিংস খুলুন**
 on the dashboard sets up departments, doctors, schedules, wards and staff
 (`S-B-11`), and **পুরোনো তথ্য আমদানি করুন** brings in what the hospital's
 own system already holds (`S-B-14`). A doctor appears to patients once their
@@ -317,6 +323,22 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
 ```
 
 Then **লাইভ করুন** in settings publishes the facility.
+
+### A lost phone
+
+An administrator resets anyone else's two-step verification from `S-B-11`
+(**দুই ধাপের যাচাই রিসেট করুন** on the person's row); their next sign-in asks
+for none, or sets it up again if they are an administrator. With the phone
+lost, a recovery code signs in once. When the facility's only administrator
+has lost both, platform staff reset it on the server, after confirming who is
+asking:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
+  pnpm staff:reset-2fa --email admin@hospital.com.bd
+```
+
+Both are written to the audit log.
 
 ## S4. Updating
 
@@ -376,6 +398,8 @@ before Docker sees them. A Linux server needs nothing.
   codes are never printed, even here.
 - **A guest proves the phone with a code** before booking (`FR-GST-03`) — on by
   default whenever `DEMO_MODE` is off.
+- **Administrators sign in with two-step verification** (`FR-SEC-10`); any
+  other account may turn it on from the console picker.
 - **Errors go to the containers' logs** (`docker compose logs api`); nothing is
   sent to an error-reporting service.
 
@@ -387,3 +411,4 @@ before Docker sees them. A Linux server needs nothing.
 | The API never becomes healthy | `docker compose … logs migrate api` — usually a value missing from `deploy/.env`; the API lists every problem at once |
 | The console signs in but shows nothing | The facility has no departments or doctors yet: `S-B-11` |
 | A patient cannot find the hospital | Not live yet, or no doctor's BMDC number verified (`S3`) |
+| Every administrator's two-step code is refused after a restore or a move | `TOTP_ENCRYPTION_KEY` is not the value the database was written with (the API log says the secret does not open). Put the old value back; failing that, `pnpm staff:reset-2fa` each administrator (`S3`) |

@@ -131,7 +131,10 @@ A hospital-held patient is visible only to that hospital's staff under the usual
 | `staff_code` | text | printed on the ID card |
 | `full_name` | text | |
 | `password_hash` | text | scrypt via `node:crypto`, stored as `scrypt$<N>$<r>$<p>$<salt>$<hash>` (base64); null until a password is set. Changed from argon2id on 2026-09-28 (`CLAUDE.md` §4.1) |
-| `totp_secret` | text | nullable, encrypted |
+| `totp_secret` | text | nullable; AES-256-GCM sealed by the API (`v1.<iv>.<tag>.<body>`), written when setup starts and shown once to its holder. Never logged, never returned otherwise |
+| `totp_enabled_at` | timestamptz | when the second factor was confirmed with a code; null means sign-in asks for none. CHECK: set only with a secret. 0033 |
+| `totp_last_step` | bigint | the TOTP step last accepted; a code is accepted only for a later one, so it works once. 0033 |
+| `totp_recovery_hashes` | text[] | HMAC-SHA-256 of each unused recovery code; a used one is removed. Default empty. 0033 |
 | `is_active` | boolean | |
 | `last_login_at` | timestamptz | |
 | `must_change_password` | boolean | true after an administrator sets or resets it; the first login asks for a new one. 0027 |
@@ -629,6 +632,7 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- external_kind, external_refs (§2.1)
     0031_imports.sql               -- step 24: import_set, import_state, import_batches, import_rows (§2.6b)
     0032_patient_otp.sql           -- step 25: otp_challenges (§2.1)
+    0033_staff_2fa.sql             -- step 28: staff_users second-factor columns (§2.1)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)
