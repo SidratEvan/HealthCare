@@ -32,8 +32,8 @@ import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 
-import { createQueueFixture, type QueueFixture } from './support/queueFixture.js';
-import { bearer, guestToken, patientToken, staffToken } from './support/tokens.js';
+import { createQueueFixture, otherHospitalId, type QueueFixture } from './support/queueFixture.js';
+import { bearer, guestToken, nationalToken, patientToken, staffToken } from './support/tokens.js';
 
 import type { Express } from 'express';
 
@@ -339,6 +339,56 @@ describe('the auth matrix', () => {
       .set('Idempotency-Key', key)
       .send({ bookingId: theirs, method: 'bkash', idempotencyKey: key })
       .expect(403);
+  });
+
+  // Found by the security review of 2026-09-30: this read checked only that
+  // somebody was signed in, and every patient in a chamber holds every booking
+  // id there through the queue state.
+  describe("a booking's payments are read by its owner and its hospital only", () => {
+    async function read(bookingId: string, token: string): Promise<number> {
+      const response = await request(app)
+        .get(`${BASE}/bookings/${bookingId}/payments`)
+        .set('Authorization', bearer(token));
+      return response.status;
+    }
+
+    function booking(index: number): string {
+      const id = fixture.bookingIds[index];
+      if (id === undefined) throw new Error(`the fixture has no booking ${String(index)}`);
+      return id;
+    }
+
+    it('lets the link for the booking read it', async () => {
+      expect(await read(booking(0), await linkFor(booking(0)))).toBe(200);
+    });
+
+    it('lets staff at its hospital read it', async () => {
+      expect(await read(booking(0), await staffToken(['receptionist'], fixture.hospitalId))).toBe(
+        200,
+      );
+    });
+
+    it('refuses a link for another booking', async () => {
+      expect(await read(booking(1), await linkFor(booking(0)))).toBe(403);
+    });
+
+    it('refuses an account holder who does not own it', async () => {
+      expect(await read(booking(0), await patientToken())).toBe(403);
+    });
+
+    it('refuses staff at another hospital', async () => {
+      const elsewhere = await otherHospitalId(fixture.hospitalId);
+      expect(await read(booking(0), await staffToken(['hospital_admin'], elsewhere))).toBe(403);
+    });
+
+    it('refuses a national account', async () => {
+      expect(await read(booking(0), await nationalToken())).toBe(403);
+    });
+
+    it('refuses anybody not signed in', async () => {
+      const response = await request(app).get(`${BASE}/bookings/${booking(0)}/payments`);
+      expect(response.status).toBe(401);
+    });
   });
 
   it('refuses staff paying, because paying is the patient’s', async () => {

@@ -495,7 +495,7 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/payments/intent` | patient \| guest. Idempotent three ways (`FR-PAY-06`). **The amount is not in the body** — it is read from the booking's own `fee_poisha`, so a client cannot decide what it owes. Only a booking is chargeable in this version |
-| GET | `/bookings/:id/payments` | what was charged against one booking |
+| GET | `/bookings/:id/payments` | owner (a guest link only for its own booking) \| staff at the booking's hospital — the fence `GET /bookings/:id` has. What was charged against one booking |
 | POST | `/payments/:id/refund` | hospital_admin. **The amount is not in the body either** — the *reason* picks the rule and `refundFor` computes it (`FR-PAY-03`). `FR-PAY-07`'s automatic eligibility does not come through here: it is raised when a session ends |
 | GET | `/hospitals/:id/settlement?from=&to=` | hospital_admin (`FR-PAY-05`) |
 | POST | `/webhooks/bkash` \| `/nagad` | **no token**: a provider holds none of ours, so the signature over the raw body *is* the authentication. Answers 200 for a replay, because a 4xx makes a provider retry something already done |

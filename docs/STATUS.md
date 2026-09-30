@@ -7,9 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/guest-booking-scope` — **a guest token now opens only the
-booking it names**; the rest of the security review's third hole waits on
-decision 85 (below, *Security review*). Before that,
+Last updated: `fix/booking-payments-scope` — **a booking's payments are read
+by its owner and its hospital only**. Three of the security review's four
+holes are closed; the rest of the third waits on decision 85 (below,
+*Security review*). Before that, `fix/guest-booking-scope` — **a guest token
+now opens only the booking it names**. Before that,
 `fix/standby-phone-proof` — **a standby place and a bed request prove the
 phone first, as a booking does**. Before that,
 `fix/visit-doctor-only` — **only a doctor writes a visit, and a signed one is
@@ -265,7 +267,12 @@ its own `fix/*` branch with tests**, marked below as it lands.
    "single-booking scoped". **Waits on decision 85**, because `BACKEND.md`
    §7.1 documents the skip. The scoping half (admit a guest by the booking its
    token names; `requireBookingScope` on `/late`) needs no ruling.
-4. **`GET /bookings/:id/payments` checks only that somebody is signed in**
+4. **Fixed (`fix/booking-payments-scope`).** The read now has the fence
+   `GET /bookings/:id` has — `requireBookingScope` on the route,
+   `assertBookingScope` in the controller — and an auth matrix: the link and
+   the hospital's staff read it; another booking's link, another account,
+   another hospital's staff and a national account do not. Was:
+   **`GET /bookings/:id/payments` checks only that somebody is signed in**
    (9/10, Low). Any patient, guest link, national account or staff member of
    any hospital reads any booking's payments, and every patient in a chamber
    holds every booking id there through the queue state. No names, so low; the
