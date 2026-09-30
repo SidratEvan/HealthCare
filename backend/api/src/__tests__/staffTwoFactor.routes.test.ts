@@ -323,6 +323,28 @@ describe('an administrator cannot sign in without the second factor (FR-SEC-10)'
     expect((await post('/staff/2fa/setup', changed.body.data.access)).status).toBe(200);
   });
 
+  it('shows one secret however often the setup is asked for, until it is on', async () => {
+    // A screen that mounted twice, a reload, a second tab: two setups racing
+    // once gave two secrets, and the code typed from the one shown was checked
+    // against the other.
+    const admin = await makeStaff(['hospital_admin']);
+    const session = (await login(admin.email)).body.data;
+    const [first, second] = await Promise.all([
+      post('/staff/2fa/setup', session.access),
+      post('/staff/2fa/setup', session.access),
+    ]);
+    expect(first.status).toBe(200);
+    expect(second.body.data.secret).toBe(first.body.data.secret);
+    const third = await post('/staff/2fa/setup', session.access);
+    expect(third.body.data.secret).toBe(first.body.data.secret);
+
+    const secret = first.body.data.secret as string;
+    const enabled = await post('/staff/2fa/enable', session.access, {
+      code: codeAt(secret, stepAt(Date.now())),
+    });
+    expect(enabled.status).toBe(200);
+  });
+
   it('will not set up a second secret over one that is on', async () => {
     const admin = await makeStaff(['hospital_admin']);
     const { session } = await enrol(admin);

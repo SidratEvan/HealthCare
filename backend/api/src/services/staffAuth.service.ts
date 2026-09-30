@@ -346,16 +346,26 @@ export interface TwoFactorSetup {
 }
 
 /**
- * `POST /staff/2fa/setup`. A new secret each time, replacing any unconfirmed
- * one — the person may have closed the screen before scanning — but never
- * one that is on.
+ * `POST /staff/2fa/setup`. The same unconfirmed secret until it is turned on —
+ * so a reload, a second tab or a screen that asked twice all show one QR code,
+ * and the code typed is checked against the secret that was shown. Never one
+ * that is on.
  */
 export async function startTwoFactorSetup(staffId: string): Promise<TwoFactorSetup> {
   const account = await accountOf(staffId);
   if (account.totpEnabled) throw new AppError('AUTH_2FA_ALREADY_ON');
-  const secret = newTotpSecret();
-  if (!(await staffAuthRepo.setPendingTotp(account.id, sealSecret(secret)))) {
-    throw new AppError('AUTH_2FA_ALREADY_ON');
+
+  let sealed = await staffAuthRepo.pendingTotp(account.id, sealSecret(newTotpSecret()));
+  if (sealed === null) throw new AppError('AUTH_2FA_ALREADY_ON');
+  let secret: string;
+  try {
+    secret = openSecret(sealed);
+  } catch {
+    // Sealed under another key (TOTP_ENCRYPTION_KEY changed): nobody can use
+    // it, so it is replaced rather than offered.
+    sealed = await staffAuthRepo.pendingTotp(account.id, sealSecret(newTotpSecret()), true);
+    if (sealed === null) throw new AppError('AUTH_2FA_ALREADY_ON');
+    secret = openSecret(sealed);
   }
   return {
     secret,

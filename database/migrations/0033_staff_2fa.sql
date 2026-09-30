@@ -8,9 +8,10 @@
 --
 -- totp_secret (0003) — the shared secret, encrypted by the API before it is
 --   written (AES-256-GCM, TOTP_ENCRYPTION_KEY). It is written when the person
---   starts setting up and is shown to them once, as a QR code and as text, to
---   put into their app. Until totp_enabled_at is set it is only a proposal:
---   a sign-in does not ask for it.
+--   starts setting up and shown to them, as a QR code and as text, to put into
+--   their app — the same one each time they open the setup, until they confirm
+--   it. Until totp_enabled_at is set it is only a proposal: a sign-in does not
+--   ask for it.
 -- totp_enabled_at — when the person proved their app holds the secret by
 --   typing a code from it. From then on every sign-in asks for a code.
 -- totp_last_step — the 30-second step of the last code accepted. A code is
@@ -35,7 +36,7 @@ ALTER TABLE staff_users
     CHECK (totp_enabled_at IS NULL OR totp_secret IS NOT NULL);
 
 COMMENT ON COLUMN staff_users.totp_secret IS
-  'Encrypted by the application before storage (AES-256-GCM). Shown once, to its own holder, while setting up the second factor; never logged, never returned otherwise.';
+  'Encrypted by the application before storage (AES-256-GCM). Shown to its own holder only while setting up the second factor; never logged, never returned otherwise.';
 COMMENT ON COLUMN staff_users.totp_enabled_at IS
   'When the second factor was confirmed with a code; null means sign-in asks for none (0033).';
 COMMENT ON COLUMN staff_users.totp_last_step IS

@@ -131,7 +131,7 @@ A hospital-held patient is visible only to that hospital's staff under the usual
 | `staff_code` | text | printed on the ID card |
 | `full_name` | text | |
 | `password_hash` | text | scrypt via `node:crypto`, stored as `scrypt$<N>$<r>$<p>$<salt>$<hash>` (base64); null until a password is set. Changed from argon2id on 2026-09-28 (`CLAUDE.md` §4.1) |
-| `totp_secret` | text | nullable; AES-256-GCM sealed by the API (`v1.<iv>.<tag>.<body>`), written when setup starts and shown once to its holder. Never logged, never returned otherwise |
+| `totp_secret` | text | nullable; AES-256-GCM sealed by the API (`v1.<iv>.<tag>.<body>`), written when setup starts and shown to its holder only until it is confirmed. Never logged, never returned otherwise |
 | `totp_enabled_at` | timestamptz | when the second factor was confirmed with a code; null means sign-in asks for none. CHECK: set only with a secret. 0033 |
 | `totp_last_step` | bigint | the TOTP step last accepted; a code is accepted only for a later one, so it works once. 0033 |
 | `totp_recovery_hashes` | text[] | HMAC-SHA-256 of each unused recovery code; a used one is removed. Default empty. 0033 |

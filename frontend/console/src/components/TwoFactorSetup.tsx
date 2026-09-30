@@ -108,6 +108,8 @@ export function TwoFactorSetup({
     setPhase({ kind: 'failed', offline: outcome.reason === 'offline' });
   }, [onDone]);
 
+  // Asked once per mount; a development build mounts twice, and the server
+  // answers both with the same secret (`POST /staff/2fa/setup`).
   useEffect(() => {
     void start();
   }, [start]);

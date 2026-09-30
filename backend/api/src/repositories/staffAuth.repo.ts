@@ -195,17 +195,26 @@ export async function upgradeHash(staffId: string, passwordHash: string): Promis
 // --- The second factor (pilot step 28, FR-SEC-10, 0033) ------------------------
 
 /**
- * Stores a new, unconfirmed secret — only while the second factor is off, so
- * starting setup again cannot replace one that is in use.
+ * The unconfirmed secret: the one already stored, or `proposed` if there is
+ * none — in one statement, so two setups racing (a second tab, a screen that
+ * mounted twice) both get the same secret instead of each overwriting the
+ * other's. `replace` discards a stored one that no longer opens. Only while
+ * the second factor is off; null when it is on.
  */
-export async function setPendingTotp(staffId: string, sealedSecret: string): Promise<boolean> {
-  const result = await sql`
+export async function pendingTotp(
+  staffId: string,
+  proposed: string,
+  replace = false,
+): Promise<string | null> {
+  const result = await sql<{ totp_secret: string }>`
     UPDATE staff_users
-       SET totp_secret = ${sealedSecret}, totp_last_step = NULL, totp_recovery_hashes = '{}',
-           updated_at = now()
+       SET totp_secret = CASE WHEN ${replace} THEN ${proposed}
+                              ELSE COALESCE(totp_secret, ${proposed}) END,
+           totp_last_step = NULL, totp_recovery_hashes = '{}', updated_at = now()
      WHERE id = ${staffId} AND totp_enabled_at IS NULL AND deleted_at IS NULL
+     RETURNING totp_secret
   `.execute(db);
-  return Number(result.numAffectedRows ?? 0) === 1;
+  return result.rows[0]?.totp_secret ?? null;
 }
 
 /** Confirms the pending secret, with the step that proved it and the recovery codes' hashes. */
