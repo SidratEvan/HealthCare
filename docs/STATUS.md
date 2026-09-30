@@ -7,7 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/staff-2fa` — **an administrator signs in with a code
+Last updated: `chore/security-review` — **a security review of the whole
+codebase found four holes to close before real patient data**; no code
+changed (below, *Security review*). Before that, `feat/staff-2fa` — **an
+administrator signs in with a code
 from their phone** (pilot step 28; below, *Step 28*). Before that,
 `chore/self-host` — **the whole stack on a hospital's own
 server, from one command** (pilot step 26; below, *Step 26*). Before that,
@@ -93,10 +96,11 @@ every pilot step in §4.2 but 27, which waits for an SMS aggregator account.
 What remains is the owner's: the open decisions below, applying migrations to
 Supabase, and whether `mvp` goes to `main`.
 
-**Next, in the order suggested to the owner (2026-09-30), none started:**
-1. **A security review of the whole codebase** — free, before any real
-   patient data; the owner was told a paid penetration test should follow
-   before a pilot holds real data.
+**Next, in the order suggested to the owner (2026-09-30):**
+1. **A security review of the whole codebase** — **done 2026-09-30** (below,
+   *Security review*). Four holes, none fixed yet; one waits on a ruling
+   (decision 85). A paid penetration test should still follow before a pilot
+   holds real data, as the owner was told.
 2. **Server sizing for Marks** — measure the `deploy/` stack's CPU, memory and
    disk on this machine, so Marks' IT can say whether they can host it.
 3. **Releasing `mvp` to `main`** — `main` is still the pitch release of
@@ -187,6 +191,79 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Security review — four holes to close before real data (`chore/security-review`)
+
+The whole codebase, not only what changed since `main`: every route and its
+guard, the service behind every `:id`, the socket, tokens, passwords and
+two-step, SQL, file storage, webhooks, logging, both frontends, the self-host
+stack, RLS. The method is `/security-review`'s: a finding stays only if a
+second, independent read of the code scores it 8/10 or more. **Nothing is
+fixed on this branch** — each fix is its own `fix/*` branch with tests.
+
+**Found, in the order to fix them:**
+
+1. **Any staff role can write — and rewrite — a visit record** (9/10,
+   Medium–High). `POST /visits` checks only that the caller is staff at the
+   booking's hospital (`clinical.routes.ts:54`, `clinical.service.ts:140`), so
+   a receptionist, pharmacy, lab or ward account can sign a diagnosis that the
+   wallet shows under the session's doctor. Worse, a later `sign: false` save
+   overwrites a *signed* record and keeps its signing time
+   (`clinical.repo.ts:405`), so any doctor at the hospital can rewrite a
+   colleague's signed visit, unaudited. `BACKEND.md` §7.6 says doctor. Fix:
+   `requireRole('doctor')` and the same check in `saveVisit`; update only
+   `WHERE signed_at IS NULL`; tests for every non-doctor role.
+2. **A standby place can be taken over with a name and a phone number**
+   (8/10, Medium, High at worst). `POST /sessions/:id/standby` asks for no code,
+   and joining again with the same phone and name returns the existing place
+   with a fresh token (`standby.service.ts:118`, `:158`). That token leaves,
+   declines or accepts; after seating, the first status read mints the
+   booking's tracking link, which opens that visit's signed record and lab
+   reports. `FR-GST-03` already requires the code here (money and an SMS
+   thread follow). Fix: `assertGuestPhoneProven` on the join, as booking has;
+   never hand a token for an existing row to an unproven caller. Bed requests
+   repeat the pattern read-only (`bed.service.ts:485`; 6/10, not counted) and
+   take the same fix.
+3. **A returning guest's number is trusted without a code** (8/10,
+   Medium–High). `POST /guest/start` gives a guest token to anybody who types
+   a number that has passed a code once (`patientAuth.service.ts:311`). With
+   it: book as that person; learn which chambers they are booked into, because
+   the socket admits a guest by identity rather than by booking
+   (`booking.repo.ts:466`, contrary to the comment on
+   `principalHoldsBooking`) and session ids are public; mark their bookings
+   late (`POST /bookings/:id/late` has no `requireBookingScope`, and
+   `ownsBooking` admits by `guestId`, `queue.controller.ts:612`). A forwarded
+   tracking link has the same identity-wide reach, against `FR-GST-05`'s
+   "single-booking scoped". **Waits on decision 85**, because `BACKEND.md`
+   §7.1 documents the skip. The scoping half (admit a guest by the booking its
+   token names; `requireBookingScope` on `/late`) needs no ruling.
+4. **`GET /bookings/:id/payments` checks only that somebody is signed in**
+   (9/10, Low). Any patient, guest link, national account or staff member of
+   any hospital reads any booking's payments, and every patient in a chamber
+   holds every booking id there through the queue state. No names, so low; the
+   route's comment promises a guard that is not there. Fix:
+   `assertBookingScope` in the controller, or delete the route — no client
+   calls it.
+
+**Below the bar, noted:** the socket handshake does not apply the `mcp` and
+`tfa: 'setup'` limits `attachPrincipal` does (`realtime/auth.ts`) — no gain
+today, since such a token can already set its own password or authenticator;
+the sync batch lets a doctor or administrator push reception-only event types
+at their own hospital; two guest tokens with no booking count as one actor for
+undo (`queue.controller.ts:551`).
+
+**Checked and sound:** staff sign-in (scrypt, lockout shared with two-step,
+refresh rotation and reuse detection, each code spent once); the roles an
+administrator can grant (facility roles, own facility); hospital scope on
+every bed, ER case, referral, lab order, import and settings write; consent
+(the patient offers, a doctor redeems); tracking links (one booking, reports
+scoped to it); file serving (signed, key built by the server, path confined,
+PDF and images only); webhooks (fail closed); SQL (parameterised
+throughout); the CSV export (formulas neutralised); logs (no bodies,
+credentials redacted, sign-in codes withheld); CORS; the demo picker (refuses
+with `DEMO_MODE` off); RLS on all 55 tables; the self-host stack (database not
+published, secrets enforced). The counter's phone lookup reads platform-wide
+by design (`BACKEND.md` §7.3) and is audited.
 
 ### Step 28 — an administrator signs in with a code from their phone (`feat/staff-2fa`)
 
@@ -2854,6 +2931,16 @@ Raised while building the national layer (step 20):
    the log provider (step 27 waits for an aggregator account). The pilot runs
    on the lowest cost there is: free tiers for the demo, and a hospital's own
    running costs carried by the hospital (terms live outside the repo).
+85. **Awaiting ruling: does a returning guest prove the phone again?** The
+   documents disagree. `BACKEND.md` §7.1 says `POST /guest/start` lets "a
+   number that has proved itself skip the code (`FR-GST-12`)", and the code
+   does that. `APP_FLOW.md` A1 says the guest token is "bound to phone +
+   device", and `FR-GST-12` itself asks only that details are not retyped.
+   The security review (above) found the skip hands anybody who types the
+   number a token for it. Proposed: `FR-GST-12` is met by pre-filling the
+   details; the code is skipped only when the returning device presents what
+   `/guest/verify` gave it, checked on the server; `BACKEND.md` §7.1's row is
+   edited to say so.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
