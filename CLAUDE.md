@@ -78,12 +78,21 @@ Rules:
 ```
 main          # protected. Only release merges. Always deployable.
 mvp           # the integration branch. ALL work branches off this and merges back here.
+demo          # the demo-data version, always runnable, for the owner to pull and show people.
 feat/*        # one step of work. Short-lived. Deleted after merge.
 fix/*         # bug fixes off mvp
 chore/*       # tooling, config, docs
 ```
 
-**Never commit directly to `main` or `mvp`.** Never work on more than one `feat/*` branch at a time.
+**Never commit directly to `main`, `mvp` or `demo`.** Never work on more than one `feat/*` branch at a time.
+
+**`demo`** (added 2026-09-30, the owner's standing request): a branch the owner
+can pull at any time and run on seeded demo data (`DEMO_MODE=true`,
+`pnpm db:reset`) to show somebody. It only ever moves forward to a commit of
+`mvp` that is green — `pnpm verify` and the e2e specs, the two-device canary
+included — by a fast-forward (`git branch -f demo <that commit>`), never by
+work of its own. Move it after each merge into `mvp` that is worth showing,
+and say so in the report. Pushing it follows the rule below like any branch.
 
 **Never push. Ever, without my explicit permission.**
 - No `git push`, no `git push -u`, no `--force`, no pushing a branch "just to back it up".

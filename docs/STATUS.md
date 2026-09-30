@@ -3024,6 +3024,21 @@ credential.
 
 ## Running the pitch demo
 
+**From the `demo` branch** (CLAUDE.md §3.1): the demo-data version, kept at
+the last green commit of `mvp`, for pulling onto any machine to show
+somebody. It stands at the security fixes of 2026-09-30.
+
+```bash
+git fetch origin && git checkout demo && git pull
+pnpm install
+```
+
+On a machine that has run it before, that is all. On a new one, `.env` first:
+`cp .env.example .env` (`DEMO_MODE=true` is already its default), then give
+`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` and `GUEST_LINK_SECRET` each their
+own value from `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+— the API will not start without them. Then the steps below.
+
 Two devices, or two browser windows, which is what `two-device-queue.spec.ts`
 automates.
 
