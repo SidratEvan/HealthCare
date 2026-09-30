@@ -7,9 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/security-review` — **a security review of the whole
-codebase found four holes to close before real patient data**; no code
-changed (below, *Security review*). Before that, `feat/staff-2fa` — **an
+Last updated: `fix/visit-doctor-only` — **the first of the security review's
+four holes closed: only a doctor writes a visit, and a signed one is final**
+(below, *Security review*). Before that, `chore/security-review` — **a
+security review of the whole codebase found four holes to close before real
+patient data**. Before that, `feat/staff-2fa` — **an
 administrator signs in with a code
 from their phone** (pilot step 28; below, *Step 28*). Before that,
 `chore/self-host` — **the whole stack on a hospital's own
@@ -98,8 +100,8 @@ Supabase, and whether `mvp` goes to `main`.
 
 **Next, in the order suggested to the owner (2026-09-30):**
 1. **A security review of the whole codebase** — **done 2026-09-30** (below,
-   *Security review*). Four holes, none fixed yet; one waits on a ruling
-   (decision 85). A paid penetration test should still follow before a pilot
+   *Security review*). Four holes, being fixed one branch each; one waits on
+   a ruling (decision 85). A paid penetration test should still follow before a pilot
    holds real data, as the owner was told.
 2. **Server sizing for Marks** — measure the `deploy/` stack's CPU, memory and
    disk on this machine, so Marks' IT can say whether they can host it.
@@ -192,19 +194,23 @@ it looks like an ordering interaction on the shared API database.
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
 
-### Security review — four holes to close before real data (`chore/security-review`)
+### Security review — four holes to close before real data (`chore/security-review`, then `fix/*`)
 
 The whole codebase, not only what changed since `main`: every route and its
 guard, the service behind every `:id`, the socket, tokens, passwords and
 two-step, SQL, file storage, webhooks, logging, both frontends, the self-host
 stack, RLS. The method is `/security-review`'s: a finding stays only if a
-second, independent read of the code scores it 8/10 or more. **Nothing is
-fixed on this branch** — each fix is its own `fix/*` branch with tests.
+second, independent read of the code scores it 8/10 or more. **Each fix is
+its own `fix/*` branch with tests**, marked below as it lands.
 
 **Found, in the order to fix them:**
 
-1. **Any staff role can write — and rewrite — a visit record** (9/10,
-   Medium–High). `POST /visits` checks only that the caller is staff at the
+1. **Fixed (`fix/visit-doctor-only`).** `POST /visits` now needs the doctor
+   role (route and service), a signed visit is final (`VISIT_ALREADY_SIGNED`;
+   the conflict update runs only `WHERE signed_at IS NULL`), and a sign sent
+   again replays only the queue step. Tests for every other role, for an edit
+   after signing, and for a sign whose queue step was lost. Was: **any staff
+   role can write — and rewrite — a visit record** (9/10, Medium–High). `POST /visits` checks only that the caller is staff at the
    booking's hospital (`clinical.routes.ts:54`, `clinical.service.ts:140`), so
    a receptionist, pharmacy, lab or ward account can sign a diagnosis that the
    wallet shows under the session's doctor. Worse, a later `sign: false` save
