@@ -444,6 +444,24 @@ export async function resetStaffPassword(
   return { temporaryPassword: password };
 }
 
+/**
+ * Turns a staff member's second factor off (pilot step 28, FR-SEC-10): a lost
+ * or replaced phone. Their next sign-in asks for none — or, for an
+ * administrator, sets one up again before anything opens. Every session they
+ * hold ends. Not one's own: that is somebody else's check on the person
+ * holding the phone, or `pnpm staff:reset-2fa` when nobody else can.
+ */
+export async function resetStaffTwoFactor(actor: Actor, staffId: string): Promise<void> {
+  if (staffId === actor.staffId) throw notAllowed('own_two_factor');
+  if ((await repo.staffOf(actor.hospitalId, staffId)) === null) throw notFound('staff');
+
+  await change(actor, { table: 'staff_users', change: 'two_factor_reset' }, async (trx) => {
+    await staffAuthRepo.clearTwoFactor(staffId, trx);
+    return { result: undefined, subjectId: staffId };
+  });
+  await staffAuthRepo.revokeOtherSessions(staffId, null);
+}
+
 // --- capabilities (FR-EMG-05) ----------------------------------------------------
 
 export async function declareCapabilities(

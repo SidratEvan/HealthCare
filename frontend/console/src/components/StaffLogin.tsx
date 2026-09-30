@@ -7,6 +7,10 @@
  * (`AUTH_HOSPITAL_REQUIRED`). A wrong email and a wrong password get one
  * message, because saying which would tell a stranger who has an account.
  *
+ * A right password for an account with a second factor on is answered with a
+ * challenge, and the screen becomes `S-B-00b` (`TwoFactorCode`, pilot step 28)
+ * in place — the email stays filled if the person goes back.
+ *
  * The four states (`GR-03`): the form is the empty state; submitting is the
  * loading state (the button says so and the fields stay filled); a refusal is
  * the error state, beside the field it concerns; offline says so before
@@ -21,7 +25,8 @@ import { format, formatClock, numeralsFor, t } from '@platform/i18n';
 import { Button, Input, useLocale } from '@platform/ui';
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
-import { adoptStaffSession, signIn, type SignInOutcome } from '@/lib/staffAuth';
+import { TwoFactorCode } from '@/components/TwoFactorCode';
+import { adoptStaffSession, signIn, type Challenge, type SignInOutcome } from '@/lib/staffAuth';
 
 type Failure = Extract<SignInOutcome, { ok: false }>;
 
@@ -44,6 +49,7 @@ export function StaffLogin({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [online, setOnline] = useState(true);
+  const [challenge, setChallenge] = useState<Challenge | null>(null);
 
   useEffect(() => {
     const update = (): void => {
@@ -66,6 +72,11 @@ export function StaffLogin({
     const outcome = await signIn({ email, password, ...(askCode ? { hospitalCode } : {}) });
     setBusy(false);
     if (outcome.ok) {
+      if ('challenge' in outcome) {
+        setPassword('');
+        setChallenge(outcome.challenge);
+        return;
+      }
       adoptStaffSession(outcome.session);
       onSignedIn();
       return;
@@ -105,7 +116,22 @@ export function StaffLogin({
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-[520px] flex-col gap-6 p-8" data-testid="staff-login">
+      {challenge === null ? null : (
+        <main className="mx-auto flex max-w-[520px] flex-col gap-6 p-8">
+          <TwoFactorCode
+            challenge={challenge}
+            onSignedIn={onSignedIn}
+            onBack={() => {
+              setChallenge(null);
+            }}
+          />
+        </main>
+      )}
+
+      <main
+        className={`mx-auto max-w-[520px] flex-col gap-6 p-8 ${challenge === null ? 'flex' : 'hidden'}`}
+        data-testid="staff-login"
+      >
         <p className="text-body-md text-ink-secondary">{t('loginIntro', locale)}</p>
 
         {ended ? (

@@ -40,6 +40,18 @@ export const ERROR_CODES = {
    * their own, the token opens nothing but `POST /staff/password`.
    */
   AUTH_PASSWORD_CHANGE_REQUIRED: { status: 403, message: 'Set a new password first.' },
+  /**
+   * The second factor (pilot step 28, FR-SEC-10). A code that is wrong, too
+   * old, or already used; it counts towards the same lock as a wrong password.
+   */
+  AUTH_2FA_INVALID: { status: 401, message: 'The code is wrong or has already been used.' },
+  /**
+   * An administrator has no second factor yet. Until one is set up, the token
+   * opens nothing but `POST /staff/2fa/setup` and `/staff/2fa/enable`.
+   */
+  AUTH_2FA_SETUP_REQUIRED: { status: 403, message: 'Set up the second factor first.' },
+  /** Setting up a second factor that is already on; an administrator resets it first. */
+  AUTH_2FA_ALREADY_ON: { status: 409, message: 'The second factor is already on.' },
 
   // --- Hospital settings (pilot step 22, FR-SUP-01, FR-ADM-11) -------------
   //

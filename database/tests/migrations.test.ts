@@ -113,6 +113,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0031',
       // Pilot step 25: a patient's one-time sign-in codes.
       '0032',
+      // Pilot step 28: a second factor for staff.
+      '0033',
     ]);
   });
 

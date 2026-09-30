@@ -152,6 +152,13 @@ hospitalSettingsRoutes.post(
   validate({ ...byId, body: emptyBody }),
   settings.postResetPassword,
 );
+hospitalSettingsRoutes.post(
+  '/hospital/staff/:id/reset-2fa',
+  ...admin,
+  write,
+  validate({ ...byId, body: emptyBody }),
+  settings.postResetTwoFactor,
+);
 
 hospitalSettingsRoutes.put(
   '/hospital/capabilities',

@@ -97,7 +97,14 @@ export interface StaffUsersTable {
   full_name: string;
   /** argon2id. Never selected into anything that leaves the repository. */
   password_hash: string;
+  /** AES-256-GCM ciphertext (`config/totp.ts`). Never selected into anything that leaves the repository. */
   totp_secret: string | null;
+  /** 0033: when the second factor was confirmed; null means none is asked for. */
+  totp_enabled_at: Timestamp | null;
+  /** 0033: the TOTP step last accepted. */
+  totp_last_step: string | null;
+  /** 0033: keyed hashes of the unused recovery codes. */
+  totp_recovery_hashes: Generated<string[]>;
   is_active: Generated<boolean>;
   last_login_at: Timestamp | null;
   created_at: Generated<Timestamp>;

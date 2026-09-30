@@ -607,6 +607,7 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-SEC-07` Data residency in Bangladesh where required; cloud region choice is a deployment decision recorded in `BACKEND.md`. **Decided 2026-09-28:** a deployment holding real patients runs on a server in Bangladesh — the hospital's own or a Bangladeshi data centre. The demo stays where it is, because it holds no real data (`FR-SEC-08`).
 - `FR-SEC-08` Demo and prototype environments contain no real patient data, ever.
 - `FR-SEC-09` Deletion and export requests are supported per profile.
+- `FR-SEC-10` Staff two-step verification: a code from an authenticator app after the password. Required for administrators (hospital and platform); any other staff account may turn it on. Ten single-use recovery codes for a lost phone; otherwise another administrator resets it, audited. Added 2026-09-29 to record pilot step 28 (`CLAUDE.md` §4.2).
 
 ---
 

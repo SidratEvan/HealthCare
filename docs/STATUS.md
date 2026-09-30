@@ -7,7 +7,9 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/self-host` — **the whole stack on a hospital's own
+Last updated: `feat/staff-2fa` — **an administrator signs in with a code
+from their phone** (pilot step 28; below, *Step 28*). Before that,
+`chore/self-host` — **the whole stack on a hospital's own
 server, from one command** (pilot step 26; below, *Step 26*). Before that,
 `feat/patient-otp` — **a patient proves a phone and finds what it holds**
 (pilot step 25; below, *Step 25*). Before that, `feat/data-import`
@@ -84,10 +86,11 @@ Before that, `feat/standby-self-serve` (decision 62) and `feat/check-in`
 | **25** | **`feat/patient-otp`** | **merged** — migration 0032, `/auth/*`, `/guest/start`, `/guest/verify`, `/guest/claim`, the Profile tab, `patient-account.spec.ts` |
 | **26** | **`chore/self-host`** | **merged** — `Dockerfile`, `deploy/` (compose, Caddy, backup, restore), local file storage, `PAYMENT_PROVIDER=off`, `GET /config`, `DEPLOY.md` Part S, `self-host.spec.ts` |
 | 27 | `feat/sms-live` | **waits for an SMS aggregator account** (`CLAUDE.md` §4.2) |
-| 28 | `feat/staff-2fa` | next |
+| **28** | **`feat/staff-2fa`** | **merged** — migration 0033, `config/totp.ts`, `/staff/2fa`, `/staff/2fa/setup`, `/staff/2fa/enable`, `S-B-00b`, `S-B-00d`, the reset on `S-B-11`, `pnpm staff:reset-2fa`, `staff-2fa.spec.ts` |
 
-**Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design). What
-remains is the owner's: the open decisions below, applying migrations to
+**Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design), and
+every pilot step in §4.2 but 27, which waits for an SMS aggregator account.
+What remains is the owner's: the open decisions below, applying migrations to
 Supabase, and whether `mvp` goes to `main`.
 
 Four unplanned branches after step 11:
@@ -142,16 +145,16 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 4476, in about three minutes.
-`pnpm test:e2e` reports 134, in Chromium, against the real API and the seeded
+`pnpm test` reports 4577, in about three minutes.
+`pnpm test:e2e` reports 136, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 5 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`, 1 in `data-import.spec.ts`, 1 in `patient-account.spec.ts`, 2 in `self-host.spec.ts`. The last full
-run took twenty-three minutes.
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`, 1 in `data-import.spec.ts`, 1 in `patient-account.spec.ts`, 2 in `self-host.spec.ts`, 2 in `staff-2fa.spec.ts`. The last full
+run took eighteen and a half minutes (twenty-nine before `fix/e2e-context-leaks`).
 
 **The two `demo.routes.test.ts` failures were Fridays, not early mornings —
 fixed in `fix/console-picker-friday`.** They expect the ER console and the ward
@@ -171,6 +174,46 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Step 28 — an administrator signs in with a code from their phone (`feat/staff-2fa`)
+
+**What a real deployment now does.** An administrator (`hospital_admin`,
+`platform_admin` — `TWO_FACTOR_REQUIRED_ROLES`) signs in with the password
+once more and meets `S-B-00d` before any console: an authenticator app scans
+the QR code (or the key is typed), the code it shows turns two-step on, and ten
+recovery codes are shown once; the console opens only after "I have kept
+these". Until then the token carries `tfa: 'setup'` and the API refuses it
+everywhere but the setup (`AUTH_2FA_SETUP_REQUIRED`) — the server's rule, as
+the password change's is. From then on a right password gets a five-minute
+challenge and no tokens, and `S-B-00b` asks for the code (or a recovery code,
+same field). Anybody else may turn it on from the picker (`/?view=2fa`), and
+the picker warns at three recovery codes or fewer. A lost phone: a recovery
+code once, an administrator's **দুই ধাপের যাচাই রিসেট করুন** on `S-B-11`, or
+`pnpm staff:reset-2fa` on the server for a facility's only administrator —
+all audited, all ending every session of the account.
+
+**How it holds.** TOTP from `node:crypto` (no dependency), RFC 6238's
+reference codes in `totp.test.ts`. The secret is sealed with AES-256-GCM under
+`TOTP_ENCRYPTION_KEY`, so a database backup alone cannot mint codes; recovery
+codes are HMACs under the same key. A code works once (`totp_last_step`); wrong
+codes count towards the password's lock, and a right password does not clear
+the count — otherwise a known password would buy unlimited guesses at the
+code, five at a time. The only new dependency is `qrcode` in the console,
+approved 2026-09-29; the QR is drawn in the browser, so the secret goes to no
+image service.
+
+**Before this reaches the deployed demo:** apply 0033 to Supabase
+(`ALLOW_REMOTE_DB=1 pnpm db:migrate`) before the API deploys — every staff
+sign-in reads the new columns. The demo needs no new variable: outside
+production the key is derived from `JWT_REFRESH_SECRET`. A real server must set
+`TOTP_ENCRYPTION_KEY` (production refuses to start without it), and a restore
+needs the same value (`DEPLOY.md` S2, S7).
+
+**On the demo, worth knowing.** The picker is unchanged. But signing in *with
+a password* as a seeded administrator now sets up two-step first, and whoever
+does it on the shared demo holds that account until the next `db:reset` or
+`pnpm staff:reset-2fa --email …`. Receptionists and the other roles are not
+asked.
 
 ### Step 26 — the whole stack on a hospital's own server (`chore/self-host`)
 
@@ -1934,6 +1977,25 @@ afternoon.
 
 ### Things learned the hard way, so they are not relearned
 
+- **A second device a spec opens lives until the whole run ends**
+  (`fix/e2e-context-leaks`, 2026-09-30). `browser.newContext()` belongs to the
+  worker's browser, not the test, and there is one worker. No-show, referral,
+  emergency, check-in and language-switch never closed theirs, so their pages
+  kept polling: by the last twenty specs of a full run the console took
+  seventeen seconds to open, the API went six seconds without answering, and
+  whichever spec came next failed — the canary's "tap after tap" in one run,
+  standby and the wallet in the next, each passing alone. Every multi-device
+  spec now closes what it opened after each test (`e2e/support/contexts.ts`);
+  the canary's file is unchanged, since it already closes its own. A late
+  spec failing only in a full run is load before it is logic.
+
+- **A development build mounts every screen twice** (React strict mode), so an
+  effect that asks the server to *create* something runs twice. `S-B-00d`'s
+  setup did, and two secrets raced: the screen showed one, the database kept
+  the other, and the right code was refused. The server now answers a repeated
+  setup with the same unconfirmed secret. Anything a screen creates on mount
+  must be idempotent on the server, not guarded on the client.
+
 - **The E2E database is the one database no suite migrates.** The unit, API
   and schema suites build theirs from nothing, so a step's migration is always
   there for them. `healthcare_dev`, which Playwright drives, was only ever
@@ -2742,6 +2804,29 @@ Raised while building the national layer (step 20):
 78. **Set D (old records) is not in the first import release**
    (`FR-IMP-12`) — it is the most sensitive set and the hospital's legal
    adviser should agree it first.
+79. **Two-step had no requirement text, so `FR-SEC-10` was added.** `CLAUDE.md`
+   §4.2 names step 28 and "the 2FA half of `FR-SUP-01`", but neither
+   `FR-SUP-01` nor `FR-SEC-06` mentions a second factor. Implemented as: a new
+   `FR-SEC-10` in `PRD.md` §SEC recording step 28 as built. Say if it should
+   be worded differently or folded into `FR-SEC-06`.
+80. **Who must have it.** "Required for administrators" is read as
+   `hospital_admin` and `platform_admin`; `gov_viewer` (read-only aggregates)
+   is not required, and every other role may opt in. Implemented as:
+   `TWO_FACTOR_REQUIRED_ROLES` in `shared/domain`.
+81. **Recovery codes are not regenerated by the person.** Ten, each once;
+   the picker warns at three. Running out means an administrator's reset and
+   setting it up again, which issues ten new ones. A "new codes" button is a
+   small addition if wanted.
+82. **An administrator cannot reset their own two-step on `S-B-11`**
+   (`own_two_factor`), for the same reason as their own password: another
+   person's check. A facility's only administrator is reset from the server.
+83. **Found, not fixed: `BTN-B02-NEXT` waits for the server between its two
+   halves.** `ReceptionConsole.callNext` awaits `queue.act('PATIENT_DONE')`,
+   and `act` awaits the network flush, before it queues `PATIENT_CALLED` — so
+   on a slow server the "called" half of the tap appears only after a round
+   trip, which is not the instant answer `NFR-02` asks for. Seen while
+   diagnosing the canary on 2026-09-30; offline it is fine (the flush returns
+   at once). A small `fix/` branch: queue both events, then flush once.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository

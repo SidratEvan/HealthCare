@@ -20,6 +20,7 @@
 | Background jobs | **pg-boss** (Postgres-backed) | No Redis dependency at launch; Upstash Redis + BullMQ only if load demands. **Not installed yet:** the pilot's first timed job (`sessions.materialise`, step 22) runs on a plain interval inside the API process and is idempotent, so a missed or doubled run is harmless (§8) |
 | Validation | **Zod**, schemas shared with the client | One contract, both sides |
 | Auth | JWT access (15 min) + refresh (30 days); staff passwords hashed with **scrypt** from `node:crypto` (N = 2^17, r = 8, p = 1, 16-byte salt, 64-byte key) | Changed from Argon2id on 2026-09-28: a real deployment runs on a Bangladeshi server rather than behind Supabase Auth (`CLAUDE.md` §4.1), and scrypt needs no native dependency. The parameters are OWASP's minimum for scrypt |
+| Staff second factor | **TOTP** (RFC 6238) from `node:crypto`: HMAC-SHA-1, 6 digits, 30-second step, one step either side accepted, each step accepted once. The secret (160 bits) is stored sealed with **AES-256-GCM** under a key derived (HKDF-SHA-256) from `TOTP_ENCRYPTION_KEY`; ten single-use recovery codes (12 characters, `xxxx-xxxx-xxxx`) kept as HMAC-SHA-256 under the same key. The QR code is drawn in the console with `qrcode` | Pilot step 28 (`FR-SEC-10`). Every authenticator app reads this by default; nothing native is added. A database backup alone cannot mint codes |
 | Files | Supabase Storage (reports, prescriptions, uploads) | Signed URLs only. A self-hosted deployment uses `STORAGE_PROVIDER=local` — a disk volume on the same server (§12b) |
 | SMS | Aggregator behind an adapter interface | Provider is swappable |
 | Push | Web Push (VAPID) for the PWA | |
@@ -343,12 +344,14 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/auth/refresh` | refresh | `{refresh}` → the same as verify | rotates; a reused token ends every session of the account; a refresh from another device than the one that signed in is refused (`FR-SEC-05`) |
 | POST | `/auth/logout` | refresh | `{refresh}` | revokes that session |
 | GET | `/me/profiles` | user | → `{profiles}` | the account's own patients, with booking and record counts. Records are `GET /patients/:id/records` |
-| POST | `/staff/login` | none | `{hospitalCode?, email, password}` → `{access, refresh, roles, hospital, staff, mustChangePassword, requires2fa}` | `hospitalCode` only when the email exists at more than one facility. Five consecutive failures lock the account for fifteen minutes (`AUTH_LOCKED`). The same answer for an unknown email and a wrong password (`AUTH_INVALID_CREDENTIALS`) |
+| POST | `/staff/login` | none | `{hospitalCode?, email, password}` → `{requires2fa: false, access, refresh, roles, hospital, staff, mustChangePassword, twoFactor}` or `{requires2fa: true, challenge, challengeExpiresAt}` | `hospitalCode` only when the email exists at more than one facility. Five consecutive failures lock the account for fifteen minutes (`AUTH_LOCKED`). The same answer for an unknown email and a wrong password (`AUTH_INVALID_CREDENTIALS`). With the second factor on, a right password gets a five-minute challenge and no tokens, and the failure count is not cleared until the code is right. `twoFactor` is `{enabled, required, recoveryCodesLeft}`; an administrator (`hospital_admin`, `platform_admin`) with it off gets a token carrying `tfa: 'setup'`, which opens only `/staff/2fa/setup`, `/staff/2fa/enable`, `/staff/me` and `/staff/logout` (`AUTH_2FA_SETUP_REQUIRED`) |
 | POST | `/staff/refresh` | refresh | → `{access, refresh}` | rotates: the old refresh row is revoked (`DATABASE.md` §2.1) |
 | POST | `/staff/logout` | staff | | revokes this refresh token |
 | GET | `/staff/me` | staff | → `{staff, hospital, roles, mustChangePassword}` | |
 | POST | `/staff/password` | staff | `{current, next}` | clears `must_change_password`; revokes the account's other refresh tokens |
-| POST | `/staff/2fa` | partial | `{code}` → tokens | step 28 |
+| POST | `/staff/2fa` | challenge | `{challenge, code}` → the session, as `/staff/login` | step 28 (`FR-SEC-10`). `code` is six digits from the app or a recovery code; the shape says which. A wrong or already-used code is `AUTH_2FA_INVALID` and counts towards the lock; a challenge that ran out, or whose account was reset since, is `AUTH_TOKEN_INVALID`. The challenge is a JWT with its own audience, so it is never accepted as a bearer token |
+| POST | `/staff/2fa/setup` | staff | → `{secret, otpauthUri}` | the secret for the app — the same unconfirmed one until it is turned on, so a reload or a second tab shows the same QR code; `AUTH_2FA_ALREADY_ON` when it is on |
+| POST | `/staff/2fa/enable` | staff | `{code}` → `{recoveryCodes, session}` | a code from the app turns it on; the ten recovery codes are shown once; every other session of the account ends. Audited (`SETTINGS_CHANGE`, `two_factor_enabled`) |
 | POST | `/guest/start` | none | `{phone, name}` → `{needsOtp: false, guestToken}` or `{needsOtp: true, ttlSeconds, …}` | a number that has proved itself skips the code (`FR-GST-12`). With `GUEST_BOOKING_OTP` off — the default on a demonstration — `{needsOtp: false, guestToken: null}` |
 | POST | `/guest/verify` | none | `{phone, name, code}` → `{guestToken}` | creates no account (`FR-GST-04`). `POST /bookings` with guest details then needs this token for the same number, where the check is on (`AUTH_REQUIRED`, `reason: phone_unverified`) |
 | GET | `/guest/link/:token` | link | → `{booking, session, queueState, etas, record}` | powers the SMS tracking link (`FR-GST-05`); `record` is that booking's signed visit once there is one, else null (`FR-GST-08`) |
@@ -509,6 +512,7 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 | PUT | `/hospital/capabilities` | hospital_admin. The kinds this facility offers (`FR-EMG-05`). A newly offered kind starts unavailable; whether it is available now is `PUT /hospitals/:id/capabilities`, which refuses a kind never declared |
 | POST, PATCH | `/hospital/staff`, `/hospital/staff/:id` | hospital_admin (`FR-ADM-11`). Creating answers with a temporary password, once; roles are the facility's seven, never `platform_admin` or `gov_viewer`. Deactivating or changing roles ends the account's refresh tokens. An administrator cannot deactivate themself or drop their own `hospital_admin` (`SETTINGS_NOT_ALLOWED`) |
 | POST | `/hospital/staff/:id/reset-password` | hospital_admin. A new temporary password; not for one's own account |
+| POST | `/hospital/staff/:id/reset-2fa` | hospital_admin (step 28). Turns the second factor off for a lost phone and ends every session; not for one's own account (`own_two_factor`). Audited (`two_factor_reset`). A facility's only administrator is reset on the server with `pnpm staff:reset-2fa --email … [--hospital-code …]`, audited with no actor |
 | POST | `/hospital/go-live` | hospital_admin. Sets `is_live` and `onboarded_at`; refused while there is no department or no active doctor. Doctors still appear only once verified |
 | GET | `/hospital/imports/templates/:set` | hospital_admin. The CSV template for a set: header row, then one example row marked as an example (`FR-IMP-09`) |
 | POST | `/hospital/imports` | hospital_admin. `{set, fileName, csv}` — the file as UTF-8 text, at most 5 MB, no multipart dependency. Checks every row and writes nothing but the batch and its rows (`FR-IMP-05`) → the preview |
@@ -594,8 +598,12 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `AUTH_LOCKED` | 423 | five consecutive failures; `details.until` says when it opens |
 | `AUTH_HOSPITAL_REQUIRED` | 409 | the email exists at more than one facility; ask for the hospital code |
 | `AUTH_PASSWORD_WEAK` | 422 | a new staff password shorter than 10 characters or the same as the old one |
+| `AUTH_PASSWORD_CHANGE_REQUIRED` | 403 | the token was issued on a password an administrator set; only the password change is open |
+| `AUTH_2FA_INVALID` | 401 | the second-factor code is wrong, too old or already used; counts towards `AUTH_LOCKED` (step 28) |
+| `AUTH_2FA_SETUP_REQUIRED` | 403 | an administrator without a second factor; only its setup is open (step 28) |
+| `AUTH_2FA_ALREADY_ON` | 409 | setting up a second factor that is on; an administrator resets it first (step 28) |
 | `SETTINGS_DUPLICATE` | 409 | a department code, a doctor already in that department, an overlapping weekly chamber, a bed label, an email or a staff code already exists at this facility; `details.field` says which (and `details.labels` for beds) |
-| `SETTINGS_NOT_ALLOWED` | 422 | a settings change the rules refuse; `details.reason` is `own_access`, `own_password`, `doctor_verified`, `doctor_shared` or `nothing_to_publish` |
+| `SETTINGS_NOT_ALLOWED` | 422 | a settings change the rules refuse; `details.reason` is `own_access`, `own_password`, `own_two_factor`, `doctor_verified`, `doctor_shared` or `nothing_to_publish` |
 | `IMPORT_FILE` | 422 | the file cannot be read as the set at all — empty, an unclosed quote, the template's columns missing (`details.columns`), more than 20,000 rows; refused before any batch exists |
 | `PAYLOAD_TOO_LARGE` | 413 | a body over its route's limit: 256 KB, or the report (14 MB) and import (6 MB) routes' own |
 | `IMPORT_STATE` | 409 | the batch is not in the state that action needs |
@@ -641,6 +649,7 @@ DEMO_MODE=true|false        # true seeds/reset allowed, mock payments, banner in
 SESSION_MATERIALISE=true    # write each day's chambers from the weekly schedules (§8)
 STORAGE_PROVIDER=mock|supabase|local, STORAGE_LOCAL_DIR   # local: a disk volume (§12b)
 STAFF_LOCKOUT_ATTEMPTS=5, STAFF_LOCKOUT_MINUTES=15
+TOTP_ENCRYPTION_KEY         # staff second factors (step 28); required in production, derived from JWT_REFRESH_SECRET elsewhere
 ```
 
 `env.ts` validates all of these with zod at boot and refuses to start if any required key is missing.

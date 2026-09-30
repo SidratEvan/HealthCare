@@ -183,6 +183,87 @@ export const CONSOLE = {
   passwordWrong: { bn: 'এখনকার পাসওয়ার্ড মেলেনি।', en: 'The current password is wrong.' },
   passwordSubmit: { bn: 'পাসওয়ার্ড রাখুন', en: 'Save the password' },
 
+  // --- The second factor (S-B-00b, S-B-00d, pilot step 28, FR-SEC-10) ---------
+  tfaCodeTitle: { bn: 'দুই ধাপের যাচাই', en: 'Two-step verification' },
+  tfaCodeIntro: {
+    bn: 'ফোনের অথেনটিকেটর অ্যাপ খুলে এই অ্যাকাউন্টের ৬ সংখ্যার কোডটি লিখুন।',
+    en: 'Open the authenticator app on your phone and enter this account’s six-digit code.',
+  },
+  tfaCodeLabel: { bn: 'কোড', en: 'Code' },
+  tfaCodeHint: {
+    bn: 'ফোন হারালে একটি রিকভারি কোড লিখুন (xxxx-xxxx-xxxx)।',
+    en: 'Lost your phone? Enter one of your recovery codes (xxxx-xxxx-xxxx).',
+  },
+  tfaCodeSubmit: { bn: 'যাচাই করুন', en: 'Verify' },
+  tfaCodeNeeds: { bn: 'কোডটি লিখুন', en: 'Enter the code' },
+  tfaCodeInvalid: {
+    bn: 'কোডটি মেলেনি, বা আগেই ব্যবহার হয়েছে। অ্যাপে এখন যেটি দেখাচ্ছে সেটি দিন।',
+    en: 'That code is wrong or has been used. Enter the one the app shows now.',
+  },
+  tfaCodeExpired: {
+    bn: 'অনেক সময় পেরিয়ে গেছে। আবার পাসওয়ার্ড দিয়ে লগ ইন করুন।',
+    en: 'That took too long. Sign in with your password again.',
+  },
+  tfaBack: { bn: 'আবার পাসওয়ার্ড দিন', en: 'Start again' },
+  tfaSetupTitle: { bn: 'দুই ধাপের যাচাই চালু করুন', en: 'Turn on two-step verification' },
+  tfaSetupIntroRequired: {
+    bn: 'প্রশাসকের অ্যাকাউন্টে পাসওয়ার্ডের সঙ্গে ফোনের একটি কোডও লাগে। এটি চালু না করা পর্যন্ত কোনো কনসোল খুলবে না।',
+    en: 'An administrator’s account needs a code from a phone as well as the password. No console opens until it is on.',
+  },
+  tfaSetupIntroOptional: {
+    bn: 'চালু করলে প্রতিবার লগ ইনে পাসওয়ার্ডের পর ফোনের একটি কোডও লাগবে।',
+    en: 'Once it is on, every sign-in asks for a code from your phone after the password.',
+  },
+  tfaSetupStep1: {
+    bn: '১. ফোনে একটি অথেনটিকেটর অ্যাপ নিন — Google Authenticator, Microsoft Authenticator বা এ রকম যেকোনোটি।',
+    en: '1. Install an authenticator app on your phone — Google Authenticator, Microsoft Authenticator or any like them.',
+  },
+  tfaSetupStep2: {
+    bn: '২. অ্যাপে নতুন অ্যাকাউন্ট যোগ করে এই QR কোডটি স্ক্যান করুন।',
+    en: '2. Add an account in the app and scan this QR code.',
+  },
+  tfaSetupManual: {
+    bn: 'স্ক্যান করা না গেলে এই চাবিটি অ্যাপে হাতে লিখুন:',
+    en: 'Cannot scan it? Type this key into the app instead:',
+  },
+  tfaSetupStep3: {
+    bn: '৩. অ্যাপে যে ৬ সংখ্যার কোড দেখাচ্ছে, সেটি লিখুন।',
+    en: '3. Enter the six-digit code the app shows.',
+  },
+  tfaSetupSubmit: { bn: 'চালু করুন', en: 'Turn it on' },
+  tfaSetupLoading: { bn: 'তৈরি হচ্ছে…', en: 'Preparing…' },
+  tfaSetupFailed: {
+    bn: 'এখন শুরু করা গেল না। একটু পরে আবার চেষ্টা করুন।',
+    en: 'Could not start just now. Try again shortly.',
+  },
+  tfaSetupInvalid: {
+    bn: 'কোডটি মেলেনি। অ্যাপে এখন যেটি দেখাচ্ছে সেটি দিন, আর ফোনের সময় ঠিক আছে কি না দেখুন।',
+    en: 'That code does not match. Enter the one the app shows now, and check the phone’s clock is right.',
+  },
+  tfaSetupNeeds: {
+    bn: 'অ্যাপের ৬ সংখ্যার কোডটি লিখুন',
+    en: 'Enter the six-digit code from the app',
+  },
+  tfaQrAlt: { bn: 'অথেনটিকেটর অ্যাপের জন্য QR কোড', en: 'QR code for the authenticator app' },
+  tfaCancel: { bn: 'এখন নয়', en: 'Not now' },
+  tfaRecoveryTitle: { bn: 'রিকভারি কোড', en: 'Recovery codes' },
+  tfaRecoveryIntro: {
+    bn: 'ফোন হারালে এর যেকোনো একটি দিয়ে একবার লগ ইন করা যাবে। কোডগুলো শুধু এখনই দেখানো হচ্ছে — লিখে বা প্রিন্ট করে নিরাপদ জায়গায় রাখুন।',
+    en: 'If you lose your phone, each of these signs you in once. They are shown only now — write them down or print them, and keep them somewhere safe.',
+  },
+  tfaRecoveryPrint: { bn: 'প্রিন্ট করুন', en: 'Print' },
+  tfaRecoverySaved: { bn: 'আমি কোডগুলো নিরাপদে রেখেছি', en: 'I have kept these codes safe' },
+  tfaRecoveryNeeds: {
+    bn: 'আগে নিশ্চিত করুন যে কোডগুলো রেখেছেন',
+    en: 'First confirm you have kept the codes',
+  },
+  tfaRecoveryContinue: { bn: 'কনসোলে যান', en: 'Continue' },
+  tfaOnNote: { bn: 'দুই ধাপের যাচাই চালু আছে', en: 'Two-step verification is on' },
+  tfaRecoveryLow: {
+    bn: 'আর {count}টি রিকভারি কোড বাকি। ফুরোনোর আগে প্রশাসককে বলে দুই ধাপের যাচাই রিসেট করিয়ে আবার চালু করুন।',
+    en: '{count} recovery codes left. Before they run out, ask an administrator to reset two-step verification, then turn it on again.',
+  },
+
   // --- Queue table (B1.4) --------------------------------------------------
   colSerial: { bn: 'সিরিয়াল', en: 'Serial' },
   colPatient: { bn: 'রোগী', en: 'Patient' },
@@ -1387,6 +1468,10 @@ export const CONSOLE = {
     bn: 'নিজের পাসওয়ার্ড এখান থেকে নয়, পাসওয়ার্ড বদলের পাতা থেকে বদলান।',
     en: 'Change your own password from the password screen, not here.',
   },
+  settingsNotAllowedOwnTwoFactor: {
+    bn: 'নিজের দুই ধাপের যাচাই নিজে রিসেট করা যায় না। অন্য একজন প্রশাসককে বলুন।',
+    en: 'You cannot reset your own two-step verification. Ask another administrator.',
+  },
   settingsNotAllowedVerified: {
     bn: 'বিএমডিসি যাচাই হওয়া ডাক্তারের নাম বদলানো যায় না।',
     en: 'A doctor whose BMDC number is verified cannot be renamed.',
@@ -1566,6 +1651,10 @@ export const CONSOLE = {
   settingsStaffInactive: { bn: 'বন্ধ', en: 'Deactivated' },
   settingsStaffMustChange: { bn: 'প্রথম লগ ইন বাকি', en: 'First sign-in pending' },
   settingsStaffYou: { bn: 'আপনি', en: 'You' },
+  // Pilot step 28 (FR-SEC-10): the second factor, and the reset for a lost phone.
+  settingsStaffTwoFactorOn: { bn: 'দুই ধাপ চালু', en: 'Two-step on' },
+  settingsStaffTwoFactorMissing: { bn: 'দুই ধাপ বাকি', en: 'Two-step not set up' },
+  settingsResetTwoFactor: { bn: 'দুই ধাপের যাচাই রিসেট করুন', en: 'Reset two-step' },
   settingsSaveRoles: { bn: 'দায়িত্ব সংরক্ষণ করুন', en: 'Save roles' },
 
   // --- Counter registration and walk-ins (S-B-03, MOD-B02-WALKIN, pilot step 23) --

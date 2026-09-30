@@ -79,6 +79,15 @@ export async function attachPrincipal(
     return;
   }
 
+  // An administrator with no second factor yet signed in with a password
+  // alone. Until they set one up, the token opens that and nothing else — so
+  // no administrator reaches a console on a password (pilot step 28,
+  // FR-SEC-10).
+  if (result.claims.tfa === 'setup' && !TWO_FACTOR_SETUP_ALLOWED.has(pathOf(req))) {
+    next(new AppError('AUTH_2FA_SETUP_REQUIRED'));
+    return;
+  }
+
   req.principal = principal;
   next();
 }
@@ -86,6 +95,14 @@ export async function attachPrincipal(
 /** What a token with `mcp` may still reach. */
 const PASSWORD_CHANGE_ALLOWED = new Set([
   '/api/v1/staff/password',
+  '/api/v1/staff/me',
+  '/api/v1/staff/logout',
+]);
+
+/** What a token with `tfa: 'setup'` may still reach. */
+const TWO_FACTOR_SETUP_ALLOWED = new Set([
+  '/api/v1/staff/2fa/setup',
+  '/api/v1/staff/2fa/enable',
   '/api/v1/staff/me',
   '/api/v1/staff/logout',
 ]);

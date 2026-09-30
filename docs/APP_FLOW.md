@@ -596,6 +596,28 @@ Accessed at `console.[domain]`. Designed for 1280px+ monitors, mouse and keyboar
 
 **In the pilot build (step 21, `CLAUDE.md` §4.2):** `S-B-00` is what the console shows whenever `DEMO_MODE` is off; the picker (`S-B-01` as built) remains the demo's way in. The hospital code field appears only when the server answers `AUTH_HOSPITAL_REQUIRED`. Wrong email and wrong password get one message. After five failures the screen says when the account opens again (`AUTH_LOCKED`). An account whose password an administrator set shows `S-B-00c` — set your own password, twice, at least ten characters — before any console. A person holding several roles chooses one on `S-B-01` (role cards only, no counter selector yet); a person with one role goes straight to it. The rail's foot gains **লগ আউট**.
 
+### `S-B-00b` Two-step code (pilot step 28, `FR-SEC-10`)
+
+| Element | ID | Wiring |
+|---|---|---|
+| কোড | `INP-B00B-CODE` | Six digits from the authenticator app, or a recovery code (`xxxx-xxxx-xxxx`) for a lost phone — one field; Bangla digits are read as the same digits |
+| যাচাই করুন | `BTN-B00B-VERIFY` | → `POST /staff/2fa` `{challenge, code}` → the session → `S-B-01` (or `S-B-00c` if the password was set by an administrator) |
+| আবার পাসওয়ার্ড দিন | `BTN-B00B-BACK` | back to `S-B-00`; the only way on once the five-minute challenge has run out |
+
+**Rules:** shown in place of `S-B-00` when the password was right and the account has the second factor on. A wrong code says so and empties the field; five wrong codes or passwords in a row lock the account (`AUTH_LOCKED`), and a right password does not reset the count.
+
+### `S-B-00d` Turn on two-step verification (pilot step 28, `FR-SEC-10`)
+
+| Element | ID | Wiring |
+|---|---|---|
+| QR code and key | `IMG-B00D-QR` | `POST /staff/2fa/setup` → drawn in the browser from the `otpauth://` link; the key beside it in groups of four for typing |
+| কোড | `INP-B00D-CODE` | the code the app now shows |
+| চালু করুন | `BTN-B00D-ENABLE` | → `POST /staff/2fa/enable` → the ten recovery codes, once |
+| আমি কোডগুলো নিরাপদে রেখেছি / কনসোলে যান | `CHK-B00D-KEPT`, `BTN-B00D-CONTINUE` | continue is off until the box is ticked; then the console the URL asked for, or `S-B-01` |
+| এখন নয় | `BTN-B00D-CANCEL` | only when it is not required |
+
+**Rules:** an administrator (`hospital_admin`, `platform_admin`) with no second factor meets this after `S-B-00`/`S-B-00c` and before any console, whatever the URL; the server refuses their token everywhere else (`AUTH_2FA_SETUP_REQUIRED`). Anybody else opens it from `S-B-01` (**দুই ধাপের যাচাই চালু করুন**, `/?view=2fa`), which says **দুই ধাপের যাচাই চালু আছে** once it is on, and warns when three or fewer recovery codes are left. A lost phone is an administrator's reset on `S-B-11`.
+
 ### `S-B-01` Role & counter selection
 
 Shown when a user holds multiple roles or the hospital has multiple counters.
@@ -917,7 +939,7 @@ Built in pilot step 22 (`FR-SUP-01`), opened by `LNK-B10-SETTINGS` in the dashbo
 | Doctors and chambers | `FRM-B11-DOCTOR`, `FRM-B11-FEE`, `BTN-B11-DOCTOR-ACTIVE`, `FRM-B11-SCHEDULE`, `BTN-B11-SCHEDULE-REMOVE` | `POST /hospital/doctors` (a known BMDC number is linked, and the toast says so); `PATCH /hospital/doctors/:id` (fee and room, with the note that bookings keep their fee; activate or deactivate); `POST /hospital/templates` → the chambers of the coming eight days, counted in the toast; `DELETE /hospital/templates/:id` → says how many booked chambers were kept for the counter |
 | Wards and beds | `FRM-B11-WARD`, `FRM-B11-BEDS` | `POST /hospital/wards`; `POST /hospital/beds` takes `301-320` or a comma list. New beds show out of service, "added in settings — not yet confirmed by the ward", until `BTN-B06-OOS`'s restore |
 | Emergency services | `FRM-B11-CAPABILITIES` | `PUT /hospital/capabilities`; each declared kind shows whether the ER last said it is available, with its `<FreshnessLine>` |
-| Staff | `FRM-B11-STAFF`, `BTN-B11-ROLES`, `BTN-B11-RESET`, `BTN-B11-STAFF-ACTIVE` | `POST /hospital/staff` → the temporary password on a card, once, to hand over in person; `PATCH /hospital/staff/:id` (roles, deactivate); `POST /hospital/staff/:id/reset-password`. Reset and deactivate are not offered on one's own row |
+| Staff | `FRM-B11-STAFF`, `BTN-B11-ROLES`, `BTN-B11-RESET`, `BTN-B11-STAFF-ACTIVE` | `POST /hospital/staff` → the temporary password on a card, once, to hand over in person; `PATCH /hospital/staff/:id` (roles, deactivate); `POST /hospital/staff/:id/reset-password`; `BTN-B11-RESET-2FA` → `POST /hospital/staff/:id/reset-2fa` (step 28), shown where two-step is on. Each row says **দুই ধাপ চালু**, or **দুই ধাপ বাকি** for an administrator without it. Reset and deactivate are not offered on one's own row |
 
 **Rules:** online only — with the connection gone the screen keeps the last snapshot under a banner, its freshness line ages, and every save is disabled with "saving needs a connection". A save always re-reads the snapshot. Counters and the refund policy are not on this screen yet: counters arrive with counter registration (step 23), and the refund policy stays the agreed default (`STATUS.md`).
 
