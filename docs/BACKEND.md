@@ -322,7 +322,7 @@ Consoles operate fully offline (`FR-OFF-01`). The protocol is deliberately small
 
 There is no room per referral. Both ends of a referral are ER consoles, already in their own `hospital:<id>:emergency` rooms, so `referral.updated` goes to both of those (step 16). A `referral:<id>` room would be one more subscription every console had to remember to make, and a forgotten one reaches nobody, silently.
 
-**Handshake:** JWT (staff/patient) or a guest-link token. A socket may only join rooms its principal is scoped to. **Resume:** client sends `lastSeq`; server replays missed events from `queue_events` before streaming live (`SY-01`).
+**Handshake:** JWT (staff/patient) or a guest-link token. A socket may only join rooms its principal is scoped to: staff their own hospital's, a patient the sessions they hold a booking in, a guest only the session of the one booking its token names — never by the guest identity behind it (`FR-GST-05`). **Resume:** client sends `lastSeq`; server replays missed events from `queue_events` before streaming live (`SY-01`).
 
 **Payload envelope (all events):**
 ```ts
@@ -377,7 +377,7 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | GET | `/me/bookings?scope=today\|upcoming\|past` | user \| guest | |
 | POST | `/bookings/:id/cancel` | owner \| staff | appends `BOOKING_CANCELLED`, triggers refund eligibility |
 | POST | `/bookings/:id/reschedule` | owner \| staff | cancels + creates in one transaction |
-| POST | `/bookings/:id/late` | owner | appends `PATIENT_LATE` (`FR-PAT-33`) |
+| POST | `/bookings/:id/late` | owner — a guest token only for the booking it names (`FR-GST-05`) | appends `PATIENT_LATE` (`FR-PAT-33`) |
 | POST | `/sessions/:id/standby` | none (guest details) — the phone proved first where a guest booking must (`FR-GST-03`: the guest token from `/guest/verify`, else 401 `phone_unverified`) | joins a **full** chamber's list; Idempotency-Key required, rate-limited per address; optional `prepay` method charges the fee against the standby row (`FR-PAT-25`, `FR-PAT-26`). Returns the status token |
 | GET | `/standby/:token` | the token | `S-A-08s`: waiting / offered / seated / left; records lapsed offers as it answers; mints the seat's tracking link once |
 | POST | `/standby/:token/accept` | the token | yes to the open offer; books the chair and pays for it with the chosen method (`FR-PAT-27`) |

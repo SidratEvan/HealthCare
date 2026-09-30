@@ -7,9 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/standby-phone-proof` — **the second of the security
-review's holes: a standby place and a bed request now prove the phone first,
-as a booking does** (below, *Security review*). Before that,
+Last updated: `fix/guest-booking-scope` — **a guest token now opens only the
+booking it names**; the rest of the security review's third hole waits on
+decision 85 (below, *Security review*). Before that,
+`fix/standby-phone-proof` — **a standby place and a bed request prove the
+phone first, as a booking does**. Before that,
 `fix/visit-doctor-only` — **only a doctor writes a visit, and a signed one is
 final**. Before that, `chore/security-review` — **a
 security review of the whole codebase found four holes to close before real
@@ -241,8 +243,17 @@ its own `fix/*` branch with tests**, marked below as it lands.
    never hand a token for an existing row to an unproven caller. Bed requests
    repeat the pattern read-only (`bed.service.ts:485`; 6/10, not counted) and
    take the same fix.
-3. **A returning guest's number is trusted without a code** (8/10,
-   Medium–High). `POST /guest/start` gives a guest token to anybody who types
+3. **Half fixed (`fix/guest-booking-scope`); the other half waits on decision
+   85.** A guest token now acts only on the booking it names: `ownsBooking`
+   and the socket's room check dropped their guest-identity branch, and
+   `/late` has `requireBookingScope` as cancel does. So a forwarded link
+   reaches one serial, and a booking-flow token (no booking) reaches none —
+   which removes the chamber-finding and the late-marking below. **Still
+   open:** `/guest/start` gives a returning number a token without a code, so
+   whoever types the number can still book as it, and — through item 2's
+   check — join standby or ask for a bed as it, which answers with that
+   person's existing place or request. Was: **a returning guest's number is
+   trusted without a code** (8/10, Medium–High). `POST /guest/start` gives a guest token to anybody who types
    a number that has passed a code once (`patientAuth.service.ts:311`). With
    it: book as that person; learn which chambers they are booked into, because
    the socket admits a guest by identity rather than by booking

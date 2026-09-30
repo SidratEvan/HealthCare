@@ -67,21 +67,18 @@ async function staff(
 /** A guest booking with a real tracking link, as `POST /bookings` mints one. */
 async function bookAsGuest(
   session: QueueFixture = fixture,
+  who: { readonly phone: string; readonly name: string } = {
+    phone: freshPhone(),
+    name: 'রহিমা খাতুন (ডেমো)',
+  },
 ): Promise<{ bookingId: string; serial: number; token: string }> {
-  const tail = String(Math.floor(Math.random() * 90_000_000) + 10_000_000);
-
   const response = await request(app)
     .post(`${BASE}/bookings`)
     .set('Idempotency-Key', crypto.randomUUID())
     .send({
       sessionId: session.sessionId,
       method: 'bkash',
-      guest: {
-        name: 'রহিমা খাতুন (ডেমো)',
-        phone: `+88019${tail}`,
-        ageYears: 34,
-        sex: 'female',
-      },
+      guest: { name: who.name, phone: who.phone, ageYears: 34, sex: 'female' },
     });
 
   expect(response.status).toBe(201);
@@ -98,6 +95,11 @@ async function bookAsGuest(
 }
 
 /** Opens a link and returns the short-lived token it issues. */
+/** A number no other test in the run holds (`DB-P6` normalised). */
+function freshPhone(): string {
+  return `+88019${String(Math.floor(Math.random() * 90_000_000) + 10_000_000)}`;
+}
+
 async function openLink(token: string): Promise<string> {
   const response = await request(app).get(`${BASE}/guest/link/${token}`);
   expect(response.status).toBe(200);
@@ -483,6 +485,44 @@ describe('POST /bookings/:id/late — the patient declares it (FR-PAT-33)', () =
     const response = await request(app)
       .post(`${BASE}/bookings/${other.bookingId}/late`)
       .set('Authorization', bearer(issued))
+      .set('Idempotency-Key', crypto.randomUUID())
+      .send({ expectedMinutes: 20 });
+
+    expect(response.status).toBe(403);
+  });
+
+  // Found by the security review of 2026-09-30: a guest token reached every
+  // booking its number held, not only the one it named.
+  it('refuses a link for another booking on the same number', async () => {
+    const phone = freshPhone();
+    const mine = await bookAsGuest(fixture, { phone, name: 'রহিমা খাতুন (ডেমো)' });
+    const family = await bookAsGuest(fixture, { phone, name: 'করিম মিয়া (ডেমো)' });
+    const issued = await openLink(mine.token);
+
+    const response = await request(app)
+      .post(`${BASE}/bookings/${family.bookingId}/late`)
+      .set('Authorization', bearer(issued))
+      .set('Idempotency-Key', crypto.randomUUID())
+      .send({ expectedMinutes: 20 });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("refuses a guest token that names no booking, even the booking's own number's", async () => {
+    const booked = await bookAsGuest();
+    const identity = await sql<{ booked_by_guest_id: string }>`
+      SELECT booked_by_guest_id FROM bookings WHERE id = ${booked.bookingId}::uuid
+    `.execute(db);
+    // The shape `/guest/start` hands out to book with: the number's identity,
+    // no booking.
+    const bookingFlow = await signToken({
+      kind: 'access',
+      claims: { sub: identity.rows[0]?.booked_by_guest_id ?? '', kind: 'guest' },
+    });
+
+    const response = await request(app)
+      .post(`${BASE}/bookings/${booked.bookingId}/late`)
+      .set('Authorization', bearer(bookingFlow))
       .set('Idempotency-Key', crypto.randomUUID())
       .send({ expectedMinutes: 20 });
 

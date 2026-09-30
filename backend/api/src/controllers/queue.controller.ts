@@ -608,8 +608,12 @@ function ownsBooking(
 ): boolean {
   if (principal.kind === 'patient') return owner.userId === principal.id;
   if (principal.kind === 'guest') {
-    // A tracking link names exactly one booking (`FR-GST-05`).
-    return principal.bookingId === bookingId || owner.guestId === principal.id;
+    // A tracking link names exactly one booking (`FR-GST-05`), and that is all
+    // it opens. Never the guest identity behind it: a forwarded link for one
+    // serial must not reach the same number's other bookings, and a guest
+    // token with no booking (the one `/guest/start` hands out to book with)
+    // must reach none. Found by the security review of 2026-09-30.
+    return principal.bookingId !== null && principal.bookingId === bookingId;
   }
   return false;
 }

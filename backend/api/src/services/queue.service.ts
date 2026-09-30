@@ -1467,7 +1467,6 @@ export async function principalHoldsBooking(
   sessionId: string,
   who: {
     readonly userId: string | null;
-    readonly guestId: string | null;
     readonly bookingId: string | null;
   },
 ): Promise<boolean> {
