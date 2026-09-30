@@ -20,6 +20,7 @@ import {
   signVisit,
   type ConsoleSession,
 } from './support/console.js';
+import { closeOtherContexts } from './support/contexts.js';
 
 const PATIENT = 'http://localhost:3000';
 const GUEST_NAME = 'সুমাইয়া ইসলাম';
@@ -29,6 +30,12 @@ let chamber: ConsoleSession;
 
 test.beforeAll(async () => {
   chamber = await createConsoleSession(1);
+});
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
 });
 
 test('a guest signs in later with the same number and finds the record', async ({ browser }) => {

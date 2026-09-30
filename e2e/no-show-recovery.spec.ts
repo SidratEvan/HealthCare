@@ -24,6 +24,7 @@ import {
   joinStandby,
   type ConsoleSession,
 } from './support/console.js';
+import { closeOtherContexts } from './support/contexts.js';
 import { bengali, latin } from './support/digits.js';
 
 const CONSOLE = 'http://localhost:3100';
@@ -75,6 +76,12 @@ async function recoveredPoisha(dashboard: Page): Promise<number> {
   if (Number.isNaN(taka)) throw new Error(`unreadable recovered figure: ${text}`);
   return Math.round(taka * 100);
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('a freed chair, recovered (FR-QUE-30, FR-REC-30, FR-ADM-03)', () => {
   test('no-show → offer → accept moves the dashboard by the chair’s fee', async ({ browser }) => {

@@ -19,6 +19,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { createConsoleSession } from './support/console.js';
+import { closeOtherContexts } from './support/contexts.js';
 import { ANY_DIGIT, latin } from './support/digits.js';
 import { districtOf, namesThatMustNotAppear } from './support/gov.js';
 
@@ -45,6 +46,12 @@ async function thisWeek(page: Page, district: string, signal: string): Promise<n
   await expect(row).toBeVisible();
   return Number(latin(await row.locator('td').nth(2).innerText()));
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('the national dashboard (S-B-13)', () => {
   test('opens from the picker, labelled as a demo and as aggregate-only', async ({ page }) => {

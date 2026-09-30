@@ -19,6 +19,7 @@
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
+import { closeOtherContexts } from './support/contexts.js';
 import {
   FARMGATE,
   caseState,
@@ -60,6 +61,12 @@ async function phoneAtFarmgate(browser: Browser): Promise<Page> {
   });
   return await context.newPage();
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('the burn scenario (PRD.md §24 step 7)', () => {
   test('a burn case sees the fresh Padma above the nearer, stale Jamuna, and the ER is told', async ({

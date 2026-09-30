@@ -12,6 +12,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 import { createConsoleSession, type ConsoleSession } from './support/console.js';
+import { closeOtherContexts } from './support/contexts.js';
 import { bengali, latin } from './support/digits.js';
 import { bookAsGuest, openLiveSerial } from './support/patient.js';
 
@@ -35,6 +36,12 @@ async function openReception(context: BrowserContext): Promise<Page> {
   await expect(page.getByTestId('queue-table')).toBeVisible();
   return page;
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('checking a patient in (FR-REC-18)', () => {
   test('reception quotes a wait, and the patient’s phone shows it (FR-PAT-38)', async ({
