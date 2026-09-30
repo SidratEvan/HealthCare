@@ -23,6 +23,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 import { createConsoleSession, type ConsoleSession } from './support/console.js';
+import { closeOtherContexts } from './support/contexts.js';
 import { bookAsGuest, openLiveSerial } from './support/patient.js';
 
 const PATIENT = 'http://localhost:3000';
@@ -50,6 +51,12 @@ async function chooseEnglish(page: Page): Promise<void> {
   await expect(page.getByTestId('language-en')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('the patient app (SEG-A00-LANG)', () => {
   test('opens in Bangla, and one tap turns the whole home screen English', async ({ page }) => {

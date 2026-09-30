@@ -16,6 +16,7 @@ import { randomInt } from 'node:crypto';
 
 import { expect, test, type Page } from '@playwright/test';
 
+import { closeOtherContexts } from './support/contexts.js';
 import { admissionsIn, bedState, createWardFixture, type WardFixture } from './support/ward.js';
 
 const CONSOLE = 'http://localhost:3100';
@@ -71,6 +72,12 @@ async function publishedGeneralFree(page: Page): Promise<number> {
   await expect(mirror).toBeVisible();
   return Number(await mirror.getAttribute('data-published-free'));
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('the mirror matches what the public is shown (FR-BED-06)', () => {
   test("the app shows the mirror's number, and both drop by one the moment a bed is taken", async ({
