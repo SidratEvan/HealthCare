@@ -12,13 +12,14 @@ import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { resetSmsAdapter, setSmsAdapter, type SmsMessage } from '../adapters/sms.js';
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 import { env } from '../env.js';
+import { counter as rateLimits } from '../middleware/rateLimit.js';
 
 import { bearer, staffToken } from './support/tokens.js';
 
@@ -260,6 +261,11 @@ describe('claiming what the number holds (FR-GST-09, FR-IMP-10, FR-PAT-04)', () 
 describe("a guest's one phone check before booking (FR-GST-03, FR-GST-04, FR-GST-12)", () => {
   const mutable = env as { GUEST_BOOKING_OTP?: boolean | undefined };
 
+  // Every `/guest/start` in the file shares one per-address window.
+  beforeEach(() => {
+    rateLimits.reset();
+  });
+
   afterAll(() => {
     delete mutable.GUEST_BOOKING_OTP;
   });
@@ -272,33 +278,86 @@ describe("a guest's one phone check before booking (FR-GST-03, FR-GST-04, FR-GST
     expect(response.body.data).toEqual({ needsOtp: false, guestToken: null });
   });
 
-  it('sends a new number a code, proves it, and asks a returning number nothing', async () => {
-    mutable.GUEST_BOOKING_OTP = true;
-    const phone = freshPhone();
-    const start = await request(app)
+  /** `/guest/start` from one device, with the proof it holds for the number, if any. */
+  async function start(
+    phone: string,
+    agent: string,
+    deviceProof?: string,
+  ): Promise<request.Response> {
+    return await request(app)
       .post(`${BASE}/guest/start`)
-      .send({ phone: phone.typed, name: 'অতিথি (ডেমো)' });
-    expect(start.body.data.needsOtp).toBe(true);
+      .set('user-agent', agent)
+      .send({ phone, name: 'অতিথি (ডেমো)', ...(deviceProof === undefined ? {} : { deviceProof }) });
+  }
 
+  /** A number proved on `agent`: the guest token and the proof that device keeps. */
+  async function proveOn(
+    phone: string,
+    agent: string,
+  ): Promise<{ guestToken: string; deviceProof: string }> {
+    const started = await start(phone, agent);
+    expect(started.body.data.needsOtp).toBe(true);
     const verified = await request(app)
       .post(`${BASE}/guest/verify`)
-      .send({
-        phone: phone.typed,
-        name: 'অতিথি (ডেমো)',
-        code: start.body.data.demoCode as string,
-      });
-    expect(typeof verified.body.data.guestToken).toBe('string');
-    // No account was made (FR-GST-04).
+      .set('user-agent', agent)
+      .send({ phone, name: 'অতিথি (ডেমো)', code: started.body.data.demoCode as string });
+    expect(verified.status).toBe(200);
+    return verified.body.data as { guestToken: string; deviceProof: string };
+  }
+
+  it('sends a new number a code, and proving it makes no account (FR-GST-04)', async () => {
+    mutable.GUEST_BOOKING_OTP = true;
+    const phone = freshPhone();
+
+    const proved = await proveOn(phone.typed, 'phone-a');
+    expect(typeof proved.guestToken).toBe('string');
+    expect(typeof proved.deviceProof).toBe('string');
+
     const accounts = await sql<{ n: number }>`
       SELECT count(*)::int AS n FROM users WHERE phone = ${phone.stored}
     `.execute(db);
     expect(accounts.rows[0]?.n).toBe(0);
+  });
 
-    const again = await request(app)
-      .post(`${BASE}/guest/start`)
-      .send({ phone: phone.typed, name: 'অতিথি (ডেমো)' });
+  // Decision 85 (2026-09-30): proved once per device, not once per number.
+  it('asks nothing again of the device that proved the number (FR-GST-12)', async () => {
+    mutable.GUEST_BOOKING_OTP = true;
+    const phone = freshPhone();
+    const proved = await proveOn(phone.typed, 'phone-a');
+
+    const again = await start(phone.typed, 'phone-a', proved.deviceProof);
+
     expect(again.body.data.needsOtp).toBe(false);
     expect(typeof again.body.data.guestToken).toBe('string');
+    // Handed back fresh, so a phone in use stays proved.
+    expect(typeof again.body.data.deviceProof).toBe('string');
+  });
+
+  // Found by the security review of 2026-09-30: a number that had proved itself
+  // once was never asked again anywhere, so typing it was enough to act as it.
+  it('sends a code to anybody else who types the number', async () => {
+    mutable.GUEST_BOOKING_OTP = true;
+    const phone = freshPhone();
+    await proveOn(phone.typed, 'phone-a');
+
+    const stranger = await start(phone.typed, 'someone-else');
+
+    expect(stranger.body.data.needsOtp).toBe(true);
+    expect(stranger.body.data.guestToken).toBeUndefined();
+  });
+
+  it('refuses a proof carried to another device, or presented for another number', async () => {
+    mutable.GUEST_BOOKING_OTP = true;
+    const mine = freshPhone();
+    const theirs = freshPhone();
+    const proved = await proveOn(mine.typed, 'phone-a');
+    await proveOn(theirs.typed, 'phone-b');
+
+    const carried = await start(mine.typed, 'phone-c', proved.deviceProof);
+    expect(carried.body.data.needsOtp).toBe(true);
+
+    const misused = await start(theirs.typed, 'phone-a', proved.deviceProof);
+    expect(misused.body.data.needsOtp).toBe(true);
   });
 
   it('refuses a guest booking whose phone was not proved', async () => {

@@ -60,11 +60,14 @@ export async function claim(req: Request, res: Response): Promise<void> {
 }
 
 export async function startGuest(req: Request, res: Response): Promise<void> {
-  const { phone, name } = guestStartBody.parse(req.body);
-  res.json({ ok: true, data: await patientAuth.startGuest(phone, name, client(req)) });
+  const { phone, name, deviceProof } = guestStartBody.parse(req.body);
+  res.json({
+    ok: true,
+    data: await patientAuth.startGuest(phone, name, client(req), deviceProof),
+  });
 }
 
 export async function verifyGuest(req: Request, res: Response): Promise<void> {
   const { phone, name, code } = guestVerifyBody.parse(req.body);
-  res.json({ ok: true, data: await patientAuth.verifyGuest(phone, code, name) });
+  res.json({ ok: true, data: await patientAuth.verifyGuest(phone, code, name, client(req)) });
 }

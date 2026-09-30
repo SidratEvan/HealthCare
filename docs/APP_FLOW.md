@@ -162,7 +162,7 @@ Opened automatically at the confirm step (`S-A-07c`) when no session token exist
 
 | Control | ID | Wiring |
 |---|---|---|
-| এগিয়ে যান | `BTN-GST-NEXT` | If this phone has booked before → prefilled details shown for one-tap confirm (`FR-GST-12`). Else → `MOD-GST-OTP` |
+| এগিয়ে যান | `BTN-GST-NEXT` | If this phone has booked before → prefilled details shown for one-tap confirm (`FR-GST-12`). Else → `MOD-GST-OTP`. "This phone" is the device: it holds the proof `/guest/verify` gave it for the number, and the number typed on any other device is sent a code (decision 85) |
 | অ্যাকাউন্ট আছে? লগ ইন | `BTN-GST-LOGIN` | Optional escape hatch → `S-A-03`, returns to the same step afterwards |
 
 ### `MOD-GST-OTP` One-time phone check
