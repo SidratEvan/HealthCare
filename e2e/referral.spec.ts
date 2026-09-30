@@ -16,6 +16,7 @@
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
+import { closeOtherContexts } from './support/contexts.js';
 import {
   caseState,
   erHospital,
@@ -50,6 +51,12 @@ async function secondConsole(browser: Browser, er: ErHospital): Promise<Page> {
   await openErConsole(page, er);
   return page;
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('the ERs open on referrals, not on empty lists (FR-DEM-04)', () => {
   test('Shapla has Jamuna’s asks waiting, and Padma sees Shapla’s decline on its row', async ({

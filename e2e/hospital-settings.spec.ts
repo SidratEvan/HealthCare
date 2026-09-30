@@ -14,6 +14,7 @@
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
+import { closeOtherContexts } from './support/contexts.js';
 import {
   bedStates,
   chamberDates,
@@ -83,6 +84,12 @@ async function openSettings(page: Page, facility: NewFacility): Promise<void> {
   await page.getByTestId('admin-open-settings').click();
   await expect(page.getByTestId('hospital-settings')).toBeVisible({ timeout: 30_000 });
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('S-B-11: a facility with no seed data sets itself up', () => {
   test.setTimeout(180_000);
