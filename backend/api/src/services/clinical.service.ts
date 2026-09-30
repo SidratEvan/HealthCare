@@ -30,8 +30,8 @@
  * notifications after committing (`FR-QUE-53`), and reaching inside it would
  * mean two places deciding who is next. So the window is: record committed,
  * queue not yet advanced. A doctor who taps again lands on the same visit —
- * `upsertVisit` is idempotent on the booking and keeps the original `signed_at`
- * — and the queue advances on the second tap. The recoverable order was chosen
+ * `upsertVisit` is idempotent on the booking and leaves a signed visit exactly
+ * as it was — and the queue advances on the second tap. The recoverable order was chosen
  * over the atomic one deliberately; the alternative loses a record.
  */
 
@@ -138,6 +138,11 @@ export async function saveVisit(input: {
   if (booking === null) throw notFound('booking');
 
   if (input.principal.kind !== 'staff') throw forbiddenScope({ reason: 'staff_only' });
+  // A clinical record is a doctor's (`BACKEND.md` §7.6). The route requires
+  // the role too; this is the same rule for any other caller of the service.
+  if (!input.principal.roles.includes('doctor')) {
+    throw forbiddenScope({ reason: 'role_not_permitted' });
+  }
   if (input.principal.hospitalId !== booking.hospitalId) {
     throw forbiddenScope({ reason: 'hospital_scope' });
   }
@@ -168,6 +173,13 @@ export async function saveVisit(input: {
         staffUserId: input.principal.id,
       }),
   );
+
+  // Signed is final. A sign sent again is the same act replayed and goes on to
+  // the queue's own replay below; anything else against a signed record is an
+  // edit, and is refused rather than written under the doctor's signature.
+  if (visit.alreadySigned && !body.sign) {
+    throw guardFailed('VISIT_ALREADY_SIGNED', 'A signed visit record cannot be changed.');
+  }
 
   if (!body.sign) {
     return { visitId: visit.id, signed: false, queue: null };

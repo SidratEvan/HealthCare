@@ -27,12 +27,15 @@ import { sql } from 'kysely';
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { StaffRole } from '@platform/domain';
+import { createVisitBody, type StaffRole } from '@platform/domain';
 
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 import { resetEmitter } from '../realtime/emit.js';
+import * as clinicalRepo from '../repositories/clinical.repo.js';
+import { withTransaction } from '../repositories/transaction.js';
+import * as clinical from '../services/clinical.service.js';
 import * as queueService from '../services/queue.service.js';
 
 import {
@@ -475,6 +478,119 @@ describe('writing a visit (FR-DOC-08)', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error.details.reason).toBe('hospital_scope');
+  });
+
+  // BACKEND.md §7.6: a visit is a doctor's. Found by the security review of
+  // 2026-09-30 — every other staff role could sign a diagnosis that the wallet
+  // shows under the doctor's name.
+  it.each(['receptionist', 'ward', 'emergency', 'lab', 'pharmacy', 'hospital_admin'] as const)(
+    'refuses a %s, who has no record to write',
+    async (role) => {
+      await callFirstPatient();
+
+      const response = await postVisit(
+        { bookingId: fixture.bookingIds[0], diagnosisText: 'Not a doctor', sign: true },
+        await staff([role], fixture.hospitalId, fixture.receptionistId),
+      );
+
+      expect(response.status).toBe(403);
+      // Nothing was signed, so nothing moved.
+      const state = await queueService.getState(fixture.sessionId);
+      expect(state.entries.find((e) => e.bookingId === fixture.bookingIds[0])?.status).toBe(
+        'in_chamber',
+      );
+    },
+  );
+
+  it('refuses a non-doctor in the service too, for any caller that is not the route', async () => {
+    await callFirstPatient();
+
+    const attempt = clinical.saveVisit({
+      principal: {
+        kind: 'staff',
+        id: fixture.receptionistId,
+        hospitalId: fixture.hospitalId,
+        roles: ['receptionist'],
+      },
+      actor: { kind: 'staff', staffUserId: fixture.receptionistId as never, role: 'receptionist' },
+      body: createVisitBody.parse({
+        bookingId: fixture.bookingIds[0],
+        diagnosisText: 'Not a doctor',
+        sign: false,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    });
+
+    await expect(attempt).rejects.toMatchObject({
+      code: 'AUTH_FORBIDDEN_SCOPE',
+      details: { reason: 'role_not_permitted' },
+    });
+  });
+
+  it('will not change a signed record, and the wallet keeps what was signed', async () => {
+    await callFirstPatient();
+    await postVisit({ bookingId: fixture.bookingIds[0], diagnosisText: 'Gastritis', sign: true });
+
+    const response = await postVisit({
+      bookingId: fixture.bookingIds[0],
+      diagnosisText: 'Rewritten afterwards',
+      sign: false,
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.details.guard).toBe('VISIT_ALREADY_SIGNED');
+
+    const records = await request(app)
+      .get(`${BASE}/patients/${String(fixture.patientIds[0])}/records`)
+      .set('authorization', `Bearer ${await staff(['doctor'])}`);
+    const visits = records.body.data.visits as {
+      bookingId: string;
+      diagnosisText: string | null;
+    }[];
+    expect(visits.find((visit) => visit.bookingId === fixture.bookingIds[0])?.diagnosisText).toBe(
+      'Gastritis',
+    );
+  });
+
+  it('finishes a sign whose queue step was lost, without rewriting the record', async () => {
+    await callFirstPatient();
+
+    // The window `clinical.service` describes: the record committed signed, the
+    // queue not yet advanced. The doctor taps sign again.
+    const bookingId = fixture.bookingIds[0];
+    if (bookingId === undefined) throw new Error('the fixture has no bookings');
+    const booking = await clinicalRepo.findChamberBooking(bookingId);
+    if (booking === null) throw new Error('the fixture booking is missing');
+    await withTransaction(
+      async (trx) =>
+        await clinicalRepo.upsertVisit(trx, {
+          bookingId: booking.bookingId,
+          patientId: booking.patientId,
+          hospitalId: booking.hospitalId,
+          doctorId: booking.doctorId,
+          diagnosisText: 'Gastritis',
+          adviceTextBn: null,
+          followUpDate: null,
+          symptomSignal: null,
+          sign: true,
+          staffUserId: fixture.doctorStaffId,
+        }),
+    );
+
+    const response = await postVisit({
+      bookingId,
+      diagnosisText: 'Changed on the second tap',
+      sign: true,
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.signed).toBe(true);
+
+    const state = await queueService.getState(fixture.sessionId);
+    expect(state.entries.find((e) => e.bookingId === bookingId)?.status).toBe('done');
+
+    const record = await clinicalRepo.findVisitForBooking(bookingId);
+    expect(record?.diagnosisText).toBe('Gastritis');
   });
 
   it('refuses a write with no idempotency key', async () => {

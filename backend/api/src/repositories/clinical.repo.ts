@@ -383,11 +383,17 @@ export interface VisitWrite {
  * conflict target turns that refusal into the update it almost always means: a
  * doctor who saved a draft and then signed.
  *
- * `signed_at` only ever moves from null to a time. Re-signing an already signed
- * visit keeps the original timestamp, because when the record was made is a
- * fact about the consultation and not about the last tap.
+ * **A signed visit is never changed** (`FR-DOC-08`). The update applies only
+ * while `signed_at` is null; against a signed row it does nothing, and the
+ * answer says so (`alreadySigned`) for the service to decide between a replayed
+ * sign and a refused edit. Before this, a draft save after signing rewrote the
+ * diagnosis and kept the original signing time — a record that read as signed
+ * by the doctor and said something else.
  */
-export async function upsertVisit(trx: Tx, write: VisitWrite): Promise<{ id: string }> {
+export async function upsertVisit(
+  trx: Tx,
+  write: VisitWrite,
+): Promise<{ id: string; alreadySigned: boolean }> {
   const result = await sql<{ id: string }>`
     INSERT INTO visits
       (booking_id, patient_id, hospital_id, doctor_id,
@@ -407,14 +413,22 @@ export async function upsertVisit(trx: Tx, write: VisitWrite): Promise<{ id: str
            advice_text_bn = EXCLUDED.advice_text_bn,
            follow_up_date = EXCLUDED.follow_up_date,
            symptom_signal = EXCLUDED.symptom_signal,
-           signed_at      = coalesce(visits.signed_at, EXCLUDED.signed_at)
+           signed_at      = EXCLUDED.signed_at
+     WHERE visits.signed_at IS NULL
     RETURNING id
   `.execute(trx);
 
   const row = result.rows[0];
-  if (row === undefined) throw new Error('visit upsert returned no row.');
+  if (row !== undefined) return { id: row.id, alreadySigned: false };
 
-  return { id: row.id };
+  // No row back: the conflict found a signed visit and the WHERE left it alone.
+  const signed = await sql<{ id: string }>`
+    SELECT id FROM visits WHERE booking_id = ${write.bookingId}::uuid AND signed_at IS NOT NULL
+  `.execute(trx);
+  const existing = signed.rows[0];
+  if (existing === undefined) throw new Error('visit upsert returned no row.');
+
+  return { id: existing.id, alreadySigned: true };
 }
 
 /**
