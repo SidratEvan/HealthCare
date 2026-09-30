@@ -14,12 +14,15 @@ import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
+import { env } from '../env.js';
+import { counter } from '../middleware/rateLimit.js';
 
+import { proveGuestPhone } from './support/guestPhone.js';
 import { createQueueFixture, type QueueFixture } from './support/queueFixture.js';
 import { bearer } from './support/tokens.js';
 
@@ -310,5 +313,70 @@ describe('reception sees who prepaid (FR-REC-30)', () => {
 
     const waiting = (panel.body as { data: { waiting: { prepaid: boolean }[] } }).data.waiting;
     expect(waiting.map((row) => row.prepaid)).toEqual([true, false]);
+  });
+});
+
+// Found by the security review of 2026-09-30: joining asked for no proof, and a
+// second join with the same phone and name was answered with the existing
+// place and a fresh link to it — so anybody who knew both could leave, decline
+// or accept somebody else's place.
+describe('the phone is proved before joining (FR-GST-03)', () => {
+  const mutable = env as { GUEST_BOOKING_OTP?: boolean | undefined };
+
+  beforeEach(() => {
+    counter.reset();
+    mutable.GUEST_BOOKING_OTP = true;
+  });
+
+  afterEach(() => {
+    delete mutable.GUEST_BOOKING_OTP;
+  });
+
+  async function joinAs(
+    guest: { readonly name: string; readonly phone: string },
+    token: string | null,
+  ): Promise<request.Response> {
+    const key = randomUUID();
+    const post = request(app)
+      .post(`${BASE}/sessions/${fixture.sessionId}/standby`)
+      .set('Idempotency-Key', key);
+    if (token !== null) void post.set('Authorization', bearer(token));
+    return await post.send({
+      guest: { ...guest, ageYears: 41, sex: 'female' },
+      prepay: null,
+      clientEventId: key,
+    });
+  }
+
+  it('refuses a join whose phone was not proved', async () => {
+    await fillChamber();
+
+    const response = await joinAs({ name: 'সালমা বেগম', phone: phone() }, null);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.details.reason).toBe('phone_unverified');
+  });
+
+  it("joins a proved phone, and gives nobody else that person's place", async () => {
+    await fillChamber();
+    const owner = { name: 'সালমা বেগম', phone: phone() };
+
+    const joined = await joinAs(owner, await proveGuestPhone(app, owner.phone, owner.name));
+    expect(joined.status).toBe(201);
+
+    // The same name and number, typed by somebody who has not proved it.
+    const stranger = await joinAs(owner, null);
+    expect(stranger.status).toBe(401);
+    expect(stranger.body.data).toBeUndefined();
+  });
+
+  it('refuses a proved phone joining under a number it did not prove', async () => {
+    await fillChamber();
+    const mine = phone();
+    const token = await proveGuestPhone(app, mine, 'সালমা বেগম');
+
+    const response = await joinAs({ name: 'সালমা বেগম', phone: phone() }, token);
+
+    expect(response.status).toBe(401);
   });
 });

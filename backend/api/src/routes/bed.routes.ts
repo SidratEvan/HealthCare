@@ -149,7 +149,11 @@ bedRoutes.post(
 
 // --- Bed requests (FR-PAT-52) -----------------------------------------------
 
-/** Public: a family asks for a bed with name and phone, as a guest books. */
+/**
+ * No account: a family asks for a bed with name and phone, as a guest books —
+ * and, as a guest booking does, proves the phone first where the deployment
+ * asks (`FR-GST-03`; the controller).
+ */
 bedRoutes.post('/bed-requests', write, validate({ body: createBedRequestBody }), bed.createRequest);
 
 /** Public: the signed token in the path is the credential. */
