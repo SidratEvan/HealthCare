@@ -145,7 +145,7 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 4576, in about three minutes.
+`pnpm test` reports 4577, in about three minutes.
 `pnpm test:e2e` reports 136, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
@@ -154,7 +154,7 @@ demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
 `check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`, 1 in `data-import.spec.ts`, 1 in `patient-account.spec.ts`, 2 in `self-host.spec.ts`, 2 in `staff-2fa.spec.ts`. The last full
-run took twenty-three minutes.
+run took eighteen and a half minutes (twenty-nine before `fix/e2e-context-leaks`).
 
 **The two `demo.routes.test.ts` failures were Fridays, not early mornings —
 fixed in `fix/console-picker-friday`.** They expect the ER console and the ward
@@ -1977,6 +1977,25 @@ afternoon.
 
 ### Things learned the hard way, so they are not relearned
 
+- **A second device a spec opens lives until the whole run ends**
+  (`fix/e2e-context-leaks`, 2026-09-30). `browser.newContext()` belongs to the
+  worker's browser, not the test, and there is one worker. No-show, referral,
+  emergency, check-in and language-switch never closed theirs, so their pages
+  kept polling: by the last twenty specs of a full run the console took
+  seventeen seconds to open, the API went six seconds without answering, and
+  whichever spec came next failed — the canary's "tap after tap" in one run,
+  standby and the wallet in the next, each passing alone. Every multi-device
+  spec now closes what it opened after each test (`e2e/support/contexts.ts`);
+  the canary's file is unchanged, since it already closes its own. A late
+  spec failing only in a full run is load before it is logic.
+
+- **A development build mounts every screen twice** (React strict mode), so an
+  effect that asks the server to *create* something runs twice. `S-B-00d`'s
+  setup did, and two secrets raced: the screen showed one, the database kept
+  the other, and the right code was refused. The server now answers a repeated
+  setup with the same unconfirmed secret. Anything a screen creates on mount
+  must be idempotent on the server, not guarded on the client.
+
 - **The E2E database is the one database no suite migrates.** The unit, API
   and schema suites build theirs from nothing, so a step's migration is always
   there for them. `healthcare_dev`, which Playwright drives, was only ever
@@ -2801,6 +2820,13 @@ Raised while building the national layer (step 20):
 82. **An administrator cannot reset their own two-step on `S-B-11`**
    (`own_two_factor`), for the same reason as their own password: another
    person's check. A facility's only administrator is reset from the server.
+83. **Found, not fixed: `BTN-B02-NEXT` waits for the server between its two
+   halves.** `ReceptionConsole.callNext` awaits `queue.act('PATIENT_DONE')`,
+   and `act` awaits the network flush, before it queues `PATIENT_CALLED` — so
+   on a slow server the "called" half of the tap appears only after a round
+   trip, which is not the instant answer `NFR-02` asks for. Seen while
+   diagnosing the canary on 2026-09-30; offline it is fine (the flush returns
+   at once). A small `fix/` branch: queue both events, then flush once.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
