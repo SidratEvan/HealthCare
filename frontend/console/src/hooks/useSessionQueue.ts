@@ -60,7 +60,18 @@ export interface SessionQueue {
   readonly clearConflict: () => void;
   /** Records an action, applies it locally, and syncs when it can. */
   readonly act: (type: QueueEventType, payload: Record<string, unknown>) => Promise<void>;
+  /**
+   * Several actions from one tap, recorded and applied together, then sent in
+   * one flush — so the last is on screen as soon as the first.
+   */
+  readonly actMany: (actions: readonly QueueAction[]) => Promise<void>;
   readonly loading: boolean;
+}
+
+/** One action as a console takes it. */
+export interface QueueAction {
+  readonly type: QueueEventType;
+  readonly payload: Record<string, unknown>;
 }
 
 export interface SessionQueueOptions {
@@ -213,26 +224,40 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
    * state and the queued event — which is what lets a later conflict be
    * matched back to the row it belongs to (`SY-02`).
    */
-  const act = useCallback(
-    async (type: QueueEventType, payload: Record<string, unknown>) => {
+  const actMany = useCallback(
+    async (actions: readonly QueueAction[]) => {
       const queue = queueRef.current;
       if (queue === null) return;
 
-      await queue.enqueue({
-        clientEventId: crypto.randomUUID(),
-        sessionId,
-        type,
-        payload,
-        clientTs: now().toISOString(),
-      });
+      // The server orders a batch by client time and breaks a tie on the
+      // random key (`SY-01`), so actions from one tap — made in the same
+      // millisecond — are a millisecond apart, in the order they were taken.
+      const at = now().getTime();
+      for (const [index, action] of actions.entries()) {
+        await queue.enqueue({
+          clientEventId: crypto.randomUUID(),
+          sessionId,
+          type: action.type,
+          payload: action.payload,
+          clientTs: new Date(at + index).toISOString(),
+        });
+      }
 
       // Applied to the screen before anything touches the network. A
       // receptionist's tap must answer instantly whether or not there is a
-      // server to hear about it (`NFR-02`, `FR-OFF-01`).
+      // server to hear about it (`NFR-02`, `FR-OFF-01`) — every action the tap
+      // made, not only the first: one flush for all of them, in order.
       await refreshPending();
       await flush();
     },
     [sessionId, now, refreshPending, flush],
+  );
+
+  const act = useCallback(
+    async (type: QueueEventType, payload: Record<string, unknown>) => {
+      await actMany([{ type, payload }]);
+    },
+    [actMany],
   );
 
   /**
@@ -264,6 +289,7 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
       setLastConflict(null);
     },
     act,
+    actMany,
     loading,
   };
 }
