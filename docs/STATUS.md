@@ -717,8 +717,15 @@ Get-Content "$env:LOCALAPPDATA\HealthCareDemo\refresh.log" -Tail 20
 Unregister-ScheduledTask -TaskName 'HealthCare demo refresh' -Confirm:$false   # stop early
 ```
 
-After 2 October the last reset's sessions run to 9 October, then the picker
-empties day by day. A further week is another owner's-word decision.
+**Extended and repaired on the owner's word (2026-09-30).** The trigger now
+ends 2026-10-15 23:00 local, so the last reset is **Friday 16 October, 08:00
+Dhaka**, and its sessions run to about 23 October. The resets had been
+failing since the pilot migrations landed on `mvp`: `db:verify` refused
+(Supabase stopped at 0026) and, as designed, nothing was truncated, so the demo
+kept its 25 September data. `ALLOW_REMOTE_DB=1 pnpm db:migrate` applied 0027–0033
+to Supabase the same day — all additive, so the deployed API from `main` is
+unaffected — and `db:verify` passes there. **Before a pilot step merges with a
+new migration, apply it to Supabase, or the next morning's reset is skipped.**
 
 ### The first scheduled refresh, and the rail (`fix/demo-refresh-retry`, `fix/console-rail-links`)
 
