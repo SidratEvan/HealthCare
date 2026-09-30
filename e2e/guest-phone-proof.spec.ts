@@ -84,6 +84,11 @@ test('a booking asks for the code, and books with the guest token it proves', as
 
   expect(carriesGuestToken(await booked)).toBe(true);
   await expect(page.getByTestId('booking-success')).toBeVisible();
+
+  // Decision 85: the device keeps its proof for the number, so the same phone
+  // is not asked again — and only this phone, since the server checks both.
+  const kept = await page.evaluate(() => localStorage.getItem('patient.guestDevice'));
+  expect(Object.keys(JSON.parse(kept ?? '{}') as Record<string, string>)).toContain(phone);
 });
 
 test('a standby place asks for the code, and joins with the guest token it proves', async ({

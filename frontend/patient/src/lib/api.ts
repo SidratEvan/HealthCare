@@ -145,19 +145,28 @@ function callerFor(guestToken: string | null | undefined): ApiClient {
 export async function startGuest(input: {
   readonly phone: string;
   readonly name: string;
+  /** What this device holds for the number, if it proved it before (decision 85). */
+  readonly deviceProof?: string;
 }): Promise<
-  | { readonly needsOtp: false; readonly guestToken: string | null }
+  | {
+      readonly needsOtp: false;
+      readonly guestToken: string | null;
+      readonly deviceProof?: string;
+    }
   | { readonly needsOtp: true; readonly demoCode?: string }
 > {
   return await api.post('/guest/start', input);
 }
 
-/** `MOD-GST-OTP`: the code for the guest token. No account is made (`FR-GST-04`). */
+/**
+ * `MOD-GST-OTP`: the code for the guest token, and the proof this device keeps
+ * so it is not asked again. No account is made (`FR-GST-04`).
+ */
 export async function verifyGuest(input: {
   readonly phone: string;
   readonly name: string;
   readonly code: string;
-}): Promise<{ readonly guestToken: string }> {
+}): Promise<{ readonly guestToken: string; readonly deviceProof: string }> {
   return await api.post('/guest/verify', input);
 }
 

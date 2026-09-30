@@ -87,6 +87,11 @@ export const claimBody = z.strictObject({ confirm: z.boolean().default(false) })
 export const guestStartBody = z.strictObject({
   phone: typedPhone,
   name: z.string().trim().min(1).max(120),
+  /**
+   * What `/guest/verify` gave this device for this number (decision 85): with
+   * it, a returning guest on the same phone is not asked for a code again.
+   */
+  deviceProof: z.string().min(20).max(2000).optional(),
 });
 
 /** `POST /guest/verify` — the code from `MOD-GST-OTP`. */

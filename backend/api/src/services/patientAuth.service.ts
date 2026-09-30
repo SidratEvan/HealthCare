@@ -39,7 +39,7 @@ import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 
 import { normaliseBdMobile } from '@platform/domain';
 
 import { sms } from '../adapters/sms.js';
-import { durationMs, signToken } from '../config/jwt.js';
+import { durationMs, signToken, verifyToken } from '../config/jwt.js';
 import { logger } from '../config/logger.js';
 import { env } from '../env.js';
 import { AppError, validationFailed } from '../errors/AppError.js';
@@ -293,40 +293,88 @@ async function guestTokenFor(identityId: string): Promise<string> {
   return await signToken({ kind: 'access', claims: { sub: identityId, kind: 'guest' } });
 }
 
+/** The device a proof is bound to: a hash of its user agent, never the agent itself. */
+function deviceMark(client: Client): string {
+  return sha256(deviceOf(client) ?? '');
+}
+
 /**
- * `MOD-A07-GUEST`'s next step. A number that has already proved itself is not
- * asked again (`FR-GST-12`); a new one is sent a code; with the check off,
- * nothing is needed.
+ * What the device keeps once its number has proved itself (decision 85,
+ * `APP_FLOW.md` A1: the guest's proof is "bound to phone + device"). It names
+ * the number's guest identity and this device, and opens only the skip of the
+ * code in `startGuest` — on this device, for this number.
+ */
+async function deviceProofFor(identityId: string, client: Client): Promise<string> {
+  return await signToken({
+    kind: 'guest_device',
+    claims: { sub: identityId, kind: 'guest', dev: deviceMark(client) },
+  });
+}
+
+/** True when `proof` was issued to this device for this identity, and is live. */
+async function provesDevice(proof: string, identityId: string, client: Client): Promise<boolean> {
+  const verified = await verifyToken(proof, 'guest_device');
+  return (
+    verified.ok && verified.claims.sub === identityId && verified.claims.dev === deviceMark(client)
+  );
+}
+
+/**
+ * `MOD-A07-GUEST`'s next step. A number proves itself once per device
+ * (`FR-GST-12`, decision 85): the device that did so presents its proof and is
+ * not asked again; anybody else — another phone, or a stranger who types the
+ * number — is sent a code. With the check off, nothing is needed.
+ *
+ * Until the security review of 2026-09-30 a number that had proved itself once
+ * was never asked again anywhere, so typing somebody's number was enough to
+ * book, join a standby list or ask for a bed as them.
  */
 export async function startGuest(
   typedPhone: string,
   name: string,
   client: Client,
+  deviceProof?: string,
 ): Promise<
-  | { needsOtp: false; guestToken: string | null }
+  | { needsOtp: false; guestToken: string | null; deviceProof?: string }
   | { needsOtp: true; ttlSeconds: number; resendAfterSeconds: number; demoCode?: string }
 > {
   const phone = phoneOf(typedPhone);
   if (!guestPhoneCheckRequired()) return { needsOtp: false, guestToken: null };
   const known = await repo.verifiedGuest(phone);
-  if (known !== null) return { needsOtp: false, guestToken: await guestTokenFor(known) };
+  if (
+    known !== null &&
+    deviceProof !== undefined &&
+    (await provesDevice(deviceProof, known, client))
+  ) {
+    // A fresh proof each time, so a phone in use stays proved.
+    return {
+      needsOtp: false,
+      guestToken: await guestTokenFor(known),
+      deviceProof: await deviceProofFor(known, client),
+    };
+  }
   void name;
   return { needsOtp: true, ...(await requestCode(phone, client)) };
 }
 
 /**
  * `MOD-GST-OTP`: the code proves the number, and the answer is a guest token
- * for it. No account is made and nothing more is asked (`FR-GST-04`).
+ * for it and the proof this device keeps. No account is made and nothing more
+ * is asked (`FR-GST-04`).
  */
 export async function verifyGuest(
   typedPhone: string,
   code: string,
   name: string,
-): Promise<{ guestToken: string }> {
+  client: Client,
+): Promise<{ guestToken: string; deviceProof: string }> {
   const phone = phoneOf(typedPhone);
   await checkCode(phone, code);
   const identityId = await repo.markGuestVerified(phone, name);
-  return { guestToken: await guestTokenFor(identityId) };
+  return {
+    guestToken: await guestTokenFor(identityId),
+    deviceProof: await deviceProofFor(identityId, client),
+  };
 }
 
 /**
