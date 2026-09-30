@@ -276,7 +276,7 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 | Live status pill | — | চেম্বারে আছেন · এখন চলছে #12 / আসবেন ৫:০০ / আজ বসবেন না (`FR-PAT-13`), subscribed to the session channel while open |
 | Chamber schedule list | `LIST-A06D-SESSIONS` | Rows per session: day, time, hospital, serials left |
 | সিরিয়াল নিন | `BTN-A06D-BOOK` | → `S-A-07b` Session picker |
-| স্ট্যান্ডবাই তালিকায় নাম দিন | `BTN-A06D-STANDBY` | Visible only when a session is full, beneath its card → `MOD-A06D-STANDBY` → `POST /sessions/:id/standby` → `S-A-08s` (`FR-PAT-25`) |
+| স্ট্যান্ডবাই তালিকায় নাম দিন | `BTN-A06D-STANDBY` | Visible only when a session is full, beneath its card → `MOD-A06D-STANDBY` → where the deployment asks, `POST /guest/start` and `MOD-GST-OTP` inline, as the booking's confirm does (`FR-GST-03`) → `POST /sessions/:id/standby` → `S-A-08s` (`FR-PAT-25`) |
 | রোগীদের মতামত | `SEC-A06D-FEEDBACK` | Aggregate ratings, shown only above the volume threshold (`FR-PAT-83`) |
 
 ---
@@ -486,7 +486,7 @@ Ranking: capability match → travel time → ER load → free beds. Stale facil
 |---|---|---|
 | Bed type chips | `CHIP-A11-<type>` | সাধারণ / কেবিন / এইচডিইউ / আইসিইউ / সিসিইউ / এনআইসিইউ / বার্ন |
 | Hospital result row | `CARD-A11-<id>` | Free count, nightly price, freshness |
-| বেড অনুরোধ করুন | `BTN-A11-REQUEST-<id>` | → `MOD-A11-REQUEST` (patient profile, expected arrival, condition note) → `POST /bed-requests` → ward console pending list (`FR-BED-07`) |
+| বেড অনুরোধ করুন | `BTN-A11-REQUEST-<id>` | → `MOD-A11-REQUEST` (patient profile, expected arrival, condition note) → where the deployment asks, `MOD-GST-OTP` inline (`FR-GST-03`) → `POST /bed-requests` → ward console pending list (`FR-BED-07`) |
 | Request status | — | অনুরোধ পাঠানো → গৃহীত (hold expiry countdown) → নিশ্চিত / বাতিল |
 
 ### `S-A-12` Health wallet (`FR-PAT-60`–`65`)

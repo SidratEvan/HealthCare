@@ -28,20 +28,21 @@ import {
   formatNumber,
   formatSerial,
   formatTaka,
-  formatPatient,
   tp,
   formatAge,
   districtName,
   numeralsFor,
   localName,
 } from '@platform/i18n';
-import { Button, Card, Chip, FreshnessLine, Input, OtpInput, useLocale } from '@platform/ui';
+import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
+import { GuestCodeCard } from '@/components/GuestCodeCard';
 import { HospitalBeds } from '@/components/HospitalBeds';
 import { BackIcon, ChevronIcon, HospitalIcon } from '@/components/icons';
 import { StandbyJoin } from '@/components/StandbyJoin';
 import { useDeployment } from '@/hooks/useDeployment';
+import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
 import {
@@ -50,8 +51,6 @@ import {
   doctorSessions,
   doctorsAtHospital,
   hospitalsForSpecialty,
-  startGuest,
-  verifyGuest,
 } from '@/lib/api';
 import { rememberBooking } from '@/lib/bookings';
 
@@ -741,8 +740,12 @@ function Confirm({
    * to prove itself before booking. A demonstration never opens it; a number
    * that has proved itself before is not asked again (`FR-GST-12`).
    */
-  const [phoneCheck, setPhoneCheck] = useState<{ readonly demoCode: string | null } | null>(null);
-  const [codeWrong, setCodeWrong] = useState(false);
+  const {
+    pending: phoneCheck,
+    codeWrong,
+    begin: beginPhoneCheck,
+    prove: provePhone,
+  } = useGuestPhoneProof();
 
   const finish = useCallback(
     async (guestToken: string | null) => {
@@ -764,13 +767,10 @@ function Confirm({
     async (code: string) => {
       if (phoneStored === null) return;
       setBusy(true);
-      setCodeWrong(false);
       try {
-        const proved = await verifyGuest({ phone: phoneStored, name: name.trim(), code });
-        await finish(proved.guestToken);
+        await finish(await provePhone(phoneStored, name.trim(), code));
       } catch (error) {
         const code = (error as { code?: string }).code;
-        setCodeWrong(code === 'AUTH_OTP_INVALID');
         onFailure(
           code === 'AUTH_OTP_INVALID'
             ? tp('accountCodeWrong', locale)
@@ -782,7 +782,7 @@ function Confirm({
         setBusy(false);
       }
     },
-    [phoneStored, name, finish, onFailure, locale],
+    [phoneStored, name, finish, provePhone, onFailure, locale],
   );
 
   const confirm = useCallback(async () => {
@@ -791,11 +791,8 @@ function Confirm({
     onFailure(null);
 
     try {
-      const start = await startGuest({ phone: phoneStored, name: name.trim() });
-      if (start.needsOtp) {
-        setPhoneCheck({ demoCode: start.demoCode ?? null });
-        return;
-      }
+      const start = await beginPhoneCheck(phoneStored, name.trim());
+      if (!start.ready) return;
       await finish(start.guestToken);
     } catch (error) {
       // Stated in Bangla, by cause. "Something went wrong" tells a person
@@ -811,7 +808,7 @@ function Confirm({
     } finally {
       setBusy(false);
     }
-  }, [phoneStored, name, finish, onFailure, locale]);
+  }, [phoneStored, name, finish, beginPhoneCheck, onFailure, locale]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -972,24 +969,15 @@ function Confirm({
       </fieldset>
 
       {phoneCheck === null ? null : (
-        <Card data-testid="guest-otp">
-          <p className="text-body-md">{formatPatient('accountCodeSent', locale, { phone })}</p>
-          <div className="mt-3">
-            <OtpInput
-              label={tp('accountCode', locale)}
-              invalid={codeWrong}
-              disabled={busy}
-              onComplete={(code) => {
-                void proveCode(code);
-              }}
-            />
-          </div>
-          {phoneCheck.demoCode === null ? null : (
-            <p className="mt-3 rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700">
-              {formatPatient('accountDemoCode', locale, { code: phoneCheck.demoCode })}
-            </p>
-          )}
-        </Card>
+        <GuestCodeCard
+          phone={phone}
+          demoCode={phoneCheck.demoCode}
+          invalid={codeWrong}
+          disabled={busy}
+          onComplete={(code) => {
+            void proveCode(code);
+          }}
+        />
       )}
 
       {failure === null ? null : (

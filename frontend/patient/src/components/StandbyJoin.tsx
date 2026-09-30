@@ -18,7 +18,9 @@ import { normaliseBdMobile } from '@platform/domain';
 import { formatDateTime, formatTaka, tp, numeralsFor, localName } from '@platform/i18n';
 import { Button, Card, Input, useLocale } from '@platform/ui';
 
+import { GuestCodeCard } from '@/components/GuestCodeCard';
 import { useDeployment } from '@/hooks/useDeployment';
+import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
 import { joinStandby } from '@/lib/api';
 
 import type { SessionCard, StandbyJoined } from '@/lib/types';
@@ -61,32 +63,79 @@ export function StandbyJoin({
   const phoneValid = phoneStored !== null;
   const ready = online && name.trim().length >= 2 && phoneValid && age !== '';
 
-  const submit = useCallback(async () => {
-    if (phoneStored === null) return;
-    setBusy(true);
-    setFailure(null);
-    try {
+  // `FR-GST-03`: a place on the list is followed by money or an SMS thread, so
+  // the phone is proved first where this deployment asks, as a booking's is.
+  const {
+    pending: phoneCheck,
+    codeWrong,
+    begin: beginPhoneCheck,
+    prove: provePhone,
+  } = useGuestPhoneProof();
+
+  const join = useCallback(
+    async (guestToken: string | null) => {
+      if (phoneStored === null) return;
       onJoined(
         await joinStandby({
           sessionId: session.id,
           guest: { name: name.trim(), phone: phoneStored, ageYears: Number(age), sex },
           prepay,
           idempotencyKey,
+          guestToken,
         }),
       );
-    } catch (error) {
+    },
+    [session.id, name, phoneStored, age, sex, prepay, idempotencyKey, onJoined],
+  );
+
+  const failed = useCallback(
+    (error: unknown) => {
+      const code = (error as { code?: string }).code;
       const guard = (error as { details?: { guard?: string } }).details?.guard;
       setFailure(
-        guard === 'SESSION_NOT_FULL'
-          ? tp('standbyNotFull', locale)
-          : guard === 'ALREADY_BOOKED'
-            ? tp('standbyAlreadyBooked', locale)
-            : tp('standbyJoinFailed', locale),
+        code === 'AUTH_OTP_INVALID'
+          ? tp('accountCodeWrong', locale)
+          : code === 'AUTH_LOCKED'
+            ? tp('accountLocked', locale)
+            : guard === 'SESSION_NOT_FULL'
+              ? tp('standbyNotFull', locale)
+              : guard === 'ALREADY_BOOKED'
+                ? tp('standbyAlreadyBooked', locale)
+                : tp('standbyJoinFailed', locale),
       );
+    },
+    [locale],
+  );
+
+  const submit = useCallback(async () => {
+    if (phoneStored === null) return;
+    setBusy(true);
+    setFailure(null);
+    try {
+      const start = await beginPhoneCheck(phoneStored, name.trim());
+      if (start.ready) await join(start.guestToken);
+    } catch (error) {
+      failed(error);
     } finally {
       setBusy(false);
     }
-  }, [session.id, name, phoneStored, age, sex, prepay, idempotencyKey, onJoined, locale]);
+  }, [phoneStored, name, beginPhoneCheck, join, failed]);
+
+  const proveCode = useCallback(
+    async (code: string) => {
+      if (phoneStored === null) return;
+      setBusy(true);
+      setFailure(null);
+      try {
+        await join(await provePhone(phoneStored, name.trim(), code));
+      } catch (error) {
+        failed(error);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [phoneStored, name, provePhone, join, failed],
+  );
 
   return (
     <section className="flex flex-col gap-4" data-testid="standby-join">
@@ -220,6 +269,18 @@ export function StandbyJoin({
           <span className="text-body-sm text-ink-secondary">{tp('standbyAskNote', locale)}</span>
         </button>
       </fieldset>
+
+      {phoneCheck === null ? null : (
+        <GuestCodeCard
+          phone={phone}
+          demoCode={phoneCheck.demoCode}
+          invalid={codeWrong}
+          disabled={busy}
+          onComplete={(code) => {
+            void proveCode(code);
+          }}
+        />
+      )}
 
       {failure === null ? null : (
         <p role="alert" className="rounded-sm bg-alert-100 p-3 text-body-md text-alert-700">

@@ -6,6 +6,7 @@
 import type { AcceptStandbyOfferBody, JoinStandbyBody } from '@platform/domain';
 
 import { notFound } from '../errors/AppError.js';
+import * as patientAuth from '../services/patientAuth.service.js';
 import * as standby from '../services/standby.service.js';
 
 import type { Request, Response } from 'express';
@@ -13,6 +14,12 @@ import type { Request, Response } from 'express';
 /** `POST /sessions/:id/standby` — 201 for a new place, 200 for a replay. */
 export async function join(req: Request, res: Response): Promise<void> {
   const body = req.body as JoinStandbyBody;
+  // FR-GST-03: money and an SMS thread follow a place on the list, so the phone
+  // is proved first where the deployment asks, as a guest booking's is. It is
+  // also what makes the join's replay safe: a second join with the same phone
+  // and name answers with the existing place and its link, and only the proven
+  // owner of the number may be handed that.
+  await patientAuth.assertGuestPhoneProven(req.principal, body.guest.phone);
   const joined = await standby.join({
     sessionId: param(req, 'id'),
     guest: body.guest,

@@ -119,9 +119,7 @@ export async function book(input: {
   /** From `MOD-GST-OTP`, when the deployment asks a guest to prove the phone (`FR-GST-03`). */
   readonly guestToken?: string | null;
 }): Promise<BookingResponse> {
-  const token = input.guestToken ?? null;
-  const caller = token === null ? api : new ApiClient({ baseUrl: BASE, getToken: () => token });
-  return await caller.post<BookingResponse>(
+  return await callerFor(input.guestToken).post<BookingResponse>(
     '/bookings',
     {
       sessionId: input.sessionId,
@@ -131,6 +129,12 @@ export async function book(input: {
     },
     input.idempotencyKey,
   );
+}
+
+/** The shared client, or one carrying a proved phone's guest token. */
+function callerFor(guestToken: string | null | undefined): ApiClient {
+  const token = guestToken ?? null;
+  return token === null ? api : new ApiClient({ baseUrl: BASE, getToken: () => token });
 }
 
 /**
@@ -321,8 +325,10 @@ export async function requestBed(input: {
   readonly expectedArrivalAt: string | null;
   readonly note: string | null;
   readonly idempotencyKey: string;
+  /** From `MOD-GST-OTP`, when the deployment asks the phone to be proved (`FR-GST-03`). */
+  readonly guestToken?: string | null;
 }): Promise<BedRequestCreated> {
-  return await api.post<BedRequestCreated>(
+  return await callerFor(input.guestToken).post<BedRequestCreated>(
     '/bed-requests',
     {
       hospitalId: input.hospitalId,
@@ -415,8 +421,10 @@ export async function joinStandby(input: {
   };
   readonly prepay: 'bkash' | 'nagad' | 'card' | null;
   readonly idempotencyKey: string;
+  /** From `MOD-GST-OTP`, when the deployment asks the phone to be proved (`FR-GST-03`). */
+  readonly guestToken?: string | null;
 }): Promise<StandbyJoined> {
-  return await api.post<StandbyJoined>(
+  return await callerFor(input.guestToken).post<StandbyJoined>(
     `/sessions/${input.sessionId}/standby`,
     { guest: input.guest, prepay: input.prepay, clientEventId: input.idempotencyKey },
     input.idempotencyKey,

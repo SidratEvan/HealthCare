@@ -7,9 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/visit-doctor-only` — **the first of the security review's
-four holes closed: only a doctor writes a visit, and a signed one is final**
-(below, *Security review*). Before that, `chore/security-review` — **a
+Last updated: `fix/standby-phone-proof` — **the second of the security
+review's holes: a standby place and a bed request now prove the phone first,
+as a booking does** (below, *Security review*). Before that,
+`fix/visit-doctor-only` — **only a doctor writes a visit, and a signed one is
+final**. Before that, `chore/security-review` — **a
 security review of the whole codebase found four holes to close before real
 patient data**. Before that, `feat/staff-2fa` — **an
 administrator signs in with a code
@@ -219,8 +221,17 @@ its own `fix/*` branch with tests**, marked below as it lands.
    colleague's signed visit, unaudited. `BACKEND.md` §7.6 says doctor. Fix:
    `requireRole('doctor')` and the same check in `saveVisit`; update only
    `WHERE signed_at IS NULL`; tests for every non-doctor role.
-2. **A standby place can be taken over with a name and a phone number**
-   (8/10, Medium, High at worst). `POST /sessions/:id/standby` asks for no code,
+2. **Fixed (`fix/standby-phone-proof`), with a limit until 3 lands.** Standby
+   join and bed requests now run `assertGuestPhoneProven`, as a guest booking
+   does, so the dedupe that answers with an existing place or request is
+   reached only by the number's proven owner. The patient app proves the phone
+   on all three forms through one hook (`useGuestPhoneProof`) and one card
+   (`GuestCodeCard`); `guest-phone-proof.spec.ts` drives each form through a
+   real code. **The limit:** `/guest/start` still hands a returning number a
+   token without a code (item 3), and that token passes this check too — so
+   this closes the anonymous path, and 3 closes the rest. Was: **a standby
+   place can be taken over with a name and a phone number** (8/10, Medium,
+   High at worst). `POST /sessions/:id/standby` asks for no code,
    and joining again with the same phone and name returns the existing place
    with a fresh token (`standby.service.ts:118`, `:158`). That token leaves,
    declines or accepts; after seating, the first status read mints the

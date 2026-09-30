@@ -2,9 +2,10 @@
  * The patient's half of the standby list (`FR-PAT-25`, `FR-PAT-26`,
  * `FR-PAT-27`; `BTN-A06D-STANDBY`, `S-A-08s`).
  *
- * All public, as a guest booking is: joining needs a name and a phone, and
- * everything after it is answered by the signed status token in the path —
- * one place on one list, useless for anything else. Reception's half
+ * No account, as a guest booking needs none: joining needs a name and a phone —
+ * proved first where the deployment asks, as a booking's is (`FR-GST-03`; the
+ * controller) — and everything after it is answered by the signed status token
+ * in the path: one place on one list, useless for anything else. Reception's half
  * (`GET /sessions/:id/standby`, `POST /bookings/:id/offer-slot`,
  * `POST /offers/:id/accept`) stays in `queue.routes.ts` behind a staff role.
  */
