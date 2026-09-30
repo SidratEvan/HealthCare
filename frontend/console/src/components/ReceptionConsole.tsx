@@ -56,7 +56,7 @@ import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
 import { StandbyCard } from '@/components/StandbyCard';
 import { WalkInSheet } from '@/components/WalkInSheet';
-import { useSessionQueue } from '@/hooks/useSessionQueue';
+import { useSessionQueue, type QueueAction } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 import { fetchPatientNames } from '@/lib/roster';
 
@@ -161,22 +161,31 @@ function ConsoleBody(): ReactNode {
    *
    * One control, two facts: whoever is in the chamber is finished, and the next
    * patient is called. B1.3 step 1 — the label says so when both will happen.
+   *
+   * Both are queued together and sent in one flush. Sending the first and
+   * waiting for the server before queueing the second left the "called" half
+   * a round trip behind the tap on a slow connection (`NFR-02`).
    */
   const callNext = useCallback(async () => {
     if (state === null) return;
 
     const inChamber = nowServing(state);
+    const next = waitingQueue(state).find((entry) => entry.status !== 'late');
+    const actions: QueueAction[] = [];
     if (inChamber !== null) {
-      await queue.act('PATIENT_DONE', {
-        bookingId: inChamber.bookingId,
-        consultSeconds: elapsedSeconds(inChamber, now),
+      actions.push({
+        type: 'PATIENT_DONE',
+        payload: { bookingId: inChamber.bookingId, consultSeconds: elapsedSeconds(inChamber, now) },
       });
     }
-
-    const next = waitingQueue(state).find((entry) => entry.status !== 'late');
+    if (next !== undefined) {
+      actions.push({
+        type: 'PATIENT_CALLED',
+        payload: { bookingId: next.bookingId, serial: next.serial },
+      });
+    }
+    if (actions.length > 0) await queue.actMany(actions);
     if (next === undefined) return;
-
-    await queue.act('PATIENT_CALLED', { bookingId: next.bookingId, serial: next.serial });
 
     show({
       title: format('calledPatient', locale, { serial: formatSerial(next.serial, numerals) }),

@@ -2820,13 +2820,20 @@ Raised while building the national layer (step 20):
 82. **An administrator cannot reset their own two-step on `S-B-11`**
    (`own_two_factor`), for the same reason as their own password: another
    person's check. A facility's only administrator is reset from the server.
-83. **Found, not fixed: `BTN-B02-NEXT` waits for the server between its two
-   halves.** `ReceptionConsole.callNext` awaits `queue.act('PATIENT_DONE')`,
-   and `act` awaits the network flush, before it queues `PATIENT_CALLED` — so
-   on a slow server the "called" half of the tap appears only after a round
-   trip, which is not the instant answer `NFR-02` asks for. Seen while
-   diagnosing the canary on 2026-09-30; offline it is fine (the flush returns
-   at once). A small `fix/` branch: queue both events, then flush once.
+83. **Fixed (`fix/next-without-waiting`): `BTN-B02-NEXT` waited for the
+   server between its two halves.** `callNext` awaited `PATIENT_DONE`'s
+   network flush before queueing `PATIENT_CALLED`, so on a slow server the
+   "called" half arrived a round trip after the tap (`NFR-02`). Both now go
+   through `actMany`: queued together, applied together, one flush. The first
+   cut failed the canary, which is what it is for: the server orders a batch
+   by client time and breaks ties on the random key (`SY-01`), and two events
+   made in one millisecond were replayed "called" before "done" half the time.
+   Actions from one tap are now a millisecond apart.
+84. **Push notifications wait for a signed hospital** (owner, 2026-09-30).
+   `FR-NOT-02`'s push half stays unbuilt until a deal is made; SMS stays on
+   the log provider (step 27 waits for an aggregator account). The pilot runs
+   on the lowest cost there is: free tiers for the demo, and a hospital's own
+   running costs carried by the hospital (terms live outside the repo).
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
