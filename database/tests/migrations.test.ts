@@ -115,6 +115,9 @@ describe('migration files (DATABASE.md §7)', () => {
       '0032',
       // Pilot step 28: a second factor for staff.
       '0033',
+      // Plan 1.7 (docs/PLATFORM_PLAN.md): the dashboard's snapshot can be
+      // rebuilt by a role that does not own it.
+      '0034',
     ]);
   });
 

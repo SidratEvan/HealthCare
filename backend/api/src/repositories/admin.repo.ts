@@ -132,18 +132,23 @@ export async function dailyRefreshedAt(): Promise<Date | null> {
 }
 
 /**
- * Rebuilds the snapshot and stamps it, in one transaction.
+ * Rebuilds the snapshot, then stamps it.
  *
- * CONCURRENTLY, so a rebuild does not take an ACCESS EXCLUSIVE lock and make
- * every dashboard read in the hospital queue behind it. It needs the unique
- * index migration 0020 creates, and it cannot run inside a transaction block —
- * so the stamp is written immediately after rather than atomically with it. A
- * refresh that succeeded and a stamp that failed leaves the screen believing
- * the data is older than it is, which errs in the safe direction (`FR-OFF-03`:
- * a freshness line may never claim data is newer than it is).
+ * Through `fn_refresh_admin_daily()` (migration 0034), not a bare `REFRESH`:
+ * only a view's owner may refresh it, and on a hospital's server the API
+ * connects as a role that owns nothing. The function does the one thing with
+ * the owner's rights.
+ *
+ * It refreshes CONCURRENTLY, so a rebuild does not take an ACCESS EXCLUSIVE
+ * lock and make every dashboard read in the hospital queue behind it; that
+ * needs the unique index migration 0020 creates. The stamp is a second
+ * statement rather than one transaction with the rebuild: a refresh that
+ * succeeded and a stamp that failed leaves the screen believing the data is
+ * older than it is, which errs in the safe direction (`FR-OFF-03`: a freshness
+ * line may never claim data is newer than it is).
  */
 export async function refreshDaily(): Promise<Date> {
-  await sql`REFRESH MATERIALIZED VIEW CONCURRENTLY v_admin_daily`.execute(db);
+  await sql`SELECT fn_refresh_admin_daily()`.execute(db);
 
   const result = await sql<{ refreshed_at: Date }>`
     INSERT INTO analytics_refresh (view_name, refreshed_at)

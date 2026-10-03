@@ -54,6 +54,17 @@ founder who did not write most of it and for whoever works on it next.
     signed in. Not after a browser restart (sign-in needs the server), not
     with patient names, and not for the ward or ER boards. Tested against
     `next build` (`pnpm test:e2e:built`); `next dev` cannot show it.
+  - **Fact 5 (the superuser half), §10 "Database", "Backups", "Logs", §12
+    items on root containers and log rotation — fixed**
+    (`chore/ops-hardening`). On a hospital's server the API connects as a
+    role that reads and writes rows and nothing else, and cannot alter or
+    remove an audit row; the API and both web apps run as `node`; container
+    logs rotate; each night's backup is restored into a scratch database,
+    copied to a second location and checksummed, and its result is the
+    backup container's health. **Still true:** RLS has no policies (the
+    role carries `BYPASSRLS` until plan 1.10), nothing alerts anybody, and
+    whether the second location really is another disk is the installer's
+    to make true.
 
 ---
 

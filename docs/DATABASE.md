@@ -537,6 +537,7 @@ ACTION_UNDONE       { "undoneEventId": "…" }
 | `fn_next_serial(session_id)` | function | Allocates the next serial atomically |
 | `fn_recalc_etas(session_id)` | function | Returns `[{bookingId, etaAt, bandMinutes}]` (`FR-QUE-11`) |
 | `fn_nearby_hospitals(lat,lng,capability,radius)` | function | The radius filter half of emergency search (`FR-PAT-43`): live facilities within the radius, nearest first, with distance and whether the capability is available now. It filters on geography only — capability is a ranking key, not a filter — and the ranking itself is `shared/domain/src/emergency/ranking.ts`. Migration 0013 |
+| `fn_refresh_admin_daily()` | function | Rebuilds `v_admin_daily` with the owner's rights (`SECURITY DEFINER`, search path pinned), because only a materialised view's owner may refresh it and the API's role owns nothing (§5.1). EXECUTE is revoked from `PUBLIC`. Migration 0034 |
 | `trg_queue_events_no_mutate` | trigger | Blocks UPDATE/DELETE on the event log |
 | `trg_touch_updated_at` | trigger | Maintains `updated_at` everywhere |
 | `trg_booking_status_from_events` | trigger | Keeps `bookings.status` consistent with the latest event |
@@ -558,6 +559,21 @@ Enabled on every table. Core policies:
 | Everything gov | `gov_viewer` may read only the aggregate views, never base tables (`FR-GOV-06`). Enforced by a database role, not a policy: `gov_reader` (NOLOGIN, 0026) holds SELECT on the six `v_gov_*` views and nothing else, and the API switches to it for each government read (`SET LOCAL ROLE`). A view runs with its owner's rights, which is what lets it aggregate tables the role cannot open; a new view is unreadable by the government layer until somebody grants it on purpose |
 
 Service-role key is used only by backend workers, never exposed to any client.
+
+### 5.1 The two database roles on a hospital's server
+
+Added by plan 1.7 (`docs/PLATFORM_PLAN.md`). A self-hosted deployment has two roles, and the API is never the owner:
+
+| Role | Who connects as it | What it may do |
+|---|---|---|
+| The owner (`POSTGRES_USER`) | The `migrate` service and the `backup` service | Everything: it owns the schema. Serves no request |
+| The API's role (`API_DB_USER`) | The API, its workers, and the `pnpm staff:*` commands | `SELECT, INSERT, UPDATE, DELETE` on rows, `USAGE` on sequences, `EXECUTE` on functions, membership of `gov_reader`. **Not** `TRUNCATE`, not any schema change, not `SUPERUSER`/`CREATEROLE`/`CREATEDB`/`REPLICATION` |
+
+Three tables are narrower still: `audit_log` and `bed_events` are `INSERT` and `SELECT` only for the API's role, and `queue_events` has no `DELETE` (its `UPDATE` stays, for the one change its trigger allows — `undone_by_event_id`). `schema_migrations` is `SELECT` only. For `audit_log`, which has no trigger, that grant is what keeps a written row written.
+
+The role is created and brought back to exactly these privileges by `pnpm db:role` (`database/scripts/lib/role.ts`), which the `migrate` service runs after every migration. The API test suite connects as an identical role, so every endpoint is tested without ownership (`backend/api/src/__tests__/apiRole.test.ts` is the list of what is refused).
+
+**Not yet true:** the table above describes policies that are not written. Row-level security is enabled on every table with **no policy**, which for a role that is not the owner means "sees nothing" — so until plan 1.10 writes the policies the API's role carries `BYPASSRLS`, and hospital scoping is enforced by the API's own checks, as it always has been. 1.10 removes the attribute in the step that adds the policies. On the demonstration deployment (Supabase) the API still connects as the owner.
 
 ---
 
@@ -633,6 +649,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0031_imports.sql               -- step 24: import_set, import_state, import_batches, import_rows (§2.6b)
     0032_patient_otp.sql           -- step 25: otp_challenges (§2.1)
     0033_staff_2fa.sql             -- step 28: staff_users second-factor columns (§2.1)
+    0034_refresh_as_owner.sql      -- plan 1.7: fn_refresh_admin_daily(), so a role that owns nothing
+                                   -- can rebuild the dashboard snapshot (§4, §5.1)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)
@@ -648,9 +666,10 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
   /scripts
     rebuild_queue_state.ts
     verify_schema.ts               -- asserts every table has created_at/updated_at/RLS
+    api_role.ts                    -- `pnpm db:role`: the role the API connects as (§5.1)
 ```
 
-**Commands:** `pnpm db:migrate`, `pnpm db:seed`, `pnpm db:reset`, `pnpm db:verify`.
+**Commands:** `pnpm db:migrate`, `pnpm db:role`, `pnpm db:seed`, `pnpm db:reset`, `pnpm db:verify`.
 
 ---
 

@@ -59,4 +59,5 @@ pnpm-debug.log*
 # A self-hosted server's backups and local files (pilot step 26): patient data,
 # never committed (FR-SEC-08).
 deploy/backups/
+deploy/backups-second/
 storage/

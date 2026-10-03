@@ -38,13 +38,28 @@ if (!/_test(\?|$)/.test(testDatabaseUrl)) {
   );
 }
 
+/**
+ * The API under test connects as the role it has on a hospital's server —
+ * rows only, owning nothing — not as the owner that built the database
+ * (`docs/PLATFORM_PLAN.md` 1.7). The global setup creates it
+ * (`database/tests/support/api-global-setup.ts`, the same two values).
+ *
+ * The owner's connection string is kept beside it for the few things a test
+ * does that the API never may: clearing up after itself in a table the API's
+ * role cannot delete from (`ownerDb.ts`).
+ */
+const apiRoleUrl = new URL(testDatabaseUrl);
+apiRoleUrl.username = 'healthcare_api';
+apiRoleUrl.password = 'test-only-api-role-not-a-real-credential';
+
 const TEST_ENV: Readonly<Record<string, string>> = {
   NODE_ENV: 'test',
   PORT: '4099',
   API_BASE_URL: 'http://localhost:4099',
   WEB_BASE_URL: 'http://localhost:3000',
 
-  DATABASE_URL: testDatabaseUrl,
+  DATABASE_URL: apiRoleUrl.toString(),
+  DATABASE_URL_OWNER_TEST: testDatabaseUrl,
   DATABASE_POOL_MAX: '5',
 
   // Long enough to satisfy the 32-character floor, and unmistakably not real.

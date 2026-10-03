@@ -28,6 +28,7 @@ import { verifyDoctor } from '../services/hospitalSettings.service.js';
 import { materialise } from '../services/sessionMaterialise.service.js';
 import { createFirstAdministrator } from '../services/staffAuth.service.js';
 
+import { asOwner } from './support/ownerDb.js';
 import { bearer, nationalToken, patientToken, staffToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -90,33 +91,38 @@ function send(
 async function removeFacilities(ids: readonly string[]): Promise<void> {
   if (ids.length === 0) return;
   const list = [...ids];
-  await sql`DELETE FROM sessions WHERE hospital_id = ANY(${list}::uuid[])`.execute(db);
-  await sql`DELETE FROM beds WHERE hospital_id = ANY(${list}::uuid[])`.execute(db);
-  await sql`DELETE FROM wards WHERE hospital_id = ANY(${list}::uuid[])`.execute(db);
-  await sql`
-    DELETE FROM session_templates WHERE doctor_hospital_id IN
-      (SELECT id FROM doctor_hospitals WHERE hospital_id = ANY(${list}::uuid[]))
-  `.execute(db);
-  const doctors = await sql<{ doctor_id: string }>`
-    SELECT DISTINCT doctor_id FROM doctor_hospitals WHERE hospital_id = ANY(${list}::uuid[])
-  `.execute(db);
-  await sql`DELETE FROM doctor_hospitals WHERE hospital_id = ANY(${list}::uuid[])`.execute(db);
-  // Only the doctors these tests created: a seeded doctor linked here sits elsewhere too.
-  await sql`
-    DELETE FROM doctors d
-     WHERE d.id = ANY(${doctors.rows.map((row) => row.doctor_id)}::uuid[])
-       AND NOT EXISTS (SELECT 1 FROM doctor_hospitals dh WHERE dh.doctor_id = d.id)
-  `.execute(db);
-  await sql`DELETE FROM departments WHERE hospital_id = ANY(${list}::uuid[])`.execute(db);
-  await sql`DELETE FROM audit_log WHERE hospital_id = ANY(${list}::uuid[])`.execute(db);
-  await sql`
-    DELETE FROM sessions_auth WHERE subject_id IN
-      (SELECT id FROM staff_users WHERE hospital_id = ANY(${list}::uuid[]))
-  `.execute(db);
-  await sql`DELETE FROM staff_roles WHERE hospital_id = ANY(${list}::uuid[])`.execute(db);
-  await sql`UPDATE hospitals SET created_by = NULL WHERE id = ANY(${list}::uuid[])`.execute(db);
-  await sql`DELETE FROM staff_users WHERE hospital_id = ANY(${list}::uuid[])`.execute(db);
-  await sql`DELETE FROM hospitals WHERE id = ANY(${list}::uuid[])`.execute(db);
+  // As the owner: the API's role may not delete an audit row (`ownerDb.ts`).
+  await asOwner(async (owner) => {
+    await sql`DELETE FROM sessions WHERE hospital_id = ANY(${list}::uuid[])`.execute(owner);
+    await sql`DELETE FROM beds WHERE hospital_id = ANY(${list}::uuid[])`.execute(owner);
+    await sql`DELETE FROM wards WHERE hospital_id = ANY(${list}::uuid[])`.execute(owner);
+    await sql`
+      DELETE FROM session_templates WHERE doctor_hospital_id IN
+        (SELECT id FROM doctor_hospitals WHERE hospital_id = ANY(${list}::uuid[]))
+    `.execute(owner);
+    const doctors = await sql<{ doctor_id: string }>`
+      SELECT DISTINCT doctor_id FROM doctor_hospitals WHERE hospital_id = ANY(${list}::uuid[])
+    `.execute(owner);
+    await sql`DELETE FROM doctor_hospitals WHERE hospital_id = ANY(${list}::uuid[])`.execute(owner);
+    // Only the doctors these tests created: a seeded doctor linked here sits elsewhere too.
+    await sql`
+      DELETE FROM doctors d
+       WHERE d.id = ANY(${doctors.rows.map((row) => row.doctor_id)}::uuid[])
+         AND NOT EXISTS (SELECT 1 FROM doctor_hospitals dh WHERE dh.doctor_id = d.id)
+    `.execute(owner);
+    await sql`DELETE FROM departments WHERE hospital_id = ANY(${list}::uuid[])`.execute(owner);
+    await sql`DELETE FROM audit_log WHERE hospital_id = ANY(${list}::uuid[])`.execute(owner);
+    await sql`
+      DELETE FROM sessions_auth WHERE subject_id IN
+        (SELECT id FROM staff_users WHERE hospital_id = ANY(${list}::uuid[]))
+    `.execute(owner);
+    await sql`DELETE FROM staff_roles WHERE hospital_id = ANY(${list}::uuid[])`.execute(owner);
+    await sql`UPDATE hospitals SET created_by = NULL WHERE id = ANY(${list}::uuid[])`.execute(
+      owner,
+    );
+    await sql`DELETE FROM staff_users WHERE hospital_id = ANY(${list}::uuid[])`.execute(owner);
+    await sql`DELETE FROM hospitals WHERE id = ANY(${list}::uuid[])`.execute(owner);
+  });
 }
 
 beforeAll(() => {
