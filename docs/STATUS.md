@@ -332,6 +332,15 @@ leaves, so the job reads only what is still to do.
 **Before this reaches the deployed demo:** apply 0035 to Supabase with the
 release (it rewrites the rows already there; it needs nothing from the API).
 
+**Found by this branch's gate, and fixed in it:** `consent.routes.test.ts`
+failed two tests in one full run and passed alone. It takes "the
+account-owned profile the fewest facilities have treated" as the patient a
+guest's link must *not* reach, and which profile that is depends on what
+every earlier test file booked; that run it was the fixture's own first
+patient, and the API rightly answered 200. The product was right. The
+profile is now chosen from outside the fixture. **A test that needs "somebody
+else" has to choose them as somebody else, not as whoever a ranking returns.**
+
 ### Plan 1.8 — the browser suite in CI, and against production (`chore/e2e-ci`)
 
 **What CI runs now** (`.github/workflows/ci.yml`), on every push to `mvp` or
