@@ -7,7 +7,12 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/sync-event-allowlist` (2 October) — **the sync path
+Last updated: `chore/e2e-memory-finding` (3 October) — **`demo` moved to
+`10bbcd1` after a clean 144/144 browser run, and why two runs before it each
+failed one test** (below, *Things learned the hard way*: the machine ran out
+of memory, and the process that grows is Playwright's trace recorder, not the
+product). No product code changed. Before that, `fix/sync-event-allowlist`
+(2 October) — **the sync path
 replays only what a counter can do offline** (plan 1.4; `BACKEND.md`
 `SY-07`): eleven event types, each from a role its own route admits; undo,
 offers, cancellation, ending a chamber and walk-ins are refused there and
@@ -2206,6 +2211,59 @@ afternoon.
 
 ### Things learned the hard way, so they are not relearned
 
+- **The browser suite does not fit beside a working desktop on this machine,
+  and the process that grows is Playwright's worker** (3 October, on `mvp` at
+  `10bbcd1`; no code changed). Two full runs each failed once, late, in a
+  different place, and every failure passed alone on fresh servers:
+  - run 1, 142/144 in 38.1 min: the canary's first case took **2,088 ms**
+    against the 2,000 ms budget, and `ward-board.spec.ts:83` hit the 60 s test
+    timeout on a page reload. Free memory 0.37–0.86 GB of 7.7 GB;
+  - run 2, 143/144 in 40.3 min: `language-switch.spec.ts:114` hit the 60 s
+    timeout loading the console. Free memory down to 0.12 GB; commit 20.3 of
+    24.3 GB;
+  - alone: canary 5/5, ward-board 8/8, language-switch 6/6.
+
+  Not a regression: the same tap-to-phone path measured on `ebfcf14` (before
+  the handover fixes) gave 397–1,132 ms warm, and on `10bbcd1` 244–756 ms
+  warm; the only taps over 1.2 s (up to 2,263 ms) came with cold servers and
+  under 0.4 GB free. Most of a tap's measured time is the click itself, in a
+  console page running in development mode.
+
+  With Chrome, WhatsApp, Teams and Copilot closed (VS Code and Docker left
+  running) the third run was **144/144 in 19.2 min**. Private memory through
+  it:
+
+  | at | console `next dev` | patient `next dev` | API | Playwright worker | free |
+  |---|---|---|---|---|---|
+  | start | 995 MB | 1,543 MB | 92 MB | 143 MB | 0.31 GB |
+  | 48/144 | 1,042 MB | 1,130 MB | 111 MB | 1,062 MB | 0.72 GB |
+  | 96/144 | 1,030 MB | 1,261 MB | 107 MB | 1,889 MB | 0.90 GB |
+  | 142/144 | 1,059 MB | 1,860 MB | 112 MB | 2,656 MB | 0.71 GB |
+
+  The two development servers and the API do not accumulate (the patient
+  server spikes to about 2.3 GB while compiling and comes back). **The
+  Playwright worker grows about 18 MB a test and is never restarted in a run
+  with no failure.** It is the trace recorder: `wallet` + `ward-board` took
+  the worker from 277 to 627 MB with `trace: 'retain-on-failure'` and left it
+  flat at 136–274 MB with `--trace off`. (Repeating the canary twenty times
+  with tracing on did not grow it, so it is what some specs record, not a
+  fixed cost per test.) By the last specs the suite's own processes hold
+  about 6 GB on a 7.7 GB machine. Nothing was changed to get the clean run:
+  no timeout, no assertion, no test.
+
+  **Until the suite is made lighter, run the full suite with the browser and
+  chat apps closed.** What would make it lighter is the owner's choice and is
+  not made: recording less in a trace, or running the two apps as production
+  builds (plan 1.8 already has a production-configuration job), which also
+  takes about 2 GB off.
+- **A typed consent code is lost if the queue arrives after it**
+  (found 3 October, not fixed). `DoctorConsole` renders `<ConsentScan
+  key={servingBookingId ?? 'nobody'}>` before the queue has loaded, so the
+  form remounts when the first state arrives and whatever was typed into it
+  is gone. `wallet.spec.ts:251` types the moment the page opens and failed on
+  it once, in a probe run under load (it passed in all three full runs). It
+  is a real, small race in the screen as well as in the test; its own
+  `fix/*` branch.
 - **A second device a spec opens lives until the whole run ends**
   (`fix/e2e-context-leaks`, 2026-09-30). `browser.newContext()` belongs to the
   worker's browser, not the test, and there is one worker. No-show, referral,
@@ -3146,7 +3204,9 @@ credential.
 
 **From the `demo` branch** (CLAUDE.md §3.1): the demo-data version, kept at
 the last green commit of `mvp`, for pulling onto any machine to show
-somebody. It stands at the security fixes of 2026-09-30.
+somebody. It stands at `10bbcd1` (3 October): the first four fixes of
+`docs/PLATFORM_PLAN.md` phase 1 — delay, resume, undo, the sync allow-list —
+after `pnpm verify` and a clean 144/144 browser run on that commit.
 
 ```bash
 git fetch origin && git checkout demo && git pull
