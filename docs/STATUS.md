@@ -7,7 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/handover` (2 October) — **a technical handover read from
+Last updated: `chore/platform-plan` (2 October) — **the owner's implementation
+brief became `docs/PLATFORM_PLAN.md`**: the order of work from here, branch by
+branch, and the decisions it waits on (below, *The platform plan*). No product
+code changed. Before that, `chore/handover` (2 October) — **a technical handover read from
 the code, `docs/HANDOVER.md`, and what it found** (below, *Handover audit*). No
 product code changed. Before that, `fix/guest-device-proof` — **a returning
 guest proves the phone once per device** (decision 85, ruled). With it all four holes the security
@@ -113,8 +116,9 @@ Supabase, and whether `mvp` goes to `main`.
    (decision 85 ruled for the returning guest). A paid penetration test should
    still follow before a pilot holds real data, as the owner was told.
 1a. **The handover audit's findings (2 October)** — before any pilot, the
-   fixes in `HANDOVER.md` §16 ("if 7 days"), in that order, one `fix/*`
-   branch each. Awaiting the owner's go.
+   fixes in `HANDOVER.md` §16 ("if 7 days"), one `fix/*` branch each. **The
+   owner said go on 2 October**; they are phase 1 of `docs/PLATFORM_PLAN.md`,
+   whose §9 says which have landed.
 2. **Server sizing for Marks** — measure the `deploy/` stack's CPU, memory and
    disk on this machine, so Marks' IT can say whether they can host it.
 3. **Releasing `mvp` to `main`** — `main` is still the pitch release of
@@ -205,6 +209,27 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### The platform plan (`chore/platform-plan`, 2 October)
+
+The owner gave an implementation brief on 2 October (a PDF, kept outside the
+repository): the product is to become a platform a hospital can join by
+itself — create an organisation, set up by hand or import, be verified, go
+live — with the handover's blockers fixed first and one narrow use of AI,
+mapping a hospital's own export onto the import template.
+
+`docs/PLATFORM_PLAN.md` is that brief turned into an order of work. A new
+session reads it after this file. What it holds: the branches of phases 1–4
+with the test each must fail first; the smallest state model for onboarding
+(one migration); exactly what a model is and is not sent; the existing code
+each phase reuses; eight places the brief, the code and the documents
+disagree and how each is handled; and the eight decisions that are the
+owner's, with which branch each one blocks. `CLAUDE.md` §4.3 points at it.
+
+**The owner's decisions it waits on** (its §7): the SMS aggregator (blocks
+only `feat/sms-live`), open or invited signup and the registration fields
+(block `feat/org-signup`), CSV-only or XLSX and the model provider (block
+`feat/import-mapping-ai`). Phase 1 waits on none.
 
 ### Handover audit — what the code actually does (`chore/handover`, 2 October)
 

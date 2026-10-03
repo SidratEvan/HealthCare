@@ -207,6 +207,23 @@ Added 2026-09-28. Same rules as §4: one branch per step, in order, merged into
 | 27 | `feat/sms-live` | A real SMS aggregator behind the adapter | Needs an aggregator account — built when one exists (§1.1) |
 | 28 | `feat/staff-2fa` | TOTP for staff, required for administrators | An administrator cannot sign in without the second factor |
 
+### 4.3 The platform build — after the handover
+
+Added 2026-10-02, from the owner's implementation brief of that day. The order
+of work, branch by branch, is **`docs/PLATFORM_PLAN.md`**: the pilot blockers
+the handover audit verified (phase 1), real patient entry (phase 2),
+self-service hospital onboarding (phase 3), and an import that maps a
+hospital's own export onto the template (phase 4). Same rules as §4: one branch
+per row, in order, merged into `mvp` only when §5 is met.
+
+- `docs/PLATFORM_PLAN.md` has no authority over behaviour. A phase that adds
+  scope begins with a documents-only branch that adds the requirements to
+  `PRD.md`; code follows the documents, as always (§2).
+- The only AI in scope is the import mapping, and no patient row is sent to a
+  model outside Bangladesh (`FR-SEC-07`, `FR-SEC-08`).
+- The decisions that plan lists as the owner's (§7 there) are not to be chosen
+  silently.
+
 ## 5. Definition of Done (every branch)
 
 A step is not done until all of these are true:
