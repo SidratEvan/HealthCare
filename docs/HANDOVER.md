@@ -12,6 +12,13 @@ founder who did not write most of it and for whoever works on it next.
 - **Authority:** none. The five documents in `CLAUDE.md` §2 still govern
   behaviour. Where this file says a document is wrong, it is a proposal to fix
   the document or the code, not a ruling.
+- **Since it was written:** the text below is left as it was found, so the
+  audit stays readable as an audit. What has been fixed since, by branch
+  (`docs/PLATFORM_PLAN.md` §9 has the full list):
+  - **Fact 3, §4.3, §4.9, §12 item 3 — fixed** (`fix/delay-on-arrival`). A
+    delay declared before the arrival is used up by it; one declared after
+    holds the chamber until then, and the no-show grace cannot end before the
+    hold does. In the §4.9 session serial 1 is told 17:32 and serial 5 17:50.
 
 ---
 

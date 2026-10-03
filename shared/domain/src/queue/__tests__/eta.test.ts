@@ -14,6 +14,7 @@ import {
   bandMinutes,
   computeEtas,
   etaFor,
+  outstandingDelayMinutes,
   projectedEnd,
   shouldLeaveNow,
   twoAwayBookings,
@@ -154,6 +155,72 @@ describe('once the chamber is running', () => {
       log.advance(420).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 420 }),
     ]);
     expect(computeEtas(measured, now)[0]?.confidence).toBe('measured');
+  });
+});
+
+describe('a declared delay and the arrival (FR-QUE-11, FR-REC-03)', () => {
+  const delay = (log: LogBuilder, minutes: number): Parameters<typeof reduce>[1] =>
+    log.next('DELAY_DECLARED', { minutes, reason: 'traffic', declaredBy: 'reception' });
+
+  it('is used up when the doctor arrives: the first patient is next, not half an hour away', () => {
+    const { state, log } = session(4);
+    // Thirty minutes declared before the chamber opens; the doctor walks in
+    // at 11:32, two minutes after the time the delay promised.
+    const arrivedAt = timestamp('2026-09-17T11:32:00.000Z');
+
+    const arrived = fold(state, [
+      delay(log, 30),
+      log.advance(1920).next('DOCTOR_ARRIVED', { arrivedAt, minutesLate: 32 }),
+    ]);
+
+    const etas = computeEtas(arrived, arrivedAt);
+    // The doctor is in the room and the chamber is empty.
+    expect(etas[0]?.etaAt).toBe(arrivedAt);
+    expect(differenceInMinutes(etas[1]?.etaAt ?? arrivedAt, arrivedAt)).toBe(8);
+    expect(outstandingDelayMinutes(arrived, arrivedAt)).toBe(0);
+    // What was declared is still on record for the day's figures.
+    expect(arrived.delayMinutes).toBe(30);
+    expect(projectedEnd(arrived, arrivedAt)).toBe(timestamp('2026-09-17T12:04:00.000Z'));
+  });
+
+  it('is the whole of what is outstanding until the doctor arrives', () => {
+    const { state, log } = session(3);
+    const delayed = fold(state, [delay(log, 30), delay(log, 15)]);
+
+    expect(outstandingDelayMinutes(delayed, timestamp('2026-09-17T10:30:00.000Z'))).toBe(45);
+  });
+
+  it('holds the chamber when it is declared after the doctor arrived', () => {
+    const { state, log } = session(4);
+    // The doctor is called away at 11:20 for half an hour.
+    const held = fold(state, [arrive(log, PLANNED_START), delay(log.advance(1200), 30)]);
+    const now = timestamp('2026-09-17T11:25:00.000Z');
+
+    expect(held.hold).toEqual({ until: timestamp('2026-09-17T11:50:00.000Z'), minutes: 30 });
+    expect(computeEtas(held, now)[0]?.etaAt).toBe(timestamp('2026-09-17T11:50:00.000Z'));
+    // The figure declared, for as long as the hold runs — not a countdown.
+    expect(outstandingDelayMinutes(held, now)).toBe(30);
+  });
+
+  it('stops holding once the declared time has passed', () => {
+    const { state, log } = session(4);
+    const held = fold(state, [arrive(log, PLANNED_START), delay(log.advance(1200), 30)]);
+    const now = timestamp('2026-09-17T12:05:00.000Z');
+
+    expect(computeEtas(held, now)[0]?.etaAt).toBe(now);
+    expect(outstandingDelayMinutes(held, now)).toBe(0);
+  });
+
+  it('extends a hold that is still running, rather than starting a second one', () => {
+    const { state, log } = session(4);
+    const held = fold(state, [
+      arrive(log, PLANNED_START),
+      delay(log.advance(1200), 30),
+      delay(log.advance(600), 15),
+    ]);
+
+    // 11:20 + 30 + 15, not 11:30 + 15.
+    expect(held.hold).toEqual({ until: timestamp('2026-09-17T12:05:00.000Z'), minutes: 45 });
   });
 });
 

@@ -291,7 +291,10 @@ export function graceRemaining(
  * chamber empty — which happens at the moment the previous patient left it.
  * So the clock starts at the latest departure: a consultation finishing, a
  * no-show being marked, or the doctor arriving if this is the first patient
- * of the session.
+ * of the session. A hold declared while the doctor is in (`hold.until`)
+ * counts too: nobody can be called before it ends, so the turn has not come
+ * before then, and the grace must not run out while the patient is being told
+ * to come later.
  *
  * Returns null while anyone is still ahead of them. A patient holding serial
  * 40 is not late at five o'clock, and the grace period has no meaning until
@@ -307,6 +310,7 @@ function turnReachedAt(state: QueueState, bookingId: BookingId): Timestamp | nul
     if (entry.noShow !== null) departures.push(entry.noShow.markedAt);
   }
   if (state.doctorArrivedAt !== null) departures.push(state.doctorArrivedAt);
+  if (state.hold !== null) departures.push(state.hold.until);
 
   if (departures.length === 0) return null;
   return departures.reduce((latest, candidate) => (candidate > latest ? candidate : latest));

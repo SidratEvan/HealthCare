@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { id, serial, timestamp } from '../../types/ids.js';
+import { etaFor } from '../eta.js';
 import { QUOTE_STEP_MINUTES, suggestedQuote } from '../quote.js';
 import { reduce } from '../reducer.js';
 import {
@@ -277,6 +278,82 @@ describe('the no-show grace period (FR-QUE-20)', () => {
     expect(graceWindowMinutes(state, lenient)).toBe(5);
     expect(
       canMarkNoShow(state, bookingId(2), lenient, timestamp('2026-09-17T11:11:00.000Z')).ok,
+    ).toBe(true);
+  });
+
+  it('never lets a patient be marked absent before the time they were told (FR-QUE-11)', () => {
+    // The handover's session: thirty minutes declared before the doctor came,
+    // the doctor in at 11:32, three patients seen by 11:50.
+    const { state, log } = session(6);
+    const arrivedAt = timestamp('2026-09-17T11:32:00.000Z');
+    const seen = fold(state, [
+      log.next('DELAY_DECLARED', { minutes: 30, reason: 'traffic', declaredBy: 'reception' }),
+      log.advance(1920).next('DOCTOR_ARRIVED', { arrivedAt, minutesLate: 32 }),
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(360).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 360 }),
+      log.next('PATIENT_CALLED', { bookingId: bookingId(2), serial: serial(2) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(2), consultSeconds: 300 }),
+      log.next('PATIENT_CALLED', { bookingId: bookingId(3), serial: serial(3) }),
+      log.advance(420).next('PATIENT_DONE', { bookingId: bookingId(3), consultSeconds: 420 }),
+    ]);
+
+    // 11:50, chamber empty, serial 4 at the front.
+    const turn = timestamp('2026-09-17T11:50:00.000Z');
+    const told = etaFor(seen, bookingId(4), turn)?.etaAt ?? null;
+    expect(told).toBe(turn);
+
+    const grace = graceRemaining(seen, bookingId(4), DEFAULT_QUEUE_SETTINGS, turn);
+    expect(grace?.turnReachedAt).toBe(turn);
+
+    // Absent-marking opens a full grace window after the time on the phone,
+    // not fourteen minutes before it.
+    const sixteenLater = timestamp('2026-09-17T12:06:00.000Z');
+    expect(canMarkNoShow(seen, bookingId(4), DEFAULT_QUEUE_SETTINGS, sixteenLater).ok).toBe(true);
+    expect(told !== null && told < sixteenLater).toBe(true);
+  });
+
+  it('does not run out while the doctor is called away (FR-REC-03)', () => {
+    // Serial 1 seen by 11:05; at 11:06 the doctor is called away for half an
+    // hour. Serial 2 is at the front and is told 11:36.
+    const { state, log } = running();
+    const held = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+      log
+        .advance(60)
+        .next('DELAY_DECLARED', { minutes: 30, reason: 'emergency', declaredBy: 'reception' }),
+    ]);
+    const heldUntil = timestamp('2026-09-17T11:36:00.000Z');
+    expect(etaFor(held, bookingId(2), timestamp('2026-09-17T11:10:00.000Z'))?.etaAt).toBe(
+      heldUntil,
+    );
+
+    // Twenty-five minutes after the turn came round, which would be past the
+    // grace if the hold did not count.
+    const duringHold = canMarkNoShow(
+      held,
+      bookingId(2),
+      DEFAULT_QUEUE_SETTINGS,
+      timestamp('2026-09-17T11:30:00.000Z'),
+    );
+    expect(duringHold.ok).toBe(false);
+
+    const graceAfterHold = graceRemaining(
+      held,
+      bookingId(2),
+      DEFAULT_QUEUE_SETTINGS,
+      timestamp('2026-09-17T11:40:00.000Z'),
+    );
+    expect(graceAfterHold?.turnReachedAt).toBe(heldUntil);
+    expect(graceAfterHold?.minutesRemaining).toBe(11);
+
+    expect(
+      canMarkNoShow(
+        held,
+        bookingId(2),
+        DEFAULT_QUEUE_SETTINGS,
+        timestamp('2026-09-17T11:52:00.000Z'),
+      ).ok,
     ).toBe(true);
   });
 
