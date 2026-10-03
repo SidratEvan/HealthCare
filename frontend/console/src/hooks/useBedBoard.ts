@@ -34,8 +34,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   BedOutbox,
-  createMemoryBedStore,
   openHospitalChannel,
+  retryDelayMs,
   type PendingBedAction,
 } from '@platform/client';
 import {
@@ -53,6 +53,7 @@ import {
   type PendingHandoff,
   type PendingRequest,
 } from '@/lib/beds';
+import { consoleStores } from '@/lib/outbox';
 
 export interface BedBoard {
   readonly board: BoardResponse | null;
@@ -62,6 +63,17 @@ export interface BedBoard {
   /** Beds with a change still waiting to reach the server. */
   readonly pendingBedIds: ReadonlySet<string>;
   readonly pendingCount: number;
+  /**
+   * Actions the server answered and could not take. Set aside so they stop
+   * blocking the ones behind them, kept until somebody decides (`FR-OFF-05`).
+   */
+  readonly stuckCount: number;
+  /** Puts them back in line and tries again. */
+  readonly retryStuck: () => Promise<void>;
+  /** Drops them. Nothing is sent for them, ever. */
+  readonly discardStuck: () => Promise<void>;
+  /** False when this browser will not keep the outbox across a reload. */
+  readonly durable: boolean;
   readonly connected: boolean;
   /** The server's clock at the last thing it told the board. */
   readonly lastServerTs: string | null;
@@ -111,6 +123,8 @@ export function useBedBoard(options: {
   const [socketUp, setSocketUp] = useState(false);
   const [browserOnline, setBrowserOnline] = useState(true);
   const [pending, setPending] = useState<PendingBedAction[]>([]);
+  const [stuck, setStuck] = useState<PendingBedAction[]>([]);
+  const [durable, setDurable] = useState(true);
   const [lastRefusal, setLastRefusal] = useState<string | null>(null);
   const [requests, setRequests] = useState<readonly PendingRequest[] | null>(null);
   const [handoffs, setHandoffs] = useState<readonly PendingHandoff[] | null>(null);
@@ -118,7 +132,9 @@ export function useBedBoard(options: {
   const [attempt, setAttempt] = useState(0);
 
   const outboxRef = useRef<BedOutbox | null>(null);
-  outboxRef.current ??= new BedOutbox(createMemoryBedStore());
+  // Kept in IndexedDB, in this person's own database (`lib/outbox.ts`): a
+  // reload or a power cut loses no bed action that was waiting (`FR-OFF-01`).
+  outboxRef.current ??= new BedOutbox(consoleStores().beds);
 
   // --- reading ---------------------------------------------------------------
 
@@ -163,8 +179,18 @@ export function useBedBoard(options: {
 
   const refreshPending = useCallback(async () => {
     const outbox = outboxRef.current;
-    if (outbox !== null) setPending(await outbox.pending());
-  }, []);
+    if (outbox === null) return;
+
+    const here = (action: PendingBedAction): boolean => action.hospitalId === hospitalId;
+    setPending((await outbox.pending()).filter(here));
+    setStuck((await outbox.stuck()).filter(here));
+    setDurable(consoleStores().durable());
+  }, [hospitalId]);
+
+  // What was queued before this page loaded is on the board again at once.
+  useEffect(() => {
+    void refreshPending();
+  }, [refreshPending]);
 
   const flush = useCallback(async () => {
     const outbox = outboxRef.current;
@@ -266,6 +292,17 @@ export function useBedBoard(options: {
     [hospitalId, refreshPending, flush],
   );
 
+  const retryStuck = useCallback(async () => {
+    await outboxRef.current?.retryStuck();
+    await refreshPending();
+    await flush();
+  }, [refreshPending, flush]);
+
+  const discardStuck = useCallback(async () => {
+    await outboxRef.current?.discard(stuck.map((action) => action.clientEventId));
+    await refreshPending();
+  }, [stuck, refreshPending]);
+
   const respond = useCallback<BedBoard['respond']>(
     async (requestId, body) => {
       await api.respond(requestId, body);
@@ -273,6 +310,29 @@ export function useBedBoard(options: {
     },
     [api, loadRequests],
   );
+
+  // --- and again, by itself, while something is still waiting ----------------
+  //
+  // FRONTEND.md §11.1 step 6: "retry with backoff". A push that failed while
+  // the socket stayed up — a server restarting, a token being renewed — has no
+  // reconnect to prompt the next attempt, and used to wait for somebody's next
+  // tap. Offline needs no timer: the reconnect sends at once.
+  const retriesRef = useRef(0);
+  useEffect(() => {
+    if (pending.length === 0) {
+      retriesRef.current = 0;
+      return undefined;
+    }
+    if (!(socketUp && browserOnline)) return undefined;
+
+    const timer = setTimeout(() => {
+      retriesRef.current += 1;
+      void flush();
+    }, retryDelayMs(retriesRef.current));
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [pending, socketUp, browserOnline, flush]);
 
   // --- deriving --------------------------------------------------------------
 
@@ -303,6 +363,10 @@ export function useBedBoard(options: {
     published,
     pendingBedIds,
     pendingCount: pending.length,
+    stuckCount: stuck.length,
+    retryStuck,
+    discardStuck,
+    durable,
     connected: socketUp && browserOnline,
     lastServerTs,
     loading,

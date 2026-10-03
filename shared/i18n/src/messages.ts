@@ -356,9 +356,26 @@ export const CONSOLE = {
   pendingToSync: { bn: 'পাঠানো বাকি', en: 'Waiting to sync' },
   lastSynced: { bn: 'সর্বশেষ সংযোগ', en: 'Last synced' },
   neverSynced: { bn: 'এখনো সংযোগ হয়নি', en: 'Not synced yet' },
+  /**
+   * An action the server answered and could not take (`FR-OFF-05`). Not the
+   * network: a dead network leaves work queued, and that is not a fault.
+   */
   syncStuck: {
-    bn: 'কিছু কাজ পাঠানো যাচ্ছে না। নেটওয়ার্ক ফিরলে আবার চেষ্টা হবে।',
-    en: 'Some actions cannot be sent. They will be retried when the network returns.',
+    bn: '{count}টি কাজ সার্ভার নিতে পারেনি। বাকিগুলো পাঠানো হচ্ছে।',
+    en: 'The server could not take {count} action(s). The rest are being sent.',
+  },
+  syncStuckRetry: { bn: 'আবার পাঠান', en: 'Send again' },
+  syncStuckDiscard: { bn: 'বাদ দিন', en: 'Discard' },
+  /** `GR-01`: a destructive action names its consequence before it happens. */
+  syncStuckConfirm: {
+    bn: 'বাদ দিলে এই কাজগুলো আর কখনো পাঠানো হবে না।',
+    en: 'Discarded actions will never be sent.',
+  },
+  syncStuckKeep: { bn: 'রেখে দিন', en: 'Keep them' },
+  /** The browser refused IndexedDB, so the outbox lives in this tab only. */
+  queueNotDurable: {
+    bn: 'এই ব্রাউজার অপেক্ষমাণ কাজ জমা রাখতে পারছে না। পাতা বন্ধ বা রিলোড করলে না-পাঠানো কাজ হারিয়ে যাবে।',
+    en: 'This browser cannot keep queued actions. Closing or reloading the page will lose anything not yet sent.',
   },
   /** FR-OFF-01: work continues without a network, and says so plainly. */
   offlineExplainer: {

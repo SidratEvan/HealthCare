@@ -693,7 +693,7 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 | Today counters | — | Seen / waiting / late / no-show / average wait, live |
 | Waitlist recovery card | `BTN-B02-OFFER` | Appears when a slot frees → "৩ জনকে প্রস্তাব পাঠান" → `EVT-SLOT_OFFERED` → standby patients receive a timed offer; acceptance appears here (`FR-REC-30`) |
 | Broadcast log | — | Last few notifications sent with channel counts ("১৮ জনকে জানানো হয়েছে — অ্যাপ ১১, এসএমএস ৭") |
-| Offline block | — | Status + pending-event count + last sync time; clicking shows the pending list (`FR-OFF-01`) |
+| Offline block | — | Status + pending-event count + last sync time; clicking shows the pending list (`FR-OFF-01`). When the server has answered and could not take some actions it says how many, with আবার পাঠান (send again) and বাদ দিন (discard, after a confirmation, `GR-01`); when the browser cannot keep the outbox across a reload it says so (`FR-OFF-05`) |
 
 ### B1.6 Registration & billing screens
 

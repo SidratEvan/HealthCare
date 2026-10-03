@@ -31,6 +31,12 @@ founder who did not write most of it and for whoever works on it next.
     `/sync/events` replays eleven event types, each only from a role its own
     route admits; the other eight are refused per entry and write nothing
     (`BACKEND.md` `SY-07`).
+  - **Fact 6 (first half), §7, §12 item 6 — fixed** (`fix/offline-outbox-persist`).
+    The three outboxes are kept in IndexedDB, one database per signed-in
+    person; a poison entry is set aside as stuck instead of blocking the
+    rest; a failed push is retried by a timer; a ward or ER action is no
+    longer dropped by an expired token. The console still cannot *load*
+    with no network — that is plan 1.6.
 
 ---
 

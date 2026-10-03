@@ -312,7 +312,14 @@ function ConsoleBody(): ReactNode {
           connected={queue.connected}
           pendingCount={queue.pendingCount}
           lastServerTs={queue.lastServerTs}
-          stuckCount={0}
+          stuckCount={queue.stuckCount}
+          onRetryStuck={() => {
+            void queue.retryStuck();
+          }}
+          onDiscardStuck={() => {
+            void queue.discardStuck();
+          }}
+          durable={queue.durable}
           locale={locale}
           now={now}
         />

@@ -8,6 +8,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { ApiError } from '../api/client.js';
 import {
   MAX_ATTEMPTS,
   OfflineQueue,
@@ -47,6 +48,14 @@ const acceptsAll: PushTransport = (_sessionId, events) =>
 
 /** A transport with no network behind it. */
 const offline: PushTransport = () => Promise.reject(new Error('Failed to fetch'));
+
+/** A server that answers, and cannot take a batch holding any of `keys`. */
+function chokesOn(keys: readonly string[], status: number): PushTransport {
+  return (sessionId, events) =>
+    events.some((event) => keys.includes(event.clientEventId))
+      ? Promise.reject(new ApiError(status >= 500 ? 'INTERNAL' : 'VALIDATION_FAILED', 'no', status))
+      : acceptsAll(sessionId, events);
+}
 
 describe('queuing while offline', () => {
   it('keeps actions in the order they were taken', async () => {
@@ -135,7 +144,7 @@ describe('flushing on reconnect', () => {
 });
 
 describe('a push that never lands', () => {
-  it('keeps everything queued and counts the attempt', async () => {
+  it('keeps everything queued, and does not hold a dead network against it', async () => {
     const queue = makeQueue();
     await queue.enqueue(action('a', 'DOCTOR_ARRIVED', 4));
 
@@ -144,20 +153,34 @@ describe('a push that never lands', () => {
     // This is the whole point: a dropped connection costs nothing.
     expect(outcome.offline).toBe(true);
     expect(await queue.pendingCount()).toBe(1);
-    expect((await queue.pending())[0]?.attempts).toBe(1);
+    expect((await queue.pending())[0]?.attempts).toBe(0);
   });
 
-  it('accumulates attempts across retries and reports what is stuck', async () => {
+  it('is never "stuck" for having been offline, however long', async () => {
     const queue = makeQueue();
     await queue.enqueue(action('a', 'DOCTOR_ARRIVED', 4));
 
-    for (let i = 0; i < MAX_ATTEMPTS; i += 1) await queue.flush(SESSION, offline);
+    // An hour without a network is an hour of retries. None of them is a
+    // fault of the action, and a shift's work must not be flagged for it.
+    for (let i = 0; i < MAX_ATTEMPTS * 3; i += 1) await queue.flush(SESSION, offline);
 
-    // Never discarded. An action a receptionist took and the system silently
-    // dropped is the worst outcome this design can produce, so it is surfaced
-    // instead.
     expect(await queue.pendingCount()).toBe(1);
-    expect(await queue.stuck()).toHaveLength(1);
+    expect(await queue.stuck()).toHaveLength(0);
+  });
+
+  it('treats "not now" from the server as it treats no server', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('a', 'DOCTOR_ARRIVED', 4));
+
+    // An access token that ran out while the counter was offline.
+    const expired: PushTransport = () =>
+      Promise.reject(new ApiError('AUTH_TOKEN_INVALID', 'expired', 401));
+    for (let i = 0; i < MAX_ATTEMPTS + 1; i += 1) {
+      expect((await queue.flush(SESSION, expired)).offline).toBe(true);
+    }
+
+    expect(await queue.pendingCount()).toBe(1);
+    expect(await queue.stuck()).toHaveLength(0);
   });
 
   it('succeeds once the network returns, with nothing lost', async () => {
@@ -172,6 +195,120 @@ describe('a push that never lands', () => {
     const outcome = await queue.flush(SESSION, acceptsAll);
     expect(outcome.accepted).toEqual(['a', 'b']);
     expect(await queue.pendingCount()).toBe(0);
+  });
+});
+
+describe('an entry the server cannot take (FR-OFF-05)', () => {
+  it('is set aside at once when it will never be taken, and the rest are sent', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('a', 'DOCTOR_ARRIVED', 3));
+    await queue.enqueue(action('bad', 'PATIENT_CALLED', 2));
+    await queue.enqueue(action('c', 'PATIENT_LATE', 1));
+
+    // The batch as a whole is refused; one entry in it is the reason.
+    const outcome = await queue.flush(SESSION, chokesOn(['bad'], 400));
+
+    expect(outcome.accepted).toEqual(['a', 'c']);
+    expect(outcome.stuck).toEqual(['bad']);
+    expect(outcome.offline).toBe(false);
+
+    // Nothing waits behind it any more, and it has not been thrown away.
+    expect(await queue.pendingCount()).toBe(0);
+    const stuck = await queue.stuck();
+    expect(stuck.map((event) => event.clientEventId)).toEqual(['bad']);
+    expect(stuck[0]?.stuck).toEqual({ code: 'VALIDATION_FAILED' });
+  });
+
+  it('is not sent again once it is stuck', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('bad', 'PATIENT_CALLED', 2));
+    await queue.flush(SESSION, chokesOn(['bad'], 422));
+
+    const push = vi.fn(acceptsAll);
+    await queue.enqueue(action('next', 'PATIENT_DONE', 1));
+    await queue.flush(SESSION, push);
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push.mock.calls[0]?.[1].map((event) => event.clientEventId)).toEqual(['next']);
+  });
+
+  it('keeps its place while the server may only be restarting', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('a', 'DOCTOR_ARRIVED', 3));
+    await queue.enqueue(action('b', 'PATIENT_CALLED', 2));
+
+    // A 500: possibly a database restarting. Order still matters, so nothing
+    // behind the entry that failed is sent ahead of it.
+    const outcome = await queue.flush(SESSION, chokesOn(['a'], 500));
+
+    expect(outcome.accepted).toEqual([]);
+    expect(outcome.stuck).toEqual([]);
+    expect((await queue.pending()).map((event) => event.clientEventId)).toEqual(['a', 'b']);
+    expect((await queue.pending())[0]?.attempts).toBe(1);
+
+    // And when the server is well again, everything goes, in order.
+    const recovered = await queue.flush(SESSION, acceptsAll);
+    expect(recovered.accepted).toEqual(['a', 'b']);
+  });
+
+  it('stops blocking the queue after the server has failed it enough times', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('poison', 'DOCTOR_ARRIVED', 3));
+    await queue.enqueue(action('b', 'PATIENT_CALLED', 2));
+
+    // This used to be forever: one entry the server kept failing on, retried
+    // as though the network were down, with a shift's work behind it.
+    const failing = chokesOn(['poison'], 500);
+    for (let i = 0; i < MAX_ATTEMPTS - 1; i += 1) {
+      expect((await queue.flush(SESSION, failing)).accepted).toEqual([]);
+    }
+    const last = await queue.flush(SESSION, failing);
+
+    expect(last.stuck).toEqual(['poison']);
+    expect(last.accepted).toEqual(['b']);
+    expect(await queue.pendingCount()).toBe(0);
+    expect((await queue.stuck()).map((event) => event.clientEventId)).toEqual(['poison']);
+  });
+
+  it('goes back in line, in its place, when the operator sends it again', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('bad', 'PATIENT_CALLED', 5));
+    await queue.flush(SESSION, chokesOn(['bad'], 400));
+    await queue.enqueue(action('later', 'PATIENT_DONE', 1));
+
+    await queue.retryStuck();
+
+    expect(await queue.stuck()).toHaveLength(0);
+    const outcome = await queue.flush(SESSION, acceptsAll);
+    expect(outcome.accepted).toEqual(['bad', 'later']);
+  });
+
+  it('is gone, and never sent, when the operator discards it', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('bad', 'PATIENT_CALLED', 5));
+    await queue.flush(SESSION, chokesOn(['bad'], 400));
+
+    await queue.discard(['bad']);
+
+    expect(await queue.stuck()).toHaveLength(0);
+    const push = vi.fn(acceptsAll);
+    await queue.flush(SESSION, push);
+    expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe('what an earlier page left behind (FR-OFF-01)', () => {
+  it('names every chamber with work still waiting', async () => {
+    const queue = makeQueue();
+    const other = '22222222-2222-7222-8222-222222222222';
+    await queue.enqueue(action('a', 'PATIENT_CALLED', 3));
+    await queue.enqueue(action('b', 'PATIENT_DONE', 2, other));
+    await queue.enqueue(action('c', 'PATIENT_LATE', 1, other));
+
+    expect((await queue.sessions()).sort()).toEqual([SESSION, other].sort());
+
+    await queue.flush(other, acceptsAll);
+    expect(await queue.sessions()).toEqual([SESSION]);
   });
 });
 

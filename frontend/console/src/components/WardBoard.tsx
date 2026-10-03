@@ -198,7 +198,14 @@ function BoardBody(): ReactNode {
           connected={board.connected}
           pendingCount={board.pendingCount}
           lastServerTs={board.lastServerTs}
-          stuckCount={0}
+          stuckCount={board.stuckCount}
+          onRetryStuck={() => {
+            void board.retryStuck();
+          }}
+          onDiscardStuck={() => {
+            void board.discardStuck();
+          }}
+          durable={board.durable}
           locale={locale}
           now={now}
         />

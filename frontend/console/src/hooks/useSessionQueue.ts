@@ -33,8 +33,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   OfflineQueue,
-  createMemoryStore,
   openSessionChannel,
+  retryDelayMs,
+  type ConsoleStores,
   type PendingEvent,
   type SessionSnapshot,
 } from '@platform/client';
@@ -47,6 +48,7 @@ import {
   type QueueState,
 } from '@platform/domain';
 
+import { consoleStores } from '@/lib/outbox';
 import { createSyncTransport, createUndoTransport } from '@/lib/sync';
 
 /**
@@ -67,6 +69,17 @@ export interface SessionQueue {
   readonly isStale: boolean;
   readonly lastServerTs: string | null;
   readonly pendingCount: number;
+  /**
+   * Actions the server answered and could not take. Set aside so they stop
+   * blocking the ones behind them, kept until somebody decides (`FR-OFF-05`).
+   */
+  readonly stuckCount: number;
+  /** Puts them back in line and tries again. */
+  readonly retryStuck: () => Promise<void>;
+  /** Drops them. Nothing is sent for them, ever. */
+  readonly discardStuck: () => Promise<void>;
+  /** False when this browser will not keep the outbox across a reload. */
+  readonly durable: boolean;
   /** Raised when the server refused a locally-applied action (`SY-03`). */
   readonly lastConflict: string | null;
   readonly clearConflict: () => void;
@@ -148,6 +161,10 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     connected: false,
   });
   const [pending, setPending] = useState<PendingEvent[]>([]);
+  const [stuck, setStuck] = useState<PendingEvent[]>([]);
+  // True until the browser shows otherwise, so the first paint and the
+  // server's agree; `refreshPending` asks the store.
+  const [durable, setDurable] = useState(true);
   const [lastConflict, setLastConflict] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -166,11 +183,13 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
    */
   const [browserOnline, setBrowserOnline] = useState(true);
 
-  // The queue outlives any render. A memory store here rather than Dexie's:
-  // the Dexie store is swapped in by the app shell once IndexedDB has opened,
-  // and the hook does not care which it was given.
+  // The queue outlives any render, and the page: it is kept in IndexedDB, in
+  // a database of this person's own (`lib/outbox.ts`), so a reload, a crashed
+  // tab or a power cut loses nothing that was waiting to go (`FR-OFF-01`).
+  const storesRef = useRef<ConsoleStores | null>(null);
+  storesRef.current ??= consoleStores();
   const queueRef = useRef<OfflineQueue | null>(null);
-  queueRef.current ??= new OfflineQueue(createMemoryStore());
+  queueRef.current ??= new OfflineQueue(storesRef.current.queue);
 
   const transport = useMemo(
     () => createSyncTransport(apiBaseUrl, getToken),
@@ -190,8 +209,22 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
   const refreshPending = useCallback(async () => {
     const queue = queueRef.current;
     if (queue === null) return;
-    setPending(await queue.pending());
-  }, []);
+
+    // This chamber's only. After a reload the store may still hold another
+    // chamber's unsent work, and folding that into this queue would draw
+    // patients who are not in it.
+    const here = (event: PendingEvent): boolean => event.sessionId === sessionId;
+    setPending((await queue.pending()).filter(here));
+    setStuck((await queue.stuck()).filter(here));
+    setDurable(storesRef.current?.durable() ?? false);
+  }, [sessionId]);
+
+  // What was queued before this page loaded is on the screen again at once,
+  // and goes with the first flush after the channel connects.
+  useEffect(() => {
+    if (sessionId === '') return;
+    void refreshPending();
+  }, [sessionId, refreshPending]);
 
   /**
    * Pushes whatever is queued, and reports anything the server refused.
@@ -218,6 +251,14 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
       if (outcome.conflicted.length > 0) {
         setLastConflict(outcome.conflicted[0]?.reason ?? null);
       }
+
+      // Left behind by an earlier page: another chamber's unsent work, taken
+      // by this same person. It goes now. Anything refused there is dropped,
+      // because nobody is looking at that queue to be told.
+      for (const other of await queue.sessions()) {
+        if (other !== sessionId) await queue.flush(other, transport);
+      }
+
       await refreshPending();
     })();
 
@@ -361,6 +402,19 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     [refreshPending, sendUndo],
   );
 
+  const retryStuck = useCallback(async () => {
+    await queueRef.current?.retryStuck();
+    await refreshPending();
+    await flush();
+  }, [refreshPending, flush]);
+
+  const discardStuck = useCallback(async () => {
+    const queue = queueRef.current;
+    if (queue === null) return;
+    await queue.discard(stuck.map((event) => event.clientEventId));
+    await refreshPending();
+  }, [stuck, refreshPending]);
+
   const undoLast = useCallback(async (): Promise<UndoOutcome> => {
     const last = lastActionRef.current;
     if (last === null) return 'nothing';
@@ -389,12 +443,39 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
   // saying otherwise is enough to say so on screen.
   const connected = snapshot.connected && browserOnline;
 
+  // --- and again, by itself, while something is still waiting ----------------
+  //
+  // FRONTEND.md §11.1 step 6: "retry with backoff". A push that failed while
+  // the socket stayed up — a server restarting, a token being renewed — has no
+  // reconnect to prompt the next attempt, and used to wait for somebody's next
+  // tap. Offline needs no timer: the reconnect sends at once.
+  const retriesRef = useRef(0);
+  useEffect(() => {
+    if (pending.length === 0) {
+      retriesRef.current = 0;
+      return undefined;
+    }
+    if (!connected) return undefined;
+
+    const timer = setTimeout(() => {
+      retriesRef.current += 1;
+      void flush();
+    }, retryDelayMs(retriesRef.current));
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [pending, connected, flush]);
+
   return {
     state,
     connected,
     isStale: snapshot.lastServerTs === null,
     lastServerTs: snapshot.lastServerTs,
     pendingCount: pending.length,
+    stuckCount: stuck.length,
+    retryStuck,
+    discardStuck,
+    durable,
     lastConflict,
     clearConflict: () => {
       setLastConflict(null);

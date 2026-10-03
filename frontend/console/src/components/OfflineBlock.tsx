@@ -12,13 +12,21 @@
  * wifi drops — and the second is the failure this whole design exists to
  * prevent.
  *
- * So it says three things plainly: whether there is a connection, how much is
- * waiting to go, and when the server was last heard from. Never a spinner, and
- * never an empty state that could be read as "all sent" (`FR-OFF-05`).
+ * So it says plainly whether there is a connection, how much is waiting to go,
+ * and when the server was last heard from. Never a spinner, and never an empty
+ * state that could be read as "all sent" (`FR-OFF-05`).
+ *
+ * Two further things it says only when they are true. That the server could
+ * not take some actions: they are set aside so they stop blocking the rest,
+ * and the operator sends them again or discards them — never the system, on
+ * its own. And that this browser will not keep the outbox across a reload,
+ * because a safety that is not there must not be implied (PRD.md §3.2).
  */
 
-import { formatNumber, numeralsFor, t, type Locale } from '@platform/i18n';
-import { Chip } from '@platform/ui';
+import { useState } from 'react';
+
+import { format, formatNumber, numeralsFor, t, type Locale } from '@platform/i18n';
+import { Button, Chip } from '@platform/ui';
 
 import type { ReactNode } from 'react';
 
@@ -27,8 +35,12 @@ export interface OfflineBlockProps {
   readonly pendingCount: number;
   /** Null when this console has never reached the server. */
   readonly lastServerTs: string | null;
-  /** Entries that have failed enough times to be worth surfacing. */
+  /** Actions the server answered and could not take. */
   readonly stuckCount: number;
+  readonly onRetryStuck?: () => void;
+  readonly onDiscardStuck?: () => void;
+  /** False when what is queued lives in this tab only. Absent means it is kept. */
+  readonly durable?: boolean;
   readonly locale: Locale;
   readonly now: Date;
 }
@@ -38,10 +50,15 @@ export function OfflineBlock({
   pendingCount,
   lastServerTs,
   stuckCount,
+  onRetryStuck,
+  onDiscardStuck,
+  durable = true,
   locale,
   now,
 }: OfflineBlockProps): ReactNode {
   const numerals = numeralsFor(locale);
+  /** `GR-01`: discarding names its consequence and is asked for twice. */
+  const [confirming, setConfirming] = useState(false);
 
   return (
     <section
@@ -84,8 +101,69 @@ export function OfflineBlock({
       ) : null}
 
       {stuckCount > 0 ? (
-        <p className="mt-2 text-caption text-warn-600" role="alert" data-testid="sync-stuck">
-          {t('syncStuck', locale)}
+        <div className="mt-3" role="alert" data-testid="sync-stuck">
+          <p className="text-caption text-warn-600">
+            {format('syncStuck', locale, { count: formatNumber(stuckCount, numerals) })}
+          </p>
+
+          {confirming ? (
+            <>
+              <p className="mt-2 text-caption text-ink-secondary">
+                {t('syncStuckConfirm', locale)}
+              </p>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  data-testid="sync-stuck-discard-confirm"
+                  onClick={() => {
+                    setConfirming(false);
+                    onDiscardStuck?.();
+                  }}
+                >
+                  {t('syncStuckDiscard', locale)}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setConfirming(false);
+                  }}
+                >
+                  {t('syncStuckKeep', locale)}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="mt-2 flex gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                data-testid="sync-stuck-retry"
+                onClick={() => {
+                  onRetryStuck?.();
+                }}
+              >
+                {t('syncStuckRetry', locale)}
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                data-testid="sync-stuck-discard"
+                onClick={() => {
+                  setConfirming(true);
+                }}
+              >
+                {t('syncStuckDiscard', locale)}
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {!durable ? (
+        <p className="mt-2 text-caption text-warn-600" role="alert" data-testid="not-durable">
+          {t('queueNotDurable', locale)}
         </p>
       ) : null}
     </section>

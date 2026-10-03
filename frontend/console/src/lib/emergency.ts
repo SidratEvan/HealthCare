@@ -117,7 +117,10 @@ export function erSender(
       return { kind: 'accepted' };
     } catch (error: unknown) {
       if (error instanceof NetworkError) return { kind: 'unreachable' };
-      if (error instanceof ApiError && error.status < 500) {
+      if (!(error instanceof ApiError)) return { kind: 'unreachable' };
+      // "Not now", as in `lib/beds.ts`: the action stays queued.
+      if (error.status === 401 || error.status === 429) return { kind: 'unreachable' };
+      if (error.status < 500) {
         const reason =
           typeof error.details?.['guard'] === 'string'
             ? error.details['guard']
@@ -126,7 +129,7 @@ export function erSender(
               : error.code;
         return { kind: 'refused', code: error.code, reason };
       }
-      return { kind: 'unreachable' };
+      return { kind: 'failed', code: error.code };
     }
   };
 }
