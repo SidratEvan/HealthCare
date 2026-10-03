@@ -66,6 +66,24 @@ async function openConsole(page: Page): Promise<void> {
   await expect(page.getByTestId('queue-table')).toBeVisible();
 }
 
+/**
+ * Resolves when the push carrying `events` queued events has failed.
+ *
+ * A spec that closes or reloads a page while a blocked push is still on its
+ * way proves nothing: Playwright pauses the request to ask the route what to
+ * do, and a page that goes while it is paused lets it through — the server
+ * got six events from a tab the test had "cut the power" to. So the page goes
+ * only once the push that holds everything taken so far has been refused,
+ * which leaves a full second before the console's next attempt.
+ */
+async function pushFailed(page: Page, events: number): Promise<void> {
+  await page.waitForEvent('requestfailed', (request) => {
+    if (!request.url().endsWith('/sync/events')) return false;
+    const body = request.postDataJSON() as { events?: unknown[] } | null;
+    return (body?.events?.length ?? 0) === events;
+  });
+}
+
 test.describe('the reception console', () => {
   test('shows a mid-queue session, with one patient in the chamber', async ({ page }) => {
     await openConsole(page);
@@ -228,11 +246,13 @@ test.describe('a shift with the network gone (FR-OFF-01)', () => {
     await openConsole(page);
     const before = await eventCount(demo.sessionId);
 
+    const refused = pushFailed(page, 6);
     for (let i = 0; i < 3; i += 1) {
       await page.getByTestId('call-next').click();
       await expect(page.getByTestId('pending-count')).toBeVisible();
     }
     await expect(page.getByTestId('now-serving')).toHaveText('৪');
+    await refused;
 
     // The tab goes. Nobody is at the counter, so nothing is sent: what was
     // taken is waiting on the device, not in a page that is no longer there.
@@ -329,9 +349,11 @@ test.describe('the outbox is kept on the device (FR-OFF-01)', () => {
     const before = await eventCount(demo.sessionId);
 
     await blockSync(page);
+    const refused = pushFailed(page, 4);
     for (let i = 0; i < 2; i += 1) await page.getByTestId('call-next').click();
     await expect(page.getByTestId('now-serving')).toHaveText('৩');
     await expect(page.getByTestId('pending-count')).toBeVisible();
+    await refused;
 
     // The reload that used to lose all of it.
     await page.reload();
@@ -373,9 +395,11 @@ test.describe('the outbox is kept on the device (FR-OFF-01)', () => {
     });
     const afternoon = await context.newPage();
     await openConsole(afternoon);
+    const refused = pushFailed(afternoon, 2);
     await afternoon.getByTestId('call-next').click();
     await expect(afternoon.getByTestId('now-serving')).toHaveText('২');
     await expect(afternoon.getByTestId('pending-count')).toBeVisible();
+    await refused;
     await afternoon.close();
     await context.unroute(sync);
     expect(await eventCount(demo.sessionId)).toBe(before);

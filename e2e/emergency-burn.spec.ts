@@ -315,7 +315,15 @@ test.describe('the ER outbox is kept on the device (FR-OFF-01)', () => {
       else await route.fallback();
     });
 
+    // The page is reloaded only once the triage has been refused: one still
+    // paused at the route when the page goes can slip through.
+    const refused = page.waitForEvent(
+      'requestfailed',
+      (request) =>
+        request.method() === 'PATCH' && request.url().includes('/api/v1/emergency/cases/'),
+    );
     await page.getByTestId(`er-triage-yellow-${walkIn.caseId}`).click();
+    await refused;
     await expect(row).toHaveAttribute('data-triage', 'yellow');
     await expect(page.getByTestId('pending-count')).toBeVisible();
     expect((await caseState(walkIn.caseId)).triage).toBe('red');

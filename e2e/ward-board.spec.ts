@@ -294,7 +294,14 @@ test.describe('the ward outbox is kept on the device (FR-OFF-01)', () => {
       else await route.fallback();
     });
 
+    // The page is reloaded only once the admit has been refused: one still
+    // paused at the route when the page goes can slip through.
+    const refused = page.waitForEvent(
+      'requestfailed',
+      (request) => request.method() === 'POST' && request.url().includes('/api/v1/beds/'),
+    );
     await admitAtDesk(page, bed(0).label, 'সালমা বেগম (ডেমো)');
+    await refused;
     const tile = page.getByTestId(`bed-tile-${bed(0).label}`);
     await expect(tile).toHaveAttribute('data-state', 'occupied');
     await expect(tile).toHaveAttribute('data-pending', 'true');
