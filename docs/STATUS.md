@@ -2454,6 +2454,35 @@ afternoon.
   guests, and the thirty-first was refused with a 429. **Repeating
   `wallet.spec.ts` more than five times in one run measures the limit, not
   the wallet.**
+- **A test that changed nothing one run in sixteen**
+  (`fix/test-coin-flips`, 3 October). `totp.test.ts` proved a sealed
+  two-step secret refuses to open once altered by changing the last
+  character of its body from `A` to `B`. The body is 32 bytes, 43 base64
+  characters, and the last carries four bits of the secret and two that
+  decode to nothing; `A` and `B` differ only in those two. So for the 6% of
+  seals that end in `A` (measured: 961 of 16,000) the "altered" value was
+  the same bytes, opened correctly, and failed the gate — once, while plan
+  1.7 was being verified. **The seal was never wrong** (AES-256-GCM, and an
+  altered IV, tag or body is refused); the test was. It now changes the
+  first character of each of the three parts, over 64 fresh seals. **A test
+  whose input is random has to be true for every value, or it is a
+  failure waiting for its turn.**
+- **Two tests asked the database for rows "since now" by the wrong clock**
+  (`fix/test-coin-flips`, 3 October). `standby.routes.test.ts` and
+  `admin.routes.test.ts` took `new Date()` on this machine, made a request,
+  and then looked for rows with `created_at >=` that moment. `created_at` is
+  PostgreSQL's `now()`, and the database runs in a container in a virtual
+  machine: a second clock. Measured the same afternoon, it ran between
+  4.1 ms ahead of this machine and 1.4 ms behind — behind in 744 of 1,345
+  samples once all eight cores were busy — and a request reaches its first
+  statement in about as long. So the row was found when the database's
+  clock leant ahead and missed when it leant behind; the standby test
+  failed the gate once reporting "no SMS written" while the same run's
+  output shows the SMS, and its row is in the table. The moment of the
+  failure itself was not caught; the mechanism and its size were. Both
+  tests now take the moment from the database (`support/databaseClock.ts`).
+  **The product was right both times. Never compare a time from this
+  machine with a time the database stamped.**
 - **A second device a spec opens lives until the whole run ends**
   (`fix/e2e-context-leaks`, 2026-09-30). `browser.newContext()` belongs to the
   worker's browser, not the test, and there is one worker. No-show, referral,
