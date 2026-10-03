@@ -302,11 +302,13 @@ export async function queueFor(
 ): Promise<QueuedBatch> {
   if (plan.length === 0) return NOTHING;
 
-  const [chamber, recipients, templates] = await Promise.all([
-    notificationRepo.chamberFor(sessionId),
-    notificationRepo.recipientsForSession(trx, sessionId),
-    templateIndex(),
-  ]);
+  // Every read here goes through `trx`. This runs inside the queue's locked
+  // transaction, on its one connection; asking the pool for another from in
+  // here is how a busy chamber stalled itself (see `chamberFor`). In order,
+  // not together: one connection carries one query at a time.
+  const chamber = await notificationRepo.chamberFor(sessionId, trx);
+  const recipients = await notificationRepo.recipientsForSession(trx, sessionId);
+  const templates = await templateIndex(trx);
 
   if (chamber === null) return NOTHING;
 
@@ -326,7 +328,7 @@ export async function queueFor(
   const smsUsed =
     chamber.smsBudgetMonthly === null
       ? 0
-      : await notificationRepo.smsSentThisMonth(chamber.hospitalId);
+      : await notificationRepo.smsSentThisMonth(chamber.hospitalId, trx);
   let smsBudgetLeft =
     chamber.smsBudgetMonthly === null
       ? Number.POSITIVE_INFINITY
@@ -346,7 +348,7 @@ export async function queueFor(
     // `FR-NOT-02`: app users get push + SMS, non-app users get SMS only. The
     // answer comes from whether any device is registered, which is a fact
     // rather than an assumption.
-    const tokens = await notificationRepo.deviceTokensFor(recipient);
+    const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
     const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
 
     for (const channel of channels) {
@@ -509,10 +511,9 @@ async function queueStandbyMessage(
   },
   at: Date,
 ): Promise<QueuedBatch> {
-  const [chamber, templates] = await Promise.all([
-    notificationRepo.chamberFor(input.sessionId),
-    templateIndex(),
-  ]);
+  // Through `trx`, one after the other: see `queueFor`.
+  const chamber = await notificationRepo.chamberFor(input.sessionId, trx);
+  const templates = await templateIndex(trx);
   if (chamber === null) return NOTHING;
 
   // Built here rather than read back: a standby row carries the phone and the
@@ -537,10 +538,11 @@ async function queueStandbyMessage(
   const budgetLeft =
     chamber.smsBudgetMonthly === null
       ? Number.POSITIVE_INFINITY
-      : chamber.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(chamber.hospitalId));
+      : chamber.smsBudgetMonthly -
+        (await notificationRepo.smsSentThisMonth(chamber.hospitalId, trx));
 
   const templateKey = input.templateKey;
-  const tokens = await notificationRepo.deviceTokensFor(recipient);
+  const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
   const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
 
   const rows: notificationRepo.QueuedNotification[] = [];
@@ -602,7 +604,7 @@ export async function queueBedRequestAnswer(
 
   const templateKey: TemplateKey =
     input.outcome === 'held' ? 'bed.request_held' : 'bed.request_declined';
-  const templates = await templateIndex();
+  const templates = await templateIndex(trx);
 
   const { recipient } = target;
   const locale: Locale = recipient.locale === 'en' ? 'en' : 'bn';
@@ -619,9 +621,9 @@ export async function queueBedRequestAnswer(
   const budgetLeft =
     target.smsBudgetMonthly === null
       ? Number.POSITIVE_INFINITY
-      : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId));
+      : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId, trx));
 
-  const tokens = await notificationRepo.deviceTokensFor(recipient);
+  const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
   const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
 
   const rows: notificationRepo.QueuedNotification[] = [];
@@ -686,7 +688,7 @@ export async function queueEmergencyAnswer(
 
   const templateKey: TemplateKey =
     input.outcome === 'acknowledged' ? 'emergency.acknowledged' : 'emergency.declined';
-  const templates = await templateIndex();
+  const templates = await templateIndex(trx);
 
   const { recipient } = target;
   const locale: Locale = recipient.locale === 'en' ? 'en' : 'bn';
@@ -697,7 +699,7 @@ export async function queueEmergencyAnswer(
     link: input.link,
   };
 
-  const tokens = await notificationRepo.deviceTokensFor(recipient);
+  const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
   const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
 
   const rows: notificationRepo.QueuedNotification[] = [];
@@ -765,7 +767,7 @@ export async function queueReportReady(
   if (target === null) return NOTHING;
 
   const templateKey: TemplateKey = 'lab.report_ready';
-  const templates = await templateIndex();
+  const templates = await templateIndex(trx);
 
   const { recipient } = target;
   const locale: Locale = recipient.locale === 'en' ? 'en' : 'bn';
@@ -782,7 +784,7 @@ export async function queueReportReady(
   const budgetLeft =
     target.smsBudgetMonthly === null
       ? Number.POSITIVE_INFINITY
-      : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId));
+      : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId, trx));
 
   const rows: notificationRepo.QueuedNotification[] = [
     {
@@ -962,10 +964,10 @@ function paramsFor(
  */
 let cache: Map<string, string> | null = null;
 
-async function templateIndex(): Promise<Map<string, string>> {
+async function templateIndex(trx?: Tx): Promise<Map<string, string>> {
   if (cache !== null) return cache;
 
-  const rows = await notificationRepo.activeTemplates();
+  const rows = await notificationRepo.activeTemplates(trx);
   cache = new Map(rows.map((row) => [`${row.key}|${row.channel}|${row.locale}`, row.body]));
   return cache;
 }
