@@ -7,7 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/platform-plan` (2 October) — **the owner's implementation
+Last updated: `fix/delay-on-arrival` (2 October) — **a delay declared before
+the doctor arrives is used up by the arrival** (plan 1.1; decision 86). The
+patient at the front of an empty chamber is told "now", not "in half an
+hour", and cannot be marked absent before the time on their phone. Before
+that, `chore/platform-plan` (2 October) — **the owner's implementation
 brief became `docs/PLATFORM_PLAN.md`**: the order of work from here, branch by
 branch, and the decisions it waits on (below, *The platform plan*). No product
 code changed. Before that, `chore/handover` (2 October) — **a technical handover read from
@@ -238,7 +242,8 @@ than the plans. It is `docs/HANDOVER.md` (16 sections: system map, database,
 queue engine with a worked 10-patient example, auth, records, offline,
 modules, payments and notifications, deployment, tests, ranked debt,
 readiness per module, what lives outside the repo, a crash course, and a
-final assessment). **Found, all unfixed, each to be its own `fix/*` branch:**
+final assessment). **Found, each to be its own `fix/*` branch** (marked
+below as it lands):
 
 1. **CRITICAL — no SMS adapter, so no patient can book on a real server.**
    With `DEMO_MODE=false` booking needs a phone code; `SMS_PROVIDER` offers
@@ -246,8 +251,8 @@ final assessment). **Found, all unfixed, each to be its own `fix/*` branch:**
    Walk-ins get no tracking link. `DEPLOY.md` S2/S6 imply otherwise.
 2. **CRITICAL — the console can pause a chamber and cannot resume it.** No
    Resume control exists; a paused session refuses *call next*.
-3. **CRITICAL — a delay declared before the doctor arrives is never
-   consumed.** After arrival the ETA baseline is still `now + delayMinutes`
+3. **Fixed (`fix/delay-on-arrival`, decision 86).** Was: **CRITICAL — a
+   delay declared before the doctor arrives is never consumed.** After arrival the ETA baseline is still `now + delayMinutes`
    (`eta.ts`); reproduced: the patient at the front told 18:20 while
    absent-marking was allowed at 18:06.
 4. **HIGH — the console's Undo sends a booking id as `undoneEventId`;** it
@@ -3052,6 +3057,21 @@ Raised while building the national layer (step 20):
    each use, and it is bound to the user agent as a patient's refresh session
    is (`FR-SEC-05`) — a browser update means one more code. Stateless, so it
    cannot be revoked one by one; rotating `GUEST_LINK_SECRET` ends them all.
+
+Raised while fixing the handover's findings (`docs/PLATFORM_PLAN.md` phase 1):
+
+86. **What a delay declared after the doctor arrived means**
+   (`fix/delay-on-arrival`). The documents say only that ETAs are "adjusted
+   for declared delays" (`FR-QUE-11`). The bug was that a delay declared
+   before the arrival kept being added afterwards. Fixed as: the arrival uses
+   up whatever was declared before it. A delay declared *after* the arrival
+   could have been dropped the same way, but reception and the doctor can
+   both declare one mid-chamber (`FR-REC-03`, `FR-DOC-02`), so it is read as
+   a hold: nobody is expected to be called before "declared at + minutes",
+   a second delay extends a hold still running, and the no-show grace cannot
+   end before the hold does. `BACKEND.md` §4.1 now says so. The other reading
+   — a later delay only shifts estimates and never blocks absent-marking —
+   is a one-line change in `rules.ts` if the owner prefers it.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository

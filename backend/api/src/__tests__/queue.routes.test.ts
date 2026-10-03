@@ -184,6 +184,47 @@ describe('every event type appends, reduces and broadcasts', () => {
     expect(events.map((entry) => entry.event)).toContain('session.delayed');
   });
 
+  it('a delay declared before the doctor arrives is used up by the arrival (FR-QUE-11)', async () => {
+    const declared = await post(`/sessions/${fixture.sessionId}/delay`, {
+      minutes: 30,
+      reason: 'যানজট',
+      declaredBy: 'reception',
+    });
+    expect(declared.status).toBe(200);
+
+    const arrived = await post(`/sessions/${fixture.sessionId}/arrived`);
+    expect(arrived.status).toBe(200);
+
+    // The doctor is in and the chamber is empty: the first patient is next,
+    // not half an hour away. Carrying the delay past the arrival told the
+    // front of the queue a time after the one reception could mark them
+    // absent at.
+    const first = arrived.body.data.etas[0] as { etaAt: string };
+    expect((Date.parse(first.etaAt) - Date.now()) / 60_000).toBeLessThan(2);
+    expect(arrived.body.data.state.hold).toBeNull();
+    // Still on record for the day's figures.
+    expect(arrived.body.data.state.delayMinutes).toBe(30);
+  });
+
+  it('a delay declared once the doctor is in holds the chamber until then (FR-REC-03)', async () => {
+    await startSession();
+    const declared = await post(`/sessions/${fixture.sessionId}/delay`, {
+      minutes: 30,
+      reason: 'জরুরি ডাক',
+      declaredBy: 'reception',
+    });
+    expect(declared.status).toBe(200);
+
+    const first = declared.body.data.etas[0] as { etaAt: string };
+    const minutesAway = (Date.parse(first.etaAt) - Date.now()) / 60_000;
+    expect(minutesAway).toBeGreaterThan(28);
+    expect(minutesAway).toBeLessThanOrEqual(30);
+    // The estimate is the hold's end, to the minute.
+    expect(declared.body.data.state.hold.minutes).toBe(30);
+    const heldUntil = Date.parse(declared.body.data.state.hold.until as string);
+    expect(Math.floor(heldUntil / 60_000) * 60_000).toBe(Date.parse(first.etaAt));
+  });
+
   it('SESSION_PAUSED and SESSION_RESUMED round-trip', async () => {
     await startSession();
     const paused = await post(`/sessions/${fixture.sessionId}/pause`, { reason: 'নামাজের বিরতি' });

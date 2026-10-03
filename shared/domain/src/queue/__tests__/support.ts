@@ -346,6 +346,7 @@ export function queueShape(state: QueueState): unknown {
     status: state.status,
     doctorArrivedAt: state.doctorArrivedAt,
     delayMinutes: state.delayMinutes,
+    hold: state.hold,
     pausedSeconds: state.pausedSeconds,
     rate: state.rate,
     entries: state.entries.map((entry) => ({

@@ -70,6 +70,7 @@ export {
   bandMinutes,
   computeEtas,
   etaFor,
+  outstandingDelayMinutes,
   projectedEnd,
   shouldLeaveNow,
   twoAwayBookings,

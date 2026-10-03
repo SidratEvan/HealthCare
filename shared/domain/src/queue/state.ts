@@ -104,6 +104,12 @@ export interface QueueEntry {
   readonly priority: { readonly movedAt: Timestamp; readonly reason: string } | null;
 }
 
+/** A delay declared while the doctor is in (FR-REC-03). */
+export interface DelayHold {
+  readonly until: Timestamp;
+  readonly minutes: number;
+}
+
 /** The rolling consultation-rate window (see `rate.ts`). */
 export interface RateState {
   /** The doctor's configured starting point, in seconds (FR-QUE-10). */
@@ -177,8 +183,23 @@ export interface QueueState {
   /** Set by DOCTOR_ARRIVED. Until then no ETA is more than a guess. */
   readonly doctorArrivedAt: Timestamp | null;
   readonly endedAt: Timestamp | null;
-  /** Cumulative declared delay in minutes (FR-REC-03). */
+  /**
+   * Everything declared so far, in minutes (FR-REC-03). A record of the day,
+   * which the admin figures count; what is still ahead of the queue is
+   * `outstandingDelayMinutes` in `eta.ts`.
+   */
   readonly delayMinutes: number;
+  /**
+   * Set by a delay declared after the doctor arrived: the chamber is not
+   * expected to move before `until`, and `minutes` is what was declared to
+   * make it so (a second delay during a hold adds to both).
+   *
+   * A delay declared *before* the arrival is not a hold. It moved the expected
+   * start, and the arrival is what ended it — carrying it past the arrival is
+   * how a patient at the front of an empty chamber was told to wait another
+   * half hour and could be marked absent before the time on their phone.
+   */
+  readonly hold: DelayHold | null;
   /** Set while the session is paused (FR-REC-05). */
   readonly pausedAt: Timestamp | null;
   /** Total time already spent paused, in seconds. */
@@ -223,6 +244,7 @@ export function emptyState(seed: QueueSeed): QueueState {
     doctorArrivedAt: null,
     endedAt: null,
     delayMinutes: 0,
+    hold: null,
     pausedAt: null,
     pausedSeconds: 0,
     entries,

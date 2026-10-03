@@ -48,7 +48,11 @@ export type LiveSerialTone = 'waiting' | 'not-arrived' | 'delayed' | 'next' | 'c
 export interface LiveSerialFacts {
   /** True once `DOCTOR_ARRIVED` has been folded. */
   readonly doctorArrived: boolean;
-  /** Cumulative declared delay, in minutes (`FR-REC-03`). */
+  /**
+   * Declared delay still ahead of the queue, in minutes (`FR-REC-03`): the
+   * domain's `outstandingDelayMinutes`, not everything declared today. A
+   * delay the doctor's arrival has used up is not a delay any more.
+   */
   readonly delayMinutes: number;
   /** How many patients are seen before this one, the chamber's occupant included. */
   readonly patientsAhead: number;

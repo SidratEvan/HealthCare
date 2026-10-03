@@ -296,8 +296,8 @@ In addition to `CLAUDE.md`:
 | # | Branch | State |
 |---|---|---|
 | — | `chore/platform-plan` | merged — this file |
-| 1.1 | `fix/delay-on-arrival` | next |
-| 1.2 | `fix/console-resume` | |
+| 1.1 | `fix/delay-on-arrival` | merged — `QueueState.hold`, `outstandingDelayMinutes`; the patient card and the doctor's header show what is still ahead |
+| 1.2 | `fix/console-resume` | next |
 | 1.3 | `fix/console-undo` | |
 | 1.4 | `fix/sync-event-allowlist` | |
 | 1.5 | `fix/offline-outbox-persist` | |

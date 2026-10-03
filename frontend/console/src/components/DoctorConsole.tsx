@@ -45,7 +45,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { nowServing, queueCounts, SYMPTOM_SIGNALS, waitingQueue } from '@platform/domain';
+import {
+  nowServing,
+  outstandingDelayMinutes,
+  queueCounts,
+  SYMPTOM_SIGNALS,
+  time,
+  waitingQueue,
+} from '@platform/domain';
 import type { QueueEntry } from '@platform/domain';
 import {
   format,
@@ -289,7 +296,7 @@ function DoctorBody(): ReactNode {
     <div className="flex min-h-screen flex-col bg-canvas">
       <SessionHeader
         counts={counts}
-        delayMinutes={state?.delayMinutes ?? 0}
+        delayMinutes={state === null ? 0 : outstandingDelayMinutes(state, time.fromDate(now))}
         avgConsultSeconds={state?.rate.currentSeconds ?? null}
         plannedStart={state?.plan.plannedStart ?? null}
         plannedEnd={state?.plan.plannedEnd ?? null}

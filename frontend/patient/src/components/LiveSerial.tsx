@@ -29,6 +29,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import {
   computeEtas,
+  outstandingDelayMinutes,
   patientsAhead as aheadOf,
   readRefundPolicy,
   refundIfCancelledNow,
@@ -171,6 +172,9 @@ function Ready({
   }, [etas, state, booking.id, now]);
 
   const called = mine?.status === 'in_chamber';
+  // What is still ahead, not everything declared today: a delay the doctor's
+  // arrival used up must stop colouring the card (`FR-PAT-34`).
+  const delayAhead = outstandingDelayMinutes(state, time.fromDate(now));
   const minutesUntil =
     eta === null || eta.confidence === 'unknown'
       ? null
@@ -225,11 +229,11 @@ function Ready({
           confidence={eta?.confidence ?? 'unknown'}
           stale={stale}
           doctorArrived={state.doctorArrivedAt !== null}
-          delayMinutes={state.delayMinutes}
+          delayMinutes={delayAhead}
           patientsAhead={ahead}
           called={called}
           labels={{
-            status: statusLine(state, called, locale),
+            status: statusLine(state, called, delayAhead, locale),
             yourSerial: tp('liveSerialTitle', locale),
             nowServing: tp('nowServing', locale),
             nobodyCalledYet: tp('nobodyCalledYet', locale),
@@ -378,16 +382,18 @@ function Ready({
  * in yet. Ordered the way `liveSerialTone` orders the surface, so the words
  * and the colour never describe different situations.
  */
-function statusLine(state: QueueState, called: boolean, locale: Locale): string {
+function statusLine(
+  state: QueueState,
+  called: boolean,
+  delayAhead: number,
+  locale: Locale,
+): string {
   const numerals = numeralsFor(locale);
   if (called) return tp('yourTurn', locale);
   if (state.status === 'ended') return tp('sessionEnded', locale);
   if (state.pausedAt !== null) return tp('sessionPaused', locale);
-  if (state.delayMinutes > 0) {
-    return tp('doctorDelayed', locale).replace(
-      '{minutes}',
-      formatMinutes(state.delayMinutes, numerals),
-    );
+  if (delayAhead > 0) {
+    return tp('doctorDelayed', locale).replace('{minutes}', formatMinutes(delayAhead, numerals));
   }
   if (state.doctorArrivedAt === null) return tp('doctorNotArrived', locale);
 
