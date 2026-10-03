@@ -202,6 +202,48 @@ describe('a conflicted entry (SY-03)', () => {
   });
 });
 
+describe('taking an action back (GR-02)', () => {
+  it('reports which event each accepted action became, so it can be undone by id', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('a', 'PATIENT_DONE', 2));
+    await queue.enqueue(action('b', 'PATIENT_CALLED', 1));
+
+    const outcome = await queue.flush(SESSION, (_sessionId, events) =>
+      Promise.resolve({
+        accepted: events.map((event) => ({
+          clientEventId: event.clientEventId,
+          eventId: `event-${event.clientEventId}`,
+        })),
+        conflicts: [],
+      }),
+    );
+
+    expect(outcome.acceptedEvents).toEqual([
+      { clientEventId: 'a', eventId: 'event-a' },
+      { clientEventId: 'b', eventId: 'event-b' },
+    ]);
+  });
+
+  it('drops an action that was never sent, and sends the rest', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('a', 'PATIENT_DONE', 3));
+    await queue.enqueue(action('b', 'PATIENT_CALLED', 2));
+    await queue.enqueue(action('c', 'PATIENT_LATE', 1));
+
+    // Offline, so nothing has left the device: undo is simply not sending it.
+    expect(await queue.discard(['b', 'missing'])).toEqual(['b']);
+
+    const sent: string[] = [];
+    await queue.flush(SESSION, (_sessionId, events) => {
+      sent.push(...events.map((event) => event.clientEventId));
+      return acceptsAll(_sessionId, events);
+    });
+
+    expect(sent).toEqual(['a', 'c']);
+    expect(await queue.pendingCount()).toBe(0);
+  });
+});
+
 describe('retry backoff', () => {
   it('grows exponentially from one second', () => {
     expect(retryDelayMs(0)).toBe(1_000);

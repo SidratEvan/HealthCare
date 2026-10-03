@@ -1285,7 +1285,13 @@ export interface BatchEntry {
 
 /** What became of one entry. */
 export type BatchOutcome =
-  | { readonly kind: 'accepted'; readonly clientEventId: string; readonly seq: number }
+  | {
+      readonly kind: 'accepted';
+      readonly clientEventId: string;
+      readonly seq: number;
+      /** The stored event, which is what `POST /events/:id/undo` names (`GR-02`). */
+      readonly eventId: string;
+    }
   | {
       readonly kind: 'conflict';
       readonly clientEventId: string;
@@ -1347,6 +1353,7 @@ export async function appendBatch(input: {
           kind: 'accepted',
           clientEventId: entry.clientEventId,
           seq: already.seq,
+          eventId: already.id,
         });
         continue;
       }
@@ -1367,6 +1374,7 @@ export async function appendBatch(input: {
           kind: 'accepted',
           clientEventId: entry.clientEventId,
           seq: result.event.seq,
+          eventId: result.event.id,
         });
       } catch (error) {
         // A guard refusal is the expected outcome of a race, not a fault.

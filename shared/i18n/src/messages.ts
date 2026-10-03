@@ -374,6 +374,22 @@ export const CONSOLE = {
   // --- Results and failures ------------------------------------------------
   undo: { bn: 'ফিরিয়ে নিন', en: 'Undo' },
   actionUndone: { bn: 'ফিরিয়ে নেওয়া হয়েছে', en: 'Undone' },
+  /** `Ctrl+Z` with no action of this console's to take back (`GR-02`). */
+  undoNothing: { bn: 'ফিরিয়ে নেওয়ার মতো কিছু নেই।', en: 'There is nothing to undo.' },
+  /** The ten seconds are up (`FR-REC-16`). */
+  undoExpired: {
+    bn: 'ফিরিয়ে নেওয়ার সময় শেষ হয়ে গেছে।',
+    en: 'It is too late to undo that.',
+  },
+  /** Already sent, and the network went before the undo could follow it. */
+  undoOffline: {
+    bn: 'সংযোগ নেই — কাজটি আগেই পাঠানো হয়েছে, তাই এখন ফিরিয়ে নেওয়া যাচ্ছে না।',
+    en: 'No connection — that was already sent, so it cannot be undone right now.',
+  },
+  undoRefused: {
+    bn: 'ফিরিয়ে নেওয়া যায়নি। সারিটি দেখে নিন।',
+    en: 'That could not be undone. Check the queue.',
+  },
   calledPatient: { bn: 'সিরিয়াল {serial} ডাকা হয়েছে', en: 'Called serial {serial}' },
   conflictRolledBack: {
     bn: 'অন্য কাউন্টার আগে কাজটি করেছে। সারিটি হালনাগাদ করা হয়েছে।',

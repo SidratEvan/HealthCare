@@ -620,3 +620,22 @@ export async function consentTrail(bookingId: string): Promise<{
     };
   });
 }
+
+/**
+ * The events an undo compensated, in log order (`GR-02`).
+ *
+ * An `ACTION_UNDONE` row proves a request was made; this proves it named a
+ * real event. The console once sent a booking id here, and the log filled
+ * with undos that pointed at nothing.
+ */
+export async function undoneTypes(sessionId: string): Promise<string[]> {
+  return await withClient(async (client) => {
+    const result = await client.query<{ type: string }>(
+      `SELECT type FROM queue_events
+        WHERE session_id = $1 AND undone_by_event_id IS NOT NULL
+        ORDER BY seq`,
+      [sessionId],
+    );
+    return result.rows.map((r) => r.type);
+  });
+}

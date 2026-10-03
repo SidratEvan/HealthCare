@@ -79,6 +79,18 @@ export type QueueSettings = Pick<
   'noShowGracePatients' | 'noShowGraceMinutes' | 'lateReinsertAfter' | 'staleThresholdMinutes'
 >;
 
+/**
+ * How long after an action it may still be undone, in seconds (`GR-02`,
+ * `FR-REC-16`).
+ *
+ * Ten seconds is the window in which a receptionist realises she tapped the
+ * wrong row. Past it, the patient has been called into the chamber and undoing
+ * the record would be rewriting what happened rather than correcting a slip.
+ * Here so the server that enforces it and the console that offers it cannot
+ * come to disagree.
+ */
+export const UNDO_WINDOW_SECONDS = 10;
+
 /** Longest delay that can be declared in one go, in minutes. */
 export const MAX_DELAY_MINUTES = 480;
 

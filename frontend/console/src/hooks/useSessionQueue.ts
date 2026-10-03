@@ -41,12 +41,24 @@ import {
 import {
   continueReplay,
   id,
+  UNDO_WINDOW_SECONDS,
   type QueueEvent,
   type QueueState,
   type QueueEventType,
 } from '@platform/domain';
 
-import { createSyncTransport } from '@/lib/sync';
+import { createSyncTransport, createUndoTransport } from '@/lib/sync';
+
+/**
+ * What became of an undo (`GR-02`).
+ *
+ * `nothing` is an action the server had already refused, or no action at all:
+ * there was nothing left to take back.
+ */
+export type UndoOutcome = 'undone' | 'nothing' | 'expired' | 'offline' | 'refused';
+
+/** How many sent actions the console remembers the event ids of. */
+const REMEMBERED_EVENTS = 200;
 
 export interface SessionQueue {
   /** What the screen renders: server state plus anything queued locally. */
@@ -58,13 +70,30 @@ export interface SessionQueue {
   /** Raised when the server refused a locally-applied action (`SY-03`). */
   readonly lastConflict: string | null;
   readonly clearConflict: () => void;
-  /** Records an action, applies it locally, and syncs when it can. */
-  readonly act: (type: QueueEventType, payload: Record<string, unknown>) => Promise<void>;
+  /**
+   * Records an action, applies it locally, and syncs when it can. Returns the
+   * keys it was recorded under, which is what `undo` takes.
+   */
+  readonly act: (
+    type: QueueEventType,
+    payload: Record<string, unknown>,
+  ) => Promise<readonly string[]>;
   /**
    * Several actions from one tap, recorded and applied together, then sent in
    * one flush — so the last is on screen as soon as the first.
    */
-  readonly actMany: (actions: readonly QueueAction[]) => Promise<void>;
+  readonly actMany: (actions: readonly QueueAction[]) => Promise<readonly string[]>;
+  /**
+   * Takes back the actions recorded under these keys (`GR-02`).
+   *
+   * One still waiting to be sent is simply never sent. One the server has is
+   * undone through `POST /events/:id/undo` by the event it became — newest
+   * first, so a tap that finished one patient and called the next unwinds in
+   * the order that leaves nobody in the chamber twice.
+   */
+  readonly undo: (clientEventIds: readonly string[]) => Promise<UndoOutcome>;
+  /** The same, for whatever this console did last, inside the window (`FR-REC-16`). */
+  readonly undoLast: () => Promise<UndoOutcome>;
   readonly loading: boolean;
 }
 
@@ -140,6 +169,16 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     () => createSyncTransport(apiBaseUrl, getToken),
     [apiBaseUrl, getToken],
   );
+  const sendUndo = useMemo(() => createUndoTransport(apiBaseUrl, getToken), [apiBaseUrl, getToken]);
+
+  /** The event each sent action became, by the console's own key (`GR-02`). */
+  const sentRef = useRef(new Map<string, string>());
+  /** What this console did last, and when, for `Ctrl+Z`. */
+  const lastActionRef = useRef<{ readonly ids: readonly string[]; readonly at: number } | null>(
+    null,
+  );
+  /** Pushes on their way, so an undo can wait to learn what became of them. */
+  const flushesRef = useRef(new Set<Promise<void>>());
 
   const refreshPending = useCallback(async () => {
     const queue = queueRef.current;
@@ -158,11 +197,29 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     const queue = queueRef.current;
     if (queue === null) return;
 
-    const outcome = await queue.flush(sessionId, transport);
-    if (outcome.conflicted.length > 0) {
-      setLastConflict(outcome.conflicted[0]?.reason ?? null);
+    const run = (async (): Promise<void> => {
+      const outcome = await queue.flush(sessionId, transport);
+
+      const sent = sentRef.current;
+      for (const entry of outcome.acceptedEvents) sent.set(entry.clientEventId, entry.eventId);
+      // A shift is hundreds of taps and only the last few can still be undone.
+      for (const key of sent.keys()) {
+        if (sent.size <= REMEMBERED_EVENTS) break;
+        sent.delete(key);
+      }
+
+      if (outcome.conflicted.length > 0) {
+        setLastConflict(outcome.conflicted[0]?.reason ?? null);
+      }
+      await refreshPending();
+    })();
+
+    flushesRef.current.add(run);
+    try {
+      await run;
+    } finally {
+      flushesRef.current.delete(run);
     }
-    await refreshPending();
   }, [sessionId, transport, refreshPending]);
 
   // --- the session channel -------------------------------------------------
@@ -227,21 +284,25 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
   const actMany = useCallback(
     async (actions: readonly QueueAction[]) => {
       const queue = queueRef.current;
-      if (queue === null) return;
+      if (queue === null) return [];
 
       // The server orders a batch by client time and breaks a tie on the
       // random key (`SY-01`), so actions from one tap — made in the same
       // millisecond — are a millisecond apart, in the order they were taken.
       const at = now().getTime();
+      const ids: string[] = [];
       for (const [index, action] of actions.entries()) {
+        const clientEventId = crypto.randomUUID();
+        ids.push(clientEventId);
         await queue.enqueue({
-          clientEventId: crypto.randomUUID(),
+          clientEventId,
           sessionId,
           type: action.type,
           payload: action.payload,
           clientTs: new Date(at + index).toISOString(),
         });
       }
+      lastActionRef.current = { ids, at };
 
       // Applied to the screen before anything touches the network. A
       // receptionist's tap must answer instantly whether or not there is a
@@ -249,16 +310,59 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
       // made, not only the first: one flush for all of them, in order.
       await refreshPending();
       await flush();
+      return ids;
     },
     [sessionId, now, refreshPending, flush],
   );
 
   const act = useCallback(
-    async (type: QueueEventType, payload: Record<string, unknown>) => {
-      await actMany([{ type, payload }]);
-    },
+    async (type: QueueEventType, payload: Record<string, unknown>) =>
+      await actMany([{ type, payload }]),
     [actMany],
   );
+
+  const undo = useCallback(
+    async (clientEventIds: readonly string[]): Promise<UndoOutcome> => {
+      const queue = queueRef.current;
+      if (queue === null || clientEventIds.length === 0) return 'nothing';
+
+      // A push on its way still holds these in the store. Dropping them now
+      // would take them off the screen while the server keeps them.
+      await Promise.allSettled([...flushesRef.current]);
+
+      // Never sent: simply never send it. No event is written for an action
+      // that was taken back before the server heard of it.
+      const unsent = await queue.discard(clientEventIds);
+      if (unsent.length > 0) await refreshPending();
+      let outcome: UndoOutcome = unsent.length > 0 ? 'undone' : 'nothing';
+
+      // Already in the log: compensate each by the event it became, newest
+      // first. The server's answer comes back on the session channel.
+      const sent = sentRef.current;
+      for (const key of [...clientEventIds].reverse()) {
+        const eventId = sent.get(key);
+        if (eventId === undefined) continue;
+
+        const result = await sendUndo(eventId);
+        if (result !== 'undone') return result;
+        sent.delete(key);
+        outcome = 'undone';
+      }
+
+      return outcome;
+    },
+    [refreshPending, sendUndo],
+  );
+
+  const undoLast = useCallback(async (): Promise<UndoOutcome> => {
+    const last = lastActionRef.current;
+    if (last === null) return 'nothing';
+    if (now().getTime() - last.at > UNDO_WINDOW_SECONDS * 1000) return 'expired';
+
+    // Once: a second Ctrl+Z does not reach back to the action before.
+    lastActionRef.current = null;
+    return await undo(last.ids);
+  }, [now, undo]);
 
   /**
    * Server state with the locally-queued events folded on top.
@@ -290,6 +394,8 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     },
     act,
     actMany,
+    undo,
+    undoLast,
     loading,
   };
 }
