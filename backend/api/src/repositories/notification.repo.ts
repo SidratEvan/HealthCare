@@ -29,7 +29,7 @@ export interface TemplateRow {
  * change at the speed of a deploy, and fetching them per send would put a
  * round trip in front of every notification a busy chamber produces.
  */
-export async function activeTemplates(): Promise<TemplateRow[]> {
+export async function activeTemplates(trx?: Tx): Promise<TemplateRow[]> {
   const result = await sql<{
     key: string;
     channel: string;
@@ -40,7 +40,7 @@ export async function activeTemplates(): Promise<TemplateRow[]> {
     SELECT key, channel::text AS channel, locale, body, version
       FROM notification_templates
      WHERE is_active
-  `.execute(db);
+  `.execute(trx ?? db);
 
   return result.rows;
 }
@@ -201,8 +201,15 @@ export interface ChamberRow {
   readonly smsBudgetMonthly: number | null;
 }
 
-/** One read for everything a session's messages need to say about the chamber. */
-export async function chamberFor(sessionId: string): Promise<ChamberRow | null> {
+/**
+ * One read for everything a session's messages need to say about the chamber.
+ *
+ * Through the caller's transaction when it has one. A queue write plans its
+ * messages while it holds the session's row lock, and a read that went back to
+ * the pool from there waited for a connection that the counters queued behind
+ * that lock were holding — five seconds, then a failed tap (`FR-QUE-53`).
+ */
+export async function chamberFor(sessionId: string, trx?: Tx): Promise<ChamberRow | null> {
   const result = await sql<{
     hospital_id: string;
     hospital_name_bn: string;
@@ -226,7 +233,7 @@ export async function chamberFor(sessionId: string): Promise<ChamberRow | null> 
       JOIN doctors d   ON d.id = s.doctor_id
       LEFT JOIN hospital_settings hs ON hs.hospital_id = h.id
      WHERE s.id = ${sessionId}::uuid
-  `.execute(db);
+  `.execute(trx ?? db);
 
   const row = result.rows[0];
   if (row === undefined) return null;
@@ -309,7 +316,7 @@ export async function recipientsForSession(
  * the channel decision in `FR-NOT-02` depends on the answer, and asking is
  * what makes "this person has no app" a fact rather than an assumption.
  */
-export async function deviceTokensFor(recipient: Recipient): Promise<string[]> {
+export async function deviceTokensFor(recipient: Recipient, trx?: Tx): Promise<string[]> {
   if (recipient.userId === null && recipient.guestId === null) return [];
 
   const result = await sql<{ token: string }>`
@@ -319,7 +326,7 @@ export async function deviceTokensFor(recipient: Recipient): Promise<string[]> {
          (${recipient.userId}::uuid  IS NOT NULL AND user_id  = ${recipient.userId}::uuid)
          OR (${recipient.guestId}::uuid IS NOT NULL AND guest_id = ${recipient.guestId}::uuid)
        )
-  `.execute(db);
+  `.execute(trx ?? db);
 
   return result.rows.map((row) => row.token);
 }
@@ -333,7 +340,7 @@ export async function deviceTokensFor(recipient: Recipient): Promise<string[]> {
  * this volume; when it stops being so, it becomes a materialised figure the
  * analytics refresh maintains.
  */
-export async function smsSentThisMonth(hospitalId: string): Promise<number> {
+export async function smsSentThisMonth(hospitalId: string, trx?: Tx): Promise<number> {
   const result = await sql<{ n: string }>`
     SELECT count(*)::text AS n
       FROM notifications n
@@ -343,7 +350,7 @@ export async function smsSentThisMonth(hospitalId: string): Promise<number> {
        AND n.channel = 'sms'
        AND n.state IN ('sent', 'delivered')
        AND n.queued_at >= date_trunc('month', now())
-  `.execute(db);
+  `.execute(trx ?? db);
 
   return Number(result.rows[0]?.n ?? '0');
 }

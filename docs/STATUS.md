@@ -7,7 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/e2e-memory-finding` (3 October) — **`demo` moved to
+Last updated: `fix/queue-pool-starvation` (3 October) — **a queue write no
+longer needs a second database connection while it holds the chamber's
+lock** (plan 1.4a; below, *Things learned the hard way*). Found by the
+verification gate while 1.5 was being verified; 1.5's work is committed on
+its branch and merges next. Before that, `chore/e2e-memory-finding` (3 October) — **`demo` moved to
 `10bbcd1` after a clean 144/144 browser run, and why two runs before it each
 failed one test** (below, *Things learned the hard way*: the machine ran out
 of memory, and the process that grows is Playwright's trace recorder, not the
@@ -2210,6 +2214,30 @@ afternoon.
   `docker compose down -v && docker compose up -d`.
 
 ### Things learned the hard way, so they are not relearned
+
+- **A queue tap could stall for five seconds and fail when the database
+  pool was busy** (`fix/queue-pool-starvation`, 3 October). Every write to
+  a chamber holds the session's row lock on one connection. While holding
+  it, `notification.service` `queueFor` read the chamber, the templates,
+  the month's SMS count and the device tokens from the *pool*. If every
+  other connection was held — most simply by other counters' taps on the
+  same chamber, each waiting for that lock — the holder waited for a
+  connection only it could free: `connectionTimeoutMillis` (5 s), then a
+  500, with the queue already broadcast as though it had moved (the
+  broadcast-before-commit in `HANDOVER.md` §12 item 12, still open). It
+  showed once, as `queueConflict.test.ts` failing after 5.3 s in a full
+  run — five taps at once on the test pool of five — and passed alone
+  eight times running, because it needs all the waiters to be queued
+  before the holder reaches that step. `poolStarvation.test.ts` does not
+  depend on timing: it takes every connection but one and runs each queue
+  write, and before the fix next, delay and the sync batch each took 5.1–
+  5.3 s and failed, and a booking took 5 s and lost its confirmation
+  message. The reads now go through the transaction (the bed-request,
+  emergency and lab-report messages had the same pattern and the same
+  fix). On a real server the pool is 20, so it needs more traffic to
+  reach — but it is the queue's hot path, and a full pool is exactly when
+  a counter is busiest. **Not audited:** whether any other transaction in
+  the API asks the pool for a second connection (beds, ER, lab, imports).
 
 - **The browser suite does not fit beside a working desktop on this machine,
   and the process that grows is Playwright's worker** (3 October, on `mvp` at
