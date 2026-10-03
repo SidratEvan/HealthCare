@@ -38,7 +38,50 @@ async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
   }
 }
 
-export async function createWardFixture(size = 3): Promise<WardFixture> {
+/** Four characters, so a bed's label still fits its tile (`E3F9A-01`). */
+export function randomTag(): string {
+  return randomUUID().slice(0, 4).toUpperCase();
+}
+
+/**
+ * Inserts the fixture's ward under a name no ward at this hospital holds, and
+ * returns the tag it ended up with.
+ *
+ * A four-character tag is one of 65,536, so two fixtures in one run can pick
+ * the same one, and `wards_hospital_name_key` then refuses the second. It
+ * happened on the first CI run of this suite (3 October,
+ * `ward-board.spec.ts:116`). The spec was not wrong and neither was the
+ * product; the fixture was asking for a name that might be taken and calling
+ * it an error when it was. A taken name is a reason to pick another.
+ */
+async function insertWard(
+  client: Client,
+  hospitalId: string,
+  staffId: string,
+  nextTag: () => string,
+): Promise<{ wardId: string; tag: string }> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const tag = nextTag();
+    const ward = await client.query<{ id: string }>(
+      `INSERT INTO wards (hospital_id, name_bn, name_en, floor, kind, created_by)
+       VALUES ($1, $2, $3, 8, 'general', $4)
+       ON CONFLICT (hospital_id, name_en) WHERE deleted_at IS NULL DO NOTHING
+       RETURNING id`,
+      [hospitalId, `ই২ই ওয়ার্ড ${tag} (ডেমো)`, `E2E Ward ${tag} (Demo)`, staffId],
+    );
+    const wardId = ward.rows[0]?.id;
+    if (wardId !== undefined) return { wardId, tag };
+  }
+  throw new Error(
+    'No free ward name in twenty tries: the tag generator is not producing new tags.',
+  );
+}
+
+export async function createWardFixture(
+  size = 3,
+  /** Where the ward's tag comes from. A spec passes its own only to prove a clash is survived. */
+  nextTag: () => string = randomTag,
+): Promise<WardFixture> {
   return await withClient(async (client) => {
     const hospital = await client.query<{ id: string; staff_id: string }>(
       `SELECT h.id, sr.staff_user_id AS staff_id
@@ -55,16 +98,8 @@ export async function createWardFixture(size = 3): Promise<WardFixture> {
       );
     }
 
-    const tag = randomUUID().slice(0, 4).toUpperCase();
+    const { wardId, tag } = await insertWard(client, row.id, row.staff_id, nextTag);
     const wardName = `ই২ই ওয়ার্ড ${tag} (ডেমো)`;
-
-    const ward = await client.query<{ id: string }>(
-      `INSERT INTO wards (hospital_id, name_bn, name_en, floor, kind, created_by)
-       VALUES ($1, $2, $3, 8, 'general', $4) RETURNING id`,
-      [row.id, wardName, `E2E Ward ${tag} (Demo)`, row.staff_id],
-    );
-    const wardId = ward.rows[0]?.id;
-    if (wardId === undefined) throw new Error('ward insert returned no id.');
 
     const beds: { id: string; label: string }[] = [];
     for (let index = 1; index <= size; index += 1) {

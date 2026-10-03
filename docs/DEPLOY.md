@@ -288,6 +288,7 @@ Fill in `deploy/.env`:
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GUEST_LINK_SECRET`, `TOTP_ENCRYPTION_KEY` | Four **different** random values of 64 hex characters. The last encrypts every administrator's two-step verification (pilot step 28): a restored database needs the same value, so keep it with the other secrets |
 | `PAYMENT_PROVIDER` | `off` — patients pay at the hospital. bKash and Nagad arrive with merchant accounts (`CLAUDE.md` §1.1) |
 | `SMS_PROVIDER` | `log` until an SMS aggregator is arranged (pilot step 27). Patients then follow their serial from the link on the booking screen |
+| `ADDRESS_RATE_LIMIT_FACTOR` | `1` unless patients will book from the hospital's own network. The API limits what one address may do in ten minutes (30 phone checks, 10 standby places, 10 emergency alerts), and a waiting room on the hospital's Wi-Fi is one address: the 31st patient would be told to wait. `10` allows ten times each limit; the most is `100`. The limits on a single phone number are not affected |
 | `BACKUP_AT_UTC_HOUR`, `BACKUP_KEEP_DAYS` | When the nightly backup runs (20 UTC is 02:00 Dhaka) and how many days are kept |
 | `BACKUP_SECOND_DIR` | The folder on **another disk or machine** every backup is copied to (`S5`). Empty means backups stay on this disk and the backup service reports itself failing |
 | `BACKUP_VERIFY_RESTORE` | `true`: each night's dump is restored into a scratch database to prove it restores. Needs free disk the size of the database |

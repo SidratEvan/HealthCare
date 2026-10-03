@@ -105,6 +105,15 @@ export default defineConfig({
         DATABASE_URL,
         DEMO_MODE: 'true',
         NODE_ENV: 'development',
+        // Every patient in this suite books from this one machine, and the API
+        // limits what one address may do: thirty phone checks in ten minutes.
+        // A runner fast enough to fit the thirty-first into that window had
+        // five bookings refused (the first CI run, 3 October; `docs/STATUS.md`
+        // decision 90) — correctly, by a limit that was never meant to count a
+        // hundred and fifty people as one. This says what the machine is. The
+        // limits themselves are tested where they belong, at their defaults
+        // (`middleware.test.ts`).
+        ADDRESS_RATE_LIMIT_FACTOR: '100',
       },
     },
     {

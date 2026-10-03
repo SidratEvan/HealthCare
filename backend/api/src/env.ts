@@ -281,6 +281,28 @@ const schema = z.object({
    * address by sending the header themselves.
    */
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(3).default(0),
+
+  /**
+   * How many times over one address may use each per-address limit.
+   *
+   * The limits keyed on the caller's address (`middleware/rateLimit.ts`,
+   * `byIp`: thirty phone checks, ten standby places, ten emergency alerts in
+   * ten minutes, and the rest) stop a script before it reaches the database.
+   * They also count everybody who shares that address as one caller, and in
+   * Bangladesh an address is often not a person: a hospital's waiting room on
+   * the hospital's Wi-Fi is one, and a mobile carrier puts many subscribers
+   * behind one.
+   *
+   * One, the default, is right where each caller has an address of their own.
+   * A deployment whose patients arrive through a shared address raises it. The
+   * browser suite, which is a hundred and fifty patients on one machine, sets
+   * it to its ceiling (`playwright.config.ts`).
+   *
+   * It does not touch what protects a person: codes per number
+   * (`OTP_MAX_PER_HOUR`), the lock after five wrong codes, sign-in lockout.
+   * Those are in the database and are not keyed on an address.
+   */
+  ADDRESS_RATE_LIMIT_FACTOR: positiveInt.max(100).default(1),
 });
 
 export type Env = z.infer<typeof schema>;

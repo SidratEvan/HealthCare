@@ -72,6 +72,11 @@ const TEST_ENV: Readonly<Record<string, string>> = {
   TRAVEL_TIME_MODE: 'static',
   LOG_LEVEL: 'error',
   DEMO_MODE: 'true',
+
+  // The per-address limits as a deployment gets them by default. A developer's
+  // `.env` may raise this for a shared network; the tests of those limits must
+  // not inherit it.
+  ADDRESS_RATE_LIMIT_FACTOR: '1',
 };
 
 for (const [key, value] of Object.entries(TEST_ENV)) {
