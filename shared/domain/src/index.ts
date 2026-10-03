@@ -103,10 +103,13 @@ export {
   nextToCall,
   DEFAULT_QUEUE_SETTINGS,
   MAX_DELAY_MINUTES,
+  OFFLINE_ACTION_ROLES,
   UNDO_WINDOW_SECONDS,
+  canReplayOffline,
   MAX_QUOTED_WAIT_MINUTES,
   SLOT_OFFER_WINDOW_MINUTES,
   type GuardResult,
+  type OfflineAction,
   type QueueGuardCode,
   type QueueSettings,
 } from './queue/rules.js';

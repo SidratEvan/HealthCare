@@ -14,6 +14,7 @@
  */
 
 import { syncBatchBody, syncParams, syncPullQuery } from '@platform/domain';
+import type { StaffRole } from '@platform/domain';
 
 import { forbiddenScope } from '../errors/AppError.js';
 import * as queueService from '../services/queue.service.js';
@@ -26,11 +27,12 @@ import type { Request, Response } from 'express';
 /** `POST /sync/events` — replay a console's offline batch (`SY-05`). */
 export async function pushEvents(req: Request, res: Response): Promise<void> {
   const body = syncBatchBody.parse(req.body);
-  requireStaffScope(req, await hospitalOf(body.sessionId));
+  const roles = requireStaffScope(req, await hospitalOf(body.sessionId));
 
   const result = await syncService.pushBatch({
     sessionId: body.sessionId,
     actor: actorOf(req),
+    roles,
     entries: body.events.map((entry) => ({
       clientEventId: entry.clientEventId,
       type: entry.type,
@@ -71,7 +73,7 @@ async function hospitalOf(sessionId: string): Promise<string> {
  * app reads the session channel — so there is no reason for a patient or guest
  * token to reach these endpoints, and a narrower door is a better one.
  */
-function requireStaffScope(req: Request, hospitalId: string): void {
+function requireStaffScope(req: Request, hospitalId: string): readonly StaffRole[] {
   const principal = req.principal;
 
   if (principal?.kind !== 'staff') {
@@ -81,4 +83,6 @@ function requireStaffScope(req: Request, hospitalId: string): void {
   if (principal.hospitalId !== hospitalId) {
     throw forbiddenScope({ reason: 'wrong_hospital' });
   }
+
+  return principal.roles;
 }

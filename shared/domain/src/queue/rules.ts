@@ -31,6 +31,7 @@ import {
 } from './state.js';
 
 import type { HospitalSettings } from '../types/entities.js';
+import type { QueueEventType, StaffRole } from '../types/enums.js';
 import type { BookingId, Timestamp } from '../types/ids.js';
 
 /** Stable codes the client maps to Bangla copy. */
@@ -54,7 +55,9 @@ export type QueueGuardCode =
   | 'OFFER_SETTLED'
   | 'OFFER_EXPIRED'
   | 'ALREADY_ARRIVED'
-  | 'QUOTE_OUT_OF_RANGE';
+  | 'QUOTE_OUT_OF_RANGE'
+  | 'NOT_AN_OFFLINE_ACTION'
+  | 'ROLE_NOT_ALLOWED';
 
 export type GuardResult =
   | { readonly ok: true }
@@ -134,6 +137,64 @@ export function canPause(state: QueueState): GuardResult {
 export function canResume(state: QueueState): GuardResult {
   if (state.status !== 'paused') {
     return deny('NOT_PAUSED', 'This session is not paused.');
+  }
+  return ALLOWED;
+}
+
+// ---------------------------------------------------------------------------
+// What a console may replay (BACKEND.md §5)
+// ---------------------------------------------------------------------------
+
+/**
+ * The actions a counter can take with no server to ask, and the roles that may
+ * take each — the same roles its own route admits (`FR-ROLE-01`).
+ *
+ * `POST /sync/events` once folded any of the nineteen event types from any
+ * console role, and the ones missing here are missing on purpose. Each has a
+ * route of its own whose rules a replayed batch would skip:
+ *
+ *   `ACTION_UNDONE`      ten seconds, and only by whoever did it
+ *   `SLOT_*`             the offers table, and who is next on standby
+ *   `BOOKING_CANCELLED`  the refund the booking is owed
+ *   `SESSION_ENDED`      refund eligibility for everybody not seen
+ *   `WALKIN_ADDED`       the booking and its serial, issued under the lock
+ *   `SESSION_OPENED`     the server's, when a chamber is materialised
+ *
+ * None of them is something a receptionist does offline: the console says a
+ * connection is needed for a walk-in and an offer, and an action it has not
+ * sent is undone by not sending it.
+ */
+export const OFFLINE_ACTION_ROLES = {
+  DOCTOR_ARRIVED: ['receptionist', 'doctor'],
+  DELAY_DECLARED: ['receptionist', 'doctor'],
+  SESSION_PAUSED: ['receptionist'],
+  SESSION_RESUMED: ['receptionist'],
+  PATIENT_CALLED: ['receptionist', 'doctor'],
+  PATIENT_DONE: ['receptionist', 'doctor'],
+  PATIENT_LATE: ['receptionist'],
+  PATIENT_NO_SHOW: ['receptionist'],
+  PATIENT_REINSERTED: ['receptionist'],
+  PATIENT_ARRIVED: ['receptionist'],
+  PRIORITY_REORDERED: ['receptionist'],
+} as const satisfies Partial<Record<QueueEventType, readonly StaffRole[]>>;
+
+/** An action a console may queue with no network, and replay later. */
+export type OfflineAction = keyof typeof OFFLINE_ACTION_ROLES;
+
+/** Whether somebody holding `roles` may replay an event of this type. */
+export function canReplayOffline(type: QueueEventType, roles: readonly StaffRole[]): GuardResult {
+  const allowed: readonly StaffRole[] | undefined = (
+    OFFLINE_ACTION_ROLES as Partial<Record<QueueEventType, readonly StaffRole[]>>
+  )[type];
+
+  if (allowed === undefined) {
+    return deny(
+      'NOT_AN_OFFLINE_ACTION',
+      `${type} cannot be replayed from a console's queue. It has its own route.`,
+    );
+  }
+  if (!roles.some((role) => allowed.includes(role))) {
+    return deny('ROLE_NOT_ALLOWED', `${type} is not an action this role may take.`);
   }
   return ALLOWED;
 }

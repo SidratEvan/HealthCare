@@ -310,6 +310,7 @@ Consoles operate fully offline (`FR-OFF-01`). The protocol is deliberately small
 - `SY-04` Bookings created online while the console was offline appear in the missed-events pull and are inserted into the local queue as new arrivals, never dropped (`FR-QUE-52`).
 - `SY-05` Batch response shape: `{ accepted: [{clientEventId, seq, eventId}], conflicts: [{clientEventId, reason, code}], state, etas }`. `eventId` is the stored event, which is what `POST /events/:id/undo` names: a console knows an action only by its own `clientEventId`, and cannot undo what it synced without it (`GR-02`).
 - `SY-06` A device offline longer than 24 h is forced to a full session re-pull rather than a delta.
+- `SY-07` A batch carries only what a counter can do offline, and each entry only from a role its own route admits (`OFFLINE_ACTION_ROLES` in `shared/domain`): `DOCTOR_ARRIVED`, `DELAY_DECLARED`, `PATIENT_CALLED`, `PATIENT_DONE` from a receptionist or a doctor; `SESSION_PAUSED`, `SESSION_RESUMED`, `PATIENT_LATE`, `PATIENT_NO_SHOW`, `PATIENT_REINSERTED`, `PATIENT_ARRIVED`, `PRIORITY_REORDERED` from a receptionist. Anything else — `ACTION_UNDONE`, `SLOT_*`, `BOOKING_CANCELLED`, `SESSION_ENDED`, `SESSION_OPENED`, `WALKIN_ADDED` — has a route of its own with rules a replay would skip, and comes back as a `conflict` (`NOT_AN_OFFLINE_ACTION`, or `ROLE_NOT_ALLOWED`) with nothing written. The rest of the batch still applies.
 
 ---
 

@@ -7,7 +7,12 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/console-undo` (2 October) — **the console's Undo undoes**
+Last updated: `fix/sync-event-allowlist` (2 October) — **the sync path
+replays only what a counter can do offline** (plan 1.4; `BACKEND.md`
+`SY-07`): eleven event types, each from a role its own route admits; undo,
+offers, cancellation, ending a chamber and walk-ins are refused there and
+keep their own routes. Before that, `fix/console-undo` (2 October) — **the
+console's Undo undoes**
 (plan 1.3): the toast and `Ctrl+Z` take back the whole tap through the real
 undo route, or drop it if it was never sent. **Still missing against
 `GR-02`:** the row buttons (done, late, absent, bring back, check-in) show no
@@ -268,7 +273,8 @@ below as it lands):
    booking id as `undoneEventId`;** it does nothing and leaves a junk
    `ACTION_UNDONE` in the log. (The sync path still *accepts* an
    `ACTION_UNDONE`; closing that is item 5.)
-5. **HIGH — `/sync/events` accepts all 19 event types** from any console role,
+5. **Fixed (`fix/sync-event-allowlist`).** Was: **HIGH — `/sync/events`
+   accepts all 19 event types** from any console role,
    including unguarded `ACTION_UNDONE` (any event, any age), `SLOT_*`,
    `BOOKING_CANCELLED` and `SESSION_ENDED` (no refund eligibility on this path).
 6. **HIGH — offline outboxes are memory-only** (`createDexieStore` has no
@@ -375,7 +381,7 @@ its own `fix/*` branch with tests**, marked below as it lands.
 `tfa: 'setup'` limits `attachPrincipal` does (`realtime/auth.ts`) — no gain
 today, since such a token can already set its own password or authenticator;
 the sync batch lets a doctor or administrator push reception-only event types
-at their own hospital; two guest tokens with no booking count as one actor for
+at their own hospital (**closed by `fix/sync-event-allowlist`**); two guest tokens with no booking count as one actor for
 undo (`queue.controller.ts:551`).
 
 **Checked and sound:** staff sign-in (scrypt, lockout shared with two-step,
