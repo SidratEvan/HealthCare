@@ -24,6 +24,7 @@ import { counter } from '../middleware/rateLimit.js';
 
 import { proveGuestPhone } from './support/guestPhone.js';
 import { createQueueFixture, type QueueFixture } from './support/queueFixture.js';
+import { rowsHoldingALink } from './support/storedLinks.js';
 import { bearer } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -210,6 +211,9 @@ describe('prepaid gets the chair automatically (FR-PAT-26)', () => {
     expect(offers.rows[0]?.accepted_at).not.toBeNull();
 
     expect(await notificationKeys()).toContain('queue.slot_seated');
+    // The message carried the new booking's tracking link; the table does not
+    // (`docs/PLATFORM_PLAN.md` 1.9).
+    expect(await rowsHoldingALink()).toBe(0);
   });
 });
 
@@ -224,6 +228,8 @@ describe('everybody else answers on their phone (FR-PAT-27)', () => {
     expect(read.body.data.state).toBe('offered');
     expect(Date.parse(read.body.data.offer.expiresAt)).toBeGreaterThan(Date.now());
     expect(await notificationKeys()).toContain('queue.slot_offered_link');
+    // The offer's link is what accepts the chair: sent, never stored.
+    expect(await rowsHoldingALink()).toBe(0);
 
     const accepted = await answer(joined.body.data.token, 'accept', {
       method: 'bkash',

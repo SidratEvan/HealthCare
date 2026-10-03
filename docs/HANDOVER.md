@@ -73,6 +73,17 @@ founder who did not write most of it and for whoever works on it next.
     real staff sign-in. **Still true:** in that configuration no patient
     can book (no SMS provider), so the patient's link there is written by
     a fixture.
+  - **§6 weakness 7, §9.2 "SMS adapter", §12 items 11 and 13 — fixed**
+    (`fix/log-sms-redaction`). The `log` provider writes one line per
+    message naming the notification and its template: no number, no text,
+    nothing kept in memory. A link is composed into the message that is
+    sent and never into the row; the row keeps the words with `{link}`
+    where the link went, the table refuses a stored link (migration 0035,
+    which also removed the ones already there), and the hourly job clears a
+    message's words after 90 days. **Still true:** `log` still marks a
+    message `sent` although nothing sends it, and the rest of
+    `DATABASE.md` §8's retention table (guest links, unclaimed guest
+    records) has no job.
 
 ---
 

@@ -59,8 +59,16 @@ export interface QueuedNotification {
   readonly recipient: Recipient;
   readonly channel: 'sms' | 'push';
   readonly templateKey: string;
+  /**
+   * What filled the template, without any credential. A `link` here is
+   * refused by the table itself (`notifications_no_stored_link`, 0035).
+   */
   readonly params: Readonly<Record<string, string>>;
-  /** The rendered text, stored so what was sent can be read back verbatim. */
+  /**
+   * The text as it is kept: what was sent, with a link left as its
+   * placeholder (`notification.service` `forTheRecord`). Never the text that
+   * was sent, when that carried one.
+   */
   readonly body: string;
   /** Set when the message was decided against rather than queued. */
   readonly skipped: string | null;
@@ -153,6 +161,46 @@ export async function markNotSent(
        SET state = ${state}::notif_state, error = ${error}
      WHERE id = ${id}::uuid AND state = 'queued'
   `.execute(db);
+}
+
+/**
+ * Clears the words of messages older than `days`, at most `limit` at a time,
+ * oldest first (DATABASE.md §8).
+ *
+ * `params` is reduced to the keys in `keep`: the ids a message was about. The
+ * text and everything that filled it go; every column stays.
+ *
+ * `params ? 'body'` is the predicate of `notifications_body_kept_idx` (0035),
+ * written the same way here so the planner uses it: a cleared row has left
+ * that index, and this reads only what is still to do.
+ *
+ * @returns how many rows were cleared.
+ */
+export async function clearBodiesOlderThan(
+  days: number,
+  keep: readonly string[],
+  limit: number,
+): Promise<number> {
+  const result = await sql<{ id: string }>`
+    UPDATE notifications n
+       SET params = COALESCE(
+             (SELECT jsonb_object_agg(kept.key, kept.value)
+                FROM jsonb_each(n.params) AS kept
+               WHERE kept.key = ANY(${[...keep]}::text[])),
+             '{}'::jsonb
+           )
+     WHERE n.id IN (
+             SELECT id
+               FROM notifications
+              WHERE params ? 'body'
+                AND queued_at < now() - (${days}::int * interval '1 day')
+              ORDER BY queued_at
+              LIMIT ${limit}::int
+           )
+    RETURNING n.id
+  `.execute(db);
+
+  return result.rows.length;
 }
 
 /**
