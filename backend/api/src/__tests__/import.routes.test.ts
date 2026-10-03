@@ -22,6 +22,7 @@ import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 import { createFirstAdministrator } from '../services/staffAuth.service.js';
 
+import { asOwner } from './support/ownerDb.js';
 import { bearer, staffToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -161,32 +162,35 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const ids = [hospitalId];
-  const run = async (query: ReturnType<typeof sql>): Promise<void> => {
-    await query.execute(db);
-  };
-  await run(
-    sql`DELETE FROM bookings WHERE session_id IN (SELECT id FROM sessions WHERE hospital_id = ANY(${ids}::uuid[]))`,
-  );
-  await run(sql`DELETE FROM sessions WHERE hospital_id = ANY(${ids}::uuid[])`);
-  await run(sql`DELETE FROM external_refs WHERE hospital_id = ANY(${ids}::uuid[])`);
-  await run(sql`DELETE FROM import_batches WHERE hospital_id = ANY(${ids}::uuid[])`);
-  await run(sql`DELETE FROM patients WHERE owner_hospital_id = ANY(${ids}::uuid[])`);
-  await run(sql`DELETE FROM beds WHERE hospital_id = ANY(${ids}::uuid[])`);
-  await run(sql`DELETE FROM wards WHERE hospital_id = ANY(${ids}::uuid[])`);
-  await run(
-    sql`DELETE FROM session_templates WHERE doctor_hospital_id IN (SELECT id FROM doctor_hospitals WHERE hospital_id = ANY(${ids}::uuid[]))`,
-  );
-  await run(sql`DELETE FROM doctor_hospitals WHERE hospital_id = ANY(${ids}::uuid[])`);
-  await run(sql`DELETE FROM doctors WHERE bmdc_number = ${bmdc}`);
-  await run(sql`DELETE FROM departments WHERE hospital_id = ANY(${ids}::uuid[])`);
-  await run(sql`DELETE FROM audit_log WHERE hospital_id = ANY(${ids}::uuid[])`);
-  await run(sql`DELETE FROM staff_roles WHERE hospital_id = ANY(${ids}::uuid[])`);
-  await run(sql`UPDATE hospitals SET created_by = NULL WHERE id = ANY(${ids}::uuid[])`);
-  await run(
-    sql`DELETE FROM sessions_auth WHERE subject_id IN (SELECT id FROM staff_users WHERE hospital_id = ANY(${ids}::uuid[]))`,
-  );
-  await run(sql`DELETE FROM staff_users WHERE hospital_id = ANY(${ids}::uuid[])`);
-  await run(sql`DELETE FROM hospitals WHERE id = ANY(${ids}::uuid[])`);
+  // As the owner: the API's role may not delete an audit row (`ownerDb.ts`).
+  await asOwner(async (owner) => {
+    const run = async (query: ReturnType<typeof sql>): Promise<void> => {
+      await query.execute(owner);
+    };
+    await run(
+      sql`DELETE FROM bookings WHERE session_id IN (SELECT id FROM sessions WHERE hospital_id = ANY(${ids}::uuid[]))`,
+    );
+    await run(sql`DELETE FROM sessions WHERE hospital_id = ANY(${ids}::uuid[])`);
+    await run(sql`DELETE FROM external_refs WHERE hospital_id = ANY(${ids}::uuid[])`);
+    await run(sql`DELETE FROM import_batches WHERE hospital_id = ANY(${ids}::uuid[])`);
+    await run(sql`DELETE FROM patients WHERE owner_hospital_id = ANY(${ids}::uuid[])`);
+    await run(sql`DELETE FROM beds WHERE hospital_id = ANY(${ids}::uuid[])`);
+    await run(sql`DELETE FROM wards WHERE hospital_id = ANY(${ids}::uuid[])`);
+    await run(
+      sql`DELETE FROM session_templates WHERE doctor_hospital_id IN (SELECT id FROM doctor_hospitals WHERE hospital_id = ANY(${ids}::uuid[]))`,
+    );
+    await run(sql`DELETE FROM doctor_hospitals WHERE hospital_id = ANY(${ids}::uuid[])`);
+    await run(sql`DELETE FROM doctors WHERE bmdc_number = ${bmdc}`);
+    await run(sql`DELETE FROM departments WHERE hospital_id = ANY(${ids}::uuid[])`);
+    await run(sql`DELETE FROM audit_log WHERE hospital_id = ANY(${ids}::uuid[])`);
+    await run(sql`DELETE FROM staff_roles WHERE hospital_id = ANY(${ids}::uuid[])`);
+    await run(sql`UPDATE hospitals SET created_by = NULL WHERE id = ANY(${ids}::uuid[])`);
+    await run(
+      sql`DELETE FROM sessions_auth WHERE subject_id IN (SELECT id FROM staff_users WHERE hospital_id = ANY(${ids}::uuid[]))`,
+    );
+    await run(sql`DELETE FROM staff_users WHERE hospital_id = ANY(${ids}::uuid[])`);
+    await run(sql`DELETE FROM hospitals WHERE id = ANY(${ids}::uuid[])`);
+  });
 });
 
 describe('who may import (FR-ROLE-01)', () => {

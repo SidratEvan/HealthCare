@@ -7,7 +7,12 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `feat/console-offline-load` (3 October) — **the console opens
+Last updated: `chore/ops-hardening` (3 October) — **on a hospital's server the
+API no longer owns the database, nothing of ours runs as root, logs rotate,
+and a backup is not a backup until it has been restored and copied
+elsewhere** (plan 1.7; below, *Plan 1.7*). The role still bypasses row-level
+security until 1.10, and nothing alerts anybody yet. Before that,
+`feat/console-offline-load` (3 October) — **the console opens
 with no network, on the queue it was last told** (plan 1.6; below, *Plan
 1.6*). In the tab that was signed in; without names; the reception queue
 only. Before that, `fix/e2e-outbox-close-race` (3 October) — **the outbox specs
@@ -247,6 +252,77 @@ it looks like an ordering interaction on the shared API database.
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
 
+### Plan 1.7 — the self-hosted stack, hardened (`chore/ops-hardening`)
+
+Nothing here changes what a patient or a receptionist sees. It changes what
+happens when something goes wrong on a hospital's server.
+
+**The API no longer owns the database.** Two roles (`DATABASE.md` §5.1): the
+owner runs the migrations and the backups; the API connects as its own role,
+made by `pnpm db:role` after every migration. That role reads and writes rows.
+It cannot change the schema, empty a table, create a role, read a file off the
+server, or switch off the guard on the event log — and it cannot change or
+remove an audit row, which until now nothing in the database prevented.
+`backend/api/src/__tests__/apiRole.test.ts` is the list, each one refused by
+PostgreSQL itself. **The whole API suite now runs as an identical role**
+(`env.setup.ts`), so every endpoint is tested without ownership: the first run
+found exactly one thing the API could not do — refresh the dashboard's
+materialised view, which only an owner may — and migration 0034 gives it a
+function that does that one thing.
+
+**What that role still has that it should not: `BYPASSRLS`.** Every table has
+row-level security switched on and no policy, which for anybody but the owner
+means "sees nothing". The policies are plan 1.10, which removes the attribute.
+Until then **the database does not separate hospitals**; the API's checks do,
+as before. Do not describe 1.7 as tenant isolation.
+
+**Nothing of ours runs as root.** The API and both web apps run as `node`.
+The database, Caddy and the backup run as their images ship them. Found on
+the first boot and fixed: pnpm 12 re-checks the installed dependencies before
+every `pnpm run`, re-marking files it does not own, and stopped the
+migrations before they began (`pnpm_config_verify_deps_before_run=false` in
+the image). A unit test would never have shown it.
+
+**A backup is not counted until it has been proven.** Each night: dump,
+**restore the dump into a scratch database** and compare it with what the live
+one held, read the files archive back, copy both to a second location and
+check their checksums there. Each run writes its result down, and
+`backup.sh check` — the backup container's health check — is failing the next
+morning if the run failed, if no second location is configured, or if the
+last good backup is more than 26 hours old. The old script could not fail:
+called on the left of `||`, `set -e` is off, and a failed `pg_dump` was
+followed by "backup written".
+
+**Logs rotate** (five files of ten megabytes per container), and **each
+service reports its health**: the API's is `/readyz`, so it is unhealthy while
+it cannot reach the database, and the web apps and Caddy wait for it.
+
+**Proven on the real stack, on this machine, not only in tests:** built from
+clean and started with one command; the API connected as the limited role and
+ready; the first administrator made by `pnpm staff:create` as that role; a
+backup taken, restored into scratch, copied and reported healthy; then every
+volume and the local backups deleted, the backup brought back **from the
+second location**, restored onto the empty server — the hospital, its
+administrator and an uploaded file were all there, and the API came up as the
+limited role again.
+
+**What it does not do:**
+- **Nothing alerts anybody.** A failed backup or an unready API is visible in
+  `docker compose ps` and nowhere else. Until an alert exists somebody has to
+  look each morning. An SMS alert waits on an aggregator (decision D1).
+- **It cannot tell whether the second location is really another disk.** A
+  folder on the same disk satisfies it. `DEPLOY.md` says so.
+- **The demonstration deployment is unchanged**: on Supabase the API still
+  connects as the owner. The role is for a hospital's own server.
+- **Development is unchanged**: `pnpm dev:api` uses `DATABASE_URL` as it
+  always did. The limited role is exercised by `pnpm test`, not by `pnpm dev`
+  or the browser suite; plan 1.8's production-configuration job is where the
+  browser suite should meet it.
+
+**For whoever updates a server first started before this:** `DEPLOY.md` §S4 —
+three values to add to `deploy/.env` and one command to hand the uploaded
+files to the account the API now runs as.
+
 ### Plan 1.6 — the console opens with no network (`feat/console-offline-load`)
 
 **What happens now.** A counter that reloads during an outage gets the
@@ -415,19 +491,25 @@ below as it lands):
    outboxes are kept on disk and the console has a service worker.** Was: **HIGH — offline
    outboxes are memory-only** (`createDexieStore` has no caller; the comment
    saying it is swapped in is wrong) and the console has no service worker.
-7. **HIGH — RLS has no policies anywhere** (no `CREATE POLICY` in any
-   migration; `0014_rls.sql` never existed, against decision 3's note), and the
-   API connects as owner/superuser, so tenancy is application code only.
+7. **Half fixed (`chore/ops-hardening`): on self-host the API connects as
+   its own role, not the owner.** Still **HIGH — RLS has no policies anywhere**
+   (no `CREATE POLICY` in any migration; `0014_rls.sql` never existed, against
+   decision 3's note), so that role carries `BYPASSRLS` and tenancy is
+   application code only. Plan 1.10.
 8. **HIGH — doctors read every hospital's signed visits** for any patient with
    any booking at their hospital, without consent (`findVisits`).
 9. **HIGH — E2E (the canary included) is not in CI** and never runs against
-   the production configuration; backups stay on the same disk; the `log`
+   the production configuration (plan 1.8); ~~backups stay on the same disk~~
+   (fixed, `chore/ops-hardening`: copied to a second location, and failing
+   loudly when none is configured); the `log`
    SMS provider prints phones and full bodies (tracking links) and keeps them
    in memory forever.
 
 The rest (broadcast before commit, links stored in `notifications.params`,
 no worker, mutable `audit_log`, sockets not revoked, single-process limits,
-non-idempotent booking, root containers, no log rotation or monitoring) is
+non-idempotent booking, ~~root containers, no log rotation~~ (fixed,
+`chore/ops-hardening`; `audit_log` can no longer be changed by the API's
+role on self-host), no monitoring) is
 ranked in `HANDOVER.md` §12. **Documents to correct** are listed in §14.3;
 they were not edited on this branch (`CLAUDE.md` §2: proposed to the owner
 first).
@@ -3434,10 +3516,11 @@ credential.
 
 **From the `demo` branch** (CLAUDE.md §3.1): the demo-data version, kept at
 the last green commit of `mvp`, for pulling onto any machine to show
-somebody. It stands at `3e910a6` (3 October): `docs/PLATFORM_PLAN.md` phase 1
-through 1.5 — delay, resume, undo, the sync allow-list, the pool and
-broadcast fixes, and the outboxes kept on disk — after `pnpm verify` and a
-clean 150/150 browser run on that commit. **From plan 1.6 on, green means
+somebody. It stands at `4a99aec` (3 October): `docs/PLATFORM_PLAN.md` phase 1
+through 1.6 — delay, resume, undo, the sync allow-list, the pool and
+broadcast fixes, the outboxes kept on disk, and the console opening with no
+network — after `pnpm verify`, a clean 150/150 browser run and the built
+suite on that commit. **From plan 1.6 on, green means
 `pnpm test:e2e` and `pnpm test:e2e:built`.**
 
 ```bash

@@ -306,6 +306,7 @@ pnpm dev:api          # api only
 pnpm dev:patient      # patient PWA
 pnpm dev:console      # staff console
 pnpm db:migrate
+pnpm db:role          # self-host only: the role the API connects as (DEPLOY.md §S2)
 pnpm db:seed
 pnpm db:reset         # truncate + reseed demo data
 pnpm db:verify        # schema invariants

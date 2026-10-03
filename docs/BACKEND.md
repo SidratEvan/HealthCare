@@ -698,13 +698,13 @@ Built in step 26 as `deploy/docker-compose.yml` from the root `Dockerfile`; one 
 | Container | What |
 |---|---|
 | `db` | PostGIS 16 (the image the schema's extensions need), data on a named volume |
-| `migrate` | one-shot `pnpm db:migrate` on every `up`; the API waits for it to succeed |
-| `api` | `backend/api`, `NODE_ENV=production`, `DEMO_MODE=false`, files on a named volume (`STORAGE_PROVIDER=local`), and the hourly jobs (§8) — there is no separate `workers` container while `backend/workers` has nothing to run |
-| `patient`, `console` | the two Next.js apps, built with the API's address baked in |
+| `migrate` | one-shot `pnpm db:migrate && pnpm db:role` on every `up`, as the database's owner; the API waits for it to succeed. The second command creates the role the API connects as and puts it back to exactly its privileges (`DATABASE.md` §5.1) |
+| `api` | `backend/api`, `NODE_ENV=production`, `DEMO_MODE=false`, files on a named volume (`STORAGE_PROVIDER=local`), and the hourly jobs (§8) — there is no separate `workers` container while `backend/workers` has nothing to run. Connects as `API_DB_USER`, never as the owner; runs as `node`, not root; its container health is `/readyz`, so it is unhealthy while it cannot reach the database |
+| `patient`, `console` | the two Next.js apps, built with the API's address baked in; run as `node`, start once the API is healthy |
 | `web` | Caddy: three names (patient app, console, API), certificates obtained and renewed on their own, the realtime socket upgraded through |
-| `backup` | nightly `pg_dump` and a tarball of the file volume into `deploy/backups`, the last `BACKUP_KEEP_DAYS` kept; `restore.sh` puts one back |
+| `backup` | nightly `pg_dump` and a tarball of the file volume into `deploy/backups`; the dump is restored into a scratch database to prove it restores, both are copied to `BACKUP_SECOND_DIR` and checksummed there, and the last `BACKUP_KEEP_DAYS` are kept in both. The result of each run is the container's health (`backup.sh check`); `restore.sh` puts one back |
 
-Until merchant accounts and an SMS aggregator exist it runs `PAYMENT_PROVIDER=off` (pay at the hospital only; the patient app asks `GET /config` and offers nothing else) and `SMS_PROVIDER=log`. Production's boot checks accept both, and no longer demand Sentry or VAPID keys that nothing uses yet. `DEPLOY.md` Part S is the runbook.
+Until merchant accounts and an SMS aggregator exist it runs `PAYMENT_PROVIDER=off` (pay at the hospital only; the patient app asks `GET /config` and offers nothing else) and `SMS_PROVIDER=log`. Production's boot checks accept both, and no longer demand Sentry or VAPID keys that nothing uses yet. `DEPLOY.md` Part S is the runbook. Every container's log rotates (five files of ten megabytes). There is still no alert: the health of each service is there to be read with `docker compose ps`, and nothing sends it anywhere.
 
 ---
 

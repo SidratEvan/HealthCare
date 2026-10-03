@@ -74,7 +74,7 @@ Phase 3 because self-service signup puts many hospitals on one database.
 | # | Branch | What changes | Done when |
 |---|---|---|---|
 | 3.0 | `chore/onboarding-scope` | `PRD.md` §14c (`FR-ONB-*`), `APP_FLOW.md` screens, `DATABASE.md`, `BACKEND.md`. Documents only | The owner has read the requirement list |
-| 3.1 | `feat/org-lifecycle` | Migration 0034 (§3), the lifecycle rules in `shared/domain`, discovery and every public read gated on `active`, the entitlement record | An unverified facility appears nowhere public, proven per public route |
+| 3.1 | `feat/org-lifecycle` | Migration 0035 (§3), the lifecycle rules in `shared/domain`, discovery and every public read gated on `active`, the entitlement record | An unverified facility appears nowhere public, proven per public route |
 | 3.2 | `feat/org-signup` — **waits: D2, D3** | A public registration screen creates a workspace in `draft` and its first administrator, who sets a password there and two-step at first sign-in. Rate-limited | A hospital exists without `pnpm staff:create` |
 | 3.3 | `feat/platform-review` | A platform administrator's screen: pending organisations, verify or reject with a note, mark the agreement active, suspend, approve go-live. All audited | Verification and activation happen on a screen |
 | 3.4 | `feat/setup-checklist` | `S-B-11`'s status card becomes the checklist: the three setup paths, what is missing, unverified doctors, unconfirmed beds, services not ready, then "request go-live" | Brief §13: a new hospital goes from registration to live on synthetic data with no CLI |
@@ -84,7 +84,7 @@ Phase 3 because self-service signup puts many hospitals on one database.
 | # | Branch | What changes | Done when |
 |---|---|---|---|
 | 4.0 | `chore/mapping-scope` | `PRD.md` §14b additions (`FR-IMP-13` onward), `APP_FLOW.md` `S-B-14`, `BACKEND.md` adapter. Documents only | — |
-| 4.1 | `feat/import-mapping` | Upload any CSV; a mapping step between the file and the existing check. Proposals from a local rule set (names, synonyms in both languages, value shapes); the administrator corrects; the result is a template-shaped CSV handed to today's `check`. Approved mappings are saved per hospital and reused. Migration 0035 | A deliberately mismatched synthetic CSV is mapped by hand and imported, with no model involved |
+| 4.1 | `feat/import-mapping` | Upload any CSV; a mapping step between the file and the existing check. Proposals from a local rule set (names, synonyms in both languages, value shapes); the administrator corrects; the result is a template-shaped CSV handed to today's `check`. Approved mappings are saved per hospital and reused. Migration 0036 | A deliberately mismatched synthetic CSV is mapped by hand and imported, with no model involved |
 | 4.2 | `feat/import-mapping-ai` — **waits: D4, D5** | The model adapter (`MAPPING_PROVIDER`, off by default) proposes the same mapping with a confidence and a plain-language reason per column. Typed, validated, audited, never trusted (§4) | The same file is mapped by the model; with the provider off or failing, 4.1's path still works |
 | 4.3 | `feat/import-warnings` | Local checks before the preview: near-duplicate patients flagged (never merged), mixed date and phone formats named with the normalisation proposed | — |
 
@@ -99,7 +99,7 @@ Phase 3 because self-service signup puts many hospitals on one database.
 
 ## 3. The onboarding state model (proposed, smallest set)
 
-**Migration 0034 — one file.**
+**Migration 0035 — one file.** (0034 was taken by plan 1.7.)
 
 ```
 hospitals
@@ -146,7 +146,7 @@ draft ──submit──▶ verification_pending ──verify──▶ setup_inc
                                    └──── reinstate ────▶
 ```
 
-**Migration 0035 — mapping profiles (Phase 4).**
+**Migration 0036 — mapping profiles (Phase 4).**
 
 ```
 import_mapping_profiles
@@ -304,8 +304,8 @@ In addition to `CLAUDE.md`:
 | 1.4b | `fix/broadcast-after-commit` | merged — `HANDOVER.md` §12 item 12, brought forward because it was failing a browser test one run in six. `queue.updated` is sent after the commit; a screen that subscribed mid-tap no longer stays on the previous patient, and a failed write tells nobody. `broadcastAfterCommit.test.ts` |
 | 1.5 | `fix/offline-outbox-persist` | merged — `openConsoleStores` (IndexedDB, one database per person), stuck entries with send-again and discard, retry with backoff, 401/429 kept rather than dropped |
 | 1.6 | `feat/console-offline-load` | merged — the console's service worker, the kept queue (`snapshots`), `pnpm test:e2e:built` against `next build`. Same tab only; no names; reception queue only |
-| 1.7 | `chore/ops-hardening` | next |
-| 1.8 | `chore/e2e-ci` | |
+| 1.7 | `chore/ops-hardening` | merged — the API's own database role (`pnpm db:role`, migration 0034), the API suite run as that role, non-root images, log rotation, a backup that is restored, copied and health-checked. The role keeps `BYPASSRLS` until 1.10; nothing alerts yet |
+| 1.8 | `chore/e2e-ci` | next |
 | 1.9 | `fix/log-sms-redaction` | |
 | 1.10 | `feat/tenant-rls` | |
 | 2.1 | `feat/notification-worker` | |

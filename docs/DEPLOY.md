@@ -253,7 +253,8 @@ Vercel, and never in a development or demo database (`FR-SEC-08`,
 
 One command starts the whole stack: the database, the migrations, the API,
 the two web apps, a web server that holds the TLS certificates, and a nightly
-backup (`deploy/docker-compose.yml`, built from the root `Dockerfile`).
+backup that is checked and copied to a second place (`deploy/docker-compose.yml`,
+built from the root `Dockerfile`).
 
 ## S1. The machine
 
@@ -266,6 +267,10 @@ backup (`deploy/docker-compose.yml`, built from the root `Dockerfile`).
   and ports **80 and 443** open to the internet. Certificates are obtained and
   renewed automatically.
 - The repository checked out on it (`git clone`, then `git checkout main`).
+- **A second place for backups** that is not this server's disk: an external
+  drive, or a folder on another machine mounted here. It has to exist before
+  the pilot starts (`S5`); the stack runs without it and says, every day,
+  that its backups are failing.
 
 ## S2. Configure
 
@@ -278,11 +283,14 @@ Fill in `deploy/.env`:
 | Value | What to put |
 |---|---|
 | `APP_ORIGIN`, `CONSOLE_ORIGIN`, `API_ORIGIN` | The three names, as `https://…` |
-| `POSTGRES_PASSWORD` | A long random password (the command is in the file) |
+| `POSTGRES_PASSWORD` | A long random password (the command is in the file). This is the **owner**: it runs the migrations and the backups and serves no request |
+| `API_DB_USER`, `API_DB_PASSWORD` | The role the **API** connects as, and a second, different password from the same command. It can read and write rows and nothing else (`S6`). Created on the first start |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GUEST_LINK_SECRET`, `TOTP_ENCRYPTION_KEY` | Four **different** random values of 64 hex characters. The last encrypts every administrator's two-step verification (pilot step 28): a restored database needs the same value, so keep it with the other secrets |
 | `PAYMENT_PROVIDER` | `off` — patients pay at the hospital. bKash and Nagad arrive with merchant accounts (`CLAUDE.md` §1.1) |
 | `SMS_PROVIDER` | `log` until an SMS aggregator is arranged (pilot step 27). Patients then follow their serial from the link on the booking screen |
 | `BACKUP_AT_UTC_HOUR`, `BACKUP_KEEP_DAYS` | When the nightly backup runs (20 UTC is 02:00 Dhaka) and how many days are kept |
+| `BACKUP_SECOND_DIR` | The folder on **another disk or machine** every backup is copied to (`S5`). Empty means backups stay on this disk and the backup service reports itself failing |
+| `BACKUP_VERIFY_RESTORE` | `true`: each night's dump is restored into a scratch database to prove it restores. Needs free disk the size of the database |
 
 `deploy/.env` holds the hospital's secrets. It is ignored by git and by the
 image build; keep a copy somewhere safe off the machine, because a backup is
@@ -351,15 +359,50 @@ The `migrate` service runs on every `up` and applies only migrations the
 database has not seen; the API waits for it to finish. Take a backup first
 (`S5`) — migrations are forward-only.
 
+**A server first started before plan 1.7** needs two things once, before
+that `up`: `API_DB_USER`, `API_DB_PASSWORD` and `BACKUP_SECOND_DIR` added to
+`deploy/.env` (`S2`), and the uploaded files handed to the account the API now
+runs as, because the volume was made by a version that ran as root:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --user root --no-deps --entrypoint chown api -R node:node /data/files
+```
+
 ## S5. Backups, and putting one back
 
-Every night the `backup` service writes two files to `deploy/backups/`:
-`db-<stamp>.dump` (the whole database) and `files-<stamp>.tar.gz` (uploaded
-lab reports), and removes those older than `BACKUP_KEEP_DAYS`.
+Every night the `backup` service writes three files to `deploy/backups/`:
+`db-<stamp>.dump` (the whole database), `files-<stamp>.tar.gz` (uploaded lab
+reports) and `sums-<stamp>.sha256` (their checksums), and removes those older
+than `BACKUP_KEEP_DAYS`. A night is not counted as a backup until three
+things have happened:
 
-**Copy `deploy/backups/` to a second machine the hospital controls** — a
-backup on the same disk does not survive the disk. They hold patient data:
-not to a service outside Bangladesh without the hospital's agreement.
+1. **The dump has been restored** into a scratch database on the same
+   server, which must hold at least what the live one held when the dump
+   began; the scratch is then dropped.
+2. **The files archive reads back.**
+3. **Both have been copied to `BACKUP_SECOND_DIR`** and their checksums
+   match there.
+
+`BACKUP_SECOND_DIR` is a folder on **another disk or another machine** the
+hospital controls — an external drive, or a share from a second machine
+mounted on this server. A backup on the same disk does not survive the disk.
+They hold patient data: not a service outside Bangladesh without the
+hospital's agreement (`FR-SEC-07`). The stack cannot tell whether the folder
+you name really is another disk; that is for whoever sets it up to make true.
+
+**Whether last night worked is visible without reading a log:**
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env ps backup          # healthy, or unhealthy
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec backup sh /deploy/backup.sh check
+```
+
+The second prints one line — `backup ok: 20261002-200003, checked by restore,
+copied to the second location, 9 hours ago`, or `backup FAILING:` and the
+reason. It fails when the last run failed, when no second location is
+configured, and when the last good backup is more than 26 hours old. Nothing
+sends this anywhere yet: **somebody has to look at it each morning** until an
+alert exists.
 
 A backup on demand:
 
@@ -367,7 +410,10 @@ A backup on demand:
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm backup once
 ```
 
-Putting one back **replaces everything** with the backup's contents:
+Putting one back **replaces everything** with the backup's contents. On a new
+machine — the old disk is gone — configure `deploy/.env` with the **same**
+values as before, copy the backup files into `deploy/backups/`, and start the
+database alone first (`docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d db`); then:
 
 ```bash
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env stop api console patient
@@ -401,14 +447,30 @@ before Docker sees them. A Linux server needs nothing.
 - **Administrators sign in with two-step verification** (`FR-SEC-10`); any
   other account may turn it on from the console picker.
 - **Errors go to the containers' logs** (`docker compose logs api`); nothing is
-  sent to an error-reporting service.
+  sent to an error-reporting service. Each container keeps five files of ten
+  megabytes and drops the oldest, so the logs cannot fill the disk.
+- **The API does not own the database.** It connects as `API_DB_USER`, which
+  reads and writes rows and cannot change the schema, empty a table, create a
+  role, or alter or remove an audit row. `POSTGRES_USER` owns the database
+  and is used only by the migrations and the backup (`DATABASE.md` §5.1).
+  **Hospitals are not yet separated by the database itself**: that is plan
+  1.10, and until then the separation is the API's own checks.
+- **The API and the two web apps do not run as root** inside their
+  containers. The database, the web server and the backup run as their images
+  ship them.
+- **Each service reports its own health** (`docker compose ps`): the API is
+  healthy only while it can reach the database; the web server waits for the
+  three it serves; the backup is healthy only while last night's backup is
+  good (`S5`). Nothing restarts or alerts on it — it is there to be read.
 
 ## S7. When something is wrong
 
 | Symptom | Look at |
 |---|---|
 | A site shows a certificate error | DNS for that name does not point at this server yet, or port 80 is blocked (Let's Encrypt needs it): `docker compose … logs web` |
-| The API never becomes healthy | `docker compose … logs migrate api` — usually a value missing from `deploy/.env`; the API lists every problem at once |
+| The API never becomes healthy | `docker compose … logs migrate api` — usually a value missing from `deploy/.env`; the API lists every problem at once. `password authentication failed` for `API_DB_USER` means `migrate` did not finish: it is what sets that password |
+| `backup` is `unhealthy` | `docker compose … exec backup sh /deploy/backup.sh check` says why. `only on this disk` means `BACKUP_SECOND_DIR` is empty (`S2`) |
+| An upload fails after an update, with `EACCES` in the API log | The files volume was made by a version that ran as root: `S4` |
 | The console signs in but shows nothing | The facility has no departments or doctors yet: `S-B-11` |
 | A patient cannot find the hospital | Not live yet, or no doctor's BMDC number verified (`S3`) |
 | Every administrator's two-step code is refused after a restore or a move | `TOTP_ENCRYPTION_KEY` is not the value the database was written with (the API log says the secret does not open). Put the old value back; failing that, `pnpm staff:reset-2fa` each administrator (`S3`) |
