@@ -14,15 +14,28 @@
  * new file and an environment variable — not a change to anything that
  * decides *whether* to send.
  *
- * ## What is never logged
+ * ## What the log provider writes, and what it does not
  *
- * CLAUDE.md §7: never log patient identifiers, OTPs, tokens or payment
- * references. An SMS body contains a person's serial and, for a booking, a
- * tracking link that is a credential (`FR-GST-05`). So the log provider prints
- * the body — that is its whole job, it is the demo's only delivery channel —
- * but the *structured* log line beside it carries the template key and the
- * message id and nothing else. A log aggregator ingests the structured field;
- * the printed body stays on a developer's terminal.
+ * One structured line per message: which notification, which template, how
+ * many segments. Never the number and never the text.
+ *
+ * CLAUDE.md §7: never log patient identifiers, OTPs or tokens — and an SMS is
+ * all three at once. It is addressed to a patient's phone, it names their
+ * serial, and a booking's carries a tracking link that is a credential
+ * (`FR-GST-05`). This provider used to print both with `console.log`, on the
+ * reasoning that the terminal was the demo's handset. But `log` is also what a
+ * hospital's own server runs until an aggregator exists (`DEPLOY.md` Part S),
+ * and there the same line put working links and phone numbers into container
+ * logs — kept, rotated and backed up, and past the logger's redaction, which
+ * `console.log` never goes through (`docs/HANDOVER.md` §12 item 11).
+ *
+ * What a message said is in its `notifications` row, with the link left out
+ * (`notification.service` `forTheRecord`). A demonstration reads its link from
+ * the booking screen, which is where a patient reads it too.
+ *
+ * It keeps nothing either. A test that wants to read what was sent uses an
+ * adapter of its own (`__tests__/support/recordingSms.ts`); a process that
+ * runs for months must not hold every message it has handed over.
  */
 
 import { logger } from '../config/logger.js';
@@ -37,8 +50,9 @@ export interface SmsMessage {
   readonly notificationId: string;
   readonly templateKey: string;
   /**
-   * The body holds a secret — a sign-in code (pilot step 25). Sent as written;
-   * never printed or logged, not even by the log provider (CLAUDE.md §7).
+   * The body holds a secret — a sign-in code (pilot step 25). Sent as written.
+   * No provider may print or log any body (CLAUDE.md §7); this marks the ones
+   * a provider must not keep for its own debugging or delivery reports either.
    */
   readonly sensitive?: boolean;
 }
@@ -69,7 +83,7 @@ export function segmentsFor(body: string): number {
 }
 
 /**
- * Writes the message to the log and reports success.
+ * Records that a message was handed over, and reports success.
  *
  * Always succeeds, like `PAYMENT_PROVIDER=mock`. A provider that randomly
  * failed would make the demo unreliable to no benefit: the failure path is
@@ -79,34 +93,26 @@ export function segmentsFor(body: string): number {
 export class LogSmsAdapter implements SmsAdapter {
   readonly name = 'log';
 
-  private readonly sent: SmsMessage[] = [];
-
   async send(message: SmsMessage): Promise<SmsResult> {
-    this.sent.push(message);
+    const segments = segmentsFor(message.body);
 
-    // The body goes to stdout, unstructured, because in this version the
-    // terminal *is* the recipient's handset — a demo operator reads the
-    // message here. The structured line below carries no content.
-    // eslint-disable-next-line no-console -- the log provider's entire purpose (CLAUDE.md §1.1)
-    console.log(
-      `\n  SMS → ${message.to}\n  ${message.sensitive === true ? '[a sign-in code — withheld from the log]' : message.body}\n`,
-    );
-
+    // Which message, never whose or what: no number, no text (see the top of
+    // this file). The words are in the notification row this id names.
     logger.info(
-      { notificationId: message.notificationId, templateKey: message.templateKey, channel: 'sms' },
-      'sms dispatched',
+      {
+        notificationId: message.notificationId,
+        templateKey: message.templateKey,
+        channel: 'sms',
+        segments,
+      },
+      'sms recorded, not sent: SMS_PROVIDER=log has no aggregator behind it',
     );
 
     return await Promise.resolve({
       ok: true,
       providerRef: `log:${message.notificationId}`,
-      costPoisha: segmentsFor(message.body) * POISHA_PER_SEGMENT,
+      costPoisha: segments * POISHA_PER_SEGMENT,
     });
-  }
-
-  /** Everything this adapter was asked to send. For tests. */
-  all(): readonly SmsMessage[] {
-    return this.sent;
   }
 }
 

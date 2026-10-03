@@ -118,6 +118,9 @@ describe('migration files (DATABASE.md §7)', () => {
       // Plan 1.7 (docs/PLATFORM_PLAN.md): the dashboard's snapshot can be
       // rebuilt by a role that does not own it.
       '0034',
+      // Plan 1.9: no tracking link is stored in the outbox, and the rows whose
+      // words are due to be cleared can be found (DATABASE.md §8).
+      '0035',
     ]);
   });
 

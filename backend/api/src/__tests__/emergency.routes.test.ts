@@ -41,6 +41,7 @@ import {
   FARMGATE,
   type ErFixture,
 } from './support/emergencyFixture.js';
+import { rowsHoldingALink } from './support/storedLinks.js';
 import { bearer, patientToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -340,6 +341,9 @@ describe('the family’s status page (S-A-10c)', () => {
     const messages = await messagesFor(caseId);
     expect(messages.map((message) => message.template_key)).toEqual(['emergency.acknowledged']);
     expect(messages[0]?.state).toBe('sent');
+    // The alert's status link went to the family's phone, not into the table
+    // (`docs/PLATFORM_PLAN.md` 1.9).
+    expect(await rowsHoldingALink()).toBe(0);
   });
 
   it('lets the family call it off, and tells the ER (BTN-A10C-CANCEL)', async () => {

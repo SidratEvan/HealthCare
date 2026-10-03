@@ -468,7 +468,9 @@ report computed from rows that could disagree with themselves is fiction.
 
 #### `notifications`
 `id`, `recipient_patient_id`/`guest_id`/`user_id`, `phone`, `channel` notif_channel, `template_key`, `params` jsonb, `state` notif_state, `provider_ref`, `cost_poisha`, `queued_at`, `sent_at`, `delivered_at`, `error`.
-**IX:** `(state, queued_at)`, `(recipient_patient_id)`
+**IX:** `(state, queued_at)`, `(recipient_patient_id)`, `(queued_at) WHERE params ? 'body'` (the 90-day purge, §8)
+
+`params` holds what filled the template, the id of what the message was about (`bookingId`, `bedRequestId`, `emergencyCaseId`, `testOrderId`) and, under `body`, the text as it is kept. **A link is never stored** (`notifications_no_stored_link`, 0035): a tracking or status link is a credential (`FR-GST-05`) whose hash alone is kept, in `guest_links`. The kept text has `{link}` where the link went; the message that was sent had the link.
 
 #### `device_tokens`
 `id`, `user_id`/`guest_id`, `token`, `platform`, `last_seen_at`, `revoked_at`.
@@ -651,6 +653,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0033_staff_2fa.sql             -- step 28: staff_users second-factor columns (§2.1)
     0034_refresh_as_owner.sql      -- plan 1.7: fn_refresh_admin_daily(), so a role that owns nothing
                                    -- can rebuild the dashboard snapshot (§4, §5.1)
+    0035_notification_retention.sql -- plan 1.9: links already stored in notifications.params removed,
+                                   -- notifications_no_stored_link, the purge's partial index (§2.7, §8)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)
@@ -682,7 +686,7 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
 | Clinical records | indefinite unless deletion requested | `FR-SEC-09` |
 | `guest_links` | session end + 30 days | then revoked |
 | Unclaimed guest records | 24 months, then anonymised | phone hashed, clinical content retained for the hospital |
-| `notifications` bodies | 90 days | metadata kept |
+| `notifications` bodies | 90 days | metadata kept: after 90 days `params` is reduced to the ids a message was about, by the API's hourly job (`notification.service` `clearExpiredBodies`); every column stays |
 | Demo/prototype DB | contains no real data, ever (`FR-SEC-08`) | separate project |
 | `import_rows.raw` | 30 days after commit; at once on discard | counts, errors and `external_refs` kept (`FR-IMP-08`) |
 

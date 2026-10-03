@@ -26,7 +26,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { StaffRole } from '@platform/domain';
 
-import { LogSmsAdapter, resetSmsAdapter, setSmsAdapter } from '../adapters/sms.js';
+import { resetSmsAdapter, setSmsAdapter } from '../adapters/sms.js';
 import { db } from '../config/db.js';
 import { resetEmitter } from '../realtime/emit.js';
 import * as notificationRepo from '../repositories/notification.repo.js';
@@ -35,9 +35,10 @@ import * as notifications from '../services/notification.service.js';
 import * as queueService from '../services/queue.service.js';
 
 import { createQueueFixture, type QueueFixture } from './support/queueFixture.js';
+import { RecordingSmsAdapter } from './support/recordingSms.js';
 
 let fixture: QueueFixture;
-let outbox: LogSmsAdapter;
+let outbox: RecordingSmsAdapter;
 
 /** The receptionist driving the chamber, as a queue actor (`FR-QUE-04`). */
 function staff(roles: readonly StaffRole[] = ['receptionist']) {
@@ -87,7 +88,7 @@ async function givePhones(): Promise<void> {
 beforeEach(async () => {
   resetEmitter();
   notifications.forgetTemplates();
-  outbox = new LogSmsAdapter();
+  outbox = new RecordingSmsAdapter();
   setSmsAdapter(outbox);
   fixture = await createQueueFixture(5);
   await givePhones();
@@ -461,12 +462,18 @@ describe('the log provider is the implementation, not a stand-in', () => {
       actor: staff(),
     });
 
+    // This chamber's rows only. Every test in this file sends a
+    // `queue.delayed` somewhere, through whichever adapter it set, and "any
+    // sent row in the table" would answer for one of theirs.
     const rows = await sql<{ cost_poisha: number | null }>`
       SELECT cost_poisha FROM notifications
        WHERE template_key = 'queue.delayed' AND state = 'sent'
-       LIMIT 1
+         AND (params ->> 'bookingId')::uuid IN (
+               SELECT id FROM bookings WHERE session_id = ${fixture.sessionId}::uuid
+             )
     `.execute(db);
 
-    expect(rows.rows[0]?.cost_poisha).toBeGreaterThan(0);
+    expect(rows.rows.length).toBeGreaterThan(0);
+    for (const row of rows.rows) expect(row.cost_poisha).toBeGreaterThan(0);
   });
 });

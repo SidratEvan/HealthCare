@@ -441,8 +441,10 @@ before Docker sees them. A Linux server needs nothing.
 - **No online payment** (`PAYMENT_PROVIDER=off`): the patient app offers
   paying at the hospital only, and the API refuses any other method before
   writing anything. It never pretends a payment was taken.
-- **SMS recorded, not sent** (`SMS_PROVIDER=log`) until pilot step 27. Sign-in
-  codes are never printed, even here.
+- **SMS recorded, not sent** (`SMS_PROVIDER=log`) until pilot step 27. The
+  API's log gets one line per message, naming the message and its template;
+  no phone number, no text and no sign-in code is ever printed. What a message
+  said is in the `notifications` table, without its link, for 90 days.
 - **A guest proves the phone with a code** before booking (`FR-GST-03`) — on by
   default whenever `DEMO_MODE` is off.
 - **Administrators sign in with two-step verification** (`FR-SEC-10`); any

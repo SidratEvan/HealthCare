@@ -7,7 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/e2e-fast-runner` (3 October) — **the first CI run of the
+Last updated: `fix/log-sms-redaction` (3 October) — **a message leaves no
+phone number, no text and no link behind it** (plan 1.9; below, *Plan 1.9*):
+the `log` SMS provider writes one line naming the message and nothing else,
+no link is stored in the outbox, and a message's words are cleared after 90
+days. Before that, `fix/e2e-fast-runner` (3 October) — **the first CI run of the
 browser suite failed six tests on GitHub's faster runner, and both causes
 were in the suite, not the product** (below, *Plan 1.8*; decision 90): a
 per-address limit that 150 simulated patients share, and a fixture that
@@ -240,7 +244,7 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-**As of `fix/e2e-fast-runner` (3 October):** `pnpm test` reports 4,726 in
+**As of `fix/log-sms-redaction` (3 October):** `pnpm test` reports 4,742 in
 about three minutes; `pnpm test:e2e` 151 in 14 to 18 minutes;
 `pnpm test:e2e:built` 3; `pnpm test:e2e:prod` 20. The per-file list below was counted at 136 and is
 kept for the names, not the numbers.
@@ -273,6 +277,69 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Plan 1.9 — what a message leaves behind (`fix/log-sms-redaction`)
+
+An SMS from this product is addressed to a patient's phone, names their
+serial, and for a booking carries the tracking link — which opens that
+booking's queue, its signed record and its reports (`FR-GST-05`). Three
+places kept all of that. None does now.
+
+- **The server's log.** `SMS_PROVIDER=log` printed the number and the whole
+  text with `console.log`, past the logger's redaction. That is also what a
+  hospital's server runs until an aggregator exists, so working links and
+  phone numbers were going into container logs that are kept and backed up.
+  It now writes one line: which notification, which template, how many
+  segments.
+- **The process.** The same provider kept every message in an array nothing
+  cleared. Gone; tests that want to read what was sent use
+  `__tests__/support/recordingSms.ts`.
+- **The database.** The link was in every confirmation's row twice, as
+  `params.link` and inside `params.body`, beside the hash that was supposed
+  to be the only trace of it. Now every outbox row is written by one function
+  (`notification.service` `writeOutbox`), which composes the message twice:
+  in full for the provider, and for the row with `{link}` left where the link
+  went. Migration 0035 removes the links already stored and adds
+  `notifications_no_stored_link`, so PostgreSQL refuses the next one whatever
+  the code does.
+
+**The patient still gets the link.** `smsRedaction.test.ts` proves that
+first, because a fix that dropped it would pass every other assertion.
+
+**The 90-day rule is enforced for the first time.** `DATABASE.md` §8 always
+said a message's body is kept 90 days and its metadata longer; nothing did
+it. The API's hourly job now reduces `params` to the ids a message was about
+(`clearExpiredBodies`), found through a partial index that a cleared row
+leaves, so the job reads only what is still to do.
+
+**What it does not do:**
+- **`log` still marks a message `sent`.** Nothing sent it. The demonstration
+  depends on that state, and it becomes true the day an aggregator is behind
+  the adapter (2.2); until then "sent" on a hospital's server means
+  "recorded".
+- **A sender that works from the row cannot send a link.** Today the full
+  text is held in memory from the commit to the send, inside the request.
+  Plan 2.1 moves sending to a worker that reads rows, and a row no longer
+  has the link: that worker has to issue a fresh link when it sends (for a
+  booking, `issueTrackingLink` writes a new `guest_links` row; how the
+  standby, bed and emergency links are issued was not read for this step).
+  That is 2.1's first design question.
+- **The constraint cannot see a link pasted into the text** under another
+  name. Only the single write path and its tests cover that.
+- **The rest of §8's retention table has no job**: guest links 30 days after
+  the session, unclaimed guest records after 24 months.
+
+**Before this reaches the deployed demo:** apply 0035 to Supabase with the
+release (it rewrites the rows already there; it needs nothing from the API).
+
+**Found by this branch's gate, and fixed in it:** `consent.routes.test.ts`
+failed two tests in one full run and passed alone. It takes "the
+account-owned profile the fewest facilities have treated" as the patient a
+guest's link must *not* reach, and which profile that is depends on what
+every earlier test file booked; that run it was the fixture's own first
+patient, and the API rightly answered 200. The product was right. The
+profile is now chosen from outside the fixture. **A test that needs "somebody
+else" has to choose them as somebody else, not as whoever a ranking returns.**
 
 ### Plan 1.8 — the browser suite in CI, and against production (`chore/e2e-ci`)
 
@@ -608,11 +675,12 @@ below as it lands):
    in CI** and never runs against the production configuration.
    ~~Backups stay on the same disk~~
    (fixed, `chore/ops-hardening`: copied to a second location, and failing
-   loudly when none is configured); the `log`
+   loudly when none is configured); ~~the `log`
    SMS provider prints phones and full bodies (tracking links) and keeps them
-   in memory forever.
+   in memory forever~~ (fixed, `fix/log-sms-redaction`).
 
-The rest (broadcast before commit, links stored in `notifications.params`,
+The rest (~~broadcast before commit~~ (fixed, `fix/broadcast-after-commit`),
+~~links stored in `notifications.params`~~ (fixed, `fix/log-sms-redaction`),
 no worker, mutable `audit_log`, sockets not revoked, single-process limits,
 non-idempotent booking, ~~root containers, no log rotation~~ (fixed,
 `chore/ops-hardening`; `audit_log` can no longer be changed by the API's
@@ -3673,12 +3741,14 @@ credential.
 
 **From the `demo` branch** (CLAUDE.md §3.1): the demo-data version, kept at
 the last green commit of `mvp`, for pulling onto any machine to show
-somebody. It stands at `4ece550` (3 October), pushed: `docs/PLATFORM_PLAN.md`
-phase 1 through 1.8 — delay, resume, undo, the sync allow-list, the pool and
-broadcast fixes, the outboxes kept on disk, the console opening with no
-network, the hardened self-host stack, and the browser suite in CI — after
-`pnpm verify` (4,723), a clean 150/150 browser run, the built suite (3) and
-the production configuration (20) on that commit. **Green means
+somebody. It is moved to each green merge into `mvp` and pushed with it, so
+`git log -1 demo` names the commit; as of 3 October that is
+`docs/PLATFORM_PLAN.md` phase 1 through 1.9 — delay, resume, undo, the sync
+allow-list, the pool and broadcast fixes, the outboxes kept on disk, the
+console opening with no network, the hardened self-host stack, the browser
+suite in CI, and messages that leave no number, text or link behind — after
+`pnpm verify`, a clean browser run, the built suite and the production
+configuration on that commit. **Green means
 `pnpm verify`, `pnpm test:e2e`, `pnpm test:e2e:built` and
 `pnpm test:e2e:prod`.**
 

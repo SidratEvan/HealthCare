@@ -43,6 +43,7 @@ import {
   type BedFixture,
 } from './support/bedFixture.js';
 import { proveGuestPhone } from './support/guestPhone.js';
+import { rowsHoldingALink } from './support/storedLinks.js';
 import { bearer, patientToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -536,6 +537,9 @@ describe('a bed request, from the phone to the bed (FR-PAT-52, FR-BED-07)', () =
       SELECT template_key FROM notifications WHERE params ->> 'bedRequestId' = ${asked.id}
     `.execute(db);
     expect(told.rows.map((row) => row.template_key)).toContain('bed.request_held');
+    // The family's status link went into the message, not into the table
+    // (`docs/PLATFORM_PLAN.md` 1.9).
+    expect(await rowsHoldingALink()).toBe(0);
 
     expect((await track(asked.token)).body.data.state).toBe('held');
 
