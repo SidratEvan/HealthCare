@@ -7,7 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/log-sms-redaction` (3 October) — **a message leaves no
+Last updated: `chore/status-handover` (3 October) — **phase 1 is merged and
+pushed through 1.9; 1.10 is next and starts with a design note for the
+owner** (below, *Next: plan 1.10*). No product code changed. Before that,
+`fix/log-sms-redaction` (3 October) — **a message leaves no
 phone number, no text and no link behind it** (plan 1.9; below, *Plan 1.9*):
 the `log` SMS provider writes one line naming the message and nothing else,
 no link is stored in the outbox, and a message's words are cleared after 90
@@ -170,7 +173,49 @@ every pilot step in §4.2 but 27, which waits for an SMS aggregator account.
 What remains is the owner's: the open decisions below, applying migrations to
 Supabase, and whether `mvp` goes to `main`.
 
-**Next, in the order suggested to the owner (2026-09-30):**
+**Next: plan 1.10, `feat/tenant-rls`** — the last and largest row of phase 1
+(`docs/PLATFORM_PLAN.md` §2): the database itself keeps one hospital's rows
+from another's staff, so a forgotten check in a route cannot leak across
+hospitals. Not started. It begins with a design note in the branch, and the
+plan's own rule 7 (§8) says to stop and ask before changing how hospitals
+are isolated, so **the note goes to the owner before any policy is
+written**. What was read for it on 3 October, so it is not read again:
+
+- **178 queries in 24 repository files go straight to the pool**
+  (`.execute(db)` or `.execute(trx ?? db)`), with nothing that says whose
+  request they belong to. A policy keyed on "this request's hospital" needs
+  every one of them to run on a connection that carries it.
+- **That can be done in one place.** The installed Kysely (0.29.6) calls
+  `onReserveConnection` each time a connection is taken from the pool
+  (`postgres-dialect-config.d.ts`). A request's scope held in an
+  `AsyncLocalStorage`, set after `attachPrincipal`, can be written to the
+  connection there, without touching the 178 call sites. Nothing in the API
+  uses `AsyncLocalStorage` yet. The cost is one more statement each time a
+  connection is taken; it has not been measured against the canary's two
+  seconds.
+- **There is a precedent for a scoped role**: `gov.repo.ts` runs government
+  reads under `SET LOCAL ROLE gov_reader` inside a transaction.
+- **The API's role still carries `BYPASSRLS`** (plan 1.7); 1.10 removes it
+  in the step that adds the policies. On Supabase the API connects as the
+  owner, whom policies do not bind unless a table is set to `FORCE ROW LEVEL
+  SECURITY`.
+
+**The questions the design note has to answer, and the owner to rule on:**
+
+1. **Which requests cross hospitals by design**, and under what scope they
+   run. Staff at a hospital are the easy case. A patient's wallet spans
+   hospitals; discovery, the emergency search and the bed search read every
+   live hospital; a referral is written by one hospital and read by another;
+   the national dashboards and the hourly jobs read all of them; staff
+   sign-in looks an email up before any hospital is known.
+2. **Whether patient-side rows get policies now** (`DATABASE.md` §5's table
+   describes them) or 1.10 is staff-side isolation only, as its plan row
+   reads, with the patient side left to the API's checks.
+3. **Whether the demonstration on Supabase is put under the policies** (a
+   second role there, or `FORCE ROW LEVEL SECURITY`), or stays as it is
+   until a release.
+
+**Then, in the order suggested to the owner (2026-09-30):**
 1. **A security review of the whole codebase** — **done 2026-09-30** (below,
    *Security review*). **All four holes fixed the same day**, one branch each
    (decision 85 ruled for the returning guest). A paid penetration test should
@@ -420,6 +465,23 @@ learned the hard way*):
   established**: by chance it is about one run in twenty thousand, and the
   job's log cannot be read without signing in. If it recurs, the fixture now
   survives it and the cause is still worth finding.
+
+**The second run** (37159673893, `3c15bb8`, with `fix/e2e-fast-runner`):
+the `browser` job passed whole on GitHub's runner — the canary, all the
+browser tests and the built console — and so did `production`. `verify`
+failed, on two tests in `consent.routes.test.ts` that passed here twenty
+minutes earlier on the same code: a test that chose its "other patient" by a
+ranking (below, *Plan 1.9*, *Found by this branch's gate*). Fixed in
+`fix/log-sms-redaction`, merged as `36d5ca2`.
+
+**The third run** (37161163568, `36d5ca2`, with plan 1.9): `verify` and
+`production` passed; the canary passed; the browser suite **150 of 151 in
+10.9 minutes**. The one failure, `pause-resume.spec.ts:90`, is in the
+console and not in the suite: **N pressed the instant the pause banner went
+was answered "a break is in progress"** and nobody was called. The console
+re-attaches its key listener in an effect that runs after the screen has
+been redrawn, so for about a frame a key is handled against the state before
+it. Fixed in `fix/console-key-race`, which is the branch after this one.
 
 A run's jobs and its failure messages can be read without signing in, at
 `api.github.com/repos/SidratEvan/HealthCare/actions/runs/<id>/jobs` and
