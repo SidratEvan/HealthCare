@@ -238,6 +238,65 @@ describe('rate limiting (FR-SEC-05, FR-GST-14)', () => {
   });
 });
 
+describe('a limit on an address, where many people share one (ADDRESS_RATE_LIMIT_FACTOR)', () => {
+  beforeEach(() => {
+    counter.reset();
+  });
+
+  /** One route limited to two per address, for an address shared `factor` times over. */
+  function sharedBy(factor?: number): Express {
+    return harness((a) => {
+      const options = { limit: 2, windowSeconds: 600, keyFor: byIp };
+      a.post(
+        '/start',
+        factor === undefined ? rateLimit(options) : rateLimit(options, factor),
+        (_req, res) => {
+          res.json({ ok: true });
+        },
+      );
+    });
+  }
+
+  it('holds an address to the limit as written, unless a deployment says it is shared', async () => {
+    // Nothing sets the factor under test, so this is the default: one.
+    const app = sharedBy();
+
+    expect((await request(app).post('/start')).status).toBe(200);
+    expect((await request(app).post('/start')).status).toBe(200);
+    expect((await request(app).post('/start')).status).toBe(429);
+  });
+
+  it('lets an address that stands for several people through that many times over', async () => {
+    const app = sharedBy(3);
+
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      const response = await request(app).post('/start');
+      expect(response.status, `attempt ${String(attempt)}`).toBe(200);
+      // The allowance it reports is the one it enforces.
+      expect(response.headers['ratelimit-limit']).toBe('6');
+    }
+
+    expect((await request(app).post('/start')).status).toBe(429);
+  });
+
+  it('never stretches a limit on a phone number: that one is a person, not an address', async () => {
+    const app = harness((a) => {
+      a.post(
+        '/otp',
+        rateLimit({ limit: 2, windowSeconds: 600, keyFor: byPhone }, 50),
+        (_req, res) => {
+          res.json({ ok: true });
+        },
+      );
+    });
+    const phone = { phone: '+8801712345678' };
+
+    expect((await request(app).post('/otp').send(phone)).status).toBe(200);
+    expect((await request(app).post('/otp').send(phone)).status).toBe(200);
+    expect((await request(app).post('/otp').send(phone)).status).toBe(429);
+  });
+});
+
 describe('what the logger refuses to record (CLAUDE.md §7)', () => {
   it.each([
     'req.headers.authorization',

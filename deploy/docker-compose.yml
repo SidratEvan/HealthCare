@@ -48,6 +48,9 @@ x-api-env: &api-env
   SMS_SENDER_ID: ${SMS_SENDER_ID:-}
   TRAVEL_TIME_MODE: static
   TRUST_PROXY_HOPS: "1"
+  # How many people one address stands for (DEPLOY.md §S2). 1 unless the
+  # hospital's patients book from the hospital's own network.
+  ADDRESS_RATE_LIMIT_FACTOR: ${ADDRESS_RATE_LIMIT_FACTOR:-1}
   LOG_LEVEL: ${LOG_LEVEL:-info}
 
 services:

@@ -7,7 +7,12 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/push-permission` (3 October) — **the owner gave standing
+Last updated: `fix/e2e-fast-runner` (3 October) — **the first CI run of the
+browser suite failed six tests on GitHub's faster runner, and both causes
+were in the suite, not the product** (below, *Plan 1.8*; decision 90): a
+per-address limit that 150 simulated patients share, and a fixture that
+could pick a name already taken. The canary passed there. Before that,
+`chore/push-permission` (3 October) — **the owner gave standing
 permission to push and merge to any branch** (`CLAUDE.md` §3.1, which now
 says so in his words; a force-push still needs asking). Under it plan 1.8 was
 merged as `4ece550` after the whole gate passed on it, and `mvp` and `demo`
@@ -235,9 +240,9 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-**As of `4ece550` (3 October):** `pnpm test` reports 4,723 in about three
-minutes; `pnpm test:e2e` 150 in 18.1 minutes; `pnpm test:e2e:built` 3;
-`pnpm test:e2e:prod` 20. The per-file list below was counted at 136 and is
+**As of `fix/e2e-fast-runner` (3 October):** `pnpm test` reports 4,726 in
+about three minutes; `pnpm test:e2e` 151 in 14 to 18 minutes;
+`pnpm test:e2e:built` 3; `pnpm test:e2e:prod` 20. The per-file list below was counted at 136 and is
 kept for the names, not the numbers.
 
 `pnpm test:e2e` reported 136 then, in Chromium, against the real API and the seeded
@@ -320,15 +325,38 @@ configuration): the pitch session, which is the demonstration's own
 (`FR-DEM-06`); and "the next person at the same PC", which needs a second
 account signed in and does not yet do it.
 
-**Not verified from here:** the workflow file itself. Every command in it was
-run on this machine in the same form, and the environment it sets was checked
-against the API's start-up validation with no `.env` present — but a workflow
-is only proven by a run on GitHub. **The first run after this is pushed needs
-looking at**, in particular whether the canary's two seconds hold on a
-hosted runner driving `next dev`. That run is 37156815719, started by the
-push of `4ece550` on 3 October; its result is recorded here when it ends.
-The runs can be read without signing in, at
-`api.github.com/repos/SidratEvan/HealthCare/actions/runs`.
+**The first run on GitHub** (37156815719, the push of `4ece550`, 3 October).
+The workflow itself works: all three jobs started, built and ran.
+
+| Job | Result |
+|---|---|
+| `verify` | passed |
+| `production` | passed — the canary and the counter against the production configuration |
+| `browser` | build passed; **the canary passed on a hosted runner**, inside its two seconds; the whole suite **144 of 150 in 11.6 minutes** (18.1 here) |
+
+The six failures were two faults in the suite, both shown by a faster
+machine and neither in the product (`fix/e2e-fast-runner`; below, *Things
+learned the hard way*):
+
+- **Five in `wallet.spec.ts`: the booking was refused.** `/guest/start`
+  allows 30 calls per address in a fixed ten-minute window. Every patient in
+  the suite books from one address, and the runner got 31 of them into one
+  window; here the suite is slow enough that it never has. The API now reads
+  `ADDRESS_RATE_LIMIT_FACTOR` (default 1, so nothing changes for anybody who
+  does not set it) and the browser suite sets it, saying what it is: one
+  machine standing for every patient. See decision 90 for what this means for
+  a real hospital.
+- **One in `ward-board.spec.ts`: a fixture's ward name was taken**
+  (`wards_hospital_name_key`). The fixture names its ward with a
+  four-character random tag. It now takes another name when one is taken.
+  **Why two of the first four wards in a run shared a tag is not
+  established**: by chance it is about one run in twenty thousand, and the
+  job's log cannot be read without signing in. If it recurs, the fixture now
+  survives it and the cause is still worth finding.
+
+A run's jobs and its failure messages can be read without signing in, at
+`api.github.com/repos/SidratEvan/HealthCare/actions/runs/<id>/jobs` and
+`…/check-runs/<job id>/annotations`. `gh` is not installed on this machine.
 
 ### Plan 1.7 — the self-hosted stack, hardened (`chore/ops-hardening`)
 
@@ -2502,6 +2530,26 @@ afternoon.
 
 ### Things learned the hard way, so they are not relearned
 
+- **A faster machine is a different test** (`fix/e2e-fast-runner`,
+  3 October). The browser suite passed 150 of 150 here in 18.1 minutes and
+  144 of 150 on GitHub's runner in 11.6. Nothing differed but the speed.
+  `/guest/start` is limited to 30 per address per ten minutes, in a **fixed**
+  window that opens at the first call; every patient in the suite books from
+  one address; and the runner fitted the 31st booking into the window this
+  machine had always been too slow to fill. Five tests in a row were refused
+  a booking (the app said so, correctly), and the ones after them passed
+  because the window had closed. It reproduces here on demand:
+  `pnpm exec playwright test e2e/wallet.spec.ts --repeat-each 6`. **A suite
+  that passes because the machine is slow has a limit in it somewhere.**
+  When a spec fails only on a fast runner, count what it sends per address
+  before reading the screen. The suite now sets `ADDRESS_RATE_LIMIT_FACTOR`
+  (decision 90).
+- **A fixture that picks a random name has to survive the name being taken.**
+  The same run failed `ward-board.spec.ts:116` on `wards_hospital_name_key`:
+  `e2e/support/ward.ts` named its ward with four random characters and
+  treated a clash as an error. It now picks another. The same lesson as
+  `fix/test-coin-flips`, in a fixture instead of a test.
+
 - **A phone that opened as reception tapped *next* could stay on the
   previous patient** (`fix/broadcast-after-commit`, 3 October). The queue
   emitted `queue.updated` from inside its transaction, before the commit. A
@@ -3559,6 +3607,24 @@ Raised while fixing the handover's findings (`docs/PLATFORM_PLAN.md` phase 1):
    needs `console-cold-start.spec.ts:98` rewritten first. The CI choice
    was made so that CI can run at all and is one line to reverse
    (`playwright.config.ts`); the local one is the owner's.
+90. **A limit on an address counts everybody behind it**
+   (`fix/e2e-fast-runner`). The API refuses the 31st phone check from one
+   address in ten minutes, the 11th standby place and the 11th emergency
+   alert (`middleware/rateLimit.ts`, `byIp`). The numbers were never measured
+   (their own comments say so) and they assume an address is a person. In
+   Bangladesh it often is not: a hospital's waiting room on the hospital's
+   Wi-Fi is one address, and a mobile carrier puts many subscribers behind
+   one. **A busy counter's patients could be refused a booking by this on a
+   real server**, and they would be told to wait ten minutes. The browser
+   suite met it first, as 150 patients on one machine.
+   Built as: `ADDRESS_RATE_LIMIT_FACTOR`, 1 to 100, multiplies every
+   per-address limit; unset, nothing changes. It does not touch what protects
+   a person — codes per number, the lock after five wrong codes, sign-in
+   lockout — which are in the database and not keyed on an address.
+   **For the owner:** what a pilot hospital's server should set (it depends
+   on whether patients book from the hospital's network), and whether the
+   defaults themselves should rise. Not chosen here; `DEPLOY.md` Part S says
+   the setting exists and when to raise it.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
