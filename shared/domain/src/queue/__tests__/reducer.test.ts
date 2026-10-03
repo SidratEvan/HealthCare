@@ -175,6 +175,8 @@ describe('session lifecycle', () => {
     expect(next.status).toBe('running');
     expect(next.pausedAt).toBeNull();
     expect(next.pausedSeconds).toBe(600);
+    // When the chamber started again: the no-show grace counts from here.
+    expect(next.resumedAt).toBe(timestamp('2026-09-17T11:11:00.000Z'));
     expect(checkInvariants(next)).toEqual([]);
   });
 

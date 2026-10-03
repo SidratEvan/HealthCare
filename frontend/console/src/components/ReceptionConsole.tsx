@@ -169,6 +169,14 @@ function ConsoleBody(): ReactNode {
   const callNext = useCallback(async () => {
     if (state === null) return;
 
+    // A paused chamber refuses the call (`canCallNext`). Say so here, in
+    // words, rather than sending it to be rolled back as a "conflict" — which
+    // is what a receptionist pressing N during a prayer break used to get.
+    if (state.status === 'paused') {
+      show({ title: t('pausedResumeFirst', locale), tone: 'caution' });
+      return;
+    }
+
     const inChamber = nowServing(state);
     const next = waitingQueue(state).find((entry) => entry.status !== 'late');
     const actions: QueueAction[] = [];
@@ -200,12 +208,27 @@ function ConsoleBody(): ReactNode {
     });
   }, [state, queue, now, show, locale]);
 
+  /**
+   * `BTN-B02-PAUSE` — one control, both directions (`FR-REC-05`, B1.2:
+   * "resume with the same button"). A chamber that could be paused from here
+   * and resumed only by calling the API by hand was frozen by a single tap.
+   */
+  const sessionStatus = state?.status ?? null;
+  const togglePause = useCallback(() => {
+    if (sessionStatus === 'paused') void queue.act('SESSION_RESUMED', {});
+    else if (sessionStatus === 'running') void queue.act('SESSION_PAUSED', { reason: null });
+  }, [sessionStatus, queue]);
+
   // A11Y-05 / B1.2: Space or N calls the next patient, A marks arrival,
-  // P pauses. The console is operated at speed by people who are not looking
-  // at the mouse.
+  // P pauses and resumes. The console is operated at speed by people who are
+  // not looking at the mouse.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.target instanceof HTMLInputElement) return;
+      if (event.key === 'p' || event.key === 'P') {
+        event.preventDefault();
+        togglePause();
+      }
       if (event.key === 'n' || event.key === 'N' || event.code === 'Space') {
         event.preventDefault();
         void callNext();
@@ -224,7 +247,7 @@ function ConsoleBody(): ReactNode {
     return () => {
       globalThis.removeEventListener?.('keydown', onKey);
     };
-  }, [callNext, queue]);
+  }, [callNext, togglePause, queue]);
 
   if (sessionId === null) {
     return <Notice>{t('noSession', locale)}</Notice>;
@@ -241,6 +264,7 @@ function ConsoleBody(): ReactNode {
   }
 
   const pendingBookingIds = new Set<string>();
+  const paused = state.status === 'paused';
 
   return (
     <div className="flex min-h-screen">
@@ -300,14 +324,24 @@ function ConsoleBody(): ReactNode {
             {t('doctorArrived', locale)}
           </Button>
 
-          <Button
-            variant="secondary"
-            onClick={() => {
-              void queue.act('SESSION_PAUSED', { reason: null });
-            }}
-          >
-            {t('pause', locale)}
-          </Button>
+          {paused ? (
+            <Button data-testid="resume-session" onClick={togglePause}>
+              {t('resume', locale)}
+            </Button>
+          ) : state.status === 'running' ? (
+            <Button variant="secondary" data-testid="pause-session" onClick={togglePause}>
+              {t('pause', locale)}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              data-testid="pause-session"
+              disabled
+              disabledReason={t('pauseNeedsRunning', locale)}
+            >
+              {t('pause', locale)}
+            </Button>
+          )}
 
           {/* BTN-B02-WALKIN (pilot step 23). A serial needs the server, so
               offline it says so instead of queueing a number two counters
@@ -333,19 +367,45 @@ function ConsoleBody(): ReactNode {
             </Button>
           )}
 
-          {/* The single most-used control in the system (B1.3). */}
-          <Button
-            size="lg"
-            data-testid="call-next"
-            onClick={() => {
-              void callNext();
-            }}
-          >
-            {serving === null ? t('callNext', locale) : t('finishAndCallNext', locale)}
-          </Button>
+          {/* The single most-used control in the system (B1.3). Off during a
+              break, and it says why (FRONTEND.md §5.1). */}
+          {paused ? (
+            <Button
+              size="lg"
+              data-testid="call-next"
+              disabled
+              disabledReason={t('pausedResumeFirst', locale)}
+            >
+              {serving === null ? t('callNext', locale) : t('finishAndCallNext', locale)}
+            </Button>
+          ) : (
+            <Button
+              size="lg"
+              data-testid="call-next"
+              onClick={() => {
+                void callNext();
+              }}
+            >
+              {serving === null ? t('callNext', locale) : t('finishAndCallNext', locale)}
+            </Button>
+          )}
 
           <ConsoleLanguageSwitch />
         </header>
+
+        {/* A break is a state of the whole chamber, so it is said across the
+            whole screen and stays until it ends (FR-REC-05). */}
+        {paused && state.pausedAt !== null ? (
+          <p
+            role="status"
+            data-testid="paused-banner"
+            className="border-b border-line bg-warn-100 px-6 py-3 text-body-md text-warn-700"
+          >
+            {format('sessionPausedSince', locale, {
+              time: formatClock(state.pausedAt, numerals),
+            })}
+          </p>
+        ) : null}
 
         {/* --- queue table (B1.4) ------------------------------------------ */}
         <main className="flex min-h-0 flex-1 gap-5 p-5">

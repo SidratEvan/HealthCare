@@ -297,8 +297,8 @@ In addition to `CLAUDE.md`:
 |---|---|---|
 | — | `chore/platform-plan` | merged — this file |
 | 1.1 | `fix/delay-on-arrival` | merged — `QueueState.hold`, `outstandingDelayMinutes`; the patient card and the doctor's header show what is still ahead |
-| 1.2 | `fix/console-resume` | next |
-| 1.3 | `fix/console-undo` | |
+| 1.2 | `fix/console-resume` | merged — one button both ways, key `P`, the paused banner, `QueueState.resumedAt`, `e2e/pause-resume.spec.ts` |
+| 1.3 | `fix/console-undo` | next |
 | 1.4 | `fix/sync-event-allowlist` | |
 | 1.5 | `fix/offline-outbox-persist` | |
 | 1.6 | `feat/console-offline-load` | |

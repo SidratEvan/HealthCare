@@ -315,6 +315,27 @@ describe('every event type appends, reduces and broadcasts', () => {
     expect(response.body.error.details.guard).toBe('NO_SHOW_BEFORE_GRACE');
   });
 
+  it('refuses a no-show during a break, and starts the grace again after it (FR-REC-05)', async () => {
+    // The grace ran out long ago — and then the chamber stopped for prayers.
+    await startSessionAnHourAgo();
+    const front = fixture.bookingIds[0] ?? '';
+    expect((await post(`/sessions/${fixture.sessionId}/pause`, { reason: 'নামাজ' })).status).toBe(
+      200,
+    );
+
+    const duringBreak = await post(`/bookings/${front}/no-show`);
+    expect(duringBreak.status).toBe(422);
+    expect(duringBreak.body.error.details.guard).toBe('SESSION_NOT_RUNNING');
+
+    expect((await post(`/sessions/${fixture.sessionId}/resume`)).status).toBe(200);
+
+    // Nobody could have been called during the break, so nobody missed a call.
+    const justAfter = await post(`/bookings/${front}/no-show`);
+    expect(justAfter.status).toBe(422);
+    expect(justAfter.body.error.details.guard).toBe('NO_SHOW_BEFORE_GRACE');
+    expect(await bookingStatusOf(front)).not.toBe('no_show');
+  });
+
   it('refuses a no-show for a patient whose turn has not come', async () => {
     await startSessionAnHourAgo();
     // Serial 3 is two places back. A patient holding a later serial is not

@@ -7,11 +7,14 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/delay-on-arrival` (2 October) — **a delay declared before
-the doctor arrives is used up by the arrival** (plan 1.1; decision 86). The
-patient at the front of an empty chamber is told "now", not "in half an
-hour", and cannot be marked absent before the time on their phone. Before
-that, `chore/platform-plan` (2 October) — **the owner's implementation
+Last updated: `fix/console-resume` (2 October) — **a chamber paused from the
+console is resumed from the console** (plan 1.2; decision 87): the pause
+button reads আবার শুরু while paused, key `P`, with a banner and call-next off
+for the length of the break. Before that, `fix/delay-on-arrival` (2 October)
+— **a delay declared before the doctor arrives is used up by the arrival**
+(plan 1.1; decision 86). The patient at the front of an empty chamber is told
+"now", not "in half an hour", and cannot be marked absent before the time on
+their phone. Before that, `chore/platform-plan` (2 October) — **the owner's implementation
 brief became `docs/PLATFORM_PLAN.md`**: the order of work from here, branch by
 branch, and the decisions it waits on (below, *The platform plan*). No product
 code changed. Before that, `chore/handover` (2 October) — **a technical handover read from
@@ -249,8 +252,9 @@ below as it lands):
    With `DEMO_MODE=false` booking needs a phone code; `SMS_PROVIDER` offers
    only `log` (withholds the code) and an adapter that fails every send.
    Walk-ins get no tracking link. `DEPLOY.md` S2/S6 imply otherwise.
-2. **CRITICAL — the console can pause a chamber and cannot resume it.** No
-   Resume control exists; a paused session refuses *call next*.
+2. **Fixed (`fix/console-resume`, decision 87).** Was: **CRITICAL — the
+   console can pause a chamber and cannot resume it.** No Resume control
+   existed; a paused session refuses *call next*.
 3. **Fixed (`fix/delay-on-arrival`, decision 86).** Was: **CRITICAL — a
    delay declared before the doctor arrives is never consumed.** After arrival the ETA baseline is still `now + delayMinutes`
    (`eta.ts`); reproduced: the patient at the front told 18:20 while
@@ -3072,6 +3076,15 @@ Raised while fixing the handover's findings (`docs/PLATFORM_PLAN.md` phase 1):
    end before the hold does. `BACKEND.md` §4.1 now says so. The other reading
    — a later delay only shifts estimates and never blocks absent-marking —
    is a one-line change in `rules.ts` if the owner prefers it.
+87. **The no-show grace and a break** (`fix/console-resume`). No document
+   says whether the grace (`FR-QUE-20`) runs while a chamber is paused. Until
+   now it did, and nothing stopped a patient being marked absent mid-break —
+   harmless while no chamber could be resumed, and a way to lose a turn to a
+   prayer break once one can. Built as: nobody is marked absent while paused
+   (the refusal says to resume first), and the grace for whoever is at the
+   front starts again, in full, at resume. `BACKEND.md` §4.1 and
+   `APP_FLOW.md` B1.2 now say so. The stricter reading — only the paused
+   minutes are given back — is a small change if preferred.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
