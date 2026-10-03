@@ -2428,14 +2428,32 @@ afternoon.
   not made: recording less in a trace, or running the two apps as production
   builds (plan 1.8 already has a production-configuration job), which also
   takes about 2 GB off.
-- **A typed consent code is lost if the queue arrives after it**
-  (found 3 October, not fixed). `DoctorConsole` renders `<ConsentScan
-  key={servingBookingId ?? 'nobody'}>` before the queue has loaded, so the
-  form remounts when the first state arrives and whatever was typed into it
-  is gone. `wallet.spec.ts:251` types the moment the page opens and failed on
-  it once, in a probe run under load (it passed in all three full runs). It
-  is a real, small race in the screen as well as in the test; its own
-  `fix/*` branch.
+- **What a doctor typed as the queue arrived was wiped, twice over**
+  (fixed in `feat/console-offline-load`, 3 October). Two places in
+  `DoctorConsole` reset themselves when the patient in the chamber changes,
+  and both counted "nobody yet → the first patient" as a change. The consent
+  form was drawn before the queue had loaded, keyed "nobody", and remounted
+  when the first state arrived: a code typed in that moment was gone
+  (`wallet.spec.ts:251`). The visit note was cleared by an effect, which
+  runs after the fields are already enabled and on screen: a diagnosis typed
+  in between was gone and the sign button was back to disabled
+  (`doctor-console.spec.ts:97`, one run in five when repeated). Neither is
+  new, and neither is only a test matter — a doctor who types the moment the
+  next patient appears hits the same gap. Whether plan 1.6 made them easier
+  to hit was not measured; it does move the moment the first state arrives,
+  since the console now reads its kept queue from the device before it asks
+  the server. The consent form is not drawn until the queue has said who is
+  in the chamber; the note is cleared in the render that brings the new
+  patient, not after it. **A reset that belongs to "the patient changed" is
+  done in the render that changes the patient, never in an effect after
+  it.** Checked by running both specs eight times over: every
+  doctor-console test passed all eight (56 of 56). The wallet tests passed
+  five times and then failed for a reason that is the product working: a
+  guest booking starts with a phone check, `POST /guest/start` allows 30 per
+  address per ten minutes (`patientAuth.routes.ts`), each repeat books six
+  guests, and the thirty-first was refused with a 429. **Repeating
+  `wallet.spec.ts` more than five times in one run measures the limit, not
+  the wallet.**
 - **A second device a spec opens lives until the whole run ends**
   (`fix/e2e-context-leaks`, 2026-09-30). `browser.newContext()` belongs to the
   worker's browser, not the test, and there is one worker. No-show, referral,
