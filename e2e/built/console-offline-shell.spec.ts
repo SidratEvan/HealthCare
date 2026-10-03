@@ -26,6 +26,7 @@ import {
   eventTypes,
   type ConsoleSession,
 } from '../support/console.js';
+import { putReceptionistInTab } from '../support/consoleSession.js';
 
 let demo: ConsoleSession;
 
@@ -39,12 +40,7 @@ async function openConsole(page: Page): Promise<void> {
   // belongs to the tab, so it is still there after a reload — which is the
   // case this covers. A browser restarted after a power cut starts signed out,
   // and signing in needs the server.
-  await page.addInitScript((token: string) => {
-    window.sessionStorage.setItem(
-      'console.demo-session',
-      JSON.stringify({ token, hospitalId: 'e2e', staffName: 'E2E' }),
-    );
-  }, demo.token);
+  await putReceptionistInTab(page, demo);
 
   await page.goto(`/?session=${demo.sessionId}`);
   await expect(page.getByTestId('queue-table')).toBeVisible();

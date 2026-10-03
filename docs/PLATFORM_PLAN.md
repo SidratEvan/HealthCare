@@ -305,8 +305,8 @@ In addition to `CLAUDE.md`:
 | 1.5 | `fix/offline-outbox-persist` | merged — `openConsoleStores` (IndexedDB, one database per person), stuck entries with send-again and discard, retry with backoff, 401/429 kept rather than dropped |
 | 1.6 | `feat/console-offline-load` | merged — the console's service worker, the kept queue (`snapshots`), `pnpm test:e2e:built` against `next build`. Same tab only; no names; reception queue only |
 | 1.7 | `chore/ops-hardening` | merged — the API's own database role (`pnpm db:role`, migration 0034), the API suite run as that role, non-root images, log rotation, a backup that is restored, copied and health-checked. The role keeps `BYPASSRLS` until 1.10; nothing alerts yet |
-| 1.8 | `chore/e2e-ci` | next |
-| 1.9 | `fix/log-sms-redaction` | |
+| 1.8 | `chore/e2e-ci` | merged — CI builds, runs the canary first, then the whole browser suite and the built suite; a second job runs the canary and the counter against the production configuration (`pnpm test:e2e:prod`). There the patient's link comes from a fixture: nobody can book without an SMS provider |
+| 1.9 | `fix/log-sms-redaction` | next |
 | 1.10 | `feat/tenant-rls` | |
 | 2.1 | `feat/notification-worker` | |
 | 2.2 | `feat/sms-live` | waits: D1 |

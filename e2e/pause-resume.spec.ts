@@ -12,7 +12,8 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 import { createConsoleSession, eventTypes, type ConsoleSession } from './support/console.js';
-import { bookAsGuest, openLiveSerial } from './support/patient.js';
+import { putReceptionistInTab } from './support/consoleSession.js';
+import { openLiveSerial, trackingLinkOn } from './support/patient.js';
 
 let demo: ConsoleSession;
 
@@ -25,12 +26,7 @@ async function openConsole(context: BrowserContext): Promise<Page> {
   const page = await context.newPage();
 
   // The same store `ConsolePicker` writes (CLAUDE.md §4.1).
-  await page.addInitScript((token: string) => {
-    window.sessionStorage.setItem(
-      'console.demo-session',
-      JSON.stringify({ token, hospitalId: 'e2e', staffName: 'E2E' }),
-    );
-  }, demo.token);
+  await putReceptionistInTab(page, demo);
 
   await page.goto(`http://localhost:3100/?session=${demo.sessionId}`);
   await expect(page.getByTestId('queue-table')).toBeVisible();
@@ -46,7 +42,7 @@ test.describe('pausing and resuming a chamber (FR-REC-05)', () => {
 
     try {
       const bookingPage = await corridor.newPage();
-      const trackingUrl = await bookAsGuest(bookingPage, demo);
+      const trackingUrl = await trackingLinkOn(bookingPage, demo);
       await bookingPage.close();
 
       const patient = await openLiveSerial(corridor, trackingUrl);

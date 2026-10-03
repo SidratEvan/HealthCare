@@ -77,3 +77,24 @@ export async function staffWithTemporaryPassword(
     return { email };
   });
 }
+
+/**
+ * A seeded receptionist at a facility, by its id — the facility a fixture's
+ * chamber happens to be in, which the spec does not choose.
+ */
+export async function seededReceptionistAt(hospitalId: string): Promise<{ email: string }> {
+  return await withClient(async (client) => {
+    const result = await client.query<{ email: string }>(
+      `SELECT su.email
+         FROM staff_users su
+         JOIN staff_roles sr ON sr.staff_user_id = su.id AND sr.role = 'receptionist'
+        WHERE su.hospital_id = $1 AND su.deleted_at IS NULL
+          AND su.staff_code IS NOT NULL
+        ORDER BY su.email LIMIT 1`,
+      [hospitalId],
+    );
+    const row = result.rows[0];
+    if (row === undefined) throw new Error('No seeded receptionist at that facility (FR-DEM-01).');
+    return { email: row.email };
+  });
+}
