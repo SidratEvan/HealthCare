@@ -94,12 +94,18 @@ included — by a fast-forward (`git branch -f demo <that commit>`), never by
 work of its own. Move it after each merge into `mvp` that is worth showing,
 and say so in the report. Pushing it follows the rule below like any branch.
 
-**Never push. Ever, without my explicit permission.**
-- No `git push`, no `git push -u`, no `--force`, no pushing a branch "just to back it up".
-- No creating remotes, no `gh` CLI, no opening pull requests, no publishing a repo.
-- Local commits and local merges are fine and expected — the network is the line.
-- When a step is merged into `mvp` and you think it is worth pushing, **ask**: say which branch and why, and wait for me to say yes. "Yes" applies to that one push only, not to future ones.
-- If I gave permission for a push earlier in the session, that permission is spent. Ask again.
+**Pushing: standing permission since 2026-10-03.** Until that day every push
+needed a fresh yes, and a yes was spent by the one push it allowed. On
+2026-10-03 the owner replaced that rule, in these words: "I give you explicit
+permission to push, pull or whatever you need to do, or merge to any branch,
+whether it's mvp or main." So:
+- After a branch is merged green into `mvp`, push `mvp`, and `demo` when it moved, without asking. Say in the report what was pushed.
+- Fetch and pull freely.
+- `mvp` may be merged into `main` and pushed. A push to `main` redeploys the public demo, which reads Supabase, so the migrations `mvp` has and Supabase does not are applied first (`docs/STATUS.md`, *Deploying*). A release is a deliberate act, named in the report, never a side effect of a step.
+- The permission is about not asking. It does not loosen the gate: nothing red is merged or pushed (§3.4, §5), and the canary still has to pass (§6).
+- CI cancels a run in progress when the same branch is pushed again. Do not push `mvp` a second time while a run you need the result of is still going.
+- Not covered, ask first: `--force`, or anything else that rewrites what is already on the remote.
+- Unchanged, because the owner's words did not mention them: no creating remotes, no `gh` CLI, no opening pull requests, no publishing a repo.
 
 ### 3.2 First session only
 
@@ -126,7 +132,7 @@ git branch -d feat/<step-slug>
 - Commit message format: `type(scope): description (REQ-IDS)` — types `feat|fix|chore|test|docs|refactor`.
 - Commit at every working checkpoint, not only at the end.
 - A branch merges into `mvp` **only when its Definition of Done (§5) is fully met**.
-- `mvp` merges into `main` only when I say so.
+- `mvp` merges into `main` as a release (§3.1): deliberately, with the migrations applied first. Until 2026-10-03 this needed the owner's word each time.
 
 ### 3.4 When something breaks
 
@@ -324,7 +330,7 @@ pnpm test:e2e:prod    # the canary and the counter, DEMO_MODE=false, built apps,
 ## 11. Non-negotiables (repeat of the things most likely to be dropped under pressure)
 
 1. Branch per step, off `mvp`, merged back only when green.
-2. **No pushing to any remote without my explicit permission, every single time.**
+2. **Push only what is green.** The owner gave standing permission to push and merge on 2026-10-03 (§3.1); a force-push still needs asking.
 3. Tests and demo data in the same branch as the feature.
 4. The two-device queue test never gets skipped.
 5. Bangla is the default language, set properly (line-height ≥ 1.65, Bengali numerals, no letter-spacing).

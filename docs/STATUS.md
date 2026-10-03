@@ -7,7 +7,12 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/e2e-ci` (3 October) — **the browser suite runs in CI,
+Last updated: `chore/push-permission` (3 October) — **the owner gave standing
+permission to push and merge to any branch** (`CLAUDE.md` §3.1, which now
+says so in his words; a force-push still needs asking). Under it plan 1.8 was
+merged as `4ece550` after the whole gate passed on it, and `mvp` and `demo`
+were pushed there. No product code changed. Before that, `chore/e2e-ci`
+(3 October) — **the browser suite runs in CI,
 the canary first, and the canary and the counter also run against the
 production configuration** (plan 1.8; below, *Plan 1.8*). Under that
 configuration a patient still cannot book: there is no SMS provider. Before
@@ -168,8 +173,12 @@ Supabase, and whether `mvp` goes to `main`.
 2. **Server sizing for Marks** — measure the `deploy/` stack's CPU, memory and
    disk on this machine, so Marks' IT can say whether they can host it.
 3. **Releasing `mvp` to `main`** — `main` is still the pitch release of
-   27 September (what Marks saw); Supabase already has 0027–0033, so a release
-   would not break the demo. The owner decides when.
+   27 September (what Marks saw). Supabase has 0027–0033; nothing records
+   0034 (plan 1.7) being applied there, so a release runs
+   `ALLOW_REMOTE_DB=1 pnpm db:migrate` against Supabase first, which applies
+   whatever is missing. Since 3 October a release no longer waits for the owner's
+   word (`CLAUDE.md` §3.1), but it has not been made: nothing in phase 1 needs
+   the public demo to change, and it is better done once, when phase 1 ends.
 Step 27 waits for an SMS account; push notifications wait for a signed
 hospital (decision 84). Company registration (HealthWealthBD Limited, via
 BanglaBiz) is outside the repo and paused; see the owner's notes.
@@ -226,8 +235,12 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 4577, in about three minutes.
-`pnpm test:e2e` reports 136, in Chromium, against the real API and the seeded
+**As of `4ece550` (3 October):** `pnpm test` reports 4,723 in about three
+minutes; `pnpm test:e2e` 150 in 18.1 minutes; `pnpm test:e2e:built` 3;
+`pnpm test:e2e:prod` 20. The per-file list below was counted at 136 and is
+kept for the names, not the numbers.
+
+`pnpm test:e2e` reported 136 then, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
 `doctor-console.spec.ts`, 5 in `console-cold-start.spec.ts`, 8 in
@@ -312,7 +325,10 @@ run on this machine in the same form, and the environment it sets was checked
 against the API's start-up validation with no `.env` present — but a workflow
 is only proven by a run on GitHub. **The first run after this is pushed needs
 looking at**, in particular whether the canary's two seconds hold on a
-hosted runner driving `next dev`.
+hosted runner driving `next dev`. That run is 37156815719, started by the
+push of `4ece550` on 3 October; its result is recorded here when it ends.
+The runs can be read without signing in, at
+`api.github.com/repos/SidratEvan/HealthCare/actions/runs`.
 
 ### Plan 1.7 — the self-hosted stack, hardened (`chore/ops-hardening`)
 
@@ -3591,12 +3607,14 @@ credential.
 
 **From the `demo` branch** (CLAUDE.md §3.1): the demo-data version, kept at
 the last green commit of `mvp`, for pulling onto any machine to show
-somebody. It stands at `4a99aec` (3 October): `docs/PLATFORM_PLAN.md` phase 1
-through 1.6 — delay, resume, undo, the sync allow-list, the pool and
-broadcast fixes, the outboxes kept on disk, and the console opening with no
-network — after `pnpm verify`, a clean 150/150 browser run and the built
-suite on that commit. **Green means `pnpm verify`, `pnpm test:e2e`,
-`pnpm test:e2e:built` and — from plan 1.8 — `pnpm test:e2e:prod`.**
+somebody. It stands at `4ece550` (3 October), pushed: `docs/PLATFORM_PLAN.md`
+phase 1 through 1.8 — delay, resume, undo, the sync allow-list, the pool and
+broadcast fixes, the outboxes kept on disk, the console opening with no
+network, the hardened self-host stack, and the browser suite in CI — after
+`pnpm verify` (4,723), a clean 150/150 browser run, the built suite (3) and
+the production configuration (20) on that commit. **Green means
+`pnpm verify`, `pnpm test:e2e`, `pnpm test:e2e:built` and
+`pnpm test:e2e:prod`.**
 
 ```bash
 git fetch origin && git checkout demo && git pull
