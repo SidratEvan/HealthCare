@@ -7,8 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/guest-device-proof` — **a returning guest proves the phone
-once per device** (decision 85, ruled). With it all four holes the security
+Last updated: `chore/handover` (2 October) — **a technical handover read from
+the code, `docs/HANDOVER.md`, and what it found** (below, *Handover audit*). No
+product code changed. Before that, `fix/guest-device-proof` — **a returning
+guest proves the phone once per device** (decision 85, ruled). With it all four holes the security
 review found are closed (below, *Security review*). Before that,
 `fix/booking-payments-scope` — **a booking's payments are read by its owner
 and its hospital only**. Before that, `fix/guest-booking-scope` — **a guest token
@@ -110,6 +112,9 @@ Supabase, and whether `mvp` goes to `main`.
    *Security review*). **All four holes fixed the same day**, one branch each
    (decision 85 ruled for the returning guest). A paid penetration test should
    still follow before a pilot holds real data, as the owner was told.
+1a. **The handover audit's findings (2 October)** — before any pilot, the
+   fixes in `HANDOVER.md` §16 ("if 7 days"), in that order, one `fix/*`
+   branch each. Awaiting the owner's go.
 2. **Server sizing for Marks** — measure the `deploy/` stack's CPU, memory and
    disk on this machine, so Marks' IT can say whether they can host it.
 3. **Releasing `mvp` to `main`** — `main` is still the pitch release of
@@ -200,6 +205,50 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Handover audit — what the code actually does (`chore/handover`, 2 October)
+
+The owner asked for a complete, critical handover read from the code rather
+than the plans. It is `docs/HANDOVER.md` (16 sections: system map, database,
+queue engine with a worked 10-patient example, auth, records, offline,
+modules, payments and notifications, deployment, tests, ranked debt,
+readiness per module, what lives outside the repo, a crash course, and a
+final assessment). **Found, all unfixed, each to be its own `fix/*` branch:**
+
+1. **CRITICAL — no SMS adapter, so no patient can book on a real server.**
+   With `DEMO_MODE=false` booking needs a phone code; `SMS_PROVIDER` offers
+   only `log` (withholds the code) and an adapter that fails every send.
+   Walk-ins get no tracking link. `DEPLOY.md` S2/S6 imply otherwise.
+2. **CRITICAL — the console can pause a chamber and cannot resume it.** No
+   Resume control exists; a paused session refuses *call next*.
+3. **CRITICAL — a delay declared before the doctor arrives is never
+   consumed.** After arrival the ETA baseline is still `now + delayMinutes`
+   (`eta.ts`); reproduced: the patient at the front told 18:20 while
+   absent-marking was allowed at 18:06.
+4. **HIGH — the console's Undo sends a booking id as `undoneEventId`;** it
+   does nothing and leaves a junk `ACTION_UNDONE` in the log.
+5. **HIGH — `/sync/events` accepts all 19 event types** from any console role,
+   including unguarded `ACTION_UNDONE` (any event, any age), `SLOT_*`,
+   `BOOKING_CANCELLED` and `SESSION_ENDED` (no refund eligibility on this path).
+6. **HIGH — offline outboxes are memory-only** (`createDexieStore` has no
+   caller; the comment saying it is swapped in is wrong) and the console has
+   no service worker.
+7. **HIGH — RLS has no policies anywhere** (no `CREATE POLICY` in any
+   migration; `0014_rls.sql` never existed, against decision 3's note), and the
+   API connects as owner/superuser, so tenancy is application code only.
+8. **HIGH — doctors read every hospital's signed visits** for any patient with
+   any booking at their hospital, without consent (`findVisits`).
+9. **HIGH — E2E (the canary included) is not in CI** and never runs against
+   the production configuration; backups stay on the same disk; the `log`
+   SMS provider prints phones and full bodies (tracking links) and keeps them
+   in memory forever.
+
+The rest (broadcast before commit, links stored in `notifications.params`,
+no worker, mutable `audit_log`, sockets not revoked, single-process limits,
+non-idempotent booking, root containers, no log rotation or monitoring) is
+ranked in `HANDOVER.md` §12. **Documents to correct** are listed in §14.3;
+they were not edited on this branch (`CLAUDE.md` §2: proposed to the owner
+first).
 
 ### Security review — four holes found and closed (`chore/security-review`, then `fix/*`)
 
