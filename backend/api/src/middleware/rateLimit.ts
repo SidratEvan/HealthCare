@@ -18,6 +18,7 @@
  * load demands"), only `Counter` below changes.
  */
 
+import { env } from '../env.js';
 import { AppError } from '../errors/AppError.js';
 
 import type { ErrorCode } from '../errors/codes.js';
@@ -110,14 +111,32 @@ const SWEEP_EVERY = 500;
 /** The process-wide counter. Exported so tests can reset it between cases. */
 export const counter = new Counter();
 
-export function rateLimit(options: RateLimitOptions): RequestHandler {
+/**
+ * Builds a limiter.
+ *
+ * ## A limit on an address is a limit on everybody behind it
+ *
+ * A limit keyed by `byIp` counts a hospital's waiting room on the hospital's
+ * Wi-Fi, or a carrier's gateway, as one caller. `addressFactor` is how many
+ * times over an address may use such a limit: `ADDRESS_RATE_LIMIT_FACTOR`,
+ * one unless a deployment says its callers share addresses (`env.ts`).
+ *
+ * Decided here, from the key, and not at each route, so a per-address limit
+ * added later is covered without anybody remembering to. A limit keyed on
+ * anything else — a phone number — is a person's, and is never stretched.
+ */
+export function rateLimit(
+  options: RateLimitOptions,
+  addressFactor: number = env.ADDRESS_RATE_LIMIT_FACTOR,
+): RequestHandler {
   const code: ErrorCode = options.code ?? 'RATE_LIMITED';
+  const limit = options.keyFor === byIp ? options.limit * addressFactor : options.limit;
 
   return (req: Request, res: Response, next: NextFunction): void => {
     const key = `${req.method}:${req.path}:${options.keyFor(req)}`;
-    const result = counter.hit(key, options.limit, options.windowSeconds, Date.now());
+    const result = counter.hit(key, limit, options.windowSeconds, Date.now());
 
-    res.setHeader('RateLimit-Limit', String(options.limit));
+    res.setHeader('RateLimit-Limit', String(limit));
     res.setHeader('RateLimit-Remaining', String(result.remaining));
 
     if (!result.allowed) {

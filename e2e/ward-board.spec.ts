@@ -17,7 +17,13 @@ import { randomInt } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 
 import { closeOtherContexts } from './support/contexts.js';
-import { admissionsIn, bedState, createWardFixture, type WardFixture } from './support/ward.js';
+import {
+  admissionsIn,
+  bedState,
+  createWardFixture,
+  randomTag,
+  type WardFixture,
+} from './support/ward.js';
 
 const CONSOLE = 'http://localhost:3100';
 const PATIENT = 'http://localhost:3000';
@@ -77,6 +83,24 @@ async function publishedGeneralFree(page: Page): Promise<number> {
 // rest of the run (`support/contexts.ts`).
 test.afterEach(async ({ browser, context }) => {
   await closeOtherContexts(browser, context);
+});
+
+test.describe('the fixture these specs stand on', () => {
+  test('a ward name that is already taken is not a failure: another is picked', async () => {
+    // `beforeEach` has just made a ward. Its tag is in every bed's label
+    // (`E3F9A-01`), and it is offered again here, twice, before a new one.
+    const taken = bed(0).label.slice(1, 5);
+    const offered = [taken, taken];
+
+    const second = await createWardFixture(1, () => offered.shift() ?? randomTag());
+
+    // The first CI run of this suite failed here with `wards_hospital_name_key`
+    // (3 October): the fixture asked for a name that was taken and called it
+    // an error. It now moves on to the next.
+    expect(offered).toHaveLength(0);
+    expect(second.wardName).not.toBe(ward.wardName);
+    expect(second.beds).toHaveLength(1);
+  });
 });
 
 test.describe('the mirror matches what the public is shown (FR-BED-06)', () => {
