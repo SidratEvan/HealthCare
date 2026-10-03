@@ -7,7 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/offline-outbox-persist` (3 October) — **what a console
+Last updated: `fix/e2e-outbox-close-race` (3 October) — **the outbox specs
+wait for a blocked push to be refused before they close the page** (a test
+fix; below, *Plan 1.5*, *Learned about the tests*). Before that,
+`fix/offline-outbox-persist` (3 October) — **what a console
 queued and could not send survives a reload, a crash and a power cut** (plan
 1.5; below, *Plan 1.5*). The console still cannot *open* with no network;
 that is 1.6. Before that, `fix/broadcast-after-commit` (3 October) — **a screen is told
@@ -297,7 +300,15 @@ rolled back on screen and the offline block says how many there are, with
 closes: the dying page sees itself come online and sends its queue. A test
 that closed the tab "offline" passed against an outbox that kept nothing.
 Blocking the route for the whole browser context is what a power cut looks
-like (`offline-console.spec.ts`).
+like (`offline-console.spec.ts`). **And a blocked route leaks the same way**
+(`fix/e2e-outbox-close-race`): Playwright pauses a request to ask the route
+what to do, and a page closed while one is paused lets it through. The first
+full run after the merge failed on exactly that — the tab was closed with the
+third tap's push still on its way, and the server had six events from a tab
+whose "power" had been cut. The specs now close or reload only after the push
+holding everything taken so far has been refused (`pushFailed`), which leaves
+a second before the console's next attempt. The product was right throughout:
+a push that does land twice is the same events with the same keys (`SY-02`).
 
 **Not in this step.** Opening the console with no network (1.6). Offline
 walk-ins and standby offers still need a connection, as before. The doctor,
