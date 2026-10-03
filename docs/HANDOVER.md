@@ -31,6 +31,13 @@ founder who did not write most of it and for whoever works on it next.
     `/sync/events` replays eleven event types, each only from a role its own
     route admits; the other eight are refused per entry and write nothing
     (`BACKEND.md` `SY-07`).
+  - **Not in this audit, found 3 October — fixed** (`fix/queue-pool-starvation`).
+    §4.8 says a call-next race is covered by `queueConflict.test.ts`; that
+    test failed once in a full run after 5.3 s. Inside the locked
+    transaction the notification step read from the pool, so a chamber with
+    as many simultaneous writers as the pool has connections stalled for
+    the connection timeout and failed the tap. Those reads now use the
+    transaction.
 
 ---
 
