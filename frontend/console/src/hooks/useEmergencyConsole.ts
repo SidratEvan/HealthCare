@@ -194,6 +194,9 @@ export function useEmergencyConsole(options: {
   const [alarmState, setAlarmState] = useState<AlarmState>('blocked');
   const [attempt, setAttempt] = useState(0);
 
+  /** Referrals this page has already queued "seen" for (see `seenReferral`). */
+  const seenSaidRef = useRef(new Set<string>());
+
   const outboxRef = useRef<ErOutbox | null>(null);
   // Kept in IndexedDB, in this person's own database (`lib/outbox.ts`): a
   // reload or a power cut loses no triage step that was waiting (`FR-OFF-01`).
@@ -723,12 +726,20 @@ export function useEmergencyConsole(options: {
         return next;
       });
       // "Seen" is said once, by the first touch, and only of one still unseen.
+      //
+      // One click is two touches — the card hears the pointer and then the
+      // focus — and what kept the second from saying "seen" again was the
+      // first already being in `pending`. That is state, and it is only as
+      // quick as the outbox: kept on disk, the second touch arrived first and
+      // "seen" was queued twice. So the page remembers what it has said.
       const current = referrals.find((entry) => entry.id === referralId);
       if (
         current?.state === 'sent' &&
         sideOf(current, hospitalId) === 'receiver' &&
-        !pendingReferralIds.has(referralId)
+        !pendingReferralIds.has(referralId) &&
+        !seenSaidRef.current.has(referralId)
       ) {
+        seenSaidRef.current.add(referralId);
         void step(referralId, 'seen', null);
       }
     },
