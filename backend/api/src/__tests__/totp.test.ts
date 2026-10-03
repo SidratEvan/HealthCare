@@ -112,11 +112,37 @@ describe('the stored secret', () => {
   });
 
   it('refuses to open if anything was changed', () => {
-    const sealed = sealSecret(newTotpSecret());
-    const parts = sealed.split('.');
-    const body = parts[3] ?? '';
-    const flipped = `${body.slice(0, -1)}${body.endsWith('A') ? 'B' : 'A'}`;
-    expect(() => openSecret([parts[0], parts[1], parts[2], flipped].join('.'))).toThrow();
+    /**
+     * The first character of each part, not the last.
+     *
+     * This used to change the last character of the body from `A` to `B`, and
+     * failed about one run in sixteen. The body is 32 bytes, which base64
+     * writes as 43 characters, and the last of them carries four bits of the
+     * secret and two that decode to nothing. `A` and `B` differ only in those
+     * two, so when a seal happened to end in `A` the "changed" value was the
+     * same bytes — and opened, as it should. The seal was never wrong; the
+     * test was not changing anything. A first character is six bits that all
+     * count, in every part.
+     *
+     * And many seals, not one: each has a fresh IV, so a check that depends
+     * on what the random bytes happened to be shows itself here rather than
+     * once a fortnight in somebody's gate.
+     */
+    const changeFirst = (part: string): string =>
+      `${part.startsWith('A') ? 'B' : 'A'}${part.slice(1)}`;
+
+    for (let round = 0; round < 64; round += 1) {
+      const secret = newTotpSecret();
+      const [version = '', iv = '', tag = '', body = ''] = sealSecret(secret).split('.');
+
+      // Unchanged, it opens: the three refusals below are about the change.
+      expect(openSecret([version, iv, tag, body].join('.'))).toBe(secret);
+
+      expect(() => openSecret([version, iv, tag, changeFirst(body)].join('.'))).toThrow();
+      expect(() => openSecret([version, iv, changeFirst(tag), body].join('.'))).toThrow();
+      expect(() => openSecret([version, changeFirst(iv), tag, body].join('.'))).toThrow();
+    }
+
     expect(() => openSecret('not-sealed')).toThrow();
   });
 });

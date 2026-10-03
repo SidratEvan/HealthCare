@@ -28,6 +28,7 @@ import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 import { toCsv } from '../services/admin.service.js';
 
+import { databaseNow } from './support/databaseClock.js';
 import {
   createQueueFixture,
   otherHospitalId,
@@ -325,7 +326,9 @@ describe('export (FR-ADM-10)', () => {
   });
 
   it('writes an audit row naming the view and the window (DB-P7)', async () => {
-    const before = new Date();
+    // By the database's clock, which is the one that stamps the row
+    // (`databaseClock.ts`).
+    const before = await databaseNow();
 
     await request(app)
       .get(`${BASE}/admin/export?view=revenue-doctor&from=${FROM}&to=${TO}`)

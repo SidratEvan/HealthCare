@@ -31,6 +31,7 @@ import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 
+import { databaseNow } from './support/databaseClock.js';
 import {
   createQueueFixture,
   otherHospitalId,
@@ -535,8 +536,9 @@ describe('the standby patient is told', () => {
     // The API suite runs against one shared, deliberately un-cleaned database
     // (see `docs/STATUS.md`), and the seeds reuse patients across sessions. So
     // the query is scoped to the instant this offer was made rather than to
-    // the patient, who has had other messages in other tests.
-    const since = new Date();
+    // the patient, who has had other messages in other tests. By the
+    // database's clock, which is the one that stamps the row (`databaseClock.ts`).
+    const since = await databaseNow();
     await offer(freed);
 
     const messages = await sql<{ phone: string | null; state: string; template_key: string }>`
