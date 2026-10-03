@@ -266,7 +266,7 @@ appendEvent({
 7. **Reduce** — `reducer(state, event)` from `shared/domain` → new state.
 8. **Persist** — upsert `queue_state`; update `bookings.status` via trigger; update `sessions.avg_consult_seconds` on `PATIENT_DONE`.
 9. **Recalculate** — `eta.ts` produces ETAs for all waiting bookings (`FR-QUE-11`), ≤ 500 ms for 100 patients (`NFR-03`).
-10. **Broadcast** — `realtime/emit.ts` publishes `queue.updated` to `session:<id>` with `{ seq, state, etas, serverTs }` (≤ 2 s end-to-end, `NFR-01`).
+10. **Broadcast** — `realtime/emit.ts` publishes `queue.updated` to `session:<id>` with `{ seq, state, etas, serverTs }` (≤ 2 s end-to-end, `NFR-01`). **After the transaction has committed, never from inside it** (`queue.service` `committed`): a screen that subscribes mid-write joins the room and then reads its catch-up state, and a broadcast sent before the commit was one it had missed for a write it could not yet see — it showed the previous patient until the next tap. A write that fails tells nobody.
 11. **Notify** — publish notification jobs per §6 mapping (called, delayed, two-away, slot offered). Planned and written inside the same transaction, **through its own connection**: every read a function makes while it holds a `trx` goes through that `trx`. A read that went back to the pool from inside the session lock waited for a connection that the counters queued behind the lock were holding — five seconds (`connectionTimeoutMillis`), then a failed tap. `poolStarvation.test.ts` leaves the pool one connection and runs every queue write.
 12. **Audit** — write `audit_log` with actor and event.
 13. **Return** — new state + ETAs so the caller's optimistic UI can reconcile.

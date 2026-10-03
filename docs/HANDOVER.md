@@ -38,6 +38,11 @@ founder who did not write most of it and for whoever works on it next.
     as many simultaneous writers as the pool has connections stalled for
     the connection timeout and failed the tap. Those reads now use the
     transaction.
+  - **§4.8 "broadcast happens inside the transaction", §12 item 12 — fixed**
+    (`fix/broadcast-after-commit`). It was worse than "rare": a screen that
+    subscribed between the broadcast and the commit missed the one and could
+    not yet read the other, and stayed on the previous patient until the next
+    event. The queue now tells its rooms after the commit.
   - **Fact 6 (first half), §7, §12 item 6 — fixed** (`fix/offline-outbox-persist`).
     The three outboxes are kept in IndexedDB, one database per signed-in
     person; a poison entry is set aside as stuck instead of blocking the

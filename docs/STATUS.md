@@ -10,7 +10,10 @@ worth that if it is true.
 Last updated: `fix/offline-outbox-persist` (3 October) — **what a console
 queued and could not send survives a reload, a crash and a power cut** (plan
 1.5; below, *Plan 1.5*). The console still cannot *open* with no network;
-that is 1.6. Before that, `fix/queue-pool-starvation` (3 October) — **a queue write no
+that is 1.6. Before that, `fix/broadcast-after-commit` (3 October) — **a screen is told
+about a queue write only once it is in the database** (plan 1.4b; below,
+*Things learned the hard way*). Found by `lab-report.spec.ts` while 1.5 was
+being verified. Before that, `fix/queue-pool-starvation` (3 October) — **a queue write no
 longer needs a second database connection while it holds the chamber's
 lock** (plan 1.4a; below, *Things learned the hard way*). Found by the
 verification gate while 1.5 was being verified. Before that, `chore/e2e-memory-finding` (3 October) — **`demo` moved to
@@ -2279,6 +2282,24 @@ afternoon.
   `docker compose down -v && docker compose up -d`.
 
 ### Things learned the hard way, so they are not relearned
+
+- **A phone that opened as reception tapped *next* could stay on the
+  previous patient** (`fix/broadcast-after-commit`, 3 October). The queue
+  emitted `queue.updated` from inside its transaction, before the commit. A
+  subscriber joins the room, *then* reads its catch-up state. One that
+  joined after the emit and read before the commit had missed the broadcast
+  for a write it could not yet see — and showed the old queue, stamped as
+  fresh, until the next event. `HANDOVER.md` §12 listed the early broadcast
+  as medium, for the rollback case only. It showed as `lab-report.spec.ts`
+  leaving the doctor's screen on serial 1, twice in about six runs: the
+  pool fix above had made the gap between emit and commit a few queries
+  longer. It is the mirror of the race step 22 fixed in `foldUpdate`, and
+  probably what that step's "once in three runs" really was.
+  `queue.service` now registers its broadcasts and sends them after the
+  commit (`committed`); `broadcastAfterCommit.test.ts` reads the log, from
+  another connection, at the instant of each broadcast, and fails a write
+  on purpose to see that nobody is told. Beds, the ER and the lab already
+  broadcast after their transactions.
 
 - **A queue tap could stall for five seconds and fail when the database
   pool was busy** (`fix/queue-pool-starvation`, 3 October). Every write to
