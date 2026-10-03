@@ -7,14 +7,16 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/broadcast-after-commit` (3 October) — **a screen is told
+Last updated: `fix/offline-outbox-persist` (3 October) — **what a console
+queued and could not send survives a reload, a crash and a power cut** (plan
+1.5; below, *Plan 1.5*). The console still cannot *open* with no network;
+that is 1.6. Before that, `fix/broadcast-after-commit` (3 October) — **a screen is told
 about a queue write only once it is in the database** (plan 1.4b; below,
 *Things learned the hard way*). Found by `lab-report.spec.ts` while 1.5 was
 being verified. Before that, `fix/queue-pool-starvation` (3 October) — **a queue write no
 longer needs a second database connection while it holds the chamber's
 lock** (plan 1.4a; below, *Things learned the hard way*). Found by the
-verification gate while 1.5 was being verified; 1.5's work is committed on
-its branch and merges next. Before that, `chore/e2e-memory-finding` (3 October) — **`demo` moved to
+verification gate while 1.5 was being verified. Before that, `chore/e2e-memory-finding` (3 October) — **`demo` moved to
 `10bbcd1` after a clean 144/144 browser run, and why two runs before it each
 failed one test** (below, *Things learned the hard way*: the machine ran out
 of memory, and the process that grows is Playwright's trace recorder, not the
@@ -239,6 +241,68 @@ it looks like an ordering interaction on the shared API database.
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
 
+### Plan 1.5 — the outboxes are kept on the device (`fix/offline-outbox-persist`)
+
+**What a counter now keeps.** The reception queue's, the ward board's and the
+ER console's unsent actions are in IndexedDB (`@platform/client`
+`openConsoleStores`), not in the page's memory. Reload, close the tab, lose
+power: when the console is opened again they are on the screen, counted, and
+sent by themselves — in order, once. `createDexieStore` had been written and
+never called (decision 37).
+
+**One database per signed-in person** (`healthcare-console-<staff id>`, from
+the token's `sub`). A queued action is sent later under whatever token the
+console then holds, and the server attributes it to that token
+(`FR-QUE-04`), so a shared database would have let the evening receptionist's
+sign-in send the afternoon's unsent work as her own. Now it is neither shown
+to her nor sent by her; it waits for its owner to sign in on that PC again.
+**What follows from that, deliberately:** work left unsent by somebody who
+never signs in on that PC again is never sent, and nothing tells anybody.
+A sign-out that warns "you have unsent actions" is the obvious next step and
+is not built.
+
+**What is on the disk, and for how long.** Each row is the action as it will
+be sent. Queue actions carry booking ids. A bed admit carries the patient's
+name, phone, age and sex; an ER walk-in registered offline carries that
+person's age, sex and phone. Rows are deleted the moment the server takes or refuses them; until
+then they are unencrypted in the browser's storage on that PC, readable by
+anybody with the Windows account. `FRONTEND.md` §9 always named Dexie for
+this; it is new only because the code never did it.
+
+**A poison entry no longer blocks the queue.** Three answers are now told
+apart (`FRONTEND.md` §11.1): never arrived, or "not now" (401, 403, 429) —
+kept, in order, however long; refused by a rule — removed and rolled back, as
+before; **the server could not take it** (another 4xx, a 5xx) — the batch is
+sent again one entry at a time, and the one that cannot go is set aside as
+*stuck*: at once for a 4xx, after eight tries for a 5xx. A stuck entry is
+rolled back on screen and the offline block says how many there are, with
+**আবার পাঠান** and **বাদ দিন**. Being offline never counts.
+
+**Found on the way, and fixed here because this branch exposed them:**
+- **A ward or ER action was dropped by an expired token.** The senders read
+  any answer below 500 as "refused", so twenty minutes offline, a 401 on
+  reconnect, and every queued bed action was removed and rolled back. 401 and
+  429 now leave it queued.
+- **Nothing retried a failed push** while the socket stayed up; it waited for
+  somebody's next tap. `FRONTEND.md` §11.1 said "retry with backoff" and
+  `retryDelayMs` existed with no caller. The three hooks now retry by timer.
+- **The bed panel closed the next step's form.** `BedPanel` went back to its
+  first view only *after* the server answered, so release followed quickly by
+  "out of service" had the reason field closed under the typist when the
+  release's answer arrived. Keeping the outbox on disk made each action a few
+  milliseconds slower and `ward-board.spec.ts` caught it. It now goes back
+  before sending.
+
+**Learned about the tests.** Playwright's `setOffline` is lifted as a page
+closes: the dying page sees itself come online and sends its queue. A test
+that closed the tab "offline" passed against an outbox that kept nothing.
+Blocking the route for the whole browser context is what a power cut looks
+like (`offline-console.spec.ts`).
+
+**Not in this step.** Opening the console with no network (1.6). Offline
+walk-ins and standby offers still need a connection, as before. The doctor,
+lab, pharmacy, admin, settings and import screens are online-only, as before.
+
 ### The platform plan (`chore/platform-plan`, 2 October)
 
 The owner gave an implementation brief on 2 October (a PDF, kept outside the
@@ -289,9 +353,10 @@ below as it lands):
    accepts all 19 event types** from any console role,
    including unguarded `ACTION_UNDONE` (any event, any age), `SLOT_*`,
    `BOOKING_CANCELLED` and `SESSION_ENDED` (no refund eligibility on this path).
-6. **HIGH — offline outboxes are memory-only** (`createDexieStore` has no
-   caller; the comment saying it is swapped in is wrong) and the console has
-   no service worker.
+6. **Half fixed (`fix/offline-outbox-persist`): the outboxes are kept on
+   disk.** The console service worker is plan 1.6. Was: **HIGH — offline
+   outboxes are memory-only** (`createDexieStore` has no caller; the comment
+   saying it is swapped in is wrong) and the console has no service worker.
 7. **HIGH — RLS has no policies anywhere** (no `CREATE POLICY` in any
    migration; `0014_rls.sql` never existed, against decision 3's note), and the
    API connects as owner/superuser, so tenancy is application code only.
@@ -2857,7 +2922,8 @@ Raised while building the bed board (step 14):
    confirmation `GR-01` requires. The two requirements cannot both hold
    literally.
 
-37. **Both consoles' offline outboxes live in memory.** `createDexieStore` exists
+37. **Closed by `fix/offline-outbox-persist`** (all three outboxes are in
+   IndexedDB). Was: **Both consoles' offline outboxes live in memory.** `createDexieStore` exists
    and neither console uses it, so a reload with actions queued loses them. The
    reception console has always been this way; the ward board matches it rather
    than being the only one that differs. Wiring Dexie in is a small change for

@@ -41,8 +41,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ErOutbox,
-  createMemoryErStore,
   openEmergencyChannel,
+  retryDelayMs,
   type CapabilityState,
   type PendingErAction,
 } from '@platform/client';
@@ -66,6 +66,7 @@ import {
 
 import { SOCKET_URL } from '@/lib/beds';
 import { erApi, erSender, type ErBoardResponse } from '@/lib/emergency';
+import { consoleStores } from '@/lib/outbox';
 
 import type { Alarm, AlarmState } from '@/lib/alarm';
 
@@ -111,6 +112,17 @@ export interface EmergencyConsole {
   /** Cases with a change still waiting to reach the server. */
   readonly pendingCaseIds: ReadonlySet<string>;
   readonly pendingCount: number;
+  /**
+   * Actions the server answered and could not take. Set aside so they stop
+   * blocking the ones behind them, kept until somebody decides (`FR-OFF-05`).
+   */
+  readonly stuckCount: number;
+  /** Puts them back in line and tries again. */
+  readonly retryStuck: () => Promise<void>;
+  /** Drops them. Nothing is sent for them, ever. */
+  readonly discardStuck: () => Promise<void>;
+  /** False when this browser will not keep the outbox across a reload. */
+  readonly durable: boolean;
   /** Alerts that rang and nobody has opened yet. */
   readonly newCaseIds: ReadonlySet<string>;
   readonly connected: boolean;
@@ -171,6 +183,8 @@ export function useEmergencyConsole(options: {
   const [socketUp, setSocketUp] = useState(false);
   const [browserOnline, setBrowserOnline] = useState(true);
   const [pending, setPending] = useState<PendingErAction[]>([]);
+  const [stuck, setStuck] = useState<PendingErAction[]>([]);
+  const [durable, setDurable] = useState(true);
   const [lastRefusal, setLastRefusal] = useState<string | null>(null);
   const [lastCancelled, setLastCancelled] = useState<EmergencyCaseView | null>(null);
   const [newCaseIds, setNewCaseIds] = useState<ReadonlySet<string>>(new Set());
@@ -180,8 +194,13 @@ export function useEmergencyConsole(options: {
   const [alarmState, setAlarmState] = useState<AlarmState>('blocked');
   const [attempt, setAttempt] = useState(0);
 
+  /** Referrals this page has already queued "seen" for (see `seenReferral`). */
+  const seenSaidRef = useRef(new Set<string>());
+
   const outboxRef = useRef<ErOutbox | null>(null);
-  outboxRef.current ??= new ErOutbox(createMemoryErStore());
+  // Kept in IndexedDB, in this person's own database (`lib/outbox.ts`): a
+  // reload or a power cut loses no triage step that was waiting (`FR-OFF-01`).
+  outboxRef.current ??= new ErOutbox(consoleStores().emergency);
 
   useEffect(() => {
     setAlarmState(alarm.state());
@@ -218,8 +237,18 @@ export function useEmergencyConsole(options: {
 
   const refreshPending = useCallback(async () => {
     const outbox = outboxRef.current;
-    if (outbox !== null) setPending(await outbox.pending());
-  }, []);
+    if (outbox === null) return;
+
+    const here = (action: PendingErAction): boolean => action.hospitalId === hospitalId;
+    setPending((await outbox.pending()).filter(here));
+    setStuck((await outbox.stuck()).filter(here));
+    setDurable(consoleStores().durable());
+  }, [hospitalId]);
+
+  // What was queued before this page loaded is on the screen again at once.
+  useEffect(() => {
+    void refreshPending();
+  }, [refreshPending]);
 
   const flush = useCallback(async () => {
     const outbox = outboxRef.current;
@@ -234,6 +263,17 @@ export function useEmergencyConsole(options: {
     // provisional walk-in with the case the server made of it.
     if (outcome.accepted.length > 0 || outcome.refused.length > 0) await loadBoardRef.current();
   }, [hospitalId, send, refreshPending]);
+
+  const retryStuck = useCallback(async () => {
+    await outboxRef.current?.retryStuck();
+    await refreshPending();
+    await flush();
+  }, [refreshPending, flush]);
+
+  const discardStuck = useCallback(async () => {
+    await outboxRef.current?.discard(stuck.map((action) => action.clientEventId));
+    await refreshPending();
+  }, [stuck, refreshPending]);
 
   // --- the channel -----------------------------------------------------------
 
@@ -603,6 +643,29 @@ export function useEmergencyConsole(options: {
     return ids;
   }, [pending]);
 
+  // --- and again, by itself, while something is still waiting ----------------
+  //
+  // FRONTEND.md §11.1 step 6: "retry with backoff". A push that failed while
+  // the socket stayed up — a server restarting, a token being renewed — has no
+  // reconnect to prompt the next attempt, and used to wait for somebody's next
+  // tap. Offline needs no timer: the reconnect sends at once.
+  const retriesRef = useRef(0);
+  useEffect(() => {
+    if (pending.length === 0) {
+      retriesRef.current = 0;
+      return undefined;
+    }
+    if (!(socketUp && browserOnline)) return undefined;
+
+    const timer = setTimeout(() => {
+      retriesRef.current += 1;
+      void flush();
+    }, retryDelayMs(retriesRef.current));
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [pending, socketUp, browserOnline, flush]);
+
   return {
     board,
     cases,
@@ -611,6 +674,10 @@ export function useEmergencyConsole(options: {
     published,
     pendingCaseIds,
     pendingCount: pending.length,
+    stuckCount: stuck.length,
+    retryStuck,
+    discardStuck,
+    durable,
     newCaseIds,
     connected: socketUp && browserOnline,
     lastServerTs,
@@ -659,12 +726,20 @@ export function useEmergencyConsole(options: {
         return next;
       });
       // "Seen" is said once, by the first touch, and only of one still unseen.
+      //
+      // One click is two touches — the card hears the pointer and then the
+      // focus — and what kept the second from saying "seen" again was the
+      // first already being in `pending`. That is state, and it is only as
+      // quick as the outbox: kept on disk, the second touch arrived first and
+      // "seen" was queued twice. So the page remembers what it has said.
       const current = referrals.find((entry) => entry.id === referralId);
       if (
         current?.state === 'sent' &&
         sideOf(current, hospitalId) === 'receiver' &&
-        !pendingReferralIds.has(referralId)
+        !pendingReferralIds.has(referralId) &&
+        !seenSaidRef.current.has(referralId)
       ) {
+        seenSaidRef.current.add(referralId);
         void step(referralId, 'seen', null);
       }
     },

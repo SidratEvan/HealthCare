@@ -639,3 +639,21 @@ export async function undoneTypes(sessionId: string): Promise<string[]> {
     return result.rows.map((r) => r.type);
   });
 }
+
+/**
+ * Who each event in a session is attributed to, in log order (`FR-QUE-04`).
+ *
+ * An outbox kept on a shared counter PC must never let one person's unsent
+ * work go out under another's sign-in; this is what a spec checks it against.
+ */
+export async function eventActors(
+  sessionId: string,
+): Promise<{ readonly type: string; readonly staffId: string | null }[]> {
+  return await withClient(async (client) => {
+    const result = await client.query<{ type: string; actor_staff_id: string | null }>(
+      'SELECT type, actor_staff_id FROM queue_events WHERE session_id = $1 ORDER BY seq',
+      [sessionId],
+    );
+    return result.rows.map((r) => ({ type: r.type, staffId: r.actor_staff_id }));
+  });
+}

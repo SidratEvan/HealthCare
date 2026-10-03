@@ -48,7 +48,7 @@ export type BedSendOutcome = SendOutcome;
 export type BedSender = (action: PendingBedAction) => Promise<BedSendOutcome>;
 export type BedFlushOutcome = FlushOutcome;
 
-/** In memory, as the reception console's outbox is today. */
+/** In memory: for tests, and for a browser with no IndexedDB (`persistent.ts`). */
 export function createMemoryBedStore(): BedActionStore {
   return createMemoryOutboxStore<PendingBedAction>();
 }

@@ -114,8 +114,13 @@ export function BedPanel(props: BedPanelProps): ReactNode {
       body: Record<string, unknown>,
       change: Parameters<BedBoard['act']>[0]['change'],
     ) => {
-      await board.act({ bedId: bed.id, route, body, change });
+      // Back to the bed before the action is sent, not after the server has
+      // answered. `board.act` resolves when the push has come back, which on a
+      // ward's network is a second or more — and somebody who had already
+      // moved on to the next step (release, then "out of service") had that
+      // step's form closed under them when the first answer arrived.
       setMode('view');
+      await board.act({ bedId: bed.id, route, body, change });
     },
     [board, bed.id],
   );

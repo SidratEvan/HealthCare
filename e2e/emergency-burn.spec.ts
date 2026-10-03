@@ -300,3 +300,44 @@ test.describe('the ER keeps working offline (FR-OFF-01)', () => {
     });
   });
 });
+
+test.describe('the ER outbox is kept on the device (FR-OFF-01)', () => {
+  test('a triage that could not be sent survives a reload, and is sent once', async ({ page }) => {
+    const walkIn = await registerWalkIn(shapla, 'breathing');
+    await openErConsole(page, shapla);
+    const row = page.getByTestId(`er-row-${walkIn.caseId}`);
+    await expect(row).toBeVisible();
+
+    // The server cannot be reached for a case action; the page itself loads.
+    const blocked = '**/api/v1/emergency/cases/**';
+    await page.route(blocked, async (route) => {
+      if (route.request().method() === 'PATCH') await route.abort('connectionfailed');
+      else await route.fallback();
+    });
+
+    await page.getByTestId(`er-triage-yellow-${walkIn.caseId}`).click();
+    await expect(row).toHaveAttribute('data-triage', 'yellow');
+    await expect(page.getByTestId('pending-count')).toBeVisible();
+    expect((await caseState(walkIn.caseId)).triage).toBe('red');
+
+    // The reload that used to lose it, leaving the case red on every screen.
+    await page.reload();
+    await expect(page.getByTestId('er-console')).toBeVisible();
+    await expect(row).toHaveAttribute('data-triage', 'yellow');
+    await expect(page.getByTestId('pending-count')).toBeVisible();
+    expect((await caseState(walkIn.caseId)).triage).toBe('red');
+
+    // Reachable again; nobody taps anything.
+    await page.unroute(blocked);
+    await expect
+      .poll(async () => (await caseState(walkIn.caseId)).triage, { timeout: 45_000 })
+      .toBe('yellow');
+    await expect(page.getByTestId('pending-count')).toBeHidden({ timeout: 20_000 });
+
+    // Nothing is left on the device to send again.
+    await page.reload();
+    await expect(page.getByTestId('er-console')).toBeVisible();
+    await expect(row).toHaveAttribute('data-triage', 'yellow');
+    await expect(page.getByTestId('pending-count')).toBeHidden();
+  });
+});

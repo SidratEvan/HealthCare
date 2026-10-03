@@ -283,6 +283,47 @@ test.describe('the ward keeps working offline (FR-OFF-01)', () => {
   });
 });
 
+test.describe('the ward outbox is kept on the device (FR-OFF-01)', () => {
+  test('an admit that could not be sent survives a reload, and is sent once', async ({ page }) => {
+    await openWardBoard(page);
+
+    // The server cannot be reached for a bed action; the page itself loads.
+    const blocked = '**/api/v1/beds/**';
+    await page.route(blocked, async (route) => {
+      if (route.request().method() === 'POST') await route.abort('connectionfailed');
+      else await route.fallback();
+    });
+
+    await admitAtDesk(page, bed(0).label, 'সালমা বেগম (ডেমো)');
+    const tile = page.getByTestId(`bed-tile-${bed(0).label}`);
+    await expect(tile).toHaveAttribute('data-state', 'occupied');
+    await expect(tile).toHaveAttribute('data-pending', 'true');
+    await expect(page.getByTestId('pending-count')).toBeVisible();
+    expect(await bedState(bed(0).id)).toBe('free');
+
+    // The reload that used to lose it: the tile went back to free and the
+    // patient was in a bed nobody had a record of.
+    await page.reload();
+    await expect(page.getByTestId('ward-board')).toBeVisible();
+    await expect(tile).toHaveAttribute('data-state', 'occupied');
+    await expect(tile).toHaveAttribute('data-pending', 'true');
+    await expect(page.getByTestId('pending-count')).toBeVisible();
+    expect(await bedState(bed(0).id)).toBe('free');
+
+    // Reachable again; nobody taps anything.
+    await page.unroute(blocked);
+    await expect(tile).toHaveAttribute('data-pending', 'false', { timeout: 45_000 });
+    await expect.poll(async () => await bedState(bed(0).id), { timeout: 20_000 }).toBe('occupied');
+
+    // Once: nothing is left on the device to send a second time (`SY-02`).
+    await page.reload();
+    await expect(page.getByTestId('ward-board')).toBeVisible();
+    await expect(tile).toHaveAttribute('data-state', 'occupied');
+    await expect(page.getByTestId('pending-count')).toBeHidden();
+    expect(await admissionsIn(bed(0).id)).toBe(1);
+  });
+});
+
 test.describe('the four states (GR-03)', () => {
   test('a board that cannot load says so and offers a retry', async ({ page }) => {
     await page.route('**/api/v1/hospitals/*/beds', (route) => route.abort());

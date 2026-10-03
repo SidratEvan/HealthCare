@@ -15,6 +15,7 @@ import {
   type BedSendOutcome,
   type PendingBedAction,
 } from '../offline/beds.js';
+import { MAX_ATTEMPTS } from '../offline/queue.js';
 
 function action(n: number, hospitalId = 'h1'): Omit<PendingBedAction, 'attempts'> {
   return {
@@ -92,7 +93,42 @@ describe('BedOutbox', () => {
       action(2).clientEventId,
       action(3).clientEventId,
     ]);
-    expect(left.every((entry) => entry.attempts === 1)).toBe(true);
+    // A dead network is not a fault of the action and is not counted as one.
+    expect(left.every((entry) => entry.attempts === 0)).toBe(true);
+    expect(await outbox.stuck()).toHaveLength(0);
+  });
+
+  it('holds the order while the server is failing, then sets the action aside (FR-OFF-05)', async () => {
+    const outbox = await outboxWith(action(1), action(2));
+    const failsOnFirst = (entry: PendingBedAction): Promise<BedSendOutcome> =>
+      Promise.resolve<BedSendOutcome>(
+        entry.clientEventId === action(1).clientEventId
+          ? { kind: 'failed', code: 'INTERNAL' }
+          : { kind: 'accepted' },
+      );
+
+    // A 500 may be a server restarting: nothing behind it goes ahead of it.
+    const first = await outbox.flush('h1', failsOnFirst);
+    expect(first.accepted).toEqual([]);
+    expect(first.offline).toBe(false);
+    expect((await outbox.pending()).map((entry) => entry.attempts)).toEqual([1, 0]);
+
+    // After enough of them it is set aside — kept, not sent, not in the way.
+    let last = first;
+    for (let i = 1; i < MAX_ATTEMPTS; i += 1) last = await outbox.flush('h1', failsOnFirst);
+
+    expect(last.stuck).toEqual([action(1).clientEventId]);
+    expect(last.accepted).toEqual([action(2).clientEventId]);
+    expect(await outbox.pending()).toHaveLength(0);
+    expect((await outbox.stuck()).map((entry) => entry.clientEventId)).toEqual([
+      action(1).clientEventId,
+    ]);
+
+    // The operator sends it again, or drops it.
+    await outbox.retryStuck();
+    expect((await outbox.pending()).map((entry) => entry.attempts)).toEqual([0]);
+    await outbox.discard([action(1).clientEventId]);
+    expect(await outbox.pending()).toHaveLength(0);
   });
 
   it('flushes one hospital at a time', async () => {

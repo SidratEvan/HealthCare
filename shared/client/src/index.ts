@@ -20,7 +20,19 @@ export {
   type PushTransport,
 } from './offline/queue.js';
 
-export { createDexieStore, openConsoleDatabase } from './offline/store.dexie.js';
+export {
+  createDexieOutboxStore,
+  createDexieStore,
+  openConsoleDatabase,
+  type ConsoleDatabase,
+} from './offline/store.dexie.js';
+
+export {
+  consoleDatabaseName,
+  openConsoleStores,
+  ownerOfToken,
+  type ConsoleStores,
+} from './offline/persistent.js';
 
 export {
   BedOutbox,

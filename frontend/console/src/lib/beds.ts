@@ -141,12 +141,18 @@ export function bedSender(
       return { kind: 'accepted' };
     } catch (error: unknown) {
       if (error instanceof NetworkError) return { kind: 'unreachable' };
-      if (error instanceof ApiError && error.status < 500) {
+      if (!(error instanceof ApiError)) return { kind: 'unreachable' };
+      // A token to renew or a limit to wait out: the action is fine and stays
+      // queued. Read as a refusal, an expired token after twenty minutes
+      // offline dropped every bed action the ward had taken.
+      if (error.status === 401 || error.status === 429) return { kind: 'unreachable' };
+      if (error.status < 500) {
         const reason =
           typeof error.details?.['reason'] === 'string' ? error.details['reason'] : error.code;
         return { kind: 'refused', code: error.code, reason };
       }
-      return { kind: 'unreachable' };
+      // The server's own fault. Kept and retried; set aside if it never clears.
+      return { kind: 'failed', code: error.code };
     }
   };
 }
