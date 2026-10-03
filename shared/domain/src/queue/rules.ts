@@ -216,6 +216,11 @@ export function canMarkNoShow(
   if (entry.status === 'done' || entry.status === 'cancelled' || entry.status === 'rescheduled') {
     return deny('BOOKING_SETTLED', 'That booking has already been settled.');
   }
+  // Nobody is called during a break (`canCallNext`), so nobody can miss a
+  // call during one. The grace starts again when the chamber does.
+  if (state.status === 'paused') {
+    return deny('SESSION_NOT_RUNNING', 'This session is paused. Resume it first.');
+  }
 
   const grace = graceRemaining(state, bookingId, settings, now);
   if (grace === null) {
@@ -294,7 +299,7 @@ export function graceRemaining(
  * of the session. A hold declared while the doctor is in (`hold.until`)
  * counts too: nobody can be called before it ends, so the turn has not come
  * before then, and the grace must not run out while the patient is being told
- * to come later.
+ * to come later. The end of a break counts for the same reason (`resumedAt`).
  *
  * Returns null while anyone is still ahead of them. A patient holding serial
  * 40 is not late at five o'clock, and the grace period has no meaning until
@@ -311,6 +316,7 @@ function turnReachedAt(state: QueueState, bookingId: BookingId): Timestamp | nul
   }
   if (state.doctorArrivedAt !== null) departures.push(state.doctorArrivedAt);
   if (state.hold !== null) departures.push(state.hold.until);
+  if (state.resumedAt !== null) departures.push(state.resumedAt);
 
   if (departures.length === 0) return null;
   return departures.reduce((latest, candidate) => (candidate > latest ? candidate : latest));

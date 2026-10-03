@@ -275,6 +275,8 @@ appendEvent({
 
 **Delays (`FR-REC-03`, `FR-QUE-11`).** A delay declared **before** the doctor arrives moves the expected start (planned start + everything declared) and is used up by `DOCTOR_ARRIVED`: from then the queue counts from now. A delay declared **after** the arrival holds the chamber until the moment it was declared plus its minutes (`QueueState.hold`); a second one extends a hold still running. The no-show grace (`FR-QUE-20`) never ends before a hold does. `sessions.delay_minutes` stays the total declared that day; what a patient is shown is `outstandingDelayMinutes` — all of it before the arrival, then a hold's own minutes for as long as it runs.
 
+**Pauses (`FR-REC-05`).** While a session is paused nobody is called (`canCallNext`) and nobody is marked absent (`canMarkNoShow`). `SESSION_RESUMED` records `QueueState.resumedAt`, and the no-show grace for whoever is at the front counts from there: a turn that came round before or during a break is not lost to it.
+
 ### 4.2 Other queue-service functions
 
 | Function | Purpose |

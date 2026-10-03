@@ -357,6 +357,53 @@ describe('the no-show grace period (FR-QUE-20)', () => {
     ).toBe(true);
   });
 
+  it('does not run during a break, and starts again when the chamber does (FR-REC-05)', () => {
+    // Serial 1 seen by 11:05, a prayer break from 11:06 to 11:30. Serial 2 is
+    // at the front throughout and could not have been called for any of it.
+    const { state, log } = running();
+    const paused = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+      log.advance(60).next('SESSION_PAUSED', { reason: 'prayer' }),
+    ]);
+
+    const duringBreak = canMarkNoShow(
+      paused,
+      bookingId(2),
+      DEFAULT_QUEUE_SETTINGS,
+      timestamp('2026-09-17T11:25:00.000Z'),
+    );
+    expect(duringBreak.ok).toBe(false);
+    if (duringBreak.ok) return;
+    expect(duringBreak.code).toBe('SESSION_NOT_RUNNING');
+
+    const resumed = reduce(paused, log.advance(1440).next('SESSION_RESUMED', {}));
+    const resumedAt = timestamp('2026-09-17T11:30:00.000Z');
+
+    // A minute after the break, twenty-six after the turn first came round.
+    const justAfter = canMarkNoShow(
+      resumed,
+      bookingId(2),
+      DEFAULT_QUEUE_SETTINGS,
+      timestamp('2026-09-17T11:31:00.000Z'),
+    );
+    expect(justAfter.ok).toBe(false);
+    if (justAfter.ok) return;
+    expect(justAfter.code).toBe('NO_SHOW_BEFORE_GRACE');
+    expect(
+      graceRemaining(resumed, bookingId(2), DEFAULT_QUEUE_SETTINGS, resumedAt)?.turnReachedAt,
+    ).toBe(resumedAt);
+
+    expect(
+      canMarkNoShow(
+        resumed,
+        bookingId(2),
+        DEFAULT_QUEUE_SETTINGS,
+        timestamp('2026-09-17T11:46:00.000Z'),
+      ).ok,
+    ).toBe(true);
+  });
+
   it('refuses to mark the same patient absent twice', () => {
     const { state, log } = running();
     const absent = reduce(

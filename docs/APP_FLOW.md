@@ -649,7 +649,7 @@ The highest-traffic screen in the system. Every primary action must be reachable
 | Session selector | `SEL-B02-SESSION` | `Alt+S` | Switches the session this counter is driving; subscribes to that session channel |
 | ডাক্তার এসেছেন | `BTN-B02-ARRIVED` | `A` | Optimistic: status flips instantly → `EVT-DOCTOR_ARRIVED` with actual time → ETAs recomputed → broadcast to all patients + push/SMS "ডাক্তার এসেছেন" (`FR-REC-02`) |
 | দেরি ঘোষণা | `BTN-B02-DELAY` | `D` | Opens `MOD-B02-DELAY`: 15/30/45/60/custom + optional reason → `EVT-DELAY_DECLARED` → every waiting patient notified with keep/reschedule/cancel (`FR-REC-03`, `FR-PAT-34`) |
-| বিরতি | `BTN-B02-PAUSE` | `P` | `EVT-SESSION_PAUSED`; ETAs freeze and shift; resume with the same button (`FR-REC-05`) |
+| বিরতি / আবার শুরু | `BTN-B02-PAUSE` | `P` | `EVT-SESSION_PAUSED`; ETAs freeze and shift; resume with the same button, which reads আবার শুরু while paused and sends `EVT-SESSION_RESUMED` (`FR-REC-05`). While paused a banner under the session bar says since when, `BTN-B02-NEXT` is off with the reason, and nobody can be marked absent; the no-show grace starts again at resume. Off (with the reason) until the doctor has arrived |
 | আজ বসবেন না | `BTN-B02-ABSENT` | — | Confirm (`GR-01`) → cancels session, notifies all, opens bulk reschedule tool (`FR-REC-04`), triggers refund eligibility (`FR-PAY-07`) |
 | ওয়াক-ইন যোগ | `BTN-B02-WALKIN` | `W` | Opens `MOD-B02-WALKIN` (see B1.4) |
 | **পরবর্তী রোগী ডাকুন** | `BTN-B02-NEXT` | `Space` or `N` | The single most-used control (see B1.3) |

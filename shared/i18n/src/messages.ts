@@ -56,6 +56,21 @@ export const CONSOLE = {
   declareDelay: { bn: 'দেরি ঘোষণা', en: 'Declare delay' },
   pause: { bn: 'বিরতি', en: 'Pause' },
   resume: { bn: 'আবার শুরু', en: 'Resume' },
+  /** Under the session bar for as long as the chamber is paused (`FR-REC-05`). */
+  sessionPausedSince: {
+    bn: 'বিরতি চলছে — {time} থেকে। রোগী ডাকতে “আবার শুরু” চাপুন।',
+    en: 'On a break since {time}. Press “Resume” to call patients.',
+  },
+  /** Why `BTN-B02-NEXT` is off, and what the `N` key says, during a break. */
+  pausedResumeFirst: {
+    bn: 'বিরতি চলছে। আগে আবার শুরু করুন।',
+    en: 'The chamber is on a break. Resume it first.',
+  },
+  /** Why `BTN-B02-PAUSE` is off before the doctor is in, or after the chamber ended. */
+  pauseNeedsRunning: {
+    bn: 'চেম্বার চলার সময় বিরতি দেওয়া যায়।',
+    en: 'A break can be taken while the chamber is running.',
+  },
   addWalkin: { bn: 'ওয়াক-ইন যোগ', en: 'Add walk-in' },
   callNext: { bn: 'পরবর্তী রোগী ডাকুন', en: 'Call next patient' },
   /** B1.3 step 1: the label changes when somebody is still in the chamber. */

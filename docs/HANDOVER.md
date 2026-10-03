@@ -19,6 +19,10 @@ founder who did not write most of it and for whoever works on it next.
     delay declared before the arrival is used up by it; one declared after
     holds the chamber until then, and the no-show grace cannot end before the
     hold does. In the §4.9 session serial 1 is told 17:32 and serial 5 17:50.
+  - **Fact 2, §12 item 2 — fixed** (`fix/console-resume`). The pause button
+    becomes আবার শুরু while paused (key `P`), a banner says since when, call
+    next is off with the reason. Nobody is marked absent during a break and
+    the grace starts again after it. `e2e/pause-resume.spec.ts` presses both.
 
 ---
 

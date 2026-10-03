@@ -204,6 +204,12 @@ export interface QueueState {
   readonly pausedAt: Timestamp | null;
   /** Total time already spent paused, in seconds. */
   readonly pausedSeconds: number;
+  /**
+   * When the latest pause ended. Nobody can be called during a break, so a
+   * turn that came round before or during one is counted from here
+   * (`rules.ts` `turnReachedAt`).
+   */
+  readonly resumedAt: Timestamp | null;
   /** The queue in the order staff see it, settled rows included. */
   readonly entries: readonly QueueEntry[];
   readonly rate: RateState;
@@ -247,6 +253,7 @@ export function emptyState(seed: QueueSeed): QueueState {
     hold: null,
     pausedAt: null,
     pausedSeconds: 0,
+    resumedAt: null,
     entries,
     rate: {
       seedSeconds: seed.plan.defaultConsultSeconds,

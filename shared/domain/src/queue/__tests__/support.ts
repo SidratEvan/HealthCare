@@ -348,6 +348,7 @@ export function queueShape(state: QueueState): unknown {
     delayMinutes: state.delayMinutes,
     hold: state.hold,
     pausedSeconds: state.pausedSeconds,
+    resumedAt: state.resumedAt,
     rate: state.rate,
     entries: state.entries.map((entry) => ({
       bookingId: entry.bookingId,

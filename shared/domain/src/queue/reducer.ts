@@ -128,6 +128,7 @@ export function reduce(state: QueueState, event: QueueEvent): QueueState {
           ...state,
           status: state.doctorArrivedAt === null ? 'scheduled' : 'running',
           pausedAt: null,
+          resumedAt: paused === null ? state.resumedAt : event.serverTs,
           pausedSeconds:
             paused === null
               ? state.pausedSeconds
