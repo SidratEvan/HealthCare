@@ -34,6 +34,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   OfflineQueue,
   openSessionChannel,
+  readKept,
   retryDelayMs,
   type ConsoleStores,
   type PendingEvent,
@@ -277,18 +278,73 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     // connection the server refuses and the console then has to retry.
     if (sessionId === '') return undefined;
 
-    const channel = openSessionChannel({
-      url: socketUrl,
-      sessionId,
-      getToken,
-      onSnapshot: (next) => {
-        setSnapshot(next);
-        if (next.state !== null) setLoading(false);
-      },
-    });
+    let closed = false;
+    let channel: ReturnType<typeof openSessionChannel> | null = null;
+    const snapshots = storesRef.current?.snapshots ?? null;
+
+    void (async () => {
+      // What this device was last told about this chamber, if it kept
+      // anything. With no network it is all there is to open on: it goes on
+      // screen with the server's own timestamp, so the freshness line says
+      // how old it is, and the channel starts from it (`FR-OFF-01`,
+      // `FR-OFF-03`).
+      const kept = snapshots === null ? null : await readKept(snapshots, sessionId, new Date());
+      if (closed) return;
+      let keptStamp = kept?.lastServerTs ?? null;
+
+      if (kept !== null) {
+        setSnapshot({
+          state: kept.state,
+          etas: kept.etas,
+          lastServerTs: kept.lastServerTs,
+          lastSeq: kept.lastSeq,
+          connected: false,
+        });
+        setLoading(false);
+      }
+
+      channel = openSessionChannel({
+        url: socketUrl,
+        sessionId,
+        getToken,
+        ...(kept === null
+          ? {}
+          : {
+              initial: {
+                state: kept.state,
+                etas: kept.etas,
+                lastServerTs: kept.lastServerTs,
+                lastSeq: kept.lastSeq,
+              },
+            }),
+        onSnapshot: (next) => {
+          setSnapshot(next);
+          if (next.state === null) return;
+          setLoading(false);
+
+          // Kept for the next time this page has to open without a server.
+          // The reduced state only: ids, serials and times, no names. Only
+          // when the server has said something new: a reconnect that repeats
+          // what was already held must not make an old queue look newly kept.
+          if (next.lastServerTs === keptStamp) return;
+          keptStamp = next.lastServerTs;
+          void snapshots
+            ?.put({
+              sessionId,
+              state: next.state,
+              etas: next.etas,
+              lastServerTs: next.lastServerTs,
+              lastSeq: next.lastSeq,
+              keptAt: new Date().toISOString(),
+            })
+            .catch(() => undefined);
+        },
+      });
+    })();
 
     return () => {
-      channel.close();
+      closed = true;
+      channel?.close();
     };
   }, [sessionId, socketUrl, getToken]);
 
@@ -484,7 +540,10 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     actMany,
     undo,
     undoLast,
-    loading,
+    // Waiting for a server that cannot be reached is not loading. With no
+    // network and nothing kept for this chamber the screen says so instead
+    // (`ReceptionConsole`), and opens by itself when the connection returns.
+    loading: loading && browserOnline,
   };
 }
 

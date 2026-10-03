@@ -29,6 +29,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:built": "playwright test -c playwright.built.config.ts",
     "test:e2e:ui": "playwright test --ui",
     "verify": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",
     "clean": "pnpm -r exec rm -rf dist .next .turbo coverage *.tsbuildinfo"

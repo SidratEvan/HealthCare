@@ -45,6 +45,13 @@ export interface SessionChannelOptions {
   /** Raised when the server refuses something, e.g. a scope failure. */
   readonly onError?: (code: string, message: string) => void;
   readonly staleAfterMs?: number;
+  /**
+   * What this device last held for the session, if it kept anything
+   * (`offline/snapshots.ts`). The channel starts from it: it stays on screen
+   * until the server speaks, the first subscribe resumes from its sequence
+   * instead of asking for everything, and an older state can never replace it.
+   */
+  readonly initial?: Omit<SessionSnapshot, 'connected'>;
 }
 
 /** A `queue.updated` as the server sends it. */
@@ -87,6 +94,30 @@ export function foldUpdate(
 }
 
 /**
+ * Where a channel begins: with nothing, or with what the device kept.
+ *
+ * Never connected — the socket has not spoken yet, whatever is on the screen.
+ * The kept state's own sequence is what an incoming `queue.updated` is
+ * compared with, so a server catching the device up from an older point cannot
+ * roll the screen back behind what it already showed.
+ */
+export function startingFrom(initial: SessionChannelOptions['initial']): {
+  readonly snapshot: SessionSnapshot;
+  readonly stateSeq: number;
+} {
+  if (initial === undefined) {
+    return {
+      snapshot: { state: null, etas: [], lastServerTs: null, lastSeq: 0, connected: false },
+      stateSeq: -1,
+    };
+  }
+  return {
+    snapshot: { ...initial, connected: false },
+    stateSeq: initial.state?.lastSeq ?? -1,
+  };
+}
+
+/**
  * Opens the channel and keeps a snapshot current.
  *
  * Returns a handle rather than taking over: the caller decides when to close
@@ -99,16 +130,11 @@ export function openSessionChannel(options: SessionChannelOptions): {
   readonly isStale: (now?: Date) => boolean;
   readonly socket: Socket;
 } {
-  let snapshot: SessionSnapshot = {
-    state: null,
-    etas: [],
-    lastServerTs: null,
-    lastSeq: 0,
-    connected: false,
-  };
+  const start = startingFrom(options.initial);
+  let snapshot: SessionSnapshot = start.snapshot;
 
   /** The sequence the held `state` describes — not `lastSeq`, which events also raise. */
-  let stateSeq = -1;
+  let stateSeq = start.stateSeq;
 
   const publish = (next: Partial<SessionSnapshot>): void => {
     snapshot = { ...snapshot, ...next };

@@ -47,8 +47,13 @@ founder who did not write most of it and for whoever works on it next.
     The three outboxes are kept in IndexedDB, one database per signed-in
     person; a poison entry is set aside as stuck instead of blocking the
     rest; a failed push is retried by a timer; a ward or ER action is no
-    longer dropped by an expired token. The console still cannot *load*
-    with no network — that is plan 1.6.
+    longer dropped by an expired token.
+  - **Fact 6 (second half), §7 "the console has no service worker" — fixed**
+    (`feat/console-offline-load`). The console keeps its shell and the last
+    queue it was told, and reloads with no network in the tab that was
+    signed in. Not after a browser restart (sign-in needs the server), not
+    with patient names, and not for the ward or ER boards. Tested against
+    `next build` (`pnpm test:e2e:built`); `next dev` cannot show it.
 
 ---
 

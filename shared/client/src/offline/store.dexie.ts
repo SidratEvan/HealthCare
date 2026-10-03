@@ -19,14 +19,25 @@ import type { PendingBedAction } from './beds.js';
 import type { PendingErAction } from './emergency.js';
 import type { OutboxEntry, OutboxStore } from './outbox.js';
 import type { PendingEvent, PendingStore } from './queue.js';
+import type { KeptSnapshot, SnapshotStore } from './snapshots.js';
 
-/** Bumped only when the stored shape changes; Dexie migrates on open. */
-const SCHEMA_VERSION = 1;
+/**
+ * Bumped only when the stored shape changes; Dexie migrates on open.
+ *
+ * 1 — the three outboxes (plan 1.5). 2 — `snapshots`, the last queue a
+ * console was told, so it can open with no network (plan 1.6).
+ */
+const OUTBOXES = {
+  pending: 'clientEventId, sessionId, clientTs',
+  bedActions: 'clientEventId, hospitalId, clientTs',
+  erActions: 'clientEventId, hospitalId, clientTs',
+} as const;
 
 export interface ConsoleDatabase extends Dexie {
   pending: EntityTable<PendingEvent, 'clientEventId'>;
   bedActions: EntityTable<PendingBedAction, 'clientEventId'>;
   erActions: EntityTable<PendingErAction, 'clientEventId'>;
+  snapshots: EntityTable<KeptSnapshot, 'sessionId'>;
 }
 
 /**
@@ -37,11 +48,8 @@ export interface ConsoleDatabase extends Dexie {
  */
 export function openConsoleDatabase(name: string): ConsoleDatabase {
   const database = new Dexie(name) as ConsoleDatabase;
-  database.version(SCHEMA_VERSION).stores({
-    pending: 'clientEventId, sessionId, clientTs',
-    bedActions: 'clientEventId, hospitalId, clientTs',
-    erActions: 'clientEventId, hospitalId, clientTs',
-  });
+  database.version(1).stores(OUTBOXES);
+  database.version(2).stores({ ...OUTBOXES, snapshots: 'sessionId, keptAt' });
   return database;
 }
 
@@ -86,6 +94,23 @@ export function createDexieOutboxStore<T extends OutboxEntry>(
 
     async clear() {
       await table.clear();
+    },
+  };
+}
+
+/** One row per chamber: the newest queue this device was told. */
+export function createDexieSnapshotStore(database: ConsoleDatabase): SnapshotStore {
+  return {
+    async get(sessionId) {
+      return (await database.snapshots.get(sessionId)) ?? null;
+    },
+
+    async put(snapshot) {
+      await database.snapshots.put(snapshot);
+    },
+
+    async remove(sessionId) {
+      await database.snapshots.delete(sessionId);
     },
   };
 }

@@ -303,8 +303,8 @@ In addition to `CLAUDE.md`:
 | 1.4a | `fix/queue-pool-starvation` | merged — not in the handover; found by the gate while verifying 1.5. A queue write needed a second database connection while holding the session lock; with the pool busy it stalled five seconds and failed. Notification reads now use the transaction; `poolStarvation.test.ts` |
 | 1.4b | `fix/broadcast-after-commit` | merged — `HANDOVER.md` §12 item 12, brought forward because it was failing a browser test one run in six. `queue.updated` is sent after the commit; a screen that subscribed mid-tap no longer stays on the previous patient, and a failed write tells nobody. `broadcastAfterCommit.test.ts` |
 | 1.5 | `fix/offline-outbox-persist` | merged — `openConsoleStores` (IndexedDB, one database per person), stuck entries with send-again and discard, retry with backoff, 401/429 kept rather than dropped |
-| 1.6 | `feat/console-offline-load` | next |
-| 1.7 | `chore/ops-hardening` | |
+| 1.6 | `feat/console-offline-load` | merged — the console's service worker, the kept queue (`snapshots`), `pnpm test:e2e:built` against `next build`. Same tab only; no names; reception queue only |
+| 1.7 | `chore/ops-hardening` | next |
 | 1.8 | `chore/e2e-ci` | |
 | 1.9 | `fix/log-sms-redaction` | |
 | 1.10 | `feat/tenant-rls` | |
