@@ -46,7 +46,7 @@ export default defineConfig({
 
   // `e2e/built/` runs against the console as built, not against `next dev`
   // (`playwright.built.config.ts`, `pnpm test:e2e:built`). Both are the gate.
-  testIgnore: ['**/built/**'],
+  testIgnore: ['**/built/**', '**/production/**'],
 
   /**
    * Rebuild the demo data first (`FR-DEM-06`).
@@ -73,7 +73,17 @@ export default defineConfig({
     baseURL: CONSOLE_URL,
     // A failure in the two-device test is the one worth being able to watch
     // afterwards, so the trace and the video survive it.
-    trace: 'retain-on-failure',
+    //
+    // Not the trace in CI. `retain-on-failure` records every test and throws
+    // the recording away if it passed, and the recorder keeps what it has
+    // seen: the worker grows by about 18 MB a test and stands at 6.7 GB by the
+    // last of 150 (`docs/STATUS.md`, measured). This machine survives that by
+    // growing its page file; a hosted runner with 7 GB does not. So in CI a
+    // failure keeps its video, its screenshot and the page as it stood, and
+    // the step-by-step trace is what is given up. Nothing that is asserted
+    // changes. The canary's own step runs first and alone, where a trace would
+    // cost nothing — it is still off there, so that one run is one setting.
+    trace: process.env['CI'] === 'true' ? 'off' : 'retain-on-failure',
     video: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

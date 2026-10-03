@@ -11,6 +11,17 @@
 #   step 10 feat/patient-live-serial → the two-device queue E2E smoke, which is
 #                                      the product's canary and is never skipped
 #                                      or marked flaky (CLAUDE.md §6)
+#   plan 1.8 chore/e2e-ci           → the build, the whole browser suite with
+#                                      the canary first, and the same canary
+#                                      against the production configuration  ✓
+#
+# Until plan 1.8 the browser suite ran only when somebody remembered to run it
+# on their own machine, and never against what a hospital runs. Three jobs now:
+#
+#   verify           typecheck, lint, format, unit, API and schema tests
+#   browser          the build; the canary; the whole suite; the console built
+#   production       the canary and the counter against NODE_ENV=production,
+#                    DEMO_MODE=false, the limited database role, built apps
 
 name: CI
 
@@ -129,3 +140,153 @@ jobs:
       # the migrations apply to a fresh database.
       - name: Test
         run: pnpm test
+
+  # ---------------------------------------------------------------------------
+  # The browser suite (CLAUDE.md §6), against the demonstration: `next dev`,
+  # DEMO_MODE=true. The canary runs first and by itself, so that when the
+  # product's one promise is broken it is the first thing the run says, not
+  # line 129 of 150.
+  # ---------------------------------------------------------------------------
+  browser:
+    name: build · canary · browser suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: healthcare
+          POSTGRES_PASSWORD: healthcare
+          POSTGRES_DB: healthcare_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U healthcare -d healthcare_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # The suite rebuilds this database from the seeds on every run
+      # (e2e/support/globalSetup.ts). Demonstration data only (FR-SEC-08).
+      DATABASE_URL: postgresql://healthcare:healthcare@localhost:5432/healthcare_dev
+      E2E_DATABASE_URL: postgresql://healthcare:healthcare@localhost:5432/healthcare_dev
+      DEMO_MODE: "true"
+      SMS_PROVIDER: log
+      PAYMENT_PROVIDER: mock
+      TRAVEL_TIME_MODE: static
+      # Obviously fake, and used by nothing but this run: the specs sign their
+      # own staff tokens and the API has to accept them.
+      JWT_ACCESS_SECRET: ci-only-access-secret-not-a-real-credential
+      JWT_REFRESH_SECRET: ci-only-refresh-secret-not-a-real-credential
+      GUEST_LINK_SECRET: ci-only-guest-link-secret-not-a-real-credential
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Both apps as a deployment builds them. A page that only fails to build
+      # for production is otherwise found on the day of the deployment.
+      - name: Build
+        run: pnpm build
+
+      - name: Install the browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      # First, alone, and never optional (CLAUDE.md §6, §11.4).
+      - name: The canary — a reception tap reaches the patient in two seconds
+        run: pnpm test:e2e e2e/two-device-queue.spec.ts
+
+      - name: The whole browser suite
+        run: pnpm test:e2e
+
+      - name: The console as built (offline reload)
+        run: pnpm test:e2e:built
+
+      - name: Keep what a failure left behind
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-suite-failures
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # The production configuration (playwright.prod.config.ts): what a hospital
+  # runs. NODE_ENV=production, DEMO_MODE=false, the API connected as the role
+  # that owns nothing, both apps built. The canary in its production form, and
+  # the counter's own specs unchanged.
+  # ---------------------------------------------------------------------------
+  production:
+    name: production configuration · canary and the counter
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: healthcare
+          POSTGRES_PASSWORD: healthcare
+          POSTGRES_DB: healthcare_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U healthcare -d healthcare_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # For the seeding only, which refuses without DEMO_MODE=true. The API
+      # this job tests is given its own environment, stated in full in
+      # e2e/support/production.ts, and that one says DEMO_MODE=false.
+      DATABASE_URL: postgresql://healthcare:healthcare@localhost:5432/healthcare_dev
+      E2E_DATABASE_URL: postgresql://healthcare:healthcare@localhost:5432/healthcare_dev
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install the browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: The canary and the counter, against the production configuration
+        run: pnpm test:e2e:prod
+
+      - name: Keep what a failure left behind
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-configuration-failures
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

@@ -7,7 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/ops-hardening` (3 October) — **on a hospital's server the
+Last updated: `chore/e2e-ci` (3 October) — **the browser suite runs in CI,
+the canary first, and the canary and the counter also run against the
+production configuration** (plan 1.8; below, *Plan 1.8*). Under that
+configuration a patient still cannot book: there is no SMS provider. Before
+that, `chore/ops-hardening` (3 October) — **on a hospital's server the
 API no longer owns the database, nothing of ours runs as root, logs rotate,
 and a backup is not a backup until it has been restored and copied
 elsewhere** (plan 1.7; below, *Plan 1.7*). The role still bypasses row-level
@@ -251,6 +255,64 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Plan 1.8 — the browser suite in CI, and against production (`chore/e2e-ci`)
+
+**What CI runs now** (`.github/workflows/ci.yml`), on every push to `mvp` or
+`main` and every pull request into them:
+
+| Job | What |
+|---|---|
+| `verify` | as before: typecheck, lint, format, unit, API and schema tests |
+| `browser` | `pnpm build`; **the canary, first and alone**; the whole browser suite; the console as built |
+| `production` | the canary and the counter against the production configuration |
+
+The canary can no longer be skipped by not running it.
+
+**The production configuration** (`playwright.prod.config.ts`,
+**`pnpm test:e2e:prod`**) is what a hospital runs, and nothing had driven a
+browser against it before: the API with `NODE_ENV=production` and
+`DEMO_MODE=false`, started as the container starts it, connected as the role
+that owns nothing (plan 1.7), no online payment, SMS recorded only; the
+console and the patient app as `next build` and `next start`. What runs there:
+
+- `e2e/production/two-device-queue.prod.spec.ts` — the receptionist **signs in
+  through `S-B-00`** with their own account, taps *next*, and the patient's
+  phone shows it inside the same two seconds as the canary. It first checks
+  that what is running really is production (`/config` says no
+  demonstration, no online payment, phone check on; the password-less
+  picker's endpoint answers 403).
+- The counter's own specs, unchanged in what they assert: offline and the
+  outbox, undo, pause and resume, and the console opening with no network.
+
+**What it found.** Under the production configuration a token written into
+the browser is not a session: the console showed the sign-in screen to all
+seventeen reception tests. That is correct, and it is why the specs now get
+their receptionist through one helper (`e2e/support/consoleSession.ts`) — the
+picker's store under the demonstration, exactly as before, and a real
+`POST /staff/login` under production.
+
+**What it cannot do, and this is the product, not the test.** Under the
+production configuration **no patient can book**: a guest proves their phone
+with a code, the code travels by SMS, and there is no SMS provider (item 1
+above; phase 2). So the patient's link in these specs is written by a fixture
+— the row an SMS would have pointed at (`e2e/support/guestLink.ts`) — and
+everything from opening it onward is the product. The production canary says
+so at the top of its file and should book through the app the day an SMS
+provider exists. **A green production job does not mean a patient can use a
+hospital's server.**
+
+**Left to the main suite, and why** (`grepInvert` in the production
+configuration): the pitch session, which is the demonstration's own
+(`FR-DEM-06`); and "the next person at the same PC", which needs a second
+account signed in and does not yet do it.
+
+**Not verified from here:** the workflow file itself. Every command in it was
+run on this machine in the same form, and the environment it sets was checked
+against the API's start-up validation with no `.env` present — but a workflow
+is only proven by a run on GitHub. **The first run after this is pushed needs
+looking at**, in particular whether the canary's two seconds hold on a
+hosted runner driving `next dev`.
 
 ### Plan 1.7 — the self-hosted stack, hardened (`chore/ops-hardening`)
 
@@ -498,8 +560,9 @@ below as it lands):
    application code only. Plan 1.10.
 8. **HIGH — doctors read every hospital's signed visits** for any patient with
    any booking at their hospital, without consent (`findVisits`).
-9. **HIGH — E2E (the canary included) is not in CI** and never runs against
-   the production configuration (plan 1.8); ~~backups stay on the same disk~~
+9. **Fixed (`chore/e2e-ci`).** Was: **HIGH — E2E (the canary included) is not
+   in CI** and never runs against the production configuration.
+   ~~Backups stay on the same disk~~
    (fixed, `chore/ops-hardening`: copied to a second location, and failing
    loudly when none is configured); the `log`
    SMS provider prints phones and full bodies (tracking links) and keeps them
@@ -3468,6 +3531,18 @@ Raised while fixing the handover's findings (`docs/PLATFORM_PLAN.md` phase 1):
    outage far more workable and would leave identifiable patient data,
    unencrypted, in the browser storage of a shared PC. Built the cautious
    way; the owner decides whether to keep more, and with what protection.
+89. **What the browser suite records while it runs** (`chore/e2e-ci`). The
+   trace recorder is what grows to 6.7 GB over a full run (*Things learned
+   the hard way*). **In CI it is now off**, because a hosted runner has no
+   page file to grow into: a failure there keeps its video, its screenshot
+   and the page as it stood, and loses the step-by-step trace. **On a
+   developer's machine nothing changed** — traces are still recorded and
+   a full run still ends with the page file enlarged. Turning it off there
+   too would take about 6 GB off a run and cost the trace of a failure;
+   running the suite against built apps would take another 2 GB off and
+   needs `console-cold-start.spec.ts:98` rewritten first. The CI choice
+   was made so that CI can run at all and is one line to reverse
+   (`playwright.config.ts`); the local one is the owner's.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
@@ -3520,8 +3595,8 @@ somebody. It stands at `4a99aec` (3 October): `docs/PLATFORM_PLAN.md` phase 1
 through 1.6 — delay, resume, undo, the sync allow-list, the pool and
 broadcast fixes, the outboxes kept on disk, and the console opening with no
 network — after `pnpm verify`, a clean 150/150 browser run and the built
-suite on that commit. **From plan 1.6 on, green means
-`pnpm test:e2e` and `pnpm test:e2e:built`.**
+suite on that commit. **Green means `pnpm verify`, `pnpm test:e2e`,
+`pnpm test:e2e:built` and — from plan 1.8 — `pnpm test:e2e:prod`.**
 
 ```bash
 git fetch origin && git checkout demo && git pull

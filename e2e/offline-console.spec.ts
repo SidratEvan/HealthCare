@@ -28,6 +28,7 @@ import {
   loadPitchSession,
   type ConsoleSession,
 } from './support/console.js';
+import { putReceptionistInTab } from './support/consoleSession.js';
 
 /**
  * A session of this spec's own, rebuilt for every test.
@@ -55,12 +56,7 @@ test.beforeEach(async () => {
 async function openConsole(page: Page): Promise<void> {
   // The same store `ConsolePicker` writes, so a spec and a person reach the
   // console the same way — one credential, one key (CLAUDE.md §4.1).
-  await page.addInitScript((token: string) => {
-    window.sessionStorage.setItem(
-      'console.demo-session',
-      JSON.stringify({ token, hospitalId: 'e2e', staffName: 'E2E' }),
-    );
-  }, demo.token);
+  await putReceptionistInTab(page, demo);
 
   await page.goto(`/?session=${demo.sessionId}`);
   await expect(page.getByTestId('queue-table')).toBeVisible();

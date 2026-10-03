@@ -247,6 +247,7 @@ A step is not done until all of these are true:
 pnpm test            # unit + integration
 pnpm test:e2e        # Playwright, against the dev servers
 pnpm test:e2e:built  # Playwright, against the console as built (e2e/built/)
+pnpm test:e2e:prod   # Playwright, against the production configuration (e2e/production/)
 pnpm db:reset        # rebuild demo data
 ```
 
@@ -315,6 +316,7 @@ pnpm lint
 pnpm test
 pnpm test:e2e
 pnpm test:e2e:built   # the specs that need `next build` (offline reload)
+pnpm test:e2e:prod    # the canary and the counter, DEMO_MODE=false, built apps, limited DB role
 ```
 
 ---

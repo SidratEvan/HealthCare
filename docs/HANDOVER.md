@@ -65,6 +65,14 @@ founder who did not write most of it and for whoever works on it next.
     role carries `BYPASSRLS` until plan 1.10), nothing alerts anybody, and
     whether the second location really is another disk is the installer's
     to make true.
+  - **Fact 7, §11, §12 item 9 — fixed** (`chore/e2e-ci`). CI builds both
+    apps, runs the two-device canary first and alone, then the whole
+    browser suite; and a second job runs the canary and the reception
+    specs against the production configuration — `NODE_ENV=production`,
+    `DEMO_MODE=false`, the limited database role, both apps built — with a
+    real staff sign-in. **Still true:** in that configuration no patient
+    can book (no SMS provider), so the patient's link there is written by
+    a fixture.
 
 ---
 
