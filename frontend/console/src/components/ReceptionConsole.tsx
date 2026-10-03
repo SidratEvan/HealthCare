@@ -56,13 +56,22 @@ import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
 import { StandbyCard } from '@/components/StandbyCard';
 import { WalkInSheet } from '@/components/WalkInSheet';
-import { useSessionQueue, type QueueAction } from '@/hooks/useSessionQueue';
+import { useSessionQueue, type QueueAction, type UndoOutcome } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 import { fetchPatientNames } from '@/lib/roster';
 
 import type { ReactNode } from 'react';
 
 const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
+
+/** What the counter is told after an undo (`GR-02`). */
+const UNDO_COPY = {
+  undone: 'actionUndone',
+  nothing: 'undoNothing',
+  expired: 'undoExpired',
+  offline: 'undoOffline',
+  refused: 'undoRefused',
+} as const satisfies Record<UndoOutcome, string>;
 
 /**
  * The demo principal (CLAUDE.md §4.1).
@@ -157,6 +166,26 @@ function ConsoleBody(): ReactNode {
   }, [sessionId, nameless]);
 
   /**
+   * Undo (`GR-02`, `FR-REC-16`): the toast's button with the keys of the tap
+   * it belongs to, or `Ctrl+Z` for whatever this console did last.
+   *
+   * It used to send `ACTION_UNDONE` through the sync batch with a *booking*
+   * id where an event id belongs — nothing was undone and a junk event stayed
+   * in the log. The hook now knows which event each action became.
+   */
+  const undo = useCallback(
+    async (clientEventIds?: readonly string[]) => {
+      const outcome =
+        clientEventIds === undefined ? await queue.undoLast() : await queue.undo(clientEventIds);
+      show({
+        title: t(UNDO_COPY[outcome], locale),
+        tone: outcome === 'undone' ? 'positive' : 'caution',
+      });
+    },
+    [queue, show, locale],
+  );
+
+  /**
    * `BTN-B02-NEXT`.
    *
    * One control, two facts: whoever is in the chamber is finished, and the next
@@ -192,7 +221,7 @@ function ConsoleBody(): ReactNode {
         payload: { bookingId: next.bookingId, serial: next.serial },
       });
     }
-    if (actions.length > 0) await queue.actMany(actions);
+    const taken = actions.length > 0 ? await queue.actMany(actions) : [];
     if (next === undefined) return;
 
     show({
@@ -201,12 +230,13 @@ function ConsoleBody(): ReactNode {
       // GR-02: undo appends a compensating event, never deletes history.
       action: {
         label: t('undo', locale),
+        // The whole tap: the call, and the finish that went with it.
         onAction: () => {
-          void queue.act('ACTION_UNDONE', { undoneEventId: next.bookingId });
+          void undo(taken);
         },
       },
     });
-  }, [state, queue, now, show, locale]);
+  }, [state, queue, now, show, locale, undo]);
 
   /**
    * `BTN-B02-PAUSE` — one control, both directions (`FR-REC-05`, B1.2:
@@ -225,6 +255,14 @@ function ConsoleBody(): ReactNode {
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.target instanceof HTMLInputElement) return;
+      if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
+        event.preventDefault();
+        void undo();
+        return;
+      }
+      // Every other key here is a bare letter. With a modifier held it is the
+      // browser's — Ctrl+P prints, Ctrl+W closes the tab — not the counter's.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === 'p' || event.key === 'P') {
         event.preventDefault();
         togglePause();
@@ -247,7 +285,7 @@ function ConsoleBody(): ReactNode {
     return () => {
       globalThis.removeEventListener?.('keydown', onKey);
     };
-  }, [callNext, togglePause, queue]);
+  }, [callNext, togglePause, undo, queue]);
 
   if (sessionId === null) {
     return <Notice>{t('noSession', locale)}</Notice>;

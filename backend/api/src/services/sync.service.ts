@@ -36,7 +36,16 @@ import type { BatchEntry, BatchResult } from './queue.service.js';
 export const MAX_OFFLINE_HOURS = 24;
 
 export interface PushResult {
-  readonly accepted: readonly { readonly clientEventId: string; readonly seq: number }[];
+  /**
+   * `eventId` is the stored event. A console needs it to undo an action it
+   * queued: undo names an event, and until this travelled back the console had
+   * only its own key and sent a booking id instead (`GR-02`).
+   */
+  readonly accepted: readonly {
+    readonly clientEventId: string;
+    readonly seq: number;
+    readonly eventId: string;
+  }[];
   readonly conflicts: readonly {
     readonly clientEventId: string;
     readonly reason: string;
@@ -74,12 +83,16 @@ export async function pushBatch(input: {
     entries: ordered.map(withPlausiblePayload),
   });
 
-  const accepted: { clientEventId: string; seq: number }[] = [];
+  const accepted: { clientEventId: string; seq: number; eventId: string }[] = [];
   const conflicts: { clientEventId: string; reason: string; code: string }[] = [];
 
   for (const outcome of result.outcomes) {
     if (outcome.kind === 'accepted') {
-      accepted.push({ clientEventId: outcome.clientEventId, seq: outcome.seq });
+      accepted.push({
+        clientEventId: outcome.clientEventId,
+        seq: outcome.seq,
+        eventId: outcome.eventId,
+      });
     } else {
       conflicts.push({
         clientEventId: outcome.clientEventId,

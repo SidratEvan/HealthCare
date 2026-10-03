@@ -7,7 +7,12 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/console-resume` (2 October) — **a chamber paused from the
+Last updated: `fix/console-undo` (2 October) — **the console's Undo undoes**
+(plan 1.3): the toast and `Ctrl+Z` take back the whole tap through the real
+undo route, or drop it if it was never sent. **Still missing against
+`GR-02`:** the row buttons (done, late, absent, bring back, check-in) show no
+undo toast of their own; `Ctrl+Z` is the only way to take those back. Before
+that, `fix/console-resume` (2 October) — **a chamber paused from the
 console is resumed from the console** (plan 1.2; decision 87): the pause
 button reads আবার শুরু while paused, key `P`, with a banner and call-next off
 for the length of the break. Before that, `fix/delay-on-arrival` (2 October)
@@ -259,8 +264,10 @@ below as it lands):
    delay declared before the doctor arrives is never consumed.** After arrival the ETA baseline is still `now + delayMinutes`
    (`eta.ts`); reproduced: the patient at the front told 18:20 while
    absent-marking was allowed at 18:06.
-4. **HIGH — the console's Undo sends a booking id as `undoneEventId`;** it
-   does nothing and leaves a junk `ACTION_UNDONE` in the log.
+4. **Fixed (`fix/console-undo`).** Was: **HIGH — the console's Undo sends a
+   booking id as `undoneEventId`;** it does nothing and leaves a junk
+   `ACTION_UNDONE` in the log. (The sync path still *accepts* an
+   `ACTION_UNDONE`; closing that is item 5.)
 5. **HIGH — `/sync/events` accepts all 19 event types** from any console role,
    including unguarded `ACTION_UNDONE` (any event, any age), `SLOT_*`,
    `BOOKING_CANCELLED` and `SESSION_ENDED` (no refund eligibility on this path).

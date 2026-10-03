@@ -214,6 +214,66 @@ describe('SY-01: the server decides order, the client only orders its own batch'
   });
 });
 
+describe('GR-02: what the console needs to undo an action it synced', () => {
+  it('names the event each accepted entry became, and that id undoes it', async () => {
+    const token = await receptionist();
+    const front = fixture.bookingIds[0] ?? '';
+    const arrived = entry(
+      'DOCTOR_ARRIVED',
+      { arrivedAt: minutesAgo(10), minutesLate: 0 },
+      minutesAgo(2),
+    );
+    const called = entry('PATIENT_CALLED', { bookingId: front, serial: 1 }, minutesAgo(1));
+
+    const pushed = await request(app)
+      .post(`${BASE}/sync/events`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ sessionId: fixture.sessionId, events: [arrived, called] });
+
+    expect(pushed.status).toBe(200);
+    const accepted = pushed.body.data.accepted as { clientEventId: string; eventId: string }[];
+    const calledEventId = accepted.find(
+      (item) => item.clientEventId === called['clientEventId'],
+    )?.eventId;
+    expect(calledEventId).toMatch(/^[0-9a-f-]{36}$/);
+
+    // The console's Undo: the dedicated route, with the event's own id.
+    const undone = await request(app)
+      .post(`${BASE}/events/${calledEventId ?? ''}/undo`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('Idempotency-Key', crypto.randomUUID())
+      .send({});
+
+    expect(undone.status).toBe(200);
+    expect(undone.body.data.state.entries[0].status).toBe('booked');
+    expect(await eventTypesOf(fixture.sessionId)).toEqual([
+      'DOCTOR_ARRIVED',
+      'PATIENT_CALLED',
+      'ACTION_UNDONE',
+    ]);
+  });
+
+  it('names the same event when the batch is sent again', async () => {
+    const token = await receptionist();
+    const arrived = entry(
+      'DOCTOR_ARRIVED',
+      { arrivedAt: minutesAgo(10), minutesLate: 0 },
+      minutesAgo(2),
+    );
+    const send = async (): Promise<string> => {
+      const response = await request(app)
+        .post(`${BASE}/sync/events`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ sessionId: fixture.sessionId, events: [arrived] });
+      return (response.body.data.accepted as { eventId: string }[])[0]?.eventId ?? '';
+    };
+
+    const first = await send();
+    expect(first).not.toBe('');
+    expect(await send()).toBe(first);
+  });
+});
+
 describe('SY-02: a replayed batch is safe', () => {
   it('applies a repeated batch exactly once', async () => {
     const batch = {

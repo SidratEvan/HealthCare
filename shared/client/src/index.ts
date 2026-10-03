@@ -63,6 +63,7 @@ export {
   ApiClient,
   ApiError,
   NetworkError,
+  createQueueApi,
   createSyncApi,
   type ApiClientOptions,
   type SyncPullResponse,

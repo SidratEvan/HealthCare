@@ -76,6 +76,15 @@ export function createMemoryStore(): PendingStore {
 export interface FlushOutcome {
   /** Entries the server took. Removed from the queue. */
   readonly accepted: readonly string[];
+  /**
+   * The same entries with the event each became, where the server said. An
+   * action already sent is undone by that id (`GR-02`); the console's own key
+   * means nothing to the undo route.
+   */
+  readonly acceptedEvents: readonly {
+    readonly clientEventId: string;
+    readonly eventId: string;
+  }[];
   /** Entries the server refused. Removed, and the row rolls back (`SY-03`). */
   readonly conflicted: readonly { readonly clientEventId: string; readonly reason: string }[];
   /** True when the push never reached the server; everything stays queued. */
@@ -87,7 +96,7 @@ export type PushTransport = (
   sessionId: string,
   events: readonly PendingEvent[],
 ) => Promise<{
-  readonly accepted: readonly { readonly clientEventId: string }[];
+  readonly accepted: readonly { readonly clientEventId: string; readonly eventId?: string }[];
   readonly conflicts: readonly {
     readonly clientEventId: string;
     readonly reason: string;
@@ -140,28 +149,51 @@ export class OfflineQueue {
   async flush(sessionId: string, push: PushTransport): Promise<FlushOutcome> {
     const queued = (await this.store.all()).filter((event) => event.sessionId === sessionId);
     if (queued.length === 0) {
-      return { accepted: [], conflicted: [], offline: false };
+      return { accepted: [], acceptedEvents: [], conflicted: [], offline: false };
     }
 
     try {
       const result = await push(sessionId, queued);
 
       const accepted = result.accepted.map((entry) => entry.clientEventId);
+      const acceptedEvents = result.accepted.flatMap((entry) =>
+        entry.eventId === undefined
+          ? []
+          : [{ clientEventId: entry.clientEventId, eventId: entry.eventId }],
+      );
       const conflicted = result.conflicts.map((entry) => ({
         clientEventId: entry.clientEventId,
         reason: entry.reason,
       }));
 
       await this.store.remove([...accepted, ...conflicted.map((entry) => entry.clientEventId)]);
-      return { accepted, conflicted, offline: false };
+      return { accepted, acceptedEvents, conflicted, offline: false };
     } catch {
       // The push never landed. Everything stays queued and the attempt count
       // rises, which is what drives the backoff and the stuck warning.
       for (const event of queued) {
         await this.store.put({ ...event, attempts: event.attempts + 1 });
       }
-      return { accepted: [], conflicted: [], offline: true };
+      return { accepted: [], acceptedEvents: [], conflicted: [], offline: true };
     }
+  }
+
+  /**
+   * Takes back actions that have not been sent (`GR-02`).
+   *
+   * Nothing has left the device, so there is nothing to compensate: the action
+   * is simply never sent, and no event is written for something that was
+   * undone before the server heard of it. Returns the keys it actually held —
+   * anything else has already gone and needs the undo route instead.
+   */
+  async discard(clientEventIds: readonly string[]): Promise<string[]> {
+    const wanted = new Set(clientEventIds);
+    const held = (await this.store.all())
+      .map((event) => event.clientEventId)
+      .filter((key) => wanted.has(key));
+
+    await this.store.remove(held);
+    return held;
   }
 
   /** Entries that have failed enough times to be worth telling someone about. */

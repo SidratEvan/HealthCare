@@ -662,7 +662,7 @@ The highest-traffic screen in the system. Every primary action must be reachable
 4. **Sync:** pushed to server immediately when online; queued when offline (`FR-QUE-50`).
 5. **Server effect:** rolling consultation rate updated (`FR-QUE-12`), all downstream ETAs recomputed (`FR-QUE-11`).
 6. **Broadcast:** `session:<id>` channel → every patient device updates within 2 s (`NFR-01`); the called patient additionally receives push + SMS.
-7. **Result UI:** undo toast for 10 s (`GR-02`); pressing undo appends a compensating event (never deletes history).
+7. **Result UI:** undo toast for 10 s (`GR-02`); pressing undo takes back the whole tap — the call, then the finish that went with it — by appending a compensating event for each (never deletes history). If the tap has not been sent yet (offline), it is simply not sent. `Ctrl+Z` does the same for the last action of any kind, once, inside the ten seconds; the toast then says what happened (taken back, too late, no connection, nothing to undo).
 8. **Failure:** sync failure keeps the optimistic state and shows the pending-sync counter; a rejected event (e.g. another counter already called that patient, `FR-QUE-53`) rolls the row back with an explanatory toast.
 
 ### B1.4 Queue table

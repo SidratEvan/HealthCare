@@ -23,6 +23,10 @@ founder who did not write most of it and for whoever works on it next.
     becomes আবার শুরু while paused (key `P`), a banner says since when, call
     next is off with the reason. Nobody is marked absent during a break and
     the grace starts again after it. `e2e/pause-resume.spec.ts` presses both.
+  - **Fact 4, §4.7, §12 item 4 — fixed** (`fix/console-undo`). `/sync/events`
+    answers with each accepted event's id; Undo and `Ctrl+Z` call
+    `POST /events/:id/undo` with it, newest first, and drop an action that
+    was never sent. `e2e/console-undo.spec.ts` presses it online and offline.
 
 ---
 

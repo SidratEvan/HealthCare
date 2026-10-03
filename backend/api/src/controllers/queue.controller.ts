@@ -12,7 +12,7 @@
  * reading of the state.
  */
 
-import { measuredConsultSeconds, time } from '@platform/domain';
+import { measuredConsultSeconds, time, UNDO_WINDOW_SECONDS } from '@platform/domain';
 import type { QueueActor } from '@platform/domain';
 
 import { AppError, forbiddenScope, notFound } from '../errors/AppError.js';
@@ -26,14 +26,8 @@ import type {
 import type { Principal } from '../types/express.js';
 import type { Request, Response } from 'express';
 
-/**
- * How long after an event it may still be undone (`GR-02`, BACKEND.md §7.4).
- *
- * Ten seconds is the window in which a receptionist realises she tapped the
- * wrong row. Past it, the patient has been called into the chamber and undoing
- * the record would be rewriting what happened rather than correcting a slip.
- */
-const UNDO_WINDOW_MS = 10_000;
+/** `GR-02`, BACKEND.md §7.4: the domain's window, in the unit a clock gives. */
+const UNDO_WINDOW_MS = UNDO_WINDOW_SECONDS * 1000;
 
 /** `GET /sessions/:id/queue` */
 export async function getQueue(req: Request, res: Response): Promise<void> {

@@ -271,7 +271,7 @@ appendEvent({
 12. **Audit** — write `audit_log` with actor and event.
 13. **Return** — new state + ETAs so the caller's optimistic UI can reconcile.
 
-**Undo (`GR-02`)** appends `ACTION_UNDONE` referencing the original event; the reducer treats the pair as a no-op. History is never deleted.
+**Undo (`GR-02`)** appends `ACTION_UNDONE` referencing the original event; the reducer treats the pair as a no-op. History is never deleted. The only way to write one is `POST /events/:id/undo` — the original actor, inside `UNDO_WINDOW_SECONDS` (10, in `shared/domain`). A console undoes a whole tap newest event first, and an action it has not yet sent is dropped from its outbox instead: nothing is written for something taken back before the server heard of it.
 
 **Delays (`FR-REC-03`, `FR-QUE-11`).** A delay declared **before** the doctor arrives moves the expected start (planned start + everything declared) and is used up by `DOCTOR_ARRIVED`: from then the queue counts from now. A delay declared **after** the arrival holds the chamber until the moment it was declared plus its minutes (`QueueState.hold`); a second one extends a hold still running. The no-show grace (`FR-QUE-20`) never ends before a hold does. `sessions.delay_minutes` stays the total declared that day; what a patient is shown is `outstandingDelayMinutes` — all of it before the arrival, then a hold's own minutes for as long as it runs.
 
@@ -308,7 +308,7 @@ Consoles operate fully offline (`FR-OFF-01`). The protocol is deliberately small
 - `SY-02` Every event is idempotent by `clientEventId`; a replayed batch is safe.
 - `SY-03` Conflicting events (two counters calling different patients) resolve by server arrival; the losing device receives a `conflict` entry in the batch response and rolls that row back.
 - `SY-04` Bookings created online while the console was offline appear in the missed-events pull and are inserted into the local queue as new arrivals, never dropped (`FR-QUE-52`).
-- `SY-05` Batch response shape: `{ accepted: [{clientEventId, seq}], conflicts: [{clientEventId, reason, currentState}], state, etas }`.
+- `SY-05` Batch response shape: `{ accepted: [{clientEventId, seq, eventId}], conflicts: [{clientEventId, reason, code}], state, etas }`. `eventId` is the stored event, which is what `POST /events/:id/undo` names: a console knows an action only by its own `clientEventId`, and cannot undo what it synced without it (`GR-02`).
 - `SY-06` A device offline longer than 24 h is forced to a full session re-pull rather than a delta.
 
 ---
