@@ -28,6 +28,15 @@ export {
 } from './offline/store.dexie.js';
 
 export {
+  MAX_KEPT_HOURS,
+  createMemorySnapshotStore,
+  isUsable,
+  readKept,
+  type KeptSnapshot,
+  type SnapshotStore,
+} from './offline/snapshots.js';
+
+export {
   consoleDatabaseName,
   openConsoleStores,
   ownerOfToken,
@@ -87,6 +96,7 @@ export {
   foldUpdate,
   isStale,
   openSessionChannel,
+  startingFrom,
   type QueueUpdatedMessage,
   type SessionChannelOptions,
   type SessionSnapshot,

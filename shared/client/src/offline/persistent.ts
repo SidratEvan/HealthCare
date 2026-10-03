@@ -26,12 +26,20 @@
 import { createMemoryBedStore, type BedActionStore } from './beds.js';
 import { createMemoryErStore, type ErActionStore } from './emergency.js';
 import { createMemoryStore, type PendingStore } from './queue.js';
-import { createDexieOutboxStore, createDexieStore, openConsoleDatabase } from './store.dexie.js';
+import { createMemorySnapshotStore, type SnapshotStore } from './snapshots.js';
+import {
+  createDexieOutboxStore,
+  createDexieSnapshotStore,
+  createDexieStore,
+  openConsoleDatabase,
+} from './store.dexie.js';
 
 export interface ConsoleStores {
   readonly queue: PendingStore;
   readonly beds: BedActionStore;
   readonly emergency: ErActionStore;
+  /** The last queue each chamber's console was told (`snapshots.ts`). */
+  readonly snapshots: SnapshotStore;
   /** False when what is queued lives in this tab only. */
   readonly durable: () => boolean;
 }
@@ -106,6 +114,11 @@ export function openConsoleStores(owner: string): ConsoleStores {
       queue: guarded(createDexieStore(database), createMemoryStore(), health),
       beds: guarded(createDexieOutboxStore(database.bedActions), createMemoryBedStore(), health),
       emergency: guarded(createDexieOutboxStore(database.erActions), createMemoryErStore(), health),
+      snapshots: guardedSnapshots(
+        createDexieSnapshotStore(database),
+        createMemorySnapshotStore(),
+        health,
+      ),
       durable: () => health.ok(),
     };
   } catch {
@@ -121,6 +134,7 @@ function memoryStores(): ConsoleStores {
     queue: createMemoryStore(),
     beds: createMemoryBedStore(),
     emergency: createMemoryErStore(),
+    snapshots: createMemorySnapshotStore(),
     durable: () => false,
   };
 }
@@ -166,6 +180,43 @@ function guarded<T>(primary: Store<T>, fallback: Store<T>, health: Health): Stor
       await run(
         () => primary.clear(),
         () => fallback.clear(),
+      );
+    },
+  };
+}
+
+/** The same guard, for the store that holds one row per chamber. */
+function guardedSnapshots(
+  primary: SnapshotStore,
+  fallback: SnapshotStore,
+  health: Health,
+): SnapshotStore {
+  async function run<R>(onDisk: () => Promise<R>, inMemory: () => Promise<R>): Promise<R> {
+    if (!health.ok()) return await inMemory();
+    try {
+      return await onDisk();
+    } catch {
+      health.fail();
+      return await inMemory();
+    }
+  }
+
+  return {
+    get: async (sessionId) =>
+      await run(
+        () => primary.get(sessionId),
+        () => fallback.get(sessionId),
+      ),
+    put: async (snapshot) => {
+      await run(
+        () => primary.put(snapshot),
+        () => fallback.put(snapshot),
+      );
+    },
+    remove: async (sessionId) => {
+      await run(
+        () => primary.remove(sessionId),
+        () => fallback.remove(sessionId),
       );
     },
   };

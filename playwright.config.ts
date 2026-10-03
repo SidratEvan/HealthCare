@@ -44,6 +44,10 @@ const DATABASE_URL = E2E_DATABASE_URL;
 export default defineConfig({
   testDir: './e2e',
 
+  // `e2e/built/` runs against the console as built, not against `next dev`
+  // (`playwright.built.config.ts`, `pnpm test:e2e:built`). Both are the gate.
+  testIgnore: ['**/built/**'],
+
   /**
    * Rebuild the demo data first (`FR-DEM-06`).
    *

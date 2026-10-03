@@ -537,6 +537,14 @@ export const CONSOLE = {
   loading: { bn: 'লোড হচ্ছে', en: 'Loading' },
   emptyQueue: { bn: 'এই চেম্বারে এখনো কোনো সিরিয়াল নেই', en: 'No serials in this chamber yet' },
   loadFailed: { bn: 'তথ্য আনা যায়নি', en: 'Could not load' },
+  /**
+   * No network, and nothing kept on this device for this chamber. Said rather
+   * than left on "loading", which would never end (`GR-03`, `FR-OFF-05`).
+   */
+  queueNotKeptOffline: {
+    bn: 'সংযোগ নেই, আর এই চেম্বারের সিরিয়াল এই ডিভাইসে রাখা নেই। সংযোগ ফিরলে নিজে থেকেই খুলবে।',
+    en: 'No connection, and this chamber’s queue is not kept on this device. It will open by itself when the connection returns.',
+  },
   retry: { bn: 'আবার চেষ্টা করুন', en: 'Try again' },
   noSession: { bn: 'আজ কোনো চেম্বার চলছে না', en: 'No chamber is running today' },
 

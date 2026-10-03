@@ -7,7 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/e2e-outbox-close-race` (3 October) — **the outbox specs
+Last updated: `feat/console-offline-load` (3 October) — **the console opens
+with no network, on the queue it was last told** (plan 1.6; below, *Plan
+1.6*). In the tab that was signed in; without names; the reception queue
+only. Before that, `fix/e2e-outbox-close-race` (3 October) — **the outbox specs
 wait for a blocked push to be refused before they close the page** (a test
 fix; below, *Plan 1.5*, *Learned about the tests*). Before that,
 `fix/offline-outbox-persist` (3 October) — **what a console
@@ -244,6 +247,50 @@ it looks like an ordering interaction on the shared API database.
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
 
+### Plan 1.6 — the console opens with no network (`feat/console-offline-load`)
+
+**What happens now.** A counter that reloads during an outage gets the
+console back: the shell from the service worker's cache
+(`frontend/console/public/sw.js`), the queue as this device was last told it
+(`snapshots` in the per-person database), and whatever it had queued
+(plan 1.5). The offline block says it is offline and the freshness line gives
+the real age of what is shown, from the server's own timestamp. Taps are
+queued and sent on reconnect, as before.
+
+**What it does not do, and each is a decision rather than an accident:**
+- **Only the tab that was signed in.** The sign-in is in `sessionStorage`
+  (step 21), which survives a reload and a discarded tab and nothing else. A
+  browser restarted after a power cut is signed out, and signing in needs the
+  server. The unsent actions still wait on disk and go when that person signs
+  in again.
+- **No names.** The kept queue is the reduced state: serials, statuses, times,
+  ids. Names come from a separate, audited read (`DB-P7`) and are not kept on
+  the device, so an offline reload shows a queue of serials until the
+  connection returns. Keeping them is a small change and puts patient names in
+  a counter PC's browser storage — **the owner's call (decision 88)**.
+- **The reception queue only.** The ward board and the ER console open their
+  shell and keep their outboxes; they do not keep their last board, and say
+  the board could not load. Their boards carry more about patients than a
+  queue does, so they wait on the same decision.
+- **A chamber never opened on this device** has nothing kept, and says so.
+- **Kept for 24 hours**, then dropped (`SY-06`).
+
+**It cannot be shown under `next dev`.** The development client will not
+start the app until it has heard from its dev server over a websocket; an
+offline reload there loads every cached file and stays blank. The same test
+passes in three seconds against `next build`. So `e2e/built/` has its own
+configuration (`playwright.built.config.ts`, **`pnpm test:e2e:built`**): the
+API as usual, the console built and served on its usual port (the API answers
+two browser origins and a test is not a reason for a third), no patient app.
+It is part of the gate. Plan 1.8 extends it to the canary and the reception
+specs against the production configuration.
+
+**Tried and set aside:** running the whole console suite against the build.
+Forty-nine of fifty specs passed as they were; `console-cold-start.spec.ts:98`
+is written around React's development double-mount ("four slow answers, not
+two") and needs rewriting first. That, and whether the suite should move to
+built apps at all — it would also take about 2 GB off a run — stays with 1.8.
+
 ### Plan 1.5 — the outboxes are kept on the device (`fix/offline-outbox-persist`)
 
 **What a counter now keeps.** The reception queue's, the ward board's and the
@@ -364,8 +411,8 @@ below as it lands):
    accepts all 19 event types** from any console role,
    including unguarded `ACTION_UNDONE` (any event, any age), `SLOT_*`,
    `BOOKING_CANCELLED` and `SESSION_ENDED` (no refund eligibility on this path).
-6. **Half fixed (`fix/offline-outbox-persist`): the outboxes are kept on
-   disk.** The console service worker is plan 1.6. Was: **HIGH — offline
+6. **Fixed (`fix/offline-outbox-persist`, `feat/console-offline-load`): the
+   outboxes are kept on disk and the console has a service worker.** Was: **HIGH — offline
    outboxes are memory-only** (`createDexieStore` has no caller; the comment
    saying it is swapped in is wrong) and the console has no service worker.
 7. **HIGH — RLS has no policies anywhere** (no `CREATE POLICY` in any
@@ -2381,14 +2428,32 @@ afternoon.
   not made: recording less in a trace, or running the two apps as production
   builds (plan 1.8 already has a production-configuration job), which also
   takes about 2 GB off.
-- **A typed consent code is lost if the queue arrives after it**
-  (found 3 October, not fixed). `DoctorConsole` renders `<ConsentScan
-  key={servingBookingId ?? 'nobody'}>` before the queue has loaded, so the
-  form remounts when the first state arrives and whatever was typed into it
-  is gone. `wallet.spec.ts:251` types the moment the page opens and failed on
-  it once, in a probe run under load (it passed in all three full runs). It
-  is a real, small race in the screen as well as in the test; its own
-  `fix/*` branch.
+- **What a doctor typed as the queue arrived was wiped, twice over**
+  (fixed in `feat/console-offline-load`, 3 October). Two places in
+  `DoctorConsole` reset themselves when the patient in the chamber changes,
+  and both counted "nobody yet → the first patient" as a change. The consent
+  form was drawn before the queue had loaded, keyed "nobody", and remounted
+  when the first state arrived: a code typed in that moment was gone
+  (`wallet.spec.ts:251`). The visit note was cleared by an effect, which
+  runs after the fields are already enabled and on screen: a diagnosis typed
+  in between was gone and the sign button was back to disabled
+  (`doctor-console.spec.ts:97`, one run in five when repeated). Neither is
+  new, and neither is only a test matter — a doctor who types the moment the
+  next patient appears hits the same gap. Whether plan 1.6 made them easier
+  to hit was not measured; it does move the moment the first state arrives,
+  since the console now reads its kept queue from the device before it asks
+  the server. The consent form is not drawn until the queue has said who is
+  in the chamber; the note is cleared in the render that brings the new
+  patient, not after it. **A reset that belongs to "the patient changed" is
+  done in the render that changes the patient, never in an effect after
+  it.** Checked by running both specs eight times over: every
+  doctor-console test passed all eight (56 of 56). The wallet tests passed
+  five times and then failed for a reason that is the product working: a
+  guest booking starts with a phone check, `POST /guest/start` allows 30 per
+  address per ten minutes (`patientAuth.routes.ts`), each repeat books six
+  guests, and the thirty-first was refused with a 429. **Repeating
+  `wallet.spec.ts` more than five times in one run measures the limit, not
+  the wallet.**
 - **A second device a spec opens lives until the whole run ends**
   (`fix/e2e-context-leaks`, 2026-09-30). `browser.newContext()` belongs to the
   worker's browser, not the test, and there is one worker. No-show, referral,
@@ -3282,6 +3347,16 @@ Raised while fixing the handover's findings (`docs/PLATFORM_PLAN.md` phase 1):
    front starts again, in full, at resume. `BACKEND.md` §4.1 and
    `APP_FLOW.md` B1.2 now say so. The stricter reading — only the paused
    minutes are given back — is a small change if preferred.
+88. **What a counter PC keeps about patients for offline use**
+   (`feat/console-offline-load`). Kept today: unsent actions, which can
+   carry a name and a phone (a bed admit, an ER walk-in) and are deleted on
+   send; and the last queue per chamber, which carries no names. **Not**
+   kept: patient names for the queue, the ward board, the ER case list. So
+   a reload with no network shows serials without names, and the ward and
+   ER consoles say their board could not load. Keeping those would make an
+   outage far more workable and would leave identifiable patient data,
+   unencrypted, in the browser storage of a shared PC. Built the cautious
+   way; the owner decides whether to keep more, and with what protection.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
@@ -3330,9 +3405,11 @@ credential.
 
 **From the `demo` branch** (CLAUDE.md §3.1): the demo-data version, kept at
 the last green commit of `mvp`, for pulling onto any machine to show
-somebody. It stands at `10bbcd1` (3 October): the first four fixes of
-`docs/PLATFORM_PLAN.md` phase 1 — delay, resume, undo, the sync allow-list —
-after `pnpm verify` and a clean 144/144 browser run on that commit.
+somebody. It stands at `3e910a6` (3 October): `docs/PLATFORM_PLAN.md` phase 1
+through 1.5 — delay, resume, undo, the sync allow-list, the pool and
+broadcast fixes, and the outboxes kept on disk — after `pnpm verify` and a
+clean 150/150 browser run on that commit. **From plan 1.6 on, green means
+`pnpm test:e2e` and `pnpm test:e2e:built`.**
 
 ```bash
 git fetch origin && git checkout demo && git pull

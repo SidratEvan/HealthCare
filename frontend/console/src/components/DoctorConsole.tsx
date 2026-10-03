@@ -185,13 +185,21 @@ function DoctorBody(): ReactNode {
    * Keyed on the booking, so the fields clear exactly when the person changes
    * and never while the doctor is typing about the same one — a re-render from a
    * socket message must not wipe a half-written diagnosis.
+   *
+   * Cleared in the render that brings the new patient, not in an effect after
+   * it. An effect runs once the fields are already enabled and on screen, and
+   * whatever was typed in between was wiped with the previous person's note:
+   * a diagnosis entered as the queue arrived was gone, and the sign button was
+   * back to disabled.
    */
   const servingBookingId = serving?.bookingId ?? null;
-  useEffect(() => {
+  const [noteFor, setNoteFor] = useState<string | null>(servingBookingId);
+  if (noteFor !== servingBookingId) {
+    setNoteFor(servingBookingId);
     setDraft(emptyDraft());
     setFailed(false);
     setTestKey(crypto.randomUUID());
-  }, [servingBookingId]);
+  }
 
   // The catalogue is the hospital's and does not change during a session, so
   // it is fetched once. A failure leaves it empty and the chips absent, which
@@ -322,8 +330,11 @@ function DoctorBody(): ReactNode {
           )}
 
           {/* Keyed on who is in the chamber, so a consented history never
-              outlives the patient it belongs to. */}
-          <ConsentScan key={servingBookingId ?? 'nobody'} />
+              outlives the patient it belongs to. And not shown until the
+              queue has said who that is: drawn before, it was keyed "nobody",
+              then remounted when the first state arrived — and a code typed
+              in that moment was gone, with the button back to disabled. */}
+          {state === null ? null : <ConsentScan key={servingBookingId ?? 'nobody'} />}
 
           <UpNext waiting={waiting} />
         </div>

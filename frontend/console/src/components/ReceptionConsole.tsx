@@ -298,7 +298,15 @@ function ConsoleBody(): ReactNode {
   }
 
   if (state === null) {
-    return <Notice>{t('loadFailed', locale)}</Notice>;
+    // Offline with nothing kept for this chamber is its own sentence: it is
+    // not a failure to retry, and it resolves itself (`FR-OFF-05`).
+    return (
+      <Notice>
+        <span data-testid="queue-not-kept">
+          {queue.connected ? t('loadFailed', locale) : t('queueNotKeptOffline', locale)}
+        </span>
+      </Notice>
+    );
   }
 
   const pendingBookingIds = new Set<string>();

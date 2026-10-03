@@ -62,7 +62,13 @@ const ROUTES = [
   `${CONSOLE}/`,
 ];
 
-export default async function globalSetup(): Promise<void> {
+/**
+ * Migrates and reseeds the E2E database (`FR-DEM-06`).
+ *
+ * Shared with `globalSetup.built.ts`, so the two suites start from the same
+ * demo data by the same route.
+ */
+export function prepareDatabase(): void {
   // The guard in `database/scripts/lib/env.ts` decides on the host, so a
   // remote target needs saying out loud. Nothing here opts into one: these
   // specs truncate and reseed, and that is not something to do to a shared
@@ -73,6 +79,10 @@ export default async function globalSetup(): Promise<void> {
 
   execFileSync('pnpm', ['db:migrate'], { stdio: 'inherit', shell: true, env });
   execFileSync('pnpm', ['db:reset'], { stdio: 'inherit', shell: true, env });
+}
+
+export default async function globalSetup(): Promise<void> {
+  prepareDatabase();
 
   // One at a time: compiling in parallel only makes each compile slower.
   for (const route of ROUTES) {
