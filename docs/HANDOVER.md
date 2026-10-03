@@ -27,6 +27,10 @@ founder who did not write most of it and for whoever works on it next.
     answers with each accepted event's id; Undo and `Ctrl+Z` call
     `POST /events/:id/undo` with it, newest first, and drop an action that
     was never sent. `e2e/console-undo.spec.ts` presses it online and offline.
+  - **§5 weakness 3, §12 item 5 — fixed** (`fix/sync-event-allowlist`).
+    `/sync/events` replays eleven event types, each only from a role its own
+    route admits; the other eight are refused per entry and write nothing
+    (`BACKEND.md` `SY-07`).
 
 ---
 

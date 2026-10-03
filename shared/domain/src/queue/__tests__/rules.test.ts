@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { QUEUE_EVENT_TYPES } from '../../types/enums.js';
 import { id, serial, timestamp } from '../../types/ids.js';
 import { etaFor } from '../eta.js';
 import { QUOTE_STEP_MINUTES, suggestedQuote } from '../quote.js';
@@ -17,6 +18,7 @@ import {
   canAcceptSlot,
   canAddWalkin,
   canCallNext,
+  canReplayOffline,
   canCheckIn,
   canDeclareDelay,
   canDeclareDoctorArrived,
@@ -34,6 +36,7 @@ import {
   lapsedOffers,
   nextToCall,
   DEFAULT_QUEUE_SETTINGS,
+  OFFLINE_ACTION_ROLES,
   MAX_DELAY_MINUTES,
   MAX_QUOTED_WAIT_MINUTES,
 } from '../rules.js';
@@ -42,6 +45,7 @@ import { emptyState, type QueueState } from '../state.js';
 import { bookingId, LogBuilder, makeSeed } from './support.js';
 
 import type { BookingId, PatientId, SlotOfferId } from '../../types/ids.js';
+import type { OfflineAction } from '../rules.js';
 
 const PLANNED_START = timestamp('2026-09-17T11:00:00.000Z');
 
@@ -614,6 +618,56 @@ describe('session controls', () => {
 
     expect(canPause(paused).ok).toBe(false);
     expect(canResume(paused).ok).toBe(true);
+  });
+});
+
+describe('what a console may replay (BACKEND.md §5)', () => {
+  /** Event types with a route of their own, which a batch must not carry. */
+  const OWN_ROUTE = [
+    'SESSION_OPENED',
+    'SESSION_ENDED',
+    'WALKIN_ADDED',
+    'BOOKING_CANCELLED',
+    'SLOT_OFFERED',
+    'SLOT_ACCEPTED',
+    'SLOT_EXPIRED',
+    'ACTION_UNDONE',
+  ] as const;
+
+  it('decides every event type one way or the other', () => {
+    // A type added to `queue_event_type` lands in neither list, and this is
+    // where that shows: whether a console may replay it is a decision, not a
+    // default.
+    const decided = [...Object.keys(OFFLINE_ACTION_ROLES), ...OWN_ROUTE].sort();
+    expect(decided).toEqual([...QUEUE_EVENT_TYPES].sort());
+  });
+
+  it('refuses the types that have a route of their own, whoever asks', () => {
+    for (const type of OWN_ROUTE) {
+      const result = canReplayOffline(type, ['receptionist', 'doctor', 'hospital_admin']);
+      expect(result.ok).toBe(false);
+      if (result.ok) continue;
+      expect(result.code).toBe('NOT_AN_OFFLINE_ACTION');
+    }
+  });
+
+  it('lets the counter replay everything it can do offline', () => {
+    for (const type of Object.keys(OFFLINE_ACTION_ROLES) as OfflineAction[]) {
+      expect(canReplayOffline(type, ['receptionist']).ok).toBe(true);
+    }
+  });
+
+  it('holds a doctor to the chamber, and an administrator to reading', () => {
+    expect(canReplayOffline('DELAY_DECLARED', ['doctor']).ok).toBe(true);
+    expect(canReplayOffline('PATIENT_DONE', ['doctor']).ok).toBe(true);
+
+    const noShow = canReplayOffline('PATIENT_NO_SHOW', ['doctor']);
+    expect(noShow.ok).toBe(false);
+    if (!noShow.ok) expect(noShow.code).toBe('ROLE_NOT_ALLOWED');
+
+    expect(canReplayOffline('PATIENT_CALLED', ['hospital_admin']).ok).toBe(false);
+    // Any one of several roles is enough (`FR-ROLE-02`).
+    expect(canReplayOffline('PATIENT_NO_SHOW', ['doctor', 'receptionist']).ok).toBe(true);
   });
 });
 

@@ -299,8 +299,8 @@ In addition to `CLAUDE.md`:
 | 1.1 | `fix/delay-on-arrival` | merged — `QueueState.hold`, `outstandingDelayMinutes`; the patient card and the doctor's header show what is still ahead |
 | 1.2 | `fix/console-resume` | merged — one button both ways, key `P`, the paused banner, `QueueState.resumedAt`, `e2e/pause-resume.spec.ts` |
 | 1.3 | `fix/console-undo` | merged — event ids in the sync answer, `undo`/`undoLast` in the hook, `Ctrl+Z`, `e2e/console-undo.spec.ts` |
-| 1.4 | `fix/sync-event-allowlist` | next |
-| 1.5 | `fix/offline-outbox-persist` | |
+| 1.4 | `fix/sync-event-allowlist` | merged — `OFFLINE_ACTION_ROLES`, `canReplayOffline`, `SY-07`; the console hook can only queue what the server replays |
+| 1.5 | `fix/offline-outbox-persist` | next |
 | 1.6 | `feat/console-offline-load` | |
 | 1.7 | `chore/ops-hardening` | |
 | 1.8 | `chore/e2e-ci` | |

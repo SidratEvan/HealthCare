@@ -274,6 +274,134 @@ describe('GR-02: what the console needs to undo an action it synced', () => {
   });
 });
 
+describe('only what a counter can queue offline is replayed', () => {
+  /** Pushes one batch as `token` and returns the answer's body. */
+  async function push(
+    token: string,
+    events: readonly Record<string, unknown>[],
+  ): Promise<{
+    status: number;
+    accepted: { clientEventId: string }[];
+    conflicts: { clientEventId: string; code: string }[];
+  }> {
+    const response = await request(app)
+      .post(`${BASE}/sync/events`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ sessionId: fixture.sessionId, events });
+    return {
+      status: response.status,
+      accepted: response.body.data?.accepted ?? [],
+      conflicts: response.body.data?.conflicts ?? [],
+    };
+  }
+
+  const arrival = (): Record<string, unknown> =>
+    entry('DOCTOR_ARRIVED', { arrivedAt: minutesAgo(10), minutesLate: 0 }, minutesAgo(10));
+
+  // Each of these has a route of its own, with rules this path would skip: the
+  // undo window and its actor, the offers table, refunds on cancel and on
+  // ending, the booking a walk-in needs.
+  it.each([
+    ['SESSION_OPENED', {}],
+    ['SESSION_ENDED', { reason: null }],
+    ['WALKIN_ADDED', { position: 'end', index: null, reason: null }],
+    ['BOOKING_CANCELLED', { reason: 'cancelled at the counter' }],
+    ['SLOT_OFFERED', {}],
+    ['SLOT_ACCEPTED', {}],
+    ['SLOT_EXPIRED', {}],
+    ['ACTION_UNDONE', {}],
+  ] as const)('refuses %s, and writes nothing', async (type, payload) => {
+    const token = await receptionist();
+    expect((await push(token, [arrival()])).accepted).toHaveLength(1);
+
+    const refused = entry(
+      type,
+      { bookingId: fixture.bookingIds[0], undoneEventId: fixture.bookingIds[0], ...payload },
+      minutesAgo(1),
+    );
+    const answer = await push(token, [refused]);
+
+    // A conflict for that entry, not a failed request: the console drops it
+    // and rolls the row back, and nothing behind it in the outbox is blocked.
+    expect(answer.status).toBe(200);
+    expect(answer.accepted).toEqual([]);
+    expect(answer.conflicts).toEqual([
+      expect.objectContaining({
+        clientEventId: refused['clientEventId'],
+        code: 'NOT_AN_OFFLINE_ACTION',
+      }),
+    ]);
+    expect(await eventTypesOf(fixture.sessionId)).toEqual(['DOCTOR_ARRIVED']);
+  });
+
+  it('applies the rest of a batch around a refused entry', async () => {
+    const token = await receptionist();
+    const front = fixture.bookingIds[0] ?? '';
+    const ended = entry('SESSION_ENDED', { reason: null }, minutesAgo(2));
+    const called = entry('PATIENT_CALLED', { bookingId: front, serial: 1 }, minutesAgo(1));
+
+    const answer = await push(token, [arrival(), ended, called]);
+
+    expect(answer.accepted).toHaveLength(2);
+    expect(answer.conflicts.map((conflict) => conflict.clientEventId)).toEqual([
+      ended['clientEventId'],
+    ]);
+    // The chamber was not ended behind the counter's back.
+    expect(await eventTypesOf(fixture.sessionId)).toEqual(['DOCTOR_ARRIVED', 'PATIENT_CALLED']);
+  });
+
+  it('holds each role to what its own routes allow (FR-ROLE-01)', async () => {
+    const reception = await receptionist();
+    expect((await push(reception, [arrival()])).accepted).toHaveLength(1);
+
+    const doctor = await staff(
+      ['doctor'],
+      fixture.hospitalId,
+      await staffIdFor(fixture.hospitalId, 'doctor'),
+    );
+    const admin = await staff(
+      ['hospital_admin'],
+      fixture.hospitalId,
+      await staffIdFor(fixture.hospitalId, 'hospital_admin'),
+    );
+    const front = fixture.bookingIds[0] ?? '';
+
+    // A doctor may declare a delay — `POST /sessions/:id/delay` lets them —
+    // and may not mark anybody absent or move the queue's order.
+    const delay = entry(
+      'DELAY_DECLARED',
+      { minutes: 15, reason: null, declaredBy: 'doctor' },
+      minutesAgo(3),
+    );
+    const noShow = entry(
+      'PATIENT_NO_SHOW',
+      { bookingId: front, graceUsedMinutes: 0 },
+      minutesAgo(2),
+    );
+    const reorder = entry(
+      'PRIORITY_REORDERED',
+      { bookingId: front, fromIndex: 0, toIndex: 2, reason: 'because' },
+      minutesAgo(1),
+    );
+    const fromDoctor = await push(doctor, [delay, noShow, reorder]);
+
+    expect(fromDoctor.accepted.map((item) => item.clientEventId)).toEqual([delay['clientEventId']]);
+    expect(fromDoctor.conflicts.map((conflict) => conflict.code)).toEqual([
+      'ROLE_NOT_ALLOWED',
+      'ROLE_NOT_ALLOWED',
+    ]);
+
+    // An administrator reads a queue and writes none of it.
+    const fromAdmin = await push(admin, [
+      entry('PATIENT_CALLED', { bookingId: front, serial: 1 }, minutesAgo(1)),
+    ]);
+    expect(fromAdmin.accepted).toEqual([]);
+    expect(fromAdmin.conflicts.map((conflict) => conflict.code)).toEqual(['ROLE_NOT_ALLOWED']);
+
+    expect(await eventTypesOf(fixture.sessionId)).toEqual(['DOCTOR_ARRIVED', 'DELAY_DECLARED']);
+  });
+});
+
 describe('SY-02: a replayed batch is safe', () => {
   it('applies a repeated batch exactly once', async () => {
     const batch = {

@@ -42,9 +42,9 @@ import {
   continueReplay,
   id,
   UNDO_WINDOW_SECONDS,
+  type OfflineAction,
   type QueueEvent,
   type QueueState,
-  type QueueEventType,
 } from '@platform/domain';
 
 import { createSyncTransport, createUndoTransport } from '@/lib/sync';
@@ -75,7 +75,7 @@ export interface SessionQueue {
    * keys it was recorded under, which is what `undo` takes.
    */
   readonly act: (
-    type: QueueEventType,
+    type: OfflineAction,
     payload: Record<string, unknown>,
   ) => Promise<readonly string[]>;
   /**
@@ -97,9 +97,16 @@ export interface SessionQueue {
   readonly loading: boolean;
 }
 
-/** One action as a console takes it. */
+/**
+ * One action as a console takes it.
+ *
+ * Only what `POST /sync/events` replays (`OFFLINE_ACTION_ROLES`): an undo, a
+ * walk-in or an offer has a route of its own and cannot be queued here — which
+ * is how the old Undo, an `ACTION_UNDONE` put into this queue, can no longer
+ * be written.
+ */
 export interface QueueAction {
-  readonly type: QueueEventType;
+  readonly type: OfflineAction;
   readonly payload: Record<string, unknown>;
 }
 
@@ -316,7 +323,7 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
   );
 
   const act = useCallback(
-    async (type: QueueEventType, payload: Record<string, unknown>) =>
+    async (type: OfflineAction, payload: Record<string, unknown>) =>
       await actMany([{ type, payload }]),
     [actMany],
   );
