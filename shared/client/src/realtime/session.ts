@@ -126,6 +126,13 @@ export function startingFrom(initial: SessionChannelOptions['initial']): {
  */
 export function openSessionChannel(options: SessionChannelOptions): {
   readonly close: () => void;
+  /**
+   * Takes the queue as the server stated it somewhere other than this socket
+   * — the answer to a push (`SY-05`) — exactly as a `queue.updated` is taken:
+   * shown if it is newer than what is held, dropped if it is not. One rule for
+   * both roads, so neither can put the screen behind the other.
+   */
+  readonly fold: (message: QueueUpdatedMessage) => void;
   readonly snapshot: () => SessionSnapshot;
   readonly isStale: (now?: Date) => boolean;
   readonly socket: Socket;
@@ -185,13 +192,15 @@ export function openSessionChannel(options: SessionChannelOptions): {
     publish({ connected: false });
   });
 
-  socket.on('queue.updated', (message: QueueUpdatedMessage) => {
+  const fold = (message: QueueUpdatedMessage): void => {
     const folded = foldUpdate(snapshot, stateSeq, message);
     if (folded === null) return;
     stateSeq = folded.stateSeq;
     snapshot = folded.snapshot;
     options.onSnapshot(snapshot);
-  });
+  };
+
+  socket.on('queue.updated', fold);
 
   // Replayed events from the resume handshake. The authoritative state follows
   // them in a `queue.updated`, so what these advance is the cursor — which is
@@ -208,6 +217,7 @@ export function openSessionChannel(options: SessionChannelOptions): {
     close: () => {
       socket.disconnect();
     },
+    fold,
     snapshot: () => snapshot,
     isStale: (now = new Date()) =>
       isStale(snapshot.lastServerTs, now, options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS),

@@ -7,12 +7,21 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/console-key-race` (5 October) — **a key on the console is
+Last updated: `fix/console-ack-rollback` (5 October) — **a tap stays on the
+reception console when its answer arrives before its broadcast** (plan 1.9b;
+below, *Plan 1.9b*). The queue used to step back to the patient before, and
+stay there while the socket said nothing. **Two things it leaves, neither
+measured:** the ward board and the ER console have the same shape, and an
+action is folded twice while the answer is the slower one (same section).
+With it, `fix/materialise-test-midnight` and `fix/tests-past-midnight` —
+**two tests that failed just after Dhaka midnight, every night** (below,
+*Things learned the hard way*); the product was right both times, and one
+question for the owner came out of it (a chamber that runs past midnight).
+Before that, `fix/console-key-race` (5 October) — **a key on the console is
 answered by the screen as it stands, not by the one before the last redraw**
-(plan 1.9a; below, *Plan 1.9a*). It was the one failure in CI's third run.
-**Found on the way and not fixed:** the queue on the console steps back for a
-moment when a tap's answer arrives before its broadcast (same section; it
-wants its own branch before 1.10). Before that,
+(plan 1.9a; below, *Plan 1.9a*). It was the one failure in CI's third run,
+and **the fourth run (37350834049, `d1ca84a`) was the first in which all
+three jobs passed**. Before that,
 `chore/status-handover` (3 October) — **phase 1 is merged and
 pushed through 1.9; 1.10 is next and starts with a design note for the
 owner** (below, *Next: plan 1.10*). No product code changed. Before that,
@@ -179,11 +188,12 @@ every pilot step in §4.2 but 27, which waits for an SMS aggregator account.
 What remains is the owner's: the open decisions below, applying migrations to
 Supabase, and whether `mvp` goes to `main`.
 
-**Before 1.10, if the owner agrees: `fix/console-ack-rollback`** — the queue
-on the console steps back when a tap's answer arrives before its broadcast.
-Found and measured on 5 October, not fixed (below, *Plan 1.9a*). It is the
-counter's own screen being untrue for a moment, so it is suggested ahead of
-1.10; it has not been put to the owner.
+**Left by `fix/console-ack-rollback`, for the owner to place** (below, *Plan
+1.9b*, *What it does not do*): the same step back on the ward board and the
+ER console, read from the code and not measured; and an action shown twice
+over while its answer is slower than its broadcast. The owner said on
+5 October to do what seemed best; the reception queue was done first because
+it is the product's own screen. Neither of the two blocks 1.10.
 
 **Next: plan 1.10, `feat/tenant-rls`** — the last and largest row of phase 1
 (`docs/PLATFORM_PLAN.md` §2): the database itself keeps one hospital's rows
@@ -336,6 +346,75 @@ it looks like an ordering interaction on the shared API database.
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
 
+### Plan 1.9b — a tap stays on the screen when its answer comes first (`fix/console-ack-rollback`)
+
+Not in the handover. Found while verifying 1.9a, by reading `useSessionQueue`
+and then by measuring.
+
+**What was wrong.** A tap is told to the server over HTTP, and the queue it
+produced comes back twice: in the answer to that request, and in the
+broadcast on the socket. The console shows the server's queue with its own
+unsent actions folded on top. When the answer came it dropped the actions
+from the fold, threw the answer's queue away, and waited for the broadcast.
+The two are separate connections. On one machine the broadcast always wins,
+so no test had seen the other order:
+
+- **With the broadcast 800 ms late** (a throwaway probe, three runs of
+  three): ১ → ২ at about 80 ms, **back to ১ at about 190 ms**, ২ again at
+  about 990 ms.
+- **With the socket saying nothing** (the new test, on the console as it
+  was, three of three): the tap was answered, and the console sat on ১ for
+  the ten seconds the test waited. A socket that is reconnecting, or stalled
+  without having closed, does this on a real network for as long as it
+  lasts, and a tap made meanwhile acts on the queue before the last tap.
+
+**It was a document not being followed.** `BACKEND.md` `SY-05` puts the
+queue in the answer, and `FRONTEND.md` §11.1 step 4 says to reconcile with
+it. `lib/sync.ts` kept `accepted` and `conflicts` and dropped the rest.
+
+**What it does now.** The answer's queue is folded into the session channel
+by the same rule a broadcast is (`foldUpdate`: the newest sequence wins, so
+neither road can put the screen behind the other), in the same redraw that
+takes the answered actions out of the fold. `OfflineQueue.flush` hands the
+answer back as `update` (the newest, when a batch had to go one entry at a
+time); `openSessionChannel` has `fold`; the hook does both in one step.
+Nothing changed in the API. By reading, not by a test of its own: the
+answer's queue goes through the same `onSnapshot` a broadcast does, so it is
+also what is kept for an offline reload.
+
+**How it is proven.** `queue.test.ts` (four tests, red before). And
+`offline-console.spec.ts` holds everything the server says on the socket at
+a gate, taps *next*, and requires ২ and never ১ again: **red three of three
+on the console as it was, green since**. It runs against the production
+configuration too.
+
+**What it does not do:**
+- **The ward board and the ER console have the same shape. Read from the
+  code, not measured.** `useBedBoard` and `useEmergencyConsole` drop the
+  optimistic change when the write is answered and then read the board
+  again; until that read or the broadcast lands, the tile should show the
+  bed before the action. `BACKEND.md` says a bed write returns the beds "so a
+  console can reconcile without waiting for the broadcast", and `bedSender`
+  discards them. A bed has no sequence number to say which of two answers is
+  newer, so that fix needs a rule this one did not: its own branch.
+- **An action is folded twice while its answer is slower than its
+  broadcast. Read from the code, not measured.** This is the usual order,
+  for a few milliseconds on every tap: the broadcast arrives with the action
+  in it, and the console folds its still-unanswered copy on top again (the
+  reducer skips an event by sequence number, and an unanswered action has
+  only a provisional one). For *next* the second fold should change nothing
+  visible. For a delay or a late mark it would show double until the answer
+  comes. It matters more than a few milliseconds because **the answer waits
+  for the messages to be sent** (`appendBatch` awaits
+  `notifications.dispatch` before it returns): with a real SMS provider
+  behind the adapter, the answer trails the broadcast by as long as the
+  provider takes. Plan 2.1 (sending from a worker) removes that wait. Closing
+  it properly needs the broadcast to name the actions it holds, which is a
+  change to `BACKEND.md` §6 and so the owner's to agree.
+- **An answer lost after the server committed** is still covered only by the
+  retry: the push goes again with the same keys and is answered then
+  (`SY-02`).
+
 ### Plan 1.9a — a key is answered by the screen as it stands (`fix/console-key-race`)
 
 Not in the handover. Found by CI's third run of the browser suite
@@ -372,30 +451,10 @@ so it has one now.
   the production configuration 21 of 21, where the new test also runs
   against the console as built.
 
-**Found on the way, measured, and not fixed: the queue steps back when a
-tap's answer beats its broadcast.** The console shows the server's last
-broadcast with its own unsent actions folded on top (`useSessionQueue`). When
-the push is answered, the actions are dropped from the fold at once, but the
-broadcast that contains them comes on another connection. If it is later, the
-screen goes back to what it showed before the tap and forward again when the
-broadcast lands. On one machine the broadcast always wins, which is why no
-test has seen it. With the broadcast held back 800 ms (a throwaway probe, not
-committed: `page.routeWebSocket`), three runs of three showed ১ → ২ at about
-80 ms, **back to ১ at about 190 ms**, and ২ again at about 990 ms. On a
-hospital's network the two are separate connections and either can be slow.
-**Read from the code and not measured:** while the socket is reconnecting and
-the push still gets through, the step back would last until the socket is
-back (its backoff is capped at ten seconds); a tap made in that time acts on
-the queue before the last tap, and the server should refuse what does not
-fit, so the console says the queue moved. Nothing has been seen lost or
-written wrongly. But the counter's screen is briefly untrue, on the one
-screen that is supposed to be true. **It wants its own branch** (`fix/console-ack-rollback`
-is the obvious name): keep an action folded until the broadcast that holds it
-has arrived. The push's answer already says which sequence each action became
-(`accepted[].seq`), and the snapshot says how far it has got (`lastSeq`), so
-it is a change to the hook and not to the API. It touches `FRONTEND.md` §11.1
-step 4, so the documents change with it. Suggested before 1.10; the owner has
-not been asked yet.
+**Found on the way: the queue stepped back when a tap's answer beat its
+broadcast.** Measured here with a throwaway probe and fixed in the next
+branch, `fix/console-ack-rollback` (above, *Plan 1.9b*, which has the
+measurements and what is still left).
 
 ### Plan 1.9 — what a message leaves behind (`fix/log-sms-redaction`)
 
@@ -2733,6 +2792,28 @@ afternoon.
   `docker compose down -v && docker compose up -d`.
 
 ### Things learned the hard way, so they are not relearned
+
+- **A spec's "server out of reach" goes away with the page it was set on, and
+  a closing tab's push then gets out** (`fix/console-ack-rollback`,
+  5 October). `offline-console.spec.ts` blocks `/sync/events` with a
+  Playwright route and closes the tab to stand for a power cut. Twice in one
+  evening, on a machine slowed by hours of runs, the closed tab's events were
+  in the log seconds later: once in "the next person at the same PC" (a full
+  gate run, 153 of 154), once in "survives the tab being closed" (one run in
+  three). Both times the events carried the right person's name, so the
+  outbox's isolation held and the product had done nothing wrong: a tab that
+  dies mid-push may land it, and the same keys sent again are the same events
+  (`SY-02`). `fix/e2e-outbox-close-race` had narrowed this by waiting for a
+  refusal before closing; the console retries by itself, so that only moves
+  the window, and waiting for a second, fresh refusal still failed one run in
+  three. **What holds: unload the console first** (`leave`: go to an empty
+  page while the block still stands, then close). Its requests die with
+  their document and its timers are gone before the block is. 16 of 16
+  after, on the same slow machine. The specs that reload instead of closing
+  keep their page, and so their block, and have not failed. **Not
+  established:** exactly how the request got out two seconds after
+  `page.close()` returned in the second failure; the fix does not depend on
+  knowing.
 
 - **For about the first hour of a Dhaka day the pitch session is dated
   yesterday, and a test that did not know failed every night in that hour**

@@ -71,6 +71,9 @@ async function openConsole(page: Page): Promise<void> {
  * got six events from a tab the test had "cut the power" to. So the page goes
  * only once the push that holds everything taken so far has been refused,
  * which leaves a full second before the console's next attempt.
+ *
+ * That second is not enough on a slow machine, and waiting for a fresh
+ * refusal just before closing was not enough either: see `leave`.
  */
 async function pushFailed(page: Page, events: number): Promise<void> {
   await page.waitForEvent('requestfailed', (request) => {
@@ -78,6 +81,29 @@ async function pushFailed(page: Page, events: number): Promise<void> {
     const body = request.postDataJSON() as { events?: unknown[] } | null;
     return (body?.events?.length ?? 0) === events;
   });
+}
+
+/**
+ * The tab goes, with the server out of reach — without the test's own block
+ * going first.
+ *
+ * "Out of reach" here is a Playwright route, and a route belongs to the page
+ * it watches. Closing the page takes the block down with it, and a push the
+ * console had waiting at the block, or made as it died, reached the server:
+ * twice on 5 October, on a slow machine, a spec found a closed tab's events
+ * in the log (under the right person's name both times — nothing was sent as
+ * anybody else, and the product had done nothing wrong: a tab that dies
+ * mid-push may land it). Waiting for a refusal first only narrows that, since
+ * the console tries again by itself.
+ *
+ * So the console is unloaded first, by leaving for an empty page while the
+ * block still stands: its requests are cancelled with their document and its
+ * timers are gone. Only then is the page closed. To the console that is a
+ * closed tab; to the test it is one whose last request could not get out.
+ */
+async function leave(page: Page): Promise<void> {
+  await page.goto('about:blank');
+  await page.close();
 }
 
 test.describe('the reception console', () => {
@@ -252,7 +278,7 @@ test.describe('a shift with the network gone (FR-OFF-01)', () => {
 
     // The tab goes. Nobody is at the counter, so nothing is sent: what was
     // taken is waiting on the device, not in a page that is no longer there.
-    await page.close();
+    await leave(page);
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     expect(await eventCount(demo.sessionId)).toBe(before);
 
@@ -396,7 +422,7 @@ test.describe('the outbox is kept on the device (FR-OFF-01)', () => {
     await expect(afternoon.getByTestId('now-serving')).toHaveText('২');
     await expect(afternoon.getByTestId('pending-count')).toBeVisible();
     await refused;
-    await afternoon.close();
+    await leave(afternoon);
     await context.unroute(sync);
     expect(await eventCount(demo.sessionId)).toBe(before);
 
@@ -433,5 +459,84 @@ test.describe('the outbox is kept on the device (FR-OFF-01)', () => {
     const sent = (await eventActors(demo.sessionId)).slice(before);
     expect(sent.map((event) => event.type)).toEqual(['PATIENT_DONE', 'PATIENT_CALLED']);
     expect(sent.every((event) => event.staffId === demo.receptionistId)).toBe(true);
+  });
+});
+
+test.describe("a tap's answer arrives before its broadcast (FRONTEND.md §11.1 step 4)", () => {
+  /**
+   * A tap is told to the server over HTTP, and the queue it produced comes
+   * back twice: in the answer to that request (`SY-05`), and in the broadcast
+   * on the socket. They are two connections, and on a hospital's network
+   * either can be the slower. On one machine the broadcast always wins, which
+   * is why nothing had seen what happens when it does not: the console dropped
+   * the tap from its screen when the answer came, and showed the queue before
+   * the tap until the broadcast arrived.
+   *
+   * Here everything the server says on the socket is held at a gate, so the
+   * answer is all the console has.
+   */
+  test('the tap stays on the screen, and the queue never steps back to the patient before', async ({
+    page,
+  }) => {
+    let held = false;
+    const waiting: (() => void)[] = [];
+    await page.routeWebSocket(/socket\.io/, (socket) => {
+      const server = socket.connectToServer();
+      socket.onMessage((message) => {
+        server.send(message);
+      });
+      server.onMessage((message) => {
+        if (held) waiting.push(() => socket.send(message));
+        else socket.send(message);
+      });
+    });
+
+    await openConsole(page);
+    await expect(page.getByTestId('offline-block')).toHaveAttribute('data-connected', 'true', {
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId('now-serving')).toHaveText('১');
+
+    // Every number the card shows from here on, in order.
+    await page.evaluate(() => {
+      const read = (): string =>
+        document.querySelector('[data-testid="now-serving"]')?.textContent ?? '';
+      const shown = [read()];
+      new MutationObserver(() => {
+        const now = read();
+        if (now !== shown[shown.length - 1]) shown.push(now);
+      }).observe(document.body, { subtree: true, childList: true, characterData: true });
+      (globalThis as unknown as { shown: string[] }).shown = shown;
+    });
+    const shown = async (): Promise<string[]> =>
+      await page.evaluate(() => (globalThis as unknown as { shown: string[] }).shown);
+
+    held = true;
+    const answered = page.waitForResponse(
+      (response) => response.url().endsWith('/sync/events') && response.ok(),
+    );
+    await page.getByTestId('call-next').click();
+    await answered;
+
+    // The server has the tap and has broadcast it; the broadcast is at the
+    // gate, and the console has nothing left to send.
+    await expect.poll(() => waiting.length).toBeGreaterThan(0);
+    await expect(page.getByTestId('pending-count')).toBeHidden();
+
+    await expect(page.getByTestId('now-serving')).toHaveText('২');
+    expect(await shown()).toEqual(['১', '২']);
+
+    // The broadcast arrives late and changes nothing.
+    held = false;
+    for (const deliver of waiting.splice(0)) deliver();
+    await expect(page.getByTestId('last-synced')).toBeVisible();
+    await expect(page.getByTestId('now-serving')).toHaveText('২');
+    expect(await shown()).toEqual(['১', '২']);
+
+    // One tap, in the log once.
+    expect((await eventTypes(demo.sessionId)).slice(-2)).toEqual([
+      'PATIENT_DONE',
+      'PATIENT_CALLED',
+    ]);
   });
 });

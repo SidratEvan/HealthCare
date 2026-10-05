@@ -22,11 +22,20 @@
  *
  * ## Why optimistic state is a separate value from server state
  *
- * `serverState` is what the last `queue.updated` said. `state` is that with
- * locally-queued events folded on top. Keeping them apart is what makes a
- * rollback possible: a conflicted event is dropped from the pending list and
- * the derived state simply stops including it — no inverse operation, no
- * attempt to subtract an event from a queue.
+ * `serverState` is what the server last said, on the session channel or in
+ * answer to a push. `state` is that with locally-queued events folded on top.
+ * Keeping them apart is what makes a rollback possible: a conflicted event is
+ * dropped from the pending list and the derived state simply stops including
+ * it — no inverse operation, no attempt to subtract an event from a queue.
+ *
+ * ## An answered action leaves the fold as the server's queue arrives
+ *
+ * Step 4. The answer to a push carries the queue with the batch in it
+ * (`SY-05`), and it is shown in the same redraw that stops folding those
+ * actions on top. They used to be dropped when the answer came and the queue
+ * left to arrive on the socket, which is another connection: whenever it was
+ * the slower of the two, the counter was shown the queue *before* her tap
+ * until it caught up, and with the socket silent she was left there.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -38,6 +47,7 @@ import {
   retryDelayMs,
   type ConsoleStores,
   type PendingEvent,
+  type QueueUpdatedMessage,
   type SessionSnapshot,
 } from '@platform/client';
 import {
@@ -206,6 +216,15 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
   );
   /** Pushes on their way, so an undo can wait to learn what became of them. */
   const flushesRef = useRef(new Set<Promise<void>>());
+  /**
+   * Where a push's answer goes to be shown, and the chamber it is open for —
+   * kept beside it so that an answer about one chamber can never be folded
+   * into another's screen.
+   */
+  const channelRef = useRef<{
+    readonly sessionId: string;
+    readonly fold: (message: QueueUpdatedMessage) => void;
+  } | null>(null);
 
   const refreshPending = useCallback(async () => {
     const queue = queueRef.current;
@@ -240,6 +259,22 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
 
     const run = (async (): Promise<void> => {
       const outcome = await queue.flush(sessionId, transport);
+
+      // The answer is the queue with these actions in it, and it goes on
+      // screen in the same redraw that stops folding them on top (see the
+      // header). Both updates are made here, together, so there is no redraw
+      // with one and not the other.
+      const channel = channelRef.current;
+      if (outcome.update !== null && channel?.sessionId === sessionId) {
+        channel.fold(outcome.update);
+      }
+      const answered = new Set([
+        ...outcome.accepted,
+        ...outcome.conflicted.map((entry) => entry.clientEventId),
+      ]);
+      if (answered.size > 0) {
+        setPending((held) => held.filter((event) => !answered.has(event.clientEventId)));
+      }
 
       const sent = sentRef.current;
       for (const entry of outcome.acceptedEvents) sent.set(entry.clientEventId, entry.eventId);
@@ -280,6 +315,7 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
 
     let closed = false;
     let channel: ReturnType<typeof openSessionChannel> | null = null;
+    let held: typeof channelRef.current = null;
     const snapshots = storesRef.current?.snapshots ?? null;
 
     void (async () => {
@@ -340,11 +376,14 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
             .catch(() => undefined);
         },
       });
+      held = { sessionId, fold: channel.fold };
+      channelRef.current = held;
     })();
 
     return () => {
       closed = true;
       channel?.close();
+      if (channelRef.current === held) channelRef.current = null;
     };
   }, [sessionId, socketUrl, getToken]);
 

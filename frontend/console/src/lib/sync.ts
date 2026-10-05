@@ -29,7 +29,17 @@ export function createSyncTransport(baseUrl: string, getToken: () => string | nu
       })),
     );
 
-    return { accepted: response.accepted, conflicts: response.conflicts };
+    return {
+      accepted: response.accepted,
+      conflicts: response.conflicts,
+      // The queue with this batch in it (`SY-05`). The console shows it at
+      // once instead of waiting to be told the same thing on the socket.
+      update: {
+        seq: response.seq,
+        serverTs: response.serverTs,
+        data: { state: response.state, etas: response.etas },
+      },
+    };
   };
 }
 
