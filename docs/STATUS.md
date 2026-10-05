@@ -848,6 +848,15 @@ re-attached its key listener in an effect that ran after the screen had
 been redrawn, so for about a frame a key was handled against the state before
 it. Fixed in `fix/console-key-race` (above, *Plan 1.9a*).
 
+**The runs of 5 October.** `d1ca84a` (1.9a): all three jobs passed, the
+first run to do so. `97bfdae` (1.9b and the documents): **shown as failed,
+and was not a test failure.** `verify` passed; the `browser` and `production`
+jobs were cancelled by the next push to `mvp`, made while they were still
+running, which is exactly what `CLAUDE.md` §3.1 says not to do. `8186353`
+(P2, which contains everything in `97bfdae`): all three passed. `c4db8ee`
+(P3): all three passed. The push that carries P4 was held until that run had
+finished.
+
 A run's jobs and its failure messages can be read without signing in, at
 `api.github.com/repos/SidratEvan/HealthCare/actions/runs/<id>/jobs` and
 `…/check-runs/<job id>/annotations`. `gh` is not installed on this machine.
