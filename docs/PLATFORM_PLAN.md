@@ -414,7 +414,7 @@ In addition to `CLAUDE.md`:
 | — | `chore/requirements-5-october` | documents only: `SY-08`, `SY-09` and `FRONTEND.md` §11.1 *One action, shown once*; `FR-QUE-06` and `FR-PAT-39` (sessions that cross midnight) in `PRD.md` and `APP_FLOW.md`; rows 1.9c–1.9f |
 | P2 | `fix/console-demo-banner` | merged — one banner component in each app, drawn only when the server says it is a demonstration, hidden until it has answered; `demo-label.spec.ts`, and the production suite checks a real server shows none |
 | P3 | `fix/chamber-end-of-day` | merged — `BTN-B02-END` and `MOD-B02-END` on the reception console; the server refuses an end while a patient is in the chamber (`canEndSession`); patients left unseen are counted, need a tick and are not changed; the picker says which day a chamber is from and no longer lists an ended one; `chamber-end.spec.ts` |
-| P4 | `chore/e2e-pilot-path` | after P3; then stop and report |
+| P4 | `chore/e2e-pilot-path` | merged — `e2e/production/reception-pilot.prod.spec.ts`: one receptionist's day end to end, and late, absent and bring back with the counters, under the production configuration. It found nothing. **Stopped here for the owner's review** (`docs/STATUS.md`, *Pilot readiness*) |
 | P5 | `chore/deploy-lan-https` | deferred until the first hospital's IT has chosen how its server is reached |
 | 1.9c | `fix/queue-exactly-once` | after the first pilot (see §2 for what would bring it forward) |
 | 1.9d | `fix/ward-reconcile` | after the first pilot |
