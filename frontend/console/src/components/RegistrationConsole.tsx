@@ -28,6 +28,7 @@ import { Button, Card, ToastProvider, useLocale, useToast } from '@platform/ui';
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { ConsoleRail } from '@/components/ConsoleRail';
+import { DemoBanner } from '@/components/DemoBanner';
 import { FAILURE_KEY, PatientFinder, type ChosenPatient } from '@/components/PatientFinder';
 import { addWalkIn } from '@/lib/registration';
 import { fetchStaffChambers, type StaffChamber } from '@/lib/staffAuth';
@@ -121,9 +122,7 @@ function RegistrationBody(): ReactNode {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
-        <p className="bg-warn-100 px-6 py-2 text-caption text-warn-700">
-          {t('demoBanner', locale)}
-        </p>
+        <DemoBanner />
 
         <header className="flex items-center gap-3 border-b border-line bg-surface px-6 py-4">
           <h1 className="min-w-0 flex-1 text-title-md font-bold">

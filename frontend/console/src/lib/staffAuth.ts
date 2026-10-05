@@ -19,6 +19,7 @@
  */
 
 import { clearDemoSession, readDemoSession, writeDemoSession, type DemoSession } from './demo';
+import { rememberDemonstration } from './deployment';
 
 const API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 
@@ -415,12 +416,19 @@ const STATUS_ATTEMPTS = 4;
  * none. So the question is asked again, `onWaking` says so after the first
  * miss, and null — never false — comes back only when every attempt failed.
  * False means the server said so.
+ *
+ * The answer is also what every screen's demonstration line follows
+ * (`lib/deployment.ts`): it is told here, once, by the one question the page
+ * asks.
  */
 export async function askDemoMode(onWaking: () => void): Promise<boolean | null> {
   for (let attempt = 1; attempt <= STATUS_ATTEMPTS; attempt += 1) {
     if (attempt > 1) onWaking();
     const answer = await fetchDemoModeOnce(STATUS_ATTEMPT_MS);
-    if (answer !== null) return answer;
+    if (answer !== null) {
+      rememberDemonstration(answer);
+      return answer;
+    }
   }
   return null;
 }

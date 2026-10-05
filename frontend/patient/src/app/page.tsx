@@ -32,6 +32,7 @@ import {
 import { useLocale } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
+import { DemoBanner } from '@/components/DemoBanner';
 import {
   AmbulanceIcon,
   BedIcon,
@@ -60,13 +61,10 @@ import type { ReactNode } from 'react';
 const AREA = 'Dhaka';
 
 export default function Home(): ReactNode {
-  const locale = useLocale();
   return (
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 px-5 pt-4">
-        <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {tp('demoBanner', locale)}
-        </p>
+        <DemoBanner />
 
         <Header />
         <EmergencyCard />

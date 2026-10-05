@@ -60,6 +60,7 @@ import {
 import { CheckInSheet } from '@/components/CheckInSheet';
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { ConsoleRail } from '@/components/ConsoleRail';
+import { DemoBanner } from '@/components/DemoBanner';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
 import { StandbyCard } from '@/components/StandbyCard';
@@ -337,9 +338,7 @@ function ConsoleBody(): ReactNode {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
-        <p className="bg-warn-100 px-6 py-2 text-caption text-warn-700">
-          {t('demoBanner', locale)}
-        </p>
+        <DemoBanner />
 
         {/* --- session bar (B1.2) ------------------------------------------ */}
         {/* Whose chamber, then when: the doctor's name is what a receptionist

@@ -58,6 +58,7 @@ import {
 } from '@platform/ui';
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
+import { DemoBanner } from '@/components/DemoBanner';
 import {
   expandBedLabels,
   loadSetup,
@@ -284,7 +285,7 @@ function Shell({
   return (
     <div className="min-h-screen">
       {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
-      <p className="bg-warn-100 px-6 py-2 text-caption text-warn-700">{t('demoBanner', locale)}</p>
+      <DemoBanner />
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 p-6" data-testid="hospital-settings">
         <header className="flex flex-wrap items-baseline justify-between gap-3">

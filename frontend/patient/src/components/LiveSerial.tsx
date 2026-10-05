@@ -61,6 +61,7 @@ import {
 } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
+import { DemoBanner } from '@/components/DemoBanner';
 import { useNow } from '@/hooks/useNow';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 import { useTrackingLink } from '@/hooks/useTrackingLink';
@@ -207,9 +208,7 @@ function Ready({
   return (
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5">
-        <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {tp('demoBanner', locale)}
-        </p>
+        <DemoBanner />
 
         <header className="flex flex-col gap-1">
           <h1 className="font-reading text-title-lg">
