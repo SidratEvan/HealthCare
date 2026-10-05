@@ -7,7 +7,12 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/requirements-5-october` (5 October) — **client-readiness
+Last updated: `fix/console-demo-banner` (5 October) — **P2: a screen says it
+is a demonstration only where the server says so** (below, *P2*). The line
+was printed unconditionally on ten console screens and four of the patient
+app's, so a hospital's own server would have told its staff that their
+patients were display data. Next is P3. Before that,
+`chore/requirements-5-october` (5 October) — **client-readiness
 mode: feature work is frozen and the order is P2, P3, P4, then a go or no-go
 for a supervised reception pilot** (below, *Now: client-readiness mode*;
 `docs/PLATFORM_PLAN.md` §2). Documents only: the owner's decisions of that
@@ -392,6 +397,33 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### P2 — the demonstration line follows the server (`fix/console-demo-banner`)
+
+**What was wrong.** "This is a demonstration. All data here is for display
+only" was a line of markup in ten console components and four of the patient
+app's screens, with nothing deciding whether to draw it. Under
+`DEMO_MODE=false` it would have been across the top of a real hospital's
+queue.
+
+**What it does now.** One component in each app draws it, and only when the
+server has said it is a demonstration: the console from the question its
+page already asks at load (`GET /demo/status`, kept in `lib/deployment.ts`),
+the patient app from `GET /config` (`useDeployment`). **Until the answer
+arrives nothing is said**, and the answer is not kept between page loads: an
+answer from an earlier visit is a guess about this one.
+
+**What that costs, deliberately.** A demonstration opened with no network —
+the console's offline reload, plan 1.6 — has no label until the server can be
+asked. The owner's rule is that the false label is the mistake that matters.
+
+**How it is proven.** `demo-label.spec.ts`: on the demonstration the
+reception queue, the registration desk and the patient app carry it; with
+the server's answer held back for good, neither app shows it (**red on the
+old code, two of two**). `e2e/production/`: under the production
+configuration the queue, the registration desk and a patient's own serial
+show no such line. The two dashboard specs that already looked for the line
+on the demonstration still pass.
 
 ### Plan 1.9b — a tap stays on the screen when its answer comes first (`fix/console-ack-rollback`)
 

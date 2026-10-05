@@ -37,6 +37,7 @@ import {
 import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
+import { DemoBanner } from '@/components/DemoBanner';
 import { GuestCodeCard } from '@/components/GuestCodeCard';
 import { HospitalBeds } from '@/components/HospitalBeds';
 import { BackIcon, ChevronIcon, HospitalIcon } from '@/components/icons';
@@ -165,9 +166,7 @@ export default function BookPage(): ReactNode {
   return (
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5">
-        <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {tp('demoBanner', locale)}
-        </p>
+        <DemoBanner />
 
         {/* GR-03: the fourth state. Announced, because a person who has just
           lost signal is not necessarily looking at the top of the screen. */}

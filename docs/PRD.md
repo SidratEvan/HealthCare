@@ -638,7 +638,7 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-DEM-04` Bed inventory across wards with live occupancy; two facilities with burn units, three with ICU.
 - `FR-DEM-05` Eight ambulances, thirty blood donors, fifty pharmacy items.
 - `FR-DEM-06` A seed script can reset the demo to a known state in one command, including a session mid-queue ready for the pitch.
-- `FR-DEM-07` All demo content is visibly labelled as demonstration data.
+- `FR-DEM-07` All demo content is visibly labelled as demonstration data. The label follows the server: it is shown where the server says it is a demonstration, never on a real server, and not before the server has answered — a real hospital's screen that calls its own patients display data is the worse mistake of the two (owner's decision, 2026-10-05).
 
 ---
 

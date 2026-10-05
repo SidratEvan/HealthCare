@@ -43,6 +43,9 @@ const API = 'http://localhost:4000';
 /** `NFR-01`, `FR-PAT-31`. The same figure as `e2e/two-device-queue.spec.ts`. */
 const LATENCY_BUDGET_MS = 2_000;
 
+/** The start of `demoBanner`, the line only a demonstration may carry. */
+const DEMONSTRATION_LINE = 'এটি একটি ডেমো';
+
 let demo: ConsoleSession;
 
 test.beforeEach(async () => {
@@ -111,6 +114,49 @@ test.describe('what is running is the production configuration', () => {
     expect(picked.status()).toBe(403);
     const refusal = (await picked.json()) as { error: { code: string } };
     expect(refusal.error.code).toBe('AUTH_FORBIDDEN_SCOPE');
+  });
+
+  test('no screen says it is a demonstration (FR-DEM-07)', async ({ browser }) => {
+    // Every console screen and four of the patient's used to print "This is a
+    // demonstration. All data here is for display only" whatever they were
+    // running against. Over a hospital's own patients that is false, and it
+    // tells the person at the counter that what they enter does not count.
+    const counter = await browser.newContext();
+    const corridor = await browser.newContext();
+
+    try {
+      const console_ = await signInAndOpenChamber(counter);
+      await expect(console_.getByTestId('offline-block')).toHaveAttribute(
+        'data-connected',
+        'true',
+        {
+          timeout: 15_000,
+        },
+      );
+      await expect(console_.getByTestId('demo-banner')).toHaveCount(0);
+      await expect(console_.getByText(DEMONSTRATION_LINE, { exact: false })).toHaveCount(0);
+
+      // The registration desk, which is where a pilot's patients are entered.
+      // Checked once the server's answer about itself is in, so a line that
+      // was merely late would be caught.
+      const answered = console_.waitForResponse((response) =>
+        response.url().endsWith('/demo/status'),
+      );
+      await console_.goto(`${CONSOLE}/?view=registration`);
+      await answered;
+      await expect(console_.getByTestId('registration-console')).toBeVisible();
+      await expect(console_.getByTestId('demo-banner')).toHaveCount(0);
+      await expect(console_.getByText(DEMONSTRATION_LINE, { exact: false })).toHaveCount(0);
+
+      // And the patient's own screen, on their own serial.
+      const patient = await openLiveSerial(corridor);
+      await expect(patient.getByTestId('now-serving')).toBeVisible();
+      await expect(patient.getByTestId('demo-banner')).toHaveCount(0);
+      await expect(patient.getByText(DEMONSTRATION_LINE, { exact: false })).toHaveCount(0);
+    } finally {
+      await counter.close();
+      await corridor.close();
+    }
   });
 });
 
