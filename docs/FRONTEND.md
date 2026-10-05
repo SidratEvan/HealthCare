@@ -506,7 +506,7 @@ Font subsetting is mandatory: full Bengali Anek is large; subset to the ranges a
 - `A11Y-02` Visible focus ring on every interactive element; never `outline: none` without a replacement.
 - `A11Y-03` Colour never carries meaning alone — every state has a text label or icon.
 - `A11Y-04` Live regions: serial changes announce via `aria-live="polite"`; the called-takeover uses `aria-live="assertive"`.
-- `A11Y-05` Full keyboard operation of the console, including the shortcut set in `APP_FLOW.md` D4.
+- `A11Y-05` Full keyboard operation of the console, including the shortcut set in `APP_FLOW.md` D4. A shortcut is answered by the screen as it stands: a screen listens for keys through `useWindowKeydown` (`@platform/ui`), never through an effect of its own that swaps the listener after a redraw.
 - `A11Y-06` Supports 200 % OS text scaling without clipping — test every screen at that size.
 - `A11Y-07` Minimum 44 px targets, 8 px minimum gap between adjacent targets.
 

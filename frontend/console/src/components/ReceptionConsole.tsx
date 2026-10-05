@@ -47,7 +47,15 @@ import {
   numeralsFor,
   localName,
 } from '@platform/i18n';
-import { Button, Card, FreshnessLine, ToastProvider, useToast, useLocale } from '@platform/ui';
+import {
+  Button,
+  Card,
+  FreshnessLine,
+  ToastProvider,
+  useToast,
+  useLocale,
+  useWindowKeydown,
+} from '@platform/ui';
 
 import { CheckInSheet } from '@/components/CheckInSheet';
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
@@ -251,41 +259,35 @@ function ConsoleBody(): ReactNode {
 
   // A11Y-05 / B1.2: Space or N calls the next patient, A marks arrival,
   // P pauses and resumes. The console is operated at speed by people who are
-  // not looking at the mouse.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.target instanceof HTMLInputElement) return;
-      if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
-        event.preventDefault();
-        void undo();
-        return;
-      }
-      // Every other key here is a bare letter. With a modifier held it is the
-      // browser's — Ctrl+P prints, Ctrl+W closes the tab — not the counter's.
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      if (event.key === 'p' || event.key === 'P') {
-        event.preventDefault();
-        togglePause();
-      }
-      if (event.key === 'n' || event.key === 'N' || event.code === 'Space') {
-        event.preventDefault();
-        void callNext();
-      }
-      // B1.2: W opens the walk-in modal — online only, like the button.
-      if ((event.key === 'w' || event.key === 'W') && queue.connected) {
-        event.preventDefault();
-        setWalkingIn(true);
-      }
-      if (event.key === 'a' || event.key === 'A') {
-        void queue.act('DOCTOR_ARRIVED', { arrivedAt: new Date().toISOString(), minutesLate: 0 });
-      }
-    };
-
-    globalThis.addEventListener?.('keydown', onKey);
-    return () => {
-      globalThis.removeEventListener?.('keydown', onKey);
-    };
-  }, [callNext, togglePause, undo, queue]);
+  // not looking at the mouse — so a key is answered by the queue as it is on
+  // the screen, never by the one before the last redraw (`useWindowKeydown`).
+  useWindowKeydown((event) => {
+    if (event.target instanceof HTMLInputElement) return;
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
+      event.preventDefault();
+      void undo();
+      return;
+    }
+    // Every other key here is a bare letter. With a modifier held it is the
+    // browser's — Ctrl+P prints, Ctrl+W closes the tab — not the counter's.
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key === 'p' || event.key === 'P') {
+      event.preventDefault();
+      togglePause();
+    }
+    if (event.key === 'n' || event.key === 'N' || event.code === 'Space') {
+      event.preventDefault();
+      void callNext();
+    }
+    // B1.2: W opens the walk-in modal — online only, like the button.
+    if ((event.key === 'w' || event.key === 'W') && queue.connected) {
+      event.preventDefault();
+      setWalkingIn(true);
+    }
+    if (event.key === 'a' || event.key === 'A') {
+      void queue.act('DOCTOR_ARRIVED', { arrivedAt: new Date().toISOString(), minutesLate: 0 });
+    }
+  });
 
   if (sessionId === null) {
     return <Notice>{t('noSession', locale)}</Notice>;

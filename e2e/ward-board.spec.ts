@@ -202,6 +202,28 @@ test.describe('S-B-06 the bed controls (APP_FLOW.md B3)', () => {
     await expect(tile).toHaveAttribute('data-state', 'out_of_service');
     await expect(tile).toContainText('অক্সিজেন লাইন মেরামত');
   });
+
+  test('Esc backs out of a step, and then closes the panel (A11Y-05)', async ({ page }) => {
+    await openWardBoard(page);
+
+    await page.getByTestId(`bed-tile-${bed(1).label}`).click();
+    await page.getByTestId('action-admit').click();
+    await expect(page.getByTestId('admit-form')).toBeVisible();
+
+    // One step back: the form goes, the bed stays open.
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('admit-form')).toBeHidden();
+    await expect(page.getByTestId('bed-actions')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('bed-panel')).toBeHidden();
+
+    // Nothing was done to the bed on the way.
+    await expect(page.getByTestId(`bed-tile-${bed(1).label}`)).toHaveAttribute(
+      'data-state',
+      'free',
+    );
+  });
 });
 
 test.describe('a bed request, from the phone to the bed (FR-PAT-52, FR-BED-07)', () => {

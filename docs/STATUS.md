@@ -7,7 +7,13 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/status-handover` (3 October) — **phase 1 is merged and
+Last updated: `fix/console-key-race` (5 October) — **a key on the console is
+answered by the screen as it stands, not by the one before the last redraw**
+(plan 1.9a; below, *Plan 1.9a*). It was the one failure in CI's third run.
+**Found on the way and not fixed:** the queue on the console steps back for a
+moment when a tap's answer arrives before its broadcast (same section; it
+wants its own branch before 1.10). Before that,
+`chore/status-handover` (3 October) — **phase 1 is merged and
 pushed through 1.9; 1.10 is next and starts with a design note for the
 owner** (below, *Next: plan 1.10*). No product code changed. Before that,
 `fix/log-sms-redaction` (3 October) — **a message leaves no
@@ -173,6 +179,12 @@ every pilot step in §4.2 but 27, which waits for an SMS aggregator account.
 What remains is the owner's: the open decisions below, applying migrations to
 Supabase, and whether `mvp` goes to `main`.
 
+**Before 1.10, if the owner agrees: `fix/console-ack-rollback`** — the queue
+on the console steps back when a tap's answer arrives before its broadcast.
+Found and measured on 5 October, not fixed (below, *Plan 1.9a*). It is the
+counter's own screen being untrue for a moment, so it is suggested ahead of
+1.10; it has not been put to the owner.
+
 **Next: plan 1.10, `feat/tenant-rls`** — the last and largest row of phase 1
 (`docs/PLATFORM_PLAN.md` §2): the database itself keeps one hospital's rows
 from another's staff, so a forgotten check in a route cannot leak across
@@ -322,6 +334,61 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Plan 1.9a — a key is answered by the screen as it stands (`fix/console-key-race`)
+
+Not in the handover. Found by CI's third run of the browser suite
+(37161163568, 3 October): `pause-resume.spec.ts:90` pressed N the instant the
+break ended on screen, was told "a break is in progress", and nobody was
+called.
+
+**What was wrong.** The reception console listened for its shortcuts in an
+effect that took the old listener off and put the new one on after each
+redraw. React runs such an effect after the page has changed and may leave a
+frame between the two; a key pressed in that frame was answered by the screen
+before it. The frame followed every redraw, and the console redraws at least
+once a second, so it was not only the pause: any shortcut pressed as the queue
+moved could act on the queue before it moved.
+
+**What it does now.** `useWindowKeydown` (`@platform/ui`, `a11y/keys.ts`) is
+the one way a screen listens for keys. The listener goes on once; what it
+calls is changed inside the redraw itself (a layout effect), in the same task
+as the change to the page. The reception console and the bed panel both use
+it. The bed panel's Esc had the same shape and no fault that could be reached
+today; it moved so there is one way to do this, and it had no browser test,
+so it has one now.
+
+**How it is proven.**
+- `keys.test.tsx` presses a key between the redraw and the effects that
+  follow it, where the old listener answered `paused` for a screen showing
+  `running`, and where a screen that had just gone still answered.
+- `pause-resume.spec.ts` has the page itself press N the moment the banner
+  leaves it. **Six of six failed on the console as it was, with CI's exact
+  symptom; six of six pass with the fix**, and nothing else changed between
+  them. The older test, which waits and then presses, is kept as it was.
+
+**Found on the way, measured, and not fixed: the queue steps back when a
+tap's answer beats its broadcast.** The console shows the server's last
+broadcast with its own unsent actions folded on top (`useSessionQueue`). When
+the push is answered, the actions are dropped from the fold at once, but the
+broadcast that contains them comes on another connection. If it is later, the
+screen goes back to what it showed before the tap and forward again when the
+broadcast lands. On one machine the broadcast always wins, which is why no
+test has seen it. With the broadcast held back 800 ms (a throwaway probe, not
+committed: `page.routeWebSocket`), three runs of three showed ১ → ২ at about
+80 ms, **back to ১ at about 190 ms**, and ২ again at about 990 ms. On a
+hospital's network the two are separate connections and either can be slow.
+**Read from the code and not measured:** while the socket is reconnecting and
+the push still gets through, the step back would last until the socket is
+back (its backoff is capped at ten seconds); a tap made in that time acts on
+the queue before the last tap, and the server should refuse what does not
+fit, so the console says the queue moved. Nothing has been seen lost or
+written wrongly. But the counter's screen is briefly untrue, on the one
+screen that is supposed to be true. **It wants its own branch** (`fix/console-ack-rollback`
+is the obvious name): keep an action folded until the broadcast that holds it
+has arrived, which needs the push's answer to say which sequence each action
+became. It touches `FRONTEND.md` §11.1 step 4, so the documents change with
+it. Suggested before 1.10; the owner has not been asked yet.
 
 ### Plan 1.9 — what a message leaves behind (`fix/log-sms-redaction`)
 
@@ -479,9 +546,9 @@ ranking (below, *Plan 1.9*, *Found by this branch's gate*). Fixed in
 10.9 minutes**. The one failure, `pause-resume.spec.ts:90`, is in the
 console and not in the suite: **N pressed the instant the pause banner went
 was answered "a break is in progress"** and nobody was called. The console
-re-attaches its key listener in an effect that runs after the screen has
-been redrawn, so for about a frame a key is handled against the state before
-it. Fixed in `fix/console-key-race`, which is the branch after this one.
+re-attached its key listener in an effect that ran after the screen had
+been redrawn, so for about a frame a key was handled against the state before
+it. Fixed in `fix/console-key-race` (above, *Plan 1.9a*).
 
 A run's jobs and its failure messages can be read without signing in, at
 `api.github.com/repos/SidratEvan/HealthCare/actions/runs/<id>/jobs` and

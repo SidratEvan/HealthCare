@@ -48,7 +48,7 @@ import {
   type Locale,
   numeralsFor,
 } from '@platform/i18n';
-import { Button, Chip, Input } from '@platform/ui';
+import { Button, Chip, Input, useWindowKeydown } from '@platform/ui';
 
 import { shownState, stateLabel } from '@/lib/bedCopy';
 
@@ -91,17 +91,11 @@ export function BedPanel(props: BedPanelProps): ReactNode {
   const at = now.toISOString() as Timestamp;
 
   // A11Y-05: Esc closes the panel, or backs out of a step within it.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      if (mode === 'view') onClose();
-      else setMode('view');
-    };
-    globalThis.addEventListener?.('keydown', onKey);
-    return () => {
-      globalThis.removeEventListener?.('keydown', onKey);
-    };
-  }, [mode, onClose]);
+  useWindowKeydown((event) => {
+    if (event.key !== 'Escape') return;
+    if (mode === 'view') onClose();
+    else setMode('view');
+  });
 
   const heldRequest =
     bed.heldForRequestId === null
