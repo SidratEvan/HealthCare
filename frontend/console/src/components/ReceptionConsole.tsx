@@ -34,12 +34,14 @@ import {
   queueCounts,
   suggestedQuote,
   time,
+  unseenAtEnd,
   waitingQueue,
   type QueueEntry,
 } from '@platform/domain';
 import {
   format,
   formatClock,
+  formatDateTime,
   formatNumber,
   formatSerial,
   t,
@@ -51,6 +53,8 @@ import {
   Button,
   Card,
   FreshnessLine,
+  Sheet,
+  SheetActions,
   ToastProvider,
   useToast,
   useLocale,
@@ -214,6 +218,11 @@ function ConsoleBody(): ReactNode {
       show({ title: t('pausedResumeFirst', locale), tone: 'caution' });
       return;
     }
+    // And one that has ended takes nothing at all (`BTN-B02-END`).
+    if (state.status === 'ended') {
+      show({ title: t('chamberHasEnded', locale), tone: 'caution' });
+      return;
+    }
 
     const inChamber = nowServing(state);
     const next = waitingQueue(state).find((entry) => entry.status !== 'late');
@@ -258,6 +267,39 @@ function ConsoleBody(): ReactNode {
     else if (sessionStatus === 'running') void queue.act('SESSION_PAUSED', { reason: null });
   }, [sessionStatus, queue]);
 
+  /**
+   * `BTN-B02-END`, `MOD-B02-END` — ending the chamber on screen.
+   *
+   * Until this existed nothing in the product ended a chamber: it stayed
+   * "running" for ever, and the next morning it was the first one the picker
+   * offered. What it must not do is strand anybody silently, so it is off
+   * while a patient is in the chamber (and the server refuses that too), and
+   * when patients are left unseen the confirmation says how many and waits for
+   * a deliberate tick. Nobody's status is changed by it.
+   */
+  const [ending, setEnding] = useState(false);
+  const [endAcknowledged, setEndAcknowledged] = useState(false);
+  const [endBusy, setEndBusy] = useState(false);
+  const confirmEnd = useCallback(async () => {
+    setEndBusy(true);
+    const outcome = await queue.end();
+    setEndBusy(false);
+    setEnding(false);
+    // Ended: the screen says so itself, from the server's answer.
+    if (outcome === 'ended') return;
+    show({
+      title: t(
+        outcome === 'in-chamber'
+          ? 'endRefusedInChamber'
+          : outcome === 'offline'
+            ? 'endNeedsConnection'
+            : 'endFailed',
+        locale,
+      ),
+      tone: 'caution',
+    });
+  }, [queue, show, locale]);
+
   // A11Y-05 / B1.2: Space or N calls the next patient, A marks arrival,
   // P pauses and resumes. The console is operated at speed by people who are
   // not looking at the mouse — so a key is answered by the queue as it is on
@@ -281,11 +323,11 @@ function ConsoleBody(): ReactNode {
       void callNext();
     }
     // B1.2: W opens the walk-in modal — online only, like the button.
-    if ((event.key === 'w' || event.key === 'W') && queue.connected) {
+    if ((event.key === 'w' || event.key === 'W') && queue.connected && sessionStatus !== 'ended') {
       event.preventDefault();
       setWalkingIn(true);
     }
-    if (event.key === 'a' || event.key === 'A') {
+    if ((event.key === 'a' || event.key === 'A') && sessionStatus !== 'ended') {
       void queue.act('DOCTOR_ARRIVED', { arrivedAt: new Date().toISOString(), minutesLate: 0 });
     }
   });
@@ -314,6 +356,14 @@ function ConsoleBody(): ReactNode {
 
   const pendingBookingIds = new Set<string>();
   const paused = state.status === 'paused';
+  const ended = state.status === 'ended';
+  const unseen = unseenAtEnd(state);
+  /** An ended chamber takes no action; a tap on a row says so instead of trying. */
+  const afterEnd = (): boolean => {
+    if (!ended) return false;
+    show({ title: t('chamberHasEnded', locale), tone: 'caution' });
+    return true;
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -369,6 +419,7 @@ function ConsoleBody(): ReactNode {
           <Button
             variant="secondary"
             onClick={() => {
+              if (afterEnd()) return;
               void queue.act('DOCTOR_ARRIVED', {
                 arrivedAt: new Date().toISOString(),
                 minutesLate: 0,
@@ -400,7 +451,7 @@ function ConsoleBody(): ReactNode {
           {/* BTN-B02-WALKIN (pilot step 23). A serial needs the server, so
               offline it says so instead of queueing a number two counters
               could both hand out (lib/registration.ts). */}
-          {queue.connected ? (
+          {queue.connected && !ended ? (
             <Button
               variant="secondary"
               data-testid="add-walkin"
@@ -415,20 +466,48 @@ function ConsoleBody(): ReactNode {
               variant="secondary"
               data-testid="add-walkin"
               disabled
-              disabledReason={t('walkInOffline', locale)}
+              disabledReason={t(ended ? 'chamberHasEnded' : 'walkInOffline', locale)}
             >
               {t('addWalkin', locale)}
             </Button>
           )}
 
+          {/* BTN-B02-END. Off, with its reason, while it would leave somebody
+              in the chamber, and while the server cannot be told. Gone once
+              the chamber has ended: there is nothing left to end. */}
+          {ended ? null : serving !== null || !queue.connected ? (
+            <Button
+              variant="secondary"
+              data-testid="end-chamber"
+              disabled
+              disabledReason={t(
+                serving !== null ? 'endPatientInChamber' : 'endNeedsConnection',
+                locale,
+              )}
+            >
+              {t('endChamber', locale)}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              data-testid="end-chamber"
+              onClick={() => {
+                setEndAcknowledged(false);
+                setEnding(true);
+              }}
+            >
+              {t('endChamber', locale)}
+            </Button>
+          )}
+
           {/* The single most-used control in the system (B1.3). Off during a
               break, and it says why (FRONTEND.md §5.1). */}
-          {paused ? (
+          {paused || ended ? (
             <Button
               size="lg"
               data-testid="call-next"
               disabled
-              disabledReason={t('pausedResumeFirst', locale)}
+              disabledReason={t(ended ? 'chamberHasEnded' : 'pausedResumeFirst', locale)}
             >
               {serving === null ? t('callNext', locale) : t('finishAndCallNext', locale)}
             </Button>
@@ -461,6 +540,98 @@ function ConsoleBody(): ReactNode {
           </p>
         ) : null}
 
+        {/* An ended chamber says so across the screen, and offers the way back
+            to the chambers that can still be worked (`S-B-01`). */}
+        {ended ? (
+          <p
+            role="status"
+            data-testid="ended-banner"
+            className="border-b border-line bg-warn-100 px-6 py-3 text-body-md text-warn-700"
+          >
+            {t('chamberEnded', locale)}{' '}
+            <a href="/" className="font-bold underline" data-testid="back-to-chambers">
+              {t('backToChambers', locale)}
+            </a>
+          </p>
+        ) : null}
+
+        {/* MOD-B02-END. Not dismissed by a stray tap on the backdrop: the
+            answer matters (FRONTEND.md §5.6). */}
+        <Sheet
+          open={ending}
+          onOpenChange={(open) => {
+            if (!open && !endBusy) setEnding(false);
+          }}
+          variant="modal"
+          dismissible={false}
+          title={t('endChamberTitle', locale)}
+          // Which chamber: the doctor, and the day it belongs to.
+          description={`${
+            chamber === null
+              ? t('navQueue', locale)
+              : localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)
+          } · ${formatDateTime(state.plan.plannedStart, numerals)}`}
+        >
+          <div className="flex flex-col gap-4" data-testid="end-chamber-sheet">
+            <p className="text-body-md" data-testid="end-unseen" data-unseen={String(unseen)}>
+              {unseen > 0
+                ? format('endChamberUnseen', locale, { count: formatNumber(unseen, numerals) })
+                : t('endChamberNobodyLeft', locale)}{' '}
+              {t('endChamberConsequence', locale)}
+            </p>
+
+            {/* Patients left unseen: a deliberate tick, not a second tap in
+                the same place (owner's decision, 2026-10-05). */}
+            {unseen > 0 ? (
+              <label className="flex min-h-touch items-center gap-3 text-body-md">
+                <input
+                  type="checkbox"
+                  checked={endAcknowledged}
+                  data-testid="end-acknowledge"
+                  onChange={(event) => {
+                    setEndAcknowledged(event.target.checked);
+                  }}
+                />
+                {t('endChamberAcknowledge', locale)}
+              </label>
+            ) : null}
+
+            {/* GR-01: the safe option on the left. */}
+            <SheetActions destructive>
+              {unseen > 0 && !endAcknowledged ? (
+                <Button
+                  variant="danger-quiet"
+                  data-testid="end-confirm"
+                  disabled
+                  disabledReason={t('endChamberAcknowledge', locale)}
+                >
+                  {t('endChamberConfirm', locale)}
+                </Button>
+              ) : (
+                <Button
+                  variant="danger-quiet"
+                  data-testid="end-confirm"
+                  loading={endBusy}
+                  onClick={() => {
+                    void confirmEnd();
+                  }}
+                >
+                  {t('endChamberConfirm', locale)}
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                data-testid="end-keep"
+                onClick={() => {
+                  setEnding(false);
+                }}
+              >
+                {t('endChamberKeep', locale)}
+              </Button>
+            </SheetActions>
+          </div>
+        </Sheet>
+
         {/* --- queue table (B1.4) ------------------------------------------ */}
         <main className="flex min-h-0 flex-1 gap-5 p-5">
           <div className="min-w-0 flex-1 overflow-auto rounded-lg border border-line bg-surface">
@@ -470,12 +641,14 @@ function ConsoleBody(): ReactNode {
               pendingBookingIds={pendingBookingIds}
               patientNames={names}
               onDone={(entry) => {
+                if (afterEnd()) return;
                 void queue.act('PATIENT_DONE', {
                   bookingId: entry.bookingId,
                   consultSeconds: elapsedSeconds(entry, now),
                 });
               }}
               onLate={(entry) => {
+                if (afterEnd()) return;
                 void queue.act('PATIENT_LATE', {
                   bookingId: entry.bookingId,
                   expectedMinutes: 20,
@@ -483,18 +656,21 @@ function ConsoleBody(): ReactNode {
                 });
               }}
               onNoShow={(entry) => {
+                if (afterEnd()) return;
                 void queue.act('PATIENT_NO_SHOW', {
                   bookingId: entry.bookingId,
                   graceUsedMinutes: 15,
                 });
               }}
               onReinstate={(entry) => {
+                if (afterEnd()) return;
                 void queue.act('PATIENT_REINSERTED', {
                   bookingId: entry.bookingId,
                   newPosition: 0,
                 });
               }}
               onCheckIn={(entry) => {
+                if (afterEnd()) return;
                 setCheckingIn(entry);
               }}
             />

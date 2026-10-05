@@ -410,6 +410,59 @@ describe('every event type appends, reduces and broadcasts', () => {
     expect(events.map((entry) => entry.event)).toContain('session.ended');
   });
 
+  it('refuses to end a chamber while a patient is in it, and writes nothing (BTN-B02-END)', async () => {
+    await startSession();
+    const called = await post(`/sessions/${fixture.sessionId}/next`);
+    expect(called.status).toBe(200);
+    const before = await eventTypesOf(fixture.sessionId);
+
+    const refused = await post(`/sessions/${fixture.sessionId}/end`, { reason: null });
+
+    // The queue's ordinary refusal, with the guard a console can read: this
+    // is what a second counter whose screen has not caught up is told.
+    expect(refused.status).toBe(422);
+    expect(refused.body.error.code).toBe('QUEUE_GUARD_FAILED');
+    expect(refused.body.error.details.guard).toBe('PATIENT_IN_CHAMBER');
+
+    // No end was written, and nobody was told there had been one. Ended
+    // here, that patient would have been "in the chamber" for good.
+    expect(await eventTypesOf(fixture.sessionId)).toEqual(before);
+    expect(before).not.toContain('SESSION_ENDED');
+    expect(
+      emitted.forRoom(ROOMS.session(fixture.sessionId)).map((entry) => entry.event),
+    ).not.toContain('session.ended');
+  });
+
+  it('ends it once that patient is finished, and leaves everybody still waiting as they were', async () => {
+    await startSession();
+    const called = await post(`/sessions/${fixture.sessionId}/next`);
+    const inChamber = (
+      called.body.data.state.entries as { bookingId: string; status: string }[]
+    ).find((entry) => entry.status === 'in_chamber');
+    if (inChamber === undefined) throw new Error('next called nobody');
+
+    const finished = await post(`/bookings/${inChamber.bookingId}/done`);
+    expect(finished.status).toBe(200);
+    const statusesBefore = (
+      finished.body.data.state.entries as { bookingId: string; status: string }[]
+    ).map((entry) => [entry.bookingId, entry.status]);
+
+    const ended = await post(`/sessions/${fixture.sessionId}/end`, { reason: null });
+
+    expect(ended.status).toBe(200);
+    expect(ended.body.data.state.status).toBe('ended');
+    expect((await eventTypesOf(fixture.sessionId)).at(-1)).toBe('SESSION_ENDED');
+
+    // Three people were never seen. Ending the chamber did not mark them
+    // absent, cancelled or seen to tidy it up: each is exactly what it was.
+    const statusesAfter = (
+      ended.body.data.state.entries as { bookingId: string; status: string }[]
+    ).map((entry) => [entry.bookingId, entry.status]);
+    expect(statusesAfter).toEqual(statusesBefore);
+    expect(statusesAfter.filter(([, status]) => status === 'done')).toHaveLength(1);
+    expect(statusesAfter.filter(([, status]) => status !== 'done')).toHaveLength(3);
+  });
+
   it('ACTION_UNDONE nets out the event it compensates (GR-02)', async () => {
     await startSession();
     const called = await post(`/sessions/${fixture.sessionId}/next`);

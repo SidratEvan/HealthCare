@@ -60,7 +60,12 @@ import {
 } from '@platform/domain';
 
 import { consoleStores } from '@/lib/outbox';
-import { createSyncTransport, createUndoTransport } from '@/lib/sync';
+import {
+  createEndTransport,
+  createPullTransport,
+  createSyncTransport,
+  createUndoTransport,
+} from '@/lib/sync';
 
 /**
  * What became of an undo (`GR-02`).
@@ -69,6 +74,15 @@ import { createSyncTransport, createUndoTransport } from '@/lib/sync';
  * there was nothing left to take back.
  */
 export type UndoOutcome = 'undone' | 'nothing' | 'expired' | 'offline' | 'refused';
+
+/**
+ * What became of ending the chamber (`BTN-B02-END`).
+ *
+ * `in-chamber` is the server refusing because somebody is in the chamber —
+ * which this screen did not show, or the control would have been off. By the
+ * time it is returned the screen has been put right from the server.
+ */
+export type EndOutcome = 'ended' | 'in-chamber' | 'offline' | 'refused';
 
 /** How many sent actions the console remembers the event ids of. */
 const REMEMBERED_EVENTS = 200;
@@ -118,6 +132,12 @@ export interface SessionQueue {
   readonly undo: (clientEventIds: readonly string[]) => Promise<UndoOutcome>;
   /** The same, for whatever this console did last, inside the window (`FR-REC-16`). */
   readonly undoLast: () => Promise<UndoOutcome>;
+  /**
+   * Ends the chamber. Not an action that can be queued: an end the server has
+   * not been told is not an end, so this asks at once and says what came back.
+   * The answer is shown from the answer itself, as a push's is.
+   */
+  readonly end: () => Promise<EndOutcome>;
   readonly loading: boolean;
 }
 
@@ -207,6 +227,8 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     [apiBaseUrl, getToken],
   );
   const sendUndo = useMemo(() => createUndoTransport(apiBaseUrl, getToken), [apiBaseUrl, getToken]);
+  const sendEnd = useMemo(() => createEndTransport(apiBaseUrl, getToken), [apiBaseUrl, getToken]);
+  const pull = useMemo(() => createPullTransport(apiBaseUrl, getToken), [apiBaseUrl, getToken]);
 
   /** The event each sent action became, by the console's own key (`GR-02`). */
   const sentRef = useRef(new Map<string, string>());
@@ -521,6 +543,39 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
   }, [now, undo]);
 
   /**
+   * `BTN-B02-END`.
+   *
+   * The server's answer is the ended queue, and it is shown from the answer
+   * (see the header: the broadcast is another connection and may be late).
+   *
+   * A refusal that means *this screen is behind* — somebody is in the chamber
+   * after all, or another counter has already ended it — is answered by
+   * fetching the queue outright, for the same reason: the broadcast that
+   * should have brought this screen up to date is the thing that did not
+   * arrive.
+   */
+  const lastSeqRef = useRef(0);
+  lastSeqRef.current = snapshot.lastSeq;
+  const end = useCallback(async (): Promise<EndOutcome> => {
+    const show = (update: QueueUpdatedMessage): void => {
+      const channel = channelRef.current;
+      if (channel?.sessionId === sessionId) channel.fold(update);
+    };
+
+    const outcome = await sendEnd(sessionId);
+    if (outcome.kind === 'ended') {
+      show(outcome.update);
+      return 'ended';
+    }
+    if (outcome.kind === 'in-chamber' || outcome.kind === 'already-ended') {
+      const truth = await pull(sessionId, lastSeqRef.current);
+      if (truth !== null) show(truth);
+      return outcome.kind === 'in-chamber' ? 'in-chamber' : 'ended';
+    }
+    return outcome.kind;
+  }, [sessionId, sendEnd, pull]);
+
+  /**
    * Server state with the locally-queued events folded on top.
    *
    * `continueReplay` rather than `reduce` in a loop: it is the same fold, and
@@ -579,6 +634,7 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     actMany,
     undo,
     undoLast,
+    end,
     // Waiting for a server that cannot be reached is not loading. With no
     // network and nothing kept for this chamber the screen says so instead
     // (`ReceptionConsole`), and opens by itself when the connection returns.

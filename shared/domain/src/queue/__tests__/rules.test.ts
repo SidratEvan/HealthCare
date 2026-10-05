@@ -23,6 +23,7 @@ import {
   canDeclareDelay,
   canDeclareDoctorArrived,
   canDeclareLate,
+  canEndSession,
   canMarkDone,
   canMarkNoShow,
   canPause,
@@ -35,6 +36,7 @@ import {
   hasCapacity,
   lapsedOffers,
   nextToCall,
+  unseenAtEnd,
   DEFAULT_QUEUE_SETTINGS,
   OFFLINE_ACTION_ROLES,
   MAX_DELAY_MINUTES,
@@ -139,6 +141,78 @@ describe('calling the next patient', () => {
     const ended = reduce(state, log.next('SESSION_ENDED', { reason: null }));
 
     const result = canCallNext(ended);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe('SESSION_ENDED');
+  });
+});
+
+describe('ending a chamber (BTN-B02-END)', () => {
+  it('refuses while a patient is in the chamber, naming the serial', () => {
+    const { state, log } = running();
+    const occupied = reduce(
+      state,
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+    );
+
+    // An ended session takes no further action: ended now, serial 1 would be
+    // "in the chamber" for good.
+    const result = canEndSession(occupied);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe('PATIENT_IN_CHAMBER');
+    expect(result.detail).toContain('1');
+  });
+
+  it('allows it once that patient has been finished', () => {
+    const { state, log } = running();
+    const finished = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+    ]);
+
+    expect(canEndSession(finished).ok).toBe(true);
+  });
+
+  it('is not refused by patients who are only waiting, and counts them', () => {
+    const { state, log } = running(5);
+    const midway = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+      log.next('PATIENT_LATE', { bookingId: bookingId(2), expectedMinutes: 20, reinsertAfter: 3 }),
+    ]);
+
+    // Four people have not been seen, one of them late. That is for the
+    // person at the counter to be told and to decide — not for this guard.
+    expect(canEndSession(midway).ok).toBe(true);
+    expect(unseenAtEnd(midway)).toBe(4);
+  });
+
+  it('changes nobody: the patients left waiting are still waiting after the end', () => {
+    const { state, log } = running(3);
+    const before = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+    ]);
+    const ended = reduce(before, log.next('SESSION_ENDED', { reason: null }));
+
+    expect(ended.status).toBe('ended');
+    expect(ended.entries.map((entry) => entry.status)).toEqual(
+      before.entries.map((entry) => entry.status),
+    );
+    expect(unseenAtEnd(ended)).toBe(2);
+  });
+
+  it('allows a chamber nobody was ever called in to be ended', () => {
+    const { state } = session();
+    expect(canEndSession(state).ok).toBe(true);
+  });
+
+  it('refuses a chamber that has already ended', () => {
+    const { state, log } = running();
+    const ended = reduce(state, log.next('SESSION_ENDED', { reason: null }));
+
+    const result = canEndSession(ended);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.code).toBe('SESSION_ENDED');

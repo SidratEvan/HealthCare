@@ -54,6 +54,7 @@ import {
   canDeclareDelay,
   canDeclareDoctorArrived,
   canDeclareLate,
+  canEndSession,
   canMarkDone,
   canMarkNoShow,
   canPause,
@@ -1253,11 +1254,19 @@ function assertAllowed(
       );
       break;
 
-    // Session lifecycle and slot events carry no guard of their own: opening a
-    // session, ending one, and the offer lifecycle are decided by the service
-    // that raises them, not by the state of the queue.
-    case 'SESSION_OPENED':
+    // An end is refused while somebody is in the chamber (`BTN-B02-END`,
+    // owner's decision, 2026-10-05). Until then this had no guard, and a
+    // chamber ended around a patient left them "in the chamber" for good, in
+    // a session that takes no further action. Patients who are only waiting
+    // do not refuse it; the console states their number instead.
     case 'SESSION_ENDED':
+      result = canEndSession(state);
+      break;
+
+    // Opening a session and the offer lifecycle carry no guard of their own:
+    // they are decided by the service that raises them, not by the state of
+    // the queue.
+    case 'SESSION_OPENED':
     case 'BOOKING_CANCELLED':
     case 'SLOT_OFFERED':
     case 'SLOT_ACCEPTED':

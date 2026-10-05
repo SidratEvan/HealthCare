@@ -28,7 +28,16 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { format, formatNumber, localName, numeralsFor, t, type ConsoleKey } from '@platform/i18n';
+import {
+  format,
+  formatClock,
+  formatDateTime,
+  formatNumber,
+  localName,
+  numeralsFor,
+  t,
+  type ConsoleKey,
+} from '@platform/i18n';
 import { Button, Card, CardMeta, CardTitle, useLocale } from '@platform/ui';
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
@@ -82,6 +91,10 @@ interface DemoSessionCard {
   readonly departmentNameEn: string;
   readonly room: string | null;
   readonly status: string;
+  /** The date the chamber belongs to, and whether the server calls that today. */
+  readonly sessionDate: string;
+  readonly today: boolean;
+  readonly plannedStart: string;
   readonly waiting: number;
   readonly total: number;
 }
@@ -427,10 +440,35 @@ export function ConsolePicker({
           <ul className="grid gap-3 md:grid-cols-2">
             {hospital.sessions.map((session) => (
               <li key={session.id}>
-                <Card tone={session.status === 'running' ? 'brand' : 'default'}>
+                <Card
+                  tone={session.status === 'running' ? 'brand' : 'default'}
+                  data-testid={`chamber-card-${session.id}`}
+                  data-today={session.today ? 'true' : 'false'}
+                >
                   <CardTitle>
                     {localName(locale, session.doctorNameBn, session.doctorNameEn)}
                   </CardTitle>
+                  {/* Which day's chamber, and when it was due to start
+                      (`S-B-01`, owner's decision 2026-10-05). A chamber nobody
+                      ended is still listed the next morning, beside today's for
+                      the same doctor, and without this the two cards read the
+                      same — so today's patients went into yesterday's queue. */}
+                  <p
+                    className={
+                      session.today
+                        ? 'mt-1 text-body-sm text-ink-secondary'
+                        : 'mt-1 text-body-sm font-bold text-warn-700'
+                    }
+                    data-testid={`chamber-when-${session.id}`}
+                  >
+                    {session.today
+                      ? format('chamberToday', locale, {
+                          time: formatClock(session.plannedStart, numerals),
+                        })
+                      : format('chamberEarlierDay', locale, {
+                          when: formatDateTime(session.plannedStart, numerals),
+                        })}
+                  </p>
                   <CardMeta>
                     {localName(locale, session.departmentNameBn, session.departmentNameEn)}
                     {session.room === null ? '' : ` · ${session.room}`} ·{' '}

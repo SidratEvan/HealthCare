@@ -7,11 +7,15 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/console-demo-banner` (5 October) — **P2: a screen says it
+Last updated: `fix/chamber-end-of-day` (5 October) — **P3: a chamber can be
+ended from the console, and not around a patient** (below, *P3*). Nothing
+ended one before, so yesterday's chamber was the first offered the next
+morning, on a card with no date. Next is P4, then the go or no-go. Before
+that, `fix/console-demo-banner` (5 October) — **P2: a screen says it
 is a demonstration only where the server says so** (below, *P2*). The line
 was printed unconditionally on ten console screens and four of the patient
 app's, so a hospital's own server would have told its staff that their
-patients were display data. Next is P3. Before that,
+patients were display data. Before that,
 `chore/requirements-5-october` (5 October) — **client-readiness
 mode: feature work is frozen and the order is P2, P3, P4, then a go or no-go
 for a supervised reception pilot** (below, *Now: client-readiness mode*;
@@ -397,6 +401,56 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### P3 — a chamber can be ended, and not around a patient (`fix/chamber-end-of-day`)
+
+**What was wrong.** Nothing in the product ended a chamber. `POST
+/sessions/:id/end` existed, no screen called it and no job did, so a chamber
+stayed "running" for ever. The next morning it was still on the picker, listed
+first, on a card that showed no date and no time, beside today's chamber for
+the same doctor. And the route itself would end a chamber whatever the queue
+held: a patient called in and not finished was left "in the chamber" for
+good, in a session that takes no further action.
+
+**What it does now.**
+- **`BTN-B02-END` on the reception console**, with `MOD-B02-END`. Off, with
+  its reason, while a patient is in the chamber and while there is no
+  connection. With nobody left unseen, one confirmation. With patients left
+  unseen (booked, waiting or late), the confirmation states how many and the
+  end button stays off until a box is ticked; going back clears the tick. A
+  tap on the backdrop does not close it.
+- **The server refuses an end while a patient is in the chamber**
+  (`canEndSession`, `QUEUE_GUARD_FAILED` / `PATIENT_IN_CHAMBER`, nothing
+  written). It is the rule; the console's control being off is a courtesy. A
+  counter whose screen is behind is refused, told why, and its queue is
+  fetched outright (`GET /sync/session/:id`) rather than waited for on the
+  socket.
+- **Ending changes nobody.** Patients left unseen keep the status they had,
+  in a chamber that has ended. Refund eligibility for anybody who paid and
+  was not seen is raised as it always was (`FR-PAY-07`).
+- **An ended chamber says so** across the console, every control on it is
+  off with that reason, and it has left the picker. Its queue and its events
+  are untouched.
+- **The picker's cards say which day** a chamber is from and when it was due
+  to start; one that is not today's says "an earlier day's chamber" and the
+  date. The server says which is today, not the counter PC's clock. A
+  chamber paused from the day before is listed as well as one running
+  (`FR-QUE-06`): it has to be reachable to be resumed or ended.
+
+**What it does not do:**
+- **Nothing ends a chamber by itself.** A chamber nobody ends is on the
+  picker the next day, now clearly marked as an earlier day's, and drops off
+  the day after. Whether one should be ended automatically, and when, was
+  not asked and not built.
+- **An end cannot be undone from the console.** There is no toast for it;
+  the confirmation is the safeguard. (Whether the server's undo route would
+  take a `SESSION_ENDED` was not tried.)
+- **The doctor's screen has no end control**, and is outside the pilot.
+- **Unsent actions are not checked before an end.** If the counter finished
+  a patient a moment ago and that has not reached the server, the server
+  refuses the end (the patient is still in the chamber as far as it knows)
+  and the console says so; a second try after the pending count clears goes
+  through.
 
 ### P2 — the demonstration line follows the server (`fix/console-demo-banner`)
 
