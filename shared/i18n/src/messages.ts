@@ -85,8 +85,6 @@ export const CONSOLE = {
     en: 'Ending a chamber needs a connection.',
   },
   endChamberTitle: { bn: 'চেম্বার শেষ করবেন?', en: 'End this chamber?' },
-  /** Which chamber: the doctor and the day it belongs to. */
-  endChamberWhich: { bn: '{doctor} · {when}', en: '{doctor} · {when}' },
   /** `MOD-B02-END`: the count, when patients are left unseen. */
   endChamberUnseen: {
     bn: '{count} জন রোগীকে দেখা হয়নি।',

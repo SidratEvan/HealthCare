@@ -72,7 +72,7 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
      WHERE s.deleted_at IS NULL
        AND (${hospitalId}::uuid IS NULL OR s.hospital_id = ${hospitalId}::uuid)
        AND s.room IS DISTINCT FROM 'E2E'
-       -- A chamber that has been ended is no longer one to open (`BTN-B02-END`,
+       -- A chamber that has been ended is no longer one to open (BTN-B02-END,
        -- owner's decision, 2026-10-05). Its queue and everything in it stay in
        -- the record; it is only this list of chambers to work that it leaves.
        AND s.status <> 'ended'
@@ -88,7 +88,7 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
          -- offered nothing running.
          --
          -- Paused as well as running: a chamber on a break when midnight
-         -- passes is still that chamber (`FR-QUE-06`), and it has to be
+         -- passes is still that chamber (FR-QUE-06), and it has to be
          -- reachable to be resumed or ended.
          OR (s.status IN ('running', 'paused')
              AND s.session_date >= (now() AT TIME ZONE 'Asia/Dhaka')::date - 1)

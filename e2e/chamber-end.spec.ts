@@ -208,7 +208,9 @@ test.describe("yesterday's chamber and today's (S-B-01, FR-QUE-06)", () => {
     await queueAction(yesterday, `/bookings/${bookingAt(yesterday, 1)}/done`);
     const todayBefore = await chamberRecord(today.sessionId);
     const todayEventsBefore = await eventTypes(today.sessionId);
-    expect(todayBefore.sessionDate).not.toBe((await chamberRecord(yesterday.sessionId)).sessionDate);
+    expect(todayBefore.sessionDate).not.toBe(
+      (await chamberRecord(yesterday.sessionId)).sessionDate,
+    );
 
     // --- the picker says which day each chamber is from ---------------------
     await page.goto(CONSOLE);

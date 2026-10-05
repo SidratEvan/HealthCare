@@ -565,13 +565,12 @@ function ConsoleBody(): ReactNode {
           variant="modal"
           dismissible={false}
           title={t('endChamberTitle', locale)}
-          description={format('endChamberWhich', locale, {
-            doctor:
-              chamber === null
-                ? t('navQueue', locale)
-                : localName(locale, chamber.doctorNameBn, chamber.doctorNameEn),
-            when: formatDateTime(state.plan.plannedStart, numerals),
-          })}
+          // Which chamber: the doctor, and the day it belongs to.
+          description={`${
+            chamber === null
+              ? t('navQueue', locale)
+              : localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)
+          } · ${formatDateTime(state.plan.plannedStart, numerals)}`}
         >
           <div className="flex flex-col gap-4" data-testid="end-chamber-sheet">
             <p className="text-body-md" data-testid="end-unseen" data-unseen={String(unseen)}>
