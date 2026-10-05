@@ -772,10 +772,14 @@ function ConsoleBody(): ReactNode {
             <Card>
               <p className="text-caption text-ink-muted">{t('countersToday', locale)}</p>
               <dl className="mt-2 grid grid-cols-2 gap-2 text-body-sm">
-                <Counter label={t('countSeen', locale)} value={counts?.done ?? 0} />
-                <Counter label={t('countWaiting', locale)} value={waiting.length} />
-                <Counter label={t('countLate', locale)} value={counts?.late ?? 0} />
-                <Counter label={t('countNoShow', locale)} value={counts?.noShow ?? 0} />
+                <Counter name="seen" label={t('countSeen', locale)} value={counts?.done ?? 0} />
+                <Counter name="waiting" label={t('countWaiting', locale)} value={waiting.length} />
+                <Counter name="late" label={t('countLate', locale)} value={counts?.late ?? 0} />
+                <Counter
+                  name="no-show"
+                  label={t('countNoShow', locale)}
+                  value={counts?.noShow ?? 0}
+                />
               </dl>
             </Card>
 
@@ -797,13 +801,24 @@ function ConsoleBody(): ReactNode {
   );
 }
 
-function Counter({ label, value }: { readonly label: string; readonly value: number }): ReactNode {
+function Counter({
+  name,
+  label,
+  value,
+}: {
+  /** What a test reads it by: the figures a counter checks its paper list against. */
+  readonly name: string;
+  readonly label: string;
+  readonly value: number;
+}): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
   return (
     <div>
       <dt className="text-caption text-ink-muted">{label}</dt>
-      <dd className="text-title-sm tabular-nums">{formatNumber(value, numerals)}</dd>
+      <dd className="text-title-sm tabular-nums" data-testid={`count-${name}`}>
+        {formatNumber(value, numerals)}
+      </dd>
     </div>
   );
 }

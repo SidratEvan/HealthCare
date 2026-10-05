@@ -75,8 +75,12 @@ export interface ConsoleSession {
  *   Serial 2's grace period (`FR-QUE-20`) has long since run out, so reception
  *   may mark them absent — which is the only honest way to reach a no-show
  *   without a spec waiting fifteen real minutes.
+ * - `scheduled` — what a schedule leaves each morning: the chamber exists,
+ *   the doctor has not arrived, and nothing has happened in it. With no
+ *   bookings asked for, it is empty; the day's patients are whoever the spec
+ *   registers at the counter (`e2e/production/reception-pilot.prod.spec.ts`).
  */
-export type SessionOpening = 'in-chamber' | 'overdue';
+export type SessionOpening = 'in-chamber' | 'overdue' | 'scheduled';
 
 async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({
@@ -289,64 +293,67 @@ export async function createConsoleSession(
     // (`DB-P1`), so a fixture that set `status` directly would be building a
     // state the reducer could never produce.
     const firstBooking = bookingsBySerial.get(1);
-    if (firstBooking === undefined) throw new Error('no serial 1');
+    if (opening !== 'scheduled' && firstBooking === undefined) throw new Error('no serial 1');
 
-    //
-    // An overdue session's events are stamped in the past, which is what
-    // `server_ts` would say had the console been driven an hour ago. The
-    // grace period reads that column, so this is the log the reducer would
-    // have produced — not a status set by hand.
-    const arrivedMinutesAgo = overdue ? 80 : 20;
+    // A chamber that has not opened has no log yet: nothing is driven.
+    if (opening !== 'scheduled' && firstBooking !== undefined) {
+      //
+      // An overdue session's events are stamped in the past, which is what
+      // `server_ts` would say had the console been driven an hour ago. The
+      // grace period reads that column, so this is the log the reducer would
+      // have produced — not a status set by hand.
+      const arrivedMinutesAgo = overdue ? 80 : 20;
 
-    await appendEvent(
-      client,
-      sessionId,
-      receptionistId,
-      'DOCTOR_ARRIVED',
-      {
-        arrivedAt: new Date(Date.now() - arrivedMinutesAgo * 60_000).toISOString(),
-        minutesLate: 10,
-      },
-      overdue ? arrivedMinutesAgo : 0,
-    );
-    await appendEvent(
-      client,
-      sessionId,
-      receptionistId,
-      'PATIENT_CALLED',
-      { bookingId: firstBooking, serial: 1 },
-      overdue ? 75 : 0,
-    );
-
-    await client.query(
-      `UPDATE sessions
-          SET status = 'running', actual_start = now() - make_interval(mins => $2)
-        WHERE id = $1`,
-      [sessionId, arrivedMinutesAgo],
-    );
-
-    if (overdue) {
       await appendEvent(
         client,
         sessionId,
         receptionistId,
-        'PATIENT_DONE',
-        { bookingId: firstBooking, consultSeconds: 300 },
-        70,
+        'DOCTOR_ARRIVED',
+        {
+          arrivedAt: new Date(Date.now() - arrivedMinutesAgo * 60_000).toISOString(),
+          minutesLate: 10,
+        },
+        overdue ? arrivedMinutesAgo : 0,
       );
+      await appendEvent(
+        client,
+        sessionId,
+        receptionistId,
+        'PATIENT_CALLED',
+        { bookingId: firstBooking, serial: 1 },
+        overdue ? 75 : 0,
+      );
+
       await client.query(
-        `UPDATE bookings
+        `UPDATE sessions
+          SET status = 'running', actual_start = now() - make_interval(mins => $2)
+        WHERE id = $1`,
+        [sessionId, arrivedMinutesAgo],
+      );
+
+      if (overdue) {
+        await appendEvent(
+          client,
+          sessionId,
+          receptionistId,
+          'PATIENT_DONE',
+          { bookingId: firstBooking, consultSeconds: 300 },
+          70,
+        );
+        await client.query(
+          `UPDATE bookings
             SET status = 'done', called_at = now() - interval '75 minutes',
                 done_at = now() - interval '70 minutes', consult_seconds = 300
           WHERE id = $1`,
-        [firstBooking],
-      );
-    } else {
-      await client.query(
-        `UPDATE bookings SET status = 'in_chamber', called_at = now() - interval '4 minutes'
+          [firstBooking],
+        );
+      } else {
+        await client.query(
+          `UPDATE bookings SET status = 'in_chamber', called_at = now() - interval '4 minutes'
           WHERE id = $1`,
-        [firstBooking],
-      );
+          [firstBooking],
+        );
+      }
     }
 
     return {

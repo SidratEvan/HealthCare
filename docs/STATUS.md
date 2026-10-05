@@ -7,10 +7,15 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/chamber-end-of-day` (5 October) — **P3: a chamber can be
+Last updated: `chore/e2e-pilot-path` (5 October) — **P4: the pilot's own path
+runs under the production configuration, and the answer is go, on three
+conditions that are not code** (below, *Pilot readiness*). **Work has
+stopped there, as the owner directed: nothing from the plan resumes until
+he has read that section.** Before that, `fix/chamber-end-of-day`
+(5 October) — **P3: a chamber can be
 ended from the console, and not around a patient** (below, *P3*). Nothing
 ended one before, so yesterday's chamber was the first offered the next
-morning, on a card with no date. Next is P4, then the go or no-go. Before
+morning, on a card with no date. Before
 that, `fix/console-demo-banner` (5 October) — **P2: a screen says it
 is a demonstration only where the server says so** (below, *P2*). The line
 was printed unconditionally on ten console screens and four of the patient
@@ -209,6 +214,8 @@ else.** The priority is one supervised reception pilot, and feature work is
 frozen until its path is green. What a new session needs from that day's
 decisions, all the owner's, each given in a written note:
 
+- **Where it stands: P1 to P4 are merged and the work has stopped for the
+  owner's review** (below, *Pilot readiness*). The order was:
 - **Order:** P1 `fix/console-ack-rollback` (merged, `becb262`) → **P2
   `fix/console-demo-banner`** → P3 `fix/chamber-end-of-day` → P4
   `chore/e2e-pilot-path` → **stop and report**: one answer, go or no-go for a
@@ -366,11 +373,11 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-**As of `fix/console-ack-rollback` (5 October):** `pnpm test` reports 4,751
-in three to four minutes; `pnpm test:e2e` 154 (11.5 minutes with `--trace
-off` on a fresh machine, 25.7 after a day of runs with 0.35 GB free: the
-tests are the same, the machine is not); `pnpm test:e2e:built` 3;
-`pnpm test:e2e:prod` 22. The per-file list below was counted at 136 and is
+**As of `chore/e2e-pilot-path` (5 October):** `pnpm test` reports 4,794
+in three to four minutes; `pnpm test:e2e` 164 (13 minutes with `--trace
+off`; 25.7 once after a day of runs with 0.35 GB free: the tests are the
+same, the machine is not); `pnpm test:e2e:built` 3; `pnpm test:e2e:prod`
+25. The per-file list below was counted at 136 and is
 kept for the names, not the numbers.
 
 `pnpm test:e2e` reported 136 then, in Chromium, against the real API and the seeded
@@ -401,6 +408,98 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Pilot readiness — the answer the owner asked for after P4 (5 October)
+
+**Go, for a supervised reception pilot of the scope agreed** (one hospital on
+its own server, one department, one to three chambers, reception only), **on
+three conditions, none of which is code:**
+
+1. **The server can be reached by HTTPS names its counter PCs trust.** The
+   only path built is publicly resolvable names with automatic certificates
+   (`DEPLOY.md` S1). If the hospital's IT says its server is reachable only
+   inside the hospital, that is P5 and it is a blocker for *that* hospital
+   until designed and built.
+2. **The pilot is deployed from this code.** `DEPLOY.md` S1 says `git checkout
+   main`, and `main` is still the pitch release of 27 September: none of
+   phase 1 and none of P1–P4 is on it. Either `mvp` is released to `main`
+   (which also redeploys the public demonstration, and needs migrations 0034
+   and 0035 applied to Supabase first), or the pilot server checks out this
+   commit of `mvp`. The owner's choice; not made.
+3. **The dry run passes on the hospital's own hardware and network** (the
+   twelve steps given to the owner on 5 October: start, first administrator
+   and two-step, settings to chambers, sign-in from every counter PC, a mock
+   chamber, a pulled cable, two counters at once, end of day and next
+   morning, backup and restore, the morning check, the operating rules,
+   clocks and browsers). Nothing in this repository has run on their machine.
+
+**What the go rests on, all under the production configuration** (built
+apps, `DEMO_MODE=false`, the database role that owns nothing): sign-in with
+one's own account; the picker listing one's own facility's chambers with
+their day; a walk-in registered at the counter; doctor arrived; call; done;
+late; absent; bring back; pause and resume; undo; end chamber, refused
+around a patient; the ended chamber gone from the list and the next one
+opened; the four counters on the console agreeing with what was done; no
+screen claiming to be a demonstration; a tap reaching a second screen inside
+two seconds; five actions taken with no network arriving once, in order.
+
+**What staff have to be told on day one, because it is how the product
+behaves and not a fault to be found later:**
+
+- A new walk-in needs the server. With the server out of reach the queue
+  already on screen can still be worked, and new patients go on paper.
+- A browser that has been closed needs the server to sign in again.
+- Nobody changes shift with a pending count showing: unsent actions belong
+  to the person who took them and go when that person signs in on that PC.
+- A chamber is ended by a person. Nothing ends one by itself, and an end
+  cannot be taken back from the console.
+- Somebody looks each morning that last night's backup is healthy and the
+  API is ready. Nothing alerts anybody.
+- The patient app is part of the stack and has no switch to leave it out.
+  Nobody can book on it without SMS; if the hospital does not want it seen,
+  its name is not pointed at the server.
+
+**Known and deliberately left, none of them blocking this pilot** (the B
+list, `PLATFORM_PLAN.md` §2): an action drawn twice for as long as its
+answer is slower than its broadcast (milliseconds while SMS is only
+recorded); the ward and ER boards' use of their answers; the patient side
+of a chamber that passes midnight; database-level separation of hospitals
+(one hospital per database until it exists).
+
+### P4 — the pilot's own path, in the configuration it runs in (`chore/e2e-pilot-path`)
+
+`e2e/production/reception-pilot.prod.spec.ts`, two tests, both run by
+`pnpm test:e2e:prod` and so by CI's `production` job.
+
+- **One receptionist's day, end to end.** Two chambers for today, not
+  started, nobody booked — what a schedule leaves each morning. Sign in
+  through `S-B-00`; the picker lists them and says they are today's; open
+  the first; register a walk-in by phone, name, age and sex; she is serial
+  1 and in the queue by name; doctor arrived; call; the end control is off
+  while she is in the chamber; done; end the chamber with one confirmation;
+  it has left the list; open the second, which is empty, not started and has
+  no event in its log. The first chamber's log is exactly `WALKIN_ADDED`,
+  `DOCTOR_ARRIVED`, `PATIENT_CALLED`, `PATIENT_DONE`, `SESSION_ENDED`. No
+  screen on the way says it is a demonstration.
+- **Late, absent, brought back, and the counters.** A chamber an hour and a
+  half in. Each action changes the row and the figure it should (seen,
+  waiting, late, absent), and the three events are in the log in the order
+  they were pressed.
+
+**It found nothing.** Both passed on their first run. That is the result
+the step existed to get or not get: until it ran, nobody knew whether a
+receptionist could do a day's work on a real server.
+
+**Two things it needed:** the fixture can make a chamber that has not
+opened (`'scheduled'`, with no bookings), and the console's four counters
+have names a test can read (`count-seen`, `count-waiting`, `count-late`,
+`count-no-show`). Neither changes what anybody sees.
+
+**What it does not cover:** setting the chambers up from `S-B-11` under
+this configuration (that needs an administrator with two-step; the API's
+own tests cover it as the limited role, and `hospital-settings.spec.ts`
+covers the screen under the demonstration); the registration desk's own
+screen beyond opening it; the doctor's screen, which is outside the pilot.
 
 ### P3 — a chamber can be ended, and not around a patient (`fix/chamber-end-of-day`)
 
