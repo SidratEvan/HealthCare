@@ -39,6 +39,7 @@ export {
   type ContrastLevel,
   type Rgb,
 } from './a11y/contrast.js';
+export { useWindowKeydown } from './a11y/keys.js';
 
 // --- Primitives (FRONTEND.md §5) -------------------------------------------
 export {

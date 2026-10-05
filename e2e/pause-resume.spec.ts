@@ -120,4 +120,46 @@ test.describe('pausing and resuming a chamber (FR-REC-05)', () => {
       await counter.close();
     }
   });
+
+  test('N pressed the instant the break ends on screen calls the next patient (A11Y-05)', async ({
+    browser,
+  }) => {
+    const counter = await browser.newContext();
+
+    try {
+      const console_ = await openConsole(counter);
+      await expect(console_.getByTestId('now-serving')).toHaveText('১');
+
+      await console_.keyboard.press('p');
+      await expect(console_.getByTestId('paused-banner')).toBeVisible();
+
+      // The test above waits for the banner to go and then presses N, which
+      // leaves the gap between the two to the speed of the machine: on
+      // 3 October a hosted runner pressed N within a frame of the redraw and
+      // the console, still listening with the screen before it, answered "a
+      // break is in progress". Here the page presses N itself, the moment the
+      // banner leaves it, so the key always lands in that frame.
+      await console_.evaluate(() => {
+        const watcher = new MutationObserver(() => {
+          if (document.querySelector('[data-testid="paused-banner"]') !== null) return;
+          watcher.disconnect();
+          globalThis.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', cancelable: true }));
+        });
+        watcher.observe(document.body, { childList: true, subtree: true });
+      });
+
+      await console_.keyboard.press('p');
+
+      await expect(console_.getByTestId('now-serving')).toHaveText('২');
+      await expect(console_.getByText('বিরতি চলছে। আগে আবার শুরু করুন।')).toHaveCount(0);
+
+      // The resume and the call left the counter a few milliseconds apart and
+      // are in the log once each, in the order they were pressed.
+      await expect
+        .poll(async () => (await eventTypes(demo.sessionId)).slice(-4))
+        .toEqual(['SESSION_PAUSED', 'SESSION_RESUMED', 'PATIENT_DONE', 'PATIENT_CALLED']);
+    } finally {
+      await counter.close();
+    }
+  });
 });
