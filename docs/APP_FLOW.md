@@ -233,7 +233,7 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 | Quick tile: অ্যাম্বুলেন্স | `BTN-A02-AMB` | tile | → `S-A-16` Ambulance |
 | Quick tile: রক্ত | `BTN-A02-BLOOD` | tile | → `S-A-17` Blood |
 | Quick tile: রিপোর্ট | `BTN-A02-REPORT` | tile | → `S-A-12` Wallet (Reports tab) |
-| **Active serial strip** | `BTN-A02-ACTIVE` | appears only if an active booking exists today | → `S-A-08` Live serial. Shows live position, updates via the session channel while Home is open |
+| **Active serial strip** | `BTN-A02-ACTIVE` | appears while this device holds a *current* booking (`FR-PAT-39`): unresolved, in a session that has not ended, whatever its date. A chamber that runs or is paused past midnight keeps its strip; the strip goes when the patient has been seen or has cancelled, or the session has ended. When that cannot be checked the strip stays and says the status is unknown, with its age | → `S-A-08` Live serial. Shows live position, updates via the session channel while Home is open |
 | Bottom nav | `NAV-A` | হোম / সিরিয়াল / রেকর্ড / প্রোফাইল | Tabs → `S-A-02`, `S-A-09`, `S-A-12`, `S-A-19` |
 
 **States**
@@ -378,9 +378,11 @@ Opened from the join, or from the SMS an offer or a seat sends; the signed statu
 
 | Element | ID | Wiring |
 |---|---|---|
-| Today section | — | Active bookings, each → `S-A-08` |
+| Today section | — | Current bookings (`FR-PAT-39`), each → `S-A-08`. A booking from an earlier date whose session is still running or paused is listed here, not under past: the date changing settles nothing. One whose status cannot be checked is listed here too, marked unknown with the age of what was last known |
 | Upcoming section | — | Future bookings with reschedule/cancel |
-| Past section | — | Completed visits → `S-A-12` record detail; each offers মতামত দিন (`FR-PAT-83`) |
+| Past section | — | Settled bookings and bookings of sessions that have ended: completed visits → `S-A-12` record detail; each offers মতামত দিন (`FR-PAT-83`). Never a booking whose only fault is that midnight passed |
+
+**Sessions crossing midnight (`FR-QUE-06`, `FR-PAT-39`; founder's decision, 2026-10-05).** The staff side already works this way: the console's picker lists a chamber still running from the day before. **The patient side does not yet** (`PLATFORM_PLAN.md` 1.9f): the strip above and the sections here still go by the date, so they are wrong for a chamber that passes midnight until that step is built. A session keeps the date it was scheduled for. A patient still waiting, late, called or in the chamber when midnight passes is still current on Home and under Today; so is everybody in a chamber that is paused across midnight. The booking moves to Past when the patient has been seen or has cancelled, or when the session ends. Nothing is copied or moved to the next day: the next day's scheduled chamber is its own session and both can be open at once. Reports and history keep the original date.
 
 ---
 
@@ -625,6 +627,7 @@ Shown when a user holds multiple roles or the hospital has multiple counters.
 | Element | ID | Wiring |
 |---|---|---|
 | Role cards | `BTN-B01-ROLE-<role>` | রিসেপশন / ডাক্তার / ওয়ার্ড / জরুরি / ল্যাব / ফার্মেসি / ব্যবস্থাপনা → routes to that console |
+| Chamber cards | `BTN-B01-CHAMBER-<sessionId>` | The facility's chambers for today, and any still running or paused from the day before (`FR-QUE-06`). Each card says the doctor, the department, the room, **the chamber's service date and its planned start**, its status and how many are waiting. A chamber that is not today's says which day it is from, in words, so yesterday's and today's chamber for one doctor cannot be taken for each other (owner's decision, 2026-10-05). An ended chamber is not offered as current |
 | Counter selector | `SEL-B01-COUNTER` | Binds this browser to a counter; used for billing reconciliation (`FR-REC-23`) |
 | Remember on this computer | `CHK-B01-REMEMBER` | Skips this screen next time |
 
@@ -652,6 +655,15 @@ The highest-traffic screen in the system. Every primary action must be reachable
 | বিরতি / আবার শুরু | `BTN-B02-PAUSE` | `P` | `EVT-SESSION_PAUSED`; ETAs freeze and shift; resume with the same button, which reads আবার শুরু while paused and sends `EVT-SESSION_RESUMED` (`FR-REC-05`). While paused a banner under the session bar says since when, `BTN-B02-NEXT` is off with the reason, and nobody can be marked absent; the no-show grace starts again at resume. Off (with the reason) until the doctor has arrived |
 | আজ বসবেন না | `BTN-B02-ABSENT` | — | Confirm (`GR-01`) → cancels session, notifies all, opens bulk reschedule tool (`FR-REC-04`), triggers refund eligibility (`FR-PAY-07`) |
 | ওয়াক-ইন যোগ | `BTN-B02-WALKIN` | `W` | Opens `MOD-B02-WALKIN` (see B1.4) |
+| চেম্বার শেষ করুন | `BTN-B02-END` | — | Ends the chamber on screen, and only that one (owner's decision, 2026-10-05). Opens `MOD-B02-END` (below). Then `POST /sessions/:id/end` → `EVT-SESSION_ENDED`. The console then says the chamber has ended and offers the way back to `S-B-01`; the chamber is no longer listed there as current, and everything in it stays in the record. Needs a connection, as a walk-in does: an end the server has not been told is not an end. **Off while a patient is in the chamber**, with the reason: finish that consultation first. Another day's chamber for the same doctor is a different session and is not touched (`FR-QUE-06`): ending yesterday's chamber, still open because it ran late or nobody closed it, leaves today's exactly as it was. Without this control a chamber stayed "running" for ever, and the next morning it was the first one offered |
+
+**`MOD-B02-END` — ending a chamber must not strand anybody silently (owner's decision, 2026-10-05).**
+
+- **Nobody is in the chamber.** The control is off until whoever was called has been finished, and the server refuses the end as well (`BACKEND.md` §7.4): a second counter whose screen has not caught up is told the patient is still in the chamber, nothing is written, and its screen is put right. Patients who are only waiting, late or booked do not stop an end; the confirmation below is what they get.
+- **Nobody left unseen:** one confirmation (`GR-01`), naming the doctor and the chamber's date, safe option on the left.
+- **Patients left unseen** (booked, waiting or late): the confirmation says how many, in a sentence — "৭ জন রোগীকে দেখা হয়নি। চেম্বার শেষ করলে এই সেশনে আর কোনো কাজ করা যাবে না।" — and the end button stays off until the person has ticked that they have read it. A tap on the backdrop does not close it.
+- **Ending changes nobody's status.** Those patients are not marked absent, cancelled or seen to tidy the session: they stay as they were, in a chamber that has ended, and that is what the record says happened.
+- **Money is as it was.** A patient who paid and was not seen is owed a refund the moment the chamber ends (`FR-PAY-07`), exactly as before this control existed.
 | **পরবর্তী রোগী ডাকুন** | `BTN-B02-NEXT` | `Space` or `N` | The single most-used control (see B1.3) |
 
 ### B1.3 `BTN-B02-NEXT` — full wiring

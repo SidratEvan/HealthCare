@@ -263,6 +263,7 @@ Many people will never create an account. Guest mode is a first-class path, not 
 - `FR-PAT-36` If the connection to the hospital is lost, the screen states that the number may be stale instead of showing a confident value.
 - `FR-PAT-37` Feature-phone parity: all state changes in `FR-PAT-30`–`34` are mirrored by SMS.
 - `FR-PAT-38` Once reception has checked the patient in (`FR-REC-18`), the live serial screen shows the wait the counter quoted, when it was quoted, and the minutes left against it — beside the live estimate, never instead of it. When the quote has run out the screen says so rather than counting below zero, and the leave-home alert no longer applies to somebody already here.
+- `FR-PAT-39` **A serial is current until it is settled, whatever the date.** A booking is *current* while it is unresolved in a session that has not ended: the session is scheduled, running or paused, and the patient has not been seen and has not cancelled. The calendar day changing is not a reason to call it past: somebody waiting at 23:59 is still waiting at 00:01, and a chamber paused across midnight is still their chamber (`FR-QUE-06`). A booking becomes *past* when it is settled (the patient was seen, or cancelled) or when its session has actually ended. If the app cannot establish which — no connection, or an answer too old to trust — it says the status is unknown and how old its last knowledge is, and does not file the booking under past. Founder's decision, 2026-10-05. **Not built yet** (`PLATFORM_PLAN.md` 1.9f): the patient app still decides by date.
 
 ### 7.5 Emergency
 
@@ -515,6 +516,7 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-QUE-03` Event types: `SESSION_OPENED`, `DOCTOR_ARRIVED`, `DELAY_DECLARED`, `SESSION_PAUSED`, `SESSION_RESUMED`, `PATIENT_CALLED`, `PATIENT_DONE`, `PATIENT_LATE`, `PATIENT_NO_SHOW`, `PATIENT_REINSERTED`, `PATIENT_ARRIVED` (`FR-REC-18`), `WALKIN_ADDED`, `BOOKING_CANCELLED`, `SLOT_OFFERED`, `SLOT_ACCEPTED`, `PRIORITY_REORDERED`, `SESSION_ENDED`.
 - `FR-QUE-04` Every event stores: session, actor (user + role), timestamp (server), client timestamp, and payload.
 - `FR-QUE-05` Replaying the log for a session reproduces its exact state. This is the debugging and dispute-resolution mechanism.
+- `FR-QUE-06` **A session keeps its service date.** A session belongs to the date it was scheduled for — the Dhaka date of its planned start — for its whole life. Running or paused past midnight does not change that date, does not make it a session of the next day, and moves none of its bookings. Reports, the schedule job and history all group by that date. The next day's scheduled chamber for the same doctor is a separate session; the two may be open at once and neither replaces the other. Founder's decision, 2026-10-05.
 
 ### 16.2 ETA calculation
 

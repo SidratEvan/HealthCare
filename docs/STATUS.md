@@ -7,7 +7,12 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/console-ack-rollback` (5 October) — **a tap stays on the
+Last updated: `chore/requirements-5-october` (5 October) — **client-readiness
+mode: feature work is frozen and the order is P2, P3, P4, then a go or no-go
+for a supervised reception pilot** (below, *Now: client-readiness mode*;
+`docs/PLATFORM_PLAN.md` §2). Documents only: the owner's decisions of that
+day, written down before any of them is built. Before that,
+`fix/console-ack-rollback` (5 October) — **a tap stays on the
 reception console when its answer arrives before its broadcast** (plan 1.9b;
 below, *Plan 1.9b*). The queue used to step back to the patient before, and
 stay there while the socket said nothing. **Two things it leaves, neither
@@ -16,7 +21,8 @@ action is folded twice while the answer is the slower one (same section).
 With it, `fix/materialise-test-midnight` and `fix/tests-past-midnight` —
 **two tests that failed just after Dhaka midnight, every night** (below,
 *Things learned the hard way*); the product was right both times, and one
-question for the owner came out of it (a chamber that runs past midnight).
+question for the owner came out of it (a chamber that runs past midnight),
+which he answered the same day (`FR-QUE-06`, `FR-PAT-39`).
 Before that, `fix/console-key-race` (5 October) — **a key on the console is
 answered by the screen as it stands, not by the one before the last redraw**
 (plan 1.9a; below, *Plan 1.9a*). It was the one failure in CI's third run,
@@ -188,14 +194,54 @@ every pilot step in §4.2 but 27, which waits for an SMS aggregator account.
 What remains is the owner's: the open decisions below, applying migrations to
 Supabase, and whether `mvp` goes to `main`.
 
-**Left by `fix/console-ack-rollback`, for the owner to place** (below, *Plan
-1.9b*, *What it does not do*): the same step back on the ward board and the
-ER console, read from the code and not measured; and an action shown twice
-over while its answer is slower than its broadcast. The owner said on
-5 October to do what seemed best; the reception queue was done first because
-it is the product's own screen. Neither of the two blocks 1.10.
+**Now: client-readiness mode (owner, 5 October). Read
+`docs/PLATFORM_PLAN.md` §2, *Now: client-readiness mode*, before anything
+else.** The priority is one supervised reception pilot, and feature work is
+frozen until its path is green. What a new session needs from that day's
+decisions, all the owner's, each given in a written note:
 
-**Next: plan 1.10, `feat/tenant-rls`** — the last and largest row of phase 1
+- **Order:** P1 `fix/console-ack-rollback` (merged, `becb262`) → **P2
+  `fix/console-demo-banner`** → P3 `fix/chamber-end-of-day` → P4
+  `chore/e2e-pilot-path` → **stop and report**: one answer, go or no-go for a
+  supervised reception pilot, naming only what actually blocks it. Nothing
+  else from the plan resumes until the owner has read that report.
+- **Scope for week one is reception only.** The other modules are outside
+  the pilot, not re-rated: they keep `HANDOVER.md` §13's ratings.
+- **P2** covers the console and the patient app: the demonstration line is
+  shown on a demonstration, absent on a real server, hidden while the server
+  has not answered.
+- **P3** adds `BTN-B02-END` and `MOD-B02-END` (`APP_FLOW.md` B1.2) and the
+  date and start on the picker's cards. It must not strand anybody silently:
+  off while a patient is in the chamber, **and the server refuses that end
+  too** (one guard, the ordinary refusal, nothing written); the number of
+  patients not seen is stated and needs a deliberate tick; nobody's status is
+  changed to tidy up; refund eligibility is as it was. Before this the server
+  ended a chamber whatever the queue held.
+- **P5** (HTTPS for a server reachable only inside a hospital) is **not to be
+  built on a guess**. `DEPLOY.md` S1 carries the question for the hospital's
+  IT; if they choose inside-only, the smallest design goes to the owner
+  first.
+- **Decided and written, not built:** `SY-08` and `SY-09` in `BACKEND.md` and
+  *One action, shown once* in `FRONTEND.md` §11.1, with the owner's
+  constraints (`applied` bounded to one write; a tap is one thing on the
+  screen; versions raised in the row's own transaction; tests that deliver
+  N+1 before N); and the founder's decision on sessions that cross midnight
+  (`PRD.md` `FR-QUE-06`, `FR-PAT-39`). Each is marked "not built" where it
+  stands. They are rows 1.9c–1.9f and wait until after the first pilot, with
+  the conditions that would bring one forward in the plan's B list.
+- **What to say about import:** supervised CSV imports in the templates
+  already built work. Not to be promised: a direct connection to an HMS or
+  its database, arbitrary Excel files, or working out an unknown format.
+
+**Found while preparing that list, verified in the code, and why P2 and P3
+exist:** the demonstration line is drawn unconditionally on ten console
+screens and four of the patient app's; nothing in the product ends a chamber
+(the route exists, no screen calls it, no job does), so yesterday's chamber
+is still "running" the next morning, is listed first, and its card shows no
+date. **Not verified, and why P4 exists:** registration and a walk-in have
+never been driven in a browser under the production configuration.
+
+**After the pilot path: plan 1.10, `feat/tenant-rls`** — the last and largest row of phase 1
 (`docs/PLATFORM_PLAN.md` §2): the database itself keeps one hospital's rows
 from another's staff, so a forgotten check in a route cannot leak across
 hospitals. Not started. It begins with a design note in the branch, and the
@@ -311,10 +357,11 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-**As of `fix/console-key-race` (5 October):** `pnpm test` reports 4,746 in
-about three minutes; `pnpm test:e2e` 153 (11.5 minutes on 5 October with
-`--trace off`, 14 to 18 with the trace recorded); `pnpm test:e2e:built` 3;
-`pnpm test:e2e:prod` 21. The per-file list below was counted at 136 and is
+**As of `fix/console-ack-rollback` (5 October):** `pnpm test` reports 4,751
+in three to four minutes; `pnpm test:e2e` 154 (11.5 minutes with `--trace
+off` on a fresh machine, 25.7 after a day of runs with 0.35 GB free: the
+tests are the same, the machine is not); `pnpm test:e2e:built` 3;
+`pnpm test:e2e:prod` 22. The per-file list below was counted at 136 and is
 kept for the names, not the numbers.
 
 `pnpm test:e2e` reported 136 then, in Chromium, against the real API and the seeded

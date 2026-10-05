@@ -267,6 +267,22 @@ built from the root `Dockerfile`).
   and ports **80 and 443** open to the internet. Certificates are obtained and
   renewed automatically.
 - The repository checked out on it (`git clone`, then `git checkout main`).
+
+  **Before a pilot, the hospital's IT is asked one question, and the answer
+  comes back before anything else is set up** (owner's decision,
+  2026-10-05). The console only works over HTTPS that every counter PC
+  trusts without a warning: the browser will not run its offline part, or
+  let it sign its own actions, on anything else. How will this server be
+  reached?
+
+  1. **By publicly resolvable HTTPS names**, as above: three names in DNS,
+     ports 80 and 443 reachable from the internet. This is the path this
+     guide describes and the only one that is built.
+  2. **Only from inside the hospital's network.** Nothing here covers that
+     yet. Automatic certificates need the public names, so this needs another
+     way for the counter PCs to trust the server. It is not built on a guess:
+     if a hospital chooses this, the smallest design that works for *their*
+     network is agreed first (`docs/PLATFORM_PLAN.md`, P5).
 - **A second place for backups** that is not this server's disk: an external
   drive, or a folder on another machine mounted here. It has to exist before
   the pilot starts (`S5`); the stack runs without it and says, every day,
