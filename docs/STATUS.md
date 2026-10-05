@@ -13,7 +13,9 @@ below, *Plan 1.9b*). The queue used to step back to the patient before, and
 stay there while the socket said nothing. **Two things it leaves, neither
 measured:** the ward board and the ER console have the same shape, and an
 action is folded twice while the answer is the slower one (same section).
-Before that, `fix/console-key-race` (5 October) — **a key on the console is
+With it, `fix/materialise-test-midnight` — **a test that failed in the first
+hour of every Dhaka day** (below, *Things learned the hard way*); the product
+was right. Before that, `fix/console-key-race` (5 October) — **a key on the console is
 answered by the screen as it stands, not by the one before the last redraw**
 (plan 1.9a; below, *Plan 1.9a*). It was the one failure in CI's third run,
 and **the fourth run (37350834049, `d1ca84a`) was the first in which all
