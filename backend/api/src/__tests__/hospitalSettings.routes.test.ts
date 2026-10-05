@@ -400,6 +400,32 @@ describe('a facility with no seed data, set up from the screen (FR-SUP-01)', () 
     expect(count.rows[0]?.n).toBe(2);
   });
 
+  it('writes a chamber that is missing the first time it runs, and not again', async () => {
+    // What the job is for, and what it did at 00:13 Dhaka on 6 October: a
+    // schedule whose chamber for today does not exist. Everything else is
+    // written first, so the count below is this chamber and nothing the hour
+    // happens to have left undone.
+    await materialise();
+    await asOwner(async (owner) => {
+      await sql`
+        DELETE FROM sessions WHERE template_id = ${templateId} AND session_date = ${today}::date
+      `.execute(owner);
+    });
+
+    expect(await materialise()).toBe(1);
+
+    const sessions = await sql<{ session_date: string }>`
+      SELECT to_char(session_date, 'YYYY-MM-DD') AS session_date
+        FROM sessions WHERE template_id = ${templateId} AND deleted_at IS NULL ORDER BY session_date
+    `.execute(db);
+    expect(sessions.rows.map((row) => row.session_date)).toEqual([
+      today,
+      time.toDhakaDate(time.addMinutes(time.fromDate(new Date()), 7 * 24 * 60)),
+    ]);
+
+    expect(await materialise()).toBe(0);
+  });
+
   it('refuses a schedule that overlaps the doctor’s own', async () => {
     const response = await send('post', '/hospital/templates', facility.token, {
       doctorHospitalId,
