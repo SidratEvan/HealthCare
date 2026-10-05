@@ -2789,6 +2789,24 @@ afternoon.
 
 ### Things learned the hard way, so they are not relearned
 
+- **For about the first hour of a Dhaka day the pitch session is dated
+  yesterday, and a test that did not know failed every night in that hour**
+  (`fix/materialise-test-midnight`, 5 October). `seed_07_demo_live` dates the
+  pitch session by when its doctor arrived, which is a little over an hour
+  before the reset. Seeded at 00:13 Dhaka it was dated the day before
+  (planned start 22:57), so today's chamber for that weekly schedule did not
+  exist, and the hourly job wrote it, as it should. `hospitalSettings.routes.
+  test.ts` asserted that the job's first run over the whole database writes
+  nothing: true for twenty-three hours, false for one. It now lets the first
+  run do what it has to and asserts what the test is named for, that a second
+  run writes nothing and no chamber exists twice. **The product was right,
+  and so were the seeds**: the same happens on the demo after a reset in that
+  hour, where the pitch doctor shows last night's chamber still running and
+  tonight's scheduled. The same family as `fix/console-past-midnight`; found
+  only because a verify run happened to start at 00:10 Dhaka. **A test that
+  asserts a count over the whole seeded database is asserting the hour it
+  was written in.**
+
 - **A faster machine is a different test** (`fix/e2e-fast-runner`,
   3 October). The browser suite passed 150 of 150 here in 18.1 minutes and
   144 of 150 on GitHub's runner in 11.6. Nothing differed but the speed.

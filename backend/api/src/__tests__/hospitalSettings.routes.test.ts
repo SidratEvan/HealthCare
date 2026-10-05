@@ -384,6 +384,14 @@ describe('a facility with no seed data, set up from the screen (FR-SUP-01)', () 
   });
 
   it('writes each chamber once, however often the job runs', async () => {
+    // The first run may have work to do that is nobody's here. For about the
+    // first hour of a Dhaka day the seeds date the pitch session yesterday —
+    // it is dated by when its doctor arrived (`seed_07_demo_live`) — and
+    // today's chamber for that schedule is then the job's to write. This
+    // line asserted that the first run writes nothing, and failed every
+    // night in that hour (seen at 00:13 Dhaka on 6 October). What the job
+    // must never do is write a chamber twice.
+    await materialise();
     expect(await materialise()).toBe(0);
     expect(await materialise({ onlyTemplate: templateId })).toBe(0);
     const count = await sql<{ n: number }>`
@@ -434,7 +442,16 @@ describe('a facility with no seed data, set up from the screen (FR-SUP-01)', () 
       SELECT count(*)::int AS n FROM sessions WHERE template_id = ${templateId} AND deleted_at IS NULL
     `.execute(db);
     expect(left.rows[0]?.n).toBe(0);
-    expect(await materialise()).toBe(0);
+
+    // And the job does not write them back: not asked for this schedule
+    // alone, and not on a run of its own. Counted by this schedule's
+    // chambers, because what a whole run writes depends on the hour (above).
+    expect(await materialise({ onlyTemplate: templateId })).toBe(0);
+    await materialise();
+    const after = await sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM sessions WHERE template_id = ${templateId} AND deleted_at IS NULL
+    `.execute(db);
+    expect(after.rows[0]?.n).toBe(0);
   });
 });
 
