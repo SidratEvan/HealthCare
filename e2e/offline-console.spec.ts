@@ -71,6 +71,9 @@ async function openConsole(page: Page): Promise<void> {
  * got six events from a tab the test had "cut the power" to. So the page goes
  * only once the push that holds everything taken so far has been refused,
  * which leaves a full second before the console's next attempt.
+ *
+ * That second is not enough on a slow machine, and waiting for a fresh
+ * refusal just before closing was not enough either: see `leave`.
  */
 async function pushFailed(page: Page, events: number): Promise<void> {
   await page.waitForEvent('requestfailed', (request) => {
@@ -78,6 +81,29 @@ async function pushFailed(page: Page, events: number): Promise<void> {
     const body = request.postDataJSON() as { events?: unknown[] } | null;
     return (body?.events?.length ?? 0) === events;
   });
+}
+
+/**
+ * The tab goes, with the server out of reach — without the test's own block
+ * going first.
+ *
+ * "Out of reach" here is a Playwright route, and a route belongs to the page
+ * it watches. Closing the page takes the block down with it, and a push the
+ * console had waiting at the block, or made as it died, reached the server:
+ * twice on 5 October, on a slow machine, a spec found a closed tab's events
+ * in the log (under the right person's name both times — nothing was sent as
+ * anybody else, and the product had done nothing wrong: a tab that dies
+ * mid-push may land it). Waiting for a refusal first only narrows that, since
+ * the console tries again by itself.
+ *
+ * So the console is unloaded first, by leaving for an empty page while the
+ * block still stands: its requests are cancelled with their document and its
+ * timers are gone. Only then is the page closed. To the console that is a
+ * closed tab; to the test it is one whose last request could not get out.
+ */
+async function leave(page: Page): Promise<void> {
+  await page.goto('about:blank');
+  await page.close();
 }
 
 test.describe('the reception console', () => {
@@ -252,7 +278,7 @@ test.describe('a shift with the network gone (FR-OFF-01)', () => {
 
     // The tab goes. Nobody is at the counter, so nothing is sent: what was
     // taken is waiting on the device, not in a page that is no longer there.
-    await page.close();
+    await leave(page);
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     expect(await eventCount(demo.sessionId)).toBe(before);
 
@@ -396,7 +422,7 @@ test.describe('the outbox is kept on the device (FR-OFF-01)', () => {
     await expect(afternoon.getByTestId('now-serving')).toHaveText('২');
     await expect(afternoon.getByTestId('pending-count')).toBeVisible();
     await refused;
-    await afternoon.close();
+    await leave(afternoon);
     await context.unroute(sync);
     expect(await eventCount(demo.sessionId)).toBe(before);
 

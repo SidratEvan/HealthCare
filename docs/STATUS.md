@@ -2793,6 +2793,28 @@ afternoon.
 
 ### Things learned the hard way, so they are not relearned
 
+- **A spec's "server out of reach" goes away with the page it was set on, and
+  a closing tab's push then gets out** (`fix/console-ack-rollback`,
+  5 October). `offline-console.spec.ts` blocks `/sync/events` with a
+  Playwright route and closes the tab to stand for a power cut. Twice in one
+  evening, on a machine slowed by hours of runs, the closed tab's events were
+  in the log seconds later: once in "the next person at the same PC" (a full
+  gate run, 153 of 154), once in "survives the tab being closed" (one run in
+  three). Both times the events carried the right person's name, so the
+  outbox's isolation held and the product had done nothing wrong: a tab that
+  dies mid-push may land it, and the same keys sent again are the same events
+  (`SY-02`). `fix/e2e-outbox-close-race` had narrowed this by waiting for a
+  refusal before closing; the console retries by itself, so that only moves
+  the window, and waiting for a second, fresh refusal still failed one run in
+  three. **What holds: unload the console first** (`leave`: go to an empty
+  page while the block still stands, then close). Its requests die with
+  their document and its timers are gone before the block is. 16 of 16
+  after, on the same slow machine. The specs that reload instead of closing
+  keep their page, and so their block, and have not failed. **Not
+  established:** exactly how the request got out two seconds after
+  `page.close()` returned in the second failure; the fix does not depend on
+  knowing.
+
 - **For about the first hour of a Dhaka day the pitch session is dated
   yesterday, and a test that did not know failed every night in that hour**
   (`fix/materialise-test-midnight`, 5 October). `seed_07_demo_live` dates the
