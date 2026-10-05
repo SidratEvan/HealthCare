@@ -466,7 +466,7 @@ Every queue action follows one shape:
 1. Append the event to the local Dexie queue with a client timestamp.
 2. Apply the reducer to local state immediately — UI updates in under 100 ms (`NFR-02`).
 3. Show the undo toast.
-4. Sync worker POSTs the event; on success, reconcile with the server's authoritative version.
+4. Sync worker POSTs the event; on success, reconcile with the server's authoritative version. The answer carries it (`SY-05`: the queue with the batch in it), and the console shows it in the same redraw that takes the answered actions out of its optimistic fold. It does not wait to be told the same thing on the socket, which is another connection and may be the slower; the answer and the broadcast are folded by one rule, newest sequence wins.
 5. On rejection (e.g. another counter already called that patient), roll the row back with an explanatory toast (`FR-QUE-53`).
 6. On network failure, leave state applied and increment the pending counter; retry with backoff (1 s doubling to 30 s, by a timer, while the console is connected; a reconnect sends at once). "Not now" from the server (401, 403, 429) is treated the same way: the action is fine and stays queued.
 7. On an answer that is neither — the server could not take the batch (a 4xx on the request, a 5xx) — send the batch again one entry at a time. The entry that cannot go is set aside as **stuck**: at once for a 4xx, after eight failed tries for a 5xx. A stuck entry is rolled back on screen, no longer blocks the ones behind it, and is never dropped by the system: the offline block says how many there are and offers **আবার পাঠান** and **বাদ দিন** (which confirms first, `GR-01`). Being offline is never "stuck".

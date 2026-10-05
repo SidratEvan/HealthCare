@@ -435,3 +435,82 @@ test.describe('the outbox is kept on the device (FR-OFF-01)', () => {
     expect(sent.every((event) => event.staffId === demo.receptionistId)).toBe(true);
   });
 });
+
+test.describe("a tap's answer arrives before its broadcast (FRONTEND.md §11.1 step 4)", () => {
+  /**
+   * A tap is told to the server over HTTP, and the queue it produced comes
+   * back twice: in the answer to that request (`SY-05`), and in the broadcast
+   * on the socket. They are two connections, and on a hospital's network
+   * either can be the slower. On one machine the broadcast always wins, which
+   * is why nothing had seen what happens when it does not: the console dropped
+   * the tap from its screen when the answer came, and showed the queue before
+   * the tap until the broadcast arrived.
+   *
+   * Here everything the server says on the socket is held at a gate, so the
+   * answer is all the console has.
+   */
+  test('the tap stays on the screen, and the queue never steps back to the patient before', async ({
+    page,
+  }) => {
+    let held = false;
+    const waiting: (() => void)[] = [];
+    await page.routeWebSocket(/socket\.io/, (socket) => {
+      const server = socket.connectToServer();
+      socket.onMessage((message) => {
+        server.send(message);
+      });
+      server.onMessage((message) => {
+        if (held) waiting.push(() => socket.send(message));
+        else socket.send(message);
+      });
+    });
+
+    await openConsole(page);
+    await expect(page.getByTestId('offline-block')).toHaveAttribute('data-connected', 'true', {
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId('now-serving')).toHaveText('১');
+
+    // Every number the card shows from here on, in order.
+    await page.evaluate(() => {
+      const read = (): string =>
+        document.querySelector('[data-testid="now-serving"]')?.textContent ?? '';
+      const shown = [read()];
+      new MutationObserver(() => {
+        const now = read();
+        if (now !== shown[shown.length - 1]) shown.push(now);
+      }).observe(document.body, { subtree: true, childList: true, characterData: true });
+      (globalThis as unknown as { shown: string[] }).shown = shown;
+    });
+    const shown = async (): Promise<string[]> =>
+      await page.evaluate(() => (globalThis as unknown as { shown: string[] }).shown);
+
+    held = true;
+    const answered = page.waitForResponse(
+      (response) => response.url().endsWith('/sync/events') && response.ok(),
+    );
+    await page.getByTestId('call-next').click();
+    await answered;
+
+    // The server has the tap and has broadcast it; the broadcast is at the
+    // gate, and the console has nothing left to send.
+    await expect.poll(() => waiting.length).toBeGreaterThan(0);
+    await expect(page.getByTestId('pending-count')).toBeHidden();
+
+    await expect(page.getByTestId('now-serving')).toHaveText('২');
+    expect(await shown()).toEqual(['১', '২']);
+
+    // The broadcast arrives late and changes nothing.
+    held = false;
+    for (const deliver of waiting.splice(0)) deliver();
+    await expect(page.getByTestId('last-synced')).toBeVisible();
+    await expect(page.getByTestId('now-serving')).toHaveText('২');
+    expect(await shown()).toEqual(['১', '২']);
+
+    // One tap, in the log once.
+    expect((await eventTypes(demo.sessionId)).slice(-2)).toEqual([
+      'PATIENT_DONE',
+      'PATIENT_CALLED',
+    ]);
+  });
+});

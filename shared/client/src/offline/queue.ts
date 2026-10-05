@@ -40,6 +40,8 @@ import type { QueueEventType } from '@platform/domain';
 
 import { ApiError } from '../api/client.js';
 
+import type { QueueUpdatedMessage } from '../realtime/session.js';
+
 /** An action taken locally, waiting to reach the server. */
 export interface PendingEvent {
   /** The idempotency key. Generated once, at the moment of the tap (`SY-02`). */
@@ -118,6 +120,18 @@ export interface FlushOutcome {
   readonly stuck: readonly string[];
   /** True when the push never reached the server; everything stays queued. */
   readonly offline: boolean;
+  /**
+   * The queue as the server holds it with this flush in it (`SY-05`) — the
+   * newest, when the batch went in more than one push. Null when the server
+   * said nothing.
+   *
+   * It is what a broadcast on the session channel carries, arriving by
+   * another road, and the console shows it the moment it drops the entries
+   * above from its screen (FRONTEND.md §11.1 step 4). Dropping them and
+   * waiting for the broadcast showed the queue *before* the tap for as long
+   * as the broadcast was the slower of the two.
+   */
+  readonly update: QueueUpdatedMessage | null;
 }
 
 /** What `flush` needs to talk to the server. Injected, so it can be faked. */
@@ -131,6 +145,8 @@ export type PushTransport = (
     readonly reason: string;
     readonly code: string;
   }[];
+  /** The queue with the batch in it, as the server answered (`SY-05`). */
+  readonly update?: QueueUpdatedMessage;
 }>;
 
 /**
@@ -148,6 +164,7 @@ const NOTHING: FlushOutcome = {
   conflicted: [],
   stuck: [],
   offline: false,
+  update: null,
 };
 
 export class OfflineQueue {
@@ -226,7 +243,14 @@ export class OfflineQueue {
     }));
 
     await this.store.remove([...accepted, ...conflicted.map((entry) => entry.clientEventId)]);
-    return { accepted, acceptedEvents, conflicted, stuck: [], offline: false };
+    return {
+      accepted,
+      acceptedEvents,
+      conflicted,
+      stuck: [],
+      offline: false,
+      update: result.update ?? null,
+    };
   }
 
   /**
@@ -247,6 +271,7 @@ export class OfflineQueue {
     const acceptedEvents: { clientEventId: string; eventId: string }[] = [];
     const conflicted: { clientEventId: string; reason: string }[] = [];
     const stuck: string[] = [];
+    let update: QueueUpdatedMessage | null = null;
 
     for (const event of queued) {
       try {
@@ -254,9 +279,10 @@ export class OfflineQueue {
         accepted.push(...one.accepted);
         acceptedEvents.push(...one.acceptedEvents);
         conflicted.push(...one.conflicted);
+        update = newerOf(update, one.update);
       } catch (error) {
         if (!couldNotTake(error)) {
-          return { accepted, acceptedEvents, conflicted, stuck, offline: true };
+          return { accepted, acceptedEvents, conflicted, stuck, offline: true, update };
         }
 
         const attempts = event.attempts + 1;
@@ -265,12 +291,14 @@ export class OfflineQueue {
           final ? { ...event, attempts, stuck: { code: error.code } } : { ...event, attempts },
         );
 
-        if (!final) return { accepted, acceptedEvents, conflicted, stuck, offline: false };
+        if (!final) {
+          return { accepted, acceptedEvents, conflicted, stuck, offline: false, update };
+        }
         stuck.push(event.clientEventId);
       }
     }
 
-    return { accepted, acceptedEvents, conflicted, stuck, offline: false };
+    return { accepted, acceptedEvents, conflicted, stuck, offline: false, update };
   }
 
   /**
@@ -324,6 +352,15 @@ export class OfflineQueue {
  */
 function couldNotTake(error: unknown): error is ApiError {
   return error instanceof ApiError && ![401, 403, 429].includes(error.status);
+}
+
+/** Of two answers from the server, the one that describes the later queue. */
+function newerOf(
+  held: QueueUpdatedMessage | null,
+  next: QueueUpdatedMessage | null,
+): QueueUpdatedMessage | null {
+  if (next === null) return held;
+  return held === null || next.seq >= held.seq ? next : held;
 }
 
 /** A request the server will refuse however often it is sent. */

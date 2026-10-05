@@ -8,6 +8,8 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
+import type { QueueState } from '@platform/domain';
+
 import { ApiError } from '../api/client.js';
 import {
   MAX_ATTEMPTS,
@@ -17,6 +19,8 @@ import {
   type PendingEvent,
   type PushTransport,
 } from '../offline/queue.js';
+
+import type { QueueUpdatedMessage } from '../realtime/session.js';
 
 const SESSION = '11111111-1111-7111-8111-111111111111';
 
@@ -336,6 +340,79 @@ describe('a conflicted entry (SY-03)', () => {
     // Both leave the queue. A refused entry lost a race that is already over
     // and will never be accepted, however many times it is sent.
     expect(await queue.pendingCount()).toBe(0);
+  });
+});
+
+describe("the server's answer (SY-05, FRONTEND.md §11.1 step 4)", () => {
+  /** A queue that only says which sequence it describes; nothing here reads more. */
+  const queueAt = (seq: number): QueueUpdatedMessage => ({
+    seq,
+    serverTs: `2026-10-05T06:00:${String(seq).padStart(2, '0')}Z`,
+    data: { state: { lastSeq: seq } as unknown as QueueState, etas: [] },
+  });
+
+  it('hands back the queue as the server holds it with the batch in it', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('a', 'PATIENT_DONE', 2));
+    await queue.enqueue(action('b', 'PATIENT_CALLED', 1));
+
+    const outcome = await queue.flush(SESSION, (_sessionId, events) =>
+      Promise.resolve({
+        accepted: events.map((event) => ({ clientEventId: event.clientEventId })),
+        conflicts: [],
+        update: queueAt(12),
+      }),
+    );
+
+    // What the console shows from here on. Waiting for the broadcast instead
+    // left the screen on the queue before the tap whenever the broadcast was
+    // the slower of the two.
+    expect(outcome.update).toEqual(queueAt(12));
+  });
+
+  it('hands it back when every entry was refused, because it is why they were', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('lost', 'PATIENT_CALLED', 1));
+
+    const outcome = await queue.flush(SESSION, () =>
+      Promise.resolve({
+        accepted: [],
+        conflicts: [{ clientEventId: 'lost', reason: 'Somebody is in the chamber.', code: 'BUSY' }],
+        update: queueAt(9),
+      }),
+    );
+
+    expect(outcome.update).toEqual(queueAt(9));
+  });
+
+  it('hands back the newest, when the batch had to go one entry at a time', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('a', 'PATIENT_DONE', 3));
+    await queue.enqueue(action('b', 'PATIENT_CALLED', 2));
+    await queue.enqueue(action('c', 'PATIENT_LATE', 1));
+
+    // The server cannot take the three together, and takes each alone.
+    let seq = 20;
+    const outcome = await queue.flush(SESSION, (_sessionId, events) => {
+      if (events.length > 1) return Promise.reject(new ApiError('INTERNAL', 'no', 500));
+      seq += 1;
+      return Promise.resolve({
+        accepted: events.map((event) => ({ clientEventId: event.clientEventId })),
+        conflicts: [],
+        update: queueAt(seq),
+      });
+    });
+
+    expect(outcome.accepted).toEqual(['a', 'b', 'c']);
+    expect(outcome.update).toEqual(queueAt(23));
+  });
+
+  it('has none when the push never arrived, or the server sent none', async () => {
+    const queue = makeQueue();
+    await queue.enqueue(action('a', 'PATIENT_DONE', 1));
+
+    expect((await queue.flush(SESSION, offline)).update).toBeNull();
+    expect((await queue.flush(SESSION, acceptsAll)).update).toBeNull();
   });
 });
 
