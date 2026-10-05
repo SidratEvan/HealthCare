@@ -301,9 +301,10 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-**As of `fix/log-sms-redaction` (3 October):** `pnpm test` reports 4,742 in
-about three minutes; `pnpm test:e2e` 151 in 14 to 18 minutes;
-`pnpm test:e2e:built` 3; `pnpm test:e2e:prod` 20. The per-file list below was counted at 136 and is
+**As of `fix/console-key-race` (5 October):** `pnpm test` reports 4,746 in
+about three minutes; `pnpm test:e2e` 153 (11.5 minutes on 5 October with
+`--trace off`, 14 to 18 with the trace recorded); `pnpm test:e2e:built` 3;
+`pnpm test:e2e:prod` 21. The per-file list below was counted at 136 and is
 kept for the names, not the numbers.
 
 `pnpm test:e2e` reported 136 then, in Chromium, against the real API and the seeded
@@ -366,6 +367,10 @@ so it has one now.
   leaves it. **Six of six failed on the console as it was, with CI's exact
   symptom; six of six pass with the fix**, and nothing else changed between
   them. The older test, which waits and then presses, is kept as it was.
+- The gate, on the branch before merging (5 October): `pnpm verify`; the
+  browser suite 153 of 153, the canary among them; the built console 3 of 3;
+  the production configuration 21 of 21, where the new test also runs
+  against the console as built.
 
 **Found on the way, measured, and not fixed: the queue steps back when a
 tap's answer beats its broadcast.** The console shows the server's last
@@ -386,9 +391,11 @@ fit, so the console says the queue moved. Nothing has been seen lost or
 written wrongly. But the counter's screen is briefly untrue, on the one
 screen that is supposed to be true. **It wants its own branch** (`fix/console-ack-rollback`
 is the obvious name): keep an action folded until the broadcast that holds it
-has arrived, which needs the push's answer to say which sequence each action
-became. It touches `FRONTEND.md` §11.1 step 4, so the documents change with
-it. Suggested before 1.10; the owner has not been asked yet.
+has arrived. The push's answer already says which sequence each action became
+(`accepted[].seq`), and the snapshot says how far it has got (`lastSeq`), so
+it is a change to the hook and not to the API. It touches `FRONTEND.md` §11.1
+step 4, so the documents change with it. Suggested before 1.10; the owner has
+not been asked yet.
 
 ### Plan 1.9 — what a message leaves behind (`fix/log-sms-redaction`)
 
