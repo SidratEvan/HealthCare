@@ -140,13 +140,30 @@ export async function createConsoleSession(
      * filed under yesterday and never appeared in the picker — and every spec
      * that books through the UI timed out waiting for a session card. The
      * product was fine; the fixture was six hours ahead of it.
+     *
+     * And the planned start is never before that date began.
+     *
+     * "Thirty minutes ago" is yesterday for the first half hour of a Dhaka
+     * day (ninety minutes, for an overdue chamber), and the session was then
+     * dated today with a start the day before — which nothing in the product
+     * ever writes: a chamber's date is the date of its planned start. The
+     * patient app dates a remembered booking by that start, so the home
+     * strip, which shows today's serial, did not show it, and
+     * `app-shell.spec.ts` failed in a run that began at 00:25 Dhaka
+     * (6 October). In that half hour the chamber now opens at midnight, with
+     * a doctor who arrived before it was due; at every other hour nothing
+     * changes.
      */
     const session = await client.query<{ id: string }>(
       `INSERT INTO sessions
          (hospital_id, doctor_id, department_id, room, session_date,
           planned_start, planned_end, capacity, fee_poisha)
        VALUES ($1, $2, $3, 'E2E', (now() AT TIME ZONE 'Asia/Dhaka')::date,
-               now() - make_interval(mins => $5), now() + interval '150 minutes',
+               greatest(
+                 now() - make_interval(mins => $5),
+                 date_trunc('day', now() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka'
+               ),
+               now() + interval '150 minutes',
                40, $4)
        RETURNING id`,
       [row.hospital_id, row.doctor_id, row.department_id, row.fee_poisha, overdue ? 90 : 30],

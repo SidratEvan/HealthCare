@@ -2750,7 +2750,27 @@ afternoon.
   tonight's scheduled. The same family as `fix/console-past-midnight`; found
   only because a verify run happened to start at 00:10 Dhaka. **A test that
   asserts a count over the whole seeded database is asserting the hour it
-  was written in.**
+  was written in.** What the job is for is now tested directly
+  (`fix/tests-past-midnight`): with today's chamber for a schedule deleted,
+  the first run writes exactly one and the second writes none.
+
+- **For the first half hour of a Dhaka day the e2e fixture made a chamber
+  the product never would** (`fix/tests-past-midnight`, 5 October).
+  `createConsoleSession` dated its chamber today and started it "thirty
+  minutes ago" (ninety, for an overdue one), which just after midnight is
+  yesterday. A chamber's date is always the date of its planned start, and
+  the patient app relies on that: it dates a remembered booking by the start,
+  so the home strip, which shows today's serial, hid it, and
+  `app-shell.spec.ts:172` failed in a full run that began at 00:25 Dhaka.
+  The fixture's start is now never before its own date began. That only acts
+  in that half hour, so it was tried at its extreme, with "midnight" set to
+  "now" for the whole browser suite: 153 of 153.
+  **Asked of the owner, not decided:** the same rule means a real chamber
+  that runs past midnight loses its strip on the patient's home screen at
+  00:00 and is listed as past, while the patient is still waiting.
+  `APP_FLOW.md` says the strip "appears only if an active booking exists
+  today" and is silent on a chamber still running from yesterday. Read from
+  the code, not seen happen.
 
 - **A faster machine is a different test** (`fix/e2e-fast-runner`,
   3 October). The browser suite passed 150 of 150 here in 18.1 minutes and
