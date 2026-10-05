@@ -92,6 +92,63 @@ async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
 }
 
 /**
+ * The room a fixture chamber is given unless a spec asks otherwise.
+ *
+ * The picker leaves this room out (`chamber.repo`), so a run's hundred
+ * fixture chambers do not pile up on `S-B-01`.
+ */
+const HIDDEN_ROOM = 'E2E';
+
+/**
+ * Where a fixture chamber is put, for the few specs that need one the picker
+ * lists: a room of its own, and optionally yesterday's date.
+ *
+ * A spec that uses this owes `hideFromPicker` afterwards, or its chambers stay
+ * on the picker for every spec that follows.
+ */
+export interface SessionPlace {
+  readonly room?: string;
+  readonly day?: 'today' | 'yesterday';
+}
+
+/** Takes fixture chambers back off the picker, whatever state a spec left them in. */
+export async function hideFromPicker(sessionIds: readonly string[]): Promise<void> {
+  if (sessionIds.length === 0) return;
+  await withClient(async (client) => {
+    await client.query('UPDATE sessions SET room = $2 WHERE id = ANY($1::uuid[])', [
+      [...sessionIds],
+      HIDDEN_ROOM,
+    ]);
+  });
+}
+
+/** A chamber as the database holds it: its status, and each booking's, by serial. */
+export async function chamberRecord(sessionId: string): Promise<{
+  readonly status: string;
+  readonly sessionDate: string;
+  readonly bookings: readonly string[];
+}> {
+  return await withClient(async (client) => {
+    const session = await client.query<{ status: string; session_date: string }>(
+      `SELECT status::text AS status, to_char(session_date, 'YYYY-MM-DD') AS session_date
+         FROM sessions WHERE id = $1`,
+      [sessionId],
+    );
+    const bookings = await client.query<{ status: string }>(
+      'SELECT status::text AS status FROM bookings WHERE session_id = $1 ORDER BY serial_number',
+      [sessionId],
+    );
+    const row = session.rows[0];
+    if (row === undefined) throw new Error(`No session ${sessionId}.`);
+    return {
+      status: row.status,
+      sessionDate: row.session_date,
+      bookings: bookings.rows.map((booking) => booking.status),
+    };
+  });
+}
+
+/**
  * A fresh session, mid-queue, driven by a real receptionist.
  *
  * Built from seeded rows — a real chamber, real patients, the fee that doctor
@@ -102,8 +159,11 @@ async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
 export async function createConsoleSession(
   bookings = 8,
   opening: SessionOpening = 'in-chamber',
+  place: SessionPlace = {},
 ): Promise<ConsoleSession> {
   const overdue = opening === 'overdue';
+  const room = place.room ?? HIDDEN_ROOM;
+  const daysAgo = place.day === 'yesterday' ? 1 : 0;
 
   return await withClient(async (client) => {
     const chamber = await client.query<{
@@ -153,20 +213,41 @@ export async function createConsoleSession(
      * (6 October). In that half hour the chamber now opens at midnight, with
      * a doctor who arrived before it was due; at every other hour nothing
      * changes.
+     *
+     * A chamber asked for as yesterday's (`place.day`) is what a chamber left
+     * open overnight is: dated yesterday, due from six to nine in the evening
+     * there, and still running now.
      */
     const session = await client.query<{ id: string }>(
       `INSERT INTO sessions
          (hospital_id, doctor_id, department_id, room, session_date,
           planned_start, planned_end, capacity, fee_poisha)
-       VALUES ($1, $2, $3, 'E2E', (now() AT TIME ZONE 'Asia/Dhaka')::date,
-               greatest(
-                 now() - make_interval(mins => $5),
+       VALUES ($1, $2, $3, $6, (now() AT TIME ZONE 'Asia/Dhaka')::date - $7::int,
+               CASE WHEN $7::int = 0 THEN
+                 greatest(
+                   now() - make_interval(mins => $5),
+                   date_trunc('day', now() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka'
+                 )
+               ELSE
                  date_trunc('day', now() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka'
-               ),
-               now() + interval '150 minutes',
+                   - interval '6 hours'
+               END,
+               CASE WHEN $7::int = 0 THEN now() + interval '150 minutes'
+               ELSE
+                 date_trunc('day', now() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka'
+                   - interval '3 hours'
+               END,
                40, $4)
        RETURNING id`,
-      [row.hospital_id, row.doctor_id, row.department_id, row.fee_poisha, overdue ? 90 : 30],
+      [
+        row.hospital_id,
+        row.doctor_id,
+        row.department_id,
+        row.fee_poisha,
+        overdue ? 90 : 30,
+        room,
+        daysAgo,
+      ],
     );
 
     const sessionId = session.rows[0]?.id;

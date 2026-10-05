@@ -87,6 +87,7 @@ export {
   createQueueApi,
   createSyncApi,
   type ApiClientOptions,
+  type QueueWriteResponse,
   type SyncPullResponse,
   type SyncPushResponse,
 } from './api/client.js';

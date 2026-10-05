@@ -71,6 +71,67 @@ export const CONSOLE = {
     bn: 'চেম্বার চলার সময় বিরতি দেওয়া যায়।',
     en: 'A break can be taken while the chamber is running.',
   },
+
+  // --- Ending a chamber (`BTN-B02-END`, `MOD-B02-END`) ----------------------
+  endChamber: { bn: 'চেম্বার শেষ করুন', en: 'End chamber' },
+  /** Why the control is off while somebody is in the chamber. */
+  endPatientInChamber: {
+    bn: 'একজন রোগী চেম্বারে আছেন। আগে তাঁর দেখা শেষ করুন।',
+    en: 'A patient is in the chamber. Finish that consultation first.',
+  },
+  /** Why it is off with no connection: an end the server has not heard is not one. */
+  endNeedsConnection: {
+    bn: 'চেম্বার শেষ করতে সংযোগ লাগে।',
+    en: 'Ending a chamber needs a connection.',
+  },
+  endChamberTitle: { bn: 'চেম্বার শেষ করবেন?', en: 'End this chamber?' },
+  /** Which chamber: the doctor and the day it belongs to. */
+  endChamberWhich: { bn: '{doctor} · {when}', en: '{doctor} · {when}' },
+  /** `MOD-B02-END`: the count, when patients are left unseen. */
+  endChamberUnseen: {
+    bn: '{count} জন রোগীকে দেখা হয়নি।',
+    en: '{count} patients have not been seen.',
+  },
+  endChamberNobodyLeft: {
+    bn: 'কোনো রোগী অপেক্ষায় নেই।',
+    en: 'Nobody is waiting.',
+  },
+  /** The consequence, said whatever the count (`GR-01`). */
+  endChamberConsequence: {
+    bn: 'চেম্বার শেষ করলে এই সেশনে আর কোনো কাজ করা যাবে না।',
+    en: 'Ending this chamber will stop further queue actions for this session.',
+  },
+  /** The deliberate tick, required when patients are left unseen. */
+  endChamberAcknowledge: {
+    bn: 'আমি বুঝেছি, এই রোগীদের দেখা হয়নি',
+    en: 'I understand these patients have not been seen',
+  },
+  endChamberConfirm: { bn: 'চেম্বার শেষ করুন', en: 'End chamber' },
+  endChamberKeep: { bn: 'ফিরে যান', en: 'Go back' },
+  /** Across the screen once the chamber has ended. */
+  chamberEnded: {
+    bn: 'এই চেম্বার শেষ হয়েছে। এখানে আর কোনো কাজ করা যাবে না।',
+    en: 'This chamber has ended. Nothing more can be done here.',
+  },
+  /** Why every control is off after that. */
+  chamberHasEnded: { bn: 'চেম্বার শেষ হয়েছে।', en: 'The chamber has ended.' },
+  backToChambers: { bn: 'চেম্বারের তালিকায় ফিরুন', en: 'Back to the chambers' },
+  /** The server refused: somebody was called in from another counter. */
+  endRefusedInChamber: {
+    bn: 'চেম্বার শেষ হয়নি: একজন রোগী চেম্বারে আছেন। তালিকা হালনাগাদ করা হয়েছে।',
+    en: 'The chamber was not ended: a patient is in the chamber. The queue has been brought up to date.',
+  },
+  endFailed: {
+    bn: 'চেম্বার শেষ করা যায়নি। আবার চেষ্টা করুন।',
+    en: 'The chamber could not be ended. Try again.',
+  },
+  /** `S-B-01`: when a chamber on the picker is today's, and when it is not. */
+  chamberToday: { bn: 'আজ · শুরু {time}', en: 'Today · starts {time}' },
+  chamberEarlierDay: {
+    bn: 'আগের দিনের চেম্বার · {when}',
+    en: 'An earlier day’s chamber · {when}',
+  },
+
   addWalkin: { bn: 'ওয়াক-ইন যোগ', en: 'Add walk-in' },
   callNext: { bn: 'পরবর্তী রোগী ডাকুন', en: 'Call next patient' },
   /** B1.3 step 1: the label changes when somebody is still in the chamber. */

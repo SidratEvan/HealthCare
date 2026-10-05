@@ -426,6 +426,71 @@ describe('a facility with no seed data, set up from the screen (FR-SUP-01)', () 
     expect(await materialise()).toBe(0);
   });
 
+  it('writes the next day’s chamber beside one still running, and changes neither (FR-QUE-06)', async () => {
+    // The same doctor sits tomorrow too: a second schedule, for tomorrow's
+    // weekday. Its chambers are written at once, tomorrow's among them.
+    const now = time.fromDate(new Date());
+    const tomorrow = time.toDhakaDate(time.addMinutes(now, 24 * 60));
+    const added = await send('post', '/hospital/templates', facility.token, {
+      doctorHospitalId,
+      weekday: time.dhakaWeekday(time.addMinutes(now, 24 * 60)),
+      startTime: '17:00',
+      endTime: '21:00',
+      capacity: 30,
+    });
+    expect(added.status).toBe(200);
+    const nextDay = added.body.data.templateId as string;
+
+    // Today's chamber runs late: it is still running when the day turns.
+    await asOwner(async (owner) => {
+      await sql`
+        UPDATE sessions SET status = 'running', actual_start = now()
+         WHERE template_id = ${templateId} AND session_date = ${today}::date
+      `.execute(owner);
+    });
+
+    const chambers = async (): Promise<
+      { id: string; template: string; day: string; status: string }[]
+    > =>
+      (
+        await sql<{ id: string; template: string; day: string; status: string }>`
+          SELECT id, template_id AS template, to_char(session_date, 'YYYY-MM-DD') AS day,
+                 status::text AS status
+            FROM sessions
+           WHERE template_id IN (${templateId}, ${nextDay}) AND deleted_at IS NULL
+             AND session_date IN (${today}::date, ${tomorrow}::date)
+           ORDER BY session_date
+        `.execute(db)
+      ).rows;
+    const before = await chambers();
+
+    // Two chambers, one doctor, two days: the one still running is today's,
+    // and tomorrow's is its own row. Neither replaced the other.
+    expect(before.map((row) => [row.template, row.day, row.status])).toEqual([
+      [templateId, today, 'running'],
+      [nextDay, tomorrow, 'scheduled'],
+    ]);
+
+    // The job runs as it does after midnight, from the next day on, for both
+    // schedules. It writes what that day newly reaches and touches neither of
+    // these: nothing is moved to the next day, and nothing is written twice.
+    await materialise({ from: tomorrow, onlyTemplate: templateId });
+    await materialise({ from: tomorrow, onlyTemplate: nextDay });
+    expect(await chambers()).toEqual(before);
+    expect(await materialise({ from: tomorrow, onlyTemplate: templateId })).toBe(0);
+    expect(await materialise({ from: tomorrow, onlyTemplate: nextDay })).toBe(0);
+
+    // Left as the tests after this one expect to find it.
+    await asOwner(async (owner) => {
+      await sql`
+        UPDATE sessions SET status = 'scheduled', actual_start = NULL
+         WHERE template_id = ${templateId} AND session_date = ${today}::date
+      `.execute(owner);
+      await sql`DELETE FROM sessions WHERE template_id = ${nextDay}`.execute(owner);
+      await sql`DELETE FROM session_templates WHERE id = ${nextDay}`.execute(owner);
+    });
+  });
+
   it('refuses a schedule that overlaps the doctor’s own', async () => {
     const response = await send('post', '/hospital/templates', facility.token, {
       doctorHospitalId,

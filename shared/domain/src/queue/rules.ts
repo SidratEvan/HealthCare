@@ -245,6 +245,56 @@ export function nextToCall(state: QueueState): QueueState['entries'][number] | n
   );
 }
 
+// ---------------------------------------------------------------------------
+// Ending a chamber — `BTN-B02-END` (owner's decision, 2026-10-05)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a chamber may be ended.
+ *
+ * Refused while a patient is in the chamber. An ended session takes no
+ * further action, so somebody called in and not yet finished would be left
+ * "in the chamber" for good, in a session nobody can touch: the one thing an
+ * end must not do silently. Finish that consultation and the end goes
+ * through.
+ *
+ * Patients who are only booked, waiting or late do **not** refuse it. A
+ * chamber does close with people unseen — the doctor leaves, the day is over
+ * — and that is a decision for the person at the counter, who is shown how
+ * many there are and has to say so deliberately (`MOD-B02-END`). Ending
+ * changes none of their statuses: `unseenAtEnd` only counts them.
+ *
+ * The console keeps its control off in the same case, but the rule lives
+ * here: a second counter whose screen has not caught up is answered by the
+ * server, not by what its own screen believes.
+ */
+export function canEndSession(state: QueueState): GuardResult {
+  if (state.status === 'ended' || state.status === 'cancelled') {
+    return deny('SESSION_ENDED', 'This session has already ended.');
+  }
+
+  const serving = nowServing(state);
+  if (serving !== null) {
+    return deny(
+      'PATIENT_IN_CHAMBER',
+      `Serial ${String(serving.serial)} is still in the chamber. Finish that consultation first.`,
+    );
+  }
+
+  return ALLOWED;
+}
+
+/**
+ * How many patients an end would leave unseen: booked, waiting or late.
+ *
+ * What the confirmation states (`MOD-B02-END`). The same list the queue
+ * table shows as still to come, so the number on the warning is the number
+ * of rows the person can see.
+ */
+export function unseenAtEnd(state: QueueState): number {
+  return waitingQueue(state).length;
+}
+
 export function canMarkDone(state: QueueState, bookingId: BookingId): GuardResult {
   const entry = findEntry(state, bookingId);
   if (entry === null) {

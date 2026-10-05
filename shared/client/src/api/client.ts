@@ -155,9 +155,30 @@ export interface SyncPullResponse {
   readonly fullResync: boolean;
 }
 
+/** What a queue route answers with: the queue as it stands with the action in it. */
+export interface QueueWriteResponse {
+  readonly state: QueueState;
+  readonly etas: readonly Eta[];
+  readonly seq: number;
+  readonly serverTs: string;
+  readonly duplicate: boolean;
+}
+
 /** The queue's own routes, for what the sync batch does not carry. */
 export function createQueueApi(client: ApiClient) {
   return {
+    /**
+     * `POST /sessions/:id/end` (`BTN-B02-END`). Refused by the server while a
+     * patient is in the chamber (`QUEUE_GUARD_FAILED`, guard
+     * `PATIENT_IN_CHAMBER`); answered with the ended queue otherwise.
+     */
+    async end(sessionId: string, idempotencyKey: string): Promise<QueueWriteResponse> {
+      return await client.post<QueueWriteResponse>(
+        `/sessions/${sessionId}/end`,
+        { reason: null },
+        idempotencyKey,
+      );
+    },
     /**
      * `POST /events/:id/undo` (`GR-02`) — by the stored event's id, inside
      * the window, by whoever did it. The key makes a retried press one undo.

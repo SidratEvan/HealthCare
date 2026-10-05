@@ -442,6 +442,10 @@ export interface StaffChamber {
   readonly departmentNameEn: string;
   readonly room: string | null;
   readonly status: string;
+  /** The date the chamber belongs to, and whether the server calls that today. */
+  readonly sessionDate: string;
+  readonly today: boolean;
+  readonly plannedStart: string;
   readonly waiting: number;
   readonly total: number;
 }

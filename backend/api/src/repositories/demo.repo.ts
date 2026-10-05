@@ -26,6 +26,9 @@ export interface DemoSessionRow {
   readonly departmentNameEn: string;
   readonly room: string | null;
   readonly status: string;
+  /** The chamber's own date, and whether that is today (`chamber.repo`). */
+  readonly sessionDate: string;
+  readonly today: boolean;
   readonly plannedStart: string;
   readonly plannedEnd: string;
   readonly waiting: number;
