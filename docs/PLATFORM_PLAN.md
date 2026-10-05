@@ -40,6 +40,78 @@ the same day, `docs/HANDOVER.md`, and the code on `mvp` at `87d3dd2`.
 
 ## 2. Order of work
 
+### Now: client-readiness mode (owner, 5 October)
+
+The priority is signing a hospital pilot, not finishing this plan. **Feature
+work is frozen**: no new product features, no self-service onboarding, no AI
+import, no network architecture, no refactor that a pilot does not need.
+Phases 2–4 and rows 1.9c–1.10 below wait.
+
+**The pilot this is for.** One hospital, one department, one to three
+chambers, on that hospital's own server and database. Supervised closely.
+Pay at the hospital. The hospital's own system keeps running beside it, and
+paper is the fallback.
+
+**Scope for week one: reception only** (owner, 5 October).
+
+| In the first week's work | Outside it |
+|---|---|
+| Staff sign-in; registration at the counter and walk-ins; doctor arrived; call next; done; late; absent; bring back; pause and resume; undo; end chamber; the few figures needed to check the queue against the paper list | The doctor's screen; the ward board; the ER console; the lab; the pharmacy; the patient app and live tracking; SMS; online payment |
+
+**Outside the pilot is not the same as not ready.** Nothing in the right-hand
+column is removed, rewritten or re-rated by this. Each module keeps the
+rating `HANDOVER.md` §13 gave it (several are "pilot-ready with
+supervision"); they are simply not part of the first week at one reception
+desk.
+
+**What may be said to a hospital, where it was getting said wrongly:**
+
+- **Import.** The product imports a hospital's data from CSV files in the
+  templates already built (sets A–C), checked, previewed, approved and
+  undoable, under supervision. What must not be promised yet is a direct
+  connection to their HMS or its database, arbitrary Excel files, or an
+  import that works out an unknown format by itself.
+- **Other modules.** Say they are outside this pilot, not that they do not
+  work.
+
+**A — must be done before a staff-side pilot.** Only what could put the
+queue in a wrong state, lose data, expose something serious, or make the
+pilot unusable.
+
+| # | Branch | Why it is here | Tests |
+|---|---|---|---|
+| P1 | `fix/console-ack-rollback` | The queue on the counter's screen stepped back to the patient before, and stayed there while the socket was silent. **Merged 5 October** (`becb262`) | In the branch: unit, and a browser test with the socket held silent |
+| P2 | `fix/console-demo-banner` | Every console screen says "This is a demonstration. All data here is for display only", whatever the server's mode: the line is drawn unconditionally in ten console components, and in four screens of the patient app, which is deployed in the same stack. Over real patients it is false, and it tells staff their entries do not count. The branch makes the label follow the server on both (owner, 5 October): shown on a demonstration, absent on a real server, and **hidden while the server has not answered**, because the false warning is the dangerous one | Console and patient app, both ways: the demonstration shows it where it did (`FR-DEM-07`); the production configuration shows it nowhere; with the answer withheld it is not shown |
+| P3 | `fix/chamber-end-of-day` | Nothing ends a chamber: `POST /sessions/:id/end` exists and no screen calls it, and no job does. The next morning yesterday's chamber is still "running", is listed first on the picker, and the card shows no date or time, so today's walk-ins go into yesterday's queue. **Approved by the owner, 5 October**: `BTN-B02-END` with its confirmation, and the service date and planned start on the picker's cards (`APP_FLOW.md` B1.2, `S-B-01`). Ending a previous day's chamber must leave today's untouched, and the schedule job's next-day chamber must sit beside a chamber that ran late. **It must not strand anybody silently** (`MOD-B02-END`): off while a patient is in the chamber; the count of patients not seen stated in the confirmation, which then needs a deliberate tick; nobody's status changed to tidy up; refund eligibility as it was. **The server refuses an end while a patient is in the chamber** (added by the owner the same day): one guard, the queue's ordinary refusal, nothing written; it is what a second counter with a stale screen is told. Waiting, late and booked patients do not block an end | Domain and API: a patient in the chamber → the end is refused and no `SESSION_ENDED` is written; that patient finished → it succeeds; patients left waiting are still waiting after an end. The end route's auth matrix already exists. Schedule job: tomorrow's chamber is written beside a chamber still running from today, and neither changes. Browser: end a chamber with nobody left; the control is off with its reason while somebody is in the chamber; end one with patients waiting, only after the tick, and they are still waiting in the record; end yesterday's chamber, it leaves the current list, and today's is then chosen and worked; a chamber not dated today says which day it is from |
+| P4 | `chore/e2e-pilot-path` | The pilot's own path has never been run in the configuration it will run in. `pnpm test:e2e:prod` drives the canary and the counter on chambers and bookings a fixture made; nothing there signs in, registers a walk-in at the counter and sees them through, and that is the whole of a pilot with no patient app. Whatever it finds is A | Production configuration, built apps, limited database role, one path from end to end: sign in → register a walk-in → doctor arrived → call → done → end chamber → it has left the current list and today's or the next valid chamber is the one chosen. No demonstration line anywhere on the way (P2). A schedule set from settings produces tomorrow's chamber |
+| P5 | `chore/deploy-lan-https` — **deferred, not to be built on a guess** (owner, 5 October) | The console needs HTTPS that every counter PC trusts: the service worker and the keys it gives its actions both need a secure context. `DEPLOY.md` covers publicly resolvable names with automatic certificates, and that stays the documented path. The first hospital's IT is asked to choose (`DEPLOY.md`, *Before a pilot*): (1) publicly resolvable HTTPS names, or (2) a server reachable only inside the hospital. If they choose the second, the smallest trusted-certificate design goes to the owner before anything is built | Decided with the design, if there is one |
+
+**Order, and where it stops** (owner, 5 October): P1 merged if its gate is
+wholly green; then P2; then P3; then P4; then **stop and report what P4
+found**. P5 only once the hospital has said how its server is reached. After
+P4 the owner is given one answer, go or no-go for a supervised reception
+pilot, listing only what actually blocks it. AI import, self-service
+onboarding, ward and ER reconciliation and the rest of this plan do not
+resume until that path is green.
+
+**B — after the first pilot.** Everything else, including things that are
+imperfect. Four of them move into A the moment the pilot's shape changes:
+
+| Waits | Moves into A if |
+|---|---|
+| 1.9c `fix/queue-exactly-once` (an action drawn twice while its answer is slower than its broadcast) | a real SMS provider is put behind the adapter while sending is still in the request, or the doctor's delay button is part of the pilot on a slow network. With SMS recorded only, the answer trails the broadcast by milliseconds |
+| 1.9d, 1.9e ward and ER reconciliation | the ward board or the ER console is part of the pilot |
+| 1.9f `fix/serial-past-midnight`, 2.1, 2.2 (patient side, SMS) | patients are given the app or a tracking link |
+| 1.10 `feat/tenant-rls`, and the doctor's read of other hospitals' visits (`HANDOVER.md` §16) | a second hospital is put on the same database |
+
+Also B: alerts when a backup or the API fails (somebody looks each morning
+instead); a warning at sign-out when actions are still unsent (an operating
+rule instead: nobody changes shift with a pending count showing); names on an
+offline reload; undo toasts on the row buttons; ending a signed-out person's
+socket; everything in phases 2–4.
+
+### The plan as it stood
+
 One branch per row, off `mvp`, merged back only when `CLAUDE.md` §5 is met.
 Every fix carries a test that fails on the old code. Rows marked **waits** need
 a decision from §7 first; everything else proceeds.
@@ -61,6 +133,34 @@ a decision from §7 first; everything else proceeds.
 
 1.10 is last in the phase because it rests on 1.7's role, and it comes before
 Phase 3 because self-service signup puts many hospitals on one database.
+
+#### Added 5 October — one action, shown once (before 1.10)
+
+Found while verifying 1.9a, and asked for by the owner's review of that day.
+The server answers a console's write by two roads, the response and a
+broadcast, and the three consoles were each right only when the broadcast
+came first and promptly. The contract is `BACKEND.md` `SY-08` and `SY-09` and
+`FRONTEND.md` §11.1 (*One action, shown once*), written before any code
+(`chore/requirements-5-october`, which also carries the founder's decision
+on sessions that cross midnight: `PRD.md` `FR-QUE-06`, `FR-PAT-39`).
+
+The review asked for these before 1.5. **1.5 and 1.6 were already merged on
+3 October**, so they were placed before 1.10 instead: the outboxes they fix
+are the ones 1.5 put on disk. Later the same day the owner switched to
+client-readiness mode (above), and all four now wait until after the first
+pilot unless its shape brings one forward. The contract and the founder's
+decision stand as written; only the building waits.
+
+| # | Branch | What changes | Tests that must fail first | Done when |
+|---|---|---|---|---|
+| 1.9c | `fix/queue-exactly-once` | `queue.updated` names the actions it took in (`applied`, bounded to the one write behind it); a subscribing console sends its unanswered keys and the catch-up names those in the log. The console takes an action off its own drawing at the first statement that names it, answer or broadcast, in the redraw that shows the queue containing it. A tap's events are queued and sent as one | Unit: each order of arrival as a sequence, ending in one queue; a tap of two events is never half drawn. API: a broadcast names its actions and nothing older; a catch-up names only the asked keys. E2E: the doctor declares 30 minutes with the answer held and the screen says 30, never 60 (broadcast first); with the socket held (answer first, socket silent); and reconnecting with an action still unanswered | One action is drawn once in every order: tap first, answer first, broadcast first, socket silent, answer slow, reconnect with unanswered actions |
+| 1.9d | `fix/ward-reconcile` | A bed carries `version`, raised by a trigger in the statement that changes the row (one migration). Answers, broadcasts and board reads carry it. The ward board keeps the highest version per bed from any road, shows the answer's beds in the redraw that drops its own drawing of the action, and `bed.updated` names the action | Schema: every write path raises the version, and a rolled-back change raises nothing. Unit: version N+1 then N leaves N+1. E2E: socket held silent, admit a patient, the tile settles from the answer and never shows the bed before; and N+1 delivered before N does not step the tile back | The board is right with the socket silent, and no older statement can replace a newer one, in any order |
+| 1.9e | `fix/er-reconcile` | The same for the ER console: `version` on an emergency case, the answer used at once, the broadcast names the action. What else that console draws optimistically (capabilities, a walk-in's provisional case) is read and settled in the branch | As 1.9d, on a triage step and a walk-in | As 1.9d, for the ER console |
+| 1.9f | `fix/serial-past-midnight` | `FR-QUE-06`, `FR-PAT-39` (founder's decision, 5 October): a booking is current until it is settled or its session ends, whatever the date. Home's strip and My serials ask the server instead of comparing dates; a status that cannot be checked is shown as unknown, never as past. Nothing is copied to the next day | Domain: waiting at 23:59 is current at 00:01; a chamber paused across midnight is current; a session ended after midnight is past; unknown is not past. API or schema: the next day's scheduled chamber is written beside a previous-day chamber still running, and neither is changed. E2E: a chamber dated yesterday and still running keeps its strip; ending it moves the booking to Past | A patient still waiting after midnight still sees their serial |
+
+Hospital and per-person isolation are not touched by any of these: the
+outboxes stay one database per signed-in person, a statement is only ever
+matched against the console's own keys, and the socket's room rules stand.
 
 ### Phase 2 — real patient entry
 
@@ -310,7 +410,17 @@ In addition to `CLAUDE.md`:
 | 1.9 | `fix/log-sms-redaction` | merged — the `log` provider writes one line per message with no number and no text, and keeps nothing; every outbox row goes through `writeOutbox`, which stores the words with `{link}` where the link went; migration 0035 removes stored links, refuses new ones and indexes the purge; the hourly job clears a message's words after 90 days |
 | 1.9a | `fix/console-key-race` | merged — not in the handover; found by the third CI run, where N pressed the instant a break ended was answered "a break is in progress". The console swapped its key listener a frame after each redraw. `useWindowKeydown` in `@platform/ui` listens once and changes what it calls inside the redraw; the reception console and the bed panel use it. Found on the way and not fixed: the queue steps back when a tap's answer beats its broadcast (`docs/STATUS.md`, *Plan 1.9a*) |
 | 1.9b | `fix/console-ack-rollback` | merged — not in the handover; found while verifying 1.9a. The reception console dropped a tap from its screen when the push was answered and waited for the broadcast, so the queue stepped back to the patient before whenever the broadcast was the slower of the two, and stayed there while the socket said nothing. The answer already carried the queue (`SY-05`); the console now shows it in the same redraw (`FRONTEND.md` §11.1 step 4). Not done: the ward board and the ER console have the same shape, and an action is folded twice for as long as the answer is slower than the broadcast (`docs/STATUS.md`, *Plan 1.9b*) |
-| 1.10 | `feat/tenant-rls` | next |
+| — | `fix/materialise-test-midnight`, `fix/tests-past-midnight` | merged — tests only. Two tests failed every night just after Dhaka midnight: one asserted the schedule job's first run writes nothing, the other stood on an e2e fixture whose chamber was dated today and started yesterday. The job's purpose now has a test of its own |
+| — | `chore/requirements-5-october` | documents only: `SY-08`, `SY-09` and `FRONTEND.md` §11.1 *One action, shown once*; `FR-QUE-06` and `FR-PAT-39` (sessions that cross midnight) in `PRD.md` and `APP_FLOW.md`; rows 1.9c–1.9f |
+| P2 | `fix/console-demo-banner` | next (client-readiness, §2) |
+| P3 | `fix/chamber-end-of-day` | approved 5 October; after P2 |
+| P4 | `chore/e2e-pilot-path` | after P3; then stop and report |
+| P5 | `chore/deploy-lan-https` | deferred until the first hospital's IT has chosen how its server is reached |
+| 1.9c | `fix/queue-exactly-once` | after the first pilot (see §2 for what would bring it forward) |
+| 1.9d | `fix/ward-reconcile` | after the first pilot |
+| 1.9e | `fix/er-reconcile` | after the first pilot |
+| 1.9f | `fix/serial-past-midnight` | after the first pilot |
+| 1.10 | `feat/tenant-rls` | after the first pilot; before a second hospital shares a database |
 | 2.1 | `feat/notification-worker` | |
 | 2.2 | `feat/sms-live` | waits: D1 |
 | 3.0–3.4 | onboarding | 3.2 waits: D2, D3 |
