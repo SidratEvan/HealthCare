@@ -93,7 +93,9 @@ test.describe('until the server has said what it is, nothing claims to be a demo
   });
 
   test('the patient app is drawn without the line', async ({ page }) => {
-    await page.route('**/api/v1/config', () => {
+    // With whatever the app adds to the question (`?host=`, `FR-BRD-07`): a
+    // pattern without that lets the real answer through, and the line with it.
+    await page.route('**/api/v1/config**', () => {
       // Never answered.
     });
 
