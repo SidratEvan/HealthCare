@@ -64,10 +64,56 @@ export function HospitalFace({ snapshot, offline, run }: FaceProps): ReactNode {
         <h2 className="text-title-md">{t('settingsFaceHeading', locale)}</h2>
         <p className="text-body-sm text-ink-secondary">{t('settingsFaceHelper', locale)}</p>
       </div>
+      <PortalAddresses snapshot={snapshot} />
       <Description snapshot={snapshot} offline={offline} run={run} />
       <Logo snapshot={snapshot} offline={offline} run={run} />
       <Colours snapshot={snapshot} offline={offline} run={run} />
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Where its portal is (`FR-BRD-07`)
+// ---------------------------------------------------------------------------
+
+/**
+ * The hospital's own portal addresses, to read and to give to patients.
+ *
+ * Not something the hospital sets here: the address under the platform's
+ * domain is its code, and a domain of its own is recorded by the platform,
+ * because the whole deployment answers for it. Nothing is shown on a
+ * deployment that has no domain, where a portal has no address to show.
+ */
+function PortalAddresses({ snapshot }: { readonly snapshot: SetupSnapshot }): ReactNode {
+  const locale = useLocale();
+  const addresses = [snapshot.portal.own, snapshot.portal.platform].filter(
+    (address): address is string => address !== null,
+  );
+  if (addresses.length === 0) return null;
+
+  return (
+    <Card data-testid="settings-portal">
+      <div className="flex flex-col gap-2">
+        <h3 className="font-ui text-body-md font-semibold text-ink">
+          {t('settingsPortalHeading', locale)}
+        </h3>
+        <ul className="flex flex-col gap-1">
+          {addresses.map((address) => (
+            <li key={address}>
+              <span
+                className="break-all font-mono text-body-md text-ink"
+                data-testid="settings-portal-address"
+              >
+                {address}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-caption text-ink-muted">
+          {t('settingsPortalHelper', locale)} {t('settingsPortalOwnHelper', locale)}
+        </p>
+      </div>
+    </Card>
   );
 }
 

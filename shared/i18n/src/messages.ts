@@ -1476,6 +1476,42 @@ export const CONSOLE = {
   platformUnverified: { bn: 'যাচাই বাকি', en: 'Not verified' },
   platformVerify: { bn: 'যাচাই হয়েছে বলে চিহ্নিত করুন', en: 'Mark as verified' },
   platformAdmins: { bn: 'হাসপাতালের প্রশাসক', en: 'The hospital’s administrators' },
+  // Where a hospital's portal is (`FR-BRD-07`, `FRM-B12-DOMAIN`).
+  platformPortalTitle: { bn: 'পোর্টালের ঠিকানা', en: 'Portal address' },
+  platformPortalAt: { bn: 'প্ল্যাটফর্মের ডোমেইনে', en: 'Under the platform’s domain' },
+  platformPortalNoDomain: {
+    bn: 'এই স্থাপনায় প্ল্যাটফর্মের নিজস্ব ডোমেইন ঠিক করা হয়নি, তাই হাসপাতালের পোর্টাল কোনো ঠিকানা দিয়ে খোলে না।',
+    en: 'This deployment has no platform domain set, so a hospital’s portal is not opened by an address.',
+  },
+  platformDomainLabel: { bn: 'হাসপাতালের নিজের ডোমেইন', en: 'The hospital’s own domain' },
+  platformDomainHelper: {
+    bn: 'যেমন portal.example-hospital.com.bd। হাসপাতাল ডোমেইনটি এই প্ল্যাটফর্মের দিকে ঘুরিয়ে দেওয়ার পরে এখানে লিখুন।',
+    en: 'For example portal.example-hospital.com.bd. Record it once the hospital has pointed the domain at this platform.',
+  },
+  platformDomainSave: { bn: 'ডোমেইন সংরক্ষণ করুন', en: 'Save domain' },
+  platformDomainRemove: { bn: 'ডোমেইন সরান', en: 'Remove domain' },
+  platformDomainNeed: { bn: 'একটি ডোমেইন লিখুন', en: 'Enter a domain' },
+  platformDomainSame: {
+    bn: 'এই ডোমেইনটিই এখন সংরক্ষিত আছে',
+    en: 'This domain is already recorded',
+  },
+  platformDomainTaken: {
+    bn: 'এই ডোমেইনটি আরেকটি হাসপাতালের নামে আছে।',
+    en: 'That domain is already recorded for another hospital.',
+  },
+  platformDomainIsOurs: {
+    bn: 'এটি প্ল্যাটফর্মের নিজের ডোমেইনের অংশ। হাসপাতালের নিজস্ব ডোমেইন লিখুন।',
+    en: 'That is part of the platform’s own domain. Record a domain the hospital owns.',
+  },
+  settingsPortalHeading: { bn: 'আপনার পোর্টালের ঠিকানা', en: 'Your portal’s address' },
+  settingsPortalHelper: {
+    bn: 'রোগীরা এই ঠিকানায় গেলে অ্যাপটি শুধু আপনার হাসপাতালের হয়ে খোলে।',
+    en: 'At this address the app opens as your hospital’s alone.',
+  },
+  settingsPortalOwnHelper: {
+    bn: 'নিজস্ব ডোমেইন যোগ বা বদল করতে প্ল্যাটফর্মকে জানান।',
+    en: 'To add or change a domain of your own, ask the platform.',
+  },
   platformActionsTitle: { bn: 'সিদ্ধান্ত', en: 'Decision' },
   platformNoActions: {
     bn: 'এখন হাসপাতালের পালা। তারা পর্যালোচনার অনুরোধ করলে এখানে সিদ্ধান্ত নেওয়া যাবে।',
@@ -3175,6 +3211,16 @@ export const PATIENT = {
   },
   bookingFailed: { bn: 'সিরিয়াল নেওয়া যায়নি', en: 'Could not book' },
   tryAgain: { bn: 'আবার চেষ্টা করুন', en: 'Try again' },
+  // `<PortalGate>`: a hospital's own domain, and the server could not be asked whose it is.
+  portalNobodys: {
+    bn: 'এই ঠিকানাটি কোনো হাসপাতালের পোর্টাল নয়।',
+    en: 'This address is not a hospital’s portal.',
+  },
+  portalGoNetwork: { bn: 'মূল অ্যাপে যান', en: 'Go to the main app' },
+  portalUnreachable: {
+    bn: 'এই ঠিকানাটি কোন হাসপাতালের, তা এখনই জানা যাচ্ছে না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।',
+    en: 'We cannot tell just now whose address this is. Check your connection and try again.',
+  },
 
   // GR-03's third state, and it is not the same as the empty one. "No hospital
   // offers this" is a statement about the world; a request that failed is a

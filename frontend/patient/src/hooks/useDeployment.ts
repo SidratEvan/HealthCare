@@ -21,7 +21,7 @@ import { useEffect, useState } from 'react';
 import type { BrandTheme } from '@platform/domain';
 
 import { api } from '@/lib/api';
-import { scopedPath } from '@/lib/scope';
+import { hostToAsk, onHostAnswer, rememberHostAnswer, scopedPath } from '@/lib/scope';
 
 /** The hospital this app is open for (`FR-PAT-19`). */
 export interface ScopeConfig {
@@ -34,6 +34,8 @@ export interface ScopeConfig {
   readonly descriptionBn?: string | null;
   readonly descriptionEn?: string | null;
   readonly logoVersion?: string | null;
+  /** True when the address itself is this hospital's portal (`FR-BRD-07`). */
+  readonly byAddress?: boolean;
 }
 
 export interface DeploymentConfig {
@@ -42,24 +44,68 @@ export interface DeploymentConfig {
   readonly guestPhoneCheck: boolean;
   /** Null for the network's own app. */
   readonly scope: ScopeConfig | null;
+  /**
+   * What the address the app was opened at is (`FR-BRD-07`): the network's,
+   * a hospital's portal, or nobody's, in which case `networkUrl` is where
+   * the network is.
+   */
+  readonly address?: 'network' | 'portal' | 'nobodys';
+  readonly networkUrl?: string;
 }
 
 let pending: Promise<DeploymentConfig | null> | null = null;
 
 function ask(): Promise<DeploymentConfig | null> {
-  pending ??= api.get<DeploymentConfig>(scopedPath('/config')).catch(() => null);
+  // The address it was opened at goes with the question (`FR-BRD-07`): at a
+  // hospital's portal the answer is that hospital's, with nothing asked for.
+  const params = new URLSearchParams();
+  const host = hostToAsk();
+  if (host !== null) params.set('host', host);
+  pending ??= api.get<DeploymentConfig>(scopedPath('/config', params)).catch(() => null);
   return pending;
+}
+
+/**
+ * Asks the server whose address this is, and keeps the answer for the visit
+ * (`<PortalGate>`). False when the server could not be reached: the question
+ * is then put again, because nothing can be shown without the answer.
+ */
+export async function askWhoseAddress(): Promise<
+  | { readonly kind: 'answered' }
+  | { readonly kind: 'unreachable' }
+  | { readonly kind: 'nobodys'; readonly networkUrl: string | null }
+> {
+  const answer = await ask();
+  if (answer === null) {
+    // Not remembered as an answer: the next try asks again.
+    pending = null;
+    return { kind: 'unreachable' };
+  }
+  if (answer.address === 'nobodys') {
+    // Not kept either: the name may be recorded for a hospital tomorrow.
+    pending = null;
+    return { kind: 'nobodys', networkUrl: answer.networkUrl ?? null };
+  }
+  rememberHostAnswer(answer.scope?.byAddress === true ? answer.scope.code : null);
+  return { kind: 'answered' };
 }
 
 export function useDeployment(): DeploymentConfig | null {
   const [config, setConfig] = useState<DeploymentConfig | null>(null);
   useEffect(() => {
     let live = true;
-    void ask().then((answer) => {
-      if (live) setConfig(answer);
-    });
+    const read = (): void => {
+      void ask().then((answer) => {
+        if (live) setConfig(answer);
+      });
+    };
+    read();
+    // Asked again once the server has said whose address this is: a first
+    // question that could not be put (`<PortalGate>`) left nothing to show.
+    const stop = onHostAnswer(read);
     return () => {
       live = false;
+      stop();
     };
   }, []);
   return config;

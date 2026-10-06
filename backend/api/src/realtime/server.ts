@@ -12,6 +12,7 @@ import { Server as SocketServer } from 'socket.io';
 
 import { allowedOrigins } from '../config/links.js';
 import { logger } from '../config/logger.js';
+import { originAllowed } from '../services/portal.service.js';
 
 import { authenticateSocket, sweepRevoked } from './auth.js';
 import { setEmitter, type RealtimeEmitter } from './emit.js';
@@ -47,7 +48,27 @@ export function attachRealtime(httpServer: HttpServer): SocketServer {
     // the API, so the browser preflights the handshake. An allowlist rather
     // than a wildcard: `credentials: true` with `origin: '*'` would let any
     // page on the internet open a session channel with a stolen token.
-    cors: { origin: [...allowedOrigins()], credentials: true },
+    // A function and not a list, since a hospital's portal is at an address
+    // of its own (`FR-BRD-07`): the same question the CORS middleware asks,
+    // of the same service, so the two cannot answer differently.
+    cors: {
+      origin: (origin, done) => {
+        if (origin === undefined) {
+          // Not a browser: nothing to allow or refuse by origin.
+          done(null, true);
+          return;
+        }
+        originAllowed(origin).then(
+          (allowed) => {
+            done(null, allowed);
+          },
+          (error: unknown) => {
+            done(error instanceof Error ? error : new Error('origin check failed'));
+          },
+        );
+      },
+      credentials: true,
+    },
 
     // A reception console on hospital wifi and a patient on 3G both drop
     // often. Socket.IO's defaults assume a better network than this product

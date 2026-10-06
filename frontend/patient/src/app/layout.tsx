@@ -32,6 +32,7 @@ import '@platform/ui/styles.css';
 
 import { fontVariables } from '@/app/fonts';
 import { LanguageBar } from '@/components/LanguageBar';
+import { PortalGate } from '@/components/PortalGate';
 import { ScopeTheme } from '@/components/ScopeTheme';
 import { ServiceWorker } from '@/components/ServiceWorker';
 
@@ -81,7 +82,9 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
       <body className="min-h-screen overscroll-none bg-canvas text-ink">
         <ScopeTheme />
         <LanguageBar />
-        {children}
+        {/* At a name only the server can place, nothing is shown until it has
+            said whose it is (`FR-BRD-07`). Everywhere else this is nothing. */}
+        <PortalGate>{children}</PortalGate>
         <ServiceWorker />
         <LocaleDocument title={{ bn: tp('appName', 'bn'), en: tp('appName', 'en') }} />
       </body>

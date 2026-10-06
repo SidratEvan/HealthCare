@@ -36,6 +36,8 @@ export interface SetupSnapshot {
     /** What the hospital says of itself to patients (`FR-BRD-06`). */
     readonly descriptionBn: string | null;
     readonly descriptionEn: string | null;
+    /** A domain of its own, recorded by the platform (`FR-BRD-07`); null for none. */
+    readonly portalDomain: string | null;
     readonly lat: number | null;
     readonly lng: number | null;
     readonly isLive: boolean;
@@ -145,6 +147,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     emergency_phone: string | null;
     description_bn: string | null;
     description_en: string | null;
+    portal_domain: string | null;
     brand: unknown;
     logo_sha256: string | null;
     logo_type: string | null;
@@ -164,7 +167,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
   }>`
     SELECT h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
            h.thana, h.address_bn, h.address_en, h.phone, h.emergency_phone,
-           h.description_bn, h.description_en, s.brand,
+           h.description_bn, h.description_en, h.portal_domain, s.brand,
            l.sha256 AS logo_sha256, l.content_type AS logo_type,
            octet_length(l.bytes) AS logo_bytes,
            h.lat::float8 AS lat, h.lng::float8 AS lng, h.is_live, h.onboarded_at,
@@ -297,6 +300,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       emergencyPhone: row.emergency_phone,
       descriptionBn: row.description_bn,
       descriptionEn: row.description_en,
+      portalDomain: row.portal_domain,
       lat: row.lat,
       lng: row.lng,
       isLive: row.is_live,

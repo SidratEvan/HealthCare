@@ -14,9 +14,11 @@ import {
   sessionQuery,
 } from '@platform/domain';
 
+import { env } from '../env.js';
 import { notFound } from '../errors/AppError.js';
 import * as deployment from '../services/deployment.service.js';
 import * as discovery from '../services/discovery.service.js';
+import * as portals from '../services/portal.service.js';
 
 import type { Request, Response } from 'express';
 
@@ -75,17 +77,30 @@ export async function getAvailability(req: Request, res: Response): Promise<void
  * phone before booking. Public; nothing in it is a secret.
  */
 export async function getConfig(req: Request, res: Response): Promise<void> {
-  const { scope } = configQuery.parse(req.query);
+  const { scope, host } = configQuery.parse(req.query);
 
   // `scope` is null for the network's own app. For a hospital's, it is whose
   // app this is and in which colours (`FR-BRD-02`, `FR-BRD-03`); an unknown
   // code is a 404 rather than a silent fall back to the whole network.
-  const scoped = scope === undefined ? null : await discovery.scopeInfo(scope);
+  //
+  // The address decides before the parameter does (`FR-BRD-07`): opened at a
+  // hospital's portal the app is that hospital's with nothing asked for, and
+  // `?scope=` there does not make it another's.
+  const address = host === undefined ? null : await portals.addressOf(host);
+  const atPortal = address?.kind === 'portal' ? address.code : null;
+  const code = atPortal ?? scope;
+  const scoped = code === undefined ? null : await discovery.scopeInfo(code);
 
   res.json({
     ok: true,
     data: {
       ...deployment.publicConfig(),
+      // What the address the app was opened at is: the network's, a
+      // hospital's portal, or nobody's. At nobody's the API answers a browser
+      // nothing but this (`middleware/cors.ts`), so the app is told where
+      // the network is and can say so.
+      address: address?.kind ?? 'network',
+      ...(address?.kind === 'nobodys' ? { networkUrl: env.WEB_BASE_URL } : {}),
       scope:
         scoped === null
           ? null
@@ -103,6 +118,9 @@ export async function getConfig(req: Request, res: Response): Promise<void> {
               descriptionBn: scoped.descriptionBn,
               descriptionEn: scoped.descriptionEn,
               logoVersion: scoped.logoVersion,
+              // True when the address itself is this hospital's portal, so
+              // the app knows the scope is not the visitor's to change.
+              byAddress: atPortal !== null,
             },
     },
   });

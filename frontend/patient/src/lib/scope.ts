@@ -11,9 +11,16 @@
  *   1. `NEXT_PUBLIC_HOSPITAL_SCOPE`, set when the app is built for one
  *      hospital. A build with it cannot be taken out of scope from the
  *      address bar.
- *   2. `?scope=CODE` on any address, kept for the rest of the visit. This is
- *      how the one build that is the network's app is shown as a hospital's:
- *      a link, not a deployment. `?scope=` on its own leaves it.
+ *   2. **The address itself** (`FR-BRD-07`, plan C2). Opened at
+ *      `<code>.<platform domain>`, or at a domain a hospital owns and the
+ *      platform has recorded, the app is that hospital's portal with no
+ *      parameter, and nothing in the address bar takes it out of scope or
+ *      into another hospital's. The first kind is read from the name; the
+ *      second only the server can say, and `<PortalGate>` waits for it.
+ *   3. `?scope=CODE` at the network's own address, kept for the rest of the
+ *      visit. This is how the one build that is the network's app is shown
+ *      as a hospital's: a link, not a deployment. `?scope=` on its own
+ *      leaves it.
  *
  * A scope is not a permission. Everything it narrows is public already; it
  * only decides what this app shows. So it is read from the address without
@@ -24,7 +31,14 @@
  * opened on the network's address is the network.
  */
 
+import { portalHostOf } from '@platform/domain';
+
 const KEY = 'patient.scope';
+/** What the server said this address is, for the visit: `{ host, code }`. */
+const HOST_KEY = 'patient.scope.host';
+
+/** The platform's own domain, when this build was given one (`FR-BRD-07`). */
+const PLATFORM_DOMAIN = (process.env['NEXT_PUBLIC_PLATFORM_DOMAIN'] ?? '').trim().toLowerCase();
 const SHAPE = /^[A-Za-z0-9][A-Za-z0-9-]{1,15}$/;
 
 /** The scope this build was made for, if it was made for one hospital. */
@@ -48,6 +62,90 @@ function store(code: string | null): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Whose address this is
+// ---------------------------------------------------------------------------
+
+type AtAddress =
+  /** The network's own address, or a name the server said is nobody's. */
+  | { readonly kind: 'network' }
+  /** A hospital's portal: its code is the scope, and the visitor cannot change it. */
+  | { readonly kind: 'portal'; readonly code: string }
+  /** A name this build cannot read. The server has not said yet whose it is. */
+  | { readonly kind: 'unasked' };
+
+/** What the server said this host is: a code, null for nobody's, undefined if not asked. */
+function hostAnswer(host: string): string | null | undefined {
+  try {
+    const kept = globalThis.sessionStorage?.getItem(HOST_KEY);
+    if (kept == null) return undefined;
+    const parsed = JSON.parse(kept) as { host?: unknown; code?: unknown };
+    if (parsed.host !== host) return undefined;
+    if (parsed.code === null) return null;
+    return typeof parsed.code === 'string' && SHAPE.test(parsed.code) ? parsed.code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function atAddress(): AtAddress {
+  if (typeof globalThis.location === 'undefined') return { kind: 'network' };
+  const which = portalHostOf(
+    globalThis.location.host,
+    PLATFORM_DOMAIN === '' ? null : PLATFORM_DOMAIN,
+  );
+  if (which.kind === 'network') return { kind: 'network' };
+  if (which.kind === 'code') return { kind: 'portal', code: which.code };
+
+  const answer = hostAnswer(which.host);
+  if (answer === undefined) return { kind: 'unasked' };
+  return answer === null ? { kind: 'network' } : { kind: 'portal', code: answer };
+}
+
+const listeners = new Set<() => void>();
+
+/** Called when the server has said whose address this is; returns the way to stop. */
+export function onHostAnswer(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** Whether this address is a name only the server can place, and it has not yet. */
+export function hostNeedsAsking(): boolean {
+  return atAddress().kind === 'unasked';
+}
+
+/** Whether the scope comes from the address, and so is not the visitor's to change. */
+export function scopeIsByAddress(): boolean {
+  return atAddress().kind === 'portal';
+}
+
+/**
+ * Keeps what the server said this address is, for the visit: a hospital's
+ * code, or null for the network.
+ */
+export function rememberHostAnswer(code: string | null): void {
+  if (typeof globalThis.location === 'undefined') return;
+  const which = portalHostOf(
+    globalThis.location.host,
+    PLATFORM_DOMAIN === '' ? null : PLATFORM_DOMAIN,
+  );
+  if (which.kind !== 'foreign') return;
+  try {
+    globalThis.sessionStorage?.setItem(HOST_KEY, JSON.stringify({ host: which.host, code }));
+  } catch {
+    // A window that refuses storage asks again on the next page.
+  }
+  for (const listener of listeners) listener();
+}
+
+/** The host to tell the server, so that it can say whose address this is. */
+export function hostToAsk(): string | null {
+  return typeof globalThis.location === 'undefined' ? null : globalThis.location.host;
+}
+
 /**
  * The scope in force, or null for the whole network.
  *
@@ -59,6 +157,11 @@ function store(code: string | null): void {
 export function currentScope(): string | null {
   if (SHAPE.test(BUILT_FOR)) return BUILT_FOR.toUpperCase();
   if (typeof globalThis.location === 'undefined') return null;
+
+  // At a hospital's own address the address decides (`FR-BRD-07`): `?scope=`
+  // neither makes one hospital's portal another's nor takes it out of scope.
+  const at = atAddress();
+  if (at.kind === 'portal') return at.code;
 
   const params = new URLSearchParams(globalThis.location.search);
   if (params.has('scope')) {

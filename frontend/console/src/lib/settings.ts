@@ -77,6 +77,12 @@ export interface SetupSnapshot {
     readonly staleThresholdMinutes: number;
     readonly smsBudgetMonthly: number | null;
   };
+  /**
+   * Where patients reach this hospital's own portal (`FR-BRD-07`): under the
+   * platform's domain, and at a domain of its own when the platform has
+   * recorded one. Both null on a deployment with no domain.
+   */
+  readonly portal: { readonly platform: string | null; readonly own: string | null };
   /** Its colours and its logo (`FR-BRD-06`). */
   readonly face: {
     /** Null: the platform's own colours. */

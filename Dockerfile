@@ -63,8 +63,12 @@ CMD ["pnpm", "--filter", "@platform/api", "start"]
 FROM deps AS web
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_SOCKET_URL
+# The platform's own domain, when it has one: the patient app reads a
+# hospital's portal address with it (FR-BRD-07). Empty is the ordinary state.
+ARG NEXT_PUBLIC_PLATFORM_DOMAIN=
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
-    NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+    NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL \
+    NEXT_PUBLIC_PLATFORM_DOMAIN=$NEXT_PUBLIC_PLATFORM_DOMAIN
 
 FROM web AS console
 RUN pnpm --filter @platform/console build \

@@ -15,6 +15,8 @@
 
 import { env } from '../env.js';
 
+import { currentPatientOrigin } from './requestOrigin.js';
+
 /**
  * A link into the patient app.
  *
@@ -26,9 +28,20 @@ import { env } from '../env.js';
 export function patientLink(
   path: string,
   query: Readonly<Record<string, string>> = {},
-  _scope: { readonly hospitalCode?: string | undefined } = {},
+  at: {
+    /**
+     * Where this hospital's links go when no patient's browser is behind the
+     * request: its own domain, from `portal.service` `hospitalLinkOrigin`.
+     */
+    readonly hospitalOrigin?: string | null;
+  } = {},
 ): string {
-  const url = new URL(path, env.WEB_BASE_URL);
+  // Where the patient is, first: a booking made inside a hospital's portal is
+  // followed in that portal, and one made in the network's app in the
+  // network's (`FR-BRD-04`, `config/requestOrigin.ts`). Then the hospital's
+  // own domain, for a link a counter or a worker issues. Then the network.
+  const base = currentPatientOrigin() ?? at.hospitalOrigin ?? env.WEB_BASE_URL;
+  const url = new URL(path, base);
   for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
   return url.toString();
 }

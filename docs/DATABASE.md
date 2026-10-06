@@ -199,6 +199,8 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 
 **The workspace's state (0037, `FR-ONB-02`).** `lifecycle` org_lifecycle NOT NULL DEFAULT `'setup'`, `registration_no` text (free text: licences do not share a shape), `review_requested_at`, `reviewed_at`, `reviewed_by` → `staff_users`, `review_note` (why the platform sent it back or suspended it; the hospital's administrator reads it). **CHK** `hospitals_live_requires_workspace_active`: `NOT is_live OR lifecycle = 'active'`. `is_live` stays the one switch every public query reads; the CHECK means nothing unapproved, suspended or closed can be live whatever a route forgets, and the two are always written in one statement (`platform.repo` `moveLifecycle`). **IX** `(lifecycle, review_requested_at)`. Hospitals live when 0037 ran were backfilled to `active`. The transitions and who may take each are `shared/domain/src/org/lifecycle.ts`; readiness is counted from what exists and never stored (`FR-ONB-03`).
 
+**Its own domain (0046, `FR-BRD-07`).** `portal_domain` text, nullable: a domain the hospital owns, recorded by a platform administrator, at which the patient app is this hospital's portal. Lower-case, a host name and nothing else (`hospitals_portal_domain_shape`); **UQ** where not null (`hospitals_portal_domain_key`): an address is one hospital's or nobody's. The address under the platform's domain needs no column: it is `code`.
+
 **What it says of itself (0045, `FR-BRD-06`).** `description_bn`, `description_en` text, nullable, 1 to 400 characters each (`hospitals_description_length`). Written by the hospital's administrator on `S-B-11`, shown on its card and page.
 
 #### `hospital_logos` (0045, `FR-BRD-06`)
@@ -762,6 +764,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- record is their own (§5.3, FR-SEC-11, FR-GST-05)
     0045_hospital_face.sql         -- plan C1: hospitals.description_bn/_en and hospital_logos
                                    -- (§2.2, FR-BRD-06)
+    0046_portal_domain.sql         -- plan C2: hospitals.portal_domain, a hospital's own domain for
+                                   -- its portal (§2.2, FR-BRD-07)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

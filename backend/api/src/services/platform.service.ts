@@ -41,6 +41,7 @@ import * as repo from '../repositories/platform.repo.js';
 import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
 import { withTransaction } from '../repositories/transaction.js';
 
+import * as portals from './portal.service.js';
 import { createFirstAdministrator } from './staffAuth.service.js';
 
 /** The platform administrator acting, for the audit row. */
@@ -76,6 +77,11 @@ export async function listWorkspaces(): Promise<readonly WorkspaceSummary[]> {
 }
 
 export interface WorkspaceDetail extends WorkspaceSummary {
+  /**
+   * Where the hospital's portal is (`FR-BRD-07`): under the platform's
+   * domain, when the deployment has one, and at its own, when one is recorded.
+   */
+  readonly portal: { readonly platform: string | null; readonly own: string | null };
   readonly doctors: readonly repo.WorkspaceDoctor[];
   readonly administrators: readonly { readonly fullName: string; readonly email: string }[];
   /** What stops an approval right now; empty when nothing does. */
@@ -93,10 +99,58 @@ export async function workspace(hospitalId: string): Promise<WorkspaceDetail> {
 
   return {
     ...summarise(row),
+    portal: portals.portalAddresses(row.code, row.portalDomain),
     doctors,
     administrators,
     missingForApproval: missingForApproval(row.counts),
   };
+}
+
+/**
+ * Records a domain the hospital owns as its portal's address, or removes it
+ * (`FR-BRD-07`).
+ *
+ * The platform's act, not the hospital's: an address is answered for by the
+ * whole deployment (CORS, the socket handshake, every link sent), and a
+ * hospital naming somebody else's domain, or the platform's own, is not
+ * something to find out afterwards. That the domain's DNS points here, and
+ * its certificate, are outside the product; this is the record that it does.
+ *
+ * Refused: a name under the platform's own domain (those are hospitals'
+ * codes, not anybody's to record), and one another hospital already has.
+ */
+export async function setPortalDomain(
+  actor: PlatformActor,
+  hospitalId: string,
+  domain: string | null,
+): Promise<WorkspaceDetail> {
+  if ((await repo.findWorkspace(hospitalId)) === null) throw notFound('hospital');
+
+  if (domain !== null) {
+    const own = portals.platformDomain();
+    if (own !== null && (domain === own || domain.endsWith(`.${own}`))) {
+      throw notAllowed('domain_is_the_platforms');
+    }
+    const holder = await repo.hospitalWithDomain(domain);
+    if (holder !== null && holder !== hospitalId) throw notAllowed('domain_taken');
+  }
+
+  await withTransaction(async (trx) => {
+    await repo.setPortalDomain(trx, hospitalId, domain);
+    await settingsRepo.recordChange(trx, {
+      actorStaffId: actor.staffId,
+      hospitalId,
+      subjectTable: 'hospitals',
+      subjectId: hospitalId,
+      change: domain === null ? 'portal_domain_removed' : 'portal_domain',
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+    });
+  });
+  // Answered for from the next request, not in half a minute.
+  portals.forgetRecordedDomains();
+
+  return await workspace(hospitalId);
 }
 
 /**

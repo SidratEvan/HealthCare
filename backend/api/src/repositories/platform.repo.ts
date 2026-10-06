@@ -79,6 +79,8 @@ export interface WorkspaceRow {
   readonly division: string;
   readonly district: string;
   readonly registrationNo: string | null;
+  /** A domain the hospital owns, recorded for its portal (`FR-BRD-07`); null for none. */
+  readonly portalDomain: string | null;
   readonly lifecycle: OrgLifecycle;
   readonly isLive: boolean;
   readonly reviewRequestedAt: string | null;
@@ -97,6 +99,7 @@ interface WorkspaceColumns extends CountColumns {
   division: string;
   district: string;
   registration_no: string | null;
+  portal_domain: string | null;
   lifecycle: OrgLifecycle;
   is_live: boolean;
   review_requested_at: Date | null;
@@ -115,6 +118,7 @@ function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
     division: row.division,
     district: row.district,
     registrationNo: row.registration_no,
+    portalDomain: row.portal_domain,
     lifecycle: row.lifecycle,
     isLive: row.is_live,
     reviewRequestedAt: row.review_requested_at?.toISOString() ?? null,
@@ -127,7 +131,7 @@ function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
 
 const WORKSPACE_COLUMNS = sql`
   h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
-  h.registration_no, h.lifecycle::text AS lifecycle, h.is_live,
+  h.registration_no, h.portal_domain, h.lifecycle::text AS lifecycle, h.is_live,
   h.review_requested_at, h.reviewed_at, h.review_note, h.created_at
 `;
 
@@ -155,6 +159,26 @@ export async function findWorkspace(hospitalId: string): Promise<WorkspaceRow | 
   `.execute(db);
   const row = result.rows[0];
   return row === undefined ? null : workspaceOf(row);
+}
+
+/** The hospital that already has this domain, if any does. */
+export async function hospitalWithDomain(domain: string): Promise<string | null> {
+  const result = await sql<{ id: string }>`
+    SELECT id FROM hospitals WHERE portal_domain = ${domain} AND deleted_at IS NULL
+  `.execute(db);
+  return result.rows[0]?.id ?? null;
+}
+
+/** Records a hospital's own domain, or removes it (`FR-BRD-07`, migration 0046). */
+export async function setPortalDomain(
+  trx: Tx,
+  hospitalId: string,
+  domain: string | null,
+): Promise<void> {
+  await sql`
+    UPDATE hospitals SET portal_domain = ${domain}, updated_at = now()
+     WHERE id = ${hospitalId} AND deleted_at IS NULL
+  `.execute(trx);
 }
 
 /** A doctor as the platform verifies them: what is on the public register. */

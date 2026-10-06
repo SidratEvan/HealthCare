@@ -22,6 +22,7 @@ import {
   emptyBody,
   lifecycleNoteBody,
   platformDoctorParams,
+  portalDomainBody,
   settingsIdParams,
   workspaceBody,
 } from '@platform/domain';
@@ -96,4 +97,14 @@ platformRoutes.post(
   write,
   validate({ params: platformDoctorParams, body: emptyBody }),
   platform.postVerifyDoctor,
+);
+
+// A domain the hospital owns, recorded as its portal's address (`FR-BRD-07`).
+// The platform's to record: the whole deployment answers for it from then on.
+platformRoutes.post(
+  '/platform/hospitals/:id/domain',
+  ...admin,
+  write,
+  validate({ ...byId, body: portalDomainBody }),
+  platform.postPortalDomain,
 );

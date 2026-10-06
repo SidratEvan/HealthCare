@@ -119,6 +119,12 @@ test.describe('a hospital sets what patients see of it (FR-BRD-06)', () => {
   }) => {
     await openSettings(page);
 
+    // Where its portal is (`FR-BRD-07`): its code under the platform's domain,
+    // which on this machine is `localhost` (`playwright.config.ts`).
+    await expect(page.getByTestId('settings-portal-address')).toHaveText(
+      'http://karnaphuli.localhost:3000',
+    );
+
     // --- as the seed left it: no logo, the platform's colours ----------------
     await expect(page.getByTestId('settings-logo-preview')).toHaveAttribute(
       'data-has-logo',

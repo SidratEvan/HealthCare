@@ -583,6 +583,32 @@ export async function findScope(code: string): Promise<ScopeRow | null> {
   };
 }
 
+/** A live hospital's own domain, and whose it is (`FR-BRD-07`, migration 0046). */
+export interface PortalDomainRow {
+  readonly domain: string;
+  readonly code: string;
+  readonly hospitalId: string;
+}
+
+/**
+ * Every domain a live hospital owns. Live only: a hospital that is not in the
+ * network has no portal to answer at (`FR-NET-03`), and one suspended stops
+ * being answered for at the next read.
+ */
+export async function portalDomains(): Promise<PortalDomainRow[]> {
+  const result = await sql<{ portal_domain: string; code: string; id: string }>`
+    SELECT h.portal_domain, h.code, h.id
+      FROM hospitals h
+     WHERE h.portal_domain IS NOT NULL AND h.code IS NOT NULL
+       AND h.deleted_at IS NULL AND h.is_live
+  `.execute(db);
+  return result.rows.map((row) => ({
+    domain: row.portal_domain,
+    code: row.code,
+    hospitalId: row.id,
+  }));
+}
+
 /** A hospital's logo as it is served. */
 export interface LogoFile {
   readonly contentType: string;
