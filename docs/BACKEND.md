@@ -701,7 +701,7 @@ CI gates: typecheck, lint (layering rule), unit, API, one E2E smoke, and `db:ver
 
 ### 12b. Self-hosted in Bangladesh (pilot, step 26)
 
-A deployment holding real patients runs on one server in Bangladesh — the hospital's own server room or a Bangladeshi data centre (`PRD.md` `FR-SEC-07`). The same repository, packaged as containers:
+A deployment holding real patients runs in Bangladesh (`PRD.md` `FR-SEC-07`). **Since 2026-10-05 the default is one shared platform there, with every hospital a workspace inside it**; a hospital's own server room is an exception for a later day. This stack is the same either way — it is what runs on the machine, whoever's machine it is — and what a shared one still needs before a second real hospital is in it is `FR-SEC-11` (`PLATFORM_PLAN.md` 1.10): today hospitals are kept apart by the API's checks, not by the database. The same repository, packaged as containers:
 
 Built in step 26 as `deploy/docker-compose.yml` from the root `Dockerfile`; one command starts it:
 
