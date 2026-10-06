@@ -45,11 +45,15 @@ import {
   type StaffPatchBody,
   type TemplateBody,
   type WardBody,
+  missingForReview,
+  nextLifecycle,
+  type SetupCounts,
 } from '@platform/domain';
 
 import { hashPassword, temporaryPassword } from '../config/password.js';
 import { AppError, notFound } from '../errors/AppError.js';
 import * as repo from '../repositories/hospitalSettings.repo.js';
+import * as platformRepo from '../repositories/platform.repo.js';
 import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
@@ -66,8 +70,8 @@ export interface Actor {
 const duplicate = (field: string, extra: Record<string, unknown> = {}): AppError =>
   new AppError('SETTINGS_DUPLICATE', { details: { field, ...extra } });
 
-const notAllowed = (reason: string): AppError =>
-  new AppError('SETTINGS_NOT_ALLOWED', { details: { reason } });
+const notAllowed = (reason: string, extra: Record<string, unknown> = {}): AppError =>
+  new AppError('SETTINGS_NOT_ALLOWED', { details: { reason, ...extra } });
 
 /** One change and its audit row, together or not at all. */
 async function change<T>(
@@ -92,10 +96,16 @@ async function change<T>(
 
 // --- reading -------------------------------------------------------------------
 
-export async function setup(hospitalId: string): Promise<repo.SetupSnapshot> {
-  const snapshot = await repo.snapshot(hospitalId);
-  if (snapshot === null) throw notFound('hospital');
-  return snapshot;
+/** The setup screen's whole view, with what the checklist counts (`FR-ONB-03`). */
+export type SetupView = repo.SetupSnapshot & { readonly counts: SetupCounts };
+
+export async function setup(hospitalId: string): Promise<SetupView> {
+  const [snapshot, counts] = await Promise.all([
+    repo.snapshot(hospitalId),
+    platformRepo.setupCounts(hospitalId),
+  ]);
+  if (snapshot === null || counts === null) throw notFound('hospital');
+  return { ...snapshot, counts };
 }
 
 // --- profile and rules ---------------------------------------------------------
@@ -481,15 +491,35 @@ export async function declareCapabilities(
 // --- going live ----------------------------------------------------------------
 
 /**
- * Publishes the facility (`hospitals.is_live`). Refused while there is
- * nothing a patient could book: no department or no active doctor. Its
- * doctors still appear only once their BMDC numbers are verified.
+ * Asks the platform to review the workspace (`FR-ONB-04`).
+ *
+ * The hospital's half of going live, and the only half it has: this moves
+ * the workspace to `ready_for_review` and publishes nothing. A platform
+ * administrator approves it, or sends it back with a note this hospital's
+ * administrator reads on the same screen.
+ *
+ * Refused while a required item of the checklist is missing — a department,
+ * a doctor, a schedule — and the refusal names them, so the screen can say
+ * what to do rather than that something is wrong.
  */
-export async function goLive(actor: Actor): Promise<void> {
-  const counts = await repo.setupCounts(actor.hospitalId);
-  if (counts.departments === 0 || counts.doctors === 0) throw notAllowed('nothing_to_publish');
-  await change(actor, { table: 'hospitals', change: 'went_live' }, async (trx) => {
-    await repo.goLive(trx, actor.hospitalId);
+export async function requestReview(actor: Actor): Promise<void> {
+  const workspace = await platformRepo.findWorkspace(actor.hospitalId);
+  if (workspace === null) throw notFound('hospital');
+
+  const to = nextLifecycle(workspace.lifecycle, 'request_review');
+  if (to === null) throw notAllowed('wrong_state', { lifecycle: workspace.lifecycle });
+
+  const missing = missingForReview(workspace.counts);
+  if (missing.length > 0) throw notAllowed('not_ready', { missing });
+
+  await change(actor, { table: 'hospitals', change: 'review_requested' }, async (trx) => {
+    const moved = await platformRepo.moveLifecycle(trx, {
+      hospitalId: actor.hospitalId,
+      from: workspace.lifecycle,
+      to,
+      reviewedBy: null,
+    });
+    if (!moved) throw notAllowed('changed_meanwhile');
     return { result: undefined, subjectId: actor.hospitalId };
   });
 }

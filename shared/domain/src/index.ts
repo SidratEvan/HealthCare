@@ -156,6 +156,27 @@ export {
   type PublicCapacity,
 } from './beds/capacity.js';
 
+// --- Onboarding ------------------------------------------------------------
+//
+// A workspace's state, who may move it, and the checklist it is ready by
+// (`FR-ONB-02`–`04`). `ORG_LIFECYCLES` itself is with the other database
+// enums in `types/enums`.
+export {
+  CHECKLIST_ITEMS,
+  ORG_ACTIONS,
+  actionNeedsNote,
+  isPublicLifecycle,
+  missingForApproval,
+  missingForReview,
+  nextLifecycle,
+  platformActions,
+  setupChecklist,
+  type ChecklistItem,
+  type ChecklistItemKey,
+  type OrgAction,
+  type SetupCounts,
+} from './org/lifecycle.js';
+
 // --- Brand -----------------------------------------------------------------
 //
 // A hospital's own colours for the patient app, and the contrast they must

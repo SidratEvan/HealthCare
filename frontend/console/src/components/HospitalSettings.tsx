@@ -27,7 +27,16 @@
 
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
-import { BED_KINDS, CAPABILITY_KINDS, FACILITY_ROLES, type FacilityRole } from '@platform/domain';
+import {
+  BED_KINDS,
+  CAPABILITY_KINDS,
+  FACILITY_ROLES,
+  missingForReview,
+  setupChecklist,
+  type ChecklistItemKey,
+  type FacilityRole,
+  type OrgLifecycle,
+} from '@platform/domain';
 import {
   bedKindName,
   capabilityName,
@@ -325,53 +334,149 @@ function Shell({
   );
 }
 
+/** The count line each checklist item is shown as. */
+const CHECK_LABEL: Readonly<Record<ChecklistItemKey, ConsoleKey>> = {
+  departments: 'settingsCountDepartments',
+  doctors: 'settingsCountDoctors',
+  schedules: 'settingsCountSchedules',
+  staff: 'settingsCountStaff',
+  beds: 'settingsCountBeds',
+  verified_doctors: 'settingsCountVerified',
+};
+
+/** What to call a missing item in the sentence that names what to add. */
+const MISSING_NAME: Readonly<Partial<Record<ChecklistItemKey, ConsoleKey>>> = {
+  departments: 'settingsItemDepartments',
+  doctors: 'settingsItemDoctors',
+  schedules: 'settingsItemSchedules',
+  staff: 'settingsItemStaff',
+};
+
+const STATE_LINE: Readonly<Record<OrgLifecycle, ConsoleKey>> = {
+  setup: 'settingsStateSetup',
+  ready_for_review: 'settingsStateReview',
+  active: 'settingsLiveNow',
+  suspended: 'settingsStateSuspended',
+  closed: 'settingsStateClosed',
+};
+
+/**
+ * Where the workspace stands, and what it still needs (`FR-ONB-02`–`04`).
+ *
+ * A hospital does not publish itself. Its administrator fills in what the
+ * checklist names and asks for review; a platform administrator approves, or
+ * sends it back with a note that is shown here. So this card is the state in
+ * a sentence, the note if there is one, the checklist, and one button.
+ *
+ * The checklist is `setupChecklist` from `shared/domain`, over counts the
+ * server made when it was asked: the same function the API refuses by, so the
+ * button and the server cannot disagree about what is missing.
+ */
 function SetupStatus({ snapshot, offline, run }: TabProps): ReactNode {
   const locale = useLocale();
   const num = (value: number): string => formatNumber(value, numeralsFor(locale));
   const [busy, setBusy] = useState(false);
-  const live = snapshot.hospital.isLive;
-  const activeDoctors = snapshot.doctors.filter((doctor) => doctor.isActive).length;
-  const beds = snapshot.wards.reduce((sum, ward) => sum + ward.beds.length, 0);
 
-  const counts: readonly [ConsoleKey, number][] = [
-    ['settingsCountDepartments', snapshot.departments.length],
-    ['settingsCountDoctors', activeDoctors],
-    ['settingsCountSchedules', snapshot.templates.length],
-    ['settingsCountBeds', beds],
-    ['settingsCountStaff', snapshot.staff.length],
-  ];
+  const { lifecycle, reviewNote } = snapshot.hospital;
+  const items = setupChecklist(snapshot.counts);
+  const missing = missingForReview(snapshot.counts);
+  const settingUp = lifecycle === 'setup';
+  const showChecklist = settingUp || lifecycle === 'ready_for_review';
 
   return (
-    <Card tone={live ? 'brand' : 'warn'} data-testid="settings-status">
+    <Card
+      tone={
+        lifecycle === 'active' ? 'brand' : lifecycle === 'ready_for_review' ? 'default' : 'warn'
+      }
+      data-testid="settings-status"
+      data-lifecycle={lifecycle}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p
           className="text-body-md font-semibold"
-          data-testid={live ? 'settings-live' : 'settings-not-live'}
+          data-testid={lifecycle === 'active' ? 'settings-live' : 'settings-not-live'}
         >
-          {t(live ? 'settingsLiveNow' : 'settingsNotLive', locale)}
+          {t(STATE_LINE[lifecycle], locale)}
         </p>
-        {live ? null : (
+        {settingUp ? (
           <SaveButton
             offline={offline}
             busy={busy}
-            testId="settings-go-live"
+            ready={missing.length === 0}
+            testId="settings-request-review"
             onClick={() => {
               setBusy(true);
-              void run(settingsApi.goLive, () => t('settingsLiveNow', locale)).finally(() => {
+              void run(settingsApi.requestReview, () =>
+                t('settingsReviewRequested', locale),
+              ).finally(() => {
                 setBusy(false);
               });
             }}
           >
-            {t('settingsGoLive', locale)}
+            {t('settingsRequestReview', locale)}
           </SaveButton>
-        )}
+        ) : null}
       </div>
-      <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-body-sm text-ink-secondary">
-        {counts.map(([key, value]) => (
-          <li key={key}>{format(key, locale, { count: num(value) })}</li>
-        ))}
-      </ul>
-      <p className="mt-2 text-caption text-ink-muted">{t('settingsGoLiveHint', locale)}</p>
+
+      {/* Why it came back, or why it is suspended: written for this reader. */}
+      {reviewNote === null || lifecycle === 'active' ? null : (
+        <p
+          className="mt-2 rounded-sm bg-surface px-3 py-2 text-body-md text-ink"
+          data-testid="settings-review-note"
+        >
+          {format('settingsReviewNote', locale, { note: reviewNote })}
+        </p>
+      )}
+
+      {showChecklist ? (
+        <div className="mt-3 flex flex-col gap-2" data-testid="settings-checklist">
+          <p className="text-body-sm font-semibold text-ink">
+            {t('settingsChecklistTitle', locale)}
+          </p>
+          <ul className="flex flex-col gap-1">
+            {items.map((item) => (
+              <li
+                key={item.key}
+                className="flex flex-wrap items-center gap-2 text-body-sm"
+                data-testid={`settings-check-${item.key}`}
+                data-done={item.done ? 'true' : 'false'}
+              >
+                {/* A11Y-03: the state is a word beside the count, never a
+                    colour or a tick alone. */}
+                <Chip tone={item.done ? 'positive' : item.required ? 'caution' : 'neutral'}>
+                  {item.done
+                    ? t('settingsCheckDone', locale)
+                    : item.key === 'verified_doctors'
+                      ? t('settingsCheckByPlatform', locale)
+                      : item.required
+                        ? t('settingsCheckMissing', locale)
+                        : t('settingsCheckOptional', locale)}
+                </Chip>
+                <span className="text-ink-secondary">
+                  {format(CHECK_LABEL[item.key], locale, { count: num(item.count) })}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          {settingUp && missing.length > 0 ? (
+            <p className="text-body-sm text-warn-700" data-testid="settings-missing">
+              {format('settingsMissingLine', locale, {
+                items: missing
+                  .map((key) => {
+                    const name = MISSING_NAME[key];
+                    return name === undefined ? key : t(name, locale);
+                  })
+                  .join(', '),
+              })}
+            </p>
+          ) : null}
+
+          {settingUp ? (
+            <p className="text-caption text-ink-muted">{t('settingsWays', locale)}</p>
+          ) : null}
+        </div>
+      ) : null}
     </Card>
   );
 }

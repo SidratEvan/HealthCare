@@ -21,6 +21,8 @@
 
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import type {
+  OrgLifecycle,
+  SetupCounts,
   BedsBody,
   DepartmentBody,
   DoctorBody,
@@ -55,7 +57,14 @@ export interface SetupSnapshot {
     readonly lng: number | null;
     readonly isLive: boolean;
     readonly onboardedAt: string | null;
+    /** The workspace's state (`FR-ONB-02`). */
+    readonly lifecycle: OrgLifecycle;
+    readonly reviewRequestedAt: string | null;
+    /** Why the platform sent it back or suspended it. */
+    readonly reviewNote: string | null;
   };
+  /** What exists here, counted by the server when asked (`FR-ONB-03`). */
+  readonly counts: SetupCounts;
   readonly rules: {
     readonly noShowGracePatients: number;
     readonly noShowGraceMinutes: number;
@@ -259,7 +268,11 @@ export const settingsApi = {
     save((api, key) => api.post(`/hospital/staff/${staffId}/reset-2fa`, {}, key)),
   capabilities: (kinds: readonly string[]) =>
     save((api, key) => api.put('/hospital/capabilities', { kinds }, key)),
-  goLive: () => save((api, key) => api.post('/hospital/go-live', {}, key)),
+  /**
+   * `FR-ONB-04`: asks the platform to review the workspace. Publishes
+   * nothing; a platform administrator approves it or sends it back.
+   */
+  requestReview: () => save((api, key) => api.post('/hospital/request-review', {}, key)),
 };
 
 /**

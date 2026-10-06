@@ -94,8 +94,8 @@ export async function insertGraph(client: Client, seed = 1): Promise<Graph> {
     client,
     `INSERT INTO hospitals
        (name_bn, name_en, kind, division, district, thana,
-        address_bn, address_en, lat, lng, phone, is_live, onboarded_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, now())
+        address_bn, address_en, lat, lng, phone, is_live, lifecycle, onboarded_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 'active', now())
      RETURNING id`,
     [
       labelBn(`${declaredFacility.nameBn} ${seed}`),

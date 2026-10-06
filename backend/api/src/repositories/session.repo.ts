@@ -175,6 +175,26 @@ export async function hospitalIdOf(sessionId: string): Promise<string | null> {
 }
 
 /**
+ * Whether the hospital running this session is in front of patients
+ * (`hospitals.is_live`, which 0037 ties to an approved workspace).
+ *
+ * Asked by the public booking path. Discovery never lists a hospital that is
+ * not live, but a chamber's id outlives the listing: somebody who opened the
+ * booking screen before a hospital was suspended still holds it.
+ */
+export async function hospitalIsLive(sessionId: string): Promise<boolean> {
+  const row = await db
+    .selectFrom('sessions')
+    .innerJoin('hospitals', 'hospitals.id', 'sessions.hospital_id')
+    .select('hospitals.is_live')
+    .where('sessions.id', '=', sessionId)
+    .where('hospitals.deleted_at', 'is', null)
+    .executeTakeFirst();
+
+  return row?.is_live ?? false;
+}
+
+/**
  * Bumps `avg_consult_seconds` from the rolling rate after `PATIENT_DONE`.
  *
  * Separate from `saveProjection` because DATABASE.md §6 requires it to be

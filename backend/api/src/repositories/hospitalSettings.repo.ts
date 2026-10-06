@@ -11,6 +11,8 @@
 
 import { sql } from 'kysely';
 
+import type { OrgLifecycle } from '@platform/domain';
+
 import { db } from '../config/db.js';
 
 import type { Tx } from './transaction.js';
@@ -35,6 +37,11 @@ export interface SetupSnapshot {
     readonly lng: number | null;
     readonly isLive: boolean;
     readonly onboardedAt: string | null;
+    /** The workspace's state (0037, `FR-ONB-02`). */
+    readonly lifecycle: OrgLifecycle;
+    readonly reviewRequestedAt: string | null;
+    /** Why the platform sent it back or suspended it, for the administrator to read. */
+    readonly reviewNote: string | null;
   };
   readonly rules: {
     readonly noShowGracePatients: number;
@@ -127,6 +134,9 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     lng: number | null;
     is_live: boolean;
     onboarded_at: Date | null;
+    lifecycle: OrgLifecycle;
+    review_requested_at: Date | null;
+    review_note: string | null;
     no_show_grace_patients: number | null;
     no_show_grace_minutes: number | null;
     late_reinsert_after: number | null;
@@ -136,6 +146,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     SELECT h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
            h.thana, h.address_bn, h.address_en, h.phone, h.emergency_phone,
            h.lat::float8 AS lat, h.lng::float8 AS lng, h.is_live, h.onboarded_at,
+           h.lifecycle::text AS lifecycle, h.review_requested_at, h.review_note,
            s.no_show_grace_patients, s.no_show_grace_minutes, s.late_reinsert_after,
            s.stale_threshold_minutes, s.sms_budget_monthly
       FROM hospitals h
@@ -265,6 +276,9 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       lng: row.lng,
       isLive: row.is_live,
       onboardedAt: row.onboarded_at?.toISOString() ?? null,
+      lifecycle: row.lifecycle,
+      reviewRequestedAt: row.review_requested_at?.toISOString() ?? null,
+      reviewNote: row.review_note,
     },
     rules: {
       noShowGracePatients: row.no_show_grace_patients ?? 2,
@@ -864,25 +878,6 @@ export async function activeAdministrators(hospitalId: string): Promise<string[]
 }
 
 // --- going live and the record of changes -------------------------------------
-
-export async function setupCounts(
-  hospitalId: string,
-): Promise<{ departments: number; doctors: number }> {
-  const result = await sql<{ departments: string; doctors: string }>`
-    SELECT
-      (SELECT count(*) FROM departments WHERE hospital_id = ${hospitalId} AND deleted_at IS NULL)::text AS departments,
-      (SELECT count(*) FROM doctor_hospitals WHERE hospital_id = ${hospitalId} AND deleted_at IS NULL AND is_active)::text AS doctors
-  `.execute(db);
-  const row = result.rows[0];
-  return { departments: Number(row?.departments ?? '0'), doctors: Number(row?.doctors ?? '0') };
-}
-
-export async function goLive(trx: Tx, hospitalId: string): Promise<void> {
-  await sql`
-    UPDATE hospitals SET is_live = true, onboarded_at = coalesce(onboarded_at, now()), updated_at = now()
-     WHERE id = ${hospitalId}
-  `.execute(trx);
-}
 
 /** One `SETTINGS_CHANGE` row per change: who, which facility, what, which row. */
 export async function recordChange(

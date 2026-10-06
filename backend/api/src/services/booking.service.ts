@@ -140,6 +140,17 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
     });
   }
 
+  // `FR-ONB-06`, `FR-NET-03`: a hospital that is not live — never approved,
+  // or suspended — takes no booking from the public, even at a chamber whose
+  // id somebody still holds. Its own counter is a different route and is not
+  // refused: the staff of a suspended hospital can still work.
+  if (!(await sessionRepo.hospitalIsLive(input.sessionId))) {
+    throw new AppError('QUEUE_GUARD_FAILED', {
+      message: 'This hospital is not taking bookings here at the moment.',
+      details: { guard: 'HOSPITAL_NOT_LIVE' },
+    });
+  }
+
   const fee = feeFor(session.feePoisha, input.method);
 
   const created = await withTransaction(async (trx) => {

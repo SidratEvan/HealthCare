@@ -1607,10 +1607,44 @@ export const CONSOLE = {
     bn: 'এখনো লাইভ নয় — রোগীরা এই প্রতিষ্ঠান দেখতে পাচ্ছেন না',
     en: 'Not live yet — patients cannot see this facility',
   },
-  settingsGoLive: { bn: 'লাইভ করুন', en: 'Go live' },
-  settingsGoLiveHint: {
-    bn: 'রোগীরা শুধু বিএমডিসি যাচাই হওয়া ডাক্তারদের চেম্বার দেখবেন।',
-    en: 'Patients see only the chambers of doctors whose BMDC numbers are verified.',
+  // The workspace's state and its checklist (FR-ONB-02 to FR-ONB-04). Going
+  // live is asked for here and approved by the platform (S-B-12).
+  settingsStateSetup: {
+    bn: 'এখনো রোগীদের সামনে নেই। নিচের ধাপগুলো শেষ হলে পর্যালোচনার অনুরোধ করুন।',
+    en: 'Not in front of patients yet. When the steps below are done, ask for review.',
+  },
+  settingsStateReview: {
+    bn: 'পর্যালোচনার অনুরোধ পাঠানো হয়েছে। প্ল্যাটফর্ম অনুমোদন দিলে হাসপাতাল রোগীদের সামনে আসবে।',
+    en: 'Review has been requested. The hospital goes in front of patients when the platform approves it.',
+  },
+  settingsStateSuspended: {
+    bn: 'এই হাসপাতাল এখন স্থগিত আছে। রোগীরা এটি দেখতে পাচ্ছেন না।',
+    en: 'This hospital is suspended. Patients cannot see it.',
+  },
+  settingsStateClosed: {
+    bn: 'এই ওয়ার্কস্পেস বন্ধ করা হয়েছে।',
+    en: 'This workspace has been closed.',
+  },
+  settingsReviewNote: { bn: 'প্ল্যাটফর্মের বার্তা: {note}', en: 'From the platform: {note}' },
+  settingsRequestReview: { bn: 'পর্যালোচনার অনুরোধ করুন', en: 'Request review' },
+  settingsReviewRequested: { bn: 'অনুরোধ পাঠানো হয়েছে', en: 'Review requested' },
+  settingsChecklistTitle: {
+    bn: 'রোগীদের সামনে আসার আগে যা লাগবে',
+    en: 'What is needed before going in front of patients',
+  },
+  settingsCheckDone: { bn: 'আছে', en: 'Done' },
+  settingsCheckMissing: { bn: 'বাকি', en: 'Missing' },
+  settingsCheckOptional: { bn: 'ঐচ্ছিক', en: 'Optional' },
+  settingsCheckByPlatform: { bn: 'প্ল্যাটফর্ম যাচাই করবে', en: 'The platform verifies these' },
+  settingsCountVerified: { bn: 'যাচাই হওয়া ডাক্তার: {count}', en: 'Verified doctors: {count}' },
+  settingsMissingLine: { bn: 'অনুরোধের আগে যোগ করুন: {items}', en: 'Add before asking: {items}' },
+  settingsItemDepartments: { bn: 'বিভাগ', en: 'a department' },
+  settingsItemDoctors: { bn: 'ডাক্তার', en: 'a doctor' },
+  settingsItemSchedules: { bn: 'সাপ্তাহিক চেম্বার', en: 'a weekly chamber' },
+  settingsItemStaff: { bn: 'কর্মী', en: 'a staff member' },
+  settingsWays: {
+    bn: 'পূরণ করার উপায়: এই পাতায় হাতে লিখে, অথবা ইমপোর্ট পাতায় CSV ফাইল দিয়ে।',
+    en: 'Two ways to fill these in: by hand on this page, or with CSV files on the import page.',
   },
   settingsHospitalCode: { bn: 'হাসপাতাল কোড: {code}', en: 'Hospital code: {code}' },
   settingsCountDepartments: { bn: 'বিভাগ: {count}', en: 'Departments: {count}' },

@@ -978,7 +978,7 @@ Built in pilot step 22 (`FR-SUP-01`), opened by `LNK-B10-SETTINGS` in the dashbo
 
 | Element | ID | Wiring |
 |---|---|---|
-| Status card | `BTN-B11-GOLIVE` | `POST /hospital/go-live` → `is_live`, `onboarded_at`. Refused with no department or no active doctor. Only verified doctors are then shown to patients |
+| Status card and checklist | `BTN-B11-REVIEW` (was `BTN-B11-GOLIVE`) | **A hospital does not publish itself (V3.1, `FR-ONB-02`–`04`).** The card says the workspace's state in a sentence (setting up; review requested; live; suspended; closed), shows the platform's note when it was sent back or suspended, and lists the checklist — departments, doctors, weekly chambers, staff (required), beds (optional), verified doctors (the platform's part) — each with its count and the word আছে / বাকি / ঐচ্ছিক / প্ল্যাটফর্ম যাচাই করবে. While something required is missing the button is off and a line names what to add. **পর্যালোচনার অনুরোধ করুন** → `POST /hospital/request-review` → the card reads "review requested" and the button is gone; nothing is public until a platform administrator approves on `S-B-12`. Only verified doctors are then shown to patients |
 | Facility | `FRM-B11-PROFILE`, `FRM-B11-RULES` | `PATCH /hospital/profile` (names, address, phones, coordinates both-or-neither); `PATCH /hospital/rules` (no-show grace in patients and minutes, late re-insert, stale threshold, SMS a month) |
 | Departments | `FRM-B11-DEPT` | `POST /hospital/departments` — names in both languages and a short code |
 | Doctors and chambers | `FRM-B11-DOCTOR`, `FRM-B11-FEE`, `BTN-B11-DOCTOR-ACTIVE`, `FRM-B11-SCHEDULE`, `BTN-B11-SCHEDULE-REMOVE` | `POST /hospital/doctors` (a known BMDC number is linked, and the toast says so); `PATCH /hospital/doctors/:id` (fee and room, with the note that bookings keep their fee; activate or deactivate); `POST /hospital/templates` → the chambers of the coming eight days, counted in the toast; `DELETE /hospital/templates/:id` → says how many booked chambers were kept for the counter |
@@ -1013,6 +1013,8 @@ Built in pilot step 22 (`FR-SUP-01`), opened by `LNK-B10-SETTINGS` in the dashbo
 ## B7. Platform super-admin — `S-B-12`
 
 Hospital onboarding wizard (steps: facility → departments → doctors → sessions → beds → capabilities → counters → staff → go live), doctor verification queue, feature flags, subscriptions and invoices, review moderation, system health (sync lag, stale-data offenders, notification delivery) — `FR-SUP-01`–`06`.
+
+> **In V1 this screen is onboarding** (`PRD.md` §14c, `FR-ONB-*`), and the wizard above is the hospital's own `S-B-11` with its checklist rather than a second copy of it here. The server side is built (V3.1, `BACKEND.md` §7.7 `/platform/*`): the list of workspaces with those waiting for review first, creating a workspace with its first administrator, verifying a doctor, and approve / send back / suspend / reinstate / close. The screen itself is V3.2. It shows organisations and counts and never a patient (`FR-ONB-08`). Feature flags, subscriptions, moderation and system health wait (`FR-SUP-03`–`06`).
 
 ## B8. Government viewer — `S-B-13`
 

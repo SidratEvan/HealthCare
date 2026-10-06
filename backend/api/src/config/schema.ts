@@ -20,6 +20,7 @@ import type {
   BookingStatus,
   CapabilityKind,
   FacilityKind,
+  OrgLifecycle,
   QueueEventType,
   SessionStatus,
   Sex,
@@ -170,6 +171,13 @@ export interface HospitalsTable {
   emergency_phone: string | null;
   is_live: Generated<boolean>;
   onboarded_at: Timestamp | null;
+  /** 0037: the workspace's state; only `active` may be live (`FR-ONB-02`). */
+  lifecycle: Generated<OrgLifecycle>;
+  registration_no: string | null;
+  review_requested_at: Timestamp | null;
+  reviewed_at: Timestamp | null;
+  reviewed_by: string | null;
+  review_note: string | null;
   /** Generated from lat/lng by the database; never written. */
   geo: ColumnType<string | null, never, never>;
   created_at: Generated<Timestamp>;
