@@ -358,7 +358,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
   pnpm doctor:verify --bmdc A-12345
 ```
 
-Then **লাইভ করুন** in settings publishes the facility.
+Then **পর্যালোচনার অনুরোধ করুন** in settings asks for the hospital to go live, and a platform administrator approves it (below).
 
 ### A lost phone
 
@@ -376,9 +376,18 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
 
 Both are written to the audit log.
 
-### Since V3.1: a hospital asks to go live, and the platform approves
+### The platform administrator, and going live (V3.1, V3.2)
 
-The administrator made by `pnpm staff:create` sets the hospital up on `S-B-11` and then **asks for review**; nothing is public until a platform administrator approves it (`FR-ONB-04`). On a deployment that holds one hospital that is still two people, by design. Until the platform's own screen and a way to create its first administrator from the command line exist (V3.2), a single-hospital deployment made before V3.1 is unaffected — a hospital that was already live stays live — and a new one waits for V3.2.
+A hospital does not publish itself. Its administrator sets it up on `S-B-11` and **asks for review**; a **platform administrator** approves it on `S-B-12`, and until then nothing of the hospital is public (`FR-ONB-04`). So a deployment needs one platform administrator, and its first comes from the command line, once:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
+  pnpm staff:create --platform --email ops@example.org --name "Full Name"
+```
+
+It prints a temporary password once; the first sign-in changes it and sets up two-step verification, as for any administrator. **From there no command is needed for a hospital**: on `S-B-12`, *নতুন হাসপাতাল যোগ করুন* creates a hospital's workspace and its first administrator (the temporary password is shown once, to hand over), each doctor's BMDC number is verified beside the doctor, and the hospital's request is approved or sent back with a reason. `pnpm staff:create --hospital-code …` and `pnpm doctor:verify` above still work and are no longer the way.
+
+On a deployment that holds a single hospital it is still two accounts, by design: the hospital's administrator and the platform's. A hospital that was already live before 0037 stays live.
 
 ## S4. Updating
 

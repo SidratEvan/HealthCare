@@ -116,13 +116,14 @@ export interface DemoPrincipal {
 }
 
 /**
- * National roles the demo console offers (`S-B-13`, step 20).
+ * National roles the demo console offers: the government viewer (`S-B-13`,
+ * step 20) and the platform administrator (`S-B-12`, V3.2).
  *
- * `gov_viewer` alone. `platform_admin` has no screen in this version —
- * `S-B-12` is not a build step — and offering a door to nothing would be the
- * dead button the picker exists to avoid.
+ * The platform administrator was left out while it had no screen — a door to
+ * nothing is the dead button the picker exists to avoid. It has one now:
+ * hospital onboarding (`FR-ONB-*`).
  */
-const OFFERED_NATIONAL: readonly NationalRole[] = ['gov_viewer'];
+const OFFERED_NATIONAL: readonly NationalRole[] = ['gov_viewer', 'platform_admin'];
 
 /**
  * `GET /demo/consoles`' national half: the national roles there is a seeded

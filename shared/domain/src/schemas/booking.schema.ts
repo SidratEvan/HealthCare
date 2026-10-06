@@ -208,7 +208,8 @@ export const demoTokenBody = z.union([
       'hospital_admin',
     ]),
   }),
-  z.strictObject({ role: z.literal('gov_viewer') }),
+  // The national consoles: `S-B-13` and, since V3.2, `S-B-12`.
+  z.strictObject({ role: z.enum(['gov_viewer', 'platform_admin']) }),
 ]);
 
 export type DemoTokenBody = z.infer<typeof demoTokenBody>;

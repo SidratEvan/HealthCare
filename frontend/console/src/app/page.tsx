@@ -2,7 +2,8 @@
  * `/` — the console: reception (`S-B-02`), the doctor (`S-B-05`), the ward
  * board (`S-B-06`), the emergency department (`S-B-07`), the lab (`S-B-08`),
  * the pharmacy (`S-B-09`), the hospital dashboard (`S-B-10`) and its settings
- * (`S-B-11`), or the national dashboard (`S-B-13`).
+ * (`S-B-11`), hospital onboarding (`S-B-12`), or the national dashboard
+ * (`S-B-13`).
  *
  * A client component in full. Every part of these screens is live: state
  * arrives over a socket, actions are applied optimistically against a local
@@ -38,6 +39,7 @@ import { HospitalImport } from '@/components/HospitalImport';
 import { HospitalSettings } from '@/components/HospitalSettings';
 import { LabConsole } from '@/components/LabConsole';
 import { PharmacyConsole } from '@/components/PharmacyConsole';
+import { PlatformConsole } from '@/components/PlatformConsole';
 import { ReceptionConsole } from '@/components/ReceptionConsole';
 import { RegistrationConsole } from '@/components/RegistrationConsole';
 import { StaffLogin } from '@/components/StaffLogin';
@@ -62,6 +64,8 @@ const HOSPITAL_ROLES = new Set([
   'hospital_admin',
   // Not a hospital's at all, but the same answer: no chamber to open (`S-B-13`).
   'gov_viewer',
+  // Nor the platform's administrator (`S-B-12`).
+  'platform_admin',
 ]);
 
 /**
@@ -78,6 +82,7 @@ const VIEW_OF: Readonly<Record<Exclude<ConsoleChoice['kind'], 'chamber'>, string
   pharmacy: 'pharmacy',
   admin: 'admin',
   gov: 'gov',
+  platform: 'platform',
 };
 
 export default function Page(): ReactNode {
@@ -252,6 +257,10 @@ export default function Page(): ReactNode {
 
   // The national layer (`S-B-13`, step 20): no hospital, no chamber.
   if (view === 'gov' && session?.role === 'gov_viewer') return <GovDashboard />;
+
+  // Hospital onboarding (`S-B-12`, V3.2): the platform's administrator, who
+  // also works for no hospital.
+  if (view === 'platform' && session?.role === 'platform_admin') return <PlatformConsole />;
 
   // A chamber in the URL *and* a chamber principal in storage is a console
   // ready to open. Anything else means the picker (`S-B-01`): every facility

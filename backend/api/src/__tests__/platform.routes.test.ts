@@ -24,6 +24,7 @@ import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 import * as demoRepo from '../repositories/demo.repo.js';
+import { createPlatformAdministrator } from '../services/staffAuth.service.js';
 
 import { asOwner } from './support/ownerDb.js';
 import { bearer, nationalToken, patientToken, staffToken } from './support/tokens.js';
@@ -495,6 +496,55 @@ describe('every act is on the record (FR-ONB-07)', () => {
 
     const byPlatform = rows.rows.filter((row) => row.change !== 'review_requested');
     expect(byPlatform.every((row) => row.actor === platformStaffId)).toBe(true);
+  });
+});
+
+describe('a deployment’s first platform administrator (pnpm staff:create --platform)', () => {
+  const email = `ops-${randomUUID().slice(0, 8)}@platform.demo.invalid`;
+  let staffId: string | undefined;
+
+  afterAll(async () => {
+    if (staffId === undefined) return;
+    await asOwner(async (owner) => {
+      await sql`DELETE FROM audit_log WHERE actor_staff_id = ${staffId ?? ''}`.execute(owner);
+      await sql`DELETE FROM sessions_auth WHERE subject_id = ${staffId ?? ''}`.execute(owner);
+      await sql`DELETE FROM staff_roles WHERE staff_user_id = ${staffId ?? ''}`.execute(owner);
+      await sql`DELETE FROM staff_users WHERE id = ${staffId ?? ''}`.execute(owner);
+    });
+  });
+
+  it('belongs to no facility, signs in, and must change the password it was given', async () => {
+    const created = await createPlatformAdministrator({ email, fullName: 'প্ল্যাটফর্ম (ডেমো)' });
+    staffId = created.staffId;
+
+    const response = await request(app)
+      .post(`${BASE}/staff/login`)
+      .send({ email, password: created.temporaryPassword });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.roles).toEqual(['platform_admin']);
+    expect(response.body.data.hospital).toBeNull();
+    expect(response.body.data.mustChangePassword).toBe(true);
+  });
+
+  it('is refused a second account at the same address', async () => {
+    await expect(createPlatformAdministrator({ email, fullName: 'আরেকজন (ডেমো)' })).rejects.toThrow(
+      /already has a platform account/,
+    );
+  });
+});
+
+describe('the demonstration’s door to S-B-12 (DEMO_MODE)', () => {
+  it('mints a platform administrator’s token, which opens the platform and no hospital', async () => {
+    const minted = await request(app).post(`${BASE}/demo/token`).send({ role: 'platform_admin' });
+    expect(minted.status).toBe(200);
+    const token = minted.body.data.token as string;
+
+    expect((await send('get', '/platform/hospitals', token)).status).toBe(200);
+    // Not a hospital's staff: a hospital's own routes refuse it.
+    expect((await send('get', '/hospital/setup', token)).status).toBe(403);
+    // And not the government's: aggregates are another role's.
+    expect((await send('get', '/gov/capacity', token)).status).toBe(403);
   });
 });
 

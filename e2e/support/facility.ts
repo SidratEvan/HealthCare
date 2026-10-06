@@ -124,6 +124,19 @@ export async function bedStates(hospitalId: string): Promise<string[]> {
 }
 
 /** Removes everything the spec made at the facility, and the facility. */
+/** The id of the hospital holding a code: one a spec created through a screen. */
+export async function hospitalIdByCode(code: string): Promise<string> {
+  return await withClient(async (client) => {
+    const found = await client.query<{ id: string }>(
+      'SELECT id FROM hospitals WHERE code = $1 AND deleted_at IS NULL',
+      [code],
+    );
+    const id = found.rows[0]?.id;
+    if (id === undefined) throw new Error(`No hospital holds the code ${code}.`);
+    return id;
+  });
+}
+
 export async function removeFacility(hospitalId: string): Promise<void> {
   await withClient(async (client) => {
     const ids = [hospitalId];
