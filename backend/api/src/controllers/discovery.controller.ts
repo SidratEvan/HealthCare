@@ -118,6 +118,7 @@ export async function getConfig(req: Request, res: Response): Promise<void> {
               descriptionBn: scoped.descriptionBn,
               descriptionEn: scoped.descriptionEn,
               logoVersion: scoped.logoVersion,
+              logoImage: scoped.logoImage,
               // True when the address itself is this hospital's portal, so
               // the app knows the scope is not the visitor's to change.
               byAddress: atPortal !== null,

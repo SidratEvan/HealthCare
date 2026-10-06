@@ -348,6 +348,16 @@ describe('what the public is shown (FR-BRD-06, FR-NET-01)', () => {
     };
     expect(scope.descriptionEn).toContain('Uttara');
     expect(scope.logoVersion).toMatch(/^[0-9a-f]{16}$/);
+    // What the logo is as an image, read from the file itself, so that the
+    // portal can be installed with it as its icon (`FR-BRD-08`).
+    expect(response.body.data.scope.logoImage).toEqual({
+      type: 'image/png',
+      width: 512,
+      height: 512,
+    });
+    // A hospital with no logo has none to describe.
+    const plain = await request(app).get(`${BASE}/config?scope=SHAPLA`).expect(200);
+    expect(plain.body.data.scope.logoImage).toBeNull();
   });
 
   it('the logo is served to anybody, from any origin, and kept by a phone while it is current', async () => {

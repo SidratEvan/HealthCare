@@ -13,7 +13,8 @@
  *
  * **A manifest**, so it installs to a home screen with its own icon and opens
  * without browser chrome. `display: standalone` is the difference between a
- * bookmark and an app.
+ * bookmark and an app. It is made per request (`app/manifest.webmanifest`),
+ * so that a hospital's portal installs as that hospital's app (`FR-BRD-08`).
  *
  * **A service worker**, so it opens on a bad connection and shows its own
  * offline state rather than the browser's error page — while never serving a
@@ -25,13 +26,13 @@
  * gesture area.
  */
 
-import { tp } from '@platform/i18n';
-import { COLOUR, LocaleDocument } from '@platform/ui';
+import { COLOUR } from '@platform/ui';
 
 import '@platform/ui/styles.css';
 
 import { fontVariables } from '@/app/fonts';
 import { LanguageBar } from '@/components/LanguageBar';
+import { PortalDocument } from '@/components/PortalDocument';
 import { PortalGate } from '@/components/PortalGate';
 import { ScopeTheme } from '@/components/ScopeTheme';
 import { ServiceWorker } from '@/components/ServiceWorker';
@@ -86,7 +87,9 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
             said whose it is (`FR-BRD-07`). Everywhere else this is nothing. */}
         <PortalGate>{children}</PortalGate>
         <ServiceWorker />
-        <LocaleDocument title={{ bn: tp('appName', 'bn'), en: tp('appName', 'en') }} />
+        {/* The title, and what a phone installs it as: the network's, or the
+            hospital's whose portal this is (`FR-BRD-08`). */}
+        <PortalDocument />
       </body>
     </html>
   );

@@ -5,7 +5,9 @@
  * and a settings screen and a card with no logo on any of them show nothing
  * of the feature (CLAUDE.md §5: no feature ships with an empty screen). So
  * the seed draws one: a rounded square in the facility's own colour with a
- * ring in white. Nobody's trademark, and not a cross.
+ * ring in white. Nobody's trademark, and not a cross. 512 pixels a side, so
+ * that the portal which carries it installs with it as its icon
+ * (`FR-BRD-08`): flat colour deflates to a few kilobytes at any size.
  *
  * Written out as a PNG by hand, for the reason `demoReportPdf` is: an image
  * library is a dependency to draw two shapes (CLAUDE.md §7). A PNG is a
@@ -15,7 +17,7 @@
 
 import { deflateSync } from 'node:zlib';
 
-const SIZE = 96;
+const SIZE = 512;
 
 const CRC_TABLE: readonly number[] = Array.from({ length: 256 }, (_, index) => {
   let value = index;
@@ -42,14 +44,14 @@ function chunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([length, body, checksum]);
 }
 
-/** A 96-pixel PNG mark in `colour` (`#rrggbb`). The same colour gives the same bytes. */
+/** A 512-pixel PNG mark in `colour` (`#rrggbb`). The same colour gives the same bytes. */
 export function markPng(colour: string): Buffer {
   const red = Number.parseInt(colour.slice(1, 3), 16);
   const green = Number.parseInt(colour.slice(3, 5), 16);
   const blue = Number.parseInt(colour.slice(5, 7), 16);
 
   const centre = (SIZE - 1) / 2;
-  const corner = 20;
+  const corner = Math.round(SIZE * 0.21);
   const rows: Buffer[] = [];
 
   for (let y = 0; y < SIZE; y += 1) {
@@ -63,7 +65,8 @@ export function markPng(colour: string): Buffer {
 
       // On the ring, or the dot at its centre?
       const distance = Math.hypot(x - centre, y - centre);
-      const white = (distance >= 22 && distance <= 30) || distance <= 7;
+      const white =
+        (distance >= SIZE * 0.23 && distance <= SIZE * 0.31) || distance <= SIZE * 0.075;
 
       const at = 1 + x * 4;
       if (!inside) continue;

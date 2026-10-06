@@ -36,6 +36,12 @@ export interface ScopeConfig {
   readonly logoVersion?: string | null;
   /** True when the address itself is this hospital's portal (`FR-BRD-07`). */
   readonly byAddress?: boolean;
+  /** What its logo is as an image, when that is known (`FR-BRD-08`). */
+  readonly logoImage?: {
+    readonly type: string;
+    readonly width: number;
+    readonly height: number;
+  } | null;
 }
 
 export interface DeploymentConfig {
