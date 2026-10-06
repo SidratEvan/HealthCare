@@ -47,6 +47,12 @@ export interface SavedBooking {
    */
   readonly doctorNameEn?: string;
   readonly hospitalNameEn?: string;
+  /**
+   * Which hospital the chamber is at. Optional because a record saved before
+   * this existed does not have it. It is what lets an app open for one
+   * hospital show that hospital's serials only (`FR-BRD-02`).
+   */
+  readonly hospitalId?: string;
   /** The session's planned start, ISO. */
   readonly plannedStart: string;
   /** `/s?b=…&t=…` — where the live screen opens. */
@@ -90,6 +96,28 @@ export function recentBookings(): readonly DatedBooking[] {
       return { ...entry, isToday: day === today, isPast: day < today };
     })
     .sort((a, b) => b.plannedStart.localeCompare(a.plannedStart));
+}
+
+/**
+ * The bookings an app should show for its scope (`FR-BRD-02`, `FR-PAT-19`).
+ *
+ * The network's own app shows everything this phone booked. An app open for
+ * one hospital shows that hospital's only — a hospital's app listing a serial
+ * at another hospital is the one thing a branded app must not do. A booking
+ * saved before `hospitalId` existed cannot be placed, so it is left out of a
+ * scoped app rather than guessed into it.
+ *
+ * `scopedHospitalId`: null for the network's app; undefined while the app is
+ * scoped but does not yet know to which hospital (the answer is on its way),
+ * in which case nothing is shown rather than everything.
+ */
+export function bookingsInScope<T extends SavedBooking>(
+  bookings: readonly T[],
+  scopedHospitalId: string | null | undefined,
+): readonly T[] {
+  if (scopedHospitalId === null) return bookings;
+  if (scopedHospitalId === undefined) return [];
+  return bookings.filter((booking) => booking.hospitalId === scopedHospitalId);
 }
 
 /** Records a booking this device just made. */

@@ -307,6 +307,7 @@ export default function BookPage(): ReactNode {
                     doctorNameEn: doctor.nameEn,
                     hospitalNameBn: place?.nameBn ?? '',
                     hospitalNameEn: place?.nameEn ?? '',
+                    ...(place === null ? {} : { hospitalId: place.id }),
                     plannedStart: session.plannedStart,
                     url: `/s?b=${result.bookingId}&t=${encodeURIComponent(token)}`,
                     token,

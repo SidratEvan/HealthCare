@@ -72,6 +72,18 @@ export function currentScope(): string | null {
   return kept !== null && SHAPE.test(kept) ? kept : null;
 }
 
+/**
+ * The hospital an app is scoped to, for filtering what this phone holds:
+ * null for the network's app, the hospital's id once `GET /config` has
+ * answered, and undefined while a scoped app is still waiting for that answer.
+ */
+export function scopedHospitalId(
+  config: { readonly scope: { readonly hospitalId: string } | null } | null,
+): string | null | undefined {
+  if (currentScope() === null) return null;
+  return config?.scope?.hospitalId;
+}
+
 /** Adds the scope to a query, when there is one. */
 export function withScope(params: URLSearchParams = new URLSearchParams()): URLSearchParams {
   const scope = currentScope();

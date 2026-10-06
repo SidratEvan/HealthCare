@@ -90,6 +90,10 @@ export async function getConfig(req: Request, res: Response): Promise<void> {
           ? null
           : {
               code: scoped.code,
+              // Public already: every hospital card carries its id. Here so
+              // an app open for one hospital can tell which of the bookings
+              // this phone holds are that hospital's.
+              hospitalId: scoped.hospitalId,
               nameBn: scoped.nameBn,
               nameEn: scoped.nameEn,
               theme: scoped.theme,
