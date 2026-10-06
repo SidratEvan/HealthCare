@@ -2551,6 +2551,20 @@ export const PATIENT = {
     en: 'See what {hospital} has right now, in one place.',
   },
   scopedSearch: { bn: 'ডাক্তার, বিভাগ, আইসিইউ খুঁজুন', en: 'Search doctors, specialties, ICU' },
+
+  // --- Inside a hospital's own portal (FR-BRD-09) ----------------------------
+  //
+  // Every page there is that hospital's, except the emergency search, which
+  // says that it is not.
+  emergencyNetworkWide: {
+    bn: 'জরুরি অবস্থায় শুধু {hospital} নয়, যুক্ত সব হাসপাতাল দেখানো হয়। যেটি চিকিৎসা দিতে পারে এবং কাছে, সেটি আগে।',
+    en: 'In an emergency this shows every participating hospital, not only {hospital}. One that can treat it and is near comes first.',
+  },
+  scopedMedicinesIntro: {
+    bn: 'ওষুধের নাম লিখুন। {hospital}-এর ফার্মেসিতে আছে কি না দেখা যাবে।',
+    en: 'Type a medicine name to see whether the pharmacy at {hospital} has it.',
+  },
+  scopedMedicinesShort: { bn: 'এই ফার্মেসিতে আছে কি না', en: 'Is it in this pharmacy' },
   searchLabel: { bn: 'নাম বা প্রয়োজন লিখুন', en: 'Type a name or what you need' },
   searchHelper: {
     bn: 'ডাক্তার, হাসপাতাল, বিভাগ, আইসিইউ, বার্ন ইউনিট',

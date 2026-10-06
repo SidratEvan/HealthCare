@@ -39,6 +39,7 @@ import { formatAge, formatSerial, tp, numeralsFor, localName } from '@platform/i
 import { Button, Card, FreshnessLine, Input, useLocale } from '@platform/ui';
 
 import { TabScreen } from '@/components/TabScreen';
+import { useDeployment } from '@/hooks/useDeployment';
 import { useOnline } from '@/hooks/useOnline';
 import { searchMedicines } from '@/lib/api';
 
@@ -59,6 +60,9 @@ type State =
 export default function MedicinesPage(): ReactNode {
   const locale = useLocale();
   const online = useOnline();
+  // Inside a hospital's own portal the search is about its pharmacy only
+  // (`FR-BRD-09`), and the screen says whose.
+  const scope = useDeployment()?.scope ?? null;
   const [query, setQuery] = useState('');
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [attempt, setAttempt] = useState(0);
@@ -98,7 +102,14 @@ export default function MedicinesPage(): ReactNode {
 
   return (
     <TabScreen title={tp('medicinesTitle', locale)}>
-      <p className="text-body-md text-ink-secondary">{tp('medicinesIntro', locale)}</p>
+      <p className="text-body-md text-ink-secondary" data-testid="medicines-intro">
+        {scope === null
+          ? tp('medicinesIntro', locale)
+          : tp('scopedMedicinesIntro', locale).replace(
+              '{hospital}',
+              localName(locale, scope.nameBn, scope.nameEn),
+            )}
+      </p>
 
       <Input
         label={tp('medicinesSearch', locale)}
@@ -214,6 +225,7 @@ function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability })
               return (
                 <li
                   key={pharmacy.hospitalId}
+                  data-testid={`pharmacy-${pharmacy.hospitalId}`}
                   className="flex flex-col gap-1 border-t border-line pt-2"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">

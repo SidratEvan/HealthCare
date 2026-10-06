@@ -39,6 +39,8 @@ import { forbiddenScope } from '../errors/AppError.js';
 import * as labRepo from '../repositories/lab.repo.js';
 import { withTransaction } from '../repositories/transaction.js';
 
+import * as discovery from './discovery.service.js';
+
 import type { LabActor } from './lab.service.js';
 
 /** One row of `S-B-09`'s shelf. */
@@ -127,6 +129,8 @@ export interface MedicineAvailability {
  * stock it", which is a claim nobody made (`PRD.md` §3.2).
  */
 export async function searchMedicines(input: {
+  /** A hospital's code: its own portal asks about its own pharmacy (`FR-BRD-09`). */
+  readonly scope?: string | undefined;
   readonly q: string;
   readonly lat: number | null;
   readonly lng: number | null;
@@ -134,7 +138,13 @@ export async function searchMedicines(input: {
 }): Promise<{ medicines: MedicineAvailability[]; serverTs: string }> {
   const now = new Date().toISOString() as Timestamp;
 
+  // An unknown code is a 404, as on every scoped read: a portal that asked
+  // about one hospital is never answered with the whole network (`FR-BRD-02`).
+  const hospitalId =
+    input.scope === undefined ? null : (await discovery.scopeInfo(input.scope)).hospitalId;
+
   const rows = await labRepo.searchMedicineAvailability({
+    hospitalId,
     query: input.q,
     lat: input.lat,
     lng: input.lng,

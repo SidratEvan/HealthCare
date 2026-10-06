@@ -468,6 +468,8 @@ Opened from the join, or from the SMS an offer or a seat sends; the signed statu
 
 Ranking: capability match → travel time → ER load → free beds. Stale facilities are de-ranked and labelled (`FR-PAT-45`).
 
+**Inside a hospital's own portal (`FR-BRD-09`).** The list is the same list: every participating hospital, ranked the same way, never narrowed to the portal's own. Under the call to 999 one line says so and names the hospital whose portal it is (জরুরি অবস্থায় শুধু … নয়, যুক্ত সব হাসপাতাল দেখানো হয়). The network's own app shows no such line.
+
 | Element | ID | Wiring |
 |---|---|---|
 | Result card | `CARD-A10-<hospitalId>` | Shows capability chip (আছে / নেই), distance, travel time, ER wait, free beds, ICU, freshness |
@@ -565,6 +567,8 @@ Catalogue → select tests → centre comparison (price, distance, turnaround) �
 
 ### `S-A-14` Pharmacy
 Prescription QR → nearby partner pharmacies with stock status → reserve or request delivery → dispensing recorded (`FR-PHR-01`).
+
+**Inside a hospital's own portal (`FR-BRD-09`)** the medicine search below asks about that hospital's pharmacy only (`GET /medicines?scope=`), its introduction names the hospital, and the first screen does not offer it at all where the hospital runs no pharmacy or does not share its shelf. The same holds for the bed tile where it runs no ward. রেকর্ড is always offered: the wallet is the patient's own, wherever a visit was made (`FR-BRD-10`).
 
 > **Not built as specified, because all three steps hang off a prescription**
 > this version does not write (`PRD.md` §9, §12). What is built instead is the
