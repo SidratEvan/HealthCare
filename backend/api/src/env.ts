@@ -99,6 +99,21 @@ const httpUrl = z.string().refine((value) => {
   }
 }, 'must be an absolute http(s) URL, e.g. https://api.example.com');
 
+/**
+ * An origin exactly as a browser sends it: scheme and host, a port if it is
+ * not the default, and nothing after. One check rather than `httpUrl` and a
+ * second on top, because a value that is not a URL at all must fail as a
+ * setting that is wrong, not as an exception thrown from inside the check.
+ */
+const exactOrigin = z.string().refine((value) => {
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.origin === value;
+  } catch {
+    return false;
+  }
+}, 'must be an origin only, e.g. https://padma.example.com, with no path or trailing slash');
+
 const schema = z.object({
   // --- Runtime ------------------------------------------------------------
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -303,6 +318,25 @@ const schema = z.object({
    * Those are in the database and are not keyed on an address.
    */
   ADDRESS_RATE_LIMIT_FACTOR: positiveInt.max(100).default(1),
+
+  /**
+   * Browser origins this API answers besides the patient app's and the
+   * console's (`FR-BRD-04`): a hospital's portal at a name of its own, a
+   * hospital-branded app's web origin. Comma-separated, each an exact origin
+   * (`https://padma.example.com`), never a pattern: with credentials allowed,
+   * a pattern that matched too much would hand a hospital's session to
+   * whoever registered the name. Empty, which is the default, changes nothing.
+   */
+  EXTRA_ALLOWED_ORIGINS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== ''),
+    )
+    .pipe(z.array(exactOrigin)),
 });
 
 export type Env = z.infer<typeof schema>;

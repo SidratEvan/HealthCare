@@ -121,6 +121,8 @@ describe('migration files (DATABASE.md §7)', () => {
       // Plan 1.9: no tracking link is stored in the outbox, and the rows whose
       // words are due to be cleared can be found (DATABASE.md §8).
       '0035',
+      // V1 pitch build, V2.2: a hospital's own brand tokens (FR-BRD-03).
+      '0036',
     ]);
   });
 

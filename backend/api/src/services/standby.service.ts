@@ -26,8 +26,8 @@ import { randomUUID } from 'node:crypto';
 import { id, type PaymentMethod } from '@platform/domain';
 
 import { verifyToken } from '../config/jwt.js';
+import { patientLink } from '../config/links.js';
 import { logger } from '../config/logger.js';
-import { env } from '../env.js';
 import { AppError, notFound } from '../errors/AppError.js';
 import * as bookingRepo from '../repositories/booking.repo.js';
 import * as guestRepo from '../repositories/guest.repo.js';
@@ -144,7 +144,7 @@ export async function join(input: JoinStandbyInput): Promise<JoinStandbyResult> 
           amountPoisha: session.feePoisha,
           method: input.prepay,
           idempotencyKey: input.clientEventId ?? randomUUID(),
-          returnUrl: `${env.WEB_BASE_URL}/standby`,
+          returnUrl: patientLink('/standby'),
         },
         { kind: 'guest', guestId: row.guestId },
       );
@@ -321,7 +321,7 @@ export async function accept(
           bookingId: booking.id,
           method: input.method,
           idempotencyKey: input.clientEventId ?? randomUUID(),
-          returnUrl: `${env.WEB_BASE_URL}/s/${booking.id}`,
+          returnUrl: patientLink(`/s/${booking.id}`),
         },
         { kind: 'guest', guestId: row.guestId },
       );

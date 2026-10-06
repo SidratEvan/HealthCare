@@ -13,14 +13,21 @@
 
 import { Router } from 'express';
 
-import { doctorQuery, hospitalQuery, idParams, searchQuery, sessionQuery } from '@platform/domain';
+import {
+  configQuery,
+  doctorQuery,
+  hospitalQuery,
+  idParams,
+  searchQuery,
+  sessionQuery,
+} from '@platform/domain';
 
 import * as discovery from '../controllers/discovery.controller.js';
 import { validate } from '../middleware/validate.js';
 
 export const discoveryRoutes: Router = Router();
 
-discoveryRoutes.get('/config', discovery.getConfig);
+discoveryRoutes.get('/config', validate({ query: configQuery }), discovery.getConfig);
 /**
  * One search for what a patient needs (`S-A-07s`, `FR-PAT-16`–`18`).
  *

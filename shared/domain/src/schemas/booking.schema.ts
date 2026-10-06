@@ -31,7 +31,24 @@ export const bdPhone = z
 // Discovery (public)
 // ---------------------------------------------------------------------------
 
+/**
+ * A hospital's code, as a scope on a public read (`FR-BRD-02`, `FR-PAT-19`).
+ *
+ * With it, discovery answers for that hospital only: it is what a
+ * hospital-branded patient app sends on every call. Not a permission — what
+ * it narrows is already public — so a wrong code is a 404, not a 403.
+ */
+export const scopeCode = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9][A-Za-z0-9-]{1,15}$/)
+  .transform((value) => value.toUpperCase());
+
+/** `GET /config`. */
+export const configQuery = z.object({ scope: scopeCode.optional() });
+
 export const hospitalQuery = z.object({
+  scope: scopeCode.optional(),
   /**
    * A department code, e.g. `CARD`.
    *
@@ -57,6 +74,7 @@ export const hospitalQuery = z.object({
 });
 
 export const doctorQuery = z.object({
+  scope: scopeCode.optional(),
   specialty: z.string().trim().min(1).max(20).optional(),
   hospitalId: uuid.optional(),
   q: z.string().trim().min(1).max(80).optional(),
@@ -76,6 +94,7 @@ export const doctorQuery = z.object({
  * rather than an empty list that reads as "no hospital has it".
  */
 export const searchQuery = z.object({
+  scope: scopeCode.optional(),
   q: z.string().trim().min(1).max(80).optional(),
   need: z
     .string()

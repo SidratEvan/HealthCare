@@ -37,6 +37,7 @@ import {
   type SessionId,
 } from '@platform/domain';
 
+import { patientLink } from '../config/links.js';
 import { logger } from '../config/logger.js';
 import { env } from '../env.js';
 import { AppError, notFound, validationFailed } from '../errors/AppError.js';
@@ -267,7 +268,7 @@ async function recordBookingPayment(
         // The booking's own client event id where there is one, so a retried
         // confirm makes one payment and not two (`FR-PAY-06`, `FR-QUE-51`).
         idempotencyKey: input.clientEventId ?? randomUUID(),
-        returnUrl: `${env.WEB_BASE_URL}/s/${created.bookingId}`,
+        returnUrl: patientLink(`/s/${created.bookingId}`),
       },
       created.payer,
     );
@@ -384,10 +385,7 @@ export async function issueTrackingLink(
 
   await guestRepo.insertTrackingLink({ bookingId, guestId, tokenHash, expiresAt });
 
-  const url = new URL('/s', env.WEB_BASE_URL);
-  url.searchParams.set('b', bookingId);
-  url.searchParams.set('t', token);
-  return url.toString();
+  return patientLink('/s', { b: bookingId, t: token });
 }
 
 // ---------------------------------------------------------------------------

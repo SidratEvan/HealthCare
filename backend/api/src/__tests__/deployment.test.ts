@@ -75,6 +75,8 @@ describe('PAYMENT_PROVIDER=off, and GET /config', () => {
       demo: true,
       onlinePayments: true,
       guestPhoneCheck: false,
+      // The network's own app is nobody's (FR-BRD-02); `scope.routes.test.ts`.
+      scope: null,
     });
   });
 

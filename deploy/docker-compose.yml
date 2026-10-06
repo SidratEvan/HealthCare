@@ -51,6 +51,7 @@ x-api-env: &api-env
   # How many people one address stands for (DEPLOY.md §S2). 1 unless the
   # hospital's patients book from the hospital's own network.
   ADDRESS_RATE_LIMIT_FACTOR: ${ADDRESS_RATE_LIMIT_FACTOR:-1}
+  EXTRA_ALLOWED_ORIGINS: ${EXTRA_ALLOWED_ORIGINS:-}
   LOG_LEVEL: ${LOG_LEVEL:-info}
 
 services:

@@ -374,12 +374,17 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | Method | Path | Result |
 |---|---|---|
 | GET | `/search?q&need&lat&lng&limit` | one search across the network (`S-A-07s`, `FR-PAT-16`–`18`). `need` is a need's key — `specialty:<code>`, `bed:<kind>`, `capability:<kind>` — and `q` is typed text. Returns `{ need, text, hospitals, doctors, asOf }`: the hospitals that can provide the need, each a hospital card with its live figures and beds (most free first for a bed kind, never-confirmed counts last), and the doctors matched by name or in the specialty. Text that names a need ("ICU", "বার্ন") is read as that need by `readSearch` in `shared/domain`, the same table the patient app offers needs from; a need the data does not hold is a 400, not an empty list |
+| GET | `/config?scope` | what this deployment offers (`demo`, `onlinePayments`, `guestPhoneCheck`) and, with `scope`, whose app this is: `scope: { code, nameBn, nameEn, theme }`, where `theme` is the hospital's brand tokens if it has set readable ones (`FR-BRD-02`, `FR-BRD-03`); `scope: null` without it |
 | GET | `/hospitals?lat&lng&district&q&bedKind` | list + live capacity from `v_public_hospital_capacity`; `bedKind` keeps hospitals that have that kind of bed, full or not (`S-A-11`) |
 | GET | `/hospitals/:id` | detail + departments + capabilities + beds summary |
 | GET | `/doctors?specialty&hospitalId&q&availableToday` | list + live status |
 | GET | `/doctors/:id` | detail + upcoming sessions |
 | GET | `/sessions/:id/availability` | serials taken/total, expected wait |
 | GET | `/specialties` | catalogue |
+
+**Hospital scope (`FR-BRD-02`, `FR-PAT-19`).** `/search`, `/hospitals`, `/doctors` and `/config` take `scope=<hospital code>` (`hospitals.code`, matched upper-case). With it they answer for that hospital only: one hospital in a list, a doctor's chambers there and not elsewhere, no other hospital found by name. It is what a hospital-branded patient app sends on every discovery call. It is not a permission — everything it narrows is public — so a code no live hospital has is a 404, never a quiet fall back to the whole network: an app built for one hospital must not show its competitors because of a mistake in its configuration. The emergency search (`/emergency/search`) does not take it; whether a hospital's own app should show other hospitals' emergency departments is the owner's to rule on (`docs/STATUS.md`).
+
+**Links and origins (`FR-BRD-04`), `config/links.ts`.** Every link this API gives a patient is built by `patientLink(path, query)`, and the browser origins it answers — for CORS and for the socket handshake alike — are `allowedOrigins()`: the patient app's, the console's, and any exact origins in `EXTRA_ALLOWED_ORIGINS`. Both answer today what the six call sites and two lists they replaced answered. They exist so that a hospital's own address (`code.platform-domain`) is a change in one function.
 
 ### 7.3 Booking
 
@@ -654,6 +659,7 @@ JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, JWT_ACCESS_TTL=15m, JWT_REFRESH_TTL=30d
 GUEST_LINK_SECRET, GUEST_LINK_TTL_DAYS=30
 GUEST_BOOKING_OTP=true|false # a guest proves the phone before booking (FR-GST-03); unset: on unless DEMO_MODE
 OTP_TTL_SECONDS=300, OTP_MAX_PER_HOUR=5
+EXTRA_ALLOWED_ORIGINS=      # comma-separated exact origins the API also answers (a hospital's portal, a branded app's web origin); empty by default (FR-BRD-04)
 ADDRESS_RATE_LIMIT_FACTOR=1 # 1–100: multiplies every limit keyed on the caller's address, for a deployment whose callers share one; never the per-number limits
 SMS_PROVIDER=local|log, SMS_API_KEY, SMS_SENDER_ID, SMS_MONTHLY_CAP
 VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT

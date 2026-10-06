@@ -79,6 +79,29 @@ const CAPABILITY_AGE_MINUTES: Readonly<Record<string, number>> = {
  * জানাবে" instead of a percentage — which is the honest-degradation case
  * (`PRD.md` §3.2) and the one a demo should be able to show.
  */
+/**
+ * One facility with colours of its own (`FR-BRD-03`, migration 0036).
+ *
+ * Padma, so that the demonstration can show what a hospital-branded patient
+ * app is: the same app, opened for one hospital (`?scope=PADMA`), in that
+ * hospital's name and colours. A navy ramp that passes the contrast rules in
+ * `shared/domain/src/brand/theme.ts`; `brand.test` and the API's own test
+ * hold it to them. Every other facility has none and appears in the
+ * platform's green, which is the ordinary state.
+ */
+const BRANDS: Readonly<Record<string, { colors: Record<string, string> }>> = {
+  'padma-specialised': {
+    colors: {
+      'brand-900': '#0b2239',
+      'brand-700': '#123a5e',
+      'brand-600': '#17507f',
+      'brand-300': '#8fc1ea',
+      'brand-100': '#e7eff6',
+      'brand-border': '#c5d6e6',
+    },
+  },
+};
+
 const REFUND_POLICIES: Readonly<
   Record<
     string,
@@ -352,6 +375,7 @@ export const seed01Hospitals: SeedModule = {
         // `{}` where there is none: the column's CHECK requires an object,
         // and an empty one is what `readRefundPolicy` reads as "no policy".
         JSON.stringify(REFUND_POLICIES[facility.slug] ?? {}),
+        BRANDS[facility.slug] === undefined ? null : JSON.stringify(BRANDS[facility.slug]),
         admins.get(facility.slug) ?? null,
       ];
     });
@@ -359,7 +383,7 @@ export const seed01Hospitals: SeedModule = {
     await insertRows(
       client,
       'hospital_settings',
-      { columns: ['hospital_id', 'numeral_style', 'refund_policy', 'created_by'] },
+      { columns: ['hospital_id', 'numeral_style', 'refund_policy', 'brand', 'created_by'] },
       settingsRows,
       '',
     );

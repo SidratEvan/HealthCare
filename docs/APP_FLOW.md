@@ -272,6 +272,8 @@ A **need** is one of the three things hospitals publish live: a specialty, a bed
 - Failed: says the search could not be completed, with আবার খুঁজুন. Never the empty state's words.
 - Offline: says searching needs a connection; the needs stay on screen.
 
+**In a hospital's own app (`FR-PAT-19`, `FR-BRD-02`).** The patient app has a *hospital scope*: unset, it is the network; set to a hospital's code, every discovery call carries it and the app is that hospital's. The header carries the hospital's name instead of the platform's, the search lines name it, results and the booking flow hold that hospital only, another hospital cannot be found by name, and the brand tokens are the hospital's if it has set readable ones (`FRONTEND.md` §1.1, `DATABASE.md` `hospital_settings.brand`). A scope comes from the build (`NEXT_PUBLIC_HOSPITAL_SCOPE`, which the address bar cannot undo) or from `?scope=CODE` on any address, kept for the visit; `?scope=` leaves it. The emergency screens are not narrowed. Built as a foundation only: no store build, no logo, no custom domain (`FR-BRD-05`).
+
 **Not built:** `FR-PAT-15`'s tolerance of misspellings (matching is the text as typed, `FR-PAT-18`); sorting by distance from the patient (no position is asked for outside the emergency search); a hospital's own page (`S-A-05h`'s header and tabs — a hospital result opens its doctors).
 
 ### `S-A-07` Specialty results (hospitals offering it)
