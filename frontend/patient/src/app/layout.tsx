@@ -32,19 +32,20 @@ import '@platform/ui/styles.css';
 
 import { fontVariables } from '@/app/fonts';
 import { LanguageBar } from '@/components/LanguageBar';
+import { ScopeTheme } from '@/components/ScopeTheme';
 import { ServiceWorker } from '@/components/ServiceWorker';
 
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
-  title: 'স্বাস্থ্যসেবা',
+  title: 'MedLiveBD',
   description: 'ডাক্তারের সিরিয়াল নিন, আর অপেক্ষা সরাসরি দেখুন।',
   manifest: '/manifest.webmanifest',
-  applicationName: 'স্বাস্থ্যসেবা',
+  applicationName: 'MedLiveBD',
   appleWebApp: {
     capable: true,
-    title: 'স্বাস্থ্যসেবা',
+    title: 'MedLiveBD',
     // The ground, so the status bar matches the page rather than fighting it.
     statusBarStyle: 'default',
   },
@@ -78,6 +79,7 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
         tell that a standalone app is a web page.
       */}
       <body className="min-h-screen overscroll-none bg-canvas text-ink">
+        <ScopeTheme />
         <LanguageBar />
         {children}
         <ServiceWorker />

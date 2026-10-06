@@ -45,6 +45,76 @@ export interface SessionChannelOptions {
   /** Raised when the server refuses something, e.g. a scope failure. */
   readonly onError?: (code: string, message: string) => void;
   readonly staleAfterMs?: number;
+  /**
+   * What this device last held for the session, if it kept anything
+   * (`offline/snapshots.ts`). The channel starts from it: it stays on screen
+   * until the server speaks, the first subscribe resumes from its sequence
+   * instead of asking for everything, and an older state can never replace it.
+   */
+  readonly initial?: Omit<SessionSnapshot, 'connected'>;
+}
+
+/** A `queue.updated` as the server sends it. */
+export interface QueueUpdatedMessage {
+  readonly seq: number;
+  readonly serverTs: string;
+  readonly data: { readonly state: QueueState; readonly etas: readonly Eta[] };
+}
+
+/**
+ * Folds a `queue.updated` into the snapshot, or refuses it when it is older
+ * than the state already held.
+ *
+ * Two messages can arrive out of order on one socket. Joining a room and
+ * reading the state to catch the client up are two steps on the server, and
+ * a queue action that commits between them is broadcast to the room *before*
+ * the catch-up — which was read a moment earlier and describes the queue
+ * without it. Taken last-wins, the older state replaced the newer one and the
+ * screen sat on the patient already sent out, until the next action happened
+ * to correct it (`FR-QUE-05`: every device converges on the log). The state's
+ * own sequence says which is newer, so the older one is dropped; its
+ * `lastSeq` still counts, since it is never higher than what is held.
+ */
+export function foldUpdate(
+  snapshot: SessionSnapshot,
+  stateSeq: number,
+  message: QueueUpdatedMessage,
+): { readonly snapshot: SessionSnapshot; readonly stateSeq: number } | null {
+  if (snapshot.state !== null && message.seq < stateSeq) return null;
+  return {
+    stateSeq: message.seq,
+    snapshot: {
+      ...snapshot,
+      state: message.data.state,
+      etas: message.data.etas,
+      lastServerTs: message.serverTs,
+      lastSeq: Math.max(snapshot.lastSeq, message.seq),
+    },
+  };
+}
+
+/**
+ * Where a channel begins: with nothing, or with what the device kept.
+ *
+ * Never connected — the socket has not spoken yet, whatever is on the screen.
+ * The kept state's own sequence is what an incoming `queue.updated` is
+ * compared with, so a server catching the device up from an older point cannot
+ * roll the screen back behind what it already showed.
+ */
+export function startingFrom(initial: SessionChannelOptions['initial']): {
+  readonly snapshot: SessionSnapshot;
+  readonly stateSeq: number;
+} {
+  if (initial === undefined) {
+    return {
+      snapshot: { state: null, etas: [], lastServerTs: null, lastSeq: 0, connected: false },
+      stateSeq: -1,
+    };
+  }
+  return {
+    snapshot: { ...initial, connected: false },
+    stateSeq: initial.state?.lastSeq ?? -1,
+  };
 }
 
 /**
@@ -56,17 +126,22 @@ export interface SessionChannelOptions {
  */
 export function openSessionChannel(options: SessionChannelOptions): {
   readonly close: () => void;
+  /**
+   * Takes the queue as the server stated it somewhere other than this socket
+   * — the answer to a push (`SY-05`) — exactly as a `queue.updated` is taken:
+   * shown if it is newer than what is held, dropped if it is not. One rule for
+   * both roads, so neither can put the screen behind the other.
+   */
+  readonly fold: (message: QueueUpdatedMessage) => void;
   readonly snapshot: () => SessionSnapshot;
   readonly isStale: (now?: Date) => boolean;
   readonly socket: Socket;
 } {
-  let snapshot: SessionSnapshot = {
-    state: null,
-    etas: [],
-    lastServerTs: null,
-    lastSeq: 0,
-    connected: false,
-  };
+  const start = startingFrom(options.initial);
+  let snapshot: SessionSnapshot = start.snapshot;
+
+  /** The sequence the held `state` describes — not `lastSeq`, which events also raise. */
+  let stateSeq = start.stateSeq;
 
   const publish = (next: Partial<SessionSnapshot>): void => {
     snapshot = { ...snapshot, ...next };
@@ -117,17 +192,15 @@ export function openSessionChannel(options: SessionChannelOptions): {
     publish({ connected: false });
   });
 
-  socket.on(
-    'queue.updated',
-    (message: { seq: number; serverTs: string; data: { state: QueueState; etas: Eta[] } }) => {
-      publish({
-        state: message.data.state,
-        etas: message.data.etas,
-        lastServerTs: message.serverTs,
-        lastSeq: Math.max(snapshot.lastSeq, message.seq),
-      });
-    },
-  );
+  const fold = (message: QueueUpdatedMessage): void => {
+    const folded = foldUpdate(snapshot, stateSeq, message);
+    if (folded === null) return;
+    stateSeq = folded.stateSeq;
+    snapshot = folded.snapshot;
+    options.onSnapshot(snapshot);
+  };
+
+  socket.on('queue.updated', fold);
 
   // Replayed events from the resume handshake. The authoritative state follows
   // them in a `queue.updated`, so what these advance is the cursor — which is
@@ -144,6 +217,7 @@ export function openSessionChannel(options: SessionChannelOptions): {
     close: () => {
       socket.disconnect();
     },
+    fold,
     snapshot: () => snapshot,
     isStale: (now = new Date()) =>
       isStale(snapshot.lastServerTs, now, options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS),

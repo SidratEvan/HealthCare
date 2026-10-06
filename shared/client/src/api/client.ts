@@ -76,6 +76,11 @@ export class ApiClient {
     return await this.send<T>('PUT', path, body, idempotencyKey);
   }
 
+  /** `DELETE /hospital/templates/:id` — ending a weekly schedule (pilot step 22). */
+  async delete<T>(path: string, idempotencyKey?: string): Promise<T> {
+    return await this.send<T>('DELETE', path, undefined, idempotencyKey);
+  }
+
   private async send<T>(
     method: string,
     path: string,
@@ -124,7 +129,12 @@ export class ApiClient {
 
 /** `SY-05`, as the console receives it. */
 export interface SyncPushResponse {
-  readonly accepted: readonly { readonly clientEventId: string; readonly seq: number }[];
+  readonly accepted: readonly {
+    readonly clientEventId: string;
+    readonly seq: number;
+    /** The stored event — what an undo names (`GR-02`). */
+    readonly eventId: string;
+  }[];
   readonly conflicts: readonly {
     readonly clientEventId: string;
     readonly reason: string;
@@ -143,6 +153,40 @@ export interface SyncPullResponse {
   readonly seq: number;
   readonly serverTs: string;
   readonly fullResync: boolean;
+}
+
+/** What a queue route answers with: the queue as it stands with the action in it. */
+export interface QueueWriteResponse {
+  readonly state: QueueState;
+  readonly etas: readonly Eta[];
+  readonly seq: number;
+  readonly serverTs: string;
+  readonly duplicate: boolean;
+}
+
+/** The queue's own routes, for what the sync batch does not carry. */
+export function createQueueApi(client: ApiClient) {
+  return {
+    /**
+     * `POST /sessions/:id/end` (`BTN-B02-END`). Refused by the server while a
+     * patient is in the chamber (`QUEUE_GUARD_FAILED`, guard
+     * `PATIENT_IN_CHAMBER`); answered with the ended queue otherwise.
+     */
+    async end(sessionId: string, idempotencyKey: string): Promise<QueueWriteResponse> {
+      return await client.post<QueueWriteResponse>(
+        `/sessions/${sessionId}/end`,
+        { reason: null },
+        idempotencyKey,
+      );
+    },
+    /**
+     * `POST /events/:id/undo` (`GR-02`) — by the stored event's id, inside
+     * the window, by whoever did it. The key makes a retried press one undo.
+     */
+    async undo(eventId: string, idempotencyKey: string): Promise<void> {
+      await client.post<unknown>(`/events/${eventId}/undo`, {}, idempotencyKey);
+    },
+  };
 }
 
 export function createSyncApi(client: ApiClient) {

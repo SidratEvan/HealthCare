@@ -55,10 +55,18 @@ beforeEach(async () => {
   // patients into chambers all over the country. A patient every hospital has
   // already treated has nothing left to consent *to*, so the tests below become
   // untestable — which is how they passed alone and failed in the suite.
+  //
+  // And never one of this fixture's own patients. Two tests below use this
+  // profile as "a patient the booking is not for", and "treated at the fewest
+  // facilities" is decided by what every earlier file happened to book: on
+  // 3 October it came out as the fixture's first patient, the API rightly
+  // answered 200 for the person the link was for, and both tests failed
+  // expecting 403. Other by construction, not by how the suite ran.
   const owned = await sql<{ patient_id: string; user_id: string }>`
     SELECT p.id AS patient_id, p.owner_user_id AS user_id
       FROM patients p
      WHERE p.owner_user_id IS NOT NULL AND p.deleted_at IS NULL
+       AND p.id <> ALL(${[...fixture.patientIds, fixture.sparePatientId]}::uuid[])
      ORDER BY (
        SELECT count(DISTINCT s.hospital_id)
          FROM bookings b

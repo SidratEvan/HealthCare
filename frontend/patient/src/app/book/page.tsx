@@ -37,12 +37,17 @@ import {
 import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
+import { DemoBanner } from '@/components/DemoBanner';
+import { GuestCodeCard } from '@/components/GuestCodeCard';
 import { HospitalBeds } from '@/components/HospitalBeds';
 import { BackIcon, ChevronIcon, HospitalIcon } from '@/components/icons';
 import { StandbyJoin } from '@/components/StandbyJoin';
+import { useDeployment } from '@/hooks/useDeployment';
+import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
 import {
+  allHospitals,
   availability,
   book,
   doctorSessions,
@@ -71,9 +76,30 @@ import type { ReactNode } from 'react';
  */
 type Step = 'hospital' | 'doctor' | 'session' | 'confirm' | 'standby' | 'done';
 
+/**
+ * No specialty: a hospital opened by name from the search screen
+ * (`S-A-07s`), where the answer is every doctor there. Not a code any
+ * department carries, so it cannot be mistaken for one.
+ */
+const ANY_SPECIALTY = '';
+
+/**
+ * Where a search result enters the flow.
+ *
+ * A result already names the hospital, and sometimes the doctor, so the flow
+ * opens on the step after them rather than asking again (`FR-PAT-17`: "without
+ * searching again"). Each is taken once; going back from there is the
+ * ordinary flow.
+ */
+interface Entry {
+  hospital: string | null;
+  doctor: string | null;
+}
+
 export default function BookPage(): ReactNode {
   const locale = useLocale();
   const [specialty, setSpecialty] = useState<string | null>(null);
+  const [entry, setEntry] = useState<Entry>({ hospital: null, doctor: null });
   const [step, setStep] = useState<Step>('hospital');
   const online = useOnline();
 
@@ -90,13 +116,16 @@ export default function BookPage(): ReactNode {
   // Read after mount: the server has no `location`, and reading it during
   // render makes the first client render disagree with the server's.
   useEffect(() => {
-    setSpecialty(new URLSearchParams(globalThis.location.search).get('specialty') ?? 'MED');
+    const params = new URLSearchParams(globalThis.location.search);
+    const hospital = params.get('hospital');
+    setEntry({ hospital, doctor: params.get('doctor') });
+    setSpecialty(params.get('specialty') ?? (hospital === null ? 'MED' : ANY_SPECIALTY));
   }, []);
 
   useEffect(() => {
     if (specialty === null) return;
     setPlaces({ state: 'loading' });
-    void hospitalsForSpecialty(specialty)
+    void (specialty === ANY_SPECIALTY ? allHospitals() : hospitalsForSpecialty(specialty))
       .then((list) => {
         setPlaces({ state: 'ready', ...list });
       })
@@ -111,7 +140,7 @@ export default function BookPage(): ReactNode {
       setPlace(chosen);
       setDoctors({ state: 'loading' });
       setStep('doctor');
-      void doctorsAtHospital(chosen.id, specialty ?? 'MED')
+      void doctorsAtHospital(chosen.id, specialty === ANY_SPECIALTY ? null : (specialty ?? 'MED'))
         .then((list) => {
           setDoctors({ state: 'ready', ...list });
         })
@@ -132,6 +161,31 @@ export default function BookPage(): ReactNode {
         setSessions([]);
       });
   }, []);
+
+  // A search result's hospital, then its doctor, each taken once the list
+  // that holds it has arrived. One that is no longer there (a hospital that
+  // has left the network, a doctor no longer listed) leaves the person on the
+  // list they would have chosen from, which is the honest place to be.
+  useEffect(() => {
+    if (entry.hospital === null || places.state === 'loading') return;
+    const found =
+      places.state === 'ready'
+        ? places.items.find((candidate) => candidate.id === entry.hospital)
+        : undefined;
+    setEntry((current) => ({ ...current, hospital: null }));
+    if (found !== undefined) chooseHospital(found);
+  }, [entry.hospital, places, chooseHospital]);
+
+  useEffect(() => {
+    if (entry.doctor === null || entry.hospital !== null) return;
+    if (step !== 'doctor' || doctors.state === 'loading') return;
+    const found =
+      doctors.state === 'ready'
+        ? doctors.items.find((candidate) => candidate.id === entry.doctor)
+        : undefined;
+    setEntry((current) => ({ ...current, doctor: null }));
+    if (found !== undefined) chooseDoctor(found);
+  }, [entry.doctor, entry.hospital, step, doctors, chooseDoctor]);
 
   const chooseSession = useCallback((chosen: SessionCard) => {
     setSession(chosen);
@@ -162,9 +216,7 @@ export default function BookPage(): ReactNode {
   return (
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5">
-        <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {tp('demoBanner', locale)}
-        </p>
+        <DemoBanner />
 
         {/* GR-03: the fourth state. Announced, because a person who has just
           lost signal is not necessarily looking at the top of the screen. */}
@@ -178,7 +230,14 @@ export default function BookPage(): ReactNode {
           </p>
         )}
 
-        {step === 'hospital' ? <HospitalList hospitals={places} onChoose={chooseHospital} /> : null}
+        {step === 'hospital' ? (
+          // A result that names its hospital waits for the list rather than
+          // showing it for a moment and then leaving it.
+          <HospitalList
+            hospitals={entry.hospital === null ? places : { state: 'loading' }}
+            onChoose={chooseHospital}
+          />
+        ) : null}
 
         {step === 'doctor' && place !== null ? (
           <DoctorList
@@ -248,6 +307,7 @@ export default function BookPage(): ReactNode {
                     doctorNameEn: doctor.nameEn,
                     hospitalNameBn: place?.nameBn ?? '',
                     hospitalNameEn: place?.nameEn ?? '',
+                    ...(place === null ? {} : { hospitalId: place.id }),
                     plannedStart: session.plannedStart,
                     url: `/s?b=${result.bookingId}&t=${encodeURIComponent(token)}`,
                     token,
@@ -684,6 +744,12 @@ function Confirm({
   const [sex, setSex] = useState<'male' | 'female' | 'other'>('female');
   const [reason, setReason] = useState('');
   const [method, setMethod] = useState<'bkash' | 'nagad' | 'card' | 'at_hospital'>('bkash');
+  // A deployment with no online payment offers the counter only (pilot step 26).
+  const deployment = useDeployment();
+  const onlinePayments = deployment?.onlinePayments !== false;
+  useEffect(() => {
+    if (!onlinePayments) setMethod('at_hospital');
+  }, [onlinePayments]);
   const [busy, setBusy] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
 
@@ -726,20 +792,65 @@ function Confirm({
     return { consultation: session.feePoisha };
   }, [session.feePoisha]);
 
-  const confirm = useCallback(async () => {
-    if (phoneStored === null) return;
-    setBusy(true);
-    onFailure(null);
+  /**
+   * `MOD-GST-OTP` (`FR-GST-03`): open when this deployment asks a new number
+   * to prove itself before booking. A demonstration never opens it; a number
+   * that has proved itself before is not asked again (`FR-GST-12`).
+   */
+  const {
+    pending: phoneCheck,
+    codeWrong,
+    begin: beginPhoneCheck,
+    prove: provePhone,
+  } = useGuestPhoneProof();
 
-    try {
+  const finish = useCallback(
+    async (guestToken: string | null) => {
+      if (phoneStored === null) return;
       const result = await book({
         sessionId: session.id,
         method,
         guest: { name: name.trim(), phone: phoneStored, ageYears: Number(age), sex },
         reason,
         idempotencyKey,
+        guestToken,
       });
       onBooked(result);
+    },
+    [session.id, method, name, phoneStored, age, sex, reason, idempotencyKey, onBooked],
+  );
+
+  const proveCode = useCallback(
+    async (code: string) => {
+      if (phoneStored === null) return;
+      setBusy(true);
+      try {
+        await finish(await provePhone(phoneStored, name.trim(), code));
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        onFailure(
+          code === 'AUTH_OTP_INVALID'
+            ? tp('accountCodeWrong', locale)
+            : code === 'AUTH_LOCKED'
+              ? tp('accountLocked', locale)
+              : tp('bookingFailed', locale),
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [phoneStored, name, finish, provePhone, onFailure, locale],
+  );
+
+  const confirm = useCallback(async () => {
+    if (phoneStored === null) return;
+    setBusy(true);
+    onFailure(null);
+
+    try {
+      const start = await beginPhoneCheck(phoneStored, name.trim());
+      if (!start.ready) return;
+      await finish(start.guestToken);
     } catch (error) {
       // Stated in Bangla, by cause. "Something went wrong" tells a person
       // nothing they can act on (BACKEND.md §9 maps codes to copy).
@@ -754,19 +865,7 @@ function Confirm({
     } finally {
       setBusy(false);
     }
-  }, [
-    session.id,
-    method,
-    name,
-    phoneStored,
-    age,
-    sex,
-    reason,
-    idempotencyKey,
-    onBooked,
-    onFailure,
-    locale,
-  ]);
+  }, [phoneStored, name, finish, beginPhoneCheck, onFailure, locale]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -908,21 +1007,35 @@ function Confirm({
               ['card', 'payCard'],
               ['at_hospital', 'payAtHospital'],
             ] as const
-          ).map(([value, key]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={method === value}
-              onClick={() => {
-                setMethod(value);
-              }}
-              className="min-h-touch rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
-            >
-              {tp(key, locale)}
-            </button>
-          ))}
+          )
+            .filter(([value]) => onlinePayments || value === 'at_hospital')
+            .map(([value, key]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={method === value}
+                onClick={() => {
+                  setMethod(value);
+                }}
+                className="min-h-touch rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
+              >
+                {tp(key, locale)}
+              </button>
+            ))}
         </div>
       </fieldset>
+
+      {phoneCheck === null ? null : (
+        <GuestCodeCard
+          phone={phone}
+          demoCode={phoneCheck.demoCode}
+          invalid={codeWrong}
+          disabled={busy}
+          onComplete={(code) => {
+            void proveCode(code);
+          }}
+        />
+      )}
 
       {failure === null ? null : (
         <p role="alert" className="rounded-sm bg-alert-100 p-3 text-body-md text-alert-700">

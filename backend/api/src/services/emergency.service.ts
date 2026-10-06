@@ -62,6 +62,7 @@ import {
 
 import { travelTime } from '../adapters/traveltime.js';
 import { signToken, verifyToken } from '../config/jwt.js';
+import { patientLink } from '../config/links.js';
 import { env } from '../env.js';
 import { AppError, forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
@@ -734,7 +735,7 @@ async function caseIdFrom(token: string): Promise<string> {
 
 /** The family's status page in the patient app (`S-A-10c`). */
 function trackUrlFor(token: string): string {
-  return `${env.WEB_BASE_URL}/emergency/onway?t=${encodeURIComponent(token)}`;
+  return patientLink('/emergency/onway', { t: token });
 }
 
 function now(): Timestamp {

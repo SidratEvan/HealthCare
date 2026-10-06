@@ -9,9 +9,9 @@ written to a log rather than sent, and payments always succeed. That is the
 correct configuration for showing a hospital director what the product does —
 not a staging environment on its way to production.
 
-`docs/STATUS.md` records what is and is not built. At the time of writing that
-is the patient app and the reception console; the doctor console, wallet, beds,
-emergency and admin dashboard are later build steps.
+`docs/STATUS.md` records what is and is not built, and its *Running the pitch
+demo* is the full walk: every console, the platform administrator's screen, a
+hospital's own app and the import.
 
 ---
 
@@ -194,8 +194,9 @@ Both matter for more than tidiness:
 
 Open the two URLs on two devices, or two windows side by side.
 
-1. **Patient** → pick a specialty → pick the doctor and the chamber → fill in
-   name, phone and age → confirm. You get a serial.
+1. **Patient** → search for what you need, or pick a specialty → pick the
+   hospital, the doctor and the chamber → fill in name, phone and age →
+   confirm. You get a serial.
 2. Tap **লাইভ সিরিয়াল দেখুন**. This is `S-A-08`, the screen the product is for.
 3. **Console** → it opens on a picker: choose the hospital, then the chamber
    the patient booked, then **রিসেপশন**. There is no password, and the screen
@@ -207,8 +208,14 @@ and the estimate moves. That is the product (`NFR-01`), and
 `e2e/two-device-queue.spec.ts` is the test that keeps it true.
 
 Also worth showing: **আমি দেরি করছি** and **বাতিল করুন** on the patient screen
-both write real events the console sees, and the Render logs print every SMS
-the demo would have sent.
+both write real events the console sees, and the Render logs record that each
+SMS the demo would have sent was written, without its number or text.
+
+The rest of the pitch — a hospital's own app at `/?scope=PADMA`, onboarding a
+hospital from the picker's **প্ল্যাটফর্ম পরিচালনা**, and importing a hospital's
+own export — is `docs/STATUS.md`, *Running the pitch demo*, steps 6–9. The
+model's import suggestions are off on the deployed demo unless
+`MAPPING_PROVIDER=claude` and `MAPPING_API_KEY` are set on Render.
 
 ---
 
@@ -233,8 +240,369 @@ the demo would have sent.
 - **Not a build.** The API runs TypeScript through `tsx` rather than compiled
   output. Fine for a pitch; a bundler decision before a pilot
   (`docs/STATUS.md`).
-- **Not private.** Anyone with the console URL can open a console, because
-  authentication is deferred (`CLAUDE.md` §4.1) and the demo picker is what
-  stands in for it. Share the link accordingly.
+- **Not private.** Anyone with the console URL can open a console: under
+  `DEMO_MODE=true` the picker lets a visitor in as any role with no password,
+  the platform administrator included, and says so on the screen. Staff login
+  and the second factor are built (`CLAUDE.md` §4.1) and are what a real
+  deployment runs on; the demo keeps the picker so that it can be explored.
+  Share the link accordingly.
 - **Not holding real data, ever** (`FR-SEC-08`). If a real patient's details
   are ever typed into this deployment, reset it.
+
+
+---
+
+# Part S — On a hospital's own server in Bangladesh
+
+> **Read this first (owner, 2026-10-05).** The default for real patients is
+> now **one shared platform hosted in Bangladesh**, every hospital a workspace
+> inside it (`FR-SEC-07` as amended, `CLAUDE.md` §1.2). This part was written
+> for one hospital on a machine of its own, and it stays true for that case,
+> which is now the exception: the reception-pilot candidate in S8 is such a
+> deployment. The stack is the same on a shared machine. What a shared one
+> needs that is not here yet: hospitals kept apart by the database before a
+> second real hospital joins (`FR-SEC-11`, `PLATFORM_PLAN.md` 1.10), and an
+> address for each hospital's portal (`FR-BRD-04`).
+
+The pilot build (`CLAUDE.md` §4.2, pilot step 26). Everything above deploys
+the **demonstration**; this part deploys the **real** thing for one
+hospital, on a machine the hospital controls, in Bangladesh (`FR-SEC-07`).
+Real patient data lives here and nowhere else — not on Supabase, Render or
+Vercel, and never in a development or demo database (`FR-SEC-08`,
+`FR-IMP-11`).
+
+One command starts the whole stack: the database, the migrations, the API,
+the two web apps, a web server that holds the TLS certificates, and a nightly
+backup that is checked and copied to a second place (`deploy/docker-compose.yml`,
+built from the root `Dockerfile`).
+
+## S1. The machine
+
+- A Linux server (Ubuntu 24.04 LTS is what this was written against) with
+  **Docker Engine and the compose plugin**. 4 CPU cores, 8 GB of memory and
+  100 GB of disk is comfortable for one hospital; the database grows by
+  roughly a gigabyte a year of queues and visits.
+- **Three DNS names** pointing at it — for example `app.hospital.com.bd`
+  (patients), `console.hospital.com.bd` (staff) and `api.hospital.com.bd` —
+  and ports **80 and 443** open to the internet. Certificates are obtained and
+  renewed automatically.
+- The repository checked out on it: `git clone`, then the commit being deployed.
+  **For the reception pilot that is the commit named in `S8`, not `main`.**
+
+  **Before a pilot, the hospital's IT is asked one question, and the answer
+  comes back before anything else is set up** (owner's decision,
+  2026-10-05). The console only works over HTTPS that every counter PC
+  trusts without a warning: the browser will not run its offline part, or
+  let it sign its own actions, on anything else. How will this server be
+  reached?
+
+  1. **By publicly resolvable HTTPS names**, as above: three names in DNS,
+     ports 80 and 443 reachable from the internet. This is the path this
+     guide describes and the only one that is built.
+  2. **Only from inside the hospital's network.** Nothing here covers that
+     yet. Automatic certificates need the public names, so this needs another
+     way for the counter PCs to trust the server. It is not built on a guess:
+     if a hospital chooses this, the smallest design that works for *their*
+     network is agreed first (`docs/PLATFORM_PLAN.md`, P5).
+- **A second place for backups** that is not this server's disk: an external
+  drive, or a folder on another machine mounted here. It has to exist before
+  the pilot starts (`S5`); the stack runs without it and says, every day,
+  that its backups are failing.
+
+## S2. Configure
+
+```bash
+cp deploy/.env.example deploy/.env
+```
+
+Fill in `deploy/.env`:
+
+| Value | What to put |
+|---|---|
+| `APP_ORIGIN`, `CONSOLE_ORIGIN`, `API_ORIGIN` | The three names, as `https://…` |
+| `POSTGRES_PASSWORD` | A long random password (the command is in the file). This is the **owner**: it runs the migrations and the backups and serves no request |
+| `API_DB_USER`, `API_DB_PASSWORD` | The role the **API** connects as, and a second, different password from the same command. It can read and write rows and nothing else (`S6`). Created on the first start |
+| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GUEST_LINK_SECRET`, `TOTP_ENCRYPTION_KEY` | Four **different** random values of 64 hex characters. The last encrypts every administrator's two-step verification (pilot step 28): a restored database needs the same value, so keep it with the other secrets |
+| `PAYMENT_PROVIDER` | `off` — patients pay at the hospital. bKash and Nagad arrive with merchant accounts (`CLAUDE.md` §1.1) |
+| `SMS_PROVIDER` | `log` until an SMS aggregator is arranged (pilot step 27). Patients then follow their serial from the link on the booking screen |
+| `ADDRESS_RATE_LIMIT_FACTOR` | `1` unless patients will book from the hospital's own network. The API limits what one address may do in ten minutes (30 phone checks, 10 standby places, 10 emergency alerts), and a waiting room on the hospital's Wi-Fi is one address: the 31st patient would be told to wait. `10` allows ten times each limit; the most is `100`. The limits on a single phone number are not affected |
+| `BACKUP_AT_UTC_HOUR`, `BACKUP_KEEP_DAYS` | When the nightly backup runs (20 UTC is 02:00 Dhaka) and how many days are kept |
+| `BACKUP_SECOND_DIR` | The folder on **another disk or machine** every backup is copied to (`S5`). Empty means backups stay on this disk and the backup service reports itself failing |
+| `BACKUP_VERIFY_RESTORE` | `true`: each night's dump is restored into a scratch database to prove it restores. Needs free disk the size of the database |
+
+`deploy/.env` holds the hospital's secrets. It is ignored by git and by the
+image build; keep a copy somewhere safe off the machine, because a backup is
+useless without the password that opens it.
+
+## S3. Start, and the first administrator
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+```
+
+The first build takes ten to fifteen minutes. Then the facility and its first
+administrator — nobody can be given an account from a screen until one exists
+(`FR-SUP-01`):
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
+  pnpm staff:create --hospital-code MARKS --email admin@hospital.com.bd --name "Full Name" \
+  --hospital-name-bn "…" --hospital-name-en "…" --kind hospital --division Dhaka --district Dhaka
+```
+
+It prints a temporary password once. Sign in at the console address; the
+first sign-in asks for the person's own password, and then — because this is
+an administrator — sets up **two-step verification** (`FR-SEC-10`): an
+authenticator app on their phone (Google Authenticator, Microsoft
+Authenticator or any like them) scans the QR code on the screen, and ten
+recovery codes are shown once, to write down or print. No console opens until
+that is done, and every sign-in after asks for the code from the app. From
+there, **সেটিংস খুলুন**
+on the dashboard sets up departments, doctors, schedules, wards and staff
+(`S-B-11`), and **পুরোনো তথ্য আমদানি করুন** brings in what the hospital's
+own system already holds (`S-B-14`). A doctor appears to patients once their
+BMDC number is verified:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
+  pnpm doctor:verify --bmdc A-12345
+```
+
+Then **পর্যালোচনার অনুরোধ করুন** in settings asks for the hospital to go live, and a platform administrator approves it (below).
+
+### A lost phone
+
+An administrator resets anyone else's two-step verification from `S-B-11`
+(**দুই ধাপের যাচাই রিসেট করুন** on the person's row); their next sign-in asks
+for none, or sets it up again if they are an administrator. With the phone
+lost, a recovery code signs in once. When the facility's only administrator
+has lost both, platform staff reset it on the server, after confirming who is
+asking:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
+  pnpm staff:reset-2fa --email admin@hospital.com.bd
+```
+
+Both are written to the audit log.
+
+### The platform administrator, and going live (V3.1, V3.2)
+
+A hospital does not publish itself. Its administrator sets it up on `S-B-11` and **asks for review**; a **platform administrator** approves it on `S-B-12`, and until then nothing of the hospital is public (`FR-ONB-04`). So a deployment needs one platform administrator, and its first comes from the command line, once:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
+  pnpm staff:create --platform --email ops@example.org --name "Full Name"
+```
+
+It prints a temporary password once; the first sign-in changes it and sets up two-step verification, as for any administrator. **From there no command is needed for a hospital**: on `S-B-12`, *নতুন হাসপাতাল যোগ করুন* creates a hospital's workspace and its first administrator (the temporary password is shown once, to hand over), each doctor's BMDC number is verified beside the doctor, and the hospital's request is approved or sent back with a reason. `pnpm staff:create --hospital-code …` and `pnpm doctor:verify` above still work and are no longer the way.
+
+On a deployment that holds a single hospital it is still two accounts, by design: the hospital's administrator and the platform's. A hospital that was already live before 0037 stays live.
+
+### Import suggestions from a model (optional, off by default)
+
+The import maps a hospital's own export with rules and the administrator's choices, and needs nothing else. A model can additionally suggest columns for the headings the rules do not know (`FR-IMP-16`). It is switched on in `deploy/.env`:
+
+```
+MAPPING_PROVIDER=claude
+MAPPING_API_KEY=…          # an Anthropic API key
+```
+
+**What leaves the server when it is on:** for a file whose headings are not already known, the column *headings* and what kind of value each column holds. Never a row, never a patient (`FR-IMP-17`). To see exactly what would be sent for a given file before switching anything on:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
+  pnpm mapping:try --set patients --file /path/to/export.csv
+```
+
+It costs one short request per new export format; a format a hospital has confirmed once is remembered and costs nothing. If the provider is unreachable or the key is wrong, the import screen says suggestions are not available and carries on without them.
+
+## S4. Updating
+
+```bash
+git pull
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+```
+
+The `migrate` service runs on every `up` and applies only migrations the
+database has not seen; the API waits for it to finish. Take a backup first
+(`S5`) — migrations are forward-only.
+
+**A server first started before plan 1.7** needs two things once, before
+that `up`: `API_DB_USER`, `API_DB_PASSWORD` and `BACKUP_SECOND_DIR` added to
+`deploy/.env` (`S2`), and the uploaded files handed to the account the API now
+runs as, because the volume was made by a version that ran as root:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --user root --no-deps --entrypoint chown api -R node:node /data/files
+```
+
+## S5. Backups, and putting one back
+
+Every night the `backup` service writes three files to `deploy/backups/`:
+`db-<stamp>.dump` (the whole database), `files-<stamp>.tar.gz` (uploaded lab
+reports) and `sums-<stamp>.sha256` (their checksums), and removes those older
+than `BACKUP_KEEP_DAYS`. A night is not counted as a backup until three
+things have happened:
+
+1. **The dump has been restored** into a scratch database on the same
+   server, which must hold at least what the live one held when the dump
+   began; the scratch is then dropped.
+2. **The files archive reads back.**
+3. **Both have been copied to `BACKUP_SECOND_DIR`** and their checksums
+   match there.
+
+`BACKUP_SECOND_DIR` is a folder on **another disk or another machine** the
+hospital controls — an external drive, or a share from a second machine
+mounted on this server. A backup on the same disk does not survive the disk.
+They hold patient data: not a service outside Bangladesh without the
+hospital's agreement (`FR-SEC-07`). The stack cannot tell whether the folder
+you name really is another disk; that is for whoever sets it up to make true.
+
+**Whether last night worked is visible without reading a log:**
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env ps backup          # healthy, or unhealthy
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec backup sh /deploy/backup.sh check
+```
+
+The second prints one line — `backup ok: 20261002-200003, checked by restore,
+copied to the second location, 9 hours ago`, or `backup FAILING:` and the
+reason. It fails when the last run failed, when no second location is
+configured, and when the last good backup is more than 26 hours old. Nothing
+sends this anywhere yet: **somebody has to look at it each morning** until an
+alert exists.
+
+A backup on demand:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm backup once
+```
+
+Putting one back **replaces everything** with the backup's contents. On a new
+machine — the old disk is gone — configure `deploy/.env` with the **same**
+values as before, copy the backup files into `deploy/backups/`, and start the
+database alone first (`docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d db`); then:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env stop api console patient
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --entrypoint sh backup \
+  /deploy/restore.sh /backups/db-<stamp>.dump /backups/files-<stamp>.tar.gz
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+```
+
+Practise this once on a spare machine before the pilot starts; a restore
+nobody has run is a hope, not a backup.
+
+Trying this on Windows in Git Bash: run `export MSYS_NO_PATHCONV=1` first, or
+Git Bash rewrites `/deploy/restore.sh` and `/backups/…` into Windows paths
+before Docker sees them. A Linux server needs nothing.
+
+## S6. What runs how on this server
+
+- **`NODE_ENV=production`, `DEMO_MODE=false`.** No demonstration banner data,
+  no password-less picker, no seeding: `db:seed` and `db:reset` refuse to run
+  unless `DEMO_MODE=true` is set on purpose. Staff sign in with their own
+  accounts (`FR-SEC-06`).
+- **Files on the server's disk** (`STORAGE_PROVIDER=local`, a named volume),
+  served only through signed, expiring links.
+- **No online payment** (`PAYMENT_PROVIDER=off`): the patient app offers
+  paying at the hospital only, and the API refuses any other method before
+  writing anything. It never pretends a payment was taken.
+- **SMS recorded, not sent** (`SMS_PROVIDER=log`) until pilot step 27. The
+  API's log gets one line per message, naming the message and its template;
+  no phone number, no text and no sign-in code is ever printed. What a message
+  said is in the `notifications` table, without its link, for 90 days.
+- **A guest proves the phone with a code** before booking (`FR-GST-03`) — on by
+  default whenever `DEMO_MODE` is off.
+- **Administrators sign in with two-step verification** (`FR-SEC-10`); any
+  other account may turn it on from the console picker.
+- **Errors go to the containers' logs** (`docker compose logs api`); nothing is
+  sent to an error-reporting service. Each container keeps five files of ten
+  megabytes and drops the oldest, so the logs cannot fill the disk.
+- **The API does not own the database.** It connects as `API_DB_USER`, which
+  reads and writes rows and cannot change the schema, empty a table, create a
+  role, or alter or remove an audit row. `POSTGRES_USER` owns the database
+  and is used only by the migrations and the backup (`DATABASE.md` §5.1).
+  **Hospitals are not yet separated by the database itself**: that is plan
+  1.10, and until then the separation is the API's own checks.
+- **The API and the two web apps do not run as root** inside their
+  containers. The database, the web server and the backup run as their images
+  ship them.
+- **Each service reports its own health** (`docker compose ps`): the API is
+  healthy only while it can reach the database; the web server waits for the
+  three it serves; the backup is healthy only while last night's backup is
+  good (`S5`). Nothing restarts or alerts on it — it is there to be read.
+
+## S7. When something is wrong
+
+| Symptom | Look at |
+|---|---|
+| A site shows a certificate error | DNS for that name does not point at this server yet, or port 80 is blocked (Let's Encrypt needs it): `docker compose … logs web` |
+| The API never becomes healthy | `docker compose … logs migrate api` — usually a value missing from `deploy/.env`; the API lists every problem at once. `password authentication failed` for `API_DB_USER` means `migrate` did not finish: it is what sets that password |
+| `backup` is `unhealthy` | `docker compose … exec backup sh /deploy/backup.sh check` says why. `only on this disk` means `BACKUP_SECOND_DIR` is empty (`S2`) |
+| An upload fails after an update, with `EACCES` in the API log | The files volume was made by a version that ran as root: `S4` |
+| The console signs in but shows nothing | The facility has no departments or doctors yet: `S-B-11` |
+| A patient cannot find the hospital | Not live yet, or no doctor's BMDC number verified (`S3`) |
+| Every administrator's two-step code is refused after a restore or a move | `TOTP_ENCRYPTION_KEY` is not the value the database was written with (the API log says the secret does not open). Put the old value back; failing that, `pnpm staff:reset-2fa` each administrator (`S3`) |
+
+## S8. The reception pilot: which code, and the dry run
+
+**The code.** The reception pilot is deployed from one exact commit, and the
+dry run and any first deployment use that same commit (owner's decision,
+2026-10-05):
+
+```
+fb1d1d816c8204f68fe1c0c95666baf68b0dbb76
+```
+
+```bash
+git fetch origin
+git checkout fb1d1d816c8204f68fe1c0c95666baf68b0dbb76
+git rev-parse HEAD        # must print the line above, and nothing else
+```
+
+Not `main`: `main` is the demonstration's release of 27 September and has
+none of the pilot's work on it, and it is not moved for this. That commit
+passed the whole gate here and all three CI jobs, the reception pilot's own
+path under the production configuration among them
+(`e2e/production/reception-pilot.prod.spec.ts`). If the dry run finds a real
+blocker, only that is fixed, on a small branch, the gate is run again, and
+the new commit replaces the one above, here, before anything is redeployed.
+
+**What the pilot is.** One hospital on its own server and database, one
+department, one to three chambers, reception only: staff sign-in,
+registration at the counter and walk-ins, doctor arrived, call next, done,
+late, absent, bring back, pause and resume, undo, end chamber, and the four
+counters on the console. Pay at the hospital. Outside it for now: the
+doctor's screen, the ward board, the ER console, the lab, the pharmacy, the
+patient app and live tracking, SMS, online payment.
+
+**The dry run**, on the hospital's own hardware and network, before any real
+patient. Each step either passes or is written down as what happened.
+
+1. The stack starts from one command (`S3`); `GET /api/v1/config` says
+   `demo: false`; the database holds no demonstration data.
+2. The first administrator is made by the command in `S3`, signs in, sets up
+   two-step verification and keeps the recovery codes.
+3. A department, the doctors and their schedules are entered in settings;
+   today's and tomorrow's chambers appear.
+4. A receptionist's account is made in settings and signs in **from every
+   counter PC**, with no certificate warning on any of them.
+5. A whole mock chamber on the reception console: register twenty walk-ins,
+   doctor arrived, call, done, late, absent, bring back, pause, resume, undo.
+6. The network cable is pulled mid-chamber: five actions are taken, the page
+   is reloaded, the cable goes back. All five arrive once, in order.
+7. Two counters on one chamber press *next* together: one calls the patient,
+   the other is told the queue moved.
+8. The chamber is ended. The next morning only that day's chamber is
+   offered, and anything left from the day before says which day it is from.
+9. The nightly backup runs to the second disk; it is restored onto a spare
+   machine and the administrator signs in there (`S5`).
+10. The morning check is written down and given to a named person: the
+    backup is healthy and the API is ready (`docker compose … ps`).
+11. The operating rules are agreed with the desk: nobody changes shift with
+    a pending count showing; if the server is out of reach the queue on
+    screen is still worked and new patients go on paper; a chamber is ended
+    by a person.
+12. The counter PCs' clocks are right, and each uses one supported browser.

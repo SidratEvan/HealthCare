@@ -7,9 +7,11 @@
 
 import type { PaymentIntentBody, RefundBody, SettlementQuery } from '@platform/domain';
 
-import { env } from '../env.js';
+import { patientLink } from '../config/links.js';
 import { forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as payments from '../services/payment.service.js';
+
+import { assertBookingScope } from './queue.controller.js';
 
 import type { Payer } from '../services/payment.service.js';
 import type { Request, Response } from 'express';
@@ -42,7 +44,7 @@ export async function intent(req: Request, res: Response): Promise<void> {
       idempotencyKey: body.idempotencyKey,
       // Where a real provider sends the patient back to. The app's own
       // serial screen, because that is where they were going anyway.
-      returnUrl: `${env.WEB_BASE_URL}/s/${body.bookingId}`,
+      returnUrl: patientLink(`/s/${body.bookingId}`),
     },
     payerOf(req),
   );
@@ -70,8 +72,14 @@ export async function refund(req: Request, res: Response): Promise<void> {
   });
 }
 
-/** `GET /bookings/:id/payments` — what was charged against one booking. */
+/**
+ * `GET /bookings/:id/payments` — what was charged against one booking.
+ *
+ * The owner's, or staff at the booking's hospital: the ownership rule
+ * `GET /bookings/:id` uses, from the one place it is written.
+ */
 export async function forBooking(req: Request, res: Response): Promise<void> {
+  await assertBookingScope(req);
   res.json({ ok: true, data: { payments: await payments.forBooking(param(req)) } });
 }
 

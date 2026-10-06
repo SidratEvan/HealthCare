@@ -89,6 +89,7 @@ import {
 import { Button, Card, FilterChip, FreshnessLine, useLocale } from '@platform/ui';
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
+import { DemoBanner } from '@/components/DemoBanner';
 import {
   adminApi,
   downloadExport,
@@ -1246,9 +1247,7 @@ function Shell({ children }: { readonly children: ReactNode }): ReactNode {
   return (
     <div className="min-h-screen">
       {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
-      <p className="bg-warn-100 px-6 py-2 text-caption text-warn-700 print:hidden">
-        {t('demoBanner', locale)}
-      </p>
+      <DemoBanner className="print:hidden" />
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 p-6" data-testid="admin-dashboard">
         <header className="flex flex-wrap items-baseline justify-between gap-3">
@@ -1258,6 +1257,13 @@ function Shell({ children }: { readonly children: ReactNode }): ReactNode {
           </div>
           <div className="flex items-center gap-3 print:hidden">
             <ConsoleLanguageSwitch className="" />
+            <a
+              href="/?view=settings"
+              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
+              data-testid="admin-open-settings"
+            >
+              {t('settingsOpen', locale)}
+            </a>
             <a
               href="/"
               className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"

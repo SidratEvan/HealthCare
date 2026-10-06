@@ -5,8 +5,16 @@
  * route validated, call a service, shape a response.
  */
 
-import { doctorQuery, hospitalQuery, idParams, sessionQuery } from '@platform/domain';
+import {
+  configQuery,
+  doctorQuery,
+  hospitalQuery,
+  idParams,
+  searchQuery,
+  sessionQuery,
+} from '@platform/domain';
 
+import * as deployment from '../services/deployment.service.js';
 import * as discovery from '../services/discovery.service.js';
 
 import type { Request, Response } from 'express';
@@ -16,6 +24,12 @@ export async function listHospitals(req: Request, res: Response): Promise<void> 
   const { items, asOf } = await discovery.searchHospitals(query);
 
   res.json({ ok: true, data: { hospitals: items, asOf } });
+}
+
+/** `GET /search` — one search across the network (`S-A-07s`, `FR-PAT-16`). */
+export async function search(req: Request, res: Response): Promise<void> {
+  const query = searchQuery.parse(req.query);
+  res.json({ ok: true, data: await discovery.search(query) });
 }
 
 export async function getHospital(req: Request, res: Response): Promise<void> {
@@ -52,4 +66,38 @@ export async function listSessions(req: Request, res: Response): Promise<void> {
 export async function getAvailability(req: Request, res: Response): Promise<void> {
   const { id } = idParams.parse(req.params);
   res.json({ ok: true, data: await discovery.availability(id) });
+}
+
+/**
+ * `GET /config` — what this deployment offers (pilot step 26): whether it is a
+ * demonstration, whether online payment exists, whether a guest proves the
+ * phone before booking. Public; nothing in it is a secret.
+ */
+export async function getConfig(req: Request, res: Response): Promise<void> {
+  const { scope } = configQuery.parse(req.query);
+
+  // `scope` is null for the network's own app. For a hospital's, it is whose
+  // app this is and in which colours (`FR-BRD-02`, `FR-BRD-03`); an unknown
+  // code is a 404 rather than a silent fall back to the whole network.
+  const scoped = scope === undefined ? null : await discovery.scopeInfo(scope);
+
+  res.json({
+    ok: true,
+    data: {
+      ...deployment.publicConfig(),
+      scope:
+        scoped === null
+          ? null
+          : {
+              code: scoped.code,
+              // Public already: every hospital card carries its id. Here so
+              // an app open for one hospital can tell which of the bookings
+              // this phone holds are that hospital's.
+              hospitalId: scoped.hospitalId,
+              nameBn: scoped.nameBn,
+              nameEn: scoped.nameEn,
+              theme: scoped.theme,
+            },
+    },
+  });
 }

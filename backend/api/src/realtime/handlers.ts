@@ -163,7 +163,6 @@ async function holdsBooking(principal: Principal, sessionId: string): Promise<bo
   // may have any of theirs in this session.
   return await queueService.principalHoldsBooking(sessionId, {
     userId: principal.kind === 'patient' ? principal.id : null,
-    guestId: principal.kind === 'guest' ? principal.id : null,
     bookingId: principal.kind === 'guest' ? principal.bookingId : null,
   });
 }

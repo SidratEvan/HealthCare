@@ -19,6 +19,7 @@ import type {
 
 import { forbiddenScope, notFound } from '../errors/AppError.js';
 import * as beds from '../services/bed.service.js';
+import * as patientAuth from '../services/patientAuth.service.js';
 
 import type { WardActor } from '../services/bed.service.js';
 import type { Request, Response } from 'express';
@@ -131,9 +132,13 @@ export async function forecastDischarge(req: Request, res: Response): Promise<vo
 
 // --- Bed requests -----------------------------------------------------------
 
-/** `POST /bed-requests` — public, like a guest booking (`FR-GST-01`). */
+/** `POST /bed-requests` — no account, like a guest booking (`FR-GST-01`). */
 export async function createRequest(req: Request, res: Response): Promise<void> {
   const body = req.body as CreateBedRequestBody;
+  // FR-GST-03 names a bed request among what proves the phone first. The same
+  // phone and name asking again is answered with the open request and its
+  // link, so only the number's proven owner may reach that answer.
+  await patientAuth.assertGuestPhoneProven(req.principal, body.patient.phone);
   const created = await beds.createRequest({
     hospitalId: body.hospitalId,
     bedKind: body.bedKind,

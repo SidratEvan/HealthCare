@@ -20,6 +20,7 @@ import type {
   BookingStatus,
   CapabilityKind,
   FacilityKind,
+  OrgLifecycle,
   QueueEventType,
   SessionStatus,
   Sex,
@@ -97,7 +98,14 @@ export interface StaffUsersTable {
   full_name: string;
   /** argon2id. Never selected into anything that leaves the repository. */
   password_hash: string;
+  /** AES-256-GCM ciphertext (`config/totp.ts`). Never selected into anything that leaves the repository. */
   totp_secret: string | null;
+  /** 0033: when the second factor was confirmed; null means none is asked for. */
+  totp_enabled_at: Timestamp | null;
+  /** 0033: the TOTP step last accepted. */
+  totp_last_step: string | null;
+  /** 0033: keyed hashes of the unused recovery codes. */
+  totp_recovery_hashes: Generated<string[]>;
   is_active: Generated<boolean>;
   last_login_at: Timestamp | null;
   created_at: Generated<Timestamp>;
@@ -163,6 +171,13 @@ export interface HospitalsTable {
   emergency_phone: string | null;
   is_live: Generated<boolean>;
   onboarded_at: Timestamp | null;
+  /** 0037: the workspace's state; only `active` may be live (`FR-ONB-02`). */
+  lifecycle: Generated<OrgLifecycle>;
+  registration_no: string | null;
+  review_requested_at: Timestamp | null;
+  reviewed_at: Timestamp | null;
+  reviewed_by: string | null;
+  review_note: string | null;
   /** Generated from lat/lng by the database; never written. */
   geo: ColumnType<string | null, never, never>;
   created_at: Generated<Timestamp>;
@@ -182,6 +197,8 @@ export interface HospitalSettingsTable {
   prepay_required: Generated<boolean>;
   numeral_style: Generated<string>;
   density_default: Generated<string>;
+  /** 0036: a hospital's own brand tokens (`FR-BRD-03`); null is the platform's. */
+  brand: Json | null;
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
   created_by: string | null;

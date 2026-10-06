@@ -24,10 +24,16 @@ import { emergencyRoutes } from './emergency.routes.js';
 import { govRoutes } from './gov.routes.js';
 import { guestRoutes } from './guest.routes.js';
 import { healthRoutes } from './health.routes.js';
+import { hospitalSettingsRoutes } from './hospitalSettings.routes.js';
+import { importRoutes } from './import.routes.js';
 import { labRoutes } from './lab.routes.js';
+import { patientAuthRoutes } from './patientAuth.routes.js';
 import { paymentRoutes } from './payment.routes.js';
+import { platformRoutes } from './platform.routes.js';
 import { queueRoutes } from './queue.routes.js';
 import { referralRoutes } from './referral.routes.js';
+import { registrationRoutes } from './registration.routes.js';
+import { staffAuthRoutes } from './staffAuth.routes.js';
 import { standbyRoutes } from './standby.routes.js';
 import { syncRoutes } from './sync.routes.js';
 import { webhookRoutes } from './webhooks.routes.js';
@@ -55,8 +61,17 @@ export function buildApiRouter(): Router {
   // Public, and only while `DEMO_MODE` is on: how the console gets a
   // principal without a password (CLAUDE.md §4.1).
   router.use(demoRoutes);
+  // Staff sign-in (pilot step 21). Login and refresh are public because the
+  // credential is in the body; the rest need the token they hand out.
+  router.use(staffAuthRoutes);
+  // A patient's phone and one-time code (pilot step 25); the code routes are
+  // public, profiles and claiming need the account.
+  router.use(patientAuthRoutes);
   router.use(bookingRoutes);
   router.use(queueRoutes);
+  // Finding and registering a patient at the counter (pilot step 23, S-B-03);
+  // the serial itself is the queue's walk-in, above.
+  router.use(registrationRoutes);
   // The patient's half of the standby list (`FR-PAT-25`…`27`): joining is
   // public like a guest booking, and the status token in the path answers
   // everything after it.
@@ -84,6 +99,14 @@ export function buildApiRouter(): Router {
   // everything about a facility at once, so the scope comes off the principal
   // and a caller cannot name a facility at all.
   router.use(adminRoutes);
+  // A facility's own setup (pilot step 22, S-B-11): the administrator's own
+  // facility, from the principal, like the dashboard.
+  router.use(hospitalSettingsRoutes);
+  // The hospital's own data, set by set (pilot step 24, S-B-14).
+  router.use(importRoutes);
+
+  // Onboarding, the platform's side (`S-B-12`, `FR-ONB-*`).
+  router.use(platformRoutes);
   // The national layer (step 20). Districts and facility kinds only, read as a
   // database role that can open nothing else (FR-GOV-06).
   router.use(govRoutes);

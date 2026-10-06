@@ -7,7 +7,9 @@
  */
 
 import { ApiClient } from '@platform/client';
-import type { BedKind, EmergencyProblem } from '@platform/domain';
+import type { BedKind, EmergencyProblem, SearchNeed } from '@platform/domain';
+
+import { scopedPath } from '@/lib/scope';
 
 import type {
   AccessLog,
@@ -39,13 +41,13 @@ export const api = new ApiClient({ baseUrl: BASE, getToken: () => null });
 
 export async function specialtyDoctors(specialty: string): Promise<DoctorCard[]> {
   const data = await api.get<{ doctors: DoctorCard[] }>(
-    `/doctors?specialty=${encodeURIComponent(specialty)}`,
+    scopedPath('/doctors', new URLSearchParams({ specialty })),
   );
   return data.doctors;
 }
 
 export async function hospitals(): Promise<HospitalCard[]> {
-  const data = await api.get<{ hospitals: HospitalCard[] }>('/hospitals');
+  const data = await api.get<{ hospitals: HospitalCard[] }>(scopedPath('/hospitals'));
   return data.hospitals;
 }
 
@@ -57,20 +59,58 @@ export async function hospitals(): Promise<HospitalCard[]> {
  */
 export async function hospitalsForSpecialty(specialty: string): Promise<StampedList<HospitalCard>> {
   const data = await api.get<{ hospitals: HospitalCard[]; asOf: string }>(
-    `/hospitals?specialty=${encodeURIComponent(specialty)}`,
+    scopedPath('/hospitals', new URLSearchParams({ specialty })),
   );
   return { items: data.hospitals, asOf: data.asOf };
 }
 
-/** `S-A-05h` — the doctors at one hospital, in the specialty asked for. */
+/**
+ * `S-A-05h` — the doctors at one hospital, in the specialty asked for.
+ *
+ * With no specialty, every doctor there: what a search result for a hospital
+ * by name opens onto (`S-A-07s`), where nobody has named a specialty.
+ */
 export async function doctorsAtHospital(
   hospitalId: string,
-  specialty: string,
+  specialty: string | null,
 ): Promise<StampedList<HospitalDoctorCard>> {
+  const suffix = specialty === null ? '' : `?specialty=${encodeURIComponent(specialty)}`;
   const data = await api.get<{ doctors: HospitalDoctorCard[]; asOf: string }>(
-    `/hospitals/${hospitalId}/doctors?specialty=${encodeURIComponent(specialty)}`,
+    `/hospitals/${hospitalId}/doctors${suffix}`,
   );
   return { items: data.doctors, asOf: data.asOf };
+}
+
+/** Every participating hospital, stamped (`S-A-07` opened for a hospital by name). */
+export async function allHospitals(): Promise<StampedList<HospitalCard>> {
+  const data = await api.get<{ hospitals: HospitalCard[]; asOf: string }>(scopedPath('/hospitals'));
+  return { items: data.hospitals, asOf: data.asOf };
+}
+
+/** What `GET /search` answers (`S-A-07s`, `FR-PAT-16`–`18`). */
+export interface SearchAnswer {
+  /** The need answered for: the one chosen, or the one the text names. */
+  readonly need: SearchNeed | null;
+  readonly text: string | null;
+  readonly hospitals: readonly HospitalCard[];
+  readonly doctors: readonly DoctorCard[];
+  readonly asOf: string;
+}
+
+/**
+ * One search across every participating hospital.
+ *
+ * `need` is a need's key from `needKey`; `q` is what was typed. Either, both
+ * or neither — neither answers with every hospital in the network.
+ */
+export async function searchNetwork(query: {
+  readonly q: string;
+  readonly need: string | null;
+}): Promise<SearchAnswer> {
+  const params = new URLSearchParams();
+  if (query.q !== '') params.set('q', query.q);
+  if (query.need !== null) params.set('need', query.need);
+  return await api.get<SearchAnswer>(scopedPath('/search', params));
 }
 
 export async function doctorSessions(doctorId: string): Promise<SessionCard[]> {
@@ -116,8 +156,10 @@ export async function book(input: {
   };
   readonly reason?: string;
   readonly idempotencyKey: string;
+  /** From `MOD-GST-OTP`, when the deployment asks a guest to prove the phone (`FR-GST-03`). */
+  readonly guestToken?: string | null;
 }): Promise<BookingResponse> {
-  return await api.post<BookingResponse>(
+  return await callerFor(input.guestToken).post<BookingResponse>(
     '/bookings',
     {
       sessionId: input.sessionId,
@@ -127,6 +169,45 @@ export async function book(input: {
     },
     input.idempotencyKey,
   );
+}
+
+/** The shared client, or one carrying a proved phone's guest token. */
+function callerFor(guestToken: string | null | undefined): ApiClient {
+  const token = guestToken ?? null;
+  return token === null ? api : new ApiClient({ baseUrl: BASE, getToken: () => token });
+}
+
+/**
+ * `MOD-A07-GUEST`'s next step (`FR-GST-03`, `FR-GST-12`): whether this number
+ * must prove itself with a code before the booking. A number that already has
+ * comes back with its guest token; a demonstration asks nothing.
+ */
+export async function startGuest(input: {
+  readonly phone: string;
+  readonly name: string;
+  /** What this device holds for the number, if it proved it before (decision 85). */
+  readonly deviceProof?: string;
+}): Promise<
+  | {
+      readonly needsOtp: false;
+      readonly guestToken: string | null;
+      readonly deviceProof?: string;
+    }
+  | { readonly needsOtp: true; readonly demoCode?: string }
+> {
+  return await api.post('/guest/start', input);
+}
+
+/**
+ * `MOD-GST-OTP`: the code for the guest token, and the proof this device keeps
+ * so it is not asked again. No account is made (`FR-GST-04`).
+ */
+export async function verifyGuest(input: {
+  readonly phone: string;
+  readonly name: string;
+  readonly code: string;
+}): Promise<{ readonly guestToken: string; readonly deviceProof: string }> {
+  return await api.post('/guest/verify', input);
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +342,7 @@ export async function revokeConsent(input: {
 /** Hospitals that have beds of `kind`, each with its published figures. */
 export async function hospitalsWithBeds(kind: BedKind): Promise<StampedList<HospitalCard>> {
   const data = await api.get<{ hospitals: HospitalCard[]; asOf: string }>(
-    `/hospitals?bedKind=${encodeURIComponent(kind)}`,
+    scopedPath('/hospitals', new URLSearchParams({ bedKind: kind })),
   );
   return { items: data.hospitals, asOf: data.asOf };
 }
@@ -293,8 +374,10 @@ export async function requestBed(input: {
   readonly expectedArrivalAt: string | null;
   readonly note: string | null;
   readonly idempotencyKey: string;
+  /** From `MOD-GST-OTP`, when the deployment asks the phone to be proved (`FR-GST-03`). */
+  readonly guestToken?: string | null;
 }): Promise<BedRequestCreated> {
-  return await api.post<BedRequestCreated>(
+  return await callerFor(input.guestToken).post<BedRequestCreated>(
     '/bed-requests',
     {
       hospitalId: input.hospitalId,
@@ -387,8 +470,10 @@ export async function joinStandby(input: {
   };
   readonly prepay: 'bkash' | 'nagad' | 'card' | null;
   readonly idempotencyKey: string;
+  /** From `MOD-GST-OTP`, when the deployment asks the phone to be proved (`FR-GST-03`). */
+  readonly guestToken?: string | null;
 }): Promise<StandbyJoined> {
-  return await api.post<StandbyJoined>(
+  return await callerFor(input.guestToken).post<StandbyJoined>(
     `/sessions/${input.sessionId}/standby`,
     { guest: input.guest, prepay: input.prepay, clientEventId: input.idempotencyKey },
     input.idempotencyKey,

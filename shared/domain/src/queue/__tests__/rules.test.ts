@@ -9,17 +9,21 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { QUEUE_EVENT_TYPES } from '../../types/enums.js';
 import { id, serial, timestamp } from '../../types/ids.js';
+import { etaFor } from '../eta.js';
 import { QUOTE_STEP_MINUTES, suggestedQuote } from '../quote.js';
 import { reduce } from '../reducer.js';
 import {
   canAcceptSlot,
   canAddWalkin,
   canCallNext,
+  canReplayOffline,
   canCheckIn,
   canDeclareDelay,
   canDeclareDoctorArrived,
   canDeclareLate,
+  canEndSession,
   canMarkDone,
   canMarkNoShow,
   canPause,
@@ -32,7 +36,9 @@ import {
   hasCapacity,
   lapsedOffers,
   nextToCall,
+  unseenAtEnd,
   DEFAULT_QUEUE_SETTINGS,
+  OFFLINE_ACTION_ROLES,
   MAX_DELAY_MINUTES,
   MAX_QUOTED_WAIT_MINUTES,
 } from '../rules.js';
@@ -41,6 +47,7 @@ import { emptyState, type QueueState } from '../state.js';
 import { bookingId, LogBuilder, makeSeed } from './support.js';
 
 import type { BookingId, PatientId, SlotOfferId } from '../../types/ids.js';
+import type { OfflineAction } from '../rules.js';
 
 const PLANNED_START = timestamp('2026-09-17T11:00:00.000Z');
 
@@ -134,6 +141,78 @@ describe('calling the next patient', () => {
     const ended = reduce(state, log.next('SESSION_ENDED', { reason: null }));
 
     const result = canCallNext(ended);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe('SESSION_ENDED');
+  });
+});
+
+describe('ending a chamber (BTN-B02-END)', () => {
+  it('refuses while a patient is in the chamber, naming the serial', () => {
+    const { state, log } = running();
+    const occupied = reduce(
+      state,
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+    );
+
+    // An ended session takes no further action: ended now, serial 1 would be
+    // "in the chamber" for good.
+    const result = canEndSession(occupied);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe('PATIENT_IN_CHAMBER');
+    expect(result.detail).toContain('1');
+  });
+
+  it('allows it once that patient has been finished', () => {
+    const { state, log } = running();
+    const finished = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+    ]);
+
+    expect(canEndSession(finished).ok).toBe(true);
+  });
+
+  it('is not refused by patients who are only waiting, and counts them', () => {
+    const { state, log } = running(5);
+    const midway = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+      log.next('PATIENT_LATE', { bookingId: bookingId(2), expectedMinutes: 20, reinsertAfter: 3 }),
+    ]);
+
+    // Four people have not been seen, one of them late. That is for the
+    // person at the counter to be told and to decide — not for this guard.
+    expect(canEndSession(midway).ok).toBe(true);
+    expect(unseenAtEnd(midway)).toBe(4);
+  });
+
+  it('changes nobody: the patients left waiting are still waiting after the end', () => {
+    const { state, log } = running(3);
+    const before = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+    ]);
+    const ended = reduce(before, log.next('SESSION_ENDED', { reason: null }));
+
+    expect(ended.status).toBe('ended');
+    expect(ended.entries.map((entry) => entry.status)).toEqual(
+      before.entries.map((entry) => entry.status),
+    );
+    expect(unseenAtEnd(ended)).toBe(2);
+  });
+
+  it('allows a chamber nobody was ever called in to be ended', () => {
+    const { state } = session();
+    expect(canEndSession(state).ok).toBe(true);
+  });
+
+  it('refuses a chamber that has already ended', () => {
+    const { state, log } = running();
+    const ended = reduce(state, log.next('SESSION_ENDED', { reason: null }));
+
+    const result = canEndSession(ended);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.code).toBe('SESSION_ENDED');
@@ -277,6 +356,129 @@ describe('the no-show grace period (FR-QUE-20)', () => {
     expect(graceWindowMinutes(state, lenient)).toBe(5);
     expect(
       canMarkNoShow(state, bookingId(2), lenient, timestamp('2026-09-17T11:11:00.000Z')).ok,
+    ).toBe(true);
+  });
+
+  it('never lets a patient be marked absent before the time they were told (FR-QUE-11)', () => {
+    // The handover's session: thirty minutes declared before the doctor came,
+    // the doctor in at 11:32, three patients seen by 11:50.
+    const { state, log } = session(6);
+    const arrivedAt = timestamp('2026-09-17T11:32:00.000Z');
+    const seen = fold(state, [
+      log.next('DELAY_DECLARED', { minutes: 30, reason: 'traffic', declaredBy: 'reception' }),
+      log.advance(1920).next('DOCTOR_ARRIVED', { arrivedAt, minutesLate: 32 }),
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(360).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 360 }),
+      log.next('PATIENT_CALLED', { bookingId: bookingId(2), serial: serial(2) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(2), consultSeconds: 300 }),
+      log.next('PATIENT_CALLED', { bookingId: bookingId(3), serial: serial(3) }),
+      log.advance(420).next('PATIENT_DONE', { bookingId: bookingId(3), consultSeconds: 420 }),
+    ]);
+
+    // 11:50, chamber empty, serial 4 at the front.
+    const turn = timestamp('2026-09-17T11:50:00.000Z');
+    const told = etaFor(seen, bookingId(4), turn)?.etaAt ?? null;
+    expect(told).toBe(turn);
+
+    const grace = graceRemaining(seen, bookingId(4), DEFAULT_QUEUE_SETTINGS, turn);
+    expect(grace?.turnReachedAt).toBe(turn);
+
+    // Absent-marking opens a full grace window after the time on the phone,
+    // not fourteen minutes before it.
+    const sixteenLater = timestamp('2026-09-17T12:06:00.000Z');
+    expect(canMarkNoShow(seen, bookingId(4), DEFAULT_QUEUE_SETTINGS, sixteenLater).ok).toBe(true);
+    expect(told !== null && told < sixteenLater).toBe(true);
+  });
+
+  it('does not run out while the doctor is called away (FR-REC-03)', () => {
+    // Serial 1 seen by 11:05; at 11:06 the doctor is called away for half an
+    // hour. Serial 2 is at the front and is told 11:36.
+    const { state, log } = running();
+    const held = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+      log
+        .advance(60)
+        .next('DELAY_DECLARED', { minutes: 30, reason: 'emergency', declaredBy: 'reception' }),
+    ]);
+    const heldUntil = timestamp('2026-09-17T11:36:00.000Z');
+    expect(etaFor(held, bookingId(2), timestamp('2026-09-17T11:10:00.000Z'))?.etaAt).toBe(
+      heldUntil,
+    );
+
+    // Twenty-five minutes after the turn came round, which would be past the
+    // grace if the hold did not count.
+    const duringHold = canMarkNoShow(
+      held,
+      bookingId(2),
+      DEFAULT_QUEUE_SETTINGS,
+      timestamp('2026-09-17T11:30:00.000Z'),
+    );
+    expect(duringHold.ok).toBe(false);
+
+    const graceAfterHold = graceRemaining(
+      held,
+      bookingId(2),
+      DEFAULT_QUEUE_SETTINGS,
+      timestamp('2026-09-17T11:40:00.000Z'),
+    );
+    expect(graceAfterHold?.turnReachedAt).toBe(heldUntil);
+    expect(graceAfterHold?.minutesRemaining).toBe(11);
+
+    expect(
+      canMarkNoShow(
+        held,
+        bookingId(2),
+        DEFAULT_QUEUE_SETTINGS,
+        timestamp('2026-09-17T11:52:00.000Z'),
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('does not run during a break, and starts again when the chamber does (FR-REC-05)', () => {
+    // Serial 1 seen by 11:05, a prayer break from 11:06 to 11:30. Serial 2 is
+    // at the front throughout and could not have been called for any of it.
+    const { state, log } = running();
+    const paused = fold(state, [
+      log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      log.advance(300).next('PATIENT_DONE', { bookingId: bookingId(1), consultSeconds: 300 }),
+      log.advance(60).next('SESSION_PAUSED', { reason: 'prayer' }),
+    ]);
+
+    const duringBreak = canMarkNoShow(
+      paused,
+      bookingId(2),
+      DEFAULT_QUEUE_SETTINGS,
+      timestamp('2026-09-17T11:25:00.000Z'),
+    );
+    expect(duringBreak.ok).toBe(false);
+    if (duringBreak.ok) return;
+    expect(duringBreak.code).toBe('SESSION_NOT_RUNNING');
+
+    const resumed = reduce(paused, log.advance(1440).next('SESSION_RESUMED', {}));
+    const resumedAt = timestamp('2026-09-17T11:30:00.000Z');
+
+    // A minute after the break, twenty-six after the turn first came round.
+    const justAfter = canMarkNoShow(
+      resumed,
+      bookingId(2),
+      DEFAULT_QUEUE_SETTINGS,
+      timestamp('2026-09-17T11:31:00.000Z'),
+    );
+    expect(justAfter.ok).toBe(false);
+    if (justAfter.ok) return;
+    expect(justAfter.code).toBe('NO_SHOW_BEFORE_GRACE');
+    expect(
+      graceRemaining(resumed, bookingId(2), DEFAULT_QUEUE_SETTINGS, resumedAt)?.turnReachedAt,
+    ).toBe(resumedAt);
+
+    expect(
+      canMarkNoShow(
+        resumed,
+        bookingId(2),
+        DEFAULT_QUEUE_SETTINGS,
+        timestamp('2026-09-17T11:46:00.000Z'),
+      ).ok,
     ).toBe(true);
   });
 
@@ -490,6 +692,56 @@ describe('session controls', () => {
 
     expect(canPause(paused).ok).toBe(false);
     expect(canResume(paused).ok).toBe(true);
+  });
+});
+
+describe('what a console may replay (BACKEND.md §5)', () => {
+  /** Event types with a route of their own, which a batch must not carry. */
+  const OWN_ROUTE = [
+    'SESSION_OPENED',
+    'SESSION_ENDED',
+    'WALKIN_ADDED',
+    'BOOKING_CANCELLED',
+    'SLOT_OFFERED',
+    'SLOT_ACCEPTED',
+    'SLOT_EXPIRED',
+    'ACTION_UNDONE',
+  ] as const;
+
+  it('decides every event type one way or the other', () => {
+    // A type added to `queue_event_type` lands in neither list, and this is
+    // where that shows: whether a console may replay it is a decision, not a
+    // default.
+    const decided = [...Object.keys(OFFLINE_ACTION_ROLES), ...OWN_ROUTE].sort();
+    expect(decided).toEqual([...QUEUE_EVENT_TYPES].sort());
+  });
+
+  it('refuses the types that have a route of their own, whoever asks', () => {
+    for (const type of OWN_ROUTE) {
+      const result = canReplayOffline(type, ['receptionist', 'doctor', 'hospital_admin']);
+      expect(result.ok).toBe(false);
+      if (result.ok) continue;
+      expect(result.code).toBe('NOT_AN_OFFLINE_ACTION');
+    }
+  });
+
+  it('lets the counter replay everything it can do offline', () => {
+    for (const type of Object.keys(OFFLINE_ACTION_ROLES) as OfflineAction[]) {
+      expect(canReplayOffline(type, ['receptionist']).ok).toBe(true);
+    }
+  });
+
+  it('holds a doctor to the chamber, and an administrator to reading', () => {
+    expect(canReplayOffline('DELAY_DECLARED', ['doctor']).ok).toBe(true);
+    expect(canReplayOffline('PATIENT_DONE', ['doctor']).ok).toBe(true);
+
+    const noShow = canReplayOffline('PATIENT_NO_SHOW', ['doctor']);
+    expect(noShow.ok).toBe(false);
+    if (!noShow.ok) expect(noShow.code).toBe('ROLE_NOT_ALLOWED');
+
+    expect(canReplayOffline('PATIENT_CALLED', ['hospital_admin']).ok).toBe(false);
+    // Any one of several roles is enough (`FR-ROLE-02`).
+    expect(canReplayOffline('PATIENT_NO_SHOW', ['doctor', 'receptionist']).ok).toBe(true);
   });
 });
 

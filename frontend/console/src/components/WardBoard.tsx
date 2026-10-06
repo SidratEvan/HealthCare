@@ -53,6 +53,7 @@ import {
 import { BedPanel } from '@/components/BedPanel';
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { ConsoleRail } from '@/components/ConsoleRail';
+import { DemoBanner } from '@/components/DemoBanner';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { PendingAdmissions } from '@/components/PendingAdmissions';
 import { useBedBoard } from '@/hooks/useBedBoard';
@@ -198,7 +199,14 @@ function BoardBody(): ReactNode {
           connected={board.connected}
           pendingCount={board.pendingCount}
           lastServerTs={board.lastServerTs}
-          stuckCount={0}
+          stuckCount={board.stuckCount}
+          onRetryStuck={() => {
+            void board.retryStuck();
+          }}
+          onDiscardStuck={() => {
+            void board.discardStuck();
+          }}
+          durable={board.durable}
           locale={locale}
           now={now}
         />
@@ -206,9 +214,7 @@ function BoardBody(): ReactNode {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
-        <p className="bg-warn-100 px-6 py-2 text-caption text-warn-700">
-          {t('demoBanner', locale)}
-        </p>
+        <DemoBanner />
 
         <header className="flex items-center gap-4 border-b border-line px-6 py-4">
           <div className="min-w-0 flex-1">

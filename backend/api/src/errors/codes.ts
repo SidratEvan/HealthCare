@@ -24,6 +24,58 @@ export const ERROR_CODES = {
   AUTH_OTP_INVALID: { status: 401, message: 'The code is wrong or has expired.' },
   AUTH_TOKEN_INVALID: { status: 401, message: 'The token is invalid or has expired.' },
   AUTH_FORBIDDEN_SCOPE: { status: 403, message: 'Outside this hospital or role scope.' },
+  /**
+   * Staff sign-in (pilot step 21). One answer for an unknown email and a wrong
+   * password, so an address cannot be tested for an account.
+   */
+  AUTH_INVALID_CREDENTIALS: { status: 401, message: 'The email or password is wrong.' },
+  /** Too many consecutive failures; `details.until` says when it opens. */
+  AUTH_LOCKED: { status: 423, message: 'This account is locked for a while.' },
+  /** The email exists at more than one facility on this deployment. */
+  AUTH_HOSPITAL_REQUIRED: { status: 409, message: 'Enter the hospital code as well.' },
+  /** A new password is too short or the same as the old one. */
+  AUTH_PASSWORD_WEAK: { status: 422, message: 'Choose a different password.' },
+  /**
+   * The account's password was set by an administrator. Until the person sets
+   * their own, the token opens nothing but `POST /staff/password`.
+   */
+  AUTH_PASSWORD_CHANGE_REQUIRED: { status: 403, message: 'Set a new password first.' },
+  /**
+   * The second factor (pilot step 28, FR-SEC-10). A code that is wrong, too
+   * old, or already used; it counts towards the same lock as a wrong password.
+   */
+  AUTH_2FA_INVALID: { status: 401, message: 'The code is wrong or has already been used.' },
+  /**
+   * An administrator has no second factor yet. Until one is set up, the token
+   * opens nothing but `POST /staff/2fa/setup` and `/staff/2fa/enable`.
+   */
+  AUTH_2FA_SETUP_REQUIRED: { status: 403, message: 'Set up the second factor first.' },
+  /** Setting up a second factor that is already on; an administrator resets it first. */
+  AUTH_2FA_ALREADY_ON: { status: 409, message: 'The second factor is already on.' },
+
+  // --- Hospital settings (pilot step 22, FR-SUP-01, FR-ADM-11) -------------
+  //
+  // Split the way the queue's are. Something with that code, number, label or
+  // email already exists here: 409, and `details.field` names which. A change
+  // the rules do not allow — an administrator removing their own access, a
+  // verified doctor's identity, going live with nothing to publish — is a
+  // 422 that fails however often it is sent; `details.reason` names the rule.
+  SETTINGS_DUPLICATE: { status: 409, message: 'Something with that value already exists here.' },
+  SETTINGS_NOT_ALLOWED: { status: 422, message: 'That change is not allowed.' },
+
+  // --- Imports (pilot step 24, FR-IMP-05..07) -------------------------------
+  //
+  // A file that cannot be read as the set at all — empty, a quote never
+  // closed, the template's columns missing, too many rows — is refused before
+  // any batch exists: 422, `details.reason`. A batch asked to do what its state
+  // does not allow (commit twice, commit with errors, undo a discarded one) is
+  // 409. An undo something has been built on names the rows that stop it.
+  IMPORT_FILE: { status: 422, message: 'That file cannot be read as this set.' },
+  IMPORT_STATE: { status: 409, message: 'That import is not in a state that allows this.' },
+  IMPORT_UNDO_BLOCKED: {
+    status: 409,
+    message: 'Something has been built on rows from this import since.',
+  },
 
   // --- Guest (FR-GST-05) ---------------------------------------------------
   GUEST_LINK_EXPIRED: { status: 410, message: 'This tracking link has expired.' },
@@ -115,6 +167,8 @@ export const ERROR_CODES = {
 
   // --- Payments (FR-PAY-03, FR-PAY-06) -------------------------------------
   PAYMENT_FAILED: { status: 402, message: 'The payment provider declined the transaction.' },
+  /** `PAYMENT_PROVIDER=off`: this deployment takes payment at the hospital only (pilot step 26). */
+  PAYMENT_UNAVAILABLE: { status: 422, message: 'Only paying at the hospital is available here.' },
   /**
    * The hospital has set no cancellation terms, so there is no rule to
    * enforce (`FR-PAY-03`). A 409 rather than a 500: nothing is broken, and
@@ -146,6 +200,8 @@ export const ERROR_CODES = {
     message: 'This endpoint requires an Idempotency-Key header.',
   },
   RATE_LIMITED: { status: 429, message: 'Too many requests.' },
+  /** A body over its route's limit (256kb, or the report and import routes' own). */
+  PAYLOAD_TOO_LARGE: { status: 413, message: 'The request body is too large.' },
   NOT_FOUND: { status: 404, message: 'No such resource.' },
 
   // --- Server --------------------------------------------------------------

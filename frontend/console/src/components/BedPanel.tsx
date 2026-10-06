@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import {
+  BED_UNCONFIRMED_REASON,
   HOLD_MINUTE_CHOICES,
   canApply,
   canReceiveTransfer,
@@ -47,7 +48,7 @@ import {
   type Locale,
   numeralsFor,
 } from '@platform/i18n';
-import { Button, Chip, Input } from '@platform/ui';
+import { Button, Chip, Input, useWindowKeydown } from '@platform/ui';
 
 import { shownState, stateLabel } from '@/lib/bedCopy';
 
@@ -90,17 +91,11 @@ export function BedPanel(props: BedPanelProps): ReactNode {
   const at = now.toISOString() as Timestamp;
 
   // A11Y-05: Esc closes the panel, or backs out of a step within it.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      if (mode === 'view') onClose();
-      else setMode('view');
-    };
-    globalThis.addEventListener?.('keydown', onKey);
-    return () => {
-      globalThis.removeEventListener?.('keydown', onKey);
-    };
-  }, [mode, onClose]);
+  useWindowKeydown((event) => {
+    if (event.key !== 'Escape') return;
+    if (mode === 'view') onClose();
+    else setMode('view');
+  });
 
   const heldRequest =
     bed.heldForRequestId === null
@@ -113,8 +108,13 @@ export function BedPanel(props: BedPanelProps): ReactNode {
       body: Record<string, unknown>,
       change: Parameters<BedBoard['act']>[0]['change'],
     ) => {
-      await board.act({ bedId: bed.id, route, body, change });
+      // Back to the bed before the action is sent, not after the server has
+      // answered. `board.act` resolves when the push has come back, which on a
+      // ward's network is a second or more — and somebody who had already
+      // moved on to the next step (release, then "out of service") had that
+      // step's form closed under them when the first answer arrived.
       setMode('view');
+      await board.act({ bedId: bed.id, route, body, change });
     },
     [board, bed.id],
   );
@@ -175,7 +175,8 @@ export function BedPanel(props: BedPanelProps): ReactNode {
 
       {state === 'out_of_service' && bed.oosReason !== null ? (
         <p className="rounded-sm bg-sunken px-3 py-2 font-ui text-body-sm text-ink">
-          {bed.oosReason}
+          {/* A bed added from S-B-11 carries a code, not typed words (pilot step 22). */}
+          {bed.oosReason === BED_UNCONFIRMED_REASON ? t('bedUnconfirmed', locale) : bed.oosReason}
         </p>
       ) : null}
 

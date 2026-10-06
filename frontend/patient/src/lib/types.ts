@@ -37,6 +37,9 @@ export interface HospitalCard {
   readonly addressBn?: string | null;
   readonly addressEn?: string | null;
   readonly distanceKm: number | null;
+  /** The switchboard and the emergency department, as the hospital publishes them. */
+  readonly phone?: string | null;
+  readonly emergencyPhone?: string | null;
   readonly capabilities: readonly string[];
   readonly capabilityAsOf: string | null;
   /** Doctors here in the specialty asked for; null when none was (`S-A-07`). */

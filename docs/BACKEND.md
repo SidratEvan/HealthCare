@@ -17,10 +17,11 @@
 | Database | **PostgreSQL (Supabase)** | See `DATABASE.md` |
 | DB access | **Kysely** (typed query builder) + raw SQL for hot paths | No heavy ORM hiding the event log |
 | Realtime | **Socket.IO** over WebSocket | Rooms map cleanly to sessions and hospitals; auto-reconnect built in |
-| Background jobs | **pg-boss** (Postgres-backed) | No Redis dependency at launch; Upstash Redis + BullMQ only if load demands |
+| Background jobs | **pg-boss** (Postgres-backed) | No Redis dependency at launch; Upstash Redis + BullMQ only if load demands. **Not installed yet:** the pilot's first timed job (`sessions.materialise`, step 22) runs on a plain interval inside the API process and is idempotent, so a missed or doubled run is harmless (§8) |
 | Validation | **Zod**, schemas shared with the client | One contract, both sides |
-| Auth | JWT access (15 min) + refresh (30 days), Argon2id for staff passwords | |
-| Files | Supabase Storage (reports, prescriptions, uploads) | Signed URLs only |
+| Auth | JWT access (15 min) + refresh (30 days); staff passwords hashed with **scrypt** from `node:crypto` (N = 2^17, r = 8, p = 1, 16-byte salt, 64-byte key) | Changed from Argon2id on 2026-09-28: a real deployment runs on a Bangladeshi server rather than behind Supabase Auth (`CLAUDE.md` §4.1), and scrypt needs no native dependency. The parameters are OWASP's minimum for scrypt |
+| Staff second factor | **TOTP** (RFC 6238) from `node:crypto`: HMAC-SHA-1, 6 digits, 30-second step, one step either side accepted, each step accepted once. The secret (160 bits) is stored sealed with **AES-256-GCM** under a key derived (HKDF-SHA-256) from `TOTP_ENCRYPTION_KEY`; ten single-use recovery codes (12 characters, `xxxx-xxxx-xxxx`) kept as HMAC-SHA-256 under the same key. The QR code is drawn in the console with `qrcode` | Pilot step 28 (`FR-SEC-10`). Every authenticator app reads this by default; nothing native is added. A database backup alone cannot mint codes |
+| Files | Supabase Storage (reports, prescriptions, uploads) | Signed URLs only. A self-hosted deployment uses `STORAGE_PROVIDER=local` — a disk volume on the same server (§12b) |
 | SMS | Aggregator behind an adapter interface | Provider is swappable |
 | Push | Web Push (VAPID) for the PWA | |
 | Logging | Pino → structured JSON | |
@@ -265,12 +266,16 @@ appendEvent({
 7. **Reduce** — `reducer(state, event)` from `shared/domain` → new state.
 8. **Persist** — upsert `queue_state`; update `bookings.status` via trigger; update `sessions.avg_consult_seconds` on `PATIENT_DONE`.
 9. **Recalculate** — `eta.ts` produces ETAs for all waiting bookings (`FR-QUE-11`), ≤ 500 ms for 100 patients (`NFR-03`).
-10. **Broadcast** — `realtime/emit.ts` publishes `queue.updated` to `session:<id>` with `{ seq, state, etas, serverTs }` (≤ 2 s end-to-end, `NFR-01`).
-11. **Notify** — publish notification jobs per §6 mapping (called, delayed, two-away, slot offered).
+10. **Broadcast** — `realtime/emit.ts` publishes `queue.updated` to `session:<id>` with `{ seq, state, etas, serverTs }` (≤ 2 s end-to-end, `NFR-01`). **After the transaction has committed, never from inside it** (`queue.service` `committed`): a screen that subscribes mid-write joins the room and then reads its catch-up state, and a broadcast sent before the commit was one it had missed for a write it could not yet see — it showed the previous patient until the next tap. A write that fails tells nobody.
+11. **Notify** — publish notification jobs per §6 mapping (called, delayed, two-away, slot offered). Planned and written inside the same transaction, **through its own connection**: every read a function makes while it holds a `trx` goes through that `trx`. A read that went back to the pool from inside the session lock waited for a connection that the counters queued behind the lock were holding — five seconds (`connectionTimeoutMillis`), then a failed tap. `poolStarvation.test.ts` leaves the pool one connection and runs every queue write.
 12. **Audit** — write `audit_log` with actor and event.
 13. **Return** — new state + ETAs so the caller's optimistic UI can reconcile.
 
-**Undo (`GR-02`)** appends `ACTION_UNDONE` referencing the original event; the reducer treats the pair as a no-op. History is never deleted.
+**Undo (`GR-02`)** appends `ACTION_UNDONE` referencing the original event; the reducer treats the pair as a no-op. History is never deleted. The only way to write one is `POST /events/:id/undo` — the original actor, inside `UNDO_WINDOW_SECONDS` (10, in `shared/domain`). A console undoes a whole tap newest event first, and an action it has not yet sent is dropped from its outbox instead: nothing is written for something taken back before the server heard of it.
+
+**Delays (`FR-REC-03`, `FR-QUE-11`).** A delay declared **before** the doctor arrives moves the expected start (planned start + everything declared) and is used up by `DOCTOR_ARRIVED`: from then the queue counts from now. A delay declared **after** the arrival holds the chamber until the moment it was declared plus its minutes (`QueueState.hold`); a second one extends a hold still running. The no-show grace (`FR-QUE-20`) never ends before a hold does. `sessions.delay_minutes` stays the total declared that day; what a patient is shown is `outstandingDelayMinutes` — all of it before the arrival, then a hold's own minutes for as long as it runs.
+
+**Pauses (`FR-REC-05`).** While a session is paused nobody is called (`canCallNext`) and nobody is marked absent (`canMarkNoShow`). `SESSION_RESUMED` records `QueueState.resumedAt`, and the no-show grace for whoever is at the front counts from there: a turn that came round before or during a break is not lost to it.
 
 ### 4.2 Other queue-service functions
 
@@ -303,8 +308,14 @@ Consoles operate fully offline (`FR-OFF-01`). The protocol is deliberately small
 - `SY-02` Every event is idempotent by `clientEventId`; a replayed batch is safe.
 - `SY-03` Conflicting events (two counters calling different patients) resolve by server arrival; the losing device receives a `conflict` entry in the batch response and rolls that row back.
 - `SY-04` Bookings created online while the console was offline appear in the missed-events pull and are inserted into the local queue as new arrivals, never dropped (`FR-QUE-52`).
-- `SY-05` Batch response shape: `{ accepted: [{clientEventId, seq}], conflicts: [{clientEventId, reason, currentState}], state, etas }`.
+- `SY-05` Batch response shape: `{ accepted: [{clientEventId, seq, eventId}], conflicts: [{clientEventId, reason, code}], state, etas }`. `eventId` is the stored event, which is what `POST /events/:id/undo` names: a console knows an action only by its own `clientEventId`, and cannot undo what it synced without it (`GR-02`).
 - `SY-06` A device offline longer than 24 h is forced to a full session re-pull rather than a delta.
+- `SY-07` A batch carries only what a counter can do offline, and each entry only from a role its own route admits (`OFFLINE_ACTION_ROLES` in `shared/domain`): `DOCTOR_ARRIVED`, `DELAY_DECLARED`, `PATIENT_CALLED`, `PATIENT_DONE` from a receptionist or a doctor; `SESSION_PAUSED`, `SESSION_RESUMED`, `PATIENT_LATE`, `PATIENT_NO_SHOW`, `PATIENT_REINSERTED`, `PATIENT_ARRIVED`, `PRIORITY_REORDERED` from a receptionist. Anything else — `ACTION_UNDONE`, `SLOT_*`, `BOOKING_CANCELLED`, `SESSION_ENDED`, `SESSION_OPENED`, `WALKIN_ADDED` — has a route of its own with rules a replay would skip, and comes back as a `conflict` (`NOT_AN_OFFLINE_ACTION`, or `ROLE_NOT_ALLOWED`) with nothing written. The rest of the batch still applies.
+- **`SY-08` and `SY-09` are decided and only partly built** (owner, 2026-10-05). Built: the reception console shows the queue from a push's answer and no longer waits for the broadcast (`fix/console-ack-rollback`). Not built: `applied` on `queue.updated`, `unanswered` on subscribe, `version` on beds and emergency cases, and the ward and ER consoles' use of their answers. They are `PLATFORM_PLAN.md` 1.9c–1.9e and wait until after the first pilot.
+- `SY-08` **One action is shown once, whichever of its two answers arrives first.** The server states the result of a write by two roads, the answer to the request and a broadcast. They are different connections: either can be first, and either can be missing. So every statement of a queue names the console actions it has just taken in, by the console's own key: the answer in `accepted` (`SY-05`), a `queue.updated` in `applied: [{clientEventId, seq, eventId}]`. A console draws an action of its own on top of the server's queue from the tap until the first statement that names it, or refuses it, and never after (`FRONTEND.md` §11.1). Which of two statements is the newer is decided by `seq`, never by arrival. A console that subscribes with actions still unanswered sends their keys, and the catch-up names those the log already holds, so an answer lost on the way is settled by the socket alone. Nothing in this rule is a timer, and nothing in it depends on how long the answer takes: an answer that waits on notifications being sent is slow, not wrong.
+  - **`applied` is bounded by what it is about.** A live broadcast names the events of the one write behind it and nothing older. A catch-up names only keys the subscriber asked about (at most 500). No statement carries the history of the log.
+  - **A tap is one thing on the screen.** One tap can be more than one event (*next* finishes one patient and calls the other). A console queues a tap's events together and sends them together, so the server takes them in one write and names them in one statement. A statement that names some of a tap's events and not the rest leaves the rest drawn until they are named or refused, and an answer's accepted and refused entries are applied in one redraw. The screen therefore shows half a tap only when that is the queue's true state — the server took one event and refused the other — and then it shows it once, with the refusal.
+- `SY-09` **A bed and an emergency case have no shared sequence, so each carries its own.** `version` on a bed and on an emergency case is raised by the database on every change to that row, by a trigger, in the statement that makes the change and so in the same transaction: no path can change a row without raising it, and a change that rolls back raises nothing. Every statement about one carries it — a board read, a broadcast, the answer to a write — and a console keeps, for each, the statement with the highest version, whichever road it came by. The answer to a write carries the rows it changed as they stand after the commit, and the broadcast names the action by its `clientEventId`; a console takes its own optimistic drawing of the action off at the first of the two, as in `SY-08`. A timestamp is not used for this: the server's clock is read after the row is, not with it, and two writes to one bed can be stamped in the opposite order to the one they happened in.
 
 ---
 
@@ -321,12 +332,14 @@ Consoles operate fully offline (`FR-OFF-01`). The protocol is deliberately small
 
 There is no room per referral. Both ends of a referral are ER consoles, already in their own `hospital:<id>:emergency` rooms, so `referral.updated` goes to both of those (step 16). A `referral:<id>` room would be one more subscription every console had to remember to make, and a forgotten one reaches nobody, silently.
 
-**Handshake:** JWT (staff/patient) or a guest-link token. A socket may only join rooms its principal is scoped to. **Resume:** client sends `lastSeq`; server replays missed events from `queue_events` before streaming live (`SY-01`).
+**Handshake:** JWT (staff/patient) or a guest-link token. A socket may only join rooms its principal is scoped to: staff their own hospital's, a patient the sessions they hold a booking in, a guest only the session of the one booking its token names — never by the guest identity behind it (`FR-GST-05`). **Resume:** client sends `lastSeq`; server replays missed events from `queue_events` before streaming live (`SY-01`). A console also sends `unanswered`, the keys of its own actions the server has not yet answered (at most 500, staff only); the `queue.updated` that ends the catch-up names in `applied` those this session's log already holds (`SY-08`).
 
 **Payload envelope (all events):**
 ```ts
 { type: string, seq?: number, serverTs: string, data: unknown }
 ```
+
+**What a statement names (`SY-08`, `SY-09`; decided, not built yet).** `queue.updated` also carries `applied: [{clientEventId, seq, eventId}]`: the events the write behind it appended, or on a catch-up the subscriber's `unanswered` keys that are in the log. It is empty when the broadcast is not the result of an action (a roster change, a catch-up with nothing to name). `bed.updated` and `emergency.updated` carry `clientEventId`, the key of the action behind them, when there was one; each bed and each case in them carries its `version`.
 
 ---
 
@@ -338,27 +351,42 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 
 | Method | Path | Auth | Body → Result | Notes |
 |---|---|---|---|---|
-| POST | `/auth/otp` | none | `{phone}` → `{ttlSeconds}` | rate-limited (`FR-SEC-05`) |
-| POST | `/auth/verify` | none | `{phone, code}` → `{access, refresh, isNew}` | |
-| POST | `/auth/refresh` | refresh | → `{access}` | |
-| POST | `/auth/logout` | user | | revokes |
-| POST | `/staff/login` | none | `{hospitalCode, email, password}` → `{access, refresh, roles, requires2fa}` | |
-| POST | `/staff/2fa` | partial | `{code}` → tokens | |
-| POST | `/guest/start` | none | `{phone, name}` → `{needsOtp, guestToken?}` | returning guest skips OTP (`FR-GST-12`) |
-| POST | `/guest/verify` | none | `{phone, code}` → `{guestToken}` | creates no account (`FR-GST-04`) |
+| POST | `/auth/otp` | none | `{phone}` → `{ttlSeconds, resendAfterSeconds, demoCode?}` | pilot step 25. Six digits by SMS, marked sensitive so no provider prints it; `demoCode` only under `DEMO_MODE`. At most `OTP_MAX_PER_HOUR` per number and 30 per address per ten minutes (`FR-SEC-05`); a locked number is `AUTH_LOCKED` |
+| POST | `/auth/verify` | none | `{phone, code}` → `{access, refresh, accessExpiresAt, user, isNew, claimable}` | makes or finds the account. Five wrong codes lock the number fifteen minutes. `claimable` counts the patients the number holds that no account owns (`S-A-20`) |
+| POST | `/auth/refresh` | refresh | `{refresh}` → the same as verify | rotates; a reused token ends every session of the account; a refresh from another device than the one that signed in is refused (`FR-SEC-05`) |
+| POST | `/auth/logout` | refresh | `{refresh}` | revokes that session |
+| GET | `/me/profiles` | user | → `{profiles}` | the account's own patients, with booking and record counts. Records are `GET /patients/:id/records` |
+| POST | `/staff/login` | none | `{hospitalCode?, email, password}` → `{requires2fa: false, access, refresh, roles, hospital, staff, mustChangePassword, twoFactor}` or `{requires2fa: true, challenge, challengeExpiresAt}` | `hospitalCode` only when the email exists at more than one facility. Five consecutive failures lock the account for fifteen minutes (`AUTH_LOCKED`). The same answer for an unknown email and a wrong password (`AUTH_INVALID_CREDENTIALS`). With the second factor on, a right password gets a five-minute challenge and no tokens, and the failure count is not cleared until the code is right. `twoFactor` is `{enabled, required, recoveryCodesLeft}`; an administrator (`hospital_admin`, `platform_admin`) with it off gets a token carrying `tfa: 'setup'`, which opens only `/staff/2fa/setup`, `/staff/2fa/enable`, `/staff/me` and `/staff/logout` (`AUTH_2FA_SETUP_REQUIRED`) |
+| POST | `/staff/refresh` | refresh | → `{access, refresh}` | rotates: the old refresh row is revoked (`DATABASE.md` §2.1) |
+| POST | `/staff/logout` | staff | | revokes this refresh token |
+| GET | `/staff/me` | staff | → `{staff, hospital, roles, mustChangePassword}` | |
+| POST | `/staff/password` | staff | `{current, next}` | clears `must_change_password`; revokes the account's other refresh tokens |
+| POST | `/staff/2fa` | challenge | `{challenge, code}` → the session, as `/staff/login` | step 28 (`FR-SEC-10`). `code` is six digits from the app or a recovery code; the shape says which. A wrong or already-used code is `AUTH_2FA_INVALID` and counts towards the lock; a challenge that ran out, or whose account was reset since, is `AUTH_TOKEN_INVALID`. The challenge is a JWT with its own audience, so it is never accepted as a bearer token |
+| POST | `/staff/2fa/setup` | staff | → `{secret, otpauthUri}` | the secret for the app — the same unconfirmed one until it is turned on, so a reload or a second tab shows the same QR code; `AUTH_2FA_ALREADY_ON` when it is on |
+| POST | `/staff/2fa/enable` | staff | `{code}` → `{recoveryCodes, session}` | a code from the app turns it on; the ten recovery codes are shown once; every other session of the account ends. Audited (`SETTINGS_CHANGE`, `two_factor_enabled`) |
+| POST | `/guest/start` | none | `{phone, name, deviceProof?}` → `{needsOtp: false, guestToken, deviceProof}` or `{needsOtp: true, ttlSeconds, …}` | a number proves itself once **per device** (`FR-GST-12`, decision 85): the code is skipped only for the `deviceProof` `/guest/verify` gave this device for this number — checked against the number's guest identity and the device, and handed back fresh. Anybody else, including somebody typing a number that proved itself elsewhere, is sent a code. With `GUEST_BOOKING_OTP` off — the default on a demonstration — `{needsOtp: false, guestToken: null}` |
+| POST | `/guest/verify` | none | `{phone, name, code}` → `{guestToken, deviceProof}` | creates no account (`FR-GST-04`). `deviceProof` is a signed token (`guest-device` audience, 90 days) the device keeps for its next `/guest/start`. `POST /bookings`, `POST /sessions/:id/standby` and `POST /bed-requests` with guest details then need the guest token for the same number, where the check is on (`AUTH_REQUIRED`, `reason: phone_unverified`) |
 | GET | `/guest/link/:token` | link | → `{booking, session, queueState, etas, record}` | powers the SMS tracking link (`FR-GST-05`); `record` is that booking's signed visit once there is one, else null (`FR-GST-08`) |
-| POST | `/guest/claim` | user | `{phone}` → `{claimable: […]}` then `{confirm:true}` | (`FR-GST-09`) |
+| POST | `/guest/claim` | user | `{confirm?}` → `{claimable: […], claimed}` | (`FR-GST-09`, `FR-PAT-04`, `FR-IMP-10`). The number is the account's own verified one, never one in the body. Without `confirm`, the preview; with it, every patient held for the number as a guest or imported by a hospital becomes the account's, in one transaction, audited |
 
 ### 7.2 Discovery (public, no auth)
 
 | Method | Path | Result |
 |---|---|---|
+| GET | `/search?q&need&lat&lng&limit` | one search across the network (`S-A-07s`, `FR-PAT-16`–`18`). `need` is a need's key — `specialty:<code>`, `bed:<kind>`, `capability:<kind>` — and `q` is typed text. Returns `{ need, text, hospitals, doctors, asOf }`: the hospitals that can provide the need, each a hospital card with its live figures and beds (most free first for a bed kind, never-confirmed counts last), and the doctors matched by name or in the specialty. Text that names a need ("ICU", "বার্ন") is read as that need by `readSearch` in `shared/domain`, the same table the patient app offers needs from; a need the data does not hold is a 400, not an empty list |
+| GET | `/config?scope` | what this deployment offers (`demo`, `onlinePayments`, `guestPhoneCheck`) and, with `scope`, whose app this is: `scope: { code, hospitalId, nameBn, nameEn, theme }`, where `theme` is the hospital's brand tokens if it has set readable ones (`FR-BRD-02`, `FR-BRD-03`); `scope: null` without it |
 | GET | `/hospitals?lat&lng&district&q&bedKind` | list + live capacity from `v_public_hospital_capacity`; `bedKind` keeps hospitals that have that kind of bed, full or not (`S-A-11`) |
 | GET | `/hospitals/:id` | detail + departments + capabilities + beds summary |
 | GET | `/doctors?specialty&hospitalId&q&availableToday` | list + live status |
 | GET | `/doctors/:id` | detail + upcoming sessions |
 | GET | `/sessions/:id/availability` | serials taken/total, expected wait |
 | GET | `/specialties` | catalogue |
+
+**Hospital scope (`FR-BRD-02`, `FR-PAT-19`).** `/search`, `/hospitals`, `/doctors` and `/config` take `scope=<hospital code>` (`hospitals.code`, matched upper-case). With it they answer for that hospital only: one hospital in a list, a doctor's chambers there and not elsewhere, no other hospital found by name. It is what a hospital-branded patient app sends on every discovery call. It is not a permission — everything it narrows is public — so a code no live hospital has is a 404, never a quiet fall back to the whole network: an app built for one hospital must not show its competitors because of a mistake in its configuration. The emergency search (`/emergency/search`) does not take it; whether a hospital's own app should show other hospitals' emergency departments is the owner's to rule on (`docs/STATUS.md`).
+
+**Links and origins (`FR-BRD-04`), `config/links.ts`.** Every link this API gives a patient is built by `patientLink(path, query)`, and the browser origins it answers — for CORS and for the socket handshake alike — are `allowedOrigins()`: the patient app's, the console's, and any exact origins in `EXTRA_ALLOWED_ORIGINS`. Both answer today what the six call sites and two lists they replaced answered. They exist so that a hospital's own address (`code.platform-domain`) is a change in one function.
+
+**A hospital that is not live takes no public booking (`FR-ONB-06`, `FR-NET-03`).** Every list above already leaves it out. `POST /bookings` also refuses a chamber at a hospital that is not live — never approved, or suspended — with `QUEUE_GUARD_FAILED`, guard `HOSPITAL_NOT_LIVE`: a chamber's id outlives the listing, and somebody who opened the booking screen before a suspension still holds it. The hospital's own counter is a different route and is not refused.
 
 ### 7.3 Booking
 
@@ -369,13 +397,15 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | GET | `/me/bookings?scope=today\|upcoming\|past` | user \| guest | |
 | POST | `/bookings/:id/cancel` | owner \| staff | appends `BOOKING_CANCELLED`, triggers refund eligibility |
 | POST | `/bookings/:id/reschedule` | owner \| staff | cancels + creates in one transaction |
-| POST | `/bookings/:id/late` | owner | appends `PATIENT_LATE` (`FR-PAT-33`) |
-| POST | `/sessions/:id/standby` | none (guest details) | joins a **full** chamber's list; Idempotency-Key required, rate-limited per address; optional `prepay` method charges the fee against the standby row (`FR-PAT-25`, `FR-PAT-26`). Returns the status token |
+| POST | `/bookings/:id/late` | owner — a guest token only for the booking it names (`FR-GST-05`) | appends `PATIENT_LATE` (`FR-PAT-33`) |
+| POST | `/sessions/:id/standby` | none (guest details) — the phone proved first where a guest booking must (`FR-GST-03`: the guest token from `/guest/verify`, else 401 `phone_unverified`) | joins a **full** chamber's list; Idempotency-Key required, rate-limited per address; optional `prepay` method charges the fee against the standby row (`FR-PAT-25`, `FR-PAT-26`). Returns the status token |
 | GET | `/standby/:token` | the token | `S-A-08s`: waiting / offered / seated / left; records lapsed offers as it answers; mints the seat's tracking link once |
 | POST | `/standby/:token/accept` | the token | yes to the open offer; books the chair and pays for it with the chosen method (`FR-PAT-27`) |
 | POST | `/standby/:token/decline` | the token | no; `SLOT_EXPIRED`, then the slot is offered to the next patient (`FR-QUE-30`) |
 | POST | `/standby/:token/leave` | the token | off the list; a prepayment is marked owed (`standby_unseated`) |
 | POST | `/offers/:id/accept` | receptionist | a yes rung in to the counter (`FR-REC-30`) — see §7.4 |
+| GET | `/registration/patients?phone=` | receptionist | pilot step 23 (`FR-REC-20`). Everybody the number reaches — through the guest identity or account it owns, or as a patient's own contact number — for the counter to pick the person standing there. The phone is normalised (`DB-P6`) or refused. One `RECORD_VIEW` audit row per patient shown (`DB-P7`) |
+| POST | `/registration/patients` | receptionist | `{phone, fullName, ageYears, sex}` → a guest identity for the phone and a patient under it, as a guest booking makes (`FR-GST-13`: no account). The same name under the same number is the same person. Idempotency-Key required. The serial is then `POST /sessions/:id/walkin` |
 
 ### 7.4 Queue (console)
 
@@ -391,12 +421,12 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/bookings/:id/no-show` | receptionist | `PATIENT_NO_SHOW` + auto slot offer |
 | POST | `/bookings/:id/reinstate` | receptionist | `PATIENT_REINSERTED` |
 | POST | `/bookings/:id/check-in` | receptionist | `PATIENT_ARRIVED` — body `{ quotedWaitMinutes }` 0–480; the arrival is the server's clock (`FR-REC-18`) |
-| POST | `/sessions/:id/walkin` | receptionist | `WALKIN_ADDED` |
+| POST | `/sessions/:id/walkin` | receptionist | `WALKIN_ADDED`. The booking is created under the session lock, so the serial is the chamber's next; a request replayed with the same `clientEventId` is answered from the log before any booking is written (pilot step 23) |
 | POST | `/sessions/:id/reorder` | receptionist | `PRIORITY_REORDERED` (reason required) |
 | GET | `/sessions/:id/standby` | receptionist, hospital_admin | — (who is waiting and what was offered, no phone numbers; records any lapsed offer as `SLOT_EXPIRED` as it answers) |
 | POST | `/bookings/:id/offer-slot` | receptionist | `SLOT_OFFERED` — `BTN-B02-OFFER`: the freed chair to the next person on the standby list, ten-minute window (`FR-QUE-30`, `FR-REC-30`) |
 | POST | `/events/:id/undo` | actor, ≤ 10 s | `ACTION_UNDONE` |
-| POST | `/sessions/:id/end` | receptionist | `SESSION_ENDED` |
+| POST | `/sessions/:id/end` | receptionist | `SESSION_ENDED`. **Refused while a patient is in the chamber** (owner's decision, 2026-10-05; `BTN-B02-END`): the queue's ordinary guard refusal (`QUEUE_GUARD_FAILED`, guard `PATIENT_IN_CHAMBER`), and no event is written. Once that patient is finished the end goes through. Patients who are waiting, late or booked do not block it, and ending changes none of their statuses: the console states their number and asks for a deliberate confirmation instead. Whoever paid and was not seen is owed a refund the moment it ends (`FR-PAY-07`), as before |
 
 ### 7.5 Emergency, beds, referrals
 
@@ -425,11 +455,11 @@ Every referral step returns `{ referral, duplicate, serverTs }` and broadcasts `
 | POST | `/beds/:id/release` \| `/restore` \| `/clean-start` \| `/clean-done` | ward | the rest of the state machine: without `clean-done` a discharged bed could never be free again. `release` refuses a bed held for a request — answer the request instead |
 | POST | `/beds/:id/expected-discharge` | ward | `SEL-B06-EXPDIS` (`FR-BED-04`); not an event, idempotent by nature |
 | GET | `/hospitals/:id/bed-requests` | ward | `LIST-B06-PENDING`; audited per request shown. `handoffs` is the ER half (`FR-BED-07`): token, problem, colour, age, sex, bed kind — names nobody, so not audited |
-| POST | `/bed-requests` | none (guest details in the body, as `POST /bookings`) | (`FR-PAT-52`); returns a signed status token (`bed_request` audience), idempotent on the key and on one open request per patient per hospital |
+| POST | `/bed-requests` | none (guest details in the body, as `POST /bookings`) — the phone proved first, as a guest booking's is (`FR-GST-03`) | (`FR-PAT-52`); returns a signed status token (`bed_request` audience), idempotent on the key and on one open request per patient per hospital |
 | GET | `/bed-requests/track/:token` | the token | the family's status; a lapsed hold reads `expired` at once |
 | POST | `/bed-requests/:id/respond` | ward | `hold` (reserves a real bed of the kind asked for), `confirm` (admits), `decline`; hold and decline send `bed.request_held` / `bed.request_declined` |
 
-Bed writes return `{ beds, published, duplicate, serverTs }`: the beds as they now stand and the view's row read back after commit, so a console can reconcile without waiting for the broadcast. A replayed `clientEventId` returns the same shape with `duplicate: true` (SY-02). A lapsed hold on a bed about to be acted on is released first, by nobody, so every decision is taken against the bed's real state.
+Bed writes return `{ beds, published, duplicate, serverTs }`: the beds as they now stand and the view's row read back after commit, so a console can reconcile without waiting for the broadcast. The ward board does not do that yet: it reads the board again after the answer. `SY-09` says what it will do, and gives each bed a `version` (decided, not built). A replayed `clientEventId` returns the same shape with `duplicate: true` (SY-02). A lapsed hold on a bed about to be acted on is released first, by nobody, so every decision is taken against the bed's real state.
 
 The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty seconds while visible rather than joining a room: the board room is staff-only, and this version has no anonymous socket.
 
@@ -446,7 +476,7 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 
 | Method | Path | Role |
 |---|---|---|
-| POST | `/visits` | doctor — creates or updates the visit; `sign: true` signs it and advances the queue (`FR-DOC-08`). Prescriptions are out of scope for this version (`PRD.md` §9) |
+| POST | `/visits` | doctor — creates or updates the visit; `sign: true` signs it and advances the queue (`FR-DOC-08`). A signed visit is final: a later save is refused (`VISIT_ALREADY_SIGNED`), and a sign sent again only replays the queue step. Prescriptions are out of scope for this version (`PRD.md` §9) |
 | GET | `/patients/:id/records?booking=` | patient (own) \| doctor (own sessions or consent). `booking` returns that booking's pre-visit intake alongside the history, so `S-B-05` opens in one request (`FR-DOC-03`, `NFR-04`) |
 | POST | `/patients/:id/consent-offer` | patient (own) — mints the short-lived signed code `BTN-A12-QR` shows, with the grant's length (`FR-PAT-63`). Returns `{code, expiresInSeconds, grantHours}` |
 | POST | `/consents` / `/consents/:id/revoke` | patient |
@@ -485,14 +515,41 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/payments/intent` | patient \| guest. Idempotent three ways (`FR-PAY-06`). **The amount is not in the body** — it is read from the booking's own `fee_poisha`, so a client cannot decide what it owes. Only a booking is chargeable in this version |
-| GET | `/bookings/:id/payments` | what was charged against one booking |
+| GET | `/bookings/:id/payments` | owner (a guest link only for its own booking) \| staff at the booking's hospital — the fence `GET /bookings/:id` has. What was charged against one booking |
 | POST | `/payments/:id/refund` | hospital_admin. **The amount is not in the body either** — the *reason* picks the rule and `refundFor` computes it (`FR-PAY-03`). `FR-PAY-07`'s automatic eligibility does not come through here: it is raised when a session ends |
 | GET | `/hospitals/:id/settlement?from=&to=` | hospital_admin (`FR-PAY-05`) |
 | POST | `/webhooks/bkash` \| `/nagad` | **no token**: a provider holds none of ours, so the signature over the raw body *is* the authentication. Answers 200 for a replay, because a 4xx makes a provider retry something already done |
 | POST | `/webhooks/sms-dlr` | delivery receipts → `notifications.state` |
 | GET | `/admin/dashboard?from&to` | aggregates from `v_admin_daily`, `v_no_show_loss`, `v_referral_flow` |
 | GET | `/admin/export?view=` | CSV/PDF (audited) |
-| CRUD | `/hospital/doctors`, `/hospital/sessions`, `/hospital/templates`, `/hospital/beds`, `/hospital/staff`, `/hospital/settings` | hospital_admin |
+| GET | `/hospital/setup` | hospital_admin. Everything `S-B-11` draws, for the administrator's own facility (step 22). No path in this group names a facility: it comes off the principal (`FR-ROLE-01`) |
+| PATCH | `/hospital/profile`, `/hospital/rules` | hospital_admin. Names, address, phones, coordinates (both or neither); the queue rules and the SMS budget (`FR-QUE-20`, `FR-QUE-21`, `FR-OFF-04`, `FR-NOT-06`) |
+| POST, PATCH | `/hospital/departments`, `/hospital/departments/:id` | hospital_admin. A code twice is `SETTINGS_DUPLICATE` |
+| POST, PATCH | `/hospital/doctors`, `/hospital/doctors/:id` | hospital_admin. A BMDC number already known links that doctor rather than making a second. Names and degrees change only while unverified and sat nowhere else (`FR-SUP-02`); a fee or room change reaches chambers still scheduled from today, never a booking already made (DB-P5) |
+| POST, DELETE | `/hospital/templates`, `/hospital/templates/:id` | hospital_admin. Adding a weekly chamber writes its sessions at once (§8); an overlap with the doctor's own is `SETTINGS_DUPLICATE`. Removing one removes its future chambers nobody booked and reports how many booked ones stayed |
+| POST | `/hospital/wards`, `/hospital/beds` | hospital_admin. Beds come several at a time and start `out_of_service` with the reason code `setup:unconfirmed`, so no public count includes a bed the ward has not looked at; the ward brings each into service from the board |
+| PATCH | `/hospital/beds/:id` | hospital_admin. Label and nightly charge |
+| PUT | `/hospital/capabilities` | hospital_admin. The kinds this facility offers (`FR-EMG-05`). A newly offered kind starts unavailable; whether it is available now is `PUT /hospitals/:id/capabilities`, which refuses a kind never declared |
+| POST, PATCH | `/hospital/staff`, `/hospital/staff/:id` | hospital_admin (`FR-ADM-11`). Creating answers with a temporary password, once; roles are the facility's seven, never `platform_admin` or `gov_viewer`. Deactivating or changing roles ends the account's refresh tokens. An administrator cannot deactivate themself or drop their own `hospital_admin` (`SETTINGS_NOT_ALLOWED`) |
+| POST | `/hospital/staff/:id/reset-password` | hospital_admin. A new temporary password; not for one's own account |
+| POST | `/hospital/staff/:id/reset-2fa` | hospital_admin (step 28). Turns the second factor off for a lost phone and ends every session; not for one's own account (`own_two_factor`). Audited (`two_factor_reset`). A facility's only administrator is reset on the server with `pnpm staff:reset-2fa --email … [--hospital-code …]`, audited with no actor |
+| POST | `/hospital/request-review` | hospital_admin. **Replaces `/hospital/go-live` (V3.1, `FR-ONB-04`): a hospital does not publish itself.** Moves the workspace `setup` → `ready_for_review` and publishes nothing. Refused (`SETTINGS_NOT_ALLOWED`) with `reason: 'not_ready'` and `missing: [...]` while a required checklist item is absent (a department, a doctor, a weekly schedule, a staff account), and with `reason: 'wrong_state'` from any other state. `GET /hospital/setup` now carries `hospital.lifecycle`, `hospital.reviewNote`, `hospital.reviewRequestedAt` and `counts` (`SetupCounts`), from which the console draws the checklist with the same `setupChecklist` the API refuses by |
+| POST | `/demo/token` (national half) | `{ role: 'gov_viewer' \| 'platform_admin' }`, no hospital. `platform_admin` joined in V3.2 with `S-B-12`; before it the role was not offered, because it had no screen. `GET /demo/consoles` lists both under `national` when their seeded accounts exist. `DEMO_MODE` only |
+| GET | `/platform/hospitals` | platform_admin (a national principal; `requireNationalRole`). Every workspace, those waiting for review first and oldest first: names, code, kind, district, registration number, `lifecycle`, the review dates and note, `counts`, `checklist` and the `actions` allowed from its state. **No patient, booking or record in any `/platform/*` answer** (`FR-ONB-08`) |
+| GET | `/platform/hospitals/:id` | platform_admin. The same, with its doctors (name, BMDC number, degrees, verified or not), its administrators (name, email) and `missingForApproval` |
+| POST | `/platform/hospitals` | platform_admin. `{ code, nameBn, nameEn, kind, division, district, registrationNo?, adminName, adminEmail }` → a workspace in `setup` and its first administrator; `temporaryPassword` is in the answer once (`FR-ONB-01`). 409 `SETTINGS_DUPLICATE` `field: 'code'` for a code in use |
+| POST | `/platform/hospitals/:id/approve` · `/send-back` · `/suspend` · `/reinstate` · `/close` | platform_admin. Body `{ note? }`; a note is required to send back, suspend or close (400 without). Each moves the workspace only from a state it starts in (`wrong_state` otherwise) and only from the state it was read in (`changed_meanwhile`). Approval counts the checklist again and also needs one verified doctor (`not_ready`, `missing`). `is_live` is written with the state: true on approve and reinstate, false on suspend and close (`FR-ONB-04`, `FR-ONB-06`) |
+| POST | `/platform/hospitals/:id/doctors/:doctorId/verify` | platform_admin. Records that the BMDC register was checked (`FR-ONB-05`, `FR-SUP-02`); 404 for a doctor who does not sit at that hospital. Replaces `pnpm doctor:verify` in the visible journey; the script stays for a deployment's first days |
+| GET | `/hospital/imports/templates/:set` | hospital_admin. The CSV template for a set: header row, then one example row marked as an example (`FR-IMP-09`) |
+| POST | `/hospital/imports` | hospital_admin. `{set, fileName, csv}` — the file as UTF-8 text, at most 5 MB, no multipart dependency. Checks every row and writes nothing but the batch and its rows (`FR-IMP-05`) → the preview |
+| POST | `/hospital/imports/analyse` | hospital_admin. `{set, csv, rowType?}` → what the file's columns hold and which is proposed for each template field (`FR-IMP-13`–`15`). **Writes nothing** — no batch, no row, no profile — and so carries no idempotency key. `templateShaped: true` when the file already has the template's columns (send it to `POST /hospital/imports` as before). Otherwise `columns` (`{index, name, profile: {kind, filled, distinct, maxLength}}` — a profile holds no value from any row), `rowType` for a structure file (asked for, remembered or guessed; `needsRowType` when none could be), `fields`, `oneOf` (a date of birth or an age), `proposal` (`{field, column, confidence, source, reason}` per field, from `proposeMapping` in `shared/domain`, or from this hospital's saved mapping for the same headings: `fromSaved`). A first row that reads as data is refused: `IMPORT_FILE`, `reason: 'no_header_row'` (`FR-IMP-14`) |
+| — | the model's part in `analyse` (V4.2, `FR-IMP-16`, `FR-IMP-17`) | `adapters/mapping.ts`. **Rules first; a model is asked only about the fields they left open and the columns they left unused**, and not at all when the hospital has a saved mapping for the headings or `MAPPING_PROVIDER=off` (the default). It is sent a `ModelMappingRequest` — the set, the open fields with what each means, the unused columns' headings and profiles, a made-up example per kind — built by `modelMappingRequest` in `shared/domain` from column profiles, which hold no value from any row. Its answer is read against a fixed shape (zod and `output_config.format`) and then filtered by `withModelSuggestions`: a suggestion is kept only for a field that was asked about and a column that was offered, each once; anything else is dropped. A kept suggestion is a proposal with `source: 'model'`, a confidence below a rule's exact match, and `note`, the model's own sentence. `analyse` answers `model: 'used' \| 'nothing' \| 'unavailable' \| 'not_asked'`. A model that is off, slow (`MAPPING_TIMEOUT_MS`), refused, rate-limited, wrong-keyed or unreadable is `unavailable` and **never an error**: the rules' proposal is returned as it would be with no model. The provider is Claude over the Messages API by plain HTTPS, no SDK (`PLATFORM_PLAN.md` §6 E): `claude-opus-5-5`, `output_config.effort: 'low'`, a JSON-schema answer, `fallbacks: 'default'`; one short request per new export format. `pnpm mapping:try --set <set> --file <csv>` prints what would be sent for a file and, with a key, what comes back |
+| POST | `/hospital/imports/mapped` | hospital_admin. `{set, fileName, csv, mapping: {rowType, fields: {<field>: <column> \| null}}, suggestedByModel?}` — the mapping a person confirmed (`FR-IMP-18`). Refused with `reason: 'mapping_invalid'` and `problems` for a field the template lacks, a column the file lacks, a required field with no column, or neither of a pair. Otherwise the file is rewritten into the template's shape (`applyMapping`) and **handed to the same `check` as `POST /hospital/imports`**: the answer is the same batch view, and commit, undo, discard and the audit are unchanged (`FR-IMP-19`). The batch records the fingerprint of the file the hospital gave. The mapping is kept in `import_mapping_profiles` and audited with the headings chosen and where each choice came from; no cell value is kept (`FR-IMP-20`). A column mapped to nothing never reaches `import_rows` |
+| GET | `/hospital/imports`, `/hospital/imports/:id` | hospital_admin. History, and one batch's counts and error rows |
+| — | `warnings` on every batch view (V4.3, `FR-IMP-21`) | `{samePerson: [{rows, because}], samePersonTotal, mixedFormats: [{field, kind, formats: [{format, rows, firstRow}]}]}`, from `importWarnings` in `shared/domain`. What the check does not refuse: patient rows under different identifiers with the same folded name and the same mobile number (`phone_and_name`) or the same birth date (`name_and_birth`) — a shared phone alone is a family, not a flag — and a date or mobile column whose readable values are written more than one way (`iso` / `day_first`, `local` / `country`). **Worked out from the batch's own rows each time it is read, stored nowhere, so no migration**; empty for a batch that is no longer `checked`. Rows are named by number and no value from a row is in it. It changes no count, refuses nothing and merges nothing. The `checked` audit row records how many were shown (`meta.warnings`: a count and the field names) |
+| POST | `/hospital/imports/:id/commit` | hospital_admin. All or nothing (`FR-IMP-06`); a batch not in `checked` is `IMPORT_STATE` |
+| POST | `/hospital/imports/:id/undo` | hospital_admin. Refused with the blocking rows while anything outside the batch refers to them (`FR-IMP-07`) |
+| POST | `/hospital/imports/:id/discard` | hospital_admin. Drops a checked batch and its rows |
 | CRUD | `/platform/hospitals`, `/platform/verify-doctor`, `/platform/flags`, `/platform/subscriptions` | platform_admin |
 | GET | `/gov/capacity`, `/gov/er-load`, `/gov/signals`, `/gov/benchmarks` | gov_viewer, aggregate only (`FR-GOV-06`). No parameters: no hospital, no patient, no range to widen. Guarded by `requireNationalRole('gov_viewer')`, which admits a `national` principal and nothing else — the mirror of every hospital route, which refuses that kind. Each read runs read-only as the `gov_reader` database role (DATABASE.md §5), and the payload is walked for identifiers before it is sent (`findIdentifiers`). `/gov/benchmarks` is `FR-GOV-04`, which `S-B-13` shows and this table had not yet routed |
 
@@ -520,6 +577,10 @@ backend/workers/src/
 │   └── retention.enforce.ts     # applies DATABASE.md §8 retention rules
 └── cron.ts                      # schedule table
 ```
+
+**In the pilot** (`CLAUDE.md` §4.2) one job runs, with no scheduler dependency, **inside the API process** rather than in `backend/workers`: `sessions.materialise` (`services/sessionMaterialise.service.ts`) at start-up and then hourly, writing `sessions` for today and the next seven days (`MATERIALISE_DAYS` = 8) from `session_templates`, and once more straight after `POST /hospital/templates`. `backend/workers` has no database access yet and a single Bangladeshi server runs one API, so a second process would be a second deployment for one query. It inserts `ON CONFLICT DO NOTHING` against `sessions_template_date_key` (0028), so running it twice, from two processes, or after a missed night is harmless. It skips an inactive doctor and a removed schedule. `SESSION_MATERIALISE=false` switches it off in a process that must never write. The same hourly tick (`services/jobs.service.ts`) clears `import_rows.raw` 30 days after a batch closes (`FR-IMP-08`, step 24), and clears the words of `notifications` older than 90 days (`DATABASE.md` §8; plan 1.9), which is the one rule `retention.enforce` applies so far. The rest of this table waits for pg-boss.
+
+**What a message leaves behind.** A tracking or status link is a credential (`FR-GST-05`). It is composed into the text that is sent and into nothing that is kept: every outbox row is written by one function (`notification.service` `writeOutbox`), which stores the words with `{link}` where the link went, and the table refuses a stored link (`DATABASE.md` §2.7). No SMS provider prints or logs a number or a text; `SMS_PROVIDER=log` writes one line per message naming the notification and its template.
 
 **Schedule**
 
@@ -565,6 +626,20 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `AUTH_OTP_RATE_LIMIT` | 429 | too many OTP requests |
 | `AUTH_OTP_INVALID` | 401 | wrong/expired code |
 | `AUTH_FORBIDDEN_SCOPE` | 403 | staff outside hospital scope |
+| `AUTH_INVALID_CREDENTIALS` | 401 | staff email or password wrong — one answer for both, so an address cannot be tested for existence |
+| `AUTH_LOCKED` | 423 | five consecutive failures; `details.until` says when it opens |
+| `AUTH_HOSPITAL_REQUIRED` | 409 | the email exists at more than one facility; ask for the hospital code |
+| `AUTH_PASSWORD_WEAK` | 422 | a new staff password shorter than 10 characters or the same as the old one |
+| `AUTH_PASSWORD_CHANGE_REQUIRED` | 403 | the token was issued on a password an administrator set; only the password change is open |
+| `AUTH_2FA_INVALID` | 401 | the second-factor code is wrong, too old or already used; counts towards `AUTH_LOCKED` (step 28) |
+| `AUTH_2FA_SETUP_REQUIRED` | 403 | an administrator without a second factor; only its setup is open (step 28) |
+| `AUTH_2FA_ALREADY_ON` | 409 | setting up a second factor that is on; an administrator resets it first (step 28) |
+| `SETTINGS_DUPLICATE` | 409 | a department code, a doctor already in that department, an overlapping weekly chamber, a bed label, an email or a staff code already exists at this facility; `details.field` says which (and `details.labels` for beds) |
+| `SETTINGS_NOT_ALLOWED` | 422 | a settings change the rules refuse; `details.reason` is `own_access`, `own_password`, `own_two_factor`, `doctor_verified`, `doctor_shared` or `nothing_to_publish` |
+| `IMPORT_FILE` | 422 | the file cannot be read as the set at all — empty, an unclosed quote, the template's columns missing (`details.columns`), more than 20,000 rows; refused before any batch exists |
+| `PAYLOAD_TOO_LARGE` | 413 | a body over its route's limit: 256 KB, or the report (14 MB) and import (6 MB) routes' own |
+| `IMPORT_STATE` | 409 | the batch is not in the state that action needs |
+| `IMPORT_UNDO_BLOCKED` | 409 | rows outside the batch refer to its rows; `details.blocking` lists them |
 | `GUEST_LINK_EXPIRED` | 410 | tracking link past expiry |
 | `BOOKING_SLOT_TAKEN` | 409 | serial no longer available |
 | `BOOKING_DUPLICATE` | 409 | same patient, same doctor, same day |
@@ -572,6 +647,7 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `QUEUE_GUARD_FAILED` | 422 | rule violation (e.g. no-show before grace) |
 | `QUEUE_EVENT_DUPLICATE` | 200 | idempotent replay — returns stored result |
 | `PAYMENT_FAILED` | 402 | provider declined |
+| `PAYMENT_UNAVAILABLE` | 422 | an online method on a deployment with `PAYMENT_PROVIDER=off`; refused before the booking is written (step 26) |
 | `CONSENT_REQUIRED` | 403 | doctor lacks record consent |
 | `CAPACITY_STALE` | 200 + flag | data returned but marked stale |
 | `BED_TRANSITION_INVALID` | 422 | the bed's state does not allow that action (the shared `canApply` guard); `details.guard` names the rule |
@@ -589,17 +665,26 @@ Rule: an error never returns a raw SQL or provider message to a client.
 ```
 NODE_ENV, PORT, API_BASE_URL, WEB_BASE_URL
 DATABASE_URL, DATABASE_POOL_MAX
-SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET
+SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET   # only with STORAGE_PROVIDER=supabase
+STORAGE_PROVIDER=mock|local|supabase, STORAGE_DIR   # local: files on this server's disk (step 26)
 JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, JWT_ACCESS_TTL=15m, JWT_REFRESH_TTL=30d
 GUEST_LINK_SECRET, GUEST_LINK_TTL_DAYS=30
+GUEST_BOOKING_OTP=true|false # a guest proves the phone before booking (FR-GST-03); unset: on unless DEMO_MODE
 OTP_TTL_SECONDS=300, OTP_MAX_PER_HOUR=5
+MAPPING_PROVIDER=off|claude, MAPPING_API_KEY, MAPPING_MODEL=claude-opus-5-5, MAPPING_BASE_URL, MAPPING_TIMEOUT_MS=20000   # the model that suggests import column mappings; off needs nothing (FR-IMP-16)
+EXTRA_ALLOWED_ORIGINS=      # comma-separated exact origins the API also answers (a hospital's portal, a branded app's web origin); empty by default (FR-BRD-04)
+ADDRESS_RATE_LIMIT_FACTOR=1 # 1–100: multiplies every limit keyed on the caller's address, for a deployment whose callers share one; never the per-number limits
 SMS_PROVIDER=local|log, SMS_API_KEY, SMS_SENDER_ID, SMS_MONTHLY_CAP
 VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
-PAYMENT_PROVIDER=mock|live, BKASH_*, NAGAD_*
+PAYMENT_PROVIDER=mock|live|off, BKASH_*, NAGAD_*   # off: pay at the hospital only (step 26)
 TRAVEL_TIME_MODE=static|api, MAPS_API_KEY
 STALE_THRESHOLD_MINUTES=10
 SENTRY_DSN, LOG_LEVEL
 DEMO_MODE=true|false        # true seeds/reset allowed, mock payments, banner in UI
+SESSION_MATERIALISE=true    # write each day's chambers from the weekly schedules (§8)
+STORAGE_PROVIDER=mock|supabase|local, STORAGE_LOCAL_DIR   # local: a disk volume (§12b)
+STAFF_LOCKOUT_ATTEMPTS=5, STAFF_LOCKOUT_MINUTES=15
+TOTP_ENCRYPTION_KEY         # staff second factors (step 28); required in production, derived from JWT_REFRESH_SECRET elsewhere
 ```
 
 `env.ts` validates all of these with zod at boot and refuses to start if any required key is missing.
@@ -633,6 +718,23 @@ CI gates: typecheck, lint (layering rule), unit, API, one E2E smoke, and `db:ver
 | Migrations | CI step before API deploy | forward-only, never destructive in one release |
 
 **Rollout rule:** schema change → deploy migration → deploy API → deploy clients. Never reverse.
+
+### 12b. Self-hosted in Bangladesh (pilot, step 26)
+
+A deployment holding real patients runs in Bangladesh (`PRD.md` `FR-SEC-07`). **Since 2026-10-05 the default is one shared platform there, with every hospital a workspace inside it**; a hospital's own server room is an exception for a later day. This stack is the same either way — it is what runs on the machine, whoever's machine it is — and what a shared one still needs before a second real hospital is in it is `FR-SEC-11` (`PLATFORM_PLAN.md` 1.10): today hospitals are kept apart by the API's checks, not by the database. The same repository, packaged as containers:
+
+Built in step 26 as `deploy/docker-compose.yml` from the root `Dockerfile`; one command starts it:
+
+| Container | What |
+|---|---|
+| `db` | PostGIS 16 (the image the schema's extensions need), data on a named volume |
+| `migrate` | one-shot `pnpm db:migrate && pnpm db:role` on every `up`, as the database's owner; the API waits for it to succeed. The second command creates the role the API connects as and puts it back to exactly its privileges (`DATABASE.md` §5.1) |
+| `api` | `backend/api`, `NODE_ENV=production`, `DEMO_MODE=false`, files on a named volume (`STORAGE_PROVIDER=local`), and the hourly jobs (§8) — there is no separate `workers` container while `backend/workers` has nothing to run. Connects as `API_DB_USER`, never as the owner; runs as `node`, not root; its container health is `/readyz`, so it is unhealthy while it cannot reach the database |
+| `patient`, `console` | the two Next.js apps, built with the API's address baked in; run as `node`, start once the API is healthy |
+| `web` | Caddy: three names (patient app, console, API), certificates obtained and renewed on their own, the realtime socket upgraded through |
+| `backup` | nightly `pg_dump` and a tarball of the file volume into `deploy/backups`; the dump is restored into a scratch database to prove it restores, both are copied to `BACKUP_SECOND_DIR` and checksummed there, and the last `BACKUP_KEEP_DAYS` are kept in both. The result of each run is the container's health (`backup.sh check`); `restore.sh` puts one back |
+
+Until merchant accounts and an SMS aggregator exist it runs `PAYMENT_PROVIDER=off` (pay at the hospital only; the patient app asks `GET /config` and offers nothing else) and `SMS_PROVIDER=log`. Production's boot checks accept both, and no longer demand Sentry or VAPID keys that nothing uses yet. `DEPLOY.md` Part S is the runbook. Every container's log rotates (five files of ten megabytes). There is still no alert: the health of each service is there to be read with `docker compose ps`, and nothing sends it anywhere.
 
 ---
 

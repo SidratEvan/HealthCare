@@ -5,7 +5,7 @@
 **Version:** 1.0
 **Owner:** Sidrat — Technical Founder
 **Audience:** the build agent (Claude Code), future engineers, and pitch reviewers
-**Product name:** `[TBD]` — referred to in this document as **the Platform**
+**Product name:** **MedLiveBD** (owner, 6 October 2026) — referred to in this document as **the Platform**
 
 > **How to use this file.** This is the source of truth for *what* to build and *why*.
 > It does not prescribe file structure, frameworks, endpoints, or component names —
@@ -20,7 +20,7 @@
 1. Problem and vision
 2. Who this is for
 3. Product principles (the rules that settle arguments)
-4. Scope: v0 prototype, v1 pilot, v2 scale
+4. Scope: v0 prototype, v1 pilot, V1 platform, v2 scale
 5. Roles and permissions
 6. Core concepts and domain glossary
 7. Functional requirements — Patient app
@@ -31,6 +31,8 @@
 12. Functional requirements — Diagnostics and pharmacy
 13. Functional requirements — Hospital admin dashboard
 14. Functional requirements — Platform super-admin
+14b. Data import from a hospital's existing system
+14c. Hospital onboarding, the patient network, and branded apps
 15. Functional requirements — Government / national layer
 16. The Live Queue Engine (the moat, specified in detail)
 17. Notifications and messaging
@@ -40,7 +42,7 @@
 21. Security, privacy, and compliance
 22. Non-functional requirements
 23. Demo data for the prototype
-24. The five-minute pitch demo script
+24. The pitch demo script
 25. Success metrics
 26. Release plan
 27. Out of scope
@@ -145,6 +147,19 @@ Everything is clickable with seeded demo data. Real logic is required only where
 
 Queue, booking, notifications (push + SMS), health wallet, diagnostics report delivery, bed board, admin dashboard, real payments, offline console, audit logging, consent.
 
+Added on 2026-09-28, when the first hospital (Marks Group) asked for a real version: individual staff logins (`FR-SEC-06`), hospital settings run by the hospital itself (`FR-SUP-01`, `FR-ADM-11`), counter registration and walk-ins (`FR-REC-14`, `FR-REC-20`), import of the hospital's existing data (§14b, `FR-IMP-*`), patient phone verification (`FR-PAT-01`, `FR-GST-03`), and deployment on a server in Bangladesh (`FR-SEC-07`).
+
+### 4.2b V1 — the platform (owner, 2026-10-05)
+
+What is built now and shown to hospitals: **one platform connecting patients and hospitals**, not a reception pilot. It runs on demonstration data until there are agreements (`CLAUDE.md` §1.1), and it is one shared deployment with every hospital a workspace inside it (`FR-SEC-07`).
+
+- **Patients:** search for what they need across participating hospitals (`FR-PAT-16`–`19`), compare live figures, book, follow the live serial, and find the visit and its reports afterwards.
+- **Hospitals:** the consoles of §8–§13 in a private workspace, set up from screens and from the hospital's own export (`FR-ONB-*`, `FR-IMP-13`–`22`).
+- **The network:** a hospital contributes public operational figures and nothing private (`FR-NET-*`).
+- **Later, on the same API:** a patient app in one hospital's name (`FR-BRD-*`); only its foundation is in V1.
+
+Not waited for, and so simulated in V1: a real SMS aggregator, bKash and Nagad, store publication, a paid penetration test. Outside V1 altogether: ambulance, blood, telemedicine, prescribing and dispensing, a direct HMS or FHIR connection, national integrations.
+
 ### 4.3 v2 — Scale
 
 Emergency network across hospitals, ambulance dispatch, referral network, blood, pharmacy, national capacity dashboard, SHR integration, insurance rails, multi-city rollout.
@@ -238,12 +253,17 @@ Many people will never create an account. Guest mode is a first-class path, not 
 - `FR-PAT-14` Hospital cards show live wait estimate, free beds, ICU count, and a freshness stamp.
 - `FR-PAT-15` Search must work with Bangla and English text and tolerate common misspellings of doctor names.
 
+- `FR-PAT-16` **One search for what a patient needs** (`S-A-07s`), reachable from the app's first screen. It takes free text over doctor names, hospital names and specialties, in Bangla and English, and offers the needs hospitals publish live as choices: a specialty, a bed kind (`FR-PAT-50`), an emergency capability (§11). Owner's direction, 2026-10-05.
+- `FR-PAT-17` **Results are places that can provide it.** Each participating hospital that matches is shown with the live figures that bear on the need asked for — doctors sitting now and open serials for a specialty or a doctor, free beds of the kind asked for, the capability and when it was confirmed — each with its age (`FR-PAT-14`). Matching doctors are listed with their hospital. From a result a patient reaches booking (`FR-PAT-20`), the bed request (`FR-PAT-52`) or the emergency path (`FR-PAT-40`) without searching again.
+- `FR-PAT-18` **Search offers only what the data holds.** A need no participating hospital publishes says so; a figure a hospital has not confirmed is shown as unknown or stale, never as none (§3.2). Matching is deterministic: the text as typed, in either script. `FR-PAT-15`'s tolerance of misspellings waits beyond V1.
+- `FR-PAT-19` **Hospital scope.** When the app is opened for one hospital (`FR-BRD-02`), search and discovery show that hospital only, and say whose app it is.
+
 ### 7.3 Booking
 
 - `FR-PAT-20` Booking flow: choose doctor → choose session → confirm profile → pay or choose pay-at-hospital → receive serial.
 - `FR-PAT-21` Fees display as a breakdown: consultation, platform fee, total, and what is due at the hospital.
 - `FR-PAT-22` Confirmation is delivered in-app **and** by SMS, containing hospital, doctor, date, serial number, and expected time window.
-- `FR-PAT-23` A patient can reschedule to another session or cancel; policy and any refund rule are stated before confirming.
+- `FR-PAT-23` A patient can reschedule to another session or cancel; policy and any refund rule are stated before confirming. **Rescheduling is outside V1** (owner, 5 October 2026): here, as the middle option of `FR-PAT-34`, and as the offer in `FR-REC-04`. A patient cancels and books again. No screen, message or pitch step offers a reschedule until it is built.
 - `FR-PAT-24` The app prevents double-booking the same profile with the same doctor on the same day.
 - `FR-PAT-25` If a session is full, the patient may join a **standby list** from the app and will be offered released slots automatically (see `FR-QUE-30`). Joining asks what a guest booking asks (`FR-GST-02`) and returns a status link that is the patient's place on the list.
 - `FR-PAT-26` **Prepaid standby.** A patient may pay the consultation fee when joining. A prepaid patient is **seated automatically** when a slot is offered to them — nobody asks — and told by SMS and on the status link which serial is theirs. A prepayment for a slot that never comes is refunded in full, whether the patient leaves the list or the session ends. Owner's ruling, 2026-09-23.
@@ -260,6 +280,7 @@ Many people will never create an account. Guest mode is a first-class path, not 
 - `FR-PAT-36` If the connection to the hospital is lost, the screen states that the number may be stale instead of showing a confident value.
 - `FR-PAT-37` Feature-phone parity: all state changes in `FR-PAT-30`–`34` are mirrored by SMS.
 - `FR-PAT-38` Once reception has checked the patient in (`FR-REC-18`), the live serial screen shows the wait the counter quoted, when it was quoted, and the minutes left against it — beside the live estimate, never instead of it. When the quote has run out the screen says so rather than counting below zero, and the leave-home alert no longer applies to somebody already here.
+- `FR-PAT-39` **A serial is current until it is settled, whatever the date.** A booking is *current* while it is unresolved in a session that has not ended: the session is scheduled, running or paused, and the patient has not been seen and has not cancelled. The calendar day changing is not a reason to call it past: somebody waiting at 23:59 is still waiting at 00:01, and a chamber paused across midnight is still their chamber (`FR-QUE-06`). A booking becomes *past* when it is settled (the patient was seen, or cancelled) or when its session has actually ended. If the app cannot establish which — no connection, or an answer too old to trust — it says the status is unknown and how old its last knowledge is, and does not file the booking under past. Founder's decision, 2026-10-05. **Not built yet** (`PLATFORM_PLAN.md` 1.9f): the patient app still decides by date.
 
 ### 7.5 Emergency
 
@@ -296,6 +317,8 @@ Many people will never create an account. Guest mode is a first-class path, not 
 - `FR-PAT-73` Telemedicine consults use the same session and queue mechanics as physical chambers.
 - `FR-PAT-74` Ambulance request shows type, published fare (fixed per km), ETA, and driver identity **before** dispatch; the quoted fare cannot change after acceptance.
 - `FR-PAT-75` Blood requests broadcast to eligible nearby donors (eligibility computed from last donation date) and show hospital blood bank stock when available.
+
+> **Outside V1** (owner, 2026-10-05): `FR-PAT-73`–`75` (telemedicine, ambulance, blood) are not built and are not on the patient app's first screen. A smaller product in which everything shown works is the requirement.
 
 ### 7.9 Follow-up, prevention, feedback
 
@@ -453,6 +476,80 @@ change when `S-A-13` lands.
 - `FR-SUP-05` Review moderation and abuse handling.
 - `FR-SUP-06` System health view: sync lag per hospital, stale-data offenders, notification delivery rates.
 
+> **In V1** (owner, 2026-10-05): `S-B-12` is built for onboarding — creating a workspace, review and go-live, doctor verification, suspension (`FR-ONB-*`, §14c). `FR-SUP-03`–`06` wait.
+
+---
+
+## 14b. Data import from a hospital's existing system (`FR-IMP`)
+
+A hospital that already runs a hospital management system keeps it. The Platform takes only what it runs on, and the hospital decides, set by set, what that is (§27: the Platform runs alongside an HMS, never replaces it).
+
+- `FR-IMP-01` Existing data is brought in as four **sets**, each approved separately by the hospital: **(A) structure** — departments, doctors, chamber schedules, wards and beds, staff; **(B) patient register**; **(C) upcoming appointments**; **(D) past lab reports and visit summaries**.
+- `FR-IMP-02` Only these fields are taken. **A:** department name (Bangla and English); doctor name, BMDC number, degrees, specialties, department, room, fee; schedule — doctor, weekday, start, end, serials per day; ward name, floor, bed kind, bed label, nightly price; staff name, role, counter or ward, login email. **B:** the hospital's own patient number, name, date of birth or age, sex, mobile number, blood group. **C:** patient number, doctor, date, start time, serial number, paid or not. **D:** report file, test name, date; visit diagnosis, advice, follow-up date. Never imported: national ID, address, photographs, guardian or emergency contacts, insurance, billing and accounts, payroll and HR, stock and procurement, OT lists, nursing charts, original imaging files, and any password.
+- `FR-IMP-03` Bed occupancy is never imported. The ward sets each bed's state on the day the hospital goes live, because a count copied from another system is already stale (§3.1, `FR-OFF-05`).
+- `FR-IMP-04` Every imported row keeps the hospital's own identifier for it. Importing the same row again updates it and never duplicates it.
+- `FR-IMP-05` An import is checked row by row before anything is written: required fields, mobile numbers normalised (`DB-P6`), dates, allowed values, and duplicates within the file. The result is a preview — rows to add, update and skip, and every error with its row number and reason, in Bangla and English.
+- `FR-IMP-06` Nothing is written until a hospital administrator approves the preview. An approved batch is written all or nothing.
+- `FR-IMP-07` A committed batch can be undone as a whole by a hospital administrator, as long as nothing has since been built on its rows (a booking against an imported session, a visit for an imported patient); the undo names the rows that stop it.
+- `FR-IMP-08` Every batch is audited: who uploaded it and when, the file's name and fingerprint, the set, the row counts, and who approved or undid it. The uploaded rows themselves are kept only as long as the batch is open, and cleared 30 days after it is committed.
+- `FR-IMP-09` The first route is one CSV file per set, against a published template (column names, what each means in Bangla, allowed values, an example row). A spreadsheet is saved as CSV. A read-only connection to the hospital's database and FHIR R4 resources feed the same checks later; until then, re-importing a set is how the two systems are kept in step.
+- `FR-IMP-10` Imported patients belong to the hospital, not to a patient account. They are visible only to that hospital's staff under the usual role rules, and never appear in a patient's app until the patient verifies the same mobile number and claims them (`FR-GST-09`, `FR-PAT-04`).
+- `FR-IMP-11` Real imported data exists only on the hospital's own production deployment. Development, test and demo environments use synthetic files only (`FR-SEC-08`); building an importer for a hospital needs its column headers, never its rows.
+- `FR-IMP-12` Set D is not in the first import release. It follows once a pilot is running and the hospital's legal adviser has agreed it.
+
+---
+
+### Mapping a hospital's own export (owner, 2026-10-05)
+
+A hospital's export does not arrive in our template. A mapping step sits between the file and the check, so that the hospital uploads what it has. **The mapping proposes; a person confirms; the check in `FR-IMP-05` alone decides what is written.**
+
+- `FR-IMP-13` A hospital administrator may upload a CSV for a set in the hospital's own column names and order. A file already in the template's shape skips the mapping step.
+- `FR-IMP-14` The file is profiled on the server before anything is proposed: for each column, the kind of value it holds (text, whole number, date, time, phone number, money), how full it is, and how many different values it has. A first row that reads as data rather than as headings stops the upload and asks for the heading row; a patient's details are never taken for a column name.
+- `FR-IMP-15` **Rules propose first:** the template's own names, known other names for each field in Bangla and English, and the shape of the values. Every proposal says where it came from (a rule, a saved mapping, the model, a person), how sure it is, and why, in a sentence.
+- `FR-IMP-16` **A model may propose for the columns the rules could not place**, when one is configured; it is off unless set. Its answer is read against a fixed shape, anything outside the template is dropped, and it is shown as a suggestion like any other. With it off, slow or failing, the rules and the administrator's own choices carry the import unchanged.
+- `FR-IMP-17` **No row is sent to a model.** It is given the set, the template's field list, the file's column names, each column's profile, and example values made up from the profile; never a value copied from a row. Real patient data does not leave Bangladesh (`FR-SEC-07`).
+- `FR-IMP-18` The administrator sees every column beside the field proposed for it, changes any of them, and confirms before anything else happens. A required field with no column blocks confirmation and says which. Columns mapped to nothing are listed as not imported (`FR-IMP-02`).
+- `FR-IMP-19` A confirmed mapping rewrites the file into the template's shape and hands it to the existing check. Preview, approval, the all-or-nothing write, undo and the audit (`FR-IMP-05`–`08`) are unchanged, and nothing in the mapping step writes to a hospital's records.
+- `FR-IMP-20` A confirmed mapping is kept for that hospital, set and heading row, and offered when the same export arrives again. Who confirmed which columns, and from which source, is audited; cell values are not.
+- `FR-IMP-21` Before approving, on the preview, the administrator is warned of what the check does not refuse: patients in the file who look like the same person (flagged, never merged), and columns that mix date or phone formats, with the reading that will be used.
+- `FR-IMP-22` CSV first. Reading a spreadsheet file directly follows; until then a spreadsheet is saved as CSV (`FR-IMP-09`).
+
+---
+
+## 14c. Hospital onboarding, the patient network, and branded apps
+
+Added 2026-10-05 with the owner's direction of that day (§4.2b).
+
+### Onboarding (`FR-ONB`)
+
+A hospital is brought onto the platform from screens, without a developer.
+
+- `FR-ONB-01` A platform administrator creates a hospital's workspace from `S-B-12`: its name in both languages, its kind, division and district, a unique hospital code (`FR-BRD-01`), and the name and email of its first administrator, whose temporary password is shown once. Opening registration to hospitals themselves comes later.
+- `FR-ONB-02` A workspace has a state: **setting up** → **ready for review** → **active**, and from active **suspended** or **closed**. Only an active workspace can be live, whatever a route forgets.
+- `FR-ONB-03` The hospital's administrator sees a checklist on `S-B-11`: what exists and what is still missing (departments, doctors and how many are verified, schedules, beds confirmed, staff), counted from the records and never stored, with the three ways to fill it (by hand, the template CSV, the hospital's own export).
+- `FR-ONB-04` **Going live is asked for by the hospital and approved by the platform.** The hospital's administrator requests review when the checklist allows it; a platform administrator approves, or sends it back with a note the hospital sees. Until approval nothing of the hospital is public.
+- `FR-ONB-05` A platform administrator records a doctor's BMDC verification from `S-B-12` (`FR-SUP-02`).
+- `FR-ONB-06` A platform administrator can suspend a workspace, which takes it out of every public surface at once and leaves its staff able to sign in, and reinstate it.
+- `FR-ONB-07` Every one of these acts is audited: who, when, which workspace, and the note.
+- `FR-ONB-08` The platform administrator's screen shows organisations and counts. It never shows a patient, a booking or a record (`FR-NET-02`).
+
+### The patient network (`FR-NET`)
+
+- `FR-NET-01` What a hospital contributes to the patient network is public operational information only: its name and address, its departments, its verified doctors with their chamber times and fees, how many serials are open, beds by kind, emergency capabilities, medicine stock flags, and the age of each figure.
+- `FR-NET-02` Nothing that identifies a patient and nothing internal to a hospital (a queue by name, staff, takings, records) is visible to another hospital or to the public. Something crosses between hospitals only by a deliberate act the product already has: a referral, or a patient's consent (`FR-SEC-04`).
+- `FR-NET-03` A hospital is in the network only while its workspace is active and live (`FR-ONB-02`).
+- `FR-NET-04` A hospital decides which of these it publishes. A figure it does not publish is shown as not shared, never as zero. **Not built yet:** today a live hospital publishes all of them.
+
+### Branded patient apps (`FR-BRD`) — foundation only in V1
+
+After an agreement a hospital may be offered the patient app in its own name. It is the same app on the same API.
+
+- `FR-BRD-01` Every hospital has a stable, unique code. It names the hospital in an address and in an app's configuration, and does not change.
+- `FR-BRD-02` The patient app has a **hospital scope**. Unset, it is the whole network. Set to a hospital's code, discovery, booking and beds are that hospital's only, and so are the serials the app lists from what this phone booked. It is configuration, never a second codebase.
+- `FR-BRD-03` Everything a patient sees is drawn from tokens (`FRONTEND.md` §1–3) and one app name, so that a hospital's name and colours replace ours by configuration read from the server.
+- `FR-BRD-04` The links sent to a patient and the addresses the API answers are built in one place each, so that they can later differ by hospital (`code.platform-domain`) without changing what calls them.
+- `FR-BRD-05` Not in V1: store builds per hospital, custom domains, a logo upload, any automation of these.
+
 ---
 
 ## 15. Functional requirements — Government / national layer
@@ -493,6 +590,7 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-QUE-03` Event types: `SESSION_OPENED`, `DOCTOR_ARRIVED`, `DELAY_DECLARED`, `SESSION_PAUSED`, `SESSION_RESUMED`, `PATIENT_CALLED`, `PATIENT_DONE`, `PATIENT_LATE`, `PATIENT_NO_SHOW`, `PATIENT_REINSERTED`, `PATIENT_ARRIVED` (`FR-REC-18`), `WALKIN_ADDED`, `BOOKING_CANCELLED`, `SLOT_OFFERED`, `SLOT_ACCEPTED`, `PRIORITY_REORDERED`, `SESSION_ENDED`.
 - `FR-QUE-04` Every event stores: session, actor (user + role), timestamp (server), client timestamp, and payload.
 - `FR-QUE-05` Replaying the log for a session reproduces its exact state. This is the debugging and dispute-resolution mechanism.
+- `FR-QUE-06` **A session keeps its service date.** A session belongs to the date it was scheduled for — the Dhaka date of its planned start — for its whole life. Running or paused past midnight does not change that date, does not make it a session of the next day, and moves none of its bookings. Reports, the schedule job and history all group by that date. The next day's scheduled chamber for the same doctor is a separate session; the two may be open at once and neither replaces the other. Founder's decision, 2026-10-05.
 
 ### 16.2 ETA calculation
 
@@ -582,9 +680,12 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-SEC-04` Consent is explicit, per hospital, revocable, and visible to the patient.
 - `FR-SEC-05` OTP rate limiting and device binding to prevent account takeover.
 - `FR-SEC-06` Staff accounts require individual logins; shared counter accounts are prohibited by design (each counter session identifies the operator).
-- `FR-SEC-07` Data residency in Bangladesh where required; cloud region choice is a deployment decision recorded in `BACKEND.md`.
+- `FR-SEC-07` Data residency in Bangladesh where required; cloud region choice is a deployment decision recorded in `BACKEND.md`. **Decided 2026-09-28:** a deployment holding real patients runs on a server in Bangladesh — the hospital's own or a Bangladeshi data centre. The demo stays where it is, because it holds no real data (`FR-SEC-08`). **Amended 2026-10-05:** that deployment is **one shared platform hosted in Bangladesh**, every hospital a workspace inside it, because the patient network (`FR-NET-*`) needs several hospitals in one place. A hospital on a server of its own is an exception for a later day and is not what V1 is designed around; real patient data stays in Bangladesh either way.
 - `FR-SEC-08` Demo and prototype environments contain no real patient data, ever.
 - `FR-SEC-09` Deletion and export requests are supported per profile.
+- `FR-SEC-10` Staff two-step verification: a code from an authenticator app after the password. Required for administrators (hospital and platform); any other staff account may turn it on. Ten single-use recovery codes for a lost phone; otherwise another administrator resets it, audited. Added 2026-09-29 to record pilot step 28 (`CLAUDE.md` §4.2).
+
+- `FR-SEC-11` **Hospitals are kept apart by the database, not only by the application**, before two hospitals' real data share a deployment: a policy on every hospital-scoped table, keyed on the request's hospital, for the role the API connects as; and no staff read of another hospital's patients, bookings or records without a referral or a consent (`FR-NET-02`). A demonstration on synthetic data may run without it; a second real hospital may not. Owner's decision, 2026-10-05. **Not built yet** (`PLATFORM_PLAN.md` 1.10).
 
 ---
 
@@ -613,20 +714,27 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-DEM-04` Bed inventory across wards with live occupancy; two facilities with burn units, three with ICU.
 - `FR-DEM-05` Eight ambulances, thirty blood donors, fifty pharmacy items.
 - `FR-DEM-06` A seed script can reset the demo to a known state in one command, including a session mid-queue ready for the pitch.
-- `FR-DEM-07` All demo content is visibly labelled as demonstration data.
+- `FR-DEM-07` All demo content is visibly labelled as demonstration data. The label follows the server: it is shown where the server says it is a demonstration, never on a real server, and not before the server has answered — a real hospital's screen that calls its own patients display data is the worse mistake of the two (owner's decision, 2026-10-05).
 
 ---
 
-## 24. The five-minute pitch demo script
+## 24. The pitch demo script
 
-1. Patient books a cardiology serial and sees serial 18 with an estimated time.
+The pitch is the whole platform (§4.2b): what a patient sees across hospitals, what one hospital's staff do, and how a hospital joins. Steps 1–8 are a hospital's day and take five minutes; 9–11 are the platform and take three more. Every step runs on demonstration data (`FR-DEM-*`).
+
+1. A patient searches for what they need — a doctor, a specialty, an ICU bed — and sees which hospitals can provide it, each with its live figure and how old that figure is (`FR-PAT-16`–`19`). They pick a cardiologist, book a serial and see it with an estimated time.
 2. Reception marks the doctor arrived; the patient screen updates live on a second device.
-3. Doctor declares a 30-minute delay; all waiting patients are notified; one reschedules in a tap.
+3. Doctor declares a 30-minute delay; every waiting patient's screen and message carry the new expected time.
 4. Reception calls next three times; the patient's position and ETA move in real time.
 5. A no-show is marked; the slot is offered to standby; acceptance appears; recovered revenue shows on the admin dashboard.
 6. Doctor writes the visit record — diagnosis, advice in Bangla, follow-up — and signs; it lands in the patient's wallet and the next patient is called in the same tap; a lab report arrives minutes later. (Prescribing itself is out of scope for this version; see §9.)
 7. Emergency: a burn case searches nearby hospitals, sees which has a free burn bed with fresh data, taps "I'm on my way"; the emergency console shows the inbound alert.
-8. Close on the admin dashboard: waits down, no-show loss recovered, occupancy visible.
+8. The admin dashboard: waits down, no-show loss recovered, occupancy visible.
+9. The same patient app opened as one hospital's own (`FR-BRD-01`–`05`): that hospital's name and colours, its doctors, beds and serials only, on the same server.
+10. A hospital joins (`FR-ONB-01`–`08`): the platform administrator adds it and its first administrator from a screen; the hospital's administrator signs in, sees what is still missing, and asks for review; the platform administrator verifies a doctor and approves; the hospital appears in the patient's search. No command line.
+11. A hospital brings what it already holds (`FR-IMP-13`–`20`): its own patient export, with its own column names, is uploaded; the columns are matched by rules, with a model suggesting the ones the rules do not know; a person confirms; the file is checked, previewed, imported, and can be undone. The model is sent headings, never a row.
+
+Not in the script, because it is not in V1: rescheduling (`FR-PAT-23`), ambulance and blood (`FR-PAT-73`–`75`), prescriptions (§9).
 
 ---
 
@@ -665,6 +773,8 @@ This is the heart of the system. Specified tightly because everything else depen
 - Inpatient nursing charts, medication administration records, OT scheduling.
 - Cross-border medical tourism.
 - Replacing an existing hospital HMS wholesale; the Platform integrates or runs alongside.
+- Any AI beyond proposing an import mapping (`FR-IMP-16`): none that diagnoses, advises on treatment, scores a doctor or a member of staff, or writes patient data.
+- Software written for one hospital. The platform is configured for a hospital, never forked for it.
 
 ---
 
@@ -672,11 +782,11 @@ This is the heart of the system. Specified tightly because everything else depen
 
 | # | Decision | Owner | Needed by |
 |---|---|---|---|
-| 1 | Product name and domain | Founders | Before pitch |
+| 1 | ~~Product name~~ **MedLiveBD**, decided 6 October 2026. The domain is still open | Founders | Before pitch |
 | 2 | Legal entity in Bangladesh and contract signatory | Founders | First agreement |
 | 3 | Whether to pursue national record integration before or after private traction | Founders | v2 |
 | 4 | SMS aggregator | Tech | Pilot |
-| 5 | Hosting region and data residency | Tech | Pilot |
+| 5 | ~~Hosting region and data residency~~ — decided 2026-09-28: Bangladesh (`FR-SEC-07`) | Tech | Pilot |
 
 > Commercial terms — what the Platform charges, which modules are sold
 > together, and what data terms are offered to a hospital — are deliberately

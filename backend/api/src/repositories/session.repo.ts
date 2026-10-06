@@ -175,6 +175,26 @@ export async function hospitalIdOf(sessionId: string): Promise<string | null> {
 }
 
 /**
+ * Whether the hospital running this session is in front of patients
+ * (`hospitals.is_live`, which 0037 ties to an approved workspace).
+ *
+ * Asked by the public booking path. Discovery never lists a hospital that is
+ * not live, but a chamber's id outlives the listing: somebody who opened the
+ * booking screen before a hospital was suspended still holds it.
+ */
+export async function hospitalIsLive(sessionId: string): Promise<boolean> {
+  const row = await db
+    .selectFrom('sessions')
+    .innerJoin('hospitals', 'hospitals.id', 'sessions.hospital_id')
+    .select('hospitals.is_live')
+    .where('sessions.id', '=', sessionId)
+    .where('hospitals.deleted_at', 'is', null)
+    .executeTakeFirst();
+
+  return row?.is_live ?? false;
+}
+
+/**
  * Bumps `avg_consult_seconds` from the rolling rate after `PATIENT_DONE`.
  *
  * Separate from `saveProjection` because DATABASE.md §6 requires it to be
@@ -251,4 +271,37 @@ function toSessionRow(row: SessionQueryRow): SessionRow {
 /** Changes how many serials a session offers. */
 export async function setCapacity(sessionId: string, capacity: number): Promise<void> {
   await sql`UPDATE sessions SET capacity = ${capacity} WHERE id = ${sessionId}`.execute(db);
+}
+
+/**
+ * The queue rules a facility set in `S-B-11` (pilot step 22, `FR-QUE-20`,
+ * `FR-QUE-21`, `FR-OFF-04`), or the documented defaults for a facility
+ * that never opened its settings — the same values migration 0004 gives the
+ * columns, so the two cannot disagree.
+ */
+export async function queueRulesFor(
+  trx: Tx,
+  hospitalId: string,
+): Promise<{
+  readonly noShowGracePatients: number;
+  readonly noShowGraceMinutes: number;
+  readonly lateReinsertAfter: number;
+  readonly staleThresholdMinutes: number;
+}> {
+  const result = await sql<{
+    no_show_grace_patients: number;
+    no_show_grace_minutes: number;
+    late_reinsert_after: number;
+    stale_threshold_minutes: number;
+  }>`
+    SELECT no_show_grace_patients, no_show_grace_minutes, late_reinsert_after, stale_threshold_minutes
+      FROM hospital_settings WHERE hospital_id = ${hospitalId}
+  `.execute(trx);
+  const row = result.rows[0];
+  return {
+    noShowGracePatients: row?.no_show_grace_patients ?? 2,
+    noShowGraceMinutes: row?.no_show_grace_minutes ?? 15,
+    lateReinsertAfter: row?.late_reinsert_after ?? 3,
+    staleThresholdMinutes: row?.stale_threshold_minutes ?? 10,
+  };
 }

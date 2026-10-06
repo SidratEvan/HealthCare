@@ -1,27 +1,37 @@
 'use client';
 
 /**
- * `S-A-02` Home (`APP_FLOW.md` A2), composed against the design canvas in
- * `FRONTEND.md` §0.4 — the `Main` artboard, 390×900.
+ * `S-A-02` Home (`APP_FLOW.md` A2).
  *
- * "Layout order is fixed and deliberate: emergency first, then care, then
- * convenience." Top to bottom: app header with area and profile, the emergency
- * card, the specialty grid, the four quick tiles, the live serial strip, and
- * the bottom navigation.
+ * Rebuilt on 2026-10-05 around the product's direction of that day
+ * (`CLAUDE.md` §1.2): this is a network of hospitals, and the first thing the
+ * app does is ask what a person needs. Top to bottom:
  *
- * ## Why this is a client component now
+ *   1. the header: the app's name, the area, the profile;
+ *   2. the live strip, only while this phone holds a serial today — if you are
+ *      waiting to be called, that is what you opened the app for;
+ *   3. **search**: one field for a doctor, a hospital, a specialty, an ICU, a
+ *      burn unit, with the needs asked for most as one-tap chips beneath it
+ *      (`FR-PAT-16`);
+ *   4. the emergency card. It moved down one place and is still on the first
+ *      screenful, above everything that is browsing (`FRONTEND.md` §6.3:
+ *      "never moved below the fold");
+ *   5. specialties, for somebody who would rather browse than type;
+ *   6. beds, reports and medicines.
  *
- * It was a server component, and that was right while nothing on it was live.
- * The active serial strip changes it: `BTN-A02-ACTIVE` "shows live position,
- * updates via the session channel while Home is open". A home screen that
- * shows a stale serial is worse than one that shows none, so the strip reads
- * the booking this device made and refreshes it.
+ * ## Why this is a client component
+ *
+ * The active serial strip is live: `BTN-A02-ACTIVE` "shows live position". A
+ * home screen that shows a stale serial is worse than one that shows none, so
+ * the strip reads the booking this device made and refreshes it.
  */
 
 import { useEffect, useState } from 'react';
 
-import { SPECIALTIES } from '@platform/domain';
+import { SPECIALTIES, needKey, type SearchNeed } from '@platform/domain';
 import {
+  bedKindName,
+  capabilityName,
   formatNumber,
   formatSerial,
   tp,
@@ -32,19 +42,21 @@ import {
 import { useLocale } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
+import { DemoBanner } from '@/components/DemoBanner';
 import {
-  AmbulanceIcon,
   BedIcon,
-  BloodIcon,
   ChevronIcon,
   EmergencyIcon,
   ProfileIcon,
   ReportIcon,
+  SearchIcon,
   SPECIALTY_ICON,
   StethoscopeIcon,
 } from '@/components/icons';
+import { useDeployment } from '@/hooks/useDeployment';
 import { openTrackingLink } from '@/lib/api';
-import { recentBookings, type SavedBooking } from '@/lib/bookings';
+import { bookingsInScope, recentBookings, type SavedBooking } from '@/lib/bookings';
+import { scopedHospitalId } from '@/lib/scope';
 
 import type { ReactNode } from 'react';
 
@@ -59,20 +71,31 @@ import type { ReactNode } from 'react';
  */
 const AREA = 'Dhaka';
 
+/**
+ * The needs offered under the search field: one of each kind the network
+ * answers, chosen because they are the ones a family rings round hospitals
+ * for. Every one is a real search; the full list is on `S-A-07s`.
+ */
+const QUICK_NEEDS: readonly SearchNeed[] = [
+  { kind: 'bed', bedKind: 'icu' },
+  { kind: 'bed', bedKind: 'nicu' },
+  { kind: 'capability', capability: 'burn_unit' },
+  { kind: 'capability', capability: 'dialysis' },
+  { kind: 'bed', bedKind: 'cabin' },
+];
+
 export default function Home(): ReactNode {
-  const locale = useLocale();
   return (
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 px-5 pt-4">
-        <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {tp('demoBanner', locale)}
-        </p>
+        <DemoBanner />
 
         <Header />
+        <ActiveSerial />
+        <SearchEntry />
         <EmergencyCard />
         <Specialties />
         <QuickTiles />
-        <ActiveSerial />
 
         <BottomNavSpacer />
       </main>
@@ -82,13 +105,22 @@ export default function Home(): ReactNode {
   );
 }
 
-/** App name, area, and the profile control (`BTN-A02-PROFILE`). */
+/**
+ * App name, area, and the profile control (`BTN-A02-PROFILE`).
+ *
+ * The name is the hospital's when the app is open for one (`FR-PAT-19`: it
+ * "says whose app it is"), and the platform's otherwise. It is the platform's
+ * until the answer arrives: a name that changes once is better than a blank.
+ */
 function Header(): ReactNode {
   const locale = useLocale();
+  const scope = useDeployment()?.scope ?? null;
   return (
     <header className="flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="font-reading text-title-lg text-brand-700">{tp('appName', locale)}</h1>
+        <h1 className="font-reading text-title-lg text-brand-700" data-testid="app-name">
+          {scope === null ? tp('appName', locale) : localName(locale, scope.nameBn, scope.nameEn)}
+        </h1>
         <p className="text-body-sm text-ink-secondary">{districtName(AREA, locale)}</p>
       </div>
 
@@ -100,6 +132,72 @@ function Header(): ReactNode {
         <ProfileIcon size={20} />
       </a>
     </header>
+  );
+}
+
+/**
+ * `BTN-A02-SEARCH` and `CHIP-A02-NEED-<key>` — the way into `S-A-07s`.
+ *
+ * A link drawn as a field, not a field: the typing happens on the search
+ * screen, where the results are. A real input here would be a second place to
+ * type that shows nothing, and a link works before the page has hydrated,
+ * which on a slow phone is when the first tap lands.
+ */
+function SearchEntry(): ReactNode {
+  const locale = useLocale();
+  const scope = useDeployment()?.scope ?? null;
+
+  const nameOf = (need: SearchNeed): string =>
+    need.kind === 'bed'
+      ? bedKindName(need.bedKind, locale)
+      : need.kind === 'capability'
+        ? capabilityName(need.capability, locale)
+        : need.code;
+
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="home-search-title">
+      <div>
+        <h2 id="home-search-title" className="font-reading text-title-md">
+          {tp('searchPrompt', locale)}
+        </h2>
+        <p className="text-body-sm text-ink-secondary">
+          {scope === null
+            ? tp('homeSearchLine', locale)
+            : tp('scopedIntro', locale).replace(
+                '{hospital}',
+                localName(locale, scope.nameBn, scope.nameEn),
+              )}
+        </p>
+      </div>
+
+      <a
+        href="/search"
+        data-testid="home-search"
+        className="flex min-h-[56px] items-center gap-3 rounded-md border border-line-strong bg-surface px-4 text-body-lg text-ink-secondary"
+      >
+        <span className="text-brand-600">
+          <SearchIcon size={22} />
+        </span>
+        {tp(scope === null ? 'homeSearch' : 'scopedSearch', locale)}
+      </a>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-caption text-ink-muted">{tp('homeNeeds', locale)}</p>
+        <ul className="flex flex-wrap gap-2">
+          {QUICK_NEEDS.map((need) => (
+            <li key={needKey(need)}>
+              <a
+                href={`/search?need=${encodeURIComponent(needKey(need))}`}
+                data-testid={`home-need-${needKey(need)}`}
+                className="flex min-h-touch items-center rounded-pill border border-line-strong bg-surface px-4 text-body-md text-ink"
+              >
+                {nameOf(need)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
@@ -144,7 +242,7 @@ function Specialties(): ReactNode {
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="font-reading text-title-sm">{tp('seeADoctor', locale)}</h2>
+        <h2 className="font-reading text-title-sm">{tp('browseBySpecialty', locale)}</h2>
         <p className="text-body-sm text-ink-secondary">{tp('seeADoctorSub', locale)}</p>
       </div>
 
@@ -177,25 +275,23 @@ function Specialties(): ReactNode {
 }
 
 /**
- * The four convenience tiles.
+ * The convenience tiles.
  *
- * Beds, ambulance, blood and reports are build steps 14, 17 and 13. They are
- * on screen because the canvas has them and because a home screen missing a
- * quarter of itself looks broken — and each one lands on an honest "not built
- * yet" rather than a dead link.
+ * Beds and reports, and medicines beneath them. Ambulance and blood were here
+ * as tiles that led to a sentence saying they were not built; they are
+ * outside V1 (`PRD.md` §7.8, owner's direction of 2026-10-05), and a first
+ * screen on which everything shown works is the requirement.
  */
 function QuickTiles(): ReactNode {
   const locale = useLocale();
   const tiles = [
     { href: '/beds', label: 'quickBed', Icon: BedIcon },
-    { href: '/ambulance', label: 'quickAmbulance', Icon: AmbulanceIcon },
-    { href: '/blood', label: 'quickBlood', Icon: BloodIcon },
     { href: '/records', label: 'quickReport', Icon: ReportIcon },
   ] as const;
 
   return (
     <div className="flex flex-col gap-2.5">
-      <ul className="grid grid-cols-4 gap-2.5">
+      <ul className="grid grid-cols-2 gap-2.5">
         {tiles.map((tile) => (
           <li key={tile.href}>
             <a
@@ -214,10 +310,8 @@ function QuickTiles(): ReactNode {
       {/*
         Medicine availability (`FR-PHR-02`, step 17).
 
-        A wide row rather than a fifth tile: five tiles across a 360px screen
-        leaves each about sixty pixels, which is under the touch target
-        `MIN_TOUCH_TARGET_PX` sets and too narrow for a Bangla label. The four
-        the canvas declares keep their grid.
+        A wide row rather than a third tile: it carries a line saying what
+        it answers, which a tile has no room for.
       */}
       <a
         href="/medicines"
@@ -247,10 +341,16 @@ function ActiveSerial(): ReactNode {
   const numerals = numeralsFor(locale);
   const [booking, setBooking] = useState<SavedBooking | null>(null);
   const [nowServing, setNowServing] = useState<number | null>(null);
+  // An app open for one hospital shows that hospital's serial only, and
+  // nothing until it knows which hospital that is (`FR-BRD-02`).
+  const inHospital = scopedHospitalId(useDeployment());
 
   useEffect(() => {
-    const today = recentBookings().find((saved) => saved.isToday);
-    if (today === undefined) return;
+    const today = bookingsInScope(recentBookings(), inHospital).find((saved) => saved.isToday);
+    if (today === undefined) {
+      setBooking(null);
+      return;
+    }
 
     setBooking(today);
 
@@ -265,7 +365,7 @@ function ActiveSerial(): ReactNode {
         // The strip still shows their own serial. A failed lookup is not a
         // reason to hide the booking they have.
       });
-  }, []);
+  }, [inHospital]);
 
   if (booking === null) return null;
 

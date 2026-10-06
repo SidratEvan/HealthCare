@@ -19,6 +19,7 @@
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
+import { closeOtherContexts } from './support/contexts.js';
 import {
   FARMGATE,
   caseState,
@@ -60,6 +61,12 @@ async function phoneAtFarmgate(browser: Browser): Promise<Page> {
   });
   return await context.newPage();
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('the burn scenario (PRD.md §24 step 7)', () => {
   test('a burn case sees the fresh Padma above the nearer, stale Jamuna, and the ER is told', async ({
@@ -291,5 +298,54 @@ test.describe('the ER keeps working offline (FR-OFF-01)', () => {
     await expect(page.getByTestId('offline-block')).toHaveAttribute('data-connected', 'true', {
       timeout: 20_000,
     });
+  });
+});
+
+test.describe('the ER outbox is kept on the device (FR-OFF-01)', () => {
+  test('a triage that could not be sent survives a reload, and is sent once', async ({ page }) => {
+    const walkIn = await registerWalkIn(shapla, 'breathing');
+    await openErConsole(page, shapla);
+    const row = page.getByTestId(`er-row-${walkIn.caseId}`);
+    await expect(row).toBeVisible();
+
+    // The server cannot be reached for a case action; the page itself loads.
+    const blocked = '**/api/v1/emergency/cases/**';
+    await page.route(blocked, async (route) => {
+      if (route.request().method() === 'PATCH') await route.abort('connectionfailed');
+      else await route.fallback();
+    });
+
+    // The page is reloaded only once the triage has been refused: one still
+    // paused at the route when the page goes can slip through.
+    const refused = page.waitForEvent(
+      'requestfailed',
+      (request) =>
+        request.method() === 'PATCH' && request.url().includes('/api/v1/emergency/cases/'),
+    );
+    await page.getByTestId(`er-triage-yellow-${walkIn.caseId}`).click();
+    await refused;
+    await expect(row).toHaveAttribute('data-triage', 'yellow');
+    await expect(page.getByTestId('pending-count')).toBeVisible();
+    expect((await caseState(walkIn.caseId)).triage).toBe('red');
+
+    // The reload that used to lose it, leaving the case red on every screen.
+    await page.reload();
+    await expect(page.getByTestId('er-console')).toBeVisible();
+    await expect(row).toHaveAttribute('data-triage', 'yellow');
+    await expect(page.getByTestId('pending-count')).toBeVisible();
+    expect((await caseState(walkIn.caseId)).triage).toBe('red');
+
+    // Reachable again; nobody taps anything.
+    await page.unroute(blocked);
+    await expect
+      .poll(async () => (await caseState(walkIn.caseId)).triage, { timeout: 45_000 })
+      .toBe('yellow');
+    await expect(page.getByTestId('pending-count')).toBeHidden({ timeout: 20_000 });
+
+    // Nothing is left on the device to send again.
+    await page.reload();
+    await expect(page.getByTestId('er-console')).toBeVisible();
+    await expect(row).toHaveAttribute('data-triage', 'yellow');
+    await expect(page.getByTestId('pending-count')).toBeHidden();
   });
 });

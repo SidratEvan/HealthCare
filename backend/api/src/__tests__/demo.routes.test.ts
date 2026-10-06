@@ -321,7 +321,9 @@ describe('the national console (S-B-13, step 20)', () => {
     const response = await request(app).get(`${BASE}/demo/consoles`);
 
     expect(response.status).toBe(200);
-    expect(response.body.data.national).toEqual(['gov_viewer']);
+    // The government viewer (S-B-13) and, since V3.2, the platform
+    // administrator (S-B-12).
+    expect(response.body.data.national).toEqual(['gov_viewer', 'platform_admin']);
   });
 
   it('mints a token with no hospital, which the API reads as national', async () => {

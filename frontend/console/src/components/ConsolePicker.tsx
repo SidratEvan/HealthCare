@@ -28,11 +28,21 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { format, formatNumber, localName, numeralsFor, t, type ConsoleKey } from '@platform/i18n';
+import {
+  format,
+  formatClock,
+  formatDateTime,
+  formatNumber,
+  localName,
+  numeralsFor,
+  t,
+  type ConsoleKey,
+} from '@platform/i18n';
 import { Button, Card, CardMeta, CardTitle, useLocale } from '@platform/ui';
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
-import { mintDemoToken, writeDemoSession } from '@/lib/demo';
+import { mintDemoToken, readDemoSession, writeDemoSession } from '@/lib/demo';
+import { fetchStaffChambers, signOut } from '@/lib/staffAuth';
 
 import type { ReactNode } from 'react';
 
@@ -81,6 +91,10 @@ interface DemoSessionCard {
   readonly departmentNameEn: string;
   readonly room: string | null;
   readonly status: string;
+  /** The date the chamber belongs to, and whether the server calls that today. */
+  readonly sessionDate: string;
+  readonly today: boolean;
+  readonly plannedStart: string;
   readonly waiting: number;
   readonly total: number;
 }
@@ -94,8 +108,8 @@ interface DemoConsole {
   readonly sessions: readonly DemoSessionCard[];
 }
 
-/** A national role the API has a seeded account for (step 20). */
-type NationalRole = 'gov_viewer';
+/** A national role the API has an account for (step 20; `S-B-12` since V3.2). */
+type NationalRole = 'gov_viewer' | 'platform_admin';
 
 /**
  * What the picker opened: a chamber, or a hospital's ward board.
@@ -110,13 +124,24 @@ export type ConsoleChoice =
   | { readonly kind: 'lab' }
   | { readonly kind: 'pharmacy' }
   | { readonly kind: 'admin' }
-  | { readonly kind: 'gov' };
+  | { readonly kind: 'gov' }
+  | { readonly kind: 'platform' };
 
 export function ConsolePicker({
   onChosen,
+  mode = 'demo',
+  onSignedOut,
 }: {
   /** Called with what to open, once a principal is in place. */
   readonly onChosen: (choice: ConsoleChoice) => void;
+  /**
+   * `demo`: every live facility, and a token minted per choice (`S-B-01` as
+   * the pitch built it). `staff`: after `S-B-00` (pilot step 21) — the
+   * person's own facility, only the roles they hold, and the token they
+   * already have, which carries all of them.
+   */
+  readonly mode?: 'demo' | 'staff';
+  readonly onSignedOut?: () => void;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
@@ -131,7 +156,40 @@ export function ConsolePicker({
   useEffect(() => {
     let cancelled = false;
 
+    async function loadOwn(): Promise<void> {
+      const session = readDemoSession();
+      const chambers = await fetchStaffChambers();
+      if (cancelled) return;
+      if (session === null || chambers === null) {
+        setFailed(true);
+        return;
+      }
+      const roles = session.roles ?? [];
+      if (session.hospitalId === null) {
+        // A national account works for no facility (`FR-ROLE-01`).
+        setConsoles([]);
+        setNational(
+          (['gov_viewer', 'platform_admin'] as const).filter((role) => roles.includes(role)),
+        );
+        return;
+      }
+      const own: DemoConsole = {
+        hospitalId: session.hospitalId,
+        nameBn: session.hospitalNameBn ?? '',
+        nameEn: session.hospitalNameEn ?? '',
+        district: '',
+        roles,
+        sessions: chambers,
+      };
+      setConsoles([own]);
+      setHospital(own);
+    }
+
     async function load(): Promise<void> {
+      if (mode === 'staff') {
+        await loadOwn();
+        return;
+      }
       for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
         if (cancelled) return;
 
@@ -178,7 +236,7 @@ export function ConsolePicker({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mode]);
 
   /**
    * Takes a principal for this hospital and role, then opens the chamber.
@@ -191,7 +249,17 @@ export function ConsolePicker({
     async (hospitalId: string | null, role: string, choice: ConsoleChoice) => {
       setBusy(true);
       try {
-        const minted = await mintDemoToken(hospitalId, role);
+        // A signed-in person's token already carries every role they hold, so
+        // choosing a console changes what is stored and nothing on the server.
+        const staffSession = mode === 'staff' ? readDemoSession() : null;
+        const minted =
+          staffSession === null
+            ? await mintDemoToken(hospitalId, role)
+            : {
+                token: staffSession.token,
+                hospitalId: staffSession.hospitalId,
+                staffName: staffSession.staffName,
+              };
 
         const picked = consoles?.find((entry) => entry.hospitalId === hospitalId);
         const chamber =
@@ -200,6 +268,7 @@ export function ConsolePicker({
             : undefined;
 
         writeDemoSession({
+          ...(staffSession ?? {}),
           token: minted.token,
           hospitalId: minted.hospitalId,
           staffName: minted.staffName,
@@ -233,12 +302,12 @@ export function ConsolePicker({
         setBusy(false);
       }
     },
-    [onChosen, consoles],
+    [onChosen, consoles, mode],
   );
 
   if (failed) {
     return (
-      <Shell>
+      <Shell mode={mode} {...(onSignedOut === undefined ? {} : { onSignedOut })}>
         <p
           role="alert"
           data-testid="picker-failed"
@@ -264,7 +333,7 @@ export function ConsolePicker({
   if (consoles === null) {
     // `GR-03` loading: the shape of the answer, never a spinner over the page.
     return (
-      <Shell>
+      <Shell mode={mode} {...(onSignedOut === undefined ? {} : { onSignedOut })}>
         {waking ? (
           <p
             role="status"
@@ -285,29 +354,54 @@ export function ConsolePicker({
 
   // `S-B-13` belongs to no hospital, so it is offered whether or not any
   // hospital is running something today.
+  // And so does `S-B-12`: the platform's administrator works for no hospital
+  // either, and brings hospitals on (`FR-ONB-*`).
   const nationalSection =
     national.length === 0 ? null : (
-      <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
-        <h2 className="text-title-sm">{t('govSection', locale)}</h2>
-        <p className="text-body-sm text-ink-secondary">{t('govSectionHint', locale)}</p>
-        <div>
-          <Button
-            variant="secondary"
-            loading={busy}
-            data-testid="open-gov"
-            onClick={() => {
-              void open(null, 'gov_viewer', { kind: 'gov' });
-            }}
-          >
-            {t('openGov', locale)}
-          </Button>
-        </div>
-      </section>
+      <>
+        {national.includes('platform_admin') ? (
+          <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+            <h2 className="text-title-sm">{t('platformSection', locale)}</h2>
+            <p className="text-body-sm text-ink-secondary">{t('platformSectionHint', locale)}</p>
+            <div>
+              <Button
+                variant="secondary"
+                loading={busy}
+                data-testid="open-platform"
+                onClick={() => {
+                  void open(null, 'platform_admin', { kind: 'platform' });
+                }}
+              >
+                {t('openPlatform', locale)}
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {national.includes('gov_viewer') ? (
+          <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+            <h2 className="text-title-sm">{t('govSection', locale)}</h2>
+            <p className="text-body-sm text-ink-secondary">{t('govSectionHint', locale)}</p>
+            <div>
+              <Button
+                variant="secondary"
+                loading={busy}
+                data-testid="open-gov"
+                onClick={() => {
+                  void open(null, 'gov_viewer', { kind: 'gov' });
+                }}
+              >
+                {t('openGov', locale)}
+              </Button>
+            </div>
+          </section>
+        ) : null}
+      </>
     );
 
   if (consoles.length === 0) {
     return (
-      <Shell>
+      <Shell mode={mode} {...(onSignedOut === undefined ? {} : { onSignedOut })}>
         <p className="text-body-md text-ink-secondary" data-testid="picker-empty">
           {t('noConsoles', locale)}
         </p>
@@ -317,27 +411,29 @@ export function ConsolePicker({
   }
 
   return (
-    <Shell>
-      <section className="flex flex-col gap-3">
-        <h2 className="text-title-sm">{t('chooseHospital', locale)}</h2>
+    <Shell mode={mode} {...(onSignedOut === undefined ? {} : { onSignedOut })}>
+      {mode === 'staff' ? null : (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-title-sm">{t('chooseHospital', locale)}</h2>
 
-        <ul className="flex flex-wrap gap-2">
-          {consoles.map((candidate) => (
-            <li key={candidate.hospitalId}>
-              <Button
-                variant={candidate.hospitalId === hospital?.hospitalId ? 'primary' : 'secondary'}
-                size="sm"
-                data-testid={`pick-hospital-${candidate.hospitalId}`}
-                onClick={() => {
-                  setHospital(candidate);
-                }}
-              >
-                {localName(locale, candidate.nameBn, candidate.nameEn)}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      </section>
+          <ul className="flex flex-wrap gap-2">
+            {consoles.map((candidate) => (
+              <li key={candidate.hospitalId}>
+                <Button
+                  variant={candidate.hospitalId === hospital?.hospitalId ? 'primary' : 'secondary'}
+                  size="sm"
+                  data-testid={`pick-hospital-${candidate.hospitalId}`}
+                  onClick={() => {
+                    setHospital(candidate);
+                  }}
+                >
+                  {localName(locale, candidate.nameBn, candidate.nameEn)}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* The hospital's own consoles — the ward board (`S-B-06`), the ER
           (`S-B-07`), the lab and the pharmacy (`S-B-08`, `S-B-09`) and the
@@ -372,10 +468,35 @@ export function ConsolePicker({
           <ul className="grid gap-3 md:grid-cols-2">
             {hospital.sessions.map((session) => (
               <li key={session.id}>
-                <Card tone={session.status === 'running' ? 'brand' : 'default'}>
+                <Card
+                  tone={session.status === 'running' ? 'brand' : 'default'}
+                  data-testid={`chamber-card-${session.id}`}
+                  data-today={session.today ? 'true' : 'false'}
+                >
                   <CardTitle>
                     {localName(locale, session.doctorNameBn, session.doctorNameEn)}
                   </CardTitle>
+                  {/* Which day's chamber, and when it was due to start
+                      (`S-B-01`, owner's decision 2026-10-05). A chamber nobody
+                      ended is still listed the next morning, beside today's for
+                      the same doctor, and without this the two cards read the
+                      same — so today's patients went into yesterday's queue. */}
+                  <p
+                    className={
+                      session.today
+                        ? 'mt-1 text-body-sm text-ink-secondary'
+                        : 'mt-1 text-body-sm font-bold text-warn-700'
+                    }
+                    data-testid={`chamber-when-${session.id}`}
+                  >
+                    {session.today
+                      ? format('chamberToday', locale, {
+                          time: formatClock(session.plannedStart, numerals),
+                        })
+                      : format('chamberEarlierDay', locale, {
+                          when: formatDateTime(session.plannedStart, numerals),
+                        })}
+                  </p>
                   <CardMeta>
                     {localName(locale, session.departmentNameBn, session.departmentNameEn)}
                     {session.room === null ? '' : ` · ${session.room}`} ·{' '}
@@ -509,8 +630,17 @@ function statusKey(status: string): ConsoleKey {
   return 'sessionScheduled';
 }
 
-function Shell({ children }: { readonly children: ReactNode }): ReactNode {
+function Shell({
+  children,
+  mode = 'demo',
+  onSignedOut,
+}: {
+  readonly children: ReactNode;
+  readonly mode?: 'demo' | 'staff';
+  readonly onSignedOut?: () => void;
+}): ReactNode {
   const locale = useLocale();
+  const session = mode === 'staff' ? readDemoSession() : null;
   return (
     <div className="min-h-screen">
       {/* The institution's colour across the top, as the consoles' rail is:
@@ -524,11 +654,62 @@ function Shell({ children }: { readonly children: ReactNode }): ReactNode {
       </header>
 
       <main className="mx-auto flex max-w-[1040px] flex-col gap-6 p-8" data-testid="console-picker">
-        {/* The console has no login. Saying so is the honest state, and it is
-            the same reason every demo row carries its label (`FR-DEM-07`). */}
-        <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {t('demoSignIn', locale)}
-        </p>
+        {mode === 'staff' ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-body-sm text-ink-secondary" data-testid="picker-signed-in">
+              {format('signedInAs', locale, { name: session?.staffName ?? '' })} ·{' '}
+              {t('staffPickerNote', locale)}
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {session?.twoFactor === undefined ? null : session.twoFactor.enabled ? (
+                <span className="text-body-sm text-ink-secondary" data-testid="picker-tfa-on">
+                  {t('tfaOnNote', locale)}
+                </span>
+              ) : (
+                <a
+                  href="/?view=2fa"
+                  className="text-body-sm text-brand-600 underline"
+                  data-testid="picker-tfa-setup"
+                >
+                  {t('tfaSetupTitle', locale)}
+                </a>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                data-testid="picker-sign-out"
+                onClick={() => {
+                  void signOut().then(() => onSignedOut?.());
+                }}
+              >
+                {t('signOut', locale)}
+              </Button>
+            </div>
+            {/* A recovery code was used for a lost phone: say when few are
+                left, while an administrator can still reset it in time. */}
+            {session?.twoFactor?.enabled === true && session.twoFactor.recoveryCodesLeft <= 3 ? (
+              <p
+                role="status"
+                className="w-full rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
+                data-testid="picker-tfa-low"
+              >
+                {format('tfaRecoveryLow', locale, {
+                  count: formatNumber(session.twoFactor.recoveryCodesLeft, numeralsFor(locale)),
+                })}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          // The demo picker needs no password. Saying so is the honest state,
+          // and it is the same reason every demo row carries its label
+          // (`FR-DEM-07`). Signing in with an account is offered beside it.
+          <p className="flex flex-wrap items-center gap-3 rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
+            <span>{t('demoSignIn', locale)}</span>
+            <a href="/?login=1" className="underline" data-testid="picker-login-link">
+              {t('loginDemoLink', locale)}
+            </a>
+          </p>
+        )}
 
         {children}
       </main>

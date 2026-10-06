@@ -31,6 +31,7 @@ import {
 } from './state.js';
 
 import type { HospitalSettings } from '../types/entities.js';
+import type { QueueEventType, StaffRole } from '../types/enums.js';
 import type { BookingId, Timestamp } from '../types/ids.js';
 
 /** Stable codes the client maps to Bangla copy. */
@@ -54,7 +55,9 @@ export type QueueGuardCode =
   | 'OFFER_SETTLED'
   | 'OFFER_EXPIRED'
   | 'ALREADY_ARRIVED'
-  | 'QUOTE_OUT_OF_RANGE';
+  | 'QUOTE_OUT_OF_RANGE'
+  | 'NOT_AN_OFFLINE_ACTION'
+  | 'ROLE_NOT_ALLOWED';
 
 export type GuardResult =
   | { readonly ok: true }
@@ -78,6 +81,18 @@ export type QueueSettings = Pick<
   HospitalSettings,
   'noShowGracePatients' | 'noShowGraceMinutes' | 'lateReinsertAfter' | 'staleThresholdMinutes'
 >;
+
+/**
+ * How long after an action it may still be undone, in seconds (`GR-02`,
+ * `FR-REC-16`).
+ *
+ * Ten seconds is the window in which a receptionist realises she tapped the
+ * wrong row. Past it, the patient has been called into the chamber and undoing
+ * the record would be rewriting what happened rather than correcting a slip.
+ * Here so the server that enforces it and the console that offers it cannot
+ * come to disagree.
+ */
+export const UNDO_WINDOW_SECONDS = 10;
 
 /** Longest delay that can be declared in one go, in minutes. */
 export const MAX_DELAY_MINUTES = 480;
@@ -122,6 +137,64 @@ export function canPause(state: QueueState): GuardResult {
 export function canResume(state: QueueState): GuardResult {
   if (state.status !== 'paused') {
     return deny('NOT_PAUSED', 'This session is not paused.');
+  }
+  return ALLOWED;
+}
+
+// ---------------------------------------------------------------------------
+// What a console may replay (BACKEND.md §5)
+// ---------------------------------------------------------------------------
+
+/**
+ * The actions a counter can take with no server to ask, and the roles that may
+ * take each — the same roles its own route admits (`FR-ROLE-01`).
+ *
+ * `POST /sync/events` once folded any of the nineteen event types from any
+ * console role, and the ones missing here are missing on purpose. Each has a
+ * route of its own whose rules a replayed batch would skip:
+ *
+ *   `ACTION_UNDONE`      ten seconds, and only by whoever did it
+ *   `SLOT_*`             the offers table, and who is next on standby
+ *   `BOOKING_CANCELLED`  the refund the booking is owed
+ *   `SESSION_ENDED`      refund eligibility for everybody not seen
+ *   `WALKIN_ADDED`       the booking and its serial, issued under the lock
+ *   `SESSION_OPENED`     the server's, when a chamber is materialised
+ *
+ * None of them is something a receptionist does offline: the console says a
+ * connection is needed for a walk-in and an offer, and an action it has not
+ * sent is undone by not sending it.
+ */
+export const OFFLINE_ACTION_ROLES = {
+  DOCTOR_ARRIVED: ['receptionist', 'doctor'],
+  DELAY_DECLARED: ['receptionist', 'doctor'],
+  SESSION_PAUSED: ['receptionist'],
+  SESSION_RESUMED: ['receptionist'],
+  PATIENT_CALLED: ['receptionist', 'doctor'],
+  PATIENT_DONE: ['receptionist', 'doctor'],
+  PATIENT_LATE: ['receptionist'],
+  PATIENT_NO_SHOW: ['receptionist'],
+  PATIENT_REINSERTED: ['receptionist'],
+  PATIENT_ARRIVED: ['receptionist'],
+  PRIORITY_REORDERED: ['receptionist'],
+} as const satisfies Partial<Record<QueueEventType, readonly StaffRole[]>>;
+
+/** An action a console may queue with no network, and replay later. */
+export type OfflineAction = keyof typeof OFFLINE_ACTION_ROLES;
+
+/** Whether somebody holding `roles` may replay an event of this type. */
+export function canReplayOffline(type: QueueEventType, roles: readonly StaffRole[]): GuardResult {
+  const allowed: readonly StaffRole[] | undefined = (
+    OFFLINE_ACTION_ROLES as Partial<Record<QueueEventType, readonly StaffRole[]>>
+  )[type];
+
+  if (allowed === undefined) {
+    return deny(
+      'NOT_AN_OFFLINE_ACTION',
+      `${type} cannot be replayed from a console's queue. It has its own route.`,
+    );
+  }
+  if (!roles.some((role) => allowed.includes(role))) {
+    return deny('ROLE_NOT_ALLOWED', `${type} is not an action this role may take.`);
   }
   return ALLOWED;
 }
@@ -172,6 +245,56 @@ export function nextToCall(state: QueueState): QueueState['entries'][number] | n
   );
 }
 
+// ---------------------------------------------------------------------------
+// Ending a chamber — `BTN-B02-END` (owner's decision, 2026-10-05)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a chamber may be ended.
+ *
+ * Refused while a patient is in the chamber. An ended session takes no
+ * further action, so somebody called in and not yet finished would be left
+ * "in the chamber" for good, in a session nobody can touch: the one thing an
+ * end must not do silently. Finish that consultation and the end goes
+ * through.
+ *
+ * Patients who are only booked, waiting or late do **not** refuse it. A
+ * chamber does close with people unseen — the doctor leaves, the day is over
+ * — and that is a decision for the person at the counter, who is shown how
+ * many there are and has to say so deliberately (`MOD-B02-END`). Ending
+ * changes none of their statuses: `unseenAtEnd` only counts them.
+ *
+ * The console keeps its control off in the same case, but the rule lives
+ * here: a second counter whose screen has not caught up is answered by the
+ * server, not by what its own screen believes.
+ */
+export function canEndSession(state: QueueState): GuardResult {
+  if (state.status === 'ended' || state.status === 'cancelled') {
+    return deny('SESSION_ENDED', 'This session has already ended.');
+  }
+
+  const serving = nowServing(state);
+  if (serving !== null) {
+    return deny(
+      'PATIENT_IN_CHAMBER',
+      `Serial ${String(serving.serial)} is still in the chamber. Finish that consultation first.`,
+    );
+  }
+
+  return ALLOWED;
+}
+
+/**
+ * How many patients an end would leave unseen: booked, waiting or late.
+ *
+ * What the confirmation states (`MOD-B02-END`). The same list the queue
+ * table shows as still to come, so the number on the warning is the number
+ * of rows the person can see.
+ */
+export function unseenAtEnd(state: QueueState): number {
+  return waitingQueue(state).length;
+}
+
 export function canMarkDone(state: QueueState, bookingId: BookingId): GuardResult {
   const entry = findEntry(state, bookingId);
   if (entry === null) {
@@ -215,6 +338,11 @@ export function canMarkNoShow(
   }
   if (entry.status === 'done' || entry.status === 'cancelled' || entry.status === 'rescheduled') {
     return deny('BOOKING_SETTLED', 'That booking has already been settled.');
+  }
+  // Nobody is called during a break (`canCallNext`), so nobody can miss a
+  // call during one. The grace starts again when the chamber does.
+  if (state.status === 'paused') {
+    return deny('SESSION_NOT_RUNNING', 'This session is paused. Resume it first.');
   }
 
   const grace = graceRemaining(state, bookingId, settings, now);
@@ -291,7 +419,10 @@ export function graceRemaining(
  * chamber empty — which happens at the moment the previous patient left it.
  * So the clock starts at the latest departure: a consultation finishing, a
  * no-show being marked, or the doctor arriving if this is the first patient
- * of the session.
+ * of the session. A hold declared while the doctor is in (`hold.until`)
+ * counts too: nobody can be called before it ends, so the turn has not come
+ * before then, and the grace must not run out while the patient is being told
+ * to come later. The end of a break counts for the same reason (`resumedAt`).
  *
  * Returns null while anyone is still ahead of them. A patient holding serial
  * 40 is not late at five o'clock, and the grace period has no meaning until
@@ -307,6 +438,8 @@ function turnReachedAt(state: QueueState, bookingId: BookingId): Timestamp | nul
     if (entry.noShow !== null) departures.push(entry.noShow.markedAt);
   }
   if (state.doctorArrivedAt !== null) departures.push(state.doctorArrivedAt);
+  if (state.hold !== null) departures.push(state.hold.until);
+  if (state.resumedAt !== null) departures.push(state.resumedAt);
 
   if (departures.length === 0) return null;
   return departures.reduce((latest, candidate) => (candidate > latest ? candidate : latest));

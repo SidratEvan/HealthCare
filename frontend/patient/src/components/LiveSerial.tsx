@@ -29,6 +29,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import {
   computeEtas,
+  outstandingDelayMinutes,
   patientsAhead as aheadOf,
   readRefundPolicy,
   refundIfCancelledNow,
@@ -60,6 +61,7 @@ import {
 } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
+import { DemoBanner } from '@/components/DemoBanner';
 import { useNow } from '@/hooks/useNow';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 import { useTrackingLink } from '@/hooks/useTrackingLink';
@@ -171,6 +173,9 @@ function Ready({
   }, [etas, state, booking.id, now]);
 
   const called = mine?.status === 'in_chamber';
+  // What is still ahead, not everything declared today: a delay the doctor's
+  // arrival used up must stop colouring the card (`FR-PAT-34`).
+  const delayAhead = outstandingDelayMinutes(state, time.fromDate(now));
   const minutesUntil =
     eta === null || eta.confidence === 'unknown'
       ? null
@@ -203,9 +208,7 @@ function Ready({
   return (
     <>
       <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5">
-        <p className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-          {tp('demoBanner', locale)}
-        </p>
+        <DemoBanner />
 
         <header className="flex flex-col gap-1">
           <h1 className="font-reading text-title-lg">
@@ -225,11 +228,11 @@ function Ready({
           confidence={eta?.confidence ?? 'unknown'}
           stale={stale}
           doctorArrived={state.doctorArrivedAt !== null}
-          delayMinutes={state.delayMinutes}
+          delayMinutes={delayAhead}
           patientsAhead={ahead}
           called={called}
           labels={{
-            status: statusLine(state, called, locale),
+            status: statusLine(state, called, delayAhead, locale),
             yourSerial: tp('liveSerialTitle', locale),
             nowServing: tp('nowServing', locale),
             nobodyCalledYet: tp('nobodyCalledYet', locale),
@@ -378,16 +381,18 @@ function Ready({
  * in yet. Ordered the way `liveSerialTone` orders the surface, so the words
  * and the colour never describe different situations.
  */
-function statusLine(state: QueueState, called: boolean, locale: Locale): string {
+function statusLine(
+  state: QueueState,
+  called: boolean,
+  delayAhead: number,
+  locale: Locale,
+): string {
   const numerals = numeralsFor(locale);
   if (called) return tp('yourTurn', locale);
   if (state.status === 'ended') return tp('sessionEnded', locale);
   if (state.pausedAt !== null) return tp('sessionPaused', locale);
-  if (state.delayMinutes > 0) {
-    return tp('doctorDelayed', locale).replace(
-      '{minutes}',
-      formatMinutes(state.delayMinutes, numerals),
-    );
+  if (delayAhead > 0) {
+    return tp('doctorDelayed', locale).replace('{minutes}', formatMinutes(delayAhead, numerals));
   }
   if (state.doctorArrivedAt === null) return tp('doctorNotArrived', locale);
 

@@ -57,6 +57,8 @@ These are the tells that mark an app as quickly generated. None of them appear i
 - Illustrations of abstract 3D blobs or generic flat-people vector art.
 - Icon + heading + one-line-of-filler triplets used as filler.
 
+> **One exception to "the single brand colour", by configuration** (`PRD.md` `FR-BRD-03`, 2026-10-05). When the patient app is opened for one hospital it may wear that hospital's values for the six brand tokens (`brand-900` … `brand-border`), set as CSS variables on the document by `<ScopeTheme>` from `GET /config?scope=`. Nothing else is replaceable — alert, caution, neutrals, type and radii mean the same in every hospital's app — and a theme is used only if it passes the contrast this document requires (`shared/domain/src/brand/theme.ts`). The banned list above binds a hospital's theme as it binds ours. Components never know: they read tokens, as always.
+
 ### 0.3 The positive direction
 
 The visual language is **clinical calm with Bengali warmth**: a warm off-white ground rather than clinical white, a deep botanical green as the single institutional colour, a restrained clay-red reserved exclusively for emergency, type that carries the page, and generous negative space around a small number of large, confident elements.
@@ -428,7 +430,7 @@ Patient app is comfortable density. Console is compact density: 56 px rows, 44 p
 | State (client) | **Zustand** | Session, active profile, locale, console queue draft state |
 | Realtime | WebSocket client with auto-reconnect + heartbeat | Session channel subscription (`FR-QUE-40`) |
 | Offline store | **Dexie (IndexedDB)** | Console event queue and cached session state (`FR-OFF-01`) |
-| PWA | **Workbox** service worker | App shell precache, runtime caching, install prompt, background sync |
+| PWA | Service worker, **hand-written** (`public/sw.js` in each app), not Workbox | App shell cached network-first; the API and the socket are never cached, because a queue answered from an HTTP cache is a number with no age (`FR-OFF-03`). The patient app has had one since `feat/app-shell`; the console since plan 1.6 |
 | Forms | **React Hook Form + Zod** | Schema shared with the backend contract |
 | Charts | **Recharts**, restyled to the single-hue ramp | Admin dashboard only |
 | Dates | **date-fns** + a Bangla locale wrapper | |
@@ -466,9 +468,22 @@ Every queue action follows one shape:
 1. Append the event to the local Dexie queue with a client timestamp.
 2. Apply the reducer to local state immediately — UI updates in under 100 ms (`NFR-02`).
 3. Show the undo toast.
-4. Sync worker POSTs the event; on success, reconcile with the server's authoritative version.
+4. Sync worker POSTs the event; on success, reconcile with the server's authoritative version. The answer carries it (`SY-05`: the queue with the batch in it), and the console shows it in the same redraw that takes the answered actions out of its optimistic fold. It does not wait to be told the same thing on the socket, which is another connection and may be the slower; the answer and the broadcast are folded by one rule, newest sequence wins.
 5. On rejection (e.g. another counter already called that patient), roll the row back with an explanatory toast (`FR-QUE-53`).
-6. On network failure, leave state applied and increment the pending counter; retry with backoff.
+6. On network failure, leave state applied and increment the pending counter; retry with backoff (1 s doubling to 30 s, by a timer, while the console is connected; a reconnect sends at once). "Not now" from the server (401, 403, 429) is treated the same way: the action is fine and stays queued.
+7. On an answer that is neither — the server could not take the batch (a 4xx on the request, a 5xx) — send the batch again one entry at a time. The entry that cannot go is set aside as **stuck**: at once for a 4xx, after eight failed tries for a 5xx. A stuck entry is rolled back on screen, no longer blocks the ones behind it, and is never dropped by the system: the offline block says how many there are and offers **আবার পাঠান** and **বাদ দিন** (which confirms first, `GR-01`). Being offline is never "stuck".
+
+**One action, shown once (`SY-08`, `SY-09`; decided 2026-10-05, built only as far as step 4 above — the rest is `PLATFORM_PLAN.md` 1.9c–1.9e, after the first pilot).** The server answers a write by two roads, the response to the request and a broadcast on the socket, and a console has to be right whichever comes first and when either never comes. Three rules, the same on the reception queue, the ward board and the ER console:
+
+1. The console shows the newest state it has been told, whichever road told it. Newest is decided by what the state itself carries — the sequence, for a queue; the version, for a bed or an emergency case — never by which arrived last.
+2. Its own action is drawn on top of that state from the tap until the first statement from the server that names the action (by `clientEventId`) or refuses it, and never after. Before the first statement the action is on screen once, as the console's own drawing; after it, once, as part of the server's state.
+3. Taking the drawing off and showing the state that contains the action happen in one redraw.
+
+So the five orders are one case: the tap before anything; the answer before the broadcast; the broadcast before the answer; the socket silent; the answer slow. Nothing here is a timer, nothing is delayed or suppressed, and the answer may take as long as it takes.
+
+**Where the outboxes are kept.** IndexedDB, through Dexie, in a database named for the signed-in person (`healthcare-console-<staff id>`): the reception queue's, the ward board's and the ER console's outboxes are three tables in it. A reload, a crashed tab or a power cut loses nothing queued; what was waiting is on screen again when the console opens and goes by itself. It is per person because a queued action is sent later under whatever token the console then holds, and an event belongs to whoever took the action (`FR-QUE-04`): one person's unsent work is neither shown to nor sent by the next person at the same PC, and waits for its owner to sign in there again. Rows are deleted when the server takes or refuses them. Until then they hold what the action held — for a bed admit the patient's name, phone, age and sex, for an ER walk-in registered offline that person's age, sex and phone — unencrypted in the browser's storage on that PC. If the browser refuses IndexedDB the outbox falls back to memory and the offline block says that a reload will lose what is unsent.
+
+**Opening with no network (`FR-OFF-01`).** The console's service worker keeps its shell, and the page tells the worker what it loaded so that even the first visit is kept; `<html data-offline-ready="true">` says when a reload no longer needs the network. What the queue screen then shows is the last state the server *told* this device, kept in the same per-person database (`snapshots`, one row per chamber, dropped after 24 hours — `SY-06`) and drawn with the server's own timestamp, so the freshness line gives its real age. It holds serials, statuses, times and ids, **not names**: patient names come from a separate, audited read and are not kept on the device, so after an offline reload the table shows serials without names until the connection returns. Three limits, all deliberate: it works in the tab that was signed in (the sign-in is in `sessionStorage`; a browser restarted after a power cut is signed out, and signing in needs the server); the ward board and the ER console open their shell and keep their outboxes but do not keep their last board; and none of it can be shown under `next dev`, whose client waits for its dev server before starting the app — `e2e/built/` runs against `next build` for that reason.
 
 The queue reducer lives in `shared/domain` and is **the same code** the server uses to derive state, so client and server can never disagree about what an event means.
 
@@ -501,7 +516,7 @@ Font subsetting is mandatory: full Bengali Anek is large; subset to the ranges a
 - `A11Y-02` Visible focus ring on every interactive element; never `outline: none` without a replacement.
 - `A11Y-03` Colour never carries meaning alone — every state has a text label or icon.
 - `A11Y-04` Live regions: serial changes announce via `aria-live="polite"`; the called-takeover uses `aria-live="assertive"`.
-- `A11Y-05` Full keyboard operation of the console, including the shortcut set in `APP_FLOW.md` D4.
+- `A11Y-05` Full keyboard operation of the console, including the shortcut set in `APP_FLOW.md` D4. A shortcut is answered by the screen as it stands: a screen listens for keys through `useWindowKeydown` (`@platform/ui`), never through an effect of its own that swaps the listener after a redraw.
 - `A11Y-06` Supports 200 % OS text scaling without clipping — test every screen at that size.
 - `A11Y-07` Minimum 44 px targets, 8 px minimum gap between adjacent targets.
 

@@ -35,6 +35,7 @@ import {
 
 import * as payment from '../controllers/payment.controller.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireBookingScope } from '../middleware/guestAuth.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { requireHospitalScope, requireRole } from '../middleware/requireRole.js';
 import { validate } from '../middleware/validate.js';
@@ -56,12 +57,16 @@ paymentRoutes.post(
   payment.intent,
 );
 
-// What was charged against one booking. The guest's own link reaches this;
-// `requireBookingScope` is unnecessary because the id *is* the path, and a
-// token scoped elsewhere is refused by the guard below.
+// What was charged against one booking: its owner, or staff at its hospital —
+// the same fence as `GET /bookings/:id`. `requireBookingScope` holds a tracking
+// link to the booking it names; the controller's `assertBookingScope` checks
+// an account holder's ownership and a staff member's hospital. Until the
+// security review of 2026-09-30 neither was here, and anybody signed in read
+// any booking's payments.
 paymentRoutes.get(
   '/bookings/:id/payments',
   requireAuth,
+  requireBookingScope('id'),
   validate({ params: idParams }),
   payment.forBooking,
 );

@@ -34,12 +34,14 @@ import {
   queueCounts,
   suggestedQuote,
   time,
+  unseenAtEnd,
   waitingQueue,
   type QueueEntry,
 } from '@platform/domain';
 import {
   format,
   formatClock,
+  formatDateTime,
   formatNumber,
   formatSerial,
   t,
@@ -47,21 +49,42 @@ import {
   numeralsFor,
   localName,
 } from '@platform/i18n';
-import { Button, Card, FreshnessLine, ToastProvider, useToast, useLocale } from '@platform/ui';
+import {
+  Button,
+  Card,
+  FreshnessLine,
+  Sheet,
+  SheetActions,
+  ToastProvider,
+  useToast,
+  useLocale,
+  useWindowKeydown,
+} from '@platform/ui';
 
 import { CheckInSheet } from '@/components/CheckInSheet';
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { ConsoleRail } from '@/components/ConsoleRail';
+import { DemoBanner } from '@/components/DemoBanner';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
 import { StandbyCard } from '@/components/StandbyCard';
-import { useSessionQueue } from '@/hooks/useSessionQueue';
+import { WalkInSheet } from '@/components/WalkInSheet';
+import { useSessionQueue, type QueueAction, type UndoOutcome } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 import { fetchPatientNames } from '@/lib/roster';
 
 import type { ReactNode } from 'react';
 
 const API_BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
+
+/** What the counter is told after an undo (`GR-02`). */
+const UNDO_COPY = {
+  undone: 'actionUndone',
+  nothing: 'undoNothing',
+  expired: 'undoExpired',
+  offline: 'undoOffline',
+  refused: 'undoRefused',
+} as const satisfies Record<UndoOutcome, string>;
 
 /**
  * The demo principal (CLAUDE.md §4.1).
@@ -96,6 +119,8 @@ function ConsoleBody(): ReactNode {
   const [now, setNow] = useState(() => new Date());
   /** The row `MOD-B02-CHECKIN` is open for (`FR-REC-18`). */
   const [checkingIn, setCheckingIn] = useState<QueueEntry | null>(null);
+  /** `MOD-B02-WALKIN` (pilot step 23). */
+  const [walkingIn, setWalkingIn] = useState(false);
 
   // The freshness line has to age on screen without anything else happening —
   // that is the whole point of it (FR-OFF-03). One tick a second is enough for
@@ -154,26 +179,68 @@ function ConsoleBody(): ReactNode {
   }, [sessionId, nameless]);
 
   /**
+   * Undo (`GR-02`, `FR-REC-16`): the toast's button with the keys of the tap
+   * it belongs to, or `Ctrl+Z` for whatever this console did last.
+   *
+   * It used to send `ACTION_UNDONE` through the sync batch with a *booking*
+   * id where an event id belongs — nothing was undone and a junk event stayed
+   * in the log. The hook now knows which event each action became.
+   */
+  const undo = useCallback(
+    async (clientEventIds?: readonly string[]) => {
+      const outcome =
+        clientEventIds === undefined ? await queue.undoLast() : await queue.undo(clientEventIds);
+      show({
+        title: t(UNDO_COPY[outcome], locale),
+        tone: outcome === 'undone' ? 'positive' : 'caution',
+      });
+    },
+    [queue, show, locale],
+  );
+
+  /**
    * `BTN-B02-NEXT`.
    *
    * One control, two facts: whoever is in the chamber is finished, and the next
    * patient is called. B1.3 step 1 — the label says so when both will happen.
+   *
+   * Both are queued together and sent in one flush. Sending the first and
+   * waiting for the server before queueing the second left the "called" half
+   * a round trip behind the tap on a slow connection (`NFR-02`).
    */
   const callNext = useCallback(async () => {
     if (state === null) return;
 
-    const inChamber = nowServing(state);
-    if (inChamber !== null) {
-      await queue.act('PATIENT_DONE', {
-        bookingId: inChamber.bookingId,
-        consultSeconds: elapsedSeconds(inChamber, now),
-      });
+    // A paused chamber refuses the call (`canCallNext`). Say so here, in
+    // words, rather than sending it to be rolled back as a "conflict" — which
+    // is what a receptionist pressing N during a prayer break used to get.
+    if (state.status === 'paused') {
+      show({ title: t('pausedResumeFirst', locale), tone: 'caution' });
+      return;
+    }
+    // And one that has ended takes nothing at all (`BTN-B02-END`).
+    if (state.status === 'ended') {
+      show({ title: t('chamberHasEnded', locale), tone: 'caution' });
+      return;
     }
 
+    const inChamber = nowServing(state);
     const next = waitingQueue(state).find((entry) => entry.status !== 'late');
+    const actions: QueueAction[] = [];
+    if (inChamber !== null) {
+      actions.push({
+        type: 'PATIENT_DONE',
+        payload: { bookingId: inChamber.bookingId, consultSeconds: elapsedSeconds(inChamber, now) },
+      });
+    }
+    if (next !== undefined) {
+      actions.push({
+        type: 'PATIENT_CALLED',
+        payload: { bookingId: next.bookingId, serial: next.serial },
+      });
+    }
+    const taken = actions.length > 0 ? await queue.actMany(actions) : [];
     if (next === undefined) return;
-
-    await queue.act('PATIENT_CALLED', { bookingId: next.bookingId, serial: next.serial });
 
     show({
       title: format('calledPatient', locale, { serial: formatSerial(next.serial, numerals) }),
@@ -181,33 +248,89 @@ function ConsoleBody(): ReactNode {
       // GR-02: undo appends a compensating event, never deletes history.
       action: {
         label: t('undo', locale),
+        // The whole tap: the call, and the finish that went with it.
         onAction: () => {
-          void queue.act('ACTION_UNDONE', { undoneEventId: next.bookingId });
+          void undo(taken);
         },
       },
     });
-  }, [state, queue, now, show, locale]);
+  }, [state, queue, now, show, locale, undo]);
+
+  /**
+   * `BTN-B02-PAUSE` — one control, both directions (`FR-REC-05`, B1.2:
+   * "resume with the same button"). A chamber that could be paused from here
+   * and resumed only by calling the API by hand was frozen by a single tap.
+   */
+  const sessionStatus = state?.status ?? null;
+  const togglePause = useCallback(() => {
+    if (sessionStatus === 'paused') void queue.act('SESSION_RESUMED', {});
+    else if (sessionStatus === 'running') void queue.act('SESSION_PAUSED', { reason: null });
+  }, [sessionStatus, queue]);
+
+  /**
+   * `BTN-B02-END`, `MOD-B02-END` — ending the chamber on screen.
+   *
+   * Until this existed nothing in the product ended a chamber: it stayed
+   * "running" for ever, and the next morning it was the first one the picker
+   * offered. What it must not do is strand anybody silently, so it is off
+   * while a patient is in the chamber (and the server refuses that too), and
+   * when patients are left unseen the confirmation says how many and waits for
+   * a deliberate tick. Nobody's status is changed by it.
+   */
+  const [ending, setEnding] = useState(false);
+  const [endAcknowledged, setEndAcknowledged] = useState(false);
+  const [endBusy, setEndBusy] = useState(false);
+  const confirmEnd = useCallback(async () => {
+    setEndBusy(true);
+    const outcome = await queue.end();
+    setEndBusy(false);
+    setEnding(false);
+    // Ended: the screen says so itself, from the server's answer.
+    if (outcome === 'ended') return;
+    show({
+      title: t(
+        outcome === 'in-chamber'
+          ? 'endRefusedInChamber'
+          : outcome === 'offline'
+            ? 'endNeedsConnection'
+            : 'endFailed',
+        locale,
+      ),
+      tone: 'caution',
+    });
+  }, [queue, show, locale]);
 
   // A11Y-05 / B1.2: Space or N calls the next patient, A marks arrival,
-  // P pauses. The console is operated at speed by people who are not looking
-  // at the mouse.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.target instanceof HTMLInputElement) return;
-      if (event.key === 'n' || event.key === 'N' || event.code === 'Space') {
-        event.preventDefault();
-        void callNext();
-      }
-      if (event.key === 'a' || event.key === 'A') {
-        void queue.act('DOCTOR_ARRIVED', { arrivedAt: new Date().toISOString(), minutesLate: 0 });
-      }
-    };
-
-    globalThis.addEventListener?.('keydown', onKey);
-    return () => {
-      globalThis.removeEventListener?.('keydown', onKey);
-    };
-  }, [callNext, queue]);
+  // P pauses and resumes. The console is operated at speed by people who are
+  // not looking at the mouse — so a key is answered by the queue as it is on
+  // the screen, never by the one before the last redraw (`useWindowKeydown`).
+  useWindowKeydown((event) => {
+    if (event.target instanceof HTMLInputElement) return;
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
+      event.preventDefault();
+      void undo();
+      return;
+    }
+    // Every other key here is a bare letter. With a modifier held it is the
+    // browser's — Ctrl+P prints, Ctrl+W closes the tab — not the counter's.
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key === 'p' || event.key === 'P') {
+      event.preventDefault();
+      togglePause();
+    }
+    if (event.key === 'n' || event.key === 'N' || event.code === 'Space') {
+      event.preventDefault();
+      void callNext();
+    }
+    // B1.2: W opens the walk-in modal — online only, like the button.
+    if ((event.key === 'w' || event.key === 'W') && queue.connected && sessionStatus !== 'ended') {
+      event.preventDefault();
+      setWalkingIn(true);
+    }
+    if ((event.key === 'a' || event.key === 'A') && sessionStatus !== 'ended') {
+      void queue.act('DOCTOR_ARRIVED', { arrivedAt: new Date().toISOString(), minutesLate: 0 });
+    }
+  });
 
   if (sessionId === null) {
     return <Notice>{t('noSession', locale)}</Notice>;
@@ -220,10 +343,27 @@ function ConsoleBody(): ReactNode {
   }
 
   if (state === null) {
-    return <Notice>{t('loadFailed', locale)}</Notice>;
+    // Offline with nothing kept for this chamber is its own sentence: it is
+    // not a failure to retry, and it resolves itself (`FR-OFF-05`).
+    return (
+      <Notice>
+        <span data-testid="queue-not-kept">
+          {queue.connected ? t('loadFailed', locale) : t('queueNotKeptOffline', locale)}
+        </span>
+      </Notice>
+    );
   }
 
   const pendingBookingIds = new Set<string>();
+  const paused = state.status === 'paused';
+  const ended = state.status === 'ended';
+  const unseen = unseenAtEnd(state);
+  /** An ended chamber takes no action; a tap on a row says so instead of trying. */
+  const afterEnd = (): boolean => {
+    if (!ended) return false;
+    show({ title: t('chamberHasEnded', locale), tone: 'caution' });
+    return true;
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -233,7 +373,14 @@ function ConsoleBody(): ReactNode {
           connected={queue.connected}
           pendingCount={queue.pendingCount}
           lastServerTs={queue.lastServerTs}
-          stuckCount={0}
+          stuckCount={queue.stuckCount}
+          onRetryStuck={() => {
+            void queue.retryStuck();
+          }}
+          onDiscardStuck={() => {
+            void queue.discardStuck();
+          }}
+          durable={queue.durable}
           locale={locale}
           now={now}
         />
@@ -241,9 +388,7 @@ function ConsoleBody(): ReactNode {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
-        <p className="bg-warn-100 px-6 py-2 text-caption text-warn-700">
-          {t('demoBanner', locale)}
-        </p>
+        <DemoBanner />
 
         {/* --- session bar (B1.2) ------------------------------------------ */}
         {/* Whose chamber, then when: the doctor's name is what a receptionist
@@ -274,6 +419,7 @@ function ConsoleBody(): ReactNode {
           <Button
             variant="secondary"
             onClick={() => {
+              if (afterEnd()) return;
               void queue.act('DOCTOR_ARRIVED', {
                 arrivedAt: new Date().toISOString(),
                 minutesLate: 0,
@@ -283,28 +429,208 @@ function ConsoleBody(): ReactNode {
             {t('doctorArrived', locale)}
           </Button>
 
-          <Button
-            variant="secondary"
-            onClick={() => {
-              void queue.act('SESSION_PAUSED', { reason: null });
-            }}
-          >
-            {t('pause', locale)}
-          </Button>
+          {paused ? (
+            <Button data-testid="resume-session" onClick={togglePause}>
+              {t('resume', locale)}
+            </Button>
+          ) : state.status === 'running' ? (
+            <Button variant="secondary" data-testid="pause-session" onClick={togglePause}>
+              {t('pause', locale)}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              data-testid="pause-session"
+              disabled
+              disabledReason={t('pauseNeedsRunning', locale)}
+            >
+              {t('pause', locale)}
+            </Button>
+          )}
 
-          {/* The single most-used control in the system (B1.3). */}
-          <Button
-            size="lg"
-            data-testid="call-next"
-            onClick={() => {
-              void callNext();
-            }}
-          >
-            {serving === null ? t('callNext', locale) : t('finishAndCallNext', locale)}
-          </Button>
+          {/* BTN-B02-WALKIN (pilot step 23). A serial needs the server, so
+              offline it says so instead of queueing a number two counters
+              could both hand out (lib/registration.ts). */}
+          {queue.connected && !ended ? (
+            <Button
+              variant="secondary"
+              data-testid="add-walkin"
+              onClick={() => {
+                setWalkingIn(true);
+              }}
+            >
+              {t('addWalkin', locale)}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              data-testid="add-walkin"
+              disabled
+              disabledReason={t(ended ? 'chamberHasEnded' : 'walkInOffline', locale)}
+            >
+              {t('addWalkin', locale)}
+            </Button>
+          )}
+
+          {/* BTN-B02-END. Off, with its reason, while it would leave somebody
+              in the chamber, and while the server cannot be told. Gone once
+              the chamber has ended: there is nothing left to end. */}
+          {ended ? null : serving !== null || !queue.connected ? (
+            <Button
+              variant="secondary"
+              data-testid="end-chamber"
+              disabled
+              disabledReason={t(
+                serving !== null ? 'endPatientInChamber' : 'endNeedsConnection',
+                locale,
+              )}
+            >
+              {t('endChamber', locale)}
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              data-testid="end-chamber"
+              onClick={() => {
+                setEndAcknowledged(false);
+                setEnding(true);
+              }}
+            >
+              {t('endChamber', locale)}
+            </Button>
+          )}
+
+          {/* The single most-used control in the system (B1.3). Off during a
+              break, and it says why (FRONTEND.md §5.1). */}
+          {paused || ended ? (
+            <Button
+              size="lg"
+              data-testid="call-next"
+              disabled
+              disabledReason={t(ended ? 'chamberHasEnded' : 'pausedResumeFirst', locale)}
+            >
+              {serving === null ? t('callNext', locale) : t('finishAndCallNext', locale)}
+            </Button>
+          ) : (
+            <Button
+              size="lg"
+              data-testid="call-next"
+              onClick={() => {
+                void callNext();
+              }}
+            >
+              {serving === null ? t('callNext', locale) : t('finishAndCallNext', locale)}
+            </Button>
+          )}
 
           <ConsoleLanguageSwitch />
         </header>
+
+        {/* A break is a state of the whole chamber, so it is said across the
+            whole screen and stays until it ends (FR-REC-05). */}
+        {paused && state.pausedAt !== null ? (
+          <p
+            role="status"
+            data-testid="paused-banner"
+            className="border-b border-line bg-warn-100 px-6 py-3 text-body-md text-warn-700"
+          >
+            {format('sessionPausedSince', locale, {
+              time: formatClock(state.pausedAt, numerals),
+            })}
+          </p>
+        ) : null}
+
+        {/* An ended chamber says so across the screen, and offers the way back
+            to the chambers that can still be worked (`S-B-01`). */}
+        {ended ? (
+          <p
+            role="status"
+            data-testid="ended-banner"
+            className="border-b border-line bg-warn-100 px-6 py-3 text-body-md text-warn-700"
+          >
+            {t('chamberEnded', locale)}{' '}
+            <a href="/" className="font-bold underline" data-testid="back-to-chambers">
+              {t('backToChambers', locale)}
+            </a>
+          </p>
+        ) : null}
+
+        {/* MOD-B02-END. Not dismissed by a stray tap on the backdrop: the
+            answer matters (FRONTEND.md §5.6). */}
+        <Sheet
+          open={ending}
+          onOpenChange={(open) => {
+            if (!open && !endBusy) setEnding(false);
+          }}
+          variant="modal"
+          dismissible={false}
+          title={t('endChamberTitle', locale)}
+          // Which chamber: the doctor, and the day it belongs to.
+          description={`${
+            chamber === null
+              ? t('navQueue', locale)
+              : localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)
+          } · ${formatDateTime(state.plan.plannedStart, numerals)}`}
+        >
+          <div className="flex flex-col gap-4" data-testid="end-chamber-sheet">
+            <p className="text-body-md" data-testid="end-unseen" data-unseen={String(unseen)}>
+              {unseen > 0
+                ? format('endChamberUnseen', locale, { count: formatNumber(unseen, numerals) })
+                : t('endChamberNobodyLeft', locale)}{' '}
+              {t('endChamberConsequence', locale)}
+            </p>
+
+            {/* Patients left unseen: a deliberate tick, not a second tap in
+                the same place (owner's decision, 2026-10-05). */}
+            {unseen > 0 ? (
+              <label className="flex min-h-touch items-center gap-3 text-body-md">
+                <input
+                  type="checkbox"
+                  checked={endAcknowledged}
+                  data-testid="end-acknowledge"
+                  onChange={(event) => {
+                    setEndAcknowledged(event.target.checked);
+                  }}
+                />
+                {t('endChamberAcknowledge', locale)}
+              </label>
+            ) : null}
+
+            {/* GR-01: the safe option on the left. */}
+            <SheetActions destructive>
+              {unseen > 0 && !endAcknowledged ? (
+                <Button
+                  variant="danger-quiet"
+                  data-testid="end-confirm"
+                  disabled
+                  disabledReason={t('endChamberAcknowledge', locale)}
+                >
+                  {t('endChamberConfirm', locale)}
+                </Button>
+              ) : (
+                <Button
+                  variant="danger-quiet"
+                  data-testid="end-confirm"
+                  loading={endBusy}
+                  onClick={() => {
+                    void confirmEnd();
+                  }}
+                >
+                  {t('endChamberConfirm', locale)}
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                data-testid="end-keep"
+                onClick={() => {
+                  setEnding(false);
+                }}
+              >
+                {t('endChamberKeep', locale)}
+              </Button>
+            </SheetActions>
+          </div>
+        </Sheet>
 
         {/* --- queue table (B1.4) ------------------------------------------ */}
         <main className="flex min-h-0 flex-1 gap-5 p-5">
@@ -315,12 +641,14 @@ function ConsoleBody(): ReactNode {
               pendingBookingIds={pendingBookingIds}
               patientNames={names}
               onDone={(entry) => {
+                if (afterEnd()) return;
                 void queue.act('PATIENT_DONE', {
                   bookingId: entry.bookingId,
                   consultSeconds: elapsedSeconds(entry, now),
                 });
               }}
               onLate={(entry) => {
+                if (afterEnd()) return;
                 void queue.act('PATIENT_LATE', {
                   bookingId: entry.bookingId,
                   expectedMinutes: 20,
@@ -328,19 +656,36 @@ function ConsoleBody(): ReactNode {
                 });
               }}
               onNoShow={(entry) => {
+                if (afterEnd()) return;
                 void queue.act('PATIENT_NO_SHOW', {
                   bookingId: entry.bookingId,
                   graceUsedMinutes: 15,
                 });
               }}
               onReinstate={(entry) => {
+                if (afterEnd()) return;
                 void queue.act('PATIENT_REINSERTED', {
                   bookingId: entry.bookingId,
                   newPosition: 0,
                 });
               }}
               onCheckIn={(entry) => {
+                if (afterEnd()) return;
                 setCheckingIn(entry);
+              }}
+            />
+
+            <WalkInSheet
+              sessionId={sessionId}
+              open={walkingIn}
+              online={queue.connected}
+              waiting={waiting.length}
+              onAdded={(message) => {
+                setWalkingIn(false);
+                show({ title: message, tone: 'positive' });
+              }}
+              onClose={() => {
+                setWalkingIn(false);
               }}
             />
 
@@ -427,10 +772,14 @@ function ConsoleBody(): ReactNode {
             <Card>
               <p className="text-caption text-ink-muted">{t('countersToday', locale)}</p>
               <dl className="mt-2 grid grid-cols-2 gap-2 text-body-sm">
-                <Counter label={t('countSeen', locale)} value={counts?.done ?? 0} />
-                <Counter label={t('countWaiting', locale)} value={waiting.length} />
-                <Counter label={t('countLate', locale)} value={counts?.late ?? 0} />
-                <Counter label={t('countNoShow', locale)} value={counts?.noShow ?? 0} />
+                <Counter name="seen" label={t('countSeen', locale)} value={counts?.done ?? 0} />
+                <Counter name="waiting" label={t('countWaiting', locale)} value={waiting.length} />
+                <Counter name="late" label={t('countLate', locale)} value={counts?.late ?? 0} />
+                <Counter
+                  name="no-show"
+                  label={t('countNoShow', locale)}
+                  value={counts?.noShow ?? 0}
+                />
               </dl>
             </Card>
 
@@ -452,13 +801,24 @@ function ConsoleBody(): ReactNode {
   );
 }
 
-function Counter({ label, value }: { readonly label: string; readonly value: number }): ReactNode {
+function Counter({
+  name,
+  label,
+  value,
+}: {
+  /** What a test reads it by: the figures a counter checks its paper list against. */
+  readonly name: string;
+  readonly label: string;
+  readonly value: number;
+}): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
   return (
     <div>
       <dt className="text-caption text-ink-muted">{label}</dt>
-      <dd className="text-title-sm tabular-nums">{formatNumber(value, numerals)}</dd>
+      <dd className="text-title-sm tabular-nums" data-testid={`count-${name}`}>
+        {formatNumber(value, numerals)}
+      </dd>
     </div>
   );
 }

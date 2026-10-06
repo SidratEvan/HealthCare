@@ -34,13 +34,17 @@ import { cx } from './cx.js';
 import type { InputHTMLAttributes, ReactNode } from 'react';
 
 /** What the field holds, which decides the keyboard it opens. */
-export type InputKind = 'text' | 'phone' | 'number' | 'search';
+export type InputKind = 'text' | 'phone' | 'number' | 'search' | 'email' | 'password';
 
 const INPUT_MODE: Record<InputKind, InputHTMLAttributes<HTMLInputElement>['inputMode']> = {
   text: 'text',
   phone: 'tel',
   number: 'numeric',
   search: 'search',
+  // Staff sign-in (`S-B-00`, pilot step 21): an email keyboard has the @,
+  // and a password field is masked and never autocorrected.
+  email: 'email',
+  password: 'text',
 };
 
 type NativeInputProps = Omit<

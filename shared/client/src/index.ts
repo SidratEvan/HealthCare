@@ -20,7 +20,28 @@ export {
   type PushTransport,
 } from './offline/queue.js';
 
-export { createDexieStore, openConsoleDatabase } from './offline/store.dexie.js';
+export {
+  createDexieOutboxStore,
+  createDexieStore,
+  openConsoleDatabase,
+  type ConsoleDatabase,
+} from './offline/store.dexie.js';
+
+export {
+  MAX_KEPT_HOURS,
+  createMemorySnapshotStore,
+  isUsable,
+  readKept,
+  type KeptSnapshot,
+  type SnapshotStore,
+} from './offline/snapshots.js';
+
+export {
+  consoleDatabaseName,
+  openConsoleStores,
+  ownerOfToken,
+  type ConsoleStores,
+} from './offline/persistent.js';
 
 export {
   BedOutbox,
@@ -63,16 +84,21 @@ export {
   ApiClient,
   ApiError,
   NetworkError,
+  createQueueApi,
   createSyncApi,
   type ApiClientOptions,
+  type QueueWriteResponse,
   type SyncPullResponse,
   type SyncPushResponse,
 } from './api/client.js';
 
 export {
   DEFAULT_STALE_AFTER_MS,
+  foldUpdate,
   isStale,
   openSessionChannel,
+  startingFrom,
+  type QueueUpdatedMessage,
   type SessionChannelOptions,
   type SessionSnapshot,
 } from './realtime/session.js';

@@ -20,7 +20,14 @@
 import { DEMO_FACILITIES } from './data/hospitals.js';
 import { composeName, rosterFor } from './data/people.js';
 import { isDeclaredDistrict, specialty } from './data/reference.js';
-import { DEMO_MARKER, DISABLED_PASSWORD, demoEmail, labelBn, labelEn } from './lib/demo.js';
+import {
+  DEMO_MARKER,
+  demoEmail,
+  demoHospitalCode,
+  demoPasswordHash,
+  labelBn,
+  labelEn,
+} from './lib/demo.js';
 import { insertRows } from './lib/insert.js';
 import { facilityIds } from './lib/lookup.js';
 
@@ -72,6 +79,29 @@ const CAPABILITY_AGE_MINUTES: Readonly<Record<string, number>> = {
  * জানাবে" instead of a percentage — which is the honest-degradation case
  * (`PRD.md` §3.2) and the one a demo should be able to show.
  */
+/**
+ * One facility with colours of its own (`FR-BRD-03`, migration 0036).
+ *
+ * Padma, so that the demonstration can show what a hospital-branded patient
+ * app is: the same app, opened for one hospital (`?scope=PADMA`), in that
+ * hospital's name and colours. A navy ramp that passes the contrast rules in
+ * `shared/domain/src/brand/theme.ts`; `brand.test` and the API's own test
+ * hold it to them. Every other facility has none and appears in the
+ * platform's green, which is the ordinary state.
+ */
+const BRANDS: Readonly<Record<string, { colors: Record<string, string> }>> = {
+  'padma-specialised': {
+    colors: {
+      'brand-900': '#0b2239',
+      'brand-700': '#123a5e',
+      'brand-600': '#17507f',
+      'brand-300': '#8fc1ea',
+      'brand-100': '#e7eff6',
+      'brand-border': '#c5d6e6',
+    },
+  },
+};
+
 const REFUND_POLICIES: Readonly<
   Record<
     string,
@@ -156,6 +186,7 @@ export const seed01Hospitals: SeedModule = {
     // before the facility does, and more honestly: a seeded facility was not
     // created by a person. DB-P3 asks for `created_by` on rows a human made.
     const hospitalRows = DEMO_FACILITIES.map((facility) => [
+      demoHospitalCode(facility.slug),
       labelBn(facility.nameBn),
       labelEn(facility.nameEn),
       facility.kind,
@@ -175,6 +206,7 @@ export const seed01Hospitals: SeedModule = {
       'hospitals',
       {
         columns: [
+          'code',
           'name_bn',
           'name_en',
           'kind',
@@ -188,6 +220,7 @@ export const seed01Hospitals: SeedModule = {
           'phone',
           'emergency_phone',
           'is_live',
+          'lifecycle',
           'onboarded_at',
         ],
         // Every demo facility is published and onboarded: an unverified
@@ -202,7 +235,12 @@ export const seed01Hospitals: SeedModule = {
         // answers nothing. `seed_04_history` reaches back twenty-one days and
         // runs its chambers closer to plan after this date, so the chart has a
         // before and an after and the marker sits between them.
-        expressions: { is_live: 'true', onboarded_at: `now() - interval '12 days'` },
+        // Live, so the workspace is `active`: 0037 ties the two (`FR-ONB-02`).
+        expressions: {
+          is_live: 'true',
+          lifecycle: `'active'`,
+          onboarded_at: `now() - interval '12 days'`,
+        },
       },
       hospitalRows,
       '',
@@ -212,10 +250,11 @@ export const seed01Hospitals: SeedModule = {
 
     // --- staff_users and staff_roles ---------------------------------------
     //
-    // No authentication is built in this version (CLAUDE.md §4.1), so
-    // `password_hash` gets a value that is deliberately not a hash and
-    // `totp_secret` stays null. Nothing can authenticate as these people;
-    // under `DEMO_MODE=true` the console selects a hospital and a role.
+    // Every demo account signs in with the one documented demo password at
+    // `S-B-00` (pilot step 21, `DEMO_STAFF_PASSWORD`); under `DEMO_MODE=true`
+    // the picker still opens any console without it. `totp_secret` stays
+    // null: 2FA is step 28.
+    const passwordHash = await demoPasswordHash();
     const staffRows: unknown[][] = [];
     const staffKeys: { slug: string; role: string; counter: number }[] = [];
 
@@ -236,7 +275,7 @@ export const seed01Hospitals: SeedModule = {
             demoEmail(local, facility.slug),
             `${prefix}-${code}-${String(n).padStart(2, '0')}`,
             labelBn(composeName(names, names.chance(0.55) ? 'female' : 'male')),
-            DISABLED_PASSWORD,
+            passwordHash,
           ]);
           staffKeys.push({ slug: facility.slug, role, counter: n });
         }
@@ -290,13 +329,15 @@ export const seed01Hospitals: SeedModule = {
       ]);
     }
 
-    // --- the national account (step 20) ------------------------------------
+    // --- the national accounts (step 20; V3.1) -----------------------------
     //
-    // One government viewer, belonging to no facility (`FR-ROLE-01`, R11;
-    // migration 0024). It is what `S-B-13` is opened as. No `platform_admin`:
-    // `S-B-12` is not built, and an account for a screen that does not exist
-    // is a door to nothing. Its own name stream, so adding it moved no
-    // hospital's staff names.
+    // Two, each belonging to no facility (`FR-ROLE-01`, R10 and R11;
+    // migration 0024). The government viewer is what `S-B-13` is opened as.
+    // The platform administrator answers hospitals' requests to go live
+    // (`FR-ONB-04`, `S-B-12`) and is the actor on those audit rows, so it has
+    // to be a real row. Their own name stream, so adding them moved no
+    // hospital's staff names; the viewer is first, so adding the
+    // administrator did not move the viewer's.
     const nationalNames = rng.stream('national-staff-names');
     const nationalIds = await insertRows<{ id: string }>(
       client,
@@ -310,13 +351,26 @@ export const seed01Hospitals: SeedModule = {
           demoEmail('gov', 'national'),
           'NAT-GOV-01',
           labelBn(composeName(nationalNames, nationalNames.chance(0.5) ? 'female' : 'male')),
-          DISABLED_PASSWORD,
+          passwordHash,
+        ],
+        [
+          null,
+          demoEmail('platform', 'national'),
+          'NAT-PLT-01',
+          labelBn(composeName(nationalNames, nationalNames.chance(0.5) ? 'female' : 'male')),
+          passwordHash,
         ],
       ],
     );
     const nationalId = nationalIds[0]?.id;
     if (nationalId === undefined) throw new Error('staff_users returned no id for gov_viewer.');
     roleRows.push([nationalId, null, 'gov_viewer', JSON.stringify(DEMO_MARKER)]);
+
+    const platformId = nationalIds[1]?.id;
+    if (platformId === undefined) {
+      throw new Error('staff_users returned no id for platform_admin.');
+    }
+    roleRows.push([platformId, null, 'platform_admin', JSON.stringify(DEMO_MARKER)]);
 
     await insertRows(
       client,
@@ -342,6 +396,7 @@ export const seed01Hospitals: SeedModule = {
         // `{}` where there is none: the column's CHECK requires an object,
         // and an empty one is what `readRefundPolicy` reads as "no policy".
         JSON.stringify(REFUND_POLICIES[facility.slug] ?? {}),
+        BRANDS[facility.slug] === undefined ? null : JSON.stringify(BRANDS[facility.slug]),
         admins.get(facility.slug) ?? null,
       ];
     });
@@ -349,7 +404,7 @@ export const seed01Hospitals: SeedModule = {
     await insertRows(
       client,
       'hospital_settings',
-      { columns: ['hospital_id', 'numeral_style', 'refund_policy', 'created_by'] },
+      { columns: ['hospital_id', 'numeral_style', 'refund_policy', 'brand', 'created_by'] },
       settingsRows,
       '',
     );

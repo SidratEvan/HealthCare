@@ -18,7 +18,7 @@ import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   tallyByKind,
@@ -30,6 +30,8 @@ import {
 
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
+import { env } from '../env.js';
+import { counter } from '../middleware/rateLimit.js';
 import { resetEmitter, type RecordingEmitter } from '../realtime/emit.js';
 import { ROOMS } from '../realtime/rooms.js';
 
@@ -40,6 +42,8 @@ import {
   otherWardToken,
   type BedFixture,
 } from './support/bedFixture.js';
+import { proveGuestPhone } from './support/guestPhone.js';
+import { rowsHoldingALink } from './support/storedLinks.js';
 import { bearer, patientToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -533,6 +537,9 @@ describe('a bed request, from the phone to the bed (FR-PAT-52, FR-BED-07)', () =
       SELECT template_key FROM notifications WHERE params ->> 'bedRequestId' = ${asked.id}
     `.execute(db);
     expect(told.rows.map((row) => row.template_key)).toContain('bed.request_held');
+    // The family's status link went into the message, not into the table
+    // (`docs/PLATFORM_PLAN.md` 1.9).
+    expect(await rowsHoldingALink()).toBe(0);
 
     expect((await track(asked.token)).body.data.state).toBe('held');
 
@@ -683,5 +690,48 @@ describe('what discovery publishes (FR-PAT-14, FR-PAT-50)', () => {
     expect(names).toHaveLength(2);
     expect(names[0]).toMatch(/^Jamuna/);
     expect(names[1]).toMatch(/^Padma/);
+  });
+});
+
+// Found by the security review of 2026-09-30: a bed request asked for no proof,
+// and the same phone and name asking again was answered with the open request
+// and its link — who is looking for which bed where, to anybody who typed them.
+describe('the phone is proved before a bed request (FR-GST-03)', () => {
+  const mutable = env as { GUEST_BOOKING_OTP?: boolean | undefined };
+
+  beforeEach(() => {
+    counter.reset();
+    mutable.GUEST_BOOKING_OTP = true;
+  });
+
+  afterEach(() => {
+    delete mutable.GUEST_BOOKING_OTP;
+  });
+
+  async function askAs(
+    patient: ReturnType<typeof deskPatient>,
+    token: string | null,
+  ): Promise<request.Response> {
+    const post = request(app).post(`${BASE}/bed-requests`).set('Idempotency-Key', randomUUID());
+    if (token !== null) void post.set('Authorization', bearer(token));
+    return await post.send({ hospitalId: fixture.hospitalId, bedKind: fixture.kind, patient });
+  }
+
+  it('refuses a request whose phone was not proved', async () => {
+    const response = await askAs(deskPatient('আমিনুল হক (ডেমো)'), null);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.details.reason).toBe('phone_unverified');
+  });
+
+  it("files a proved phone's request, and shows it to nobody else", async () => {
+    const patient = deskPatient('আমিনুল হক (ডেমো)');
+
+    const filed = await askAs(patient, await proveGuestPhone(app, patient.phone, patient.name));
+    expect(filed.status).toBe(201);
+
+    const stranger = await askAs(patient, null);
+    expect(stranger.status).toBe(401);
+    expect(stranger.body.data).toBeUndefined();
   });
 });

@@ -29,12 +29,13 @@
  * now refuse still has to fold into the state the same way it did at the time.
  */
 
-import { differenceInSeconds } from '../util/time.js';
+import { addSeconds, differenceInSeconds } from '../util/time.js';
 
 import { observeConsult } from './rate.js';
 import {
   findEntry,
   nowServing,
+  type DelayHold,
   type QueueAnomaly,
   type QueueEntry,
   type QueueState,
@@ -99,11 +100,23 @@ export function reduce(state: QueueState, event: QueueEvent): QueueState {
         event,
       );
 
-    case 'DELAY_DECLARED':
+    case 'DELAY_DECLARED': {
+      const minutes = Math.max(0, event.payload.minutes);
       return advance(
-        { ...state, delayMinutes: state.delayMinutes + Math.max(0, event.payload.minutes) },
+        {
+          ...state,
+          delayMinutes: state.delayMinutes + minutes,
+          // Before the doctor arrives a delay moves the expected start, and
+          // the arrival uses it up. After, it holds the chamber from the
+          // moment it was declared (FR-REC-03).
+          hold:
+            state.doctorArrivedAt === null
+              ? state.hold
+              : extendHold(state.hold, event.serverTs, minutes),
+        },
         event,
       );
+    }
 
     case 'SESSION_PAUSED':
       return advance({ ...state, status: 'paused', pausedAt: event.serverTs }, event);
@@ -115,6 +128,7 @@ export function reduce(state: QueueState, event: QueueEvent): QueueState {
           ...state,
           status: state.doctorArrivedAt === null ? 'scheduled' : 'running',
           pausedAt: null,
+          resumedAt: paused === null ? state.resumedAt : event.serverTs,
           pausedSeconds:
             paused === null
               ? state.pausedSeconds
@@ -194,6 +208,20 @@ export function reduce(state: QueueState, event: QueueEvent): QueueState {
 // ---------------------------------------------------------------------------
 // Per-event handlers
 // ---------------------------------------------------------------------------
+
+/**
+ * A delay declared while the doctor is in.
+ *
+ * A hold still running is extended — fifteen more minutes on top of thirty is
+ * forty-five from when the first was declared, not fifteen from now. One that
+ * has already passed is history, and the new delay starts its own.
+ */
+function extendHold(current: DelayHold | null, at: Timestamp, minutes: number): DelayHold {
+  if (current !== null && current.until > at) {
+    return { until: addSeconds(current.until, minutes * 60), minutes: current.minutes + minutes };
+  }
+  return { until: addSeconds(at, minutes * 60), minutes };
+}
 
 function reduceCalled(
   state: QueueState,

@@ -48,6 +48,21 @@ import { API_BASE_PATH, buildApiRouter, rootRoutes } from './routes/index.js';
  */
 const BODY_LIMIT = '256kb';
 
+/**
+ * The routes that parse their own, larger body beside their handler: the lab
+ * report file (`lab.routes.ts`) and a hospital's import file
+ * (`import.routes.ts`, pilot step 24).
+ *
+ * The global parser has to step aside for them. It runs first, and a body it
+ * refuses never reaches the route's own parser — which is how a real PDF
+ * report, a few hundred kilobytes once base64'd, was answered with a 500 while
+ * every test uploaded a few bytes.
+ */
+const OWN_BODY_LIMIT: readonly RegExp[] = [
+  /^\/api\/v1\/test-orders\/[^/]+\/report$/,
+  /^\/api\/v1\/hospital\/imports$/,
+];
+
 export function createApp(): Express {
   const app = express();
 
@@ -74,18 +89,23 @@ export function createApp(): Express {
   // the caller is.
   app.use(cors);
 
-  app.use(
-    json({
-      limit: BODY_LIMIT,
-      // A provider signs the bytes it sent, not a re-serialisation of them
-      // (BACKEND.md §7.7). This is the only hook that sees them; see
-      // `config/rawBody.ts` for why, and for why it keeps only the webhooks'.
-      verify: (req, _res, buf) => {
-        if (req.url?.startsWith('/api/v1/webhooks/') !== true) return;
-        rememberRawBody(req, buf.toString('utf8'));
-      },
-    }),
-  );
+  const parseJson = json({
+    limit: BODY_LIMIT,
+    // A provider signs the bytes it sent, not a re-serialisation of them
+    // (BACKEND.md §7.7). This is the only hook that sees them; see
+    // `config/rawBody.ts` for why, and for why it keeps only the webhooks'.
+    verify: (req, _res, buf) => {
+      if (req.url?.startsWith('/api/v1/webhooks/') !== true) return;
+      rememberRawBody(req, buf.toString('utf8'));
+    },
+  });
+  app.use((req, res, next) => {
+    if (OWN_BODY_LIMIT.some((pattern) => pattern.test(req.path))) {
+      next();
+      return;
+    }
+    parseJson(req, res, next);
+  });
 
   app.use(attachPrincipal);
   app.use(attachGuestFromLink);

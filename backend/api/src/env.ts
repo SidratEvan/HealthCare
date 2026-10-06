@@ -99,6 +99,21 @@ const httpUrl = z.string().refine((value) => {
   }
 }, 'must be an absolute http(s) URL, e.g. https://api.example.com');
 
+/**
+ * An origin exactly as a browser sends it: scheme and host, a port if it is
+ * not the default, and nothing after. One check rather than `httpUrl` and a
+ * second on top, because a value that is not a URL at all must fail as a
+ * setting that is wrong, not as an exception thrown from inside the check.
+ */
+const exactOrigin = z.string().refine((value) => {
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.origin === value;
+  } catch {
+    return false;
+  }
+}, 'must be an origin only, e.g. https://padma.example.com, with no path or trailing slash');
+
 const schema = z.object({
   // --- Runtime ------------------------------------------------------------
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -165,7 +180,13 @@ const schema = z.object({
    * `PAYMENT_PROVIDER=mock` have. `supabase` is the real bucket, and needs the
    * three keys above.
    */
-  STORAGE_PROVIDER: z.enum(['mock', 'supabase']).default('mock'),
+  STORAGE_PROVIDER: z.enum(['mock', 'local', 'supabase']).default('mock'),
+  /**
+   * Where `STORAGE_PROVIDER=local` keeps files (pilot step 26): a directory on
+   * the hospital's own server, mounted as a volume and backed up with the
+   * database (DEPLOY.md). Relative paths are from the API's working directory.
+   */
+  STORAGE_DIR: z.string().min(1).default('./storage'),
   /** How long a report's signed URL lasts, in seconds. */
   STORAGE_URL_TTL_SECONDS: positiveInt.max(86_400).default(900),
 
@@ -174,6 +195,22 @@ const schema = z.object({
   JWT_REFRESH_SECRET: secret,
   JWT_ACCESS_TTL: duration.default('15m'),
   JWT_REFRESH_TTL: duration.default('30d'),
+  /**
+   * Staff lockout (pilot step 21, BACKEND.md §7.1): this many consecutive
+   * failed sign-ins lock an account for this many minutes. Counted per
+   * account, so guessing from many machines is stopped as surely as from one.
+   */
+  STAFF_LOCKOUT_ATTEMPTS: positiveInt.max(50).default(5),
+  STAFF_LOCKOUT_MINUTES: positiveInt.max(1_440).default(15),
+  /**
+   * The key the staff second factor's secrets and recovery codes are
+   * protected with (pilot step 28, FR-SEC-10, `config/totp.ts`). Required in
+   * production. Blank elsewhere derives one from `JWT_REFRESH_SECRET`, so a
+   * development machine and the pitch demo need no new variable — but a
+   * derived key dies with that secret, and every enrolled authenticator with
+   * it, which is why a real server must have its own.
+   */
+  TOTP_ENCRYPTION_KEY: z.union([z.literal(''), secret]).default(''),
 
   // --- Guest tracking links (FR-GST-05) -----------------------------------
   GUEST_LINK_SECRET: secret,
@@ -195,7 +232,14 @@ const schema = z.object({
   VAPID_SUBJECT: z.string().default(''),
 
   // --- Payments -----------------------------------------------------------
-  PAYMENT_PROVIDER: z.enum(['mock', 'live']).default('mock'),
+  /**
+   * `off` (pilot step 26): no online payment at all — only paying at the
+   * hospital is offered, and an online method is refused before anything is
+   * written. What a hospital's own server runs until it has merchant accounts
+   * (CLAUDE.md §1.1), because the mock approves everything and must never
+   * face a real patient.
+   */
+  PAYMENT_PROVIDER: z.enum(['mock', 'live', 'off']).default('mock'),
   BKASH_BASE_URL: z.string().default(''),
   BKASH_APP_KEY: z.string().default(''),
   BKASH_APP_SECRET: z.string().default(''),
@@ -222,6 +266,21 @@ const schema = z.object({
   DEMO_MODE: boolish.default(false),
 
   /**
+   * Whether this process writes each day's chambers from the weekly schedules
+   * (pilot step 22, BACKEND.md §8). On by default: a facility set up from
+   * `S-B-11` has nothing to book without it. The write is idempotent, so a
+   * second API instance may leave it on; it is here to switch off in a
+   * process that should never write.
+   */
+  SESSION_MATERIALISE: boolish.default(true),
+
+  /**
+   * Whether a guest booking must prove its phone with a code first (pilot
+   * step 25, `FR-GST-03`). Unset means: on, except on a demonstration.
+   */
+  GUEST_BOOKING_OTP: boolish.optional(),
+
+  /**
    * How many reverse proxies sit in front of this process.
    *
    * Render terminates TLS and forwards the caller's address in
@@ -237,6 +296,67 @@ const schema = z.object({
    * address by sending the header themselves.
    */
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(3).default(0),
+
+  /**
+   * How many times over one address may use each per-address limit.
+   *
+   * The limits keyed on the caller's address (`middleware/rateLimit.ts`,
+   * `byIp`: thirty phone checks, ten standby places, ten emergency alerts in
+   * ten minutes, and the rest) stop a script before it reaches the database.
+   * They also count everybody who shares that address as one caller, and in
+   * Bangladesh an address is often not a person: a hospital's waiting room on
+   * the hospital's Wi-Fi is one, and a mobile carrier puts many subscribers
+   * behind one.
+   *
+   * One, the default, is right where each caller has an address of their own.
+   * A deployment whose patients arrive through a shared address raises it. The
+   * browser suite, which is a hundred and fifty patients on one machine, sets
+   * it to its ceiling (`playwright.config.ts`).
+   *
+   * It does not touch what protects a person: codes per number
+   * (`OTP_MAX_PER_HOUR`), the lock after five wrong codes, sign-in lockout.
+   * Those are in the database and are not keyed on an address.
+   */
+  ADDRESS_RATE_LIMIT_FACTOR: positiveInt.max(100).default(1),
+
+  /**
+   * The model that suggests import column mappings (`FR-IMP-16`), or `off`.
+   *
+   * `off` is the default and a complete product: the rules and the
+   * administrator's own choices carry an import with no model at all. `claude`
+   * asks Anthropic's Messages API for the columns the rules could not place.
+   * It is sent headings and column profiles and never a row (`FR-IMP-17`), so
+   * where it runs does not move patient data.
+   */
+  MAPPING_PROVIDER: z.enum(['off', 'claude']).default('off'),
+  /** The provider's API key. Required when `MAPPING_PROVIDER` is not `off`. */
+  MAPPING_API_KEY: z.string().default(''),
+  MAPPING_MODEL: z.string().trim().min(1).default('claude-opus-5-5'),
+  MAPPING_BASE_URL: httpUrl.default('https://api.anthropic.com'),
+  /**
+   * How long an administrator waits for suggestions before the screen opens
+   * without them. Suggestions are a convenience; the wait is bounded.
+   */
+  MAPPING_TIMEOUT_MS: positiveInt.max(120_000).default(20_000),
+
+  /**
+   * Browser origins this API answers besides the patient app's and the
+   * console's (`FR-BRD-04`): a hospital's portal at a name of its own, a
+   * hospital-branded app's web origin. Comma-separated, each an exact origin
+   * (`https://padma.example.com`), never a pattern: with credentials allowed,
+   * a pattern that matched too much would hand a hospital's session to
+   * whoever registered the name. Empty, which is the default, changes nothing.
+   */
+  EXTRA_ALLOWED_ORIGINS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== ''),
+    )
+    .pipe(z.array(exactOrigin)),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -251,10 +371,15 @@ const PRODUCTION_REQUIREMENTS: readonly {
   readonly because: string;
   readonly unless?: (env: Env) => boolean;
 }[] = [
-  { key: 'SUPABASE_URL', because: 'reports and prescriptions have nowhere to be stored' },
+  {
+    key: 'SUPABASE_URL',
+    because: 'reports and prescriptions have nowhere to be stored',
+    unless: (env) => env.STORAGE_PROVIDER !== 'supabase',
+  },
   {
     key: 'SUPABASE_SERVICE_ROLE_KEY',
     because: 'signed URLs cannot be issued, so no patient could open a report',
+    unless: (env) => env.STORAGE_PROVIDER !== 'supabase',
   },
   {
     key: 'SMS_API_KEY',
@@ -268,14 +393,22 @@ const PRODUCTION_REQUIREMENTS: readonly {
     unless: (env) => env.SMS_PROVIDER === 'log',
   },
   {
-    key: 'VAPID_PUBLIC_KEY',
-    because: 'push is half the notification policy for app users (FR-NOT-02)',
+    key: 'TOTP_ENCRYPTION_KEY',
+    because:
+      "administrators' second factors would be encrypted with a key derived from JWT_REFRESH_SECRET, and rotating that secret would lock every one of them out (FR-SEC-10)",
   },
-  { key: 'VAPID_PRIVATE_KEY', because: 'push notifications cannot be signed' },
   {
-    key: 'SENTRY_DSN',
-    because: 'a crash in a live chamber would go unreported',
+    key: 'MAPPING_API_KEY',
+    because:
+      'MAPPING_PROVIDER names a model and there is no key to ask it with; set the key, or MAPPING_PROVIDER=off, which needs none (FR-IMP-16)',
+    unless: (env) => env.MAPPING_PROVIDER === 'off',
   },
+  // VAPID keys are not required either: no adapter sends Web Push yet
+  // (`adapters/push.ts` has only the unconfigured one), so notifications go by
+  // SMS until one does (FR-NOT-02).
+  // SENTRY_DSN is not required: nothing reports to Sentry yet, and a
+  // required variable with no consumer is one a deploy fails on for no
+  // benefit (see API_BASE_URL). A self-hosted server's errors are in its logs.
 ];
 
 /**
@@ -329,7 +462,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     if (env.PAYMENT_PROVIDER === 'mock') {
       problems.push({
         key: 'PAYMENT_PROVIDER',
-        message: 'must be "live" in production — the mock adapter approves every payment',
+        message: 'must be "live" or "off" in production — the mock adapter approves every payment',
       });
     }
 
@@ -337,7 +470,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       problems.push({
         key: 'STORAGE_PROVIDER',
         message:
-          'must be "supabase" in production — the mock store keeps report files in process memory, so a restart loses every report a lab uploaded (FR-LAB-03)',
+          'must be "local" or "supabase" in production — the mock store keeps report files in process memory, so a restart loses every report a lab uploaded (FR-LAB-03)',
       });
     }
 

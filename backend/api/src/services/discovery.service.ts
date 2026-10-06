@@ -12,14 +12,20 @@
  */
 
 import {
+  orderForNeed,
+  parseNeed,
   projectedEnd,
+  readBrandTheme,
+  readSearch,
   time,
   type BedKind,
+  type BrandTheme,
   type PublicCapacity,
+  type SearchNeed,
   type Timestamp,
 } from '@platform/domain';
 
-import { notFound } from '../errors/AppError.js';
+import { AppError, notFound } from '../errors/AppError.js';
 import * as bedRepo from '../repositories/bed.repo.js';
 import * as discoveryRepo from '../repositories/discovery.repo.js';
 
@@ -54,7 +60,42 @@ export interface Stamped<T> {
  */
 export type HospitalListing = HospitalCard & { readonly beds: PublicCapacity | null };
 
+/** The hospital an app is scoped to, as `GET /config` reports it. */
+export interface ScopeInfo {
+  readonly code: string;
+  readonly hospitalId: string;
+  readonly nameBn: string;
+  readonly nameEn: string;
+  /** Its colours, if it has set some and they are readable (`FR-BRD-03`). */
+  readonly theme: BrandTheme | null;
+}
+
+/**
+ * The hospital a scope names, or a 404.
+ *
+ * A wrong code is refused rather than read as "no scope": an app built for
+ * one hospital that silently showed the whole network — its competitors —
+ * because of a typing mistake in its configuration is the failure this
+ * exists to prevent (`FR-BRD-02`).
+ */
+export async function scopeInfo(code: string): Promise<ScopeInfo> {
+  const row = await discoveryRepo.findScope(code);
+  if (row === null) throw notFound('hospital');
+  return {
+    code: row.code,
+    hospitalId: row.id,
+    nameBn: row.nameBn,
+    nameEn: row.nameEn,
+    theme: readBrandTheme(row.brand),
+  };
+}
+
+async function scopedHospitalId(scope: string | undefined): Promise<string | undefined> {
+  return scope === undefined ? undefined : (await scopeInfo(scope)).hospitalId;
+}
+
 export async function searchHospitals(query: {
+  readonly scope?: string | undefined;
   readonly specialty?: string | undefined;
   readonly district?: string | undefined;
   readonly q?: string | undefined;
@@ -64,6 +105,7 @@ export async function searchHospitals(query: {
   readonly limit?: number | undefined;
 }): Promise<Stamped<HospitalListing>> {
   const cards = await discoveryRepo.listHospitals({
+    hospitalId: await scopedHospitalId(query.scope),
     specialty: query.specialty,
     district: query.district,
     q: query.q,
@@ -83,6 +125,136 @@ export async function searchHospitals(query: {
 
   return {
     items: shown.map((card) => ({ ...card, beds: capacity.get(card.id) ?? null })),
+    asOf: time.fromDate(new Date()),
+  };
+}
+
+/** What `GET /search` answers (`S-A-07s`). */
+export interface SearchResult {
+  /** The need the answer is for: the one chosen, or the one the text names. */
+  readonly need: SearchNeed | null;
+  /** The text that names were matched against, as typed. */
+  readonly text: string | null;
+  readonly hospitals: readonly HospitalListing[];
+  readonly doctors: readonly DoctorCard[];
+  readonly asOf: Timestamp;
+}
+
+/** How many doctors a search lists; the screen is a phone's. */
+const SEARCH_DOCTORS = 20;
+
+/**
+ * One search across the network (`FR-PAT-16`–`18`).
+ *
+ * A need answers with the hospitals that can provide it, carrying the same
+ * live figures every hospital card carries. Text answers with the hospitals
+ * and doctors whose names contain it. Text that *names* a need ("ICU",
+ * "বার্ন") answers with both: the places that meet the need first, then any
+ * whose name happens to contain the word, so that reading a word as a need
+ * never hides a hospital called by it.
+ *
+ * Nothing here is new data. It is `listHospitals`, `listDoctors` and the
+ * published bed figures, asked the way a patient asks.
+ */
+export async function search(query: {
+  readonly scope?: string | undefined;
+  readonly q?: string | undefined;
+  readonly need?: string | undefined;
+  readonly lat?: number | undefined;
+  readonly lng?: number | undefined;
+  readonly limit?: number | undefined;
+}): Promise<SearchResult> {
+  const limit = query.limit ?? 30;
+  const reading = readSearch(query.q);
+
+  let chosen: SearchNeed | null = null;
+  if (query.need !== undefined) {
+    chosen = parseNeed(query.need);
+    // A need the data does not hold is refused, not answered with nothing:
+    // an empty list would read as "no hospital has it" (`FR-PAT-18`).
+    if (chosen === null) {
+      throw new AppError('VALIDATION_FAILED', { details: { need: 'unknown_need' } });
+    }
+  }
+
+  const need = chosen ?? reading.need;
+  // With a chosen need, text narrows it by name. With a need read *from* the
+  // text, the text has already been used; matching it against names as well
+  // would ask for an ICU inside a hospital called "ICU".
+  const narrowing = chosen === null ? undefined : (reading.text ?? undefined);
+  // A scoped app's search is its own hospital's: every read below carries it.
+  const hospitalId = await scopedHospitalId(query.scope);
+  const position = { lat: query.lat, lng: query.lng, hospitalId };
+
+  const byNeed =
+    need === null
+      ? []
+      : await discoveryRepo.listHospitals({
+          specialty: need.kind === 'specialty' ? need.code : undefined,
+          capability: need.kind === 'capability' ? need.capability : undefined,
+          q: narrowing,
+          ...position,
+          limit,
+        });
+
+  const withKind = need?.kind === 'bed' ? await bedRepo.hospitalsWithKind(need.bedKind) : null;
+  const meeting = withKind === null ? byNeed : byNeed.filter((card) => withKind.has(card.id));
+
+  // By name: when there is no need at all, or the need was read from the text.
+  const byName =
+    chosen === null
+      ? await discoveryRepo.listHospitals({ q: reading.text ?? undefined, ...position, limit })
+      : [];
+  const seen = new Set(meeting.map((card) => card.id));
+  const named = need === null ? byName : byName.filter((card) => !seen.has(card.id));
+
+  const cards = [...meeting, ...(need === null || reading.text !== null ? named : [])].slice(
+    0,
+    limit,
+  );
+  const capacity = await bedRepo.publicCapacity(cards.map((card) => card.id));
+  const listings = cards.map((card) => ({ ...card, beds: capacity.get(card.id) ?? null }));
+
+  // Doctors: by name when something was typed, by specialty when that is the
+  // need. Not for a bed or a capability, where a list of doctors answers a
+  // question nobody asked.
+  const doctorsByName =
+    reading.text === null
+      ? []
+      : await discoveryRepo.listDoctors({ q: reading.text, hospitalId, limit: SEARCH_DOCTORS });
+  const doctorsBySpecialty =
+    need?.kind === 'specialty'
+      ? await discoveryRepo.listDoctors({
+          specialty: need.code,
+          q: narrowing,
+          hospitalId,
+          limit: SEARCH_DOCTORS,
+        })
+      : [];
+  const doctorIds = new Set(doctorsByName.map((doctor) => doctor.id));
+  const doctors = [
+    ...doctorsByName,
+    ...doctorsBySpecialty.filter((doctor) => !doctorIds.has(doctor.id)),
+  ]
+    // A scoped app lists a doctor's chambers at its own hospital only: the
+    // same doctor's chamber elsewhere is another hospital's listing.
+    .map((doctor) =>
+      hospitalId === undefined
+        ? doctor
+        : {
+            ...doctor,
+            chambers: doctor.chambers.filter((chamber) => chamber.hospitalId === hospitalId),
+          },
+    )
+    // A doctor with no chamber at a live hospital cannot be booked from here.
+    .filter((doctor) => doctor.chambers.length > 0)
+    .slice(0, SEARCH_DOCTORS);
+
+  return {
+    need,
+    text: reading.text,
+    hospitals: orderForNeed(listings, need),
+    doctors,
     asOf: time.fromDate(new Date()),
   };
 }
@@ -107,6 +279,7 @@ export async function hospitalDetail(hospitalId: string): Promise<HospitalDetail
 }
 
 export async function searchDoctors(query: {
+  readonly scope?: string | undefined;
   readonly specialty?: string | undefined;
   readonly hospitalId?: string | undefined;
   readonly q?: string | undefined;
@@ -114,7 +287,7 @@ export async function searchDoctors(query: {
 }): Promise<readonly DoctorCard[]> {
   return await discoveryRepo.listDoctors({
     specialty: query.specialty,
-    hospitalId: query.hospitalId,
+    hospitalId: (await scopedHospitalId(query.scope)) ?? query.hospitalId,
     q: query.q,
     limit: query.limit ?? 50,
   });

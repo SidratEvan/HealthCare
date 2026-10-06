@@ -12,7 +12,7 @@
  */
 
 import { signToken } from '../config/jwt.js';
-import { env } from '../env.js';
+import { patientLink } from '../config/links.js';
 
 /** Mints a status token for one standby row. */
 export async function standbyToken(standbyId: string, subject: string): Promise<string> {
@@ -24,7 +24,7 @@ export async function standbyToken(standbyId: string, subject: string): Promise<
 
 /** The page in the patient app that answers it. */
 export function standbyUrl(token: string): string {
-  return `${env.WEB_BASE_URL}/standby?t=${encodeURIComponent(token)}`;
+  return patientLink('/standby', { t: token });
 }
 
 /** Both at once, for a message that carries the link. */

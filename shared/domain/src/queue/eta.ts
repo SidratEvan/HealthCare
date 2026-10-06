@@ -20,7 +20,13 @@
  * cannot be tested at a fixed instant.
  */
 
-import { addSeconds, differenceInSeconds, floorToMinute, maxTimestamp } from '../util/time.js';
+import {
+  addSeconds,
+  differenceInSeconds,
+  floorToMinute,
+  isAfter,
+  maxTimestamp,
+} from '../util/time.js';
 
 import { currentRateSeconds, isMeasured, rateSpreadSeconds } from './rate.js';
 import { activeQueue, nowServing, waitingQueue, type QueueState } from './state.js';
@@ -138,11 +144,14 @@ export function etaFor(
  * at five and has not started at half past does not get to claim five.
  *
  * Once the doctor is in, it starts from now: the queue is moving, and the
- * measured rate carries it forward.
+ * measured rate carries it forward. A delay declared before the arrival is
+ * used up by it — the doctor being in the room is the end of "the doctor will
+ * be late". Only a delay declared since holds the chamber, until the instant
+ * it named (`hold.until`).
  *
- * A paused session adds the pause so far. Nothing can know when a prayer break
- * or an emergency call-away ends, which is why a paused session reports
- * `unknown` confidence rather than a confident wrong time (FR-REC-05).
+ * Nothing can know when a prayer break or an emergency call-away ends, which
+ * is why a paused session reports `unknown` confidence rather than a confident
+ * wrong time (FR-REC-05).
  */
 function baselineFor(state: QueueState, now: Timestamp): Timestamp {
   if (state.doctorArrivedAt === null) {
@@ -150,8 +159,25 @@ function baselineFor(state: QueueState, now: Timestamp): Timestamp {
     return maxTimestamp(plannedWithDelay, now);
   }
 
-  const withDelay = addSeconds(now, state.delayMinutes * 60);
-  return maxTimestamp(withDelay, now);
+  return state.hold === null ? now : maxTimestamp(state.hold.until, now);
+}
+
+/**
+ * The declared delay still in force, in minutes (FR-PAT-34).
+ *
+ * What a waiting patient's screen should say. `delayMinutes` is everything
+ * declared today and never shrinks; this is the part that has not been used
+ * up — all of it until the doctor arrives, then a hold declared since, for as
+ * long as it runs.
+ *
+ * The figure declared, not a countdown of what is left of it: the estimate
+ * beside it already carries the time, and a phone's clock ticks a minute at a
+ * time and is often wrong, which turned a thirty-minute delay into "31".
+ */
+export function outstandingDelayMinutes(state: QueueState, now: Timestamp): number {
+  if (state.doctorArrivedAt === null) return state.delayMinutes;
+  if (state.hold === null || !isAfter(state.hold.until, now)) return 0;
+  return state.hold.minutes;
 }
 
 function confidenceOf(state: QueueState): Eta['confidence'] {

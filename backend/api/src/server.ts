@@ -23,6 +23,7 @@ import { closeDatabase } from './config/db.js';
 import { logger } from './config/logger.js';
 import { env } from './env.js';
 import { attachRealtime } from './realtime/server.js';
+import { startHourlyJobs } from './services/jobs.service.js';
 
 import type { Server as SocketServer } from 'socket.io';
 
@@ -52,11 +53,15 @@ export function startServer(): Server {
     );
   });
 
-  installShutdownHandlers(server, io);
+  // Each day's chambers from the weekly schedules (pilot step 22) and the
+  // 30-day clearing of imported rows (step 24): now, and hourly after.
+  const stopJobs = startHourlyJobs();
+
+  installShutdownHandlers(server, io, stopJobs);
   return server;
 }
 
-function installShutdownHandlers(server: Server, io: SocketServer): void {
+function installShutdownHandlers(server: Server, io: SocketServer, stopJobs: () => void): void {
   let shuttingDown = false;
 
   const shutdown = (signal: string): void => {
@@ -64,6 +69,7 @@ function installShutdownHandlers(server: Server, io: SocketServer): void {
     shuttingDown = true;
 
     logger.info({ signal }, 'shutting down');
+    stopJobs();
 
     // Tell every connected console and phone to reconnect elsewhere before the
     // process goes. Without this they wait for a ping timeout — up to a

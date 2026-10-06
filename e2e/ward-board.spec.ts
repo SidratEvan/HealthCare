@@ -16,7 +16,14 @@ import { randomInt } from 'node:crypto';
 
 import { expect, test, type Page } from '@playwright/test';
 
-import { admissionsIn, bedState, createWardFixture, type WardFixture } from './support/ward.js';
+import { closeOtherContexts } from './support/contexts.js';
+import {
+  admissionsIn,
+  bedState,
+  createWardFixture,
+  randomTag,
+  type WardFixture,
+} from './support/ward.js';
 
 const CONSOLE = 'http://localhost:3100';
 const PATIENT = 'http://localhost:3000';
@@ -71,6 +78,30 @@ async function publishedGeneralFree(page: Page): Promise<number> {
   await expect(mirror).toBeVisible();
   return Number(await mirror.getAttribute('data-published-free'));
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
+
+test.describe('the fixture these specs stand on', () => {
+  test('a ward name that is already taken is not a failure: another is picked', async () => {
+    // `beforeEach` has just made a ward. Its tag is in every bed's label
+    // (`E3F9A-01`), and it is offered again here, twice, before a new one.
+    const taken = bed(0).label.slice(1, 5);
+    const offered = [taken, taken];
+
+    const second = await createWardFixture(1, () => offered.shift() ?? randomTag());
+
+    // The first CI run of this suite failed here with `wards_hospital_name_key`
+    // (3 October): the fixture asked for a name that was taken and called it
+    // an error. It now moves on to the next.
+    expect(offered).toHaveLength(0);
+    expect(second.wardName).not.toBe(ward.wardName);
+    expect(second.beds).toHaveLength(1);
+  });
+});
 
 test.describe('the mirror matches what the public is shown (FR-BED-06)', () => {
   test("the app shows the mirror's number, and both drop by one the moment a bed is taken", async ({
@@ -170,6 +201,28 @@ test.describe('S-B-06 the bed controls (APP_FLOW.md B3)', () => {
     const tile = page.getByTestId(`bed-tile-${bed(2).label}`);
     await expect(tile).toHaveAttribute('data-state', 'out_of_service');
     await expect(tile).toContainText('অক্সিজেন লাইন মেরামত');
+  });
+
+  test('Esc backs out of a step, and then closes the panel (A11Y-05)', async ({ page }) => {
+    await openWardBoard(page);
+
+    await page.getByTestId(`bed-tile-${bed(1).label}`).click();
+    await page.getByTestId('action-admit').click();
+    await expect(page.getByTestId('admit-form')).toBeVisible();
+
+    // One step back: the form goes, the bed stays open.
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('admit-form')).toBeHidden();
+    await expect(page.getByTestId('bed-actions')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('bed-panel')).toBeHidden();
+
+    // Nothing was done to the bed on the way.
+    await expect(page.getByTestId(`bed-tile-${bed(1).label}`)).toHaveAttribute(
+      'data-state',
+      'free',
+    );
   });
 });
 
@@ -273,6 +326,54 @@ test.describe('the ward keeps working offline (FR-OFF-01)', () => {
     // Once, not twice: the replay is recognised by its event id (SY-02).
     expect(await admissionsIn(bed(0).id)).toBe(1);
     await expect(mirror).toHaveAttribute('data-published-free', String(published - 1));
+  });
+});
+
+test.describe('the ward outbox is kept on the device (FR-OFF-01)', () => {
+  test('an admit that could not be sent survives a reload, and is sent once', async ({ page }) => {
+    await openWardBoard(page);
+
+    // The server cannot be reached for a bed action; the page itself loads.
+    const blocked = '**/api/v1/beds/**';
+    await page.route(blocked, async (route) => {
+      if (route.request().method() === 'POST') await route.abort('connectionfailed');
+      else await route.fallback();
+    });
+
+    // The page is reloaded only once the admit has been refused: one still
+    // paused at the route when the page goes can slip through.
+    const refused = page.waitForEvent(
+      'requestfailed',
+      (request) => request.method() === 'POST' && request.url().includes('/api/v1/beds/'),
+    );
+    await admitAtDesk(page, bed(0).label, 'সালমা বেগম (ডেমো)');
+    await refused;
+    const tile = page.getByTestId(`bed-tile-${bed(0).label}`);
+    await expect(tile).toHaveAttribute('data-state', 'occupied');
+    await expect(tile).toHaveAttribute('data-pending', 'true');
+    await expect(page.getByTestId('pending-count')).toBeVisible();
+    expect(await bedState(bed(0).id)).toBe('free');
+
+    // The reload that used to lose it: the tile went back to free and the
+    // patient was in a bed nobody had a record of.
+    await page.reload();
+    await expect(page.getByTestId('ward-board')).toBeVisible();
+    await expect(tile).toHaveAttribute('data-state', 'occupied');
+    await expect(tile).toHaveAttribute('data-pending', 'true');
+    await expect(page.getByTestId('pending-count')).toBeVisible();
+    expect(await bedState(bed(0).id)).toBe('free');
+
+    // Reachable again; nobody taps anything.
+    await page.unroute(blocked);
+    await expect(tile).toHaveAttribute('data-pending', 'false', { timeout: 45_000 });
+    await expect.poll(async () => await bedState(bed(0).id), { timeout: 20_000 }).toBe('occupied');
+
+    // Once: nothing is left on the device to send a second time (`SY-02`).
+    await page.reload();
+    await expect(page.getByTestId('ward-board')).toBeVisible();
+    await expect(tile).toHaveAttribute('data-state', 'occupied');
+    await expect(page.getByTestId('pending-count')).toBeHidden();
+    expect(await admissionsIn(bed(0).id)).toBe(1);
   });
 });
 

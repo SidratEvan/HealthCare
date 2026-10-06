@@ -48,7 +48,7 @@ import {
 } from '@platform/domain';
 
 import { signToken, verifyToken } from '../config/jwt.js';
-import { env } from '../env.js';
+import { patientLink } from '../config/links.js';
 import { AppError, forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
 import * as bedRepo from '../repositories/bed.repo.js';
@@ -1082,7 +1082,7 @@ async function statusToken(requestId: string, subject: string): Promise<string> 
 
 /** The family's status page in the patient app. */
 function trackUrlFor(token: string): string {
-  return `${env.WEB_BASE_URL}/beds/request?t=${encodeURIComponent(token)}`;
+  return patientLink('/beds/request', { t: token });
 }
 
 function guard(bed: BedRow, action: BedAction, context: BedActionContext = {}): void {

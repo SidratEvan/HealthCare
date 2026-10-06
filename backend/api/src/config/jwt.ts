@@ -27,7 +27,15 @@ import { env } from '../env.js';
 
 /** Which secret a token is signed with, and therefore what it may authorise. */
 export type TokenKind =
-  'access' | 'refresh' | 'guest' | 'consent' | 'bed_request' | 'emergency_case' | 'standby';
+  | 'access'
+  | 'refresh'
+  | 'guest'
+  | 'consent'
+  | 'bed_request'
+  | 'emergency_case'
+  | 'standby'
+  | 'staff_2fa'
+  | 'guest_device';
 
 const ISSUER = 'healthcare-api';
 
@@ -65,6 +73,18 @@ const SECRETS: Record<TokenKind, Uint8Array> = {
   // And for a place on a standby list (`FR-PAT-27`): the link a patient
   // answers an offer from. One row, useless as a tracking link or a bearer.
   standby: encoder.encode(env.GUEST_LINK_SECRET),
+
+  // Between a right password and the second factor (pilot step 28,
+  // `POST /staff/2fa`): the access secret, a different signed audience, so the
+  // challenge cannot be presented as a bearer token — `attachPrincipal`
+  // verifies only `access` — and opens nothing but the code check.
+  staff_2fa: encoder.encode(env.JWT_ACCESS_SECRET),
+
+  // A phone that proved itself, kept by the device it proved itself on
+  // (decision 85, `APP_FLOW.md` A1: "bound to phone + device"): the guest-link
+  // secret, its own audience. It opens nothing but `POST /guest/start`'s
+  // skip of the code, and only on the device and for the number it names.
+  guest_device: encoder.encode(env.GUEST_LINK_SECRET),
 };
 
 const AUDIENCES: Record<TokenKind, string> = {
@@ -75,6 +95,8 @@ const AUDIENCES: Record<TokenKind, string> = {
   bed_request: 'bed-request',
   emergency_case: 'emergency-case',
   standby: 'standby',
+  staff_2fa: 'staff-2fa',
+  guest_device: 'guest-device',
 };
 
 /**
@@ -101,6 +123,23 @@ export interface TokenClaims extends JWTPayload {
   emergencyCaseId?: string;
   /** Present for a standby status link: the one place on a list it may act on. */
   standbyId?: string;
+  /**
+   * Present on a guest device proof: a hash of the device it was issued to,
+   * compared on use, as a patient's refresh session is (`FR-SEC-05`).
+   */
+  dev?: string;
+  /**
+   * Set on a staff access token issued while `must_change_password` holds
+   * (0027): `attachPrincipal` then admits it to the password change and
+   * nothing else.
+   */
+  mcp?: boolean;
+  /**
+   * Set on a staff access token for an account that must have a second factor
+   * and has none yet (pilot step 28, `FR-SEC-10`): `attachPrincipal` then
+   * admits it to setting one up and nothing else.
+   */
+  tfa?: 'setup';
 }
 
 export interface SignOptions {
@@ -137,6 +176,15 @@ function defaultLifetime(kind: TokenKind): string {
       // As long as a tracking link: an offer can come at the end of the
       // chamber, and a seated patient opens their serial from this link.
       return `${String(env.GUEST_LINK_TTL_DAYS)}d`;
+    case 'staff_2fa':
+      // Long enough to find the phone and open the app, short enough that a
+      // password typed on a shared counter is not a standing half of a login.
+      return '5m';
+    case 'guest_device':
+      // A follow-up visit is weeks or months away, and each use hands back a
+      // fresh one, so a phone in use stays proved; one put away for a season
+      // is asked for a code again. A judgement, recorded in STATUS (decision 85).
+      return '90d';
   }
 }
 
@@ -199,4 +247,15 @@ function classify(error: unknown): Exclude<VerifyResult, { ok: true }>['reason']
     if (code === 'ERR_JWS_INVALID' || code === 'ERR_JWT_INVALID') return 'malformed';
   }
   return 'invalid';
+}
+
+/** A TTL in the form the env accepts (`15m`, `24h`, `30d`), in milliseconds. */
+export function durationMs(value: string): number {
+  const match = /^(\d+)([smhd])$/.exec(value);
+  if (match === null) throw new Error(`Not a duration: ${value}`);
+  const amount = Number(match[1]);
+  const unit = match[2];
+  const scale =
+    unit === 's' ? 1_000 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 86_400_000;
+  return amount * scale;
 }

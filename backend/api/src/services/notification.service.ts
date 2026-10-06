@@ -28,6 +28,20 @@
  * `notification_templates`, and this file reads that table. So a hospital can
  * be given different wording without a deploy, and a message sent last month
  * can still be explained by the row that produced it.
+ *
+ * ## What is sent and what is kept are two texts
+ *
+ * Some messages carry a link that is a credential: a booking's tracking link
+ * opens that booking's queue, its signed record and its reports
+ * (`FR-GST-05`). The link goes into the message that is sent and into nothing
+ * that is kept — the row holds the same words with `{link}` still standing
+ * where the link went (`forTheRecord`). Every row is written through one
+ * function, `writeOutbox`, so no kind of message can forget this; migration
+ * 0035 has PostgreSQL refuse a stored link besides.
+ *
+ * And the words themselves are kept for ninety days (DATABASE.md §8), after
+ * which a row says which message it was and what became of it and no more
+ * (`clearExpiredBodies`).
  */
 
 import { twoAwayBookings, waitingQueue, type QueueEvent, type QueueState } from '@platform/domain';
@@ -286,6 +300,100 @@ export function merge(...batches: readonly QueuedBatch[]): QueuedBatch {
 }
 
 /**
+ * Placeholders whose value is a credential.
+ *
+ * A link here is not an address anybody may know: whoever holds it reads that
+ * booking, that standby place, that bed request or that emergency alert
+ * without signing in. Only its hash is meant to exist in the database
+ * (`guest_links.token_hash`).
+ */
+const CREDENTIAL_PARAMS: ReadonlySet<string> = new Set(['link']);
+
+/**
+ * What is kept of a message: its parameters without any credential, and its
+ * words with each credential left as the template's own placeholder.
+ *
+ * So the row still answers "what did we tell them" — the serial, the doctor,
+ * the time, the sentence — and cannot be used to open anything.
+ *
+ * A credential that was empty is rendered as empty, exactly as it was sent.
+ * An account holder's confirmation has no tracking link, and its record must
+ * not read as though one had been taken out of it.
+ */
+export function forTheRecord(
+  template: string,
+  params: Readonly<Record<string, string>>,
+): { readonly params: Record<string, string>; readonly body: string } {
+  const kept: Record<string, string> = {};
+  const shown: Record<string, string> = {};
+
+  for (const [name, value] of Object.entries(params)) {
+    if (!CREDENTIAL_PARAMS.has(name)) {
+      kept[name] = value;
+      shown[name] = value;
+    } else if (value === '') {
+      shown[name] = value;
+    }
+  }
+
+  // `render` leaves a placeholder it has no value for as it stands.
+  return { params: kept, body: render(template, shown) };
+}
+
+/** One message decided on — who, how, in which words — and not yet written. */
+interface Draft {
+  readonly recipient: notificationRepo.Recipient;
+  readonly channel: 'sms' | 'push';
+  readonly templateKey: string;
+  /** The template's own text, placeholders unfilled. */
+  readonly template: string;
+  readonly params: Readonly<Record<string, string>>;
+  /** Why it is not going out, or null. */
+  readonly skipped: string | null;
+}
+
+/**
+ * Writes the outbox rows for a set of drafts, inside the caller's transaction,
+ * and returns what is to be sent once it commits.
+ *
+ * **The only caller of `notificationRepo.queueAll`.** Each draft is composed
+ * twice here: once in full, for the adapter, held in memory until `dispatch`;
+ * once for the row, through `forTheRecord`. A new kind of message that goes
+ * through this function cannot store a link, and there is no other way in.
+ */
+async function writeOutbox(trx: Tx, drafts: readonly Draft[]): Promise<QueuedBatch> {
+  const ids = await notificationRepo.queueAll(
+    trx,
+    drafts.map((draft) => ({
+      recipient: draft.recipient,
+      channel: draft.channel,
+      templateKey: draft.templateKey,
+      ...forTheRecord(draft.template, draft.params),
+      skipped: draft.skipped,
+    })),
+  );
+
+  return {
+    ids,
+    messages: ids.flatMap((id, index) => {
+      const draft = drafts[index];
+      if (draft?.skipped !== null) return [];
+
+      return [
+        {
+          id,
+          channel: draft.channel,
+          to: draft.channel === 'sms' ? draft.recipient.phone : null,
+          body: render(draft.template, draft.params),
+          templateKey: draft.templateKey,
+          recipient: draft.recipient,
+        },
+      ];
+    }),
+  };
+}
+
+/**
  * Writes the outbox rows for a plan, inside the caller's transaction.
  *
  * Every decision that could suppress a message happens here and is recorded on
@@ -302,11 +410,13 @@ export async function queueFor(
 ): Promise<QueuedBatch> {
   if (plan.length === 0) return NOTHING;
 
-  const [chamber, recipients, templates] = await Promise.all([
-    notificationRepo.chamberFor(sessionId),
-    notificationRepo.recipientsForSession(trx, sessionId),
-    templateIndex(),
-  ]);
+  // Every read here goes through `trx`. This runs inside the queue's locked
+  // transaction, on its one connection; asking the pool for another from in
+  // here is how a busy chamber stalled itself (see `chamberFor`). In order,
+  // not together: one connection carries one query at a time.
+  const chamber = await notificationRepo.chamberFor(sessionId, trx);
+  const recipients = await notificationRepo.recipientsForSession(trx, sessionId);
+  const templates = await templateIndex(trx);
 
   if (chamber === null) return NOTHING;
 
@@ -326,14 +436,13 @@ export async function queueFor(
   const smsUsed =
     chamber.smsBudgetMonthly === null
       ? 0
-      : await notificationRepo.smsSentThisMonth(chamber.hospitalId);
+      : await notificationRepo.smsSentThisMonth(chamber.hospitalId, trx);
   let smsBudgetLeft =
     chamber.smsBudgetMonthly === null
       ? Number.POSITIVE_INFINITY
       : chamber.smsBudgetMonthly - smsUsed;
 
-  const rows: notificationRepo.QueuedNotification[] = [];
-  const pending: { channel: 'sms' | 'push'; to: string | null; body: string; key: string }[] = [];
+  const drafts: Draft[] = [];
 
   for (const planned of plan) {
     const recipient = byBooking.get(planned.bookingId);
@@ -346,14 +455,13 @@ export async function queueFor(
     // `FR-NOT-02`: app users get push + SMS, non-app users get SMS only. The
     // answer comes from whether any device is registered, which is a fact
     // rather than an assumption.
-    const tokens = await notificationRepo.deviceTokensFor(recipient);
+    const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
     const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
 
     for (const channel of channels) {
-      const body = templates.get(`${planned.templateKey}|${channel}|${locale}`);
-      if (body === undefined) continue;
+      const template = templates.get(`${planned.templateKey}|${channel}|${locale}`);
+      if (template === undefined) continue;
 
-      const rendered = render(body, params);
       const skipped = suppression({
         channel,
         phone: recipient.phone,
@@ -364,44 +472,18 @@ export async function queueFor(
 
       if (skipped === null && channel === 'sms') smsBudgetLeft -= 1;
 
-      rows.push({
+      drafts.push({
         recipient,
         channel,
         templateKey: planned.templateKey,
+        template,
         params,
-        body: rendered,
         skipped,
-      });
-      pending.push({
-        channel,
-        to: channel === 'sms' ? recipient.phone : null,
-        body: rendered,
-        key: planned.templateKey,
       });
     }
   }
 
-  const ids = await notificationRepo.queueAll(trx, rows);
-
-  return {
-    ids,
-    messages: ids.flatMap((id, index) => {
-      const row = rows[index];
-      const detail = pending[index];
-      if (row === undefined || detail === undefined || row.skipped !== null) return [];
-
-      return [
-        {
-          id,
-          channel: detail.channel,
-          to: detail.to,
-          body: detail.body,
-          templateKey: detail.key,
-          recipient: row.recipient,
-        },
-      ];
-    }),
-  };
+  return await writeOutbox(trx, drafts);
 }
 
 /**
@@ -509,10 +591,9 @@ async function queueStandbyMessage(
   },
   at: Date,
 ): Promise<QueuedBatch> {
-  const [chamber, templates] = await Promise.all([
-    notificationRepo.chamberFor(input.sessionId),
-    templateIndex(),
-  ]);
+  // Through `trx`, one after the other: see `queueFor`.
+  const chamber = await notificationRepo.chamberFor(input.sessionId, trx);
+  const templates = await templateIndex(trx);
   if (chamber === null) return NOTHING;
 
   // Built here rather than read back: a standby row carries the phone and the
@@ -537,45 +618,28 @@ async function queueStandbyMessage(
   const budgetLeft =
     chamber.smsBudgetMonthly === null
       ? Number.POSITIVE_INFINITY
-      : chamber.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(chamber.hospitalId));
+      : chamber.smsBudgetMonthly -
+        (await notificationRepo.smsSentThisMonth(chamber.hospitalId, trx));
 
   const templateKey = input.templateKey;
-  const tokens = await notificationRepo.deviceTokensFor(recipient);
+  const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
   const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
 
-  const rows: notificationRepo.QueuedNotification[] = [];
+  const drafts: Draft[] = [];
   for (const channel of channels) {
-    const body = templates.get(`${templateKey}|${channel}|${locale}`);
-    if (body === undefined) continue;
-    rows.push({
+    const template = templates.get(`${templateKey}|${channel}|${locale}`);
+    if (template === undefined) continue;
+    drafts.push({
       recipient,
       channel,
       templateKey,
+      template,
       params,
-      body: render(body, params),
       skipped: suppression({ channel, phone: recipient.phone, templateKey, at, budgetLeft }),
     });
   }
 
-  const ids = await notificationRepo.queueAll(trx, rows);
-
-  return {
-    ids,
-    messages: ids.flatMap((id, index) => {
-      const row = rows[index];
-      if (row?.skipped !== null) return [];
-      return [
-        {
-          id,
-          channel: row.channel,
-          to: row.channel === 'sms' ? recipient.phone : null,
-          body: row.body,
-          templateKey,
-          recipient,
-        },
-      ];
-    }),
-  };
+  return await writeOutbox(trx, drafts);
 }
 
 /**
@@ -602,7 +666,7 @@ export async function queueBedRequestAnswer(
 
   const templateKey: TemplateKey =
     input.outcome === 'held' ? 'bed.request_held' : 'bed.request_declined';
-  const templates = await templateIndex();
+  const templates = await templateIndex(trx);
 
   const { recipient } = target;
   const locale: Locale = recipient.locale === 'en' ? 'en' : 'bn';
@@ -619,44 +683,26 @@ export async function queueBedRequestAnswer(
   const budgetLeft =
     target.smsBudgetMonthly === null
       ? Number.POSITIVE_INFINITY
-      : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId));
+      : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId, trx));
 
-  const tokens = await notificationRepo.deviceTokensFor(recipient);
+  const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
   const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
 
-  const rows: notificationRepo.QueuedNotification[] = [];
+  const drafts: Draft[] = [];
   for (const channel of channels) {
-    const body = templates.get(`${templateKey}|${channel}|${locale}`);
-    if (body === undefined) continue;
-    rows.push({
+    const template = templates.get(`${templateKey}|${channel}|${locale}`);
+    if (template === undefined) continue;
+    drafts.push({
       recipient,
       channel,
       templateKey,
+      template,
       params,
-      body: render(body, params),
       skipped: suppression({ channel, phone: recipient.phone, templateKey, at, budgetLeft }),
     });
   }
 
-  const ids = await notificationRepo.queueAll(trx, rows);
-
-  return {
-    ids,
-    messages: ids.flatMap((id, index) => {
-      const row = rows[index];
-      if (row?.skipped !== null) return [];
-      return [
-        {
-          id,
-          channel: row.channel,
-          to: row.channel === 'sms' ? recipient.phone : null,
-          body: row.body,
-          templateKey,
-          recipient,
-        },
-      ];
-    }),
-  };
+  return await writeOutbox(trx, drafts);
 }
 
 /**
@@ -686,7 +732,7 @@ export async function queueEmergencyAnswer(
 
   const templateKey: TemplateKey =
     input.outcome === 'acknowledged' ? 'emergency.acknowledged' : 'emergency.declined';
-  const templates = await templateIndex();
+  const templates = await templateIndex(trx);
 
   const { recipient } = target;
   const locale: Locale = recipient.locale === 'en' ? 'en' : 'bn';
@@ -697,19 +743,19 @@ export async function queueEmergencyAnswer(
     link: input.link,
   };
 
-  const tokens = await notificationRepo.deviceTokensFor(recipient);
+  const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
   const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
 
-  const rows: notificationRepo.QueuedNotification[] = [];
+  const drafts: Draft[] = [];
   for (const channel of channels) {
-    const body = templates.get(`${templateKey}|${channel}|${locale}`);
-    if (body === undefined) continue;
-    rows.push({
+    const template = templates.get(`${templateKey}|${channel}|${locale}`);
+    if (template === undefined) continue;
+    drafts.push({
       recipient,
       channel,
       templateKey,
+      template,
       params,
-      body: render(body, params),
       skipped: suppression({
         channel,
         phone: recipient.phone,
@@ -720,25 +766,7 @@ export async function queueEmergencyAnswer(
     });
   }
 
-  const ids = await notificationRepo.queueAll(trx, rows);
-
-  return {
-    ids,
-    messages: ids.flatMap((id, index) => {
-      const row = rows[index];
-      if (row?.skipped !== null) return [];
-      return [
-        {
-          id,
-          channel: row.channel,
-          to: row.channel === 'sms' ? recipient.phone : null,
-          body: row.body,
-          templateKey,
-          recipient,
-        },
-      ];
-    }),
-  };
+  return await writeOutbox(trx, drafts);
 }
 
 /**
@@ -765,7 +793,7 @@ export async function queueReportReady(
   if (target === null) return NOTHING;
 
   const templateKey: TemplateKey = 'lab.report_ready';
-  const templates = await templateIndex();
+  const templates = await templateIndex(trx);
 
   const { recipient } = target;
   const locale: Locale = recipient.locale === 'en' ? 'en' : 'bn';
@@ -776,21 +804,21 @@ export async function queueReportReady(
     hospital: locale === 'bn' ? target.hospitalNameBn : target.hospitalNameEn,
   };
 
-  const body = templates.get(`${templateKey}|push|${locale}`);
-  if (body === undefined) return NOTHING;
+  const template = templates.get(`${templateKey}|push|${locale}`);
+  if (template === undefined) return NOTHING;
 
   const budgetLeft =
     target.smsBudgetMonthly === null
       ? Number.POSITIVE_INFINITY
-      : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId));
+      : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId, trx));
 
-  const rows: notificationRepo.QueuedNotification[] = [
+  return await writeOutbox(trx, [
     {
       recipient,
       channel: 'push',
       templateKey,
+      template,
       params,
-      body: render(body, params),
       skipped: suppression({
         channel: 'push',
         phone: recipient.phone,
@@ -799,18 +827,7 @@ export async function queueReportReady(
         budgetLeft,
       }),
     },
-  ];
-
-  const ids = await notificationRepo.queueAll(trx, rows);
-
-  return {
-    ids,
-    messages: ids.flatMap((id, index) => {
-      const row = rows[index];
-      if (row?.skipped !== null) return [];
-      return [{ id, channel: row.channel, to: null, body: row.body, templateKey, recipient }];
-    }),
-  };
+  ]);
 }
 
 function isBedKindName(kind: string): kind is BedKindName {
@@ -884,6 +901,47 @@ export async function dispatch(batch: QueuedBatch): Promise<void> {
         .markNotSent(message.id, 'failed', 'dispatch_threw')
         .catch(() => undefined);
     }
+  }
+}
+
+/** How long a message's words are kept (DATABASE.md §8). */
+export const BODY_RETENTION_DAYS = 90;
+
+/**
+ * The parameters that say what a message was about rather than what it said.
+ *
+ * Ids, not content: the booking, bed request, emergency case or test order a
+ * message answered. A delivery report still starts from them after the words
+ * are gone.
+ */
+const CORRELATION_PARAMS = ['bookingId', 'bedRequestId', 'emergencyCaseId', 'testOrderId'] as const;
+
+/** Rows cleared per statement, so no one purge holds the table for long. */
+const PURGE_BATCH = 2_000;
+
+/**
+ * Clears the words of every message older than ninety days (DATABASE.md §8:
+ * "`notifications` bodies — 90 days — metadata kept").
+ *
+ * What goes: the rendered text and everything that filled it — a serial, a
+ * doctor's name, a test's name. What stays: which message it was, to which
+ * number, when, what became of it, what it cost, and the ids in
+ * `CORRELATION_PARAMS`.
+ *
+ * Run hourly (`jobs.service`). Safe to run twice and from two processes: a
+ * cleared row no longer matches. Returns how many rows it cleared.
+ */
+export async function clearExpiredBodies(): Promise<number> {
+  let cleared = 0;
+
+  for (;;) {
+    const batch = await notificationRepo.clearBodiesOlderThan(
+      BODY_RETENTION_DAYS,
+      CORRELATION_PARAMS,
+      PURGE_BATCH,
+    );
+    cleared += batch;
+    if (batch < PURGE_BATCH) return cleared;
   }
 }
 
@@ -962,10 +1020,10 @@ function paramsFor(
  */
 let cache: Map<string, string> | null = null;
 
-async function templateIndex(): Promise<Map<string, string>> {
+async function templateIndex(trx?: Tx): Promise<Map<string, string>> {
   if (cache !== null) return cache;
 
-  const rows = await notificationRepo.activeTemplates();
+  const rows = await notificationRepo.activeTemplates(trx);
   cache = new Map(rows.map((row) => [`${row.key}|${row.channel}|${row.locale}`, row.body]));
   return cache;
 }

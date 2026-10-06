@@ -28,7 +28,9 @@ import { Card, useLocale } from '@platform/ui';
 
 import { ChevronIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
-import { recentBookings, type DatedBooking } from '@/lib/bookings';
+import { useDeployment } from '@/hooks/useDeployment';
+import { bookingsInScope, recentBookings, type DatedBooking } from '@/lib/bookings';
+import { scopedHospitalId } from '@/lib/scope';
 
 import type { ReactNode } from 'react';
 
@@ -38,9 +40,11 @@ export default function SerialsPage(): ReactNode {
 
   // Read after mount: `localStorage` does not exist on the server, and reading
   // it during render makes the first client render disagree with it.
+  // An app open for one hospital lists that hospital's serials (`FR-BRD-02`).
+  const inHospital = scopedHospitalId(useDeployment());
   useEffect(() => {
-    setBookings(recentBookings());
-  }, []);
+    setBookings(bookingsInScope(recentBookings(), inHospital));
+  }, [inHospital]);
 
   const today = bookings?.filter((entry) => entry.isToday) ?? [];
   const upcoming = bookings?.filter((entry) => !entry.isToday && !entry.isPast) ?? [];

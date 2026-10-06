@@ -13,6 +13,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 import { createConsoleSession, fillSession, type ConsoleSession } from './support/console.js';
+import { closeOtherContexts } from './support/contexts.js';
 import { bengali } from './support/digits.js';
 import { joinStandbyAsGuest } from './support/patient.js';
 
@@ -50,6 +51,12 @@ async function freeAndOffer(reception: Page): Promise<void> {
   await expect(offer).toBeEnabled({ timeout: 10_000 });
   await offer.click();
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('a place on the standby list, from the phone (FR-PAT-25)', () => {
   test('paid when joining: seated the moment a chair frees, nobody asked (FR-PAT-26)', async ({

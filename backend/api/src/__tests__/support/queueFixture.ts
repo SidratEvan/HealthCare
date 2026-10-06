@@ -206,6 +206,14 @@ export async function cachedStateOf(sessionId: string): Promise<{
 }
 
 /** One booking's derived status, to prove the projection reached it. */
+/** The measured consultation length the projection stored for a booking. */
+export async function consultSecondsOf(bookingId: string): Promise<number | null> {
+  const result = await sql<{ consult_seconds: number | null }>`
+    SELECT consult_seconds FROM bookings WHERE id = ${bookingId}
+  `.execute(db);
+  return result.rows[0]?.consult_seconds ?? null;
+}
+
 export async function bookingStatusOf(bookingId: string): Promise<string | null> {
   const result = await sql<{ status: string }>`
     SELECT status FROM bookings WHERE id = ${bookingId}

@@ -8,8 +8,15 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
+import type { QueueState } from '@platform/domain';
+
 import { ApiClient, ApiError, NetworkError } from '../api/client.js';
-import { DEFAULT_STALE_AFTER_MS, isStale } from '../realtime/session.js';
+import {
+  DEFAULT_STALE_AFTER_MS,
+  foldUpdate,
+  isStale,
+  type SessionSnapshot,
+} from '../realtime/session.js';
 
 describe('isStale (FR-OFF-03, FR-OFF-04)', () => {
   const now = new Date('2026-09-18T12:00:00Z');
@@ -133,5 +140,43 @@ describe('ApiClient', () => {
     // rolls a row back, "there was no server" leaves it applied and queued.
     const fetchImpl = fetchDouble(() => Promise.reject(new Error('Failed to fetch')));
     await expect(client(fetchImpl).get('/x')).rejects.toThrow(NetworkError);
+  });
+});
+
+describe('foldUpdate (FR-QUE-05)', () => {
+  /** A state that only says which sequence it describes; nothing here reads more. */
+  const stateAt = (seq: number): QueueState => ({ lastSeq: seq }) as unknown as QueueState;
+  const empty: SessionSnapshot = {
+    state: null,
+    etas: [],
+    lastServerTs: null,
+    lastSeq: 0,
+    connected: true,
+  };
+  const update = (seq: number) => ({
+    seq,
+    serverTs: `2026-09-29T06:00:${String(seq).padStart(2, '0')}Z`,
+    data: { state: stateAt(seq), etas: [] },
+  });
+
+  it('takes the first state it is given', () => {
+    const folded = foldUpdate(empty, -1, update(4));
+    expect(folded?.snapshot.state).toEqual(stateAt(4));
+    expect(folded?.stateSeq).toBe(4);
+  });
+
+  it('keeps a newer state when the older catch-up arrives after it', () => {
+    // The live broadcast of seq 6 reached the room before the join's
+    // catch-up, which was read at seq 5. Last-wins put the screen back on 5.
+    const live = foldUpdate(empty, -1, update(6));
+    if (live === null) throw new Error('the first update was refused');
+    expect(foldUpdate(live.snapshot, live.stateSeq, update(5))).toBeNull();
+  });
+
+  it('takes the same sequence again, and anything newer', () => {
+    const held = foldUpdate(empty, -1, update(6));
+    if (held === null) throw new Error('the first update was refused');
+    expect(foldUpdate(held.snapshot, held.stateSeq, update(6))?.snapshot.state).toEqual(stateAt(6));
+    expect(foldUpdate(held.snapshot, held.stateSeq, update(7))?.snapshot.lastSeq).toBe(7);
   });
 });

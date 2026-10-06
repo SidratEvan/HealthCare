@@ -15,9 +15,9 @@
  */
 
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { time } from '@platform/domain';
+import { time, MAX_CONSULT_SECONDS } from '@platform/domain';
 import type { StaffRole } from '@platform/domain';
 
 import { createApp } from '../app.js';
@@ -29,6 +29,7 @@ import * as queueService from '../services/queue.service.js';
 import {
   bookingStatusOf,
   cachedStateOf,
+  consultSecondsOf,
   createQueueFixture,
   eventTypesOf,
   otherHospitalId,
@@ -183,6 +184,47 @@ describe('every event type appends, reduces and broadcasts', () => {
     expect(events.map((entry) => entry.event)).toContain('session.delayed');
   });
 
+  it('a delay declared before the doctor arrives is used up by the arrival (FR-QUE-11)', async () => {
+    const declared = await post(`/sessions/${fixture.sessionId}/delay`, {
+      minutes: 30,
+      reason: 'যানজট',
+      declaredBy: 'reception',
+    });
+    expect(declared.status).toBe(200);
+
+    const arrived = await post(`/sessions/${fixture.sessionId}/arrived`);
+    expect(arrived.status).toBe(200);
+
+    // The doctor is in and the chamber is empty: the first patient is next,
+    // not half an hour away. Carrying the delay past the arrival told the
+    // front of the queue a time after the one reception could mark them
+    // absent at.
+    const first = arrived.body.data.etas[0] as { etaAt: string };
+    expect((Date.parse(first.etaAt) - Date.now()) / 60_000).toBeLessThan(2);
+    expect(arrived.body.data.state.hold).toBeNull();
+    // Still on record for the day's figures.
+    expect(arrived.body.data.state.delayMinutes).toBe(30);
+  });
+
+  it('a delay declared once the doctor is in holds the chamber until then (FR-REC-03)', async () => {
+    await startSession();
+    const declared = await post(`/sessions/${fixture.sessionId}/delay`, {
+      minutes: 30,
+      reason: 'জরুরি ডাক',
+      declaredBy: 'reception',
+    });
+    expect(declared.status).toBe(200);
+
+    const first = declared.body.data.etas[0] as { etaAt: string };
+    const minutesAway = (Date.parse(first.etaAt) - Date.now()) / 60_000;
+    expect(minutesAway).toBeGreaterThan(28);
+    expect(minutesAway).toBeLessThanOrEqual(30);
+    // The estimate is the hold's end, to the minute.
+    expect(declared.body.data.state.hold.minutes).toBe(30);
+    const heldUntil = Date.parse(declared.body.data.state.hold.until as string);
+    expect(Math.floor(heldUntil / 60_000) * 60_000).toBe(Date.parse(first.etaAt));
+  });
+
   it('SESSION_PAUSED and SESSION_RESUMED round-trip', async () => {
     await startSession();
     const paused = await post(`/sessions/${fixture.sessionId}/pause`, { reason: 'নামাজের বিরতি' });
@@ -273,6 +315,27 @@ describe('every event type appends, reduces and broadcasts', () => {
     expect(response.body.error.details.guard).toBe('NO_SHOW_BEFORE_GRACE');
   });
 
+  it('refuses a no-show during a break, and starts the grace again after it (FR-REC-05)', async () => {
+    // The grace ran out long ago — and then the chamber stopped for prayers.
+    await startSessionAnHourAgo();
+    const front = fixture.bookingIds[0] ?? '';
+    expect((await post(`/sessions/${fixture.sessionId}/pause`, { reason: 'নামাজ' })).status).toBe(
+      200,
+    );
+
+    const duringBreak = await post(`/bookings/${front}/no-show`);
+    expect(duringBreak.status).toBe(422);
+    expect(duringBreak.body.error.details.guard).toBe('SESSION_NOT_RUNNING');
+
+    expect((await post(`/sessions/${fixture.sessionId}/resume`)).status).toBe(200);
+
+    // Nobody could have been called during the break, so nobody missed a call.
+    const justAfter = await post(`/bookings/${front}/no-show`);
+    expect(justAfter.status).toBe(422);
+    expect(justAfter.body.error.details.guard).toBe('NO_SHOW_BEFORE_GRACE');
+    expect(await bookingStatusOf(front)).not.toBe('no_show');
+  });
+
   it('refuses a no-show for a patient whose turn has not come', async () => {
     await startSessionAnHourAgo();
     // Serial 3 is two places back. A patient holding a later serial is not
@@ -347,6 +410,59 @@ describe('every event type appends, reduces and broadcasts', () => {
     expect(events.map((entry) => entry.event)).toContain('session.ended');
   });
 
+  it('refuses to end a chamber while a patient is in it, and writes nothing (BTN-B02-END)', async () => {
+    await startSession();
+    const called = await post(`/sessions/${fixture.sessionId}/next`);
+    expect(called.status).toBe(200);
+    const before = await eventTypesOf(fixture.sessionId);
+
+    const refused = await post(`/sessions/${fixture.sessionId}/end`, { reason: null });
+
+    // The queue's ordinary refusal, with the guard a console can read: this
+    // is what a second counter whose screen has not caught up is told.
+    expect(refused.status).toBe(422);
+    expect(refused.body.error.code).toBe('QUEUE_GUARD_FAILED');
+    expect(refused.body.error.details.guard).toBe('PATIENT_IN_CHAMBER');
+
+    // No end was written, and nobody was told there had been one. Ended
+    // here, that patient would have been "in the chamber" for good.
+    expect(await eventTypesOf(fixture.sessionId)).toEqual(before);
+    expect(before).not.toContain('SESSION_ENDED');
+    expect(
+      emitted.forRoom(ROOMS.session(fixture.sessionId)).map((entry) => entry.event),
+    ).not.toContain('session.ended');
+  });
+
+  it('ends it once that patient is finished, and leaves everybody still waiting as they were', async () => {
+    await startSession();
+    const called = await post(`/sessions/${fixture.sessionId}/next`);
+    const inChamber = (
+      called.body.data.state.entries as { bookingId: string; status: string }[]
+    ).find((entry) => entry.status === 'in_chamber');
+    if (inChamber === undefined) throw new Error('next called nobody');
+
+    const finished = await post(`/bookings/${inChamber.bookingId}/done`);
+    expect(finished.status).toBe(200);
+    const statusesBefore = (
+      finished.body.data.state.entries as { bookingId: string; status: string }[]
+    ).map((entry) => [entry.bookingId, entry.status]);
+
+    const ended = await post(`/sessions/${fixture.sessionId}/end`, { reason: null });
+
+    expect(ended.status).toBe(200);
+    expect(ended.body.data.state.status).toBe('ended');
+    expect((await eventTypesOf(fixture.sessionId)).at(-1)).toBe('SESSION_ENDED');
+
+    // Three people were never seen. Ending the chamber did not mark them
+    // absent, cancelled or seen to tidy it up: each is exactly what it was.
+    const statusesAfter = (
+      ended.body.data.state.entries as { bookingId: string; status: string }[]
+    ).map((entry) => [entry.bookingId, entry.status]);
+    expect(statusesAfter).toEqual(statusesBefore);
+    expect(statusesAfter.filter(([, status]) => status === 'done')).toHaveLength(1);
+    expect(statusesAfter.filter(([, status]) => status !== 'done')).toHaveLength(3);
+  });
+
   it('ACTION_UNDONE nets out the event it compensates (GR-02)', async () => {
     await startSession();
     const called = await post(`/sessions/${fixture.sessionId}/next`);
@@ -365,6 +481,45 @@ describe('every event type appends, reduces and broadcasts', () => {
       'PATIENT_CALLED',
       'ACTION_UNDONE',
     ]);
+  });
+});
+
+describe('a patient left in the chamber for hours', () => {
+  // The known bug: reception forgets "done", the patient stays in_chamber,
+  // and three hours later "done" or "next" failed on
+  // bookings_consult_seconds_plausible with a 500 — the chamber could not move
+  // until somebody reset the demo. Only Date is faked, so the database driver's
+  // own timers are untouched.
+  const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('can still be finished, and the booking stores the plausible maximum', async () => {
+    await startSession();
+    await post(`/sessions/${fixture.sessionId}/next`);
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + FOUR_HOURS_MS);
+    const response = await post(`/bookings/${fixture.bookingIds[0] ?? ''}/done`);
+
+    expect(response.status).toBe(200);
+    expect(await bookingStatusOf(fixture.bookingIds[0] ?? '')).toBe('done');
+    expect(await consultSecondsOf(fixture.bookingIds[0] ?? '')).toBe(MAX_CONSULT_SECONDS);
+  });
+
+  it('does not stop "next" from calling the following patient', async () => {
+    await startSession();
+    await post(`/sessions/${fixture.sessionId}/next`);
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + FOUR_HOURS_MS);
+    const response = await post(`/sessions/${fixture.sessionId}/next`);
+
+    expect(response.status).toBe(200);
+    expect((await cachedStateOf(fixture.sessionId))?.now_serving_serial).toBe(2);
+    expect(await consultSecondsOf(fixture.bookingIds[0] ?? '')).toBe(MAX_CONSULT_SECONDS);
   });
 });
 

@@ -445,15 +445,16 @@ export async function patientBelongsTo(
  * Whether a patient or guest holds a booking in this session.
  *
  * Used by the socket handshake to decide who may listen to a queue. A booking
- * id is checked first and on its own: a tracking link names exactly one
- * booking (`FR-GST-05`), and a guest who later books elsewhere must not find
- * that their old link now opens a different chamber.
+ * id is checked on its own: a tracking link names exactly one booking
+ * (`FR-GST-05`), and a guest who later books elsewhere must not find that their
+ * old link now opens a different chamber. There is deliberately no guest
+ * identity branch: it admitted any token for a number to every chamber that
+ * number was booked into (security review, 2026-09-30).
  */
 export async function existsForPrincipal(
   sessionId: string,
   who: {
     readonly userId: string | null;
-    readonly guestId: string | null;
     readonly bookingId: string | null;
   },
 ): Promise<boolean> {
@@ -465,7 +466,6 @@ export async function existsForPrincipal(
        AND (
          (${who.bookingId}::uuid IS NOT NULL AND id = ${who.bookingId}::uuid)
          OR (${who.userId}::uuid IS NOT NULL AND booked_by_user_id = ${who.userId}::uuid)
-         OR (${who.guestId}::uuid IS NOT NULL AND booked_by_guest_id = ${who.guestId}::uuid)
        )
      LIMIT 1
   `.execute(db);

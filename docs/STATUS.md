@@ -7,7 +7,158 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `fix/phone-entry-normalise` — **the booking and standby forms
+Last updated: `chore/pitch-release` (6 October) — **the V1 pitch build is
+released as MedLiveBD: `main` and the public demo are `mvp` at `fa31157`
+(and this branch's documents), Supabase has
+migrations through 0038 and fresh demo data, and `demo` is the same commit**
+(below, *Now: the V1 pitch build* and *Running the pitch demo*). The plan's
+rule from here is the owner's: stop adding V1 features; what is next is his
+own walk through the demo and whatever it turns up. Before that,
+`chore/v1-direction` (5 October, evening) — **the feature
+freeze is lifted and the product is one shared multi-hospital platform; the
+V1 pitch build is what is being built** (below, *Now: the V1 pitch build*).
+Documents only. Before that, `chore/pilot-candidate` (5 October) —
+**`fb1d1d8` is the reception-pilot candidate, approved by the owner**; the
+stop that came with it ("all product work is stopped until a hospital agrees
+to pilot") **was lifted the same evening and no longer holds** (below,
+*Pilot readiness*, for what is still true of it). Before that,
+`chore/e2e-pilot-path` (5 October) — **P4: the pilot's own path
+runs under the production configuration, and the answer is go, on three
+conditions that are not code** (below, *Pilot readiness*). **Work has
+stopped there, as the owner directed: nothing from the plan resumes until
+he has read that section.** Before that, `fix/chamber-end-of-day`
+(5 October) — **P3: a chamber can be
+ended from the console, and not around a patient** (below, *P3*). Nothing
+ended one before, so yesterday's chamber was the first offered the next
+morning, on a card with no date. Before
+that, `fix/console-demo-banner` (5 October) — **P2: a screen says it
+is a demonstration only where the server says so** (below, *P2*). The line
+was printed unconditionally on ten console screens and four of the patient
+app's, so a hospital's own server would have told its staff that their
+patients were display data. Before that,
+`chore/requirements-5-october` (5 October) — **client-readiness
+mode: feature work is frozen and the order is P2, P3, P4, then a go or no-go
+for a supervised reception pilot** (below, *Now: client-readiness mode*;
+`docs/PLATFORM_PLAN.md` §2). Documents only: the owner's decisions of that
+day, written down before any of them is built. Before that,
+`fix/console-ack-rollback` (5 October) — **a tap stays on the
+reception console when its answer arrives before its broadcast** (plan 1.9b;
+below, *Plan 1.9b*). The queue used to step back to the patient before, and
+stay there while the socket said nothing. **Two things it leaves, neither
+measured:** the ward board and the ER console have the same shape, and an
+action is folded twice while the answer is the slower one (same section).
+With it, `fix/materialise-test-midnight` and `fix/tests-past-midnight` —
+**two tests that failed just after Dhaka midnight, every night** (below,
+*Things learned the hard way*); the product was right both times, and one
+question for the owner came out of it (a chamber that runs past midnight),
+which he answered the same day (`FR-QUE-06`, `FR-PAT-39`).
+Before that, `fix/console-key-race` (5 October) — **a key on the console is
+answered by the screen as it stands, not by the one before the last redraw**
+(plan 1.9a; below, *Plan 1.9a*). It was the one failure in CI's third run,
+and **the fourth run (37350834049, `d1ca84a`) was the first in which all
+three jobs passed**. Before that,
+`chore/status-handover` (3 October) — **phase 1 is merged and
+pushed through 1.9; 1.10 is next and starts with a design note for the
+owner** (below, *Next: plan 1.10*). No product code changed. Before that,
+`fix/log-sms-redaction` (3 October) — **a message leaves no
+phone number, no text and no link behind it** (plan 1.9; below, *Plan 1.9*):
+the `log` SMS provider writes one line naming the message and nothing else,
+no link is stored in the outbox, and a message's words are cleared after 90
+days. Before that, `fix/e2e-fast-runner` (3 October) — **the first CI run of the
+browser suite failed six tests on GitHub's faster runner, and both causes
+were in the suite, not the product** (below, *Plan 1.8*; decision 90): a
+per-address limit that 150 simulated patients share, and a fixture that
+could pick a name already taken. The canary passed there. Before that,
+`chore/push-permission` (3 October) — **the owner gave standing
+permission to push and merge to any branch** (`CLAUDE.md` §3.1, which now
+says so in his words; a force-push still needs asking). Under it plan 1.8 was
+merged as `4ece550` after the whole gate passed on it, and `mvp` and `demo`
+were pushed there. No product code changed. Before that, `chore/e2e-ci`
+(3 October) — **the browser suite runs in CI,
+the canary first, and the canary and the counter also run against the
+production configuration** (plan 1.8; below, *Plan 1.8*). Under that
+configuration a patient still cannot book: there is no SMS provider. Before
+that, `chore/ops-hardening` (3 October) — **on a hospital's server the
+API no longer owns the database, nothing of ours runs as root, logs rotate,
+and a backup is not a backup until it has been restored and copied
+elsewhere** (plan 1.7; below, *Plan 1.7*). The role still bypasses row-level
+security until 1.10, and nothing alerts anybody yet. Before that,
+`feat/console-offline-load` (3 October) — **the console opens
+with no network, on the queue it was last told** (plan 1.6; below, *Plan
+1.6*). In the tab that was signed in; without names; the reception queue
+only. Before that, `fix/e2e-outbox-close-race` (3 October) — **the outbox specs
+wait for a blocked push to be refused before they close the page** (a test
+fix; below, *Plan 1.5*, *Learned about the tests*). Before that,
+`fix/offline-outbox-persist` (3 October) — **what a console
+queued and could not send survives a reload, a crash and a power cut** (plan
+1.5; below, *Plan 1.5*). The console still cannot *open* with no network;
+that is 1.6. Before that, `fix/broadcast-after-commit` (3 October) — **a screen is told
+about a queue write only once it is in the database** (plan 1.4b; below,
+*Things learned the hard way*). Found by `lab-report.spec.ts` while 1.5 was
+being verified. Before that, `fix/queue-pool-starvation` (3 October) — **a queue write no
+longer needs a second database connection while it holds the chamber's
+lock** (plan 1.4a; below, *Things learned the hard way*). Found by the
+verification gate while 1.5 was being verified. Before that, `chore/e2e-memory-finding` (3 October) — **`demo` moved to
+`10bbcd1` after a clean 144/144 browser run, and why two runs before it each
+failed one test** (below, *Things learned the hard way*: the machine ran out
+of memory, and the process that grows is Playwright's trace recorder, not the
+product). No product code changed. Before that, `fix/sync-event-allowlist`
+(2 October) — **the sync path
+replays only what a counter can do offline** (plan 1.4; `BACKEND.md`
+`SY-07`): eleven event types, each from a role its own route admits; undo,
+offers, cancellation, ending a chamber and walk-ins are refused there and
+keep their own routes. Before that, `fix/console-undo` (2 October) — **the
+console's Undo undoes**
+(plan 1.3): the toast and `Ctrl+Z` take back the whole tap through the real
+undo route, or drop it if it was never sent. **Still missing against
+`GR-02`:** the row buttons (done, late, absent, bring back, check-in) show no
+undo toast of their own; `Ctrl+Z` is the only way to take those back. Before
+that, `fix/console-resume` (2 October) — **a chamber paused from the
+console is resumed from the console** (plan 1.2; decision 87): the pause
+button reads আবার শুরু while paused, key `P`, with a banner and call-next off
+for the length of the break. Before that, `fix/delay-on-arrival` (2 October)
+— **a delay declared before the doctor arrives is used up by the arrival**
+(plan 1.1; decision 86). The patient at the front of an empty chamber is told
+"now", not "in half an hour", and cannot be marked absent before the time on
+their phone. Before that, `chore/platform-plan` (2 October) — **the owner's implementation
+brief became `docs/PLATFORM_PLAN.md`**: the order of work from here, branch by
+branch, and the decisions it waits on (below, *The platform plan*). No product
+code changed. Before that, `chore/handover` (2 October) — **a technical handover read from
+the code, `docs/HANDOVER.md`, and what it found** (below, *Handover audit*). No
+product code changed. Before that, `fix/guest-device-proof` — **a returning
+guest proves the phone once per device** (decision 85, ruled). With it all four holes the security
+review found are closed (below, *Security review*). Before that,
+`fix/booking-payments-scope` — **a booking's payments are read by its owner
+and its hospital only**. Before that, `fix/guest-booking-scope` — **a guest token
+now opens only the booking it names**. Before that,
+`fix/standby-phone-proof` — **a standby place and a bed request prove the
+phone first, as a booking does**. Before that,
+`fix/visit-doctor-only` — **only a doctor writes a visit, and a signed one is
+final**. Before that, `chore/security-review` — **a
+security review of the whole codebase found four holes to close before real
+patient data**. Before that, `feat/staff-2fa` — **an
+administrator signs in with a code
+from their phone** (pilot step 28; below, *Step 28*). Before that,
+`chore/self-host` — **the whole stack on a hospital's own
+server, from one command** (pilot step 26; below, *Step 26*). Before that,
+`feat/patient-otp` — **a patient proves a phone and finds what it holds**
+(pilot step 25; below, *Step 25*). Before that, `feat/data-import`
+— **a hospital imports what it already holds** (pilot step 24; below, *Step
+24*). Before that, `feat/counter-registration`
+— **walk-ins and the registration desk** (pilot step 23; below, *Step 23*).
+Before that, `feat/hospital-settings`
+— **a hospital sets itself up from `S-B-11`** (pilot step 22; below, *Step
+22*). Before that, `feat/staff-auth` —
+**staff sign in with their own accounts** (pilot step 21; below, *Step 21*).
+Before that, `chore/pilot-scope` — **the
+pilot build is in the documents**:
+import requirements, auth un-deferred, steps 21–28 (below, *The Marks
+handbook*). Before that, `fix/console-rail-billing` — **the rail's বিল no
+longer opens the pharmacy; ফার্মেসি has its own item**. Before that, `fix/consult-overflow` —
+**a patient forgotten in the chamber no longer freezes it** (below, under *Preparing the demo*). Before that,
+`chore/status-marks-handbook` — **a Bangla handbook for Marks
+Group, and what a real (non-demo) version for them would need** (below, *The
+Marks handbook*). No product code changed. Before that, `fix/phone-entry-normalise` — **the booking and standby forms
 refused a mobile number typed as 01…**, found rehearsing the first hospital
 pitch (28 September), with what that rehearsal taught about preparing the
 demo (below, *Preparing the demo for a
@@ -58,10 +209,251 @@ Before that, `feat/standby-self-serve` (decision 62) and `feat/check-in`
 | 18 | `feat/payments` | merged — migrations 0009 + 0019, the refund and settlement domain, the provider seam, `seed_08_money`, the refund statement on `MOD-A08-CANCEL`. **bKash and Nagad are not implemented**; the mock is the working provider (`CLAUDE.md` §1.1) |
 | 19 | `feat/admin-dashboard` | merged — migration 0020, `S-B-10`, the standby card on `S-B-02` (`BTN-B02-OFFER`), CSV export with audit, `no-show-recovery.spec.ts`. **Average wait is not measured**: nothing records a patient arriving (decision 61) |
 | 20 | `feat/gov-dashboard` | merged — migrations 0024–0026, `S-B-13`, `gov_reader`, `CHIP-B05-SIGNAL`, `seed_09_signals`, `gov-dashboard.spec.ts`. **Decision 5 implemented, not ruled**: national roles hold a null hospital. `FR-GOV-05` (shared health record) waits for a counterparty |
+| **21** | **`feat/staff-auth`** | **merged — the pilot's first step** (`CLAUDE.md` §4.2). Migration 0027, `S-B-00` sign-in, `S-B-00c` first password, the picker narrowed to the person's own facility and roles, refresh rotation, lockout, `pnpm staff:create`, `staff-login.spec.ts` |
+| **22** | **`feat/hospital-settings`** | **merged** — migration 0028, `S-B-11`, `/hospital/*`, the hourly session materialiser in the API, `pnpm doctor:verify`, `hospital-settings.spec.ts` |
+| **23** | **`feat/counter-registration`** | **merged** — `S-B-03`, `MOD-B02-WALKIN`, `/registration/patients`, the walk-in replay fix, `counter-registration.spec.ts` |
+| **24** | **`feat/data-import`** | **merged** — migrations 0029–0031, `S-B-14`, `/hospital/imports`, sets A–C, undo, the body-limit fix, `data-import.spec.ts` |
+| **25** | **`feat/patient-otp`** | **merged** — migration 0032, `/auth/*`, `/guest/start`, `/guest/verify`, `/guest/claim`, the Profile tab, `patient-account.spec.ts` |
+| **26** | **`chore/self-host`** | **merged** — `Dockerfile`, `deploy/` (compose, Caddy, backup, restore), local file storage, `PAYMENT_PROVIDER=off`, `GET /config`, `DEPLOY.md` Part S, `self-host.spec.ts` |
+| 27 | `feat/sms-live` | **waits for an SMS aggregator account** (`CLAUDE.md` §4.2) |
+| **28** | **`feat/staff-2fa`** | **merged** — migration 0033, `config/totp.ts`, `/staff/2fa`, `/staff/2fa/setup`, `/staff/2fa/enable`, `S-B-00b`, `S-B-00d`, the reset on `S-B-11`, `pnpm staff:reset-2fa`, `staff-2fa.spec.ts` |
 
-**Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design). What
-remains is the owner's: the open decisions below, applying migrations to
+**Every step in `CLAUDE.md` §4 is now merged** (4 deferred by design), and
+every pilot step in §4.2 but 27, which waits for an SMS aggregator account.
+What remains is the owner's: the open decisions below, applying migrations to
 Supabase, and whether `mvp` goes to `main`.
+
+### Now: the V1 pitch build (owner, 5 October, evening)
+
+**Read `CLAUDE.md` §1.2 and §4.4, then `docs/PLATFORM_PLAN.md` §2, *Now: the
+V1 pitch build*.** The owner read an audit of the code against a clarified
+direction and decided, in one written note, overriding the freeze of that
+morning:
+
+- **The product is one platform**: a multi-hospital patient app (search for
+  what you need, see which hospitals can provide it now), a private portal
+  per hospital, and later an optional hospital-branded patient app on the
+  same API. Not software rewritten per hospital.
+- **One shared deployment hosted in Bangladesh is the default** (`FR-SEC-07`
+  amended). A hospital's own server is a later exception. Do not design
+  around one server per hospital.
+- **The freeze is lifted.** Build until the pitch-ready V1 experience is
+  complete, then stop adding scope. The pitch is the whole platform, not
+  "only a reception pilot".
+- **Not blockers now:** a real SMS provider and sender ID, bKash, Nagad,
+  merchant accounts, store publication, a paid penetration test. The company
+  is still being registered; these follow it. Simulated codes, mock payment
+  and demo data are what the pitch runs on.
+- **Security is split.** Tenant isolation in the database, scope enforcement
+  and the cross-hospital reads must be done before two real hospitals share
+  real data (`FR-SEC-11`, plan 1.10); they do not block the pitch.
+- **Order:** patient search and discovery; hospital onboarding from screens;
+  the mapped CSV import with a model's suggestions on top; a design pass
+  walked as each role; then one full gate and a release to the public demo
+  (made 6 October; it had been 133 commits behind `mvp`).
+- **Ambulance and blood leave the first screen.** Reschedule only if cheap.
+  A significant redesign is allowed where the old screens fight the new
+  structure.
+- **Testing has two levels** (`CLAUDE.md` §6): focused for screens and copy,
+  strict for the queue, migrations, auth, tenancy, records and import writes;
+  everything once before a release.
+- **How the owner wants it worked:** a line on what a branch changes, build
+  it, a short plain update when it merges (what changed, what he can see,
+  tests run, next branch), and no waiting for approval in between.
+
+**Where it stands:** the table in `docs/PLATFORM_PLAN.md` §9 (rows V0–V6).
+
+**Merged so far in this build, newest last:**
+- **V1.1 `fix/patient-v1-surface`** — nothing unfinished is offered in the patient app: ambulance and blood are gone from Home and from the emergency screens, and the "not built yet" screen no longer exists. Focused gate: typecheck, lint, format, the message tests, `app-shell.spec.ts` and `emergency-burn.spec.ts` (20 passed).
+- **V2.1 `feat/patient-search`** — a patient searches for a doctor, a hospital, a specialty, a bed kind or a capability and sees which hospitals can provide it, each with the live figure for that need and its age; Home opens on that search; a result goes straight into booking at that hospital or doctor. Found by a screenshot and fixed with a test: the bottom bar lit the serials tab on `/search`. Focused gate plus the new route's API tests: typecheck, lint, format, 33 unit and 12 API tests for search, `patient-search`, `app-shell` and `guest-booking` in the browser (42 passed, then 23 after the tab fix).
+- **V2.2 `feat/hospital-scope`** — the branded-app foundation and no more: the patient app opened with `?scope=PADMA` is Padma's, in its name and colours, showing its doctors and beds only; every patient link and the API's allowed origins are each built in one place. **Supabase needs migration 0036 before a release.** Strict gate: `pnpm test` whole (4,913, one pinned `/config` shape updated), typecheck, lint, format, and in the browser the canary, hospital-scope, patient-search, guest-booking, standby, emergency-burn, ward-board and demo-label (67 passed; one of the new spec's own waits was wrong and was fixed).
+- **V3.1 `feat/org-lifecycle`** — a hospital no longer publishes itself: its administrator sees a checklist on `S-B-11` and asks for review, and a platform administrator approves, sends back with a note, suspends, reinstates or closes, and verifies doctors (`/platform/*`, API only until V3.2). Found and closed on the way: a booking sent straight to a chamber at a suspended or unapproved hospital was accepted. **Supabase needs 0036 and 0037 before a release. A new single-hospital deployment cannot go live until V3.2 gives it a platform administrator** (`DEPLOY.md` S3). Strict gate: `pnpm test` whole (4,963), typecheck, lint, format, and eleven browser specs with the canary (66 passed).
+- **V3.2 `feat/platform-console`** — the platform administrator's screen: hospitals with those waiting first, add a hospital with its first administrator (temporary password shown once), verify a doctor, approve / send back / suspend / reinstate / close with a reason where one is owed. A hospital now goes from nothing to live with no command line after the deployment's first platform administrator (`pnpm staff:create --platform`, `DEPLOY.md` S3). On the demo it is the picker's **প্ল্যাটফর্ম পরিচালনা** section. Strict gate: `pnpm test` whole (5,134), typecheck, lint, format; in the browser the canary, platform-onboarding, gov-dashboard, console-cold-start, staff-login, staff-2fa, hospital-settings, console-rail and demo-label (41 passed).
+- **V4.1 `feat/import-mapping`** — a hospital uploads its own CSV export: the server says what each column holds and proposes which is which with a reason, an administrator corrects and confirms on a screen that never shows a row, and the file goes to the importer that already exists (check, preview, approve, undo). The same export maps itself next time. Rules and a person only; the model is V4.2. Sample exports to show it with: `database/seeds/samples/`. **Supabase needs 0036–0038 before a release.** Strict gate: `pnpm test` whole (5,274), typecheck, lint, format; `import-mapping` and `data-import` in the browser (4 passed).
+- **V4.2 `feat/import-mapping-ai`** — a model's suggestions on top of the rules, for the columns the rules could not place. It is sent headings and column profiles and never a row; its answer is filtered to the fields and columns it was asked about; each kept suggestion is shown as a suggestion with its reason; a person confirms; the same importer decides. Off by default, and off, slow or failing it changes nothing. **To show it in a pitch the owner sets `MAPPING_PROVIDER=claude` and `MAPPING_API_KEY`; it has only been run against a stand-in network, so try `pnpm mapping:try` with the key first.** Strict gate for what is sent, focused for the screen: `pnpm test` whole (5,318), typecheck, lint, format; `import-mapping` in the browser (5 passed).
+- **V5.1 `fix/pitch-walkthrough`** — the product walked by screenshot as each role: patient, Padma's own app, reception, doctor, ward, emergency, hospital administrator, platform administrator. One fault found and fixed with a test: a hospital's own app showed a serial this phone had booked at another hospital (Home's strip and সিরিয়াল); it now shows that hospital's only, and `GET /config?scope=` says which hospital that is by id. No staff screen needed changing. `PRD.md` §24 is the platform's pitch now, eleven steps, and promises no reschedule (`FR-PAT-23` marked outside V1); *Running the pitch demo* below covers search, a hospital's own app, onboarding and the mapped import. Focused gate: typecheck, lint, format, the scope API tests (21), and in the browser hospital-scope (6) then the canary, guest-booking, app-shell, patient-search and standby (50 passed).
+- **`chore/rename-medlivebd`** — **the product is MedLiveBD** (owner, 6 October, replacing the working name HealthWealthBD and the placeholder স্বাস্থ্যসেবা the patient app showed). The patient app's header, title and installed name, the console's tab, a patient's verification message, a platform administrator's authenticator entry, a downloaded import template (`medlivebd-<set>-template.csv`) and the self-hosted stack's project, image, database and role names. **Written the same in Bangla and English, which is this build's choice and not the owner's:** he gave one spelling, so none was invented; a Bangla spelling is one line in `shared/i18n` (`appName`) when he gives it. Not renamed: `@platform/*`, the repository folder, tables. **A self-hosted stack started under the old names would need its `deploy/.env` kept as it is** (none exists outside this machine's tests). Focused gate: typecheck, lint, format, the message, environment, import and TOTP tests (3,096), and in the browser hospital-scope, data-import, app-shell, patient-account and staff-2fa (23 passed).
+- **V4.3 `feat/import-warnings`** — what is not an error is still said before an import is approved (`FR-IMP-21`): patient rows under different identifiers that look like one person (same name with the same mobile number or the same birth date; a shared phone alone is a family), and a date or mobile column written more than one way, with the reading that will be used. By row number only, nothing merged, nothing refused, approval never disabled. Worked out from the batch's rows each time it is read, so **no migration**. To show it: `database/seeds/samples/hospital-export-patients-untidy.csv`. The last planned branch of the V1 pitch build. Strict gate: `pnpm test` whole (5,368), typecheck, lint, format; `data-import` and `import-mapping` in the browser (7 passed).
+- **V6 `chore/pitch-release`** — the release. Full gate on `fa31157`: `pnpm verify` (5,368 tests), `pnpm build`, `pnpm test:e2e` (191 passed), `pnpm test:e2e:built` (3 passed) and `pnpm test:e2e:prod` (25 passed), the canary in the first and the last. Then, in this order: migrations 0034–0038 applied to Supabase and `db:verify` clean there; `mvp` merged into `main` and pushed, which redeploys the API and both apps; the demo data reset from the new seeds (Padma's theme, every hospital's lifecycle, the platform administrator); `demo` moved to the same commit and pushed. **Not verified from here: the deployed pages themselves** — the public demo's addresses are not recorded in this repository, so the owner opens them. The model's import suggestions are off on the public demo until `MAPPING_PROVIDER` and `MAPPING_API_KEY` are set on Render. The morning refresh task had been skipping since 0037 was written (Supabase was behind, so `db:verify` refused); it runs again now. **The first full gate of the night was red by one test, the canary, by 186 ms** (2,186 against 2,000): it ran while a formatter and a patch script were running in a second working copy on the same machine. Alone it passed, and the gate was run again from the start on the final commit with the machine left alone, which is the run counted here. The rule it confirms: nothing else runs on this machine while the browser suite does, not even a formatter. **The second run's production suite was red by one assertion** that pinned the exact shape of `GET /config` and had not been updated when V2.2 added `scope` to it (the suite had not been run since): the test was corrected (`fix/prod-config-shape`, the only difference between `2e26cd0`, which the other four steps ran on, and `fa31157`) and the production suite run again whole, 25 of 25. So a branch that changes a public answer's shape runs `pnpm test:e2e:prod` too.
+
+**Left for the owner by this build** (none of them blocks the pitch):
+
+- **Emergency inside a hospital's own app.** With a scope set, discovery,
+  booking and beds are that hospital's only (`FR-BRD-02`). The emergency
+  search is not narrowed: it still ranks every hospital that can treat the
+  problem. A hospital will not want its app sending people to a competitor;
+  a family with a burn case needs the nearest burn unit, which may not be
+  this hospital's. Two different products. Until ruled, it stays unnarrowed,
+  which is the one that cannot send somebody to the wrong place.
+- **`FR-NET-04`** (a hospital choosing which figures it publishes) is written
+  as a requirement and not built: a live hospital publishes all of them.
+- **Records inside a hospital's own app.** A scoped app shows only that
+  hospital's serials, on Home and on সিরিয়াল (V5.1). **রেকর্ড** is not
+  narrowed: the wallet is the patient's, and it lists visits at every
+  hospital. Whether a hospital's app should show a visit made elsewhere is the
+  same kind of question as the emergency one above.
+- **A serial booked before V5.1 is not shown in a scoped app.** The phone's
+  saved booking did not record which hospital it was at. It still shows in the
+  network's own app, and it is a matter of a day's bookings on a demo.
+
+**Decided by this build without asking, as the direction allows:**
+
+- **Home's order** changed from "emergency first" to: a live serial if this
+  phone holds one, search, the emergency card, specialties, convenience
+  (`APP_FLOW.md` `S-A-02`). The emergency card is still on the first
+  screenful, which a browser test now measures.
+- **A word that names a need is read as the need**, and hospitals or doctors
+  whose names contain the word are listed after it. Whole text only: "burn"
+  is a need, "Burnett" is a person (`shared/domain` `search/needs`).
+- **Blood bank and ambulance are not offered as search needs**, though both
+  are capabilities a hospital publishes: a search for either reads as the two
+  services that are outside V1.
+- **A scope is not a permission.** It narrows public data, so it is read
+  from the address (`?scope=CODE`) or the build, and a code no live hospital
+  has is refused with a 404 rather than read as the whole network.
+- **A hospital's theme is six brand tokens and nothing else**, refused whole
+  if white on `brand-600`, `brand-700` on the canvas or `brand-600` on
+  `brand-100` falls under 4.5:1. Padma carries a navy one in the demo data so
+  the pitch can show it: open the patient app with `?scope=PADMA`.
+- **Hospital-aware links and origins are prepared, not switched on**:
+  `config/links.ts` `patientLink` and `allowedOrigins`, and
+  `EXTRA_ALLOWED_ORIGINS`. Nothing answers differently until it is set.
+
+**Carried over from the audit, true of the code on 5 October and worth not
+re-deriving:**
+
+- The patient app's discovery is specialty → hospital → doctor only. The API
+  already takes `q` on `/hospitals` and `/doctors` (substring, both scripts)
+  and `bedKind` on `/hospitals`; no screen sends `q`.
+- `hospitals.code` exists and is unique (0027). There are no brand columns.
+- The API answers exactly two browser origins (`middleware/cors.ts`,
+  `realtime/server.ts`), and every patient link is built from one
+  `WEB_BASE_URL` (booking, bed request, emergency, standby).
+- A hospital administrator's go-live publishes the hospital with one
+  department and one doctor; nobody outside the hospital approves it. A
+  hospital and its first administrator are made by `pnpm staff:create`; a
+  doctor is verified by `pnpm doctor:verify`. `platform_admin` is a role with
+  no screen.
+- The import takes only a file whose headings are the template's
+  (`missingColumns`). No mapping code exists.
+- `booking.service.ts` stamps `intake.demo = true` on every booking, real
+  ones included; notification sending is still awaited inside the request;
+  `audit_log` can be edited; no security headers. All after the pitch.
+- A signed-in patient still books as a guest, My serials is this phone's
+  list, and nothing reschedules (no route, no screen).
+
+### Superseded the same day: client-readiness mode (owner, 5 October, morning)
+
+**The freeze in this section was lifted that evening (above). It is kept for
+the record of P1–P4 and of the reception-pilot candidate, which stand.**
+The priority was one supervised reception pilot, and feature work was
+frozen until its path was green. What that day's decisions were, all the
+owner's, each given in a written note:
+
+- **Where it stands: P1 to P4 are merged and the work has stopped for the
+  owner's review** (below, *Pilot readiness*). The order was:
+- **Order:** P1 `fix/console-ack-rollback` (merged, `becb262`) → **P2
+  `fix/console-demo-banner`** → P3 `fix/chamber-end-of-day` → P4
+  `chore/e2e-pilot-path` → **stop and report**: one answer, go or no-go for a
+  supervised reception pilot, naming only what actually blocks it. Nothing
+  else from the plan resumes until the owner has read that report.
+- **Scope for week one is reception only.** The other modules are outside
+  the pilot, not re-rated: they keep `HANDOVER.md` §13's ratings.
+- **P2** covers the console and the patient app: the demonstration line is
+  shown on a demonstration, absent on a real server, hidden while the server
+  has not answered.
+- **P3** adds `BTN-B02-END` and `MOD-B02-END` (`APP_FLOW.md` B1.2) and the
+  date and start on the picker's cards. It must not strand anybody silently:
+  off while a patient is in the chamber, **and the server refuses that end
+  too** (one guard, the ordinary refusal, nothing written); the number of
+  patients not seen is stated and needs a deliberate tick; nobody's status is
+  changed to tidy up; refund eligibility is as it was. Before this the server
+  ended a chamber whatever the queue held.
+- **P5** (HTTPS for a server reachable only inside a hospital) is **not to be
+  built on a guess**. `DEPLOY.md` S1 carries the question for the hospital's
+  IT; if they choose inside-only, the smallest design goes to the owner
+  first.
+- **Decided and written, not built:** `SY-08` and `SY-09` in `BACKEND.md` and
+  *One action, shown once* in `FRONTEND.md` §11.1, with the owner's
+  constraints (`applied` bounded to one write; a tap is one thing on the
+  screen; versions raised in the row's own transaction; tests that deliver
+  N+1 before N); and the founder's decision on sessions that cross midnight
+  (`PRD.md` `FR-QUE-06`, `FR-PAT-39`). Each is marked "not built" where it
+  stands. They are rows 1.9c–1.9f and wait until after the first pilot, with
+  the conditions that would bring one forward in the plan's B list.
+- **What to say about import:** supervised CSV imports in the templates
+  already built work. Not to be promised: a direct connection to an HMS or
+  its database, arbitrary Excel files, or working out an unknown format.
+
+**Found while preparing that list, verified in the code, and why P2 and P3
+exist:** the demonstration line is drawn unconditionally on ten console
+screens and four of the patient app's; nothing in the product ends a chamber
+(the route exists, no screen calls it, no job does), so yesterday's chamber
+is still "running" the next morning, is listed first, and its card shows no
+date. **Not verified, and why P4 exists:** registration and a walk-in have
+never been driven in a browser under the production configuration.
+
+**After the pilot path: plan 1.10, `feat/tenant-rls`** — the last and largest row of phase 1
+(`docs/PLATFORM_PLAN.md` §2): the database itself keeps one hospital's rows
+from another's staff, so a forgotten check in a route cannot leak across
+hospitals. Not started. It begins with a design note in the branch, and the
+plan's own rule 7 (§8) says to stop and ask before changing how hospitals
+are isolated, so **the note goes to the owner before any policy is
+written**. What was read for it on 3 October, so it is not read again:
+
+- **178 queries in 24 repository files go straight to the pool**
+  (`.execute(db)` or `.execute(trx ?? db)`), with nothing that says whose
+  request they belong to. A policy keyed on "this request's hospital" needs
+  every one of them to run on a connection that carries it.
+- **That can be done in one place.** The installed Kysely (0.29.6) calls
+  `onReserveConnection` each time a connection is taken from the pool
+  (`postgres-dialect-config.d.ts`). A request's scope held in an
+  `AsyncLocalStorage`, set after `attachPrincipal`, can be written to the
+  connection there, without touching the 178 call sites. Nothing in the API
+  uses `AsyncLocalStorage` yet. The cost is one more statement each time a
+  connection is taken; it has not been measured against the canary's two
+  seconds.
+- **There is a precedent for a scoped role**: `gov.repo.ts` runs government
+  reads under `SET LOCAL ROLE gov_reader` inside a transaction.
+- **The API's role still carries `BYPASSRLS`** (plan 1.7); 1.10 removes it
+  in the step that adds the policies. On Supabase the API connects as the
+  owner, whom policies do not bind unless a table is set to `FORCE ROW LEVEL
+  SECURITY`.
+
+**The questions the design note has to answer, and the owner to rule on:**
+
+1. **Which requests cross hospitals by design**, and under what scope they
+   run. Staff at a hospital are the easy case. A patient's wallet spans
+   hospitals; discovery, the emergency search and the bed search read every
+   live hospital; a referral is written by one hospital and read by another;
+   the national dashboards and the hourly jobs read all of them; staff
+   sign-in looks an email up before any hospital is known.
+2. **Whether patient-side rows get policies now** (`DATABASE.md` §5's table
+   describes them) or 1.10 is staff-side isolation only, as its plan row
+   reads, with the patient side left to the API's checks.
+3. **Whether the demonstration on Supabase is put under the policies** (a
+   second role there, or `FORCE ROW LEVEL SECURITY`), or stays as it is
+   until a release.
+
+**Then, in the order suggested to the owner (2026-09-30):**
+1. **A security review of the whole codebase** — **done 2026-09-30** (below,
+   *Security review*). **All four holes fixed the same day**, one branch each
+   (decision 85 ruled for the returning guest). A paid penetration test should
+   still follow before a pilot holds real data, as the owner was told.
+1a. **The handover audit's findings (2 October)** — before any pilot, the
+   fixes in `HANDOVER.md` §16 ("if 7 days"), one `fix/*` branch each. **The
+   owner said go on 2 October**; they are phase 1 of `docs/PLATFORM_PLAN.md`,
+   whose §9 says which have landed.
+2. **Server sizing for Marks** — measure the `deploy/` stack's CPU, memory and
+   disk on this machine, so Marks' IT can say whether they can host it.
+3. ~~**Releasing `mvp` to `main`**~~ — **done 6 October** (`chore/pitch-release`):
+   Supabase took 0034–0038, `main` is `mvp` at `fa31157`, and the demo data
+   was reset afterwards. The next release repeats it: the full gate, then
+   `ALLOW_REMOTE_DB=1 pnpm db:migrate` and `db:verify` against Supabase, then
+   the merge and push, then the reset.
+Step 27 waits for an SMS account; push notifications wait for a signed
+hospital (decision 84). Company registration (the name is MedLiveBD since 6 October; via
+BanglaBiz) is outside the repo and paused; see the owner's notes.
 
 Four unplanned branches after step 11:
 
@@ -115,16 +507,22 @@ installed (see the open decisions): every message this version sends is caused
 by an event, so nothing needed a scheduler. The two jobs that genuinely do —
 the leave-home alert and send-retry — are noted under the deliberate gaps.
 
-`pnpm test` reports 3775, in about two minutes.
-`pnpm test:e2e` reports 119, in Chromium, against the real API and the seeded
+**As of `chore/e2e-pilot-path` (5 October):** `pnpm test` reports 4,794
+in three to four minutes; `pnpm test:e2e` 164 (13 minutes with `--trace
+off`; 25.7 once after a day of runs with 0.35 GB free: the tests are the
+same, the machine is not); `pnpm test:e2e:built` 3; `pnpm test:e2e:prod`
+25. The per-file list below was counted at 136 and is
+kept for the names, not the numbers.
+
+`pnpm test:e2e` reported 136 then, in Chromium, against the real API and the seeded
 demo database — 5 in `two-device-queue.spec.ts`, 18 in `guest-booking.spec.ts`,
 5 in `offline-console.spec.ts`, 12 in `app-shell.spec.ts`, 7 in
-`doctor-console.spec.ts`, 3 in `console-cold-start.spec.ts`, 8 in
+`doctor-console.spec.ts`, 5 in `console-cold-start.spec.ts`, 8 in
 `wallet.spec.ts`, 8 in `ward-board.spec.ts`, 7 in `emergency-burn.spec.ts`,
 6 in `referral.spec.ts`, 6 in `lab-report.spec.ts`, 2 in
 `no-show-recovery.spec.ts`, 6 in `admin-dashboard.spec.ts`, 2 in
-`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`. The last full
-run took twelve minutes.
+`check-in.spec.ts`, 3 in `standby.spec.ts`, 10 in `gov-dashboard.spec.ts`, 6 in `language-switch.spec.ts`, 4 in `console-rail.spec.ts`, 3 in `staff-login.spec.ts`, 2 in `hospital-settings.spec.ts`, 3 in `counter-registration.spec.ts`, 1 in `data-import.spec.ts`, 1 in `patient-account.spec.ts`, 2 in `self-host.spec.ts`, 2 in `staff-2fa.spec.ts`. The last full
+run took eighteen and a half minutes (twenty-nine before `fix/e2e-context-leaks`).
 
 **The two `demo.routes.test.ts` failures were Fridays, not early mornings —
 fixed in `fix/console-picker-friday`.** They expect the ER console and the ward
@@ -144,6 +542,1253 @@ it looks like an ordering interaction on the shared API database.
 `pnpm build`. `format:check` had been failing on five files since before step
 16; `chore/format-clean` fixed them and the two things that let it happen (see
 below).
+
+### Pilot readiness — the answer the owner asked for after P4 (5 October)
+
+**Go, for a supervised reception pilot of the scope agreed** (one hospital on
+its own server, one department, one to three chambers, reception only), **on
+three conditions, none of which is code:**
+
+1. **The server can be reached by HTTPS names its counter PCs trust.** The
+   only path built is publicly resolvable names with automatic certificates
+   (`DEPLOY.md` S1). If the hospital's IT says its server is reachable only
+   inside the hospital, that is P5 and it is a blocker for *that* hospital
+   until designed and built.
+2. **The pilot is deployed from the exact commit that was tested — decided.**
+   The owner approved `fb1d1d8` as the reception-pilot candidate on
+   5 October. The dry run and any first deployment check out
+   `fb1d1d816c8204f68fe1c0c95666baf68b0dbb76` and nothing else (`DEPLOY.md` S8).
+   `main` is still the pitch release of 27 September, is **not** what a
+   pilot deploys, and is not to be moved merely to tidy this up.
+3. **The dry run passes on the hospital's own hardware and network** (the
+   twelve steps given to the owner on 5 October: start, first administrator
+   and two-step, settings to chambers, sign-in from every counter PC, a mock
+   chamber, a pulled cable, two counters at once, end of day and next
+   morning, backup and restore, the morning check, the operating rules,
+   clocks and browsers). Nothing in this repository has run on their machine.
+
+**Where this left the work (owner, 5 October, morning) — superseded that
+evening:** feature work has resumed (above, *Now: the V1 pitch build*). What
+is still true is the operational half, for a hospital that runs on its own
+server. As written then: no new feature coding
+until there is a hospital to deploy to: not AI import, not self-service
+onboarding, not white-labelling, not ward or ER work, nothing else from the
+plan. What remains is operational:
+
+- The hospital's IT says whether its server is publicly reachable with
+  HTTPS names, or reachable only inside the hospital. Certificates for the
+  second are not built unless a real pilot hospital chooses it.
+- Before real patients, the dry run in `DEPLOY.md` S8 is run on the actual
+  hardware and network.
+- If that finds a real blocker, only that is fixed, on a small branch, and
+  the relevant gate is run again. The new commit then replaces the one in
+  `DEPLOY.md` S8.
+
+**When a hospital agrees to pilot, the owner is given one short deployment
+sheet, and not a documentation project.** It holds: the exact commit; what
+the server and network need; the environment variables and secrets; the
+setup commands; setting up the first administrator; setting up a
+receptionist; the dry-run steps; backup and restore; how to roll back; and
+what the pilot does and does not include. Almost all of it is already in
+`DEPLOY.md` Part S; the sheet is that, cut down to one page for one
+hospital.
+
+**What the go rests on, all under the production configuration** (built
+apps, `DEMO_MODE=false`, the database role that owns nothing): sign-in with
+one's own account; the picker listing one's own facility's chambers with
+their day; a walk-in registered at the counter; doctor arrived; call; done;
+late; absent; bring back; pause and resume; undo; end chamber, refused
+around a patient; the ended chamber gone from the list and the next one
+opened; the four counters on the console agreeing with what was done; no
+screen claiming to be a demonstration; a tap reaching a second screen inside
+two seconds; five actions taken with no network arriving once, in order.
+
+**What staff have to be told on day one, because it is how the product
+behaves and not a fault to be found later:**
+
+- A new walk-in needs the server. With the server out of reach the queue
+  already on screen can still be worked, and new patients go on paper.
+- A browser that has been closed needs the server to sign in again.
+- Nobody changes shift with a pending count showing: unsent actions belong
+  to the person who took them and go when that person signs in on that PC.
+- A chamber is ended by a person. Nothing ends one by itself, and an end
+  cannot be taken back from the console.
+- Somebody looks each morning that last night's backup is healthy and the
+  API is ready. Nothing alerts anybody.
+- The patient app is part of the stack and has no switch to leave it out.
+  Nobody can book on it without SMS; if the hospital does not want it seen,
+  its name is not pointed at the server.
+
+**Known and deliberately left, none of them blocking this pilot** (the B
+list, `PLATFORM_PLAN.md` §2): an action drawn twice for as long as its
+answer is slower than its broadcast (milliseconds while SMS is only
+recorded); the ward and ER boards' use of their answers; the patient side
+of a chamber that passes midnight; database-level separation of hospitals
+(one hospital per database until it exists).
+
+### P4 — the pilot's own path, in the configuration it runs in (`chore/e2e-pilot-path`)
+
+`e2e/production/reception-pilot.prod.spec.ts`, two tests, both run by
+`pnpm test:e2e:prod` and so by CI's `production` job.
+
+- **One receptionist's day, end to end.** Two chambers for today, not
+  started, nobody booked — what a schedule leaves each morning. Sign in
+  through `S-B-00`; the picker lists them and says they are today's; open
+  the first; register a walk-in by phone, name, age and sex; she is serial
+  1 and in the queue by name; doctor arrived; call; the end control is off
+  while she is in the chamber; done; end the chamber with one confirmation;
+  it has left the list; open the second, which is empty, not started and has
+  no event in its log. The first chamber's log is exactly `WALKIN_ADDED`,
+  `DOCTOR_ARRIVED`, `PATIENT_CALLED`, `PATIENT_DONE`, `SESSION_ENDED`. No
+  screen on the way says it is a demonstration.
+- **Late, absent, brought back, and the counters.** A chamber an hour and a
+  half in. Each action changes the row and the figure it should (seen,
+  waiting, late, absent), and the three events are in the log in the order
+  they were pressed.
+
+**It found nothing.** Both passed on their first run. That is the result
+the step existed to get or not get: until it ran, nobody knew whether a
+receptionist could do a day's work on a real server.
+
+**Two things it needed:** the fixture can make a chamber that has not
+opened (`'scheduled'`, with no bookings), and the console's four counters
+have names a test can read (`count-seen`, `count-waiting`, `count-late`,
+`count-no-show`). Neither changes what anybody sees.
+
+**What it does not cover:** setting the chambers up from `S-B-11` under
+this configuration (that needs an administrator with two-step; the API's
+own tests cover it as the limited role, and `hospital-settings.spec.ts`
+covers the screen under the demonstration); the registration desk's own
+screen beyond opening it; the doctor's screen, which is outside the pilot.
+
+### P3 — a chamber can be ended, and not around a patient (`fix/chamber-end-of-day`)
+
+**What was wrong.** Nothing in the product ended a chamber. `POST
+/sessions/:id/end` existed, no screen called it and no job did, so a chamber
+stayed "running" for ever. The next morning it was still on the picker, listed
+first, on a card that showed no date and no time, beside today's chamber for
+the same doctor. And the route itself would end a chamber whatever the queue
+held: a patient called in and not finished was left "in the chamber" for
+good, in a session that takes no further action.
+
+**What it does now.**
+- **`BTN-B02-END` on the reception console**, with `MOD-B02-END`. Off, with
+  its reason, while a patient is in the chamber and while there is no
+  connection. With nobody left unseen, one confirmation. With patients left
+  unseen (booked, waiting or late), the confirmation states how many and the
+  end button stays off until a box is ticked; going back clears the tick. A
+  tap on the backdrop does not close it.
+- **The server refuses an end while a patient is in the chamber**
+  (`canEndSession`, `QUEUE_GUARD_FAILED` / `PATIENT_IN_CHAMBER`, nothing
+  written). It is the rule; the console's control being off is a courtesy. A
+  counter whose screen is behind is refused, told why, and its queue is
+  fetched outright (`GET /sync/session/:id`) rather than waited for on the
+  socket.
+- **Ending changes nobody.** Patients left unseen keep the status they had,
+  in a chamber that has ended. Refund eligibility for anybody who paid and
+  was not seen is raised as it always was (`FR-PAY-07`).
+- **An ended chamber says so** across the console, every control on it is
+  off with that reason, and it has left the picker. Its queue and its events
+  are untouched.
+- **The picker's cards say which day** a chamber is from and when it was due
+  to start; one that is not today's says "an earlier day's chamber" and the
+  date. The server says which is today, not the counter PC's clock. A
+  chamber paused from the day before is listed as well as one running
+  (`FR-QUE-06`): it has to be reachable to be resumed or ended.
+
+**What it does not do:**
+- **Nothing ends a chamber by itself.** A chamber nobody ends is on the
+  picker the next day, now clearly marked as an earlier day's, and drops off
+  the day after. Whether one should be ended automatically, and when, was
+  not asked and not built.
+- **An end cannot be undone from the console.** There is no toast for it;
+  the confirmation is the safeguard. (Whether the server's undo route would
+  take a `SESSION_ENDED` was not tried.)
+- **The doctor's screen has no end control**, and is outside the pilot.
+- **Unsent actions are not checked before an end.** If the counter finished
+  a patient a moment ago and that has not reached the server, the server
+  refuses the end (the patient is still in the chamber as far as it knows)
+  and the console says so; a second try after the pending count clears goes
+  through.
+
+### P2 — the demonstration line follows the server (`fix/console-demo-banner`)
+
+**What was wrong.** "This is a demonstration. All data here is for display
+only" was a line of markup in ten console components and four of the patient
+app's screens, with nothing deciding whether to draw it. Under
+`DEMO_MODE=false` it would have been across the top of a real hospital's
+queue.
+
+**What it does now.** One component in each app draws it, and only when the
+server has said it is a demonstration: the console from the question its
+page already asks at load (`GET /demo/status`, kept in `lib/deployment.ts`),
+the patient app from `GET /config` (`useDeployment`). **Until the answer
+arrives nothing is said**, and the answer is not kept between page loads: an
+answer from an earlier visit is a guess about this one.
+
+**What that costs, deliberately.** A demonstration opened with no network —
+the console's offline reload, plan 1.6 — has no label until the server can be
+asked. The owner's rule is that the false label is the mistake that matters.
+
+**How it is proven.** `demo-label.spec.ts`: on the demonstration the
+reception queue, the registration desk and the patient app carry it; with
+the server's answer held back for good, neither app shows it (**red on the
+old code, two of two**). `e2e/production/`: under the production
+configuration the queue, the registration desk and a patient's own serial
+show no such line. The two dashboard specs that already looked for the line
+on the demonstration still pass.
+
+### Plan 1.9b — a tap stays on the screen when its answer comes first (`fix/console-ack-rollback`)
+
+Not in the handover. Found while verifying 1.9a, by reading `useSessionQueue`
+and then by measuring.
+
+**What was wrong.** A tap is told to the server over HTTP, and the queue it
+produced comes back twice: in the answer to that request, and in the
+broadcast on the socket. The console shows the server's queue with its own
+unsent actions folded on top. When the answer came it dropped the actions
+from the fold, threw the answer's queue away, and waited for the broadcast.
+The two are separate connections. On one machine the broadcast always wins,
+so no test had seen the other order:
+
+- **With the broadcast 800 ms late** (a throwaway probe, three runs of
+  three): ১ → ২ at about 80 ms, **back to ১ at about 190 ms**, ২ again at
+  about 990 ms.
+- **With the socket saying nothing** (the new test, on the console as it
+  was, three of three): the tap was answered, and the console sat on ১ for
+  the ten seconds the test waited. A socket that is reconnecting, or stalled
+  without having closed, does this on a real network for as long as it
+  lasts, and a tap made meanwhile acts on the queue before the last tap.
+
+**It was a document not being followed.** `BACKEND.md` `SY-05` puts the
+queue in the answer, and `FRONTEND.md` §11.1 step 4 says to reconcile with
+it. `lib/sync.ts` kept `accepted` and `conflicts` and dropped the rest.
+
+**What it does now.** The answer's queue is folded into the session channel
+by the same rule a broadcast is (`foldUpdate`: the newest sequence wins, so
+neither road can put the screen behind the other), in the same redraw that
+takes the answered actions out of the fold. `OfflineQueue.flush` hands the
+answer back as `update` (the newest, when a batch had to go one entry at a
+time); `openSessionChannel` has `fold`; the hook does both in one step.
+Nothing changed in the API. By reading, not by a test of its own: the
+answer's queue goes through the same `onSnapshot` a broadcast does, so it is
+also what is kept for an offline reload.
+
+**How it is proven.** `queue.test.ts` (four tests, red before). And
+`offline-console.spec.ts` holds everything the server says on the socket at
+a gate, taps *next*, and requires ২ and never ১ again: **red three of three
+on the console as it was, green since**. It runs against the production
+configuration too.
+
+**What it does not do:**
+- **The ward board and the ER console have the same shape. Read from the
+  code, not measured.** `useBedBoard` and `useEmergencyConsole` drop the
+  optimistic change when the write is answered and then read the board
+  again; until that read or the broadcast lands, the tile should show the
+  bed before the action. `BACKEND.md` says a bed write returns the beds "so a
+  console can reconcile without waiting for the broadcast", and `bedSender`
+  discards them. A bed has no sequence number to say which of two answers is
+  newer, so that fix needs a rule this one did not: its own branch.
+- **An action is folded twice while its answer is slower than its
+  broadcast. Read from the code, not measured.** This is the usual order,
+  for a few milliseconds on every tap: the broadcast arrives with the action
+  in it, and the console folds its still-unanswered copy on top again (the
+  reducer skips an event by sequence number, and an unanswered action has
+  only a provisional one). For *next* the second fold should change nothing
+  visible. For a delay or a late mark it would show double until the answer
+  comes. It matters more than a few milliseconds because **the answer waits
+  for the messages to be sent** (`appendBatch` awaits
+  `notifications.dispatch` before it returns): with a real SMS provider
+  behind the adapter, the answer trails the broadcast by as long as the
+  provider takes. Plan 2.1 (sending from a worker) removes that wait. Closing
+  it properly needs the broadcast to name the actions it holds, which is a
+  change to `BACKEND.md` §6 and so the owner's to agree.
+- **An answer lost after the server committed** is still covered only by the
+  retry: the push goes again with the same keys and is answered then
+  (`SY-02`).
+
+### Plan 1.9a — a key is answered by the screen as it stands (`fix/console-key-race`)
+
+Not in the handover. Found by CI's third run of the browser suite
+(37161163568, 3 October): `pause-resume.spec.ts:90` pressed N the instant the
+break ended on screen, was told "a break is in progress", and nobody was
+called.
+
+**What was wrong.** The reception console listened for its shortcuts in an
+effect that took the old listener off and put the new one on after each
+redraw. React runs such an effect after the page has changed and may leave a
+frame between the two; a key pressed in that frame was answered by the screen
+before it. The frame followed every redraw, and the console redraws at least
+once a second, so it was not only the pause: any shortcut pressed as the queue
+moved could act on the queue before it moved.
+
+**What it does now.** `useWindowKeydown` (`@platform/ui`, `a11y/keys.ts`) is
+the one way a screen listens for keys. The listener goes on once; what it
+calls is changed inside the redraw itself (a layout effect), in the same task
+as the change to the page. The reception console and the bed panel both use
+it. The bed panel's Esc had the same shape and no fault that could be reached
+today; it moved so there is one way to do this, and it had no browser test,
+so it has one now.
+
+**How it is proven.**
+- `keys.test.tsx` presses a key between the redraw and the effects that
+  follow it, where the old listener answered `paused` for a screen showing
+  `running`, and where a screen that had just gone still answered.
+- `pause-resume.spec.ts` has the page itself press N the moment the banner
+  leaves it. **Six of six failed on the console as it was, with CI's exact
+  symptom; six of six pass with the fix**, and nothing else changed between
+  them. The older test, which waits and then presses, is kept as it was.
+- The gate, on the branch before merging (5 October): `pnpm verify`; the
+  browser suite 153 of 153, the canary among them; the built console 3 of 3;
+  the production configuration 21 of 21, where the new test also runs
+  against the console as built.
+
+**Found on the way: the queue stepped back when a tap's answer beat its
+broadcast.** Measured here with a throwaway probe and fixed in the next
+branch, `fix/console-ack-rollback` (above, *Plan 1.9b*, which has the
+measurements and what is still left).
+
+### Plan 1.9 — what a message leaves behind (`fix/log-sms-redaction`)
+
+An SMS from this product is addressed to a patient's phone, names their
+serial, and for a booking carries the tracking link — which opens that
+booking's queue, its signed record and its reports (`FR-GST-05`). Three
+places kept all of that. None does now.
+
+- **The server's log.** `SMS_PROVIDER=log` printed the number and the whole
+  text with `console.log`, past the logger's redaction. That is also what a
+  hospital's server runs until an aggregator exists, so working links and
+  phone numbers were going into container logs that are kept and backed up.
+  It now writes one line: which notification, which template, how many
+  segments.
+- **The process.** The same provider kept every message in an array nothing
+  cleared. Gone; tests that want to read what was sent use
+  `__tests__/support/recordingSms.ts`.
+- **The database.** The link was in every confirmation's row twice, as
+  `params.link` and inside `params.body`, beside the hash that was supposed
+  to be the only trace of it. Now every outbox row is written by one function
+  (`notification.service` `writeOutbox`), which composes the message twice:
+  in full for the provider, and for the row with `{link}` left where the link
+  went. Migration 0035 removes the links already stored and adds
+  `notifications_no_stored_link`, so PostgreSQL refuses the next one whatever
+  the code does.
+
+**The patient still gets the link.** `smsRedaction.test.ts` proves that
+first, because a fix that dropped it would pass every other assertion.
+
+**The 90-day rule is enforced for the first time.** `DATABASE.md` §8 always
+said a message's body is kept 90 days and its metadata longer; nothing did
+it. The API's hourly job now reduces `params` to the ids a message was about
+(`clearExpiredBodies`), found through a partial index that a cleared row
+leaves, so the job reads only what is still to do.
+
+**What it does not do:**
+- **`log` still marks a message `sent`.** Nothing sent it. The demonstration
+  depends on that state, and it becomes true the day an aggregator is behind
+  the adapter (2.2); until then "sent" on a hospital's server means
+  "recorded".
+- **A sender that works from the row cannot send a link.** Today the full
+  text is held in memory from the commit to the send, inside the request.
+  Plan 2.1 moves sending to a worker that reads rows, and a row no longer
+  has the link: that worker has to issue a fresh link when it sends (for a
+  booking, `issueTrackingLink` writes a new `guest_links` row; how the
+  standby, bed and emergency links are issued was not read for this step).
+  That is 2.1's first design question.
+- **The constraint cannot see a link pasted into the text** under another
+  name. Only the single write path and its tests cover that.
+- **The rest of §8's retention table has no job**: guest links 30 days after
+  the session, unclaimed guest records after 24 months.
+
+**Before this reaches the deployed demo:** apply 0035 to Supabase with the
+release (it rewrites the rows already there; it needs nothing from the API).
+
+**Found by this branch's gate, and fixed in it:** `consent.routes.test.ts`
+failed two tests in one full run and passed alone. It takes "the
+account-owned profile the fewest facilities have treated" as the patient a
+guest's link must *not* reach, and which profile that is depends on what
+every earlier test file booked; that run it was the fixture's own first
+patient, and the API rightly answered 200. The product was right. The
+profile is now chosen from outside the fixture. **A test that needs "somebody
+else" has to choose them as somebody else, not as whoever a ranking returns.**
+
+### Plan 1.8 — the browser suite in CI, and against production (`chore/e2e-ci`)
+
+**What CI runs now** (`.github/workflows/ci.yml`), on every push to `mvp` or
+`main` and every pull request into them:
+
+| Job | What |
+|---|---|
+| `verify` | as before: typecheck, lint, format, unit, API and schema tests |
+| `browser` | `pnpm build`; **the canary, first and alone**; the whole browser suite; the console as built |
+| `production` | the canary and the counter against the production configuration |
+
+The canary can no longer be skipped by not running it.
+
+**The production configuration** (`playwright.prod.config.ts`,
+**`pnpm test:e2e:prod`**) is what a hospital runs, and nothing had driven a
+browser against it before: the API with `NODE_ENV=production` and
+`DEMO_MODE=false`, started as the container starts it, connected as the role
+that owns nothing (plan 1.7), no online payment, SMS recorded only; the
+console and the patient app as `next build` and `next start`. What runs there:
+
+- `e2e/production/two-device-queue.prod.spec.ts` — the receptionist **signs in
+  through `S-B-00`** with their own account, taps *next*, and the patient's
+  phone shows it inside the same two seconds as the canary. It first checks
+  that what is running really is production (`/config` says no
+  demonstration, no online payment, phone check on; the password-less
+  picker's endpoint answers 403).
+- The counter's own specs, unchanged in what they assert: offline and the
+  outbox, undo, pause and resume, and the console opening with no network.
+
+**What it found.** Under the production configuration a token written into
+the browser is not a session: the console showed the sign-in screen to all
+seventeen reception tests. That is correct, and it is why the specs now get
+their receptionist through one helper (`e2e/support/consoleSession.ts`) — the
+picker's store under the demonstration, exactly as before, and a real
+`POST /staff/login` under production.
+
+**What it cannot do, and this is the product, not the test.** Under the
+production configuration **no patient can book**: a guest proves their phone
+with a code, the code travels by SMS, and there is no SMS provider (item 1
+above; phase 2). So the patient's link in these specs is written by a fixture
+— the row an SMS would have pointed at (`e2e/support/guestLink.ts`) — and
+everything from opening it onward is the product. The production canary says
+so at the top of its file and should book through the app the day an SMS
+provider exists. **A green production job does not mean a patient can use a
+hospital's server.**
+
+**Left to the main suite, and why** (`grepInvert` in the production
+configuration): the pitch session, which is the demonstration's own
+(`FR-DEM-06`); and "the next person at the same PC", which needs a second
+account signed in and does not yet do it.
+
+**The first run on GitHub** (37156815719, the push of `4ece550`, 3 October).
+The workflow itself works: all three jobs started, built and ran.
+
+| Job | Result |
+|---|---|
+| `verify` | passed |
+| `production` | passed — the canary and the counter against the production configuration |
+| `browser` | build passed; **the canary passed on a hosted runner**, inside its two seconds; the whole suite **144 of 150 in 11.6 minutes** (18.1 here) |
+
+The six failures were two faults in the suite, both shown by a faster
+machine and neither in the product (`fix/e2e-fast-runner`; below, *Things
+learned the hard way*):
+
+- **Five in `wallet.spec.ts`: the booking was refused.** `/guest/start`
+  allows 30 calls per address in a fixed ten-minute window. Every patient in
+  the suite books from one address, and the runner got 31 of them into one
+  window; here the suite is slow enough that it never has. The API now reads
+  `ADDRESS_RATE_LIMIT_FACTOR` (default 1, so nothing changes for anybody who
+  does not set it) and the browser suite sets it, saying what it is: one
+  machine standing for every patient. See decision 90 for what this means for
+  a real hospital.
+- **One in `ward-board.spec.ts`: a fixture's ward name was taken**
+  (`wards_hospital_name_key`). The fixture names its ward with a
+  four-character random tag. It now takes another name when one is taken.
+  **Why two of the first four wards in a run shared a tag is not
+  established**: by chance it is about one run in twenty thousand, and the
+  job's log cannot be read without signing in. If it recurs, the fixture now
+  survives it and the cause is still worth finding.
+
+**The second run** (37159673893, `3c15bb8`, with `fix/e2e-fast-runner`):
+the `browser` job passed whole on GitHub's runner — the canary, all the
+browser tests and the built console — and so did `production`. `verify`
+failed, on two tests in `consent.routes.test.ts` that passed here twenty
+minutes earlier on the same code: a test that chose its "other patient" by a
+ranking (below, *Plan 1.9*, *Found by this branch's gate*). Fixed in
+`fix/log-sms-redaction`, merged as `36d5ca2`.
+
+**The third run** (37161163568, `36d5ca2`, with plan 1.9): `verify` and
+`production` passed; the canary passed; the browser suite **150 of 151 in
+10.9 minutes**. The one failure, `pause-resume.spec.ts:90`, is in the
+console and not in the suite: **N pressed the instant the pause banner went
+was answered "a break is in progress"** and nobody was called. The console
+re-attached its key listener in an effect that ran after the screen had
+been redrawn, so for about a frame a key was handled against the state before
+it. Fixed in `fix/console-key-race` (above, *Plan 1.9a*).
+
+**The runs of 5 October.** `d1ca84a` (1.9a): all three jobs passed, the
+first run to do so. `97bfdae` (1.9b and the documents): **shown as failed,
+and was not a test failure.** `verify` passed; the `browser` and `production`
+jobs were cancelled by the next push to `mvp`, made while they were still
+running, which is exactly what `CLAUDE.md` §3.1 says not to do. `8186353`
+(P2, which contains everything in `97bfdae`): all three passed. `c4db8ee`
+(P3): all three passed. The push that carries P4 was held until that run had
+finished.
+
+A run's jobs and its failure messages can be read without signing in, at
+`api.github.com/repos/SidratEvan/HealthCare/actions/runs/<id>/jobs` and
+`…/check-runs/<job id>/annotations`. `gh` is not installed on this machine.
+
+### Plan 1.7 — the self-hosted stack, hardened (`chore/ops-hardening`)
+
+Nothing here changes what a patient or a receptionist sees. It changes what
+happens when something goes wrong on a hospital's server.
+
+**The API no longer owns the database.** Two roles (`DATABASE.md` §5.1): the
+owner runs the migrations and the backups; the API connects as its own role,
+made by `pnpm db:role` after every migration. That role reads and writes rows.
+It cannot change the schema, empty a table, create a role, read a file off the
+server, or switch off the guard on the event log — and it cannot change or
+remove an audit row, which until now nothing in the database prevented.
+`backend/api/src/__tests__/apiRole.test.ts` is the list, each one refused by
+PostgreSQL itself. **The whole API suite now runs as an identical role**
+(`env.setup.ts`), so every endpoint is tested without ownership: the first run
+found exactly one thing the API could not do — refresh the dashboard's
+materialised view, which only an owner may — and migration 0034 gives it a
+function that does that one thing.
+
+**What that role still has that it should not: `BYPASSRLS`.** Every table has
+row-level security switched on and no policy, which for anybody but the owner
+means "sees nothing". The policies are plan 1.10, which removes the attribute.
+Until then **the database does not separate hospitals**; the API's checks do,
+as before. Do not describe 1.7 as tenant isolation.
+
+**Nothing of ours runs as root.** The API and both web apps run as `node`.
+The database, Caddy and the backup run as their images ship them. Found on
+the first boot and fixed: pnpm 12 re-checks the installed dependencies before
+every `pnpm run`, re-marking files it does not own, and stopped the
+migrations before they began (`pnpm_config_verify_deps_before_run=false` in
+the image). A unit test would never have shown it.
+
+**A backup is not counted until it has been proven.** Each night: dump,
+**restore the dump into a scratch database** and compare it with what the live
+one held, read the files archive back, copy both to a second location and
+check their checksums there. Each run writes its result down, and
+`backup.sh check` — the backup container's health check — is failing the next
+morning if the run failed, if no second location is configured, or if the
+last good backup is more than 26 hours old. The old script could not fail:
+called on the left of `||`, `set -e` is off, and a failed `pg_dump` was
+followed by "backup written".
+
+**Logs rotate** (five files of ten megabytes per container), and **each
+service reports its health**: the API's is `/readyz`, so it is unhealthy while
+it cannot reach the database, and the web apps and Caddy wait for it.
+
+**Proven on the real stack, on this machine, not only in tests:** built from
+clean and started with one command; the API connected as the limited role and
+ready; the first administrator made by `pnpm staff:create` as that role; a
+backup taken, restored into scratch, copied and reported healthy; then every
+volume and the local backups deleted, the backup brought back **from the
+second location**, restored onto the empty server — the hospital, its
+administrator and an uploaded file were all there, and the API came up as the
+limited role again.
+
+**What it does not do:**
+- **Nothing alerts anybody.** A failed backup or an unready API is visible in
+  `docker compose ps` and nowhere else. Until an alert exists somebody has to
+  look each morning. An SMS alert waits on an aggregator (decision D1).
+- **It cannot tell whether the second location is really another disk.** A
+  folder on the same disk satisfies it. `DEPLOY.md` says so.
+- **The demonstration deployment is unchanged**: on Supabase the API still
+  connects as the owner. The role is for a hospital's own server.
+- **Development is unchanged**: `pnpm dev:api` uses `DATABASE_URL` as it
+  always did. The limited role is exercised by `pnpm test`, not by `pnpm dev`
+  or the browser suite; plan 1.8's production-configuration job is where the
+  browser suite should meet it.
+
+**For whoever updates a server first started before this:** `DEPLOY.md` §S4 —
+three values to add to `deploy/.env` and one command to hand the uploaded
+files to the account the API now runs as.
+
+### Plan 1.6 — the console opens with no network (`feat/console-offline-load`)
+
+**What happens now.** A counter that reloads during an outage gets the
+console back: the shell from the service worker's cache
+(`frontend/console/public/sw.js`), the queue as this device was last told it
+(`snapshots` in the per-person database), and whatever it had queued
+(plan 1.5). The offline block says it is offline and the freshness line gives
+the real age of what is shown, from the server's own timestamp. Taps are
+queued and sent on reconnect, as before.
+
+**What it does not do, and each is a decision rather than an accident:**
+- **Only the tab that was signed in.** The sign-in is in `sessionStorage`
+  (step 21), which survives a reload and a discarded tab and nothing else. A
+  browser restarted after a power cut is signed out, and signing in needs the
+  server. The unsent actions still wait on disk and go when that person signs
+  in again.
+- **No names.** The kept queue is the reduced state: serials, statuses, times,
+  ids. Names come from a separate, audited read (`DB-P7`) and are not kept on
+  the device, so an offline reload shows a queue of serials until the
+  connection returns. Keeping them is a small change and puts patient names in
+  a counter PC's browser storage — **the owner's call (decision 88)**.
+- **The reception queue only.** The ward board and the ER console open their
+  shell and keep their outboxes; they do not keep their last board, and say
+  the board could not load. Their boards carry more about patients than a
+  queue does, so they wait on the same decision.
+- **A chamber never opened on this device** has nothing kept, and says so.
+- **Kept for 24 hours**, then dropped (`SY-06`).
+
+**It cannot be shown under `next dev`.** The development client will not
+start the app until it has heard from its dev server over a websocket; an
+offline reload there loads every cached file and stays blank. The same test
+passes in three seconds against `next build`. So `e2e/built/` has its own
+configuration (`playwright.built.config.ts`, **`pnpm test:e2e:built`**): the
+API as usual, the console built and served on its usual port (the API answers
+two browser origins and a test is not a reason for a third), no patient app.
+It is part of the gate. Plan 1.8 extends it to the canary and the reception
+specs against the production configuration.
+
+**Tried and set aside:** running the whole console suite against the build.
+Forty-nine of fifty specs passed as they were; `console-cold-start.spec.ts:98`
+is written around React's development double-mount ("four slow answers, not
+two") and needs rewriting first. That, and whether the suite should move to
+built apps at all — it would also take about 2 GB off a run — stays with 1.8.
+
+### Plan 1.5 — the outboxes are kept on the device (`fix/offline-outbox-persist`)
+
+**What a counter now keeps.** The reception queue's, the ward board's and the
+ER console's unsent actions are in IndexedDB (`@platform/client`
+`openConsoleStores`), not in the page's memory. Reload, close the tab, lose
+power: when the console is opened again they are on the screen, counted, and
+sent by themselves — in order, once. `createDexieStore` had been written and
+never called (decision 37).
+
+**One database per signed-in person** (`healthcare-console-<staff id>`, from
+the token's `sub`). A queued action is sent later under whatever token the
+console then holds, and the server attributes it to that token
+(`FR-QUE-04`), so a shared database would have let the evening receptionist's
+sign-in send the afternoon's unsent work as her own. Now it is neither shown
+to her nor sent by her; it waits for its owner to sign in on that PC again.
+**What follows from that, deliberately:** work left unsent by somebody who
+never signs in on that PC again is never sent, and nothing tells anybody.
+A sign-out that warns "you have unsent actions" is the obvious next step and
+is not built.
+
+**What is on the disk, and for how long.** Each row is the action as it will
+be sent. Queue actions carry booking ids. A bed admit carries the patient's
+name, phone, age and sex; an ER walk-in registered offline carries that
+person's age, sex and phone. Rows are deleted the moment the server takes or refuses them; until
+then they are unencrypted in the browser's storage on that PC, readable by
+anybody with the Windows account. `FRONTEND.md` §9 always named Dexie for
+this; it is new only because the code never did it.
+
+**A poison entry no longer blocks the queue.** Three answers are now told
+apart (`FRONTEND.md` §11.1): never arrived, or "not now" (401, 403, 429) —
+kept, in order, however long; refused by a rule — removed and rolled back, as
+before; **the server could not take it** (another 4xx, a 5xx) — the batch is
+sent again one entry at a time, and the one that cannot go is set aside as
+*stuck*: at once for a 4xx, after eight tries for a 5xx. A stuck entry is
+rolled back on screen and the offline block says how many there are, with
+**আবার পাঠান** and **বাদ দিন**. Being offline never counts.
+
+**Found on the way, and fixed here because this branch exposed them:**
+- **A ward or ER action was dropped by an expired token.** The senders read
+  any answer below 500 as "refused", so twenty minutes offline, a 401 on
+  reconnect, and every queued bed action was removed and rolled back. 401 and
+  429 now leave it queued.
+- **Nothing retried a failed push** while the socket stayed up; it waited for
+  somebody's next tap. `FRONTEND.md` §11.1 said "retry with backoff" and
+  `retryDelayMs` existed with no caller. The three hooks now retry by timer.
+- **The bed panel closed the next step's form.** `BedPanel` went back to its
+  first view only *after* the server answered, so release followed quickly by
+  "out of service" had the reason field closed under the typist when the
+  release's answer arrived. Keeping the outbox on disk made each action a few
+  milliseconds slower and `ward-board.spec.ts` caught it. It now goes back
+  before sending.
+
+**Learned about the tests.** Playwright's `setOffline` is lifted as a page
+closes: the dying page sees itself come online and sends its queue. A test
+that closed the tab "offline" passed against an outbox that kept nothing.
+Blocking the route for the whole browser context is what a power cut looks
+like (`offline-console.spec.ts`). **And a blocked route leaks the same way**
+(`fix/e2e-outbox-close-race`): Playwright pauses a request to ask the route
+what to do, and a page closed while one is paused lets it through. The first
+full run after the merge failed on exactly that — the tab was closed with the
+third tap's push still on its way, and the server had six events from a tab
+whose "power" had been cut. The specs now close or reload only after the push
+holding everything taken so far has been refused (`pushFailed`), which leaves
+a second before the console's next attempt. The product was right throughout:
+a push that does land twice is the same events with the same keys (`SY-02`).
+
+**Not in this step.** Opening the console with no network (1.6). Offline
+walk-ins and standby offers still need a connection, as before. The doctor,
+lab, pharmacy, admin, settings and import screens are online-only, as before.
+
+### The platform plan (`chore/platform-plan`, 2 October)
+
+The owner gave an implementation brief on 2 October (a PDF, kept outside the
+repository): the product is to become a platform a hospital can join by
+itself — create an organisation, set up by hand or import, be verified, go
+live — with the handover's blockers fixed first and one narrow use of AI,
+mapping a hospital's own export onto the import template.
+
+`docs/PLATFORM_PLAN.md` is that brief turned into an order of work. A new
+session reads it after this file. What it holds: the branches of phases 1–4
+with the test each must fail first; the smallest state model for onboarding
+(one migration); exactly what a model is and is not sent; the existing code
+each phase reuses; eight places the brief, the code and the documents
+disagree and how each is handled; and the eight decisions that are the
+owner's, with which branch each one blocks. `CLAUDE.md` §4.3 points at it.
+
+**The owner's decisions it waits on** (its §7): the SMS aggregator (blocks
+only `feat/sms-live`), open or invited signup and the registration fields
+(block `feat/org-signup`), CSV-only or XLSX and the model provider (block
+`feat/import-mapping-ai`). Phase 1 waits on none.
+
+### Handover audit — what the code actually does (`chore/handover`, 2 October)
+
+The owner asked for a complete, critical handover read from the code rather
+than the plans. It is `docs/HANDOVER.md` (16 sections: system map, database,
+queue engine with a worked 10-patient example, auth, records, offline,
+modules, payments and notifications, deployment, tests, ranked debt,
+readiness per module, what lives outside the repo, a crash course, and a
+final assessment). **Found, each to be its own `fix/*` branch** (marked
+below as it lands):
+
+1. **CRITICAL — no SMS adapter, so no patient can book on a real server.**
+   With `DEMO_MODE=false` booking needs a phone code; `SMS_PROVIDER` offers
+   only `log` (withholds the code) and an adapter that fails every send.
+   Walk-ins get no tracking link. `DEPLOY.md` S2/S6 imply otherwise.
+2. **Fixed (`fix/console-resume`, decision 87).** Was: **CRITICAL — the
+   console can pause a chamber and cannot resume it.** No Resume control
+   existed; a paused session refuses *call next*.
+3. **Fixed (`fix/delay-on-arrival`, decision 86).** Was: **CRITICAL — a
+   delay declared before the doctor arrives is never consumed.** After arrival the ETA baseline is still `now + delayMinutes`
+   (`eta.ts`); reproduced: the patient at the front told 18:20 while
+   absent-marking was allowed at 18:06.
+4. **Fixed (`fix/console-undo`).** Was: **HIGH — the console's Undo sends a
+   booking id as `undoneEventId`;** it does nothing and leaves a junk
+   `ACTION_UNDONE` in the log. (The sync path still *accepts* an
+   `ACTION_UNDONE`; closing that is item 5.)
+5. **Fixed (`fix/sync-event-allowlist`).** Was: **HIGH — `/sync/events`
+   accepts all 19 event types** from any console role,
+   including unguarded `ACTION_UNDONE` (any event, any age), `SLOT_*`,
+   `BOOKING_CANCELLED` and `SESSION_ENDED` (no refund eligibility on this path).
+6. **Fixed (`fix/offline-outbox-persist`, `feat/console-offline-load`): the
+   outboxes are kept on disk and the console has a service worker.** Was: **HIGH — offline
+   outboxes are memory-only** (`createDexieStore` has no caller; the comment
+   saying it is swapped in is wrong) and the console has no service worker.
+7. **Half fixed (`chore/ops-hardening`): on self-host the API connects as
+   its own role, not the owner.** Still **HIGH — RLS has no policies anywhere**
+   (no `CREATE POLICY` in any migration; `0014_rls.sql` never existed, against
+   decision 3's note), so that role carries `BYPASSRLS` and tenancy is
+   application code only. Plan 1.10.
+8. **HIGH — doctors read every hospital's signed visits** for any patient with
+   any booking at their hospital, without consent (`findVisits`).
+9. **Fixed (`chore/e2e-ci`).** Was: **HIGH — E2E (the canary included) is not
+   in CI** and never runs against the production configuration.
+   ~~Backups stay on the same disk~~
+   (fixed, `chore/ops-hardening`: copied to a second location, and failing
+   loudly when none is configured); ~~the `log`
+   SMS provider prints phones and full bodies (tracking links) and keeps them
+   in memory forever~~ (fixed, `fix/log-sms-redaction`).
+
+The rest (~~broadcast before commit~~ (fixed, `fix/broadcast-after-commit`),
+~~links stored in `notifications.params`~~ (fixed, `fix/log-sms-redaction`),
+no worker, mutable `audit_log`, sockets not revoked, single-process limits,
+non-idempotent booking, ~~root containers, no log rotation~~ (fixed,
+`chore/ops-hardening`; `audit_log` can no longer be changed by the API's
+role on self-host), no monitoring) is
+ranked in `HANDOVER.md` §12. **Documents to correct** are listed in §14.3;
+they were not edited on this branch (`CLAUDE.md` §2: proposed to the owner
+first).
+
+### Security review — four holes found and closed (`chore/security-review`, then `fix/*`)
+
+The whole codebase, not only what changed since `main`: every route and its
+guard, the service behind every `:id`, the socket, tokens, passwords and
+two-step, SQL, file storage, webhooks, logging, both frontends, the self-host
+stack, RLS. The method is `/security-review`'s: a finding stays only if a
+second, independent read of the code scores it 8/10 or more. **Each fix is
+its own `fix/*` branch with tests**, marked below as it lands.
+
+**Found, in the order to fix them:**
+
+1. **Fixed (`fix/visit-doctor-only`).** `POST /visits` now needs the doctor
+   role (route and service), a signed visit is final (`VISIT_ALREADY_SIGNED`;
+   the conflict update runs only `WHERE signed_at IS NULL`), and a sign sent
+   again replays only the queue step. Tests for every other role, for an edit
+   after signing, and for a sign whose queue step was lost. Was: **any staff
+   role can write — and rewrite — a visit record** (9/10, Medium–High). `POST /visits` checks only that the caller is staff at the
+   booking's hospital (`clinical.routes.ts:54`, `clinical.service.ts:140`), so
+   a receptionist, pharmacy, lab or ward account can sign a diagnosis that the
+   wallet shows under the session's doctor. Worse, a later `sign: false` save
+   overwrites a *signed* record and keeps its signing time
+   (`clinical.repo.ts:405`), so any doctor at the hospital can rewrite a
+   colleague's signed visit, unaudited. `BACKEND.md` §7.6 says doctor. Fix:
+   `requireRole('doctor')` and the same check in `saveVisit`; update only
+   `WHERE signed_at IS NULL`; tests for every non-doctor role.
+2. **Fixed (`fix/standby-phone-proof`; its limit closed by item 3).** Standby
+   join and bed requests now run `assertGuestPhoneProven`, as a guest booking
+   does, so the dedupe that answers with an existing place or request is
+   reached only by the number's proven owner. The patient app proves the phone
+   on all three forms through one hook (`useGuestPhoneProof`) and one card
+   (`GuestCodeCard`); `guest-phone-proof.spec.ts` drives each form through a
+   real code. **The limit, now closed:** until item 3, `/guest/start` handed a
+   returning number a token without a code, and that token passed this check
+   too. Was: **a standby
+   place can be taken over with a name and a phone number** (8/10, Medium,
+   High at worst). `POST /sessions/:id/standby` asks for no code,
+   and joining again with the same phone and name returns the existing place
+   with a fresh token (`standby.service.ts:118`, `:158`). That token leaves,
+   declines or accepts; after seating, the first status read mints the
+   booking's tracking link, which opens that visit's signed record and lab
+   reports. `FR-GST-03` already requires the code here (money and an SMS
+   thread follow). Fix: `assertGuestPhoneProven` on the join, as booking has;
+   never hand a token for an existing row to an unproven caller. Bed requests
+   repeat the pattern read-only (`bed.service.ts:485`; 6/10, not counted) and
+   take the same fix.
+3. **Fixed (`fix/guest-booking-scope`, then `fix/guest-device-proof`).** A
+   guest token now acts only on the booking it names: `ownsBooking` and the
+   socket's room check dropped their guest-identity branch, and `/late` has
+   `requireBookingScope` as cancel does. And, by the ruling on decision 85, a
+   number proves itself once **per device**: `/guest/verify` also returns a
+   device proof (`guest-device` audience, bound to the number's identity and
+   the device's user agent, 90 days, renewed on use), which the app keeps per
+   number (`lib/guestDevice.ts`); `/guest/start` skips the code only for it.
+   Anybody typing the number elsewhere is sent a code — which also closes the
+   limit noted on item 2. Was: **a returning guest's number is
+   trusted without a code** (8/10, Medium–High). `POST /guest/start` gives a guest token to anybody who types
+   a number that has passed a code once (`patientAuth.service.ts:311`). With
+   it: book as that person; learn which chambers they are booked into, because
+   the socket admits a guest by identity rather than by booking
+   (`booking.repo.ts:466`, contrary to the comment on
+   `principalHoldsBooking`) and session ids are public; mark their bookings
+   late (`POST /bookings/:id/late` has no `requireBookingScope`, and
+   `ownsBooking` admits by `guestId`, `queue.controller.ts:612`). A forwarded
+   tracking link has the same identity-wide reach, against `FR-GST-05`'s
+   "single-booking scoped". **Waits on decision 85**, because `BACKEND.md`
+   §7.1 documents the skip. The scoping half (admit a guest by the booking its
+   token names; `requireBookingScope` on `/late`) needs no ruling.
+4. **Fixed (`fix/booking-payments-scope`).** The read now has the fence
+   `GET /bookings/:id` has — `requireBookingScope` on the route,
+   `assertBookingScope` in the controller — and an auth matrix: the link and
+   the hospital's staff read it; another booking's link, another account,
+   another hospital's staff and a national account do not. Was:
+   **`GET /bookings/:id/payments` checks only that somebody is signed in**
+   (9/10, Low). Any patient, guest link, national account or staff member of
+   any hospital reads any booking's payments, and every patient in a chamber
+   holds every booking id there through the queue state. No names, so low; the
+   route's comment promises a guard that is not there. Fix:
+   `assertBookingScope` in the controller, or delete the route — no client
+   calls it.
+
+**Below the bar, noted:** the socket handshake does not apply the `mcp` and
+`tfa: 'setup'` limits `attachPrincipal` does (`realtime/auth.ts`) — no gain
+today, since such a token can already set its own password or authenticator;
+the sync batch lets a doctor or administrator push reception-only event types
+at their own hospital (**closed by `fix/sync-event-allowlist`**); two guest tokens with no booking count as one actor for
+undo (`queue.controller.ts:551`).
+
+**Checked and sound:** staff sign-in (scrypt, lockout shared with two-step,
+refresh rotation and reuse detection, each code spent once); the roles an
+administrator can grant (facility roles, own facility); hospital scope on
+every bed, ER case, referral, lab order, import and settings write; consent
+(the patient offers, a doctor redeems); tracking links (one booking, reports
+scoped to it); file serving (signed, key built by the server, path confined,
+PDF and images only); webhooks (fail closed); SQL (parameterised
+throughout); the CSV export (formulas neutralised); logs (no bodies,
+credentials redacted, sign-in codes withheld); CORS; the demo picker (refuses
+with `DEMO_MODE` off); RLS on all 55 tables; the self-host stack (database not
+published, secrets enforced). The counter's phone lookup reads platform-wide
+by design (`BACKEND.md` §7.3) and is audited.
+
+### Step 28 — an administrator signs in with a code from their phone (`feat/staff-2fa`)
+
+**What a real deployment now does.** An administrator (`hospital_admin`,
+`platform_admin` — `TWO_FACTOR_REQUIRED_ROLES`) signs in with the password
+once more and meets `S-B-00d` before any console: an authenticator app scans
+the QR code (or the key is typed), the code it shows turns two-step on, and ten
+recovery codes are shown once; the console opens only after "I have kept
+these". Until then the token carries `tfa: 'setup'` and the API refuses it
+everywhere but the setup (`AUTH_2FA_SETUP_REQUIRED`) — the server's rule, as
+the password change's is. From then on a right password gets a five-minute
+challenge and no tokens, and `S-B-00b` asks for the code (or a recovery code,
+same field). Anybody else may turn it on from the picker (`/?view=2fa`), and
+the picker warns at three recovery codes or fewer. A lost phone: a recovery
+code once, an administrator's **দুই ধাপের যাচাই রিসেট করুন** on `S-B-11`, or
+`pnpm staff:reset-2fa` on the server for a facility's only administrator —
+all audited, all ending every session of the account.
+
+**How it holds.** TOTP from `node:crypto` (no dependency), RFC 6238's
+reference codes in `totp.test.ts`. The secret is sealed with AES-256-GCM under
+`TOTP_ENCRYPTION_KEY`, so a database backup alone cannot mint codes; recovery
+codes are HMACs under the same key. A code works once (`totp_last_step`); wrong
+codes count towards the password's lock, and a right password does not clear
+the count — otherwise a known password would buy unlimited guesses at the
+code, five at a time. The only new dependency is `qrcode` in the console,
+approved 2026-09-29; the QR is drawn in the browser, so the secret goes to no
+image service.
+
+**Before this reaches the deployed demo:** apply 0033 to Supabase
+(`ALLOW_REMOTE_DB=1 pnpm db:migrate`) before the API deploys — every staff
+sign-in reads the new columns. The demo needs no new variable: outside
+production the key is derived from `JWT_REFRESH_SECRET`. A real server must set
+`TOTP_ENCRYPTION_KEY` (production refuses to start without it), and a restore
+needs the same value (`DEPLOY.md` S2, S7).
+
+**On the demo, worth knowing.** The picker is unchanged. But signing in *with
+a password* as a seeded administrator now sets up two-step first, and whoever
+does it on the shared demo holds that account until the next `db:reset` or
+`pnpm staff:reset-2fa --email …`. Receptionists and the other roles are not
+asked.
+
+### Step 26 — the whole stack on a hospital's own server (`chore/self-host`)
+
+**What exists.** A root `Dockerfile` (targets `api`, `console`, `patient`)
+and `deploy/docker-compose.yml`: PostGIS, a one-shot `migrate`, the API
+(with the hourly jobs), the two apps, Caddy for three names with automatic
+certificates, and a nightly `backup` (database dump and the files volume,
+`BACKUP_KEEP_DAYS` kept) with `restore.sh` to put one back. `DEPLOY.md`
+**Part S** is the runbook: configure `deploy/.env`, one `up`, `staff:create`
+for the first administrator, `doctor:verify`, backups off the machine.
+**Proved on this machine (2026-09-29).** From a clean project and empty volumes: one `up --build` built the three images (about fifteen minutes cold) and started everything; the migrations applied all 30; `/healthz`, `GET /config` (`demo: false, onlinePayments: false, guestPhoneCheck: true`), the console and the patient app answered through Caddy; `staff:create` made the facility and its administrator, who signed in. A backup was taken, an account and a file were added after it, and `restore.sh` put the backup back: the later account and file were gone, the earlier file was back, the API healthy, the migrations up to date. `db:reset` in the API container refused (`DEMO_MODE is not true`). The first attempt failed on a real race — the database health check passed on Postgres's temporary first-boot server — and the check now goes over TCP.
+
+**What had to change for a real server to boot at all.** `NODE_ENV=production`
+refused anything but a live payment provider (which needs merchant accounts
+nobody has yet), Supabase storage, a Sentry DSN and VAPID keys — the last two
+wired to nothing. Now:
+- **`STORAGE_PROVIDER=local`** keeps files on the server's disk
+  (`LocalStorageAdapter`, a named volume), served through the same signed,
+  expiring links; a key that would leave the directory is refused.
+- **`PAYMENT_PROVIDER=off`**: pay at the hospital only. The API refuses an
+  online method before writing anything (`PAYMENT_UNAVAILABLE`), and the
+  patient app asks `GET /config` and offers only the counter, and no standby
+  prepayment. Production accepts `off` or `live`, never `mock`.
+- **Sentry and VAPID are no longer demanded** until something uses them; a
+  self-hosted server's errors are in its container logs.
+- `db:seed`/`db:reset` already refuse without `DEMO_MODE=true`, so the
+  migration guard treating host `db` as local is not a way to wipe a
+  hospital's data.
+
+**Decided here, worth the owner's eye.** The patient app, the console and the
+API are three names (`app.`, `console.`, `api.`), not paths under one, because
+the apps are separate Next deployments with their own origins (CORS lists
+them). Backups land in `deploy/backups/` on the same disk; copying them to a
+second machine in Bangladesh is the hospital's side of the runbook.
+
+**Tests.** `deployment.test.ts` (local storage, the escape refusal, `GET
+/config`, `PAYMENT_UNAVAILABLE`), the production cases in `env.test.ts`, and
+`e2e/self-host.spec.ts`: with `GET /config` answering `onlinePayments: false`
+(stubbed — the suite's API runs the demo), the booking form offers the
+counter only and books, and the standby form has no prepayment.
+
+### Step 25 — a patient proves a phone and finds what it holds (`feat/patient-otp`)
+
+**What a patient now does.** The Profile tab (a placeholder until now) signs
+in with a mobile number and a six-digit code (`S-A-03`, `S-A-04`). If the
+number holds anything no account owns — bookings made as a guest, patients a
+hospital imported — `S-A-20` lists them and **যোগ করুন** takes them over in
+one step (`FR-GST-09`); then the account's profiles show, each with its
+records. `patient-account.spec.ts`: a guest books, is seen and signed off,
+then on another device signs in and reads the record.
+
+**The code** (migration 0032, `otp_challenges`): six digits, five minutes,
+only a keyed hash stored, the latest the only one that works, five an hour
+per number, five wrong entries lock the number fifteen minutes (`FR-SEC-05`).
+It is sent marked sensitive, so **no provider prints it** — the log provider
+writes "withheld" where the body would be. **On a demonstration the code comes
+back in the response and the app shows it** under the boxes; `DEMO_MODE`
+cannot run in production, so a real deployment never does this.
+
+**The session** is step 21's shape for patients: fifteen-minute access, a
+rotating refresh token, reuse ends every session — and the refresh token is
+**bound to the browser that signed in**; carried elsewhere it is refused. It
+lives in `localStorage` (a patient app that forgets its person on every tab
+close is not one people keep), guarded for private windows.
+
+**A guest proves the phone before booking (`FR-GST-03`) — on a real
+deployment.** `POST /guest/start` answers whether a code is needed: a number
+that has proved itself before is not asked again (`FR-GST-12`). The booking
+then needs the guest token for that number. **`GUEST_BOOKING_OTP` unset means
+on, except under `DEMO_MODE`**, where the demo keeps its one-tap booking the
+way it keeps the password-less picker; that is why every booking e2e spec is
+unchanged, and why the code path is covered by API tests rather than the
+browser. Set it to `true` on a demo to show the check.
+
+**Not built.** `S-A-05`/`S-A-06` (making and switching profiles by hand):
+in this version a profile comes from a booking or a claim. The NID is not asked
+for anywhere (see *Step 23*).
+
+### Step 24 — a hospital imports what it already holds (`feat/data-import`)
+
+**What an administrator now does.** `S-B-11` → **পুরোনো তথ্য আমদানি করুন**
+opens `S-B-14`. Choose a set (ক কাঠামো, খ রোগীর তালিকা, গ আগামী
+অ্যাপয়েন্টমেন্ট; ঘ is shown off, `FR-IMP-12`), download its template, choose
+the CSV saved from the hospital's own system, **যাচাই করুন**. The preview
+counts add, update, skip and errors, and lists every error by row and column.
+**অনুমোদন করে সংরক্ষণ** writes it all or nothing; the history lists every
+batch; a committed one can be taken back. `data-import.spec.ts` does all of
+it on a facility that starts empty.
+
+**How the data is held.** Migrations 0029–0031: `booking_source 'import'`,
+patients a hospital holds (`owner_hospital_id`, a third owner under
+`patients_one_owner`), `external_refs` for the hospital's own identifiers,
+and `import_batches`/`import_rows` (with `previous`, for undo). Row
+reading is pure and tested in `shared/domain/src/imports`: day-first dates,
+either clock, weekday names in both languages, Bengali digits, taka with
+commas.
+
+**Rules a reader would not guess** (`import.service.ts`):
+- **Re-importing updates.** Every row keeps the hospital's identifier; a
+  department whose code already exists, or a doctor whose BMDC number is
+  known, is adopted rather than duplicated.
+- **Beds arrive out of service** (`FR-IMP-03`: occupancy is never imported).
+- **An imported staff account has no password** — none is ever imported —
+  until an administrator issues a temporary one from `S-B-11`. An email that
+  already has an account here is skipped: an import never changes a signed-in
+  person's access.
+- **Appointments** need their patients and doctors imported first, a chamber
+  that day (a date in the past is refused), and a free serial. "Paid" is kept
+  on the booking as the hospital's word (`intake.import.paid`): a payment row
+  needs a payer, and an imported patient has none until they claim the record.
+- **Undo** removes what the batch added and restores what it changed, unless
+  something outside the batch has been built on it since — a booking, a
+  visit, a bed the ward has used, an account somebody signed in with — and
+  then it names those rows and changes nothing.
+- **Imported patients are their hospital's alone** (`FR-IMP-10`): the
+  counter lookup from step 23 now shows another hospital's imported patients to
+  nobody.
+- **Rows are cleared 30 days after a batch closes** by the hourly jobs
+  (`jobs.service`, which now also runs the materialiser); counts, errors and
+  `external_refs` stay (`FR-IMP-08`).
+
+**Found on the way: lab reports over 256 KB failed.** The global JSON parser
+runs before the lab route's own 14 MB one and refused any real PDF (as base64)
+with a **500**; every test uploaded a few bytes. Routes with their own limit
+are now skipped by the global parser, an oversized body is `PAYLOAD_TOO_LARGE`
+(413) and a malformed one `VALIDATION_FAILED` (400) instead of `INTERNAL`.
+
+**Not in this step.** A read-only connection to a hospital's database or FHIR
+(`FR-IMP-09`: "later"); set D (`FR-IMP-12`). Before a real import, the
+hospital's column headers — never its rows — are what an importer needs
+(`FR-IMP-11`).
+
+**Before this reaches the deployed demo:** apply 0029, then 0030 and 0031
+(0029 must commit first, as 0021 did).
+
+### Step 23 — somebody walks up to the counter (`feat/counter-registration`)
+
+**What a counter now does.** On `S-B-02`, **ওয়াক-ইন যোগ** (key `W`) opens
+`MOD-B02-WALKIN`: type the number the patient says (`০১৭…`, `017 …`,
+`+88017…` all work), pick the person from everybody registered under it, or
+register somebody new in four fields, choose the end of the line or a place
+with a reason, and **সিরিয়াল দিন**. The rail's **রেজিস্ট্রেশন** now opens
+`S-B-03`, a registration desk with the same finder and today's chambers
+beside it. `counter-registration.spec.ts` does both; `console-rail.spec.ts`
+now expects রেজিস্ট্রেশন to open.
+
+**How it is stored.** Registration makes exactly what a guest booking makes —
+a guest identity for the phone and a patient under it (`FR-GST-13`) — so a
+counter patient can later verify the phone in the app and find their records
+(step 25). The same name under the same number is one person; a child on a
+parent's phone is a second patient. Every lookup that shows somebody writes
+one `RECORD_VIEW` audit row per patient (`DB-P7`). The serial is the
+queue's own `POST /sessions/:id/walkin`, issued under the session lock.
+
+**A walk-in sent twice was two bookings.** `addWalkin` created the booking
+before `appendEvent` noticed a replayed `clientEventId`, so a counter that
+lost the answer and sent again left an orphan booking holding a serial.
+The controller now answers a replay from the log first
+(`registration.routes.test.ts`).
+
+**Deliberately not built.** *Offline walk-ins*: every other reception action
+queues offline, but a serial issued offline by two counters could be the same
+number, so the controls say a connection is needed. *The printed token slip*
+(`FR-REC-21`, not in this step). *The NID* on `S-B-03`: the column is to be
+encrypted by the application first, and nothing encrypts it yet.
+
+### Step 22 — a hospital sets itself up (`feat/hospital-settings`)
+
+**What a real deployment now does.** After `pnpm staff:create`, the facility's
+administrator signs in, opens the dashboard, and **সেটিংস খুলুন** leads to
+`S-B-11`: facility details and queue rules (with the SMS budget), departments,
+doctors and their weekly chambers, wards and beds, the emergency services
+offered, and staff accounts. A status card counts what is set up and carries
+**লাইভ করুন**. `hospital-settings.spec.ts` does all of it through the browser
+on a facility that starts with nothing but a name and an administrator, and a
+receptionist the screen created then signs in with the temporary password it
+showed once.
+
+**Chambers come from schedules now.** Migration 0028 gives `sessions` a
+`template_id` and a unique (template, date) index. The API process writes
+today plus seven days from every schedule at start-up, hourly, and straight
+after a schedule is added (`sessionMaterialise.service`, `SESSION_MATERIALISE`).
+It is idempotent by the index, so it cannot double a chamber. The seeds link
+their sessions to their templates, so the job writes nothing on a fresh demo;
+on the deployed demo it writes the eighth day after midnight, which the daily
+reset used to be the only thing doing.
+
+**Rules a reader would not guess** (all in `hospitalSettings.service.ts`):
+- A BMDC number already known **links that doctor** instead of making a second
+  record. A doctor's names and degrees change only while unverified and sat at
+  no other facility; after that they are the register's.
+- **`pnpm doctor:verify --bmdc A-12345`** is the platform's half of
+  `FR-SUP-02`. A hospital cannot verify its own doctors. Discovery shows only
+  verified doctors, so a facility can go live before its doctors appear.
+- A fee or room change reaches chambers **still scheduled from today**; a
+  booking keeps its own fee.
+- Removing a schedule removes its future chambers **nobody booked**; booked ones
+  stay for the counter, and the toast says how many.
+- **A new bed is out of service** with the reason code `setup:unconfirmed`
+  (the board shows "added in settings — not yet confirmed by the ward") until
+  the ward restores it. A public count never includes a bed nobody checked.
+- **Declaring a capability makes it unavailable** until the ER says otherwise;
+  the ER's own endpoint still refuses a kind never declared.
+- An administrator **cannot deactivate themself, drop their own admin role, or
+  reset their own password** here. Deactivating or changing roles ends that
+  account's refresh tokens.
+- **Soft-deleted roles are no longer issued.** `staffAuth.repo.rolesOf` and
+  the demo picker's queries ignored `staff_roles.deleted_at`; removing a role
+  from `S-B-11` would otherwise have done nothing until the row was deleted.
+
+**The queue now follows the facility's rules.** Until this step every guard
+ran on `DEFAULT_QUEUE_SETTINGS` and the late route wrote `reinsertAfter: 3`,
+so the no-show grace and late re-insert saved in `S-B-11` would have changed
+nothing. `queue.service.applyOne` reads `hospital_settings` for every event,
+checks the guards against it, and writes the facility's `k` into a
+`PATIENT_LATE` payload whatever the console sent (`queueRules.routes.test.ts`).
+The console still sends 3 optimistically; the server's event corrects it.
+
+**A screen could roll back to an older queue** (found by
+`lab-report.spec.ts` failing once in three runs, on this branch and not
+because of it). Joining a session room and reading the catch-up state are two
+steps on the server; an action committed between them was broadcast first,
+then the older catch-up arrived and replaced it, and the screen sat on the
+previous patient until the next action. `shared/client` `foldUpdate` now
+keeps the newer state (`FR-QUE-05`). This affected every console and every
+patient phone, most visibly a doctor's screen opened a second before the
+queue moved.
+
+**Not on the screen, deliberately.** *Counters* have nothing to configure
+until counter registration (step 23) gives them a use: nothing reads
+`staff_roles.scope` yet. The *refund policy* stays the agreed default (see the
+payment decisions); it is not a setting a facility edits. *A doctor account
+linked to its `doctors` row* (so a doctor sees only their own chambers, see
+*Step 21*) still has no column; it needs a migration and is open.
+
+**Before this reaches the deployed demo:** apply 0028 to Supabase before the
+API deploys — the materialiser and the seeds read `sessions.template_id`.
+
+### Step 21 — staff sign in with their own accounts (`feat/staff-auth`)
+
+**What a real deployment now does.** With `DEMO_MODE` off, the console shows
+`S-B-00`: email and password, one message for any wrong combination, a
+fifteen-minute lock after five failures in a row (`STAFF_LOCKOUT_*`). The
+access token is the same shape the demo picker's is — every role the person
+holds at their own facility — so no guard written since step 3 changed. It
+lasts fifteen minutes and the console renews it in the background
+(`keepSessionFresh`); the refresh token is opaque, stored hashed in
+`sessions_auth`, and rotates on every use. A rotated token used again means
+two parties hold it, and every session of that account is revoked. The picker
+after sign-in shows only the person's facility, only their roles, and today's
+chambers there (`GET /staff/chambers`, one query shared with the demo picker
+in `chamber.repo`). The rail's foot gains **লগ আউট**.
+
+**A password an administrator set** (`must_change_password`, 0027) signs in,
+but the token carries `mcp` and `attachPrincipal` refuses it everywhere except
+`/staff/me`, `/staff/password` and `/staff/logout`
+(`AUTH_PASSWORD_CHANGE_REQUIRED`) — the server's rule, not only the screen's.
+`S-B-00c` asks for the current password and the new one twice.
+
+**Starting a fresh deployment:** `pnpm staff:create --hospital-code MARKS
+--email … --name … [--hospital-name-bn … --hospital-name-en … --kind hospital
+--division … --district …]` creates the facility if the code is new (not
+live) and its first administrator, and prints a temporary password once.
+Accounts for everybody else come from `S-B-11` (step 22).
+
+**The demo is unchanged, and gains the sign-in.** `DEMO_MODE=true` still opens
+the picker without a password (`GET /demo/status` tells the console which it
+is; not knowing is treated as "not a demo"). The picker links to `S-B-00`
+(`?login=1`). **Every seeded account's password is `demo-password-2026`**
+(`DEMO_STAFF_PASSWORD`) — documented, and shown on the sign-in screen only on
+a demo: it opens nothing the picker did not already open. Demo hospitals now
+have codes: SHAPLA, PADMA, KARNAPHULI, JAMUNA, MEGHNA, BURIGANGA.
+
+**Things worth knowing.**
+- **scrypt, not Argon2id** (decision 75), at OWASP's minimum; the stored hash
+  names its parameters, so raising them later rehashes at the next sign-in.
+- **The per-address limits are generous on purpose** (300 sign-ins per ten
+  minutes): every counter in a hospital usually reaches the server from one
+  public address, and a shift change is a hundred sign-ins. The per-account
+  lock is what stops guessing.
+- **One email at two facilities** is resolved by the password; the hospital
+  code is asked for only when the password opens both
+  (`AUTH_HOSPITAL_REQUIRED`), so the question reveals nothing to somebody who
+  does not know it.
+- **Sessions live in the tab** (`sessionStorage`), as the demo's did: a new tab
+  signs in again, and closing the browser signs out.
+- **A doctor still chooses among all the facility's chambers.** No column joins
+  an account to a `doctors` row (see *Step 12*), so "only my own chambers"
+  waits for step 22's staff screen to record it.
+- `seeds.test.ts` now asserts the opposite of what it did: every seeded
+  account carries the one scrypt hash of the demo password, and nothing else.
+- **Before the console knows whether it is a demo, it says it is starting.**
+  The first cut treated an unanswered `GET /demo/status` as "not a demo" and
+  showed sign-in — which is what the deployed demo's API does for thirty
+  seconds after sleeping, and what a full e2e run hit when the API was slow.
+  `askDemoMode` now asks four times at twelve seconds, says the server is
+  waking after the first miss (`ConsoleStarting`), and ends on "could not
+  reach the server" with a retry — never on sign-in by default. A session
+  already in the tab does not wait for the answer. `console-cold-start.spec.ts`
+  holds both cases.
+- **Before this reaches the deployed demo:** apply 0027 to Supabase
+  (`ALLOW_REMOTE_DB=1 pnpm db:migrate`) before the API deploys — the login
+  and the picker's chamber query read its columns. The demo's accounts can sign
+  in only after the next `db:reset`; until then the picker works as before.
+
+### The Marks handbook, and the real version they asked about
+
+**What was asked (28 September).** After the pitch, Marks Group's COO asked
+for full documentation of the app and whether their existing hospital
+database can be imported. The owner chose: the real version runs **on a server
+in Bangladesh** (their server room or a Bangladeshi data centre), and the
+document comes first so Marks can decide from it.
+
+**The handbook is pitch material and lives outside the repository**, in
+`%LOCALAPPDATA%\HealthCareDemo\handbook\` (`README.txt` there says how to
+rebuild it for another hospital: copy `config.json`, change the names,
+`node build.mjs <config>`). 26 A4 pages, all Bangla, every screenshot from the
+current build with numbered markers, every feature badged *আজই চালু* /
+*পাইলটে যোগ হবে* / *পরের ধাপে*. It states no price and no legal
+compliance claim, and calls itself a description, not a contract. A copy is in
+the owner's Downloads as `MARKS-handbook-bn.pdf`. If the product changes, the
+three status lists in `build.mjs` and the screenshots must change before a
+new copy is sent. Fresh screenshots were taken against the local
+`healthcare_dev`, which was reset for it (demo data only).
+
+**What it proposes for importing their data** — four sets Marks approves one
+by one, and nothing outside them: (ক) hospital structure — departments,
+doctors, schedules, wards/beds, staff; (খ) patient register — their patient
+number, name, DOB or age, sex, mobile, blood group; (গ) upcoming
+appointments; (ঘ) past lab reports and visit summaries, proposed for later.
+Never taken: NID, address, photos, billing, HR, stock, OT, nursing charts,
+imaging originals. Bed occupancy is not imported (the ward sets it on go-live
+day). Three routes: Excel/CSV template first, a read-only database link,
+FHIR. Five steps: export, validate, preview and approve, all-or-nothing save,
+undo per batch.
+
+**In the documents as of `chore/pilot-scope`; built as pilot steps 21–28**
+(`CLAUDE.md` §4.2): `PRD.md` §14b (`FR-IMP-01`–`12`), §4.2 and `FR-SEC-07`;
+`CLAUDE.md` §4.1 rewritten (auth built here, scrypt, demo picker kept);
+`DATABASE.md` migrations 0027–0031 planned (0027 staff auth, 0028 schedules, 0029–0031 import); `BACKEND.md` staff auth, import
+routes, the worker loop, §12b self-hosting; `APP_FLOW.md` `S-B-00` pilot rules
+and `S-B-14`. What the documents had to change, for the record:
+
+- `FR-IMP-*` requirements need adding to `PRD.md` (import is new scope;
+  §27 only says the Platform runs alongside an HMS).
+- `patients_one_owner` requires every patient to belong to a user or a guest,
+  and there is no column for a hospital's own patient number — an imported
+  register needs a schema change (`DATABASE.md`).
+- A server in Bangladesh means our own staff login, not Supabase Auth, which
+  reverses `CLAUDE.md` §4.1; that section needs the owner's edit.
+- The rest of the pilot list, as the handbook states it: staff logins and
+  staff management (`FR-ADM-11`), hospital setup screens (`FR-SUP-01`), the
+  nightly session materialiser (`backend/workers` is still a stub, so no
+  chamber exists after the seeded days), counter registration and walk-ins
+  (`FR-REC-14`, `FR-REC-20`), patient OTP, a live SMS aggregator, and
+  packaging for a Bangladeshi server with backups.
+
+**Found while checking the handbook against the build:** the console rail's
+**বিল** (Billing) item opened the pharmacy stock screen. `APP_FLOW.md` B1.1
+said so on purpose ("while `S-B-04` is not built"), but a person clicking
+Billing landed on medicine stock. **Changed in `fix/console-rail-billing`**, and
+B1.1 edited to match: ফার্মেসি is its own rail item, and বিল is switched off
+with "এই সংস্করণে নেই", the way রেজিস্ট্রেশন is. `console-rail.spec.ts`
+asserts both. **Decision 74 (owner may reverse):** the rail gains an eighth
+item rather than keeping a mislabelled one.
 
 ### Preparing the demo for a meeting (`fix/phone-entry-normalise`)
 
@@ -182,6 +1827,30 @@ on their first action after that. Demo principals now last twelve hours
   both, which is what `freshenPadma` does in `emergency-burn.spec.ts`.
 - **After “I'm on my way” there is a send step** (জানান ও রওনা দিন), and the
   lab needs নমুনা নেওয়া হয়েছে → প্রসেসিং before রিপোর্ট দিন.
+
+**Scheduled for the pitch (owner's machine, Monday 28 September).**
+`HealthCare pitch reset` resets the deployed demo once at 11:10 Dhaka (23:10
+on the machine), and `HealthCare pitch prep` runs
+`%LOCALAPPDATA%\HealthCareDemo\pitch-prep.ps1` at 11:24 and every 5 minutes
+until 14:54: it starts the API on the machine against the demo database, marks
+serial 6 seen if it is still in the chamber (the setup tap), confirms Padma's
+capability list and cycles BU-01 through cleaning, then stops the API. Its log
+is `pitch-prep.log` beside it. `HealthCare demo refresh` no longer catches up a
+missed run (`StartWhenAvailable` off, so a reset can never start mid-meeting)
+and may wake the machine. All three are outside the repository. Five minutes, because
+the deployed demo calls a figure stale after ten (`staleAfterMinutes: 10`),
+and a stale Padma drops below the nearer, equally stale Jamuna.
+
+~~**Known bug: a patient left in the chamber for three hours cannot be
+finished.**~~ **Fixed in `fix/consult-overflow`.** Only the offline batch
+clamped the measured length; the counter's "done" and "next" wrote the raw
+number, and `bookings_consult_seconds_plausible` (0–10800 s) refused it with a
+500. Every producer of `PATIENT_DONE` now measures through the domain's
+`measuredConsultSeconds` — the same clamp the rate already used (30 s to one
+hour) — so the event, the booking row and the rate hold one number. The event
+records the plausible bound, not the four hours, which is what the offline path
+already did. `queue.routes.test.ts` moves the clock four hours past a call and
+finishes the patient both ways; both tests fail with the 500 on the old code.
 
 The presenters' material lives outside the repository (it is pitch material,
 not product): a slide deck, a text guide and a screenshot walkthrough built by
@@ -258,8 +1927,15 @@ Get-Content "$env:LOCALAPPDATA\HealthCareDemo\refresh.log" -Tail 20
 Unregister-ScheduledTask -TaskName 'HealthCare demo refresh' -Confirm:$false   # stop early
 ```
 
-After 2 October the last reset's sessions run to 9 October, then the picker
-empties day by day. A further week is another owner's-word decision.
+**Extended and repaired on the owner's word (2026-09-30).** The trigger now
+ends 2026-10-15 23:00 local, so the last reset is **Friday 16 October, 08:00
+Dhaka**, and its sessions run to about 23 October. The resets had been
+failing since the pilot migrations landed on `mvp`: `db:verify` refused
+(Supabase stopped at 0026) and, as designed, nothing was truncated, so the demo
+kept its 25 September data. `ALLOW_REMOTE_DB=1 pnpm db:migrate` applied 0027–0033
+to Supabase the same day — all additive, so the deployed API from `main` is
+unaffected — and `db:verify` passes there. **Before a pilot step merges with a
+new migration, apply it to Supabase, or the next morning's reset is skipped.**
 
 ### The first scheduled refresh, and the rail (`fix/demo-refresh-retry`, `fix/console-rail-links`)
 
@@ -1518,6 +3194,247 @@ afternoon.
 
 ### Things learned the hard way, so they are not relearned
 
+- **A spec's "server out of reach" goes away with the page it was set on, and
+  a closing tab's push then gets out** (`fix/console-ack-rollback`,
+  5 October). `offline-console.spec.ts` blocks `/sync/events` with a
+  Playwright route and closes the tab to stand for a power cut. Twice in one
+  evening, on a machine slowed by hours of runs, the closed tab's events were
+  in the log seconds later: once in "the next person at the same PC" (a full
+  gate run, 153 of 154), once in "survives the tab being closed" (one run in
+  three). Both times the events carried the right person's name, so the
+  outbox's isolation held and the product had done nothing wrong: a tab that
+  dies mid-push may land it, and the same keys sent again are the same events
+  (`SY-02`). `fix/e2e-outbox-close-race` had narrowed this by waiting for a
+  refusal before closing; the console retries by itself, so that only moves
+  the window, and waiting for a second, fresh refusal still failed one run in
+  three. **What holds: unload the console first** (`leave`: go to an empty
+  page while the block still stands, then close). Its requests die with
+  their document and its timers are gone before the block is. 16 of 16
+  after, on the same slow machine. The specs that reload instead of closing
+  keep their page, and so their block, and have not failed. **Not
+  established:** exactly how the request got out two seconds after
+  `page.close()` returned in the second failure; the fix does not depend on
+  knowing.
+
+- **For about the first hour of a Dhaka day the pitch session is dated
+  yesterday, and a test that did not know failed every night in that hour**
+  (`fix/materialise-test-midnight`, 5 October). `seed_07_demo_live` dates the
+  pitch session by when its doctor arrived, which is a little over an hour
+  before the reset. Seeded at 00:13 Dhaka it was dated the day before
+  (planned start 22:57), so today's chamber for that weekly schedule did not
+  exist, and the hourly job wrote it, as it should. `hospitalSettings.routes.
+  test.ts` asserted that the job's first run over the whole database writes
+  nothing: true for twenty-three hours, false for one. It now lets the first
+  run do what it has to and asserts what the test is named for, that a second
+  run writes nothing and no chamber exists twice. **The product was right,
+  and so were the seeds**: the same happens on the demo after a reset in that
+  hour, where the pitch doctor shows last night's chamber still running and
+  tonight's scheduled. The same family as `fix/console-past-midnight`; found
+  only because a verify run happened to start at 00:10 Dhaka. **A test that
+  asserts a count over the whole seeded database is asserting the hour it
+  was written in.** What the job is for is now tested directly
+  (`fix/tests-past-midnight`): with today's chamber for a schedule deleted,
+  the first run writes exactly one and the second writes none.
+
+- **For the first half hour of a Dhaka day the e2e fixture made a chamber
+  the product never would** (`fix/tests-past-midnight`, 5 October).
+  `createConsoleSession` dated its chamber today and started it "thirty
+  minutes ago" (ninety, for an overdue one), which just after midnight is
+  yesterday. A chamber's date is always the date of its planned start, and
+  the patient app relies on that: it dates a remembered booking by the start,
+  so the home strip, which shows today's serial, hid it, and
+  `app-shell.spec.ts:172` failed in a full run that began at 00:25 Dhaka.
+  The fixture's start is now never before its own date began. That only acts
+  in that half hour, so it was tried at its extreme, with "midnight" set to
+  "now" for the whole browser suite: 153 of 153.
+  **Asked of the owner, not decided:** the same rule means a real chamber
+  that runs past midnight loses its strip on the patient's home screen at
+  00:00 and is listed as past, while the patient is still waiting.
+  `APP_FLOW.md` says the strip "appears only if an active booking exists
+  today" and is silent on a chamber still running from yesterday. Read from
+  the code, not seen happen.
+
+- **A faster machine is a different test** (`fix/e2e-fast-runner`,
+  3 October). The browser suite passed 150 of 150 here in 18.1 minutes and
+  144 of 150 on GitHub's runner in 11.6. Nothing differed but the speed.
+  `/guest/start` is limited to 30 per address per ten minutes, in a **fixed**
+  window that opens at the first call; every patient in the suite books from
+  one address; and the runner fitted the 31st booking into the window this
+  machine had always been too slow to fill. Five tests in a row were refused
+  a booking (the app said so, correctly), and the ones after them passed
+  because the window had closed. It reproduces here on demand:
+  `pnpm exec playwright test e2e/wallet.spec.ts --repeat-each 6`. **A suite
+  that passes because the machine is slow has a limit in it somewhere.**
+  When a spec fails only on a fast runner, count what it sends per address
+  before reading the screen. The suite now sets `ADDRESS_RATE_LIMIT_FACTOR`
+  (decision 90).
+- **A fixture that picks a random name has to survive the name being taken.**
+  The same run failed `ward-board.spec.ts:116` on `wards_hospital_name_key`:
+  `e2e/support/ward.ts` named its ward with four random characters and
+  treated a clash as an error. It now picks another. The same lesson as
+  `fix/test-coin-flips`, in a fixture instead of a test.
+
+- **A phone that opened as reception tapped *next* could stay on the
+  previous patient** (`fix/broadcast-after-commit`, 3 October). The queue
+  emitted `queue.updated` from inside its transaction, before the commit. A
+  subscriber joins the room, *then* reads its catch-up state. One that
+  joined after the emit and read before the commit had missed the broadcast
+  for a write it could not yet see — and showed the old queue, stamped as
+  fresh, until the next event. `HANDOVER.md` §12 listed the early broadcast
+  as medium, for the rollback case only. It showed as `lab-report.spec.ts`
+  leaving the doctor's screen on serial 1, twice in about six runs: the
+  pool fix above had made the gap between emit and commit a few queries
+  longer. It is the mirror of the race step 22 fixed in `foldUpdate`, and
+  probably what that step's "once in three runs" really was.
+  `queue.service` now registers its broadcasts and sends them after the
+  commit (`committed`); `broadcastAfterCommit.test.ts` reads the log, from
+  another connection, at the instant of each broadcast, and fails a write
+  on purpose to see that nobody is told. Beds, the ER and the lab already
+  broadcast after their transactions.
+
+- **A queue tap could stall for five seconds and fail when the database
+  pool was busy** (`fix/queue-pool-starvation`, 3 October). Every write to
+  a chamber holds the session's row lock on one connection. While holding
+  it, `notification.service` `queueFor` read the chamber, the templates,
+  the month's SMS count and the device tokens from the *pool*. If every
+  other connection was held — most simply by other counters' taps on the
+  same chamber, each waiting for that lock — the holder waited for a
+  connection only it could free: `connectionTimeoutMillis` (5 s), then a
+  500, with the queue already broadcast as though it had moved (the
+  broadcast-before-commit in `HANDOVER.md` §12 item 12, still open). It
+  showed once, as `queueConflict.test.ts` failing after 5.3 s in a full
+  run — five taps at once on the test pool of five — and passed alone
+  eight times running, because it needs all the waiters to be queued
+  before the holder reaches that step. `poolStarvation.test.ts` does not
+  depend on timing: it takes every connection but one and runs each queue
+  write, and before the fix next, delay and the sync batch each took 5.1–
+  5.3 s and failed, and a booking took 5 s and lost its confirmation
+  message. The reads now go through the transaction (the bed-request,
+  emergency and lab-report messages had the same pattern and the same
+  fix). On a real server the pool is 20, so it needs more traffic to
+  reach — but it is the queue's hot path, and a full pool is exactly when
+  a counter is busiest. **Not audited:** whether any other transaction in
+  the API asks the pool for a second connection (beds, ER, lab, imports).
+
+- **The browser suite does not fit beside a working desktop on this machine,
+  and the process that grows is Playwright's worker** (3 October, on `mvp` at
+  `10bbcd1`; no code changed). Two full runs each failed once, late, in a
+  different place, and every failure passed alone on fresh servers:
+  - run 1, 142/144 in 38.1 min: the canary's first case took **2,088 ms**
+    against the 2,000 ms budget, and `ward-board.spec.ts:83` hit the 60 s test
+    timeout on a page reload. Free memory 0.37–0.86 GB of 7.7 GB;
+  - run 2, 143/144 in 40.3 min: `language-switch.spec.ts:114` hit the 60 s
+    timeout loading the console. Free memory down to 0.12 GB; commit 20.3 of
+    24.3 GB;
+  - alone: canary 5/5, ward-board 8/8, language-switch 6/6.
+
+  Not a regression: the same tap-to-phone path measured on `ebfcf14` (before
+  the handover fixes) gave 397–1,132 ms warm, and on `10bbcd1` 244–756 ms
+  warm; the only taps over 1.2 s (up to 2,263 ms) came with cold servers and
+  under 0.4 GB free. Most of a tap's measured time is the click itself, in a
+  console page running in development mode.
+
+  With Chrome, WhatsApp, Teams and Copilot closed (VS Code and Docker left
+  running) the third run was **144/144 in 19.2 min**. Private memory through
+  it:
+
+  | at | console `next dev` | patient `next dev` | API | Playwright worker | free |
+  |---|---|---|---|---|---|
+  | start | 995 MB | 1,543 MB | 92 MB | 143 MB | 0.31 GB |
+  | 48/144 | 1,042 MB | 1,130 MB | 111 MB | 1,062 MB | 0.72 GB |
+  | 96/144 | 1,030 MB | 1,261 MB | 107 MB | 1,889 MB | 0.90 GB |
+  | 142/144 | 1,059 MB | 1,860 MB | 112 MB | 2,656 MB | 0.71 GB |
+
+  The two development servers and the API do not accumulate (the patient
+  server spikes to about 2.3 GB while compiling and comes back). **The
+  Playwright worker grows about 18 MB a test and is never restarted in a run
+  with no failure.** It is the trace recorder: `wallet` + `ward-board` took
+  the worker from 277 to 627 MB with `trace: 'retain-on-failure'` and left it
+  flat at 136–274 MB with `--trace off`. (Repeating the canary twenty times
+  with tracing on did not grow it, so it is what some specs record, not a
+  fixed cost per test.) By the last specs the suite's own processes hold
+  about 6 GB on a 7.7 GB machine. Nothing was changed to get the clean run:
+  no timeout, no assertion, no test.
+
+  **Until the suite is made lighter, run the full suite with the browser and
+  chat apps closed.** What would make it lighter is the owner's choice and is
+  not made: recording less in a trace, or running the two apps as production
+  builds (plan 1.8 already has a production-configuration job), which also
+  takes about 2 GB off.
+- **What a doctor typed as the queue arrived was wiped, twice over**
+  (fixed in `feat/console-offline-load`, 3 October). Two places in
+  `DoctorConsole` reset themselves when the patient in the chamber changes,
+  and both counted "nobody yet → the first patient" as a change. The consent
+  form was drawn before the queue had loaded, keyed "nobody", and remounted
+  when the first state arrived: a code typed in that moment was gone
+  (`wallet.spec.ts:251`). The visit note was cleared by an effect, which
+  runs after the fields are already enabled and on screen: a diagnosis typed
+  in between was gone and the sign button was back to disabled
+  (`doctor-console.spec.ts:97`, one run in five when repeated). Neither is
+  new, and neither is only a test matter — a doctor who types the moment the
+  next patient appears hits the same gap. Whether plan 1.6 made them easier
+  to hit was not measured; it does move the moment the first state arrives,
+  since the console now reads its kept queue from the device before it asks
+  the server. The consent form is not drawn until the queue has said who is
+  in the chamber; the note is cleared in the render that brings the new
+  patient, not after it. **A reset that belongs to "the patient changed" is
+  done in the render that changes the patient, never in an effect after
+  it.** Checked by running both specs eight times over: every
+  doctor-console test passed all eight (56 of 56). The wallet tests passed
+  five times and then failed for a reason that is the product working: a
+  guest booking starts with a phone check, `POST /guest/start` allows 30 per
+  address per ten minutes (`patientAuth.routes.ts`), each repeat books six
+  guests, and the thirty-first was refused with a 429. **Repeating
+  `wallet.spec.ts` more than five times in one run measures the limit, not
+  the wallet.**
+- **A test that changed nothing one run in sixteen**
+  (`fix/test-coin-flips`, 3 October). `totp.test.ts` proved a sealed
+  two-step secret refuses to open once altered by changing the last
+  character of its body from `A` to `B`. The body is 32 bytes, 43 base64
+  characters, and the last carries four bits of the secret and two that
+  decode to nothing; `A` and `B` differ only in those two. So for the 6% of
+  seals that end in `A` (measured: 961 of 16,000) the "altered" value was
+  the same bytes, opened correctly, and failed the gate — once, while plan
+  1.7 was being verified. **The seal was never wrong** (AES-256-GCM, and an
+  altered IV, tag or body is refused); the test was. It now changes the
+  first character of each of the three parts, over 64 fresh seals. **A test
+  whose input is random has to be true for every value, or it is a
+  failure waiting for its turn.**
+- **Two tests asked the database for rows "since now" by the wrong clock**
+  (`fix/test-coin-flips`, 3 October). `standby.routes.test.ts` and
+  `admin.routes.test.ts` took `new Date()` on this machine, made a request,
+  and then looked for rows with `created_at >=` that moment. `created_at` is
+  PostgreSQL's `now()`, and the database runs in a container in a virtual
+  machine: a second clock. Measured the same afternoon, it ran between
+  4.1 ms ahead of this machine and 1.4 ms behind — behind in 744 of 1,345
+  samples once all eight cores were busy — and a request reaches its first
+  statement in about as long. So the row was found when the database's
+  clock leant ahead and missed when it leant behind; the standby test
+  failed the gate once reporting "no SMS written" while the same run's
+  output shows the SMS, and its row is in the table. The moment of the
+  failure itself was not caught; the mechanism and its size were. Both
+  tests now take the moment from the database (`support/databaseClock.ts`).
+  **The product was right both times. Never compare a time from this
+  machine with a time the database stamped.**
+- **A second device a spec opens lives until the whole run ends**
+  (`fix/e2e-context-leaks`, 2026-09-30). `browser.newContext()` belongs to the
+  worker's browser, not the test, and there is one worker. No-show, referral,
+  emergency, check-in and language-switch never closed theirs, so their pages
+  kept polling: by the last twenty specs of a full run the console took
+  seventeen seconds to open, the API went six seconds without answering, and
+  whichever spec came next failed — the canary's "tap after tap" in one run,
+  standby and the wallet in the next, each passing alone. Every multi-device
+  spec now closes what it opened after each test (`e2e/support/contexts.ts`);
+  the canary's file is unchanged, since it already closes its own. A late
+  spec failing only in a full run is load before it is logic.
+
+- **A development build mounts every screen twice** (React strict mode), so an
+  effect that asks the server to *create* something runs twice. `S-B-00d`'s
+  setup did, and two secrets raced: the screen showed one, the database kept
+  the other, and the right code was refused. The server now answers a repeated
+  setup with the same unconfirmed secret. Anything a screen creates on mount
+  must be idempotent on the server, not guarded on the client.
+
 - **The E2E database is the one database no suite migrates.** The unit, API
   and schema suites build theirs from nothing, so a step's migration is always
   there for them. `healthcare_dev`, which Playwright drives, was only ever
@@ -2043,7 +3960,8 @@ Raised while building the bed board (step 14):
    confirmation `GR-01` requires. The two requirements cannot both hold
    literally.
 
-37. **Both consoles' offline outboxes live in memory.** `createDexieStore` exists
+37. **Closed by `fix/offline-outbox-persist`** (all three outboxes are in
+   IndexedDB). Was: **Both consoles' offline outboxes live in memory.** `createDexieStore` exists
    and neither console uses it, so a reload with actions queued loses them. The
    reception console has always been this way; the ward board matches it rather
    than being the only one that differs. Wiring Dexie in is a small change for
@@ -2304,6 +4222,133 @@ Raised while building the national layer (step 20):
    to `bn`. That is a schema change and a product call: whether a patient who
    reads the app in English should also be texted in English before accounts
    exist. Implemented as: not yet — the SMS is Bangla.
+74. **The rail has eight items, not seven.** `APP_FLOW.md` B1.1 listed seven
+   and sent বিল to the pharmacy while `S-B-04` (billing) is not built, so a
+   person clicking Billing landed on medicine stock. Implemented as: ফার্মেসি
+   is its own item and বিল is switched off with its reason (`fix/console-rail-billing`),
+   B1.1 edited. The alternative is to drop বিল from the rail until `S-B-04`
+   exists.
+75. **Staff passwords use scrypt, not Argon2id.** `BACKEND.md` §0 named
+   Argon2id; that is a native dependency, and `CLAUDE.md` §7 asks before any
+   new one. `node:crypto` scrypt at OWASP's minimum (N = 2^17, r = 8, p = 1)
+   needs none. Implemented as: scrypt, recorded in `BACKEND.md` §0 and
+   `DATABASE.md` §2.1. Switching later means rehashing at each next login.
+76. **Import reads CSV only.** Reading `.xlsx` needs a library. Excel's
+   "Save as CSV (UTF-8)" covers it, and the templates are CSV. Implemented as:
+   CSV (`FR-IMP-09`).
+77. **Imported patients belong to the hospital; counter registrations are
+   guests.** `FR-GST-13` already makes a counter registration a guest
+   identity. An imported register is the hospital's record, not the patient's,
+   so it gets `patients.owner_hospital_id` (0030) and stays out of any patient
+   app until claimed (`FR-IMP-10`). Implemented as: both, as described.
+78. **Set D (old records) is not in the first import release**
+   (`FR-IMP-12`) — it is the most sensitive set and the hospital's legal
+   adviser should agree it first.
+79. **Two-step had no requirement text, so `FR-SEC-10` was added.** `CLAUDE.md`
+   §4.2 names step 28 and "the 2FA half of `FR-SUP-01`", but neither
+   `FR-SUP-01` nor `FR-SEC-06` mentions a second factor. Implemented as: a new
+   `FR-SEC-10` in `PRD.md` §SEC recording step 28 as built. Say if it should
+   be worded differently or folded into `FR-SEC-06`.
+80. **Who must have it.** "Required for administrators" is read as
+   `hospital_admin` and `platform_admin`; `gov_viewer` (read-only aggregates)
+   is not required, and every other role may opt in. Implemented as:
+   `TWO_FACTOR_REQUIRED_ROLES` in `shared/domain`.
+81. **Recovery codes are not regenerated by the person.** Ten, each once;
+   the picker warns at three. Running out means an administrator's reset and
+   setting it up again, which issues ten new ones. A "new codes" button is a
+   small addition if wanted.
+82. **An administrator cannot reset their own two-step on `S-B-11`**
+   (`own_two_factor`), for the same reason as their own password: another
+   person's check. A facility's only administrator is reset from the server.
+83. **Fixed (`fix/next-without-waiting`): `BTN-B02-NEXT` waited for the
+   server between its two halves.** `callNext` awaited `PATIENT_DONE`'s
+   network flush before queueing `PATIENT_CALLED`, so on a slow server the
+   "called" half arrived a round trip after the tap (`NFR-02`). Both now go
+   through `actMany`: queued together, applied together, one flush. The first
+   cut failed the canary, which is what it is for: the server orders a batch
+   by client time and breaks ties on the random key (`SY-01`), and two events
+   made in one millisecond were replayed "called" before "done" half the time.
+   Actions from one tap are now a millisecond apart.
+84. **Push notifications wait for a signed hospital** (owner, 2026-09-30).
+   `FR-NOT-02`'s push half stays unbuilt until a deal is made; SMS stays on
+   the log provider (step 27 waits for an aggregator account). The pilot runs
+   on the lowest cost there is: free tiers for the demo, and a hospital's own
+   running costs carried by the hospital (terms live outside the repo).
+85. **Ruled (owner, 2026-09-30): a returning guest proves the phone once per
+   device.** The documents had disagreed — `BACKEND.md` §7.1 let "a number
+   that has proved itself skip the code", `APP_FLOW.md` A1 bound the guest
+   token to "phone + device" — and the security review found the first handed
+   anybody who typed the number a token for it. The same phone is not asked
+   again and saves the SMS; any other device, or a stranger typing the
+   number, is sent a code. `BACKEND.md` §7.1 and `APP_FLOW.md` A1 now say so.
+   **Judgement calls, not ruled:** the proof lasts 90 days and is renewed on
+   each use, and it is bound to the user agent as a patient's refresh session
+   is (`FR-SEC-05`) — a browser update means one more code. Stateless, so it
+   cannot be revoked one by one; rotating `GUEST_LINK_SECRET` ends them all.
+
+Raised while fixing the handover's findings (`docs/PLATFORM_PLAN.md` phase 1):
+
+86. **What a delay declared after the doctor arrived means**
+   (`fix/delay-on-arrival`). The documents say only that ETAs are "adjusted
+   for declared delays" (`FR-QUE-11`). The bug was that a delay declared
+   before the arrival kept being added afterwards. Fixed as: the arrival uses
+   up whatever was declared before it. A delay declared *after* the arrival
+   could have been dropped the same way, but reception and the doctor can
+   both declare one mid-chamber (`FR-REC-03`, `FR-DOC-02`), so it is read as
+   a hold: nobody is expected to be called before "declared at + minutes",
+   a second delay extends a hold still running, and the no-show grace cannot
+   end before the hold does. `BACKEND.md` §4.1 now says so. The other reading
+   — a later delay only shifts estimates and never blocks absent-marking —
+   is a one-line change in `rules.ts` if the owner prefers it.
+87. **The no-show grace and a break** (`fix/console-resume`). No document
+   says whether the grace (`FR-QUE-20`) runs while a chamber is paused. Until
+   now it did, and nothing stopped a patient being marked absent mid-break —
+   harmless while no chamber could be resumed, and a way to lose a turn to a
+   prayer break once one can. Built as: nobody is marked absent while paused
+   (the refusal says to resume first), and the grace for whoever is at the
+   front starts again, in full, at resume. `BACKEND.md` §4.1 and
+   `APP_FLOW.md` B1.2 now say so. The stricter reading — only the paused
+   minutes are given back — is a small change if preferred.
+88. **What a counter PC keeps about patients for offline use**
+   (`feat/console-offline-load`). Kept today: unsent actions, which can
+   carry a name and a phone (a bed admit, an ER walk-in) and are deleted on
+   send; and the last queue per chamber, which carries no names. **Not**
+   kept: patient names for the queue, the ward board, the ER case list. So
+   a reload with no network shows serials without names, and the ward and
+   ER consoles say their board could not load. Keeping those would make an
+   outage far more workable and would leave identifiable patient data,
+   unencrypted, in the browser storage of a shared PC. Built the cautious
+   way; the owner decides whether to keep more, and with what protection.
+89. **What the browser suite records while it runs** (`chore/e2e-ci`). The
+   trace recorder is what grows to 6.7 GB over a full run (*Things learned
+   the hard way*). **In CI it is now off**, because a hosted runner has no
+   page file to grow into: a failure there keeps its video, its screenshot
+   and the page as it stood, and loses the step-by-step trace. **On a
+   developer's machine nothing changed** — traces are still recorded and
+   a full run still ends with the page file enlarged. Turning it off there
+   too would take about 6 GB off a run and cost the trace of a failure;
+   running the suite against built apps would take another 2 GB off and
+   needs `console-cold-start.spec.ts:98` rewritten first. The CI choice
+   was made so that CI can run at all and is one line to reverse
+   (`playwright.config.ts`); the local one is the owner's.
+90. **A limit on an address counts everybody behind it**
+   (`fix/e2e-fast-runner`). The API refuses the 31st phone check from one
+   address in ten minutes, the 11th standby place and the 11th emergency
+   alert (`middleware/rateLimit.ts`, `byIp`). The numbers were never measured
+   (their own comments say so) and they assume an address is a person. In
+   Bangladesh it often is not: a hospital's waiting room on the hospital's
+   Wi-Fi is one address, and a mobile carrier puts many subscribers behind
+   one. **A busy counter's patients could be refused a booking by this on a
+   real server**, and they would be told to wait ten minutes. The browser
+   suite met it first, as 150 patients on one machine.
+   Built as: `ADDRESS_RATE_LIMIT_FACTOR`, 1 to 100, multiplies every
+   per-address limit; unset, nothing changes. It does not touch what protects
+   a person — codes per number, the lock after five wrong codes, sign-in
+   lockout — which are in the database and not keyed on an address.
+   **For the owner:** what a pilot hospital's server should set (it depends
+   on whether patients book from the hospital's network), and whether the
+   defaults themselves should rise. Not chosen here; `DEPLOY.md` Part S says
+   the setting exists and when to raise it.
 
 Two were the owner's, and both are **settled — closed on 2026-09-22 and not to
 be raised again**, in a session or in a report. They were repository
@@ -2350,6 +4395,29 @@ credential.
 
 ## Running the pitch demo
 
+**From the `demo` branch** (CLAUDE.md §3.1): the demo-data version, kept at
+the last green commit of `mvp`, for pulling onto any machine to show
+somebody. It is moved to each green merge into `mvp` and pushed with it, so
+`git log -1 demo` names the commit; as of 6 October that is the V1 pitch
+build, whole (`fa31157`), under the name MedLiveBD — search across
+hospitals, a hospital's own app, onboarding from the platform administrator's
+screen, the mapped import with a model's suggestions and the warnings before
+approval — which is also what `main` and the public demo
+are. **Green means
+`pnpm verify`, `pnpm test:e2e`, `pnpm test:e2e:built` and
+`pnpm test:e2e:prod`.**
+
+```bash
+git fetch origin && git checkout demo && git pull
+pnpm install
+```
+
+On a machine that has run it before, that is all. On a new one, `.env` first:
+`cp .env.example .env` (`DEMO_MODE=true` is already its default), then give
+`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` and `GUEST_LINK_SECRET` each their
+own value from `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+— the API will not start without them. Then the steps below.
+
 Two devices, or two browser windows, which is what `two-device-queue.spec.ts`
 automates.
 
@@ -2361,11 +4429,15 @@ pnpm dev:console                     # :3100  — reception
 pnpm dev:patient                     # :3000  — the patient
 ```
 
-1. **Patient**: `http://localhost:3000` — the home screen, with the emergency
-   card, the specialty grid and the bottom navigation. Tap a specialty, then
-   **the hospital**, then the doctor, then the chamber; fill in name / phone /
-   age and confirm. The success screen shows the serial and **লাইভ সিরিয়াল
-   দেখুন** — tap it.
+1. **Patient**: `http://localhost:3000` — the home screen: the search box
+   first, then the emergency card, the specialty grid and the bottom
+   navigation. Tap the search box and type what somebody needs — **আইসিইউ**,
+   **বার্ন**, **কার্ডিওলজি**, a doctor's or a hospital's name — or tap one of
+   the chips. Each hospital that can provide it is listed with the live figure
+   for that need and its age. Tap a hospital or a doctor to go straight into
+   booking there (or tap a specialty on Home, then the hospital, the doctor
+   and the chamber); fill in name / phone / age and confirm. The success
+   screen shows the serial and **লাইভ সিরিয়াল দেখুন** — tap it.
 2. **Reception**: `http://localhost:3100`. The console picker (`S-B-01`) opens
    first: choose the hospital, the chamber and the role, no password. There is
    no login screen by design (CLAUDE.md §4.1) and the screen says so. Pick the
@@ -2393,7 +4465,49 @@ version.
    district's count on the next reload.
 
 The patient screen also carries **আমি দেরি করছি** and **বাতিল করুন**, both of
-which write real events the console sees.
+which write real events the console sees. **Nothing reschedules** — do not
+offer it in a pitch (`PRD.md` `FR-PAT-23`, §24).
+
+**The platform half of the pitch** (`PRD.md` §24 steps 9–11), added by the V1
+pitch build:
+
+6. **A hospital's own app**: `http://localhost:3000/?scope=PADMA`. The same
+   app is Padma's: its name in the header, its navy in place of the green,
+   its doctors, beds and search results only, and only the serials this phone
+   booked at Padma. `http://localhost:3000/?scope=` gives the network back.
+   The scope is kept for the tab, so open it in its own tab or window.
+7. **A hospital joins**: on the console picker, **প্ল্যাটফর্ম পরিচালনা →
+   হাসপাতাল অনবোর্ডিং খুলুন**. The list is every hospital with those waiting
+   first. **নতুন হাসপাতাল যোগ করুন** makes one with its first administrator and shows
+   the temporary password once. To show the rest live — the administrator
+   signing in (**স্টাফ অ্যাকাউন্টে লগ ইন** on the picker), changing the
+   password, the checklist on settings, **পর্যালোচনার অনুরোধ করুন**, then back
+   on the platform screen verifying a doctor and approving — have an
+   authenticator app ready: an administrator cannot sign in without the second
+   factor (`FR-SEC-06`), and the demo does not waive it. It takes about three
+   minutes. The short version: create the hospital, show it sitting in
+   **সেটআপ চলছে** with nothing a patient can see, then open a live hospital's
+   row to show suspend and reinstate with a reason.
+8. **A hospital's own export**: picker → any hospital → **ড্যাশবোর্ড খুলুন →
+   সেটিংস খুলুন → পুরোনো তথ্য আমদানি করুন**. Choose **খ রোগীর তালিকা** and upload
+   `database/seeds/samples/hospital-export-patients.csv` (English headings
+   of the hospital's own) or `hospital-export-patients-bangla.csv`. The
+   mapping step shows which column was read as what and why, and what will
+   not be imported; confirm, and the ordinary check, preview, approve and
+   undo follow. Upload the same file again and it maps itself. Every row in
+   those files is marked demonstration data. For the warnings before
+   approval (`FR-IMP-21`), upload `hospital-export-patients-untidy.csv`:
+   two patients entered twice and dates written two ways, named by row
+   number above the approve button, and nothing merged.
+9. **The model's suggestions** need `MAPPING_PROVIDER=claude` and
+   `MAPPING_API_KEY` in `.env`, and the API restarted. Then upload
+   `hospital-export-patients-abbreviated.csv`: the rules place only the phone
+   column, and the model suggests the rest, each marked **এআইয়ের প্রস্তাব**
+   with its reason. Without the key the same file is matched by hand, which is
+   also worth showing. **It has only ever been run against a stand-in for the
+   network: run `pnpm mapping:try --set patients --file
+   database/seeds/samples/hospital-export-patients-abbreviated.csv` with the
+   key before a meeting, not in one.**
 
 **Next is pinned to `--webpack`.** The shared packages import with the `.js`
 extensions Node ESM requires; webpack resolves those through `extensionAlias`
@@ -2423,11 +4537,11 @@ Turbopack is substantially faster and this is the only thing holding it off.
   `@utility` because Tailwind has no such thing. The `@source` line at the top
   is load-bearing — see the note under "things learned the hard way".
 
-- **No authentication is implemented, by decision** (`CLAUDE.md` §4.1). Under
-  `DEMO_MODE=true` the console selects a hospital and role without a password,
-  and a booking returns a signed guest tracking link. Requirements not covered
-  in this version: `FR-PAT-01`, `FR-PAT-04`, `FR-GST-03/04/09/12`, `FR-SEC-05`,
-  `FR-SEC-06`.
+- ~~**No authentication is implemented, by decision.**~~ **Staff sign-in is
+  built** (step 21, `FR-SEC-06`). Patient phone verification is not yet —
+  step 25 (`FR-PAT-01`, `FR-PAT-04`, `FR-GST-03/04/09/12`, `FR-SEC-05`). Under
+  `DEMO_MODE=true` the picker still opens any console without a password, and
+  a booking returns a signed guest tracking link.
 - ~~**`FR-DEM-05` is not covered.**~~ **Covered as of step 17.** Migration
   0011 landed and `seed_06_ancillary` runs: eight ambulances, thirty blood
   donors, fifty pharmacy items. **No seed module is waiting on a migration any

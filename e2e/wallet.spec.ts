@@ -30,6 +30,7 @@ import {
   signVisit,
   type ConsoleSession,
 } from './support/console.js';
+import { closeOtherContexts } from './support/contexts.js';
 
 const PATIENT = 'http://localhost:3000';
 const CONSOLE = 'http://localhost:3100';
@@ -101,6 +102,12 @@ async function openDoctorConsole(page: Page): Promise<void> {
 
   await page.goto(`${CONSOLE}/?session=${demo.sessionId}`);
 }
+
+// Second devices close after each test, or their pages poll the API for the
+// rest of the run (`support/contexts.ts`).
+test.afterEach(async ({ browser, context }) => {
+  await closeOtherContexts(browser, context);
+});
 
 test.describe('S-A-12 the timeline', () => {
   test('an empty wallet says so, and names what it cannot hold yet', async ({ page }) => {

@@ -37,6 +37,7 @@ import {
   type SessionId,
 } from '@platform/domain';
 
+import { patientLink } from '../config/links.js';
 import { logger } from '../config/logger.js';
 import { env } from '../env.js';
 import { AppError, notFound, validationFailed } from '../errors/AppError.js';
@@ -136,6 +137,17 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
     throw new AppError('QUEUE_GUARD_FAILED', {
       message: 'This chamber is no longer taking bookings.',
       details: { guard: 'SESSION_CLOSED' },
+    });
+  }
+
+  // `FR-ONB-06`, `FR-NET-03`: a hospital that is not live — never approved,
+  // or suspended — takes no booking from the public, even at a chamber whose
+  // id somebody still holds. Its own counter is a different route and is not
+  // refused: the staff of a suspended hospital can still work.
+  if (!(await sessionRepo.hospitalIsLive(input.sessionId))) {
+    throw new AppError('QUEUE_GUARD_FAILED', {
+      message: 'This hospital is not taking bookings here at the moment.',
+      details: { guard: 'HOSPITAL_NOT_LIVE' },
     });
   }
 
@@ -267,7 +279,7 @@ async function recordBookingPayment(
         // The booking's own client event id where there is one, so a retried
         // confirm makes one payment and not two (`FR-PAY-06`, `FR-QUE-51`).
         idempotencyKey: input.clientEventId ?? randomUUID(),
-        returnUrl: `${env.WEB_BASE_URL}/s/${created.bookingId}`,
+        returnUrl: patientLink(`/s/${created.bookingId}`),
       },
       created.payer,
     );
@@ -384,10 +396,7 @@ export async function issueTrackingLink(
 
   await guestRepo.insertTrackingLink({ bookingId, guestId, tokenHash, expiresAt });
 
-  const url = new URL('/s', env.WEB_BASE_URL);
-  url.searchParams.set('b', bookingId);
-  url.searchParams.set('t', token);
-  return url.toString();
+  return patientLink('/s', { b: bookingId, t: token });
 }
 
 // ---------------------------------------------------------------------------

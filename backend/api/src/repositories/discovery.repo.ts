@@ -62,6 +62,14 @@ export interface HospitalQuery {
    * question a patient actually has: where can I see a cardiologist.
    */
   readonly specialty?: string | undefined;
+  /**
+   * An emergency capability the hospital says it has now (`FR-PAT-16`). Only
+   * hospitals whose row for it is switched on; when that was last confirmed
+   * travels on the card as `capabilityAsOf`.
+   */
+  readonly capability?: string | undefined;
+  /** Only this hospital: a scoped app's discovery (`FR-BRD-02`). */
+  readonly hospitalId?: string | undefined;
   readonly limit: number;
 }
 
@@ -137,6 +145,7 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
       FROM hospitals h
      WHERE h.deleted_at IS NULL
        AND h.is_live
+       AND (${query.hospitalId ?? null}::uuid IS NULL OR h.id = ${query.hospitalId ?? null}::uuid)
        AND (${query.district ?? null}::text IS NULL OR h.district = ${query.district ?? null})
        -- S-A-07: only hospitals that actually offer the specialty.
        AND (${query.specialty ?? null}::text IS NULL
@@ -146,6 +155,10 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
                         WHERE dh.hospital_id = h.id AND dh.is_active
                           AND dh.deleted_at IS NULL
                           AND dep.code = ${query.specialty ?? null}))
+       AND (${query.capability ?? null}::text IS NULL
+            OR EXISTS (SELECT 1 FROM capabilities c
+                        WHERE c.hospital_id = h.id AND c.is_available
+                          AND c.kind::text = ${query.capability ?? null}))
        AND (
          ${query.q ?? null}::text IS NULL
          OR h.name_en ILIKE '%' || ${query.q ?? null} || '%'
@@ -501,6 +514,41 @@ export async function listBookableSessions(input: {
 }
 
 /** One facility, or null. Used by the detail screen. */
+/** A live hospital by its code, with what a scoped app needs to say whose it is. */
+export interface ScopeRow {
+  readonly id: string;
+  readonly code: string;
+  readonly nameBn: string;
+  readonly nameEn: string;
+  /** `hospital_settings.brand` as stored; read by `readBrandTheme`. */
+  readonly brand: unknown;
+}
+
+/**
+ * The hospital a scope names (`FR-BRD-01`, `FR-BRD-02`).
+ *
+ * Live only, like everything public: a hospital that is not in the network
+ * cannot be opened by knowing its code (`FR-NET-03`).
+ */
+export async function findScope(code: string): Promise<ScopeRow | null> {
+  const result = await sql<{
+    id: string;
+    code: string;
+    name_bn: string;
+    name_en: string;
+    brand: unknown;
+  }>`
+    SELECT h.id, h.code, h.name_bn, h.name_en, hs.brand
+      FROM hospitals h
+      LEFT JOIN hospital_settings hs ON hs.hospital_id = h.id
+     WHERE h.code = ${code} AND h.deleted_at IS NULL AND h.is_live
+  `.execute(db);
+
+  const row = result.rows[0];
+  if (row === undefined) return null;
+  return { id: row.id, code: row.code, nameBn: row.name_bn, nameEn: row.name_en, brand: row.brand };
+}
+
 export async function findHospital(hospitalId: string): Promise<HospitalCard | null> {
   const rows = await listHospitalsById(hospitalId);
   return rows[0] ?? null;

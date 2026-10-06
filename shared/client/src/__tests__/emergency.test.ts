@@ -128,7 +128,10 @@ describe('ErOutbox', () => {
     expect(outcome.accepted).toEqual([WALK_IN]);
     const left = await outbox.pending();
     expect(left.map((entry) => entry.method)).toEqual(['PATCH', 'PUT']);
-    expect(left.every((entry) => entry.attempts === 1)).toBe(true);
+    // A dead network is not a fault of the action and is not counted as one:
+    // an hour offline must not mark a shift's triage as stuck.
+    expect(left.every((entry) => entry.attempts === 0)).toBe(true);
+    expect(await outbox.stuck()).toHaveLength(0);
   });
 
   it('drops a refused action, reports why, and sends the next (SY-03)', async () => {

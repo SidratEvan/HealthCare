@@ -16,8 +16,15 @@
  * online the whole time.
  */
 
-import { clampConsultSeconds, id, time } from '@platform/domain';
-import type { Eta, QueueActor, QueueEvent, QueueState, Timestamp } from '@platform/domain';
+import { canReplayOffline, clampConsultSeconds, id, time } from '@platform/domain';
+import type {
+  Eta,
+  QueueActor,
+  QueueEvent,
+  QueueState,
+  StaffRole,
+  Timestamp,
+} from '@platform/domain';
 
 import { validationFailed } from '../errors/AppError.js';
 
@@ -36,7 +43,16 @@ import type { BatchEntry, BatchResult } from './queue.service.js';
 export const MAX_OFFLINE_HOURS = 24;
 
 export interface PushResult {
-  readonly accepted: readonly { readonly clientEventId: string; readonly seq: number }[];
+  /**
+   * `eventId` is the stored event. A console needs it to undo an action it
+   * queued: undo names an event, and until this travelled back the console had
+   * only its own key and sent a booking id instead (`GR-02`).
+   */
+  readonly accepted: readonly {
+    readonly clientEventId: string;
+    readonly seq: number;
+    readonly eventId: string;
+  }[];
   readonly conflicts: readonly {
     readonly clientEventId: string;
     readonly reason: string;
@@ -58,6 +74,8 @@ export interface PushResult {
 export async function pushBatch(input: {
   readonly sessionId: string;
   readonly actor: QueueActor;
+  /** Every role the caller holds, to check each entry against (`FR-ROLE-01`). */
+  readonly roles: readonly StaffRole[];
   readonly entries: readonly BatchEntry[];
 }): Promise<PushResult> {
   // `SY-01`: client timestamps order the batch *within itself* and nothing
@@ -68,18 +86,41 @@ export async function pushBatch(input: {
 
   assertNoDuplicateKeys(ordered);
 
+  const accepted: { clientEventId: string; seq: number; eventId: string }[] = [];
+  const conflicts: { clientEventId: string; reason: string; code: string }[] = [];
+
+  // This endpoint replays what a counter did offline, and nothing else. An
+  // entry of a type that has its own route, or one this caller's role may not
+  // take, is answered as a conflict for that entry — the console drops it and
+  // rolls the row back — and never reaches the log. A refused entry does not
+  // fail the batch: what is queued behind it is still a receptionist's work.
+  const replayable: BatchEntry[] = [];
+  for (const entry of ordered) {
+    const allowed = canReplayOffline(entry.type, input.roles);
+    if (allowed.ok) {
+      replayable.push(entry);
+    } else {
+      conflicts.push({
+        clientEventId: entry.clientEventId,
+        reason: allowed.detail,
+        code: allowed.code,
+      });
+    }
+  }
+
   const result: BatchResult = await queueService.appendBatch({
     sessionId: input.sessionId,
     actor: input.actor,
-    entries: ordered.map(withPlausiblePayload),
+    entries: replayable.map(withPlausiblePayload),
   });
-
-  const accepted: { clientEventId: string; seq: number }[] = [];
-  const conflicts: { clientEventId: string; reason: string; code: string }[] = [];
 
   for (const outcome of result.outcomes) {
     if (outcome.kind === 'accepted') {
-      accepted.push({ clientEventId: outcome.clientEventId, seq: outcome.seq });
+      accepted.push({
+        clientEventId: outcome.clientEventId,
+        seq: outcome.seq,
+        eventId: outcome.eventId,
+      });
     } else {
       conflicts.push({
         clientEventId: outcome.clientEventId,

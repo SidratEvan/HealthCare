@@ -15,10 +15,13 @@
 import { createServer, type Server as HttpServer } from 'node:http';
 import { type AddressInfo } from 'node:net';
 
+import { sql } from 'kysely';
 import { io as connect, type Socket as ClientSocket } from 'socket.io-client';
+import request from 'supertest';
 import { afterEach, beforeAll, afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createApp } from '../app.js';
+import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 import { resetEmitter } from '../realtime/emit.js';
 import { attachRealtime } from '../realtime/server.js';
@@ -171,6 +174,70 @@ describe('session rooms', () => {
     const error = await once<{ data: { code: string } }>(socket, 'error.occurred');
 
     expect(error.data.code).toBe('AUTH_FORBIDDEN_SCOPE');
+  });
+
+  // Found by the security review of 2026-09-30: a guest was admitted by the
+  // identity behind the token, so any token for a number opened every chamber
+  // that number was booked into — and told whoever held it which ones.
+  describe('a guest is admitted by the booking the token names, never by the number', () => {
+    /** A real guest booking in the fixture's chamber, and the identity it was made under. */
+    async function guestBooking(): Promise<{ bookingId: string; guestId: string }> {
+      const phone = `+88019${String(Math.floor(Math.random() * 90_000_000) + 10_000_000)}`;
+      const response = await request(httpServer)
+        .post('/api/v1/bookings')
+        .set('Idempotency-Key', crypto.randomUUID())
+        .send({
+          sessionId: fixture.sessionId,
+          method: 'at_hospital',
+          guest: { name: 'রহিমা খাতুন (ডেমো)', phone, ageYears: 34, sex: 'female' },
+        });
+      expect(response.status).toBe(201);
+      const bookingId = response.body.data.bookingId as string;
+      const row = await sql<{ booked_by_guest_id: string }>`
+        SELECT booked_by_guest_id FROM bookings WHERE id = ${bookingId}::uuid
+      `.execute(db);
+      return { bookingId, guestId: row.rows[0]?.booked_by_guest_id ?? '' };
+    }
+
+    async function subscribeWith(token: string): Promise<string> {
+      const socket = open(token);
+      await once(socket, 'connect');
+      socket.emit('session:subscribe', { sessionId: fixture.sessionId });
+      return await Promise.race([
+        once(socket, 'queue.updated').then(() => 'admitted'),
+        once<{ data: { code: string } }>(socket, 'error.occurred').then((error) => error.data.code),
+      ]);
+    }
+
+    it('refuses a token that names no booking, though its number holds one here', async () => {
+      const { guestId } = await guestBooking();
+      const bookingFlow = await signToken({
+        kind: 'access',
+        claims: { sub: guestId, kind: 'guest' },
+      });
+
+      expect(await subscribeWith(bookingFlow)).toBe('AUTH_FORBIDDEN_SCOPE');
+    });
+
+    it('refuses a link for a booking elsewhere, though its number holds one here', async () => {
+      const { guestId } = await guestBooking();
+      const elsewhere = await signToken({
+        kind: 'access',
+        claims: { sub: guestId, kind: 'guest', bookingId: crypto.randomUUID() },
+      });
+
+      expect(await subscribeWith(elsewhere)).toBe('AUTH_FORBIDDEN_SCOPE');
+    });
+
+    it('admits the link for the booking in this chamber', async () => {
+      const { bookingId, guestId } = await guestBooking();
+      const link = await signToken({
+        kind: 'access',
+        claims: { sub: guestId, kind: 'guest', bookingId },
+      });
+
+      expect(await subscribeWith(link)).toBe('admitted');
+    });
   });
 });
 

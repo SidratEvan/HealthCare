@@ -116,6 +116,50 @@ describe('session lifecycle', () => {
     expect(next.delayMinutes).toBe(45);
   });
 
+  it('DELAY_DECLARED holds the chamber only once the doctor is in (FR-REC-03)', () => {
+    const { state, log } = setup();
+
+    // Before the arrival a delay moves the expected start; it holds nothing.
+    const before = reduce(
+      state,
+      log.next('DELAY_DECLARED', { minutes: 30, reason: 'traffic', declaredBy: 'reception' }),
+    );
+    expect(before.hold).toBeNull();
+
+    const after = fold(before, [
+      log.advance(1800).next('DOCTOR_ARRIVED', {
+        arrivedAt: timestamp('2026-09-17T11:30:00.000Z'),
+        minutesLate: 30,
+      }),
+      log.advance(600).next('DELAY_DECLARED', { minutes: 20, reason: null, declaredBy: 'doctor' }),
+    ]);
+
+    // Declared at 11:40 for twenty minutes.
+    expect(after.hold).toEqual({ until: timestamp('2026-09-17T12:00:00.000Z'), minutes: 20 });
+    // Both are still what the day's figures count.
+    expect(after.delayMinutes).toBe(50);
+    expect(checkInvariants(after)).toEqual([]);
+  });
+
+  it('an undone delay holds nothing (GR-02)', () => {
+    const seed = makeSeed(3);
+    const builder = new LogBuilder(seed.plan.sessionId);
+
+    const arrived = builder.next('DOCTOR_ARRIVED', {
+      arrivedAt: timestamp('2026-09-17T11:00:00.000Z'),
+      minutesLate: 0,
+    });
+    const declared = builder
+      .advance(300)
+      .next('DELAY_DECLARED', { minutes: 30, reason: null, declaredBy: 'reception' });
+    const undone = builder.advance(5).next('ACTION_UNDONE', { undoneEventId: declared.id });
+
+    const state = replay(seed, [arrived, declared, undone]);
+
+    expect(state.hold).toBeNull();
+    expect(state.delayMinutes).toBe(0);
+  });
+
   it('SESSION_PAUSED and SESSION_RESUMED accumulate the time lost', () => {
     const { state, log } = setup();
 
@@ -131,6 +175,8 @@ describe('session lifecycle', () => {
     expect(next.status).toBe('running');
     expect(next.pausedAt).toBeNull();
     expect(next.pausedSeconds).toBe(600);
+    // When the chamber started again: the no-show grace counts from here.
+    expect(next.resumedAt).toBe(timestamp('2026-09-17T11:11:00.000Z'));
     expect(checkInvariants(next)).toEqual([]);
   });
 

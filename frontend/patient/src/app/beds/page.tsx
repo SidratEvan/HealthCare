@@ -44,8 +44,10 @@ import {
 } from '@platform/i18n';
 import { Button, Card, FilterChip, FreshnessLine, Input, Sheet, useLocale } from '@platform/ui';
 
+import { GuestCodeCard } from '@/components/GuestCodeCard';
 import { HospitalIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
+import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
 import { hospitalsWithBeds, requestBed } from '@/lib/api';
@@ -386,6 +388,53 @@ function RequestSheet({
   const ageYears = /^\d{1,3}$/.test(age.trim()) ? Number(age.trim()) : null;
   const complete = name.trim().length >= 2 && stored !== null && ageYears !== null && sex !== null;
 
+  // `FR-GST-03` names a bed request among what proves the phone first.
+  const {
+    pending: phoneCheck,
+    codeWrong,
+    begin: beginPhoneCheck,
+    prove: provePhone,
+  } = useGuestPhoneProof();
+
+  async function file(guestToken: string | null): Promise<void> {
+    if (stored === null || ageYears === null || sex === null) return;
+
+    const created = await requestBed({
+      hospitalId: hospital.id,
+      bedKind: kind,
+      patient: { name: name.trim(), phone: stored, ageYears, sex },
+      expectedArrivalAt:
+        arrivalMinutes === null
+          ? null
+          : new Date(Date.now() + arrivalMinutes * 60_000).toISOString(),
+      note: note.trim() === '' ? null : note.trim(),
+      idempotencyKey,
+      guestToken,
+    });
+
+    rememberBedRequest({
+      requestId: created.request.id,
+      token: created.token,
+      hospitalNameBn: hospital.nameBn,
+      hospitalNameEn: hospital.nameEn,
+      bedKind: kind,
+      savedAt: new Date().toISOString(),
+    });
+
+    globalThis.location.assign(`/beds/request?t=${encodeURIComponent(created.token)}`);
+  }
+
+  function failed(error: unknown): void {
+    const code = (error as { code?: string }).code;
+    setFailure(
+      code === 'AUTH_OTP_INVALID'
+        ? tp('accountCodeWrong', locale)
+        : code === 'AUTH_LOCKED'
+          ? tp('accountLocked', locale)
+          : tp('requestFailed', locale),
+    );
+  }
+
   async function send(): Promise<void> {
     setTried(true);
     if (!complete || stored === null || ageYears === null || sex === null) return;
@@ -393,30 +442,24 @@ function RequestSheet({
     setSending(true);
     setFailure(null);
     try {
-      const created = await requestBed({
-        hospitalId: hospital.id,
-        bedKind: kind,
-        patient: { name: name.trim(), phone: stored, ageYears, sex },
-        expectedArrivalAt:
-          arrivalMinutes === null
-            ? null
-            : new Date(Date.now() + arrivalMinutes * 60_000).toISOString(),
-        note: note.trim() === '' ? null : note.trim(),
-        idempotencyKey,
-      });
+      const start = await beginPhoneCheck(stored, name.trim());
+      if (start.ready) await file(start.guestToken);
+    } catch (error) {
+      failed(error);
+    } finally {
+      setSending(false);
+    }
+  }
 
-      rememberBedRequest({
-        requestId: created.request.id,
-        token: created.token,
-        hospitalNameBn: hospital.nameBn,
-        hospitalNameEn: hospital.nameEn,
-        bedKind: kind,
-        savedAt: new Date().toISOString(),
-      });
+  async function proveCode(code: string): Promise<void> {
+    if (stored === null) return;
 
-      globalThis.location.assign(`/beds/request?t=${encodeURIComponent(created.token)}`);
-    } catch {
-      setFailure(tp('requestFailed', locale));
+    setSending(true);
+    setFailure(null);
+    try {
+      await file(await provePhone(stored, name.trim(), code));
+    } catch (error) {
+      failed(error);
     } finally {
       setSending(false);
     }
@@ -524,6 +567,17 @@ function RequestSheet({
             {tp('requestFillAll', locale)}
           </p>
         ) : null}
+        {phoneCheck === null ? null : (
+          <GuestCodeCard
+            phone={phone}
+            demoCode={phoneCheck.demoCode}
+            invalid={codeWrong}
+            disabled={sending}
+            onComplete={(code) => {
+              void proveCode(code);
+            }}
+          />
+        )}
         {failure === null ? null : (
           <p className="text-body-sm text-alert-700" role="alert" data-testid="request-failed">
             {failure}

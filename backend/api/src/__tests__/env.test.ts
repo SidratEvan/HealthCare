@@ -38,6 +38,7 @@ const PROD: Readonly<Record<string, string>> = {
   PAYMENT_PROVIDER: 'live',
   STORAGE_PROVIDER: 'supabase',
   SENTRY_DSN: 'https://sentry.example.com/1',
+  TOTP_ENCRYPTION_KEY: 'd'.repeat(32),
   DEMO_MODE: 'false',
 };
 
@@ -52,6 +53,10 @@ function problemsOf(source: Record<string, string>): readonly string[] {
 }
 
 describe('development', () => {
+  it('needs no key for staff second factors: one is derived (pilot step 28)', () => {
+    expect(loadEnv({ ...DEV }).TOTP_ENCRYPTION_KEY).toBe('');
+  });
+
   it('accepts a minimal environment', () => {
     const env = loadEnv({ ...DEV });
 
@@ -192,13 +197,39 @@ describe('production', () => {
     expect(problems).not.toContain('SMS_SENDER_ID');
   });
 
-  it('refuses missing push keys, which are half the notification policy', () => {
-    // FR-NOT-02: app users get push and SMS for material events.
-    expect(problemsOf({ ...PROD, VAPID_PRIVATE_KEY: '' })).toContain('VAPID_PRIVATE_KEY');
+  it('does not demand push keys while nothing sends Web Push (pilot step 26)', () => {
+    // FR-NOT-02's push half waits for an adapter; SMS carries the messages.
+    expect(problemsOf({ ...PROD, VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '' })).toEqual([]);
   });
 
-  it('refuses a missing Sentry DSN, so a crash in a live chamber is reported', () => {
-    expect(problemsOf({ ...PROD, SENTRY_DSN: '' })).toContain('SENTRY_DSN');
+  it('does not demand a Sentry DSN nothing reports to yet (pilot step 26)', () => {
+    expect(problemsOf({ ...PROD, SENTRY_DSN: '' })).not.toContain('SENTRY_DSN');
+  });
+
+  it('boots a hospital’s own server: local files, no online payment, no Supabase (FR-SEC-07)', () => {
+    expect(
+      problemsOf({
+        ...PROD,
+        STORAGE_PROVIDER: 'local',
+        STORAGE_DIR: '/var/lib/medlivebd/files',
+        PAYMENT_PROVIDER: 'off',
+        SUPABASE_URL: '',
+        SUPABASE_SERVICE_ROLE_KEY: '',
+      }),
+    ).toEqual([]);
+  });
+
+  it('asks for its own key for staff second factors (pilot step 28, FR-SEC-10)', () => {
+    // A key derived from JWT_REFRESH_SECRET would lock every administrator out
+    // the day that secret is rotated.
+    expect(problemsOf({ ...PROD, TOTP_ENCRYPTION_KEY: '' })).toContain('TOTP_ENCRYPTION_KEY');
+    expect(problemsOf({ ...PROD, TOTP_ENCRYPTION_KEY: 'short' })).toContain('TOTP_ENCRYPTION_KEY');
+  });
+
+  it('still refuses the mock payment and storage adapters in production', () => {
+    const problems = problemsOf({ ...PROD, PAYMENT_PROVIDER: 'mock', STORAGE_PROVIDER: 'mock' });
+    expect(problems).toContain('PAYMENT_PROVIDER');
+    expect(problems).toContain('STORAGE_PROVIDER');
   });
 });
 

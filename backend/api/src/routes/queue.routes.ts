@@ -51,6 +51,7 @@ import {
 
 import * as queue from '../controllers/queue.controller.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireBookingScope } from '../middleware/guestAuth.js';
 import { idempotency } from '../middleware/idempotency.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { validate } from '../middleware/validate.js';
@@ -144,10 +145,13 @@ queueRoutes.post(
  * `requireAuth` without `requireRole`: the controller distinguishes a
  * receptionist from the patient themselves and checks booking ownership, and
  * the actor recorded on the event says which of them it was (`FR-QUE-04`).
+ * `requireBookingScope` is the tracking link's fence, as on cancel: a guest
+ * token acts on the one booking it names and no other (`FR-GST-05`).
  */
 queueRoutes.post(
   '/bookings/:id/late',
   requireAuth,
+  requireBookingScope('id'),
   write,
   validate({ params: bookingParams, body: markLateBody }),
   queue.markLate,

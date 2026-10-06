@@ -1,0 +1,202 @@
+# MedLiveBD on a hospital's own server (pilot step 26, `FR-SEC-07`).
+#
+#   cp deploy/.env.example deploy/.env      then fill it in (DEPLOY.md §S2)
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+#
+# One command starts everything: the database, the migrations (which run once
+# and exit), the API, the two web apps, the web server that holds the TLS
+# certificates, and the nightly backup. Data lives in named volumes; the
+# backups land in deploy/backups on the host and are copied to a second
+# location (BACKUP_SECOND_DIR), which is the copy that survives this disk.
+#
+# This is the real-data configuration: DEMO_MODE is false, nothing is seeded,
+# the first administrator is made with `pnpm staff:create` (DEPLOY.md §S3).
+#
+# Two database roles (plan 1.7). POSTGRES_USER owns the database: it runs the
+# migrations and the backups and serves no request. The API connects as
+# API_DB_USER, which can read and write rows and nothing else — the `migrate`
+# service creates it, and narrows it again on every start.
+
+name: medlivebd
+
+# A container's log is a file on the host that grows until the disk is full,
+# unless it is told otherwise. Fifty megabytes each, the oldest dropped.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-api-env: &api-env
+  NODE_ENV: production
+  DEMO_MODE: "false"
+  PORT: "4000"
+  DATABASE_URL: postgresql://${API_DB_USER}:${API_DB_PASSWORD}@db:5432/${POSTGRES_DB}
+  DATABASE_POOL_MAX: "20"
+  API_BASE_URL: ${API_ORIGIN}
+  WEB_BASE_URL: ${APP_ORIGIN}
+  CONSOLE_BASE_URL: ${CONSOLE_ORIGIN}
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+  GUEST_LINK_SECRET: ${GUEST_LINK_SECRET}
+  TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY}
+  STORAGE_PROVIDER: local
+  STORAGE_DIR: /data/files
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-off}
+  SMS_PROVIDER: ${SMS_PROVIDER:-log}
+  SMS_API_KEY: ${SMS_API_KEY:-}
+  SMS_SENDER_ID: ${SMS_SENDER_ID:-}
+  TRAVEL_TIME_MODE: static
+  TRUST_PROXY_HOPS: "1"
+  # How many people one address stands for (DEPLOY.md §S2). 1 unless the
+  # hospital's patients book from the hospital's own network.
+  ADDRESS_RATE_LIMIT_FACTOR: ${ADDRESS_RATE_LIMIT_FACTOR:-1}
+  EXTRA_ALLOWED_ORIGINS: ${EXTRA_ALLOWED_ORIGINS:-}
+  MAPPING_PROVIDER: ${MAPPING_PROVIDER:-off}
+  MAPPING_API_KEY: ${MAPPING_API_KEY:-}
+  MAPPING_MODEL: ${MAPPING_MODEL:-claude-opus-5-5}
+  MAPPING_TIMEOUT_MS: ${MAPPING_TIMEOUT_MS:-20000}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # Over TCP, not the socket: during the first initialisation Postgres runs
+      # a temporary server on the socket only, and a socket check would call the
+      # database ready before the migrations can reach it.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # The schema, applied before the API starts; forward-only, so running it on
+  # every `up` is how an upgrade reaches the database (DATABASE.md §7). Then
+  # the API's role: created the first time, and put back to exactly its
+  # privileges every time after. This is the only service that connects as the
+  # owner besides the backup.
+  migrate:
+    build: { context: .., target: api }
+    image: medlivebd-api
+    logging: *logging
+    command: ["sh", "-c", "pnpm db:migrate && pnpm db:role"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      API_DB_USER: ${API_DB_USER:?set API_DB_USER in deploy/.env (DEPLOY.md S2)}
+      API_DB_PASSWORD: ${API_DB_PASSWORD:?set API_DB_PASSWORD in deploy/.env (DEPLOY.md S2)}
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    # The image's health check asks the API whether it is ready. This is not
+    # the API: it runs once and exits, and its exit code is its result.
+    healthcheck: { disable: true }
+
+  api:
+    image: medlivebd-api
+    restart: unless-stopped
+    logging: *logging
+    environment: *api-env
+    volumes:
+      - files:/data/files
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  console:
+    build:
+      context: ..
+      target: console
+      args:
+        NEXT_PUBLIC_API_URL: ${API_ORIGIN}/api/v1
+        NEXT_PUBLIC_SOCKET_URL: ${API_ORIGIN}
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      api: { condition: service_healthy }
+
+  patient:
+    build:
+      context: ..
+      target: patient
+      args:
+        NEXT_PUBLIC_API_URL: ${API_ORIGIN}/api/v1
+        NEXT_PUBLIC_SOCKET_URL: ${API_ORIGIN}
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      api: { condition: service_healthy }
+
+  # TLS for the three addresses, renewed on its own (Let's Encrypt). An origin
+  # given as http:// is served without TLS, which is only for trying the stack
+  # on a machine with no public name.
+  web:
+    image: caddy:2
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN}
+      CONSOLE_ORIGIN: ${CONSOLE_ORIGIN}
+      API_ORIGIN: ${API_ORIGIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api: { condition: service_healthy }
+      console: { condition: service_healthy }
+      patient: { condition: service_healthy }
+
+  # A database dump and a copy of the files every night, restored into a
+  # scratch database to prove it restores, copied to a second location, and the
+  # last BACKUP_KEEP_DAYS kept in both (FR-SEC-07). `restore.sh` puts one back
+  # (DEPLOY.md §S5). The health check is the result of the last run: a night
+  # that failed shows as `unhealthy` in `docker compose ps`.
+  backup:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    logging: *logging
+    entrypoint: ["sh", "/deploy/backup.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      API_DB_USER: ${API_DB_USER}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_AT_UTC_HOUR: ${BACKUP_AT_UTC_HOUR:-20}
+      BACKUP_VERIFY_RESTORE: ${BACKUP_VERIFY_RESTORE:-true}
+      # Set only when the host names a second location: with none, the script
+      # says so and reports every run as failing, rather than copying a backup
+      # onto the disk it is a backup of and calling that a second copy.
+      BACKUP_SECOND_DIR: ${BACKUP_SECOND_DIR:+/backups-second}
+      TZ: UTC
+    volumes:
+      - ./backup.sh:/deploy/backup.sh:ro
+      - ./restore.sh:/deploy/restore.sh:ro
+      - ./backups:/backups
+      - ${BACKUP_SECOND_DIR:-./backups-second}:/backups-second
+      - files:/data/files
+    healthcheck:
+      test: ["CMD", "sh", "/deploy/backup.sh", "check"]
+      interval: 5m
+      timeout: 10s
+      retries: 1
+    depends_on:
+      db: { condition: service_healthy }
+
+volumes:
+  db-data:
+  files:
+  caddy-data:
+  caddy-config:

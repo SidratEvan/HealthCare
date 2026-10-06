@@ -12,7 +12,7 @@
  * reading of the state.
  */
 
-import { time } from '@platform/domain';
+import { measuredConsultSeconds, time, UNDO_WINDOW_SECONDS } from '@platform/domain';
 import type { QueueActor } from '@platform/domain';
 
 import { AppError, forbiddenScope, notFound } from '../errors/AppError.js';
@@ -26,14 +26,8 @@ import type {
 import type { Principal } from '../types/express.js';
 import type { Request, Response } from 'express';
 
-/**
- * How long after an event it may still be undone (`GR-02`, BACKEND.md §7.4).
- *
- * Ten seconds is the window in which a receptionist realises she tapped the
- * wrong row. Past it, the patient has been called into the chamber and undoing
- * the record would be rewriting what happened rather than correcting a slip.
- */
-const UNDO_WINDOW_MS = 10_000;
+/** `GR-02`, BACKEND.md §7.4: the domain's window, in the unit a clock gives. */
+const UNDO_WINDOW_MS = UNDO_WINDOW_SECONDS * 1000;
 
 /** `GET /sessions/:id/queue` */
 export async function getQueue(req: Request, res: Response): Promise<void> {
@@ -190,10 +184,7 @@ export async function markDone(req: Request, res: Response): Promise<void> {
       type: 'PATIENT_DONE',
       payload: {
         bookingId: booking.id,
-        consultSeconds:
-          calledAt === null
-            ? 0
-            : Math.max(0, time.differenceInSeconds(time.fromDate(new Date()), calledAt)),
+        consultSeconds: measuredConsultSeconds(calledAt, time.fromDate(new Date())),
       },
       actor: actorOf(req),
       ...envelope(req),
@@ -221,9 +212,8 @@ export async function markLate(req: Request, res: Response): Promise<void> {
       payload: {
         bookingId: booking.id,
         expectedMinutes: body.expectedMinutes,
-        // The hospital's configured k (`FR-QUE-21`). Per-facility settings land
-        // with the hospital service; the documented default holds until then.
-        reinsertAfter: 3,
+        // `reinsertAfter` is the facility's k (`FR-QUE-21`), written by
+        // `queue.service` from `hospital_settings` — never the caller's.
       },
       actor: actorOf(req),
       ...envelope(req),
@@ -311,6 +301,16 @@ export async function addWalkin(req: Request, res: Response): Promise<void> {
 
   const principal = req.principal;
   if (principal?.kind !== 'staff') throw forbiddenScope({ reason: 'staff_only' });
+
+  // A counter that lost the answer sends the walk-in again with the same key.
+  // `appendEvent` would recognise the event — but only after a second booking
+  // had been made for it, a serial nobody holds. So a replay is answered
+  // before anything is written (`FR-QUE-51`, pilot step 23).
+  const replayed = await queueService.findReplay(envelope(req).clientEventId);
+  if (replayed !== null) {
+    send(res, replayed);
+    return;
+  }
 
   const bookingId = await queueService.createWalkinBooking({
     sessionId,
@@ -602,8 +602,12 @@ function ownsBooking(
 ): boolean {
   if (principal.kind === 'patient') return owner.userId === principal.id;
   if (principal.kind === 'guest') {
-    // A tracking link names exactly one booking (`FR-GST-05`).
-    return principal.bookingId === bookingId || owner.guestId === principal.id;
+    // A tracking link names exactly one booking (`FR-GST-05`), and that is all
+    // it opens. Never the guest identity behind it: a forwarded link for one
+    // serial must not reach the same number's other bookings, and a guest
+    // token with no booking (the one `/guest/start` hands out to book with)
+    // must reach none. Found by the security review of 2026-09-30.
+    return principal.bookingId !== null && principal.bookingId === bookingId;
   }
   return false;
 }

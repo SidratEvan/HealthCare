@@ -176,25 +176,6 @@ export function BedIcon(props: IconProps): ReactNode {
   );
 }
 
-export function AmbulanceIcon(props: IconProps): ReactNode {
-  return (
-    <Svg {...props}>
-      <path d="M3 16V8h11v8" />
-      <path d="M14 11h4l3 3v2h-7" />
-      <circle cx="7" cy="18" r="2" />
-      <circle cx="17" cy="18" r="2" />
-    </Svg>
-  );
-}
-
-export function BloodIcon(props: IconProps): ReactNode {
-  return (
-    <Svg {...props}>
-      <path d="M12 3s6 6.4 6 10a6 6 0 0 1-12 0c0-3.6 6-10 6-10z" />
-    </Svg>
-  );
-}
-
 export function ReportIcon(props: IconProps): ReactNode {
   return (
     <Svg {...props}>
@@ -210,6 +191,15 @@ export function EmergencyIcon(props: IconProps): ReactNode {
   return (
     <Svg {...props}>
       <path d="M12 4v16M4 12h16" />
+    </Svg>
+  );
+}
+
+export function SearchIcon(props: IconProps): ReactNode {
+  return (
+    <Svg {...props}>
+      <circle cx="11" cy="11" r="6" />
+      <path d="M20 20l-4.5-4.5" />
     </Svg>
   );
 }

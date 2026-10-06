@@ -54,6 +54,7 @@ import {
   canDeclareDelay,
   canDeclareDoctorArrived,
   canDeclareLate,
+  canEndSession,
   canMarkDone,
   canMarkNoShow,
   canPause,
@@ -64,9 +65,9 @@ import {
   canResume,
   id,
   lapsedOffers,
+  measuredConsultSeconds,
   recoveredValueFor,
   time,
-  DEFAULT_QUEUE_SETTINGS,
   SLOT_OFFER_WINDOW_MINUTES,
   type Eta,
   type GuardResult,
@@ -77,6 +78,7 @@ import {
   type SessionId,
   type Timestamp,
   type QueueActor,
+  type QueueSettings,
 } from '@platform/domain';
 
 import { logger } from '../config/logger.js';
@@ -140,7 +142,7 @@ export async function appendEvent(input: AppendEventInput): Promise<AppendEventR
   const replayed = await findReplay(input.clientEventId ?? null);
   if (replayed !== null) return replayed;
 
-  const settled = await withTransaction(async (trx) => {
+  const settled = await committed(async (trx) => {
     // --- 5. Serialise ------------------------------------------------------
     const session = await lockSession(trx, input.sessionId);
 
@@ -219,7 +221,7 @@ export async function callNext(input: {
     (await findReplay(derive(original, 'c'))) ?? (await findReplay(derive(original, 'd')));
   if (replayed !== null) return replayed;
 
-  const settled = await withTransaction(async (trx) => {
+  const settled = await committed(async (trx) => {
     const session = await lockSession(trx, input.sessionId);
     let state = await loadState(trx, session);
     const events: QueueEvent[] = [];
@@ -236,10 +238,7 @@ export async function callNext(input: {
           // Measured from the call, never typed (`FR-REC-11`). This is what
           // the rolling rate learns from, so a typed number would be a guess
           // entering the ETA maths as a fact.
-          consultSeconds:
-            serving.calledAt === null
-              ? 0
-              : Math.max(0, time.differenceInSeconds(nowTs(), serving.calledAt)),
+          consultSeconds: measuredConsultSeconds(serving.calledAt, nowTs()),
         },
         actor: input.actor,
         clientEventId: derive(input.clientEventId ?? null, 'd'),
@@ -319,7 +318,7 @@ export async function offerFreedSlot(input: {
   const replayed = await findReplay(input.clientEventId ?? null);
   if (replayed !== null) return replayed;
 
-  const settled = await withTransaction(async (trx) => {
+  const settled = await committed(async (trx) => {
     const session = await lockSession(trx, input.sessionId);
     const state = await loadState(trx, session);
 
@@ -469,7 +468,7 @@ export async function acceptSlotDetailed(input: {
   const offer = await standbyRepo.findOffer(input.offerId);
   if (offer === null) throw notFound('offer');
 
-  const settled = await withTransaction(async (trx) => {
+  const settled = await committed(async (trx) => {
     const session = await lockSession(trx, offer.sessionId);
     const before = await loadState(trx, session);
 
@@ -641,7 +640,7 @@ export async function declineSlot(input: {
   const offer = await standbyRepo.findOffer(input.offerId);
   if (offer === null) throw notFound('offer');
 
-  const declined = await withTransaction(
+  const declined = await committed(
     async (trx) => await standbyRepo.markDeclined(trx, offer.id, new Date()),
   );
   if (!declined) {
@@ -784,12 +783,21 @@ async function applyOne(
   state: QueueState,
   input: AppendEventInput,
 ): Promise<{ readonly event: QueueEvent; readonly state: QueueState }> {
-  assertAllowed(state, input, session);
+  // The facility's own rules (pilot step 22). A late patient's `k` is the
+  // facility's, not whatever the counter sent: the reducer places the row by
+  // the payload, so the payload is where the rule has to be written.
+  const rules = await sessionRepo.queueRulesFor(trx, session.hospitalId);
+  const payload =
+    input.type === 'PATIENT_LATE'
+      ? { ...input.payload, reinsertAfter: rules.lateReinsertAfter }
+      : input.payload;
+
+  assertAllowed(state, { ...input, payload }, session, rules);
 
   const event = await eventRepo.append(trx, {
     sessionId: input.sessionId,
     type: input.type,
-    payload: input.payload,
+    payload,
     actor: input.actor,
     clientEventId: input.clientEventId ?? null,
     clientTs:
@@ -810,6 +818,47 @@ async function applyOne(
   }
 
   return { event, state: continueReplay(state, [event]) };
+}
+
+// ---------------------------------------------------------------------------
+// Telling the room, after the fact
+// ---------------------------------------------------------------------------
+
+/** What each open transaction will say once it has committed. */
+const pendingBroadcasts = new WeakMap<Tx, (() => void)[]>();
+
+/** Registers something to tell the rooms if, and only when, `trx` commits. */
+function afterCommit(trx: Tx, tell: () => void): void {
+  const waiting = pendingBroadcasts.get(trx);
+  if (waiting === undefined) pendingBroadcasts.set(trx, [tell]);
+  else waiting.push(tell);
+}
+
+/**
+ * `withTransaction`, and then the broadcasts its body registered.
+ *
+ * `queue.updated` used to be emitted from inside the transaction, before it
+ * committed. A screen that subscribed in that gap — a phone opening its
+ * tracking link as reception tapped *next* — joined the room just too late to
+ * hear it and read its catch-up state just too early to see the write: it
+ * showed the previous patient, stamped fresh, until the next tap
+ * (`NFR-01`, PRD.md §3.2). And a write that failed after the emit rolled back
+ * with every screen already told about a queue that never existed.
+ *
+ * So the rooms are told here: after the commit, before anything else. A body
+ * that throws tells nobody, because nothing happened.
+ */
+async function committed<T>(body: (trx: Tx) => Promise<T>): Promise<T> {
+  let tell: (() => void)[] = [];
+
+  const result = await withTransaction(async (trx) => {
+    const value = await body(trx);
+    tell = pendingBroadcasts.get(trx) ?? [];
+    return value;
+  });
+
+  for (const say of tell) say();
+  return result;
 }
 
 /** Persist, recalculate, broadcast — and shape what the caller gets back. */
@@ -833,16 +882,19 @@ async function settle(
   // One `queue.updated` carrying the final state, plus the targeted events
   // each fact deserves. Two `queue.updated` messages for one console action
   // would make a client render an intermediate queue nobody was ever in.
-  emit.queueUpdated(session.id, { state, etas }, last.seq, last.serverTs);
-  for (const event of events) {
-    broadcastSpecific(session.id, state, event);
+  //
+  // Said once the transaction has committed (`committed`, below), never from
+  // inside it. See there for what telling the room early cost.
+  afterCommit(trx, () => {
+    emit.queueUpdated(session.id, { state, etas }, last.seq, last.serverTs);
+    for (const event of events) broadcastSpecific(session.id, state, event);
+  });
 
-    // --- 12. Audit ---------------------------------------------------------
-    //
-    // Not built: `middleware/audit.ts` is unwritten, though `audit_log` now
-    // exists (migration 0010). The actor is already on the event row, so the
-    // log is attributable in the meantime (`FR-QUE-04`).
-  }
+  // --- 12. Audit -----------------------------------------------------------
+  //
+  // Not built: `middleware/audit.ts` is unwritten, though `audit_log` now
+  // exists (migration 0010). The actor is already on the event row, so the
+  // log is attributable in the meantime (`FR-QUE-04`).
 
   // --- 11. Notify ----------------------------------------------------------
   //
@@ -979,7 +1031,7 @@ export async function getCachedState(
  * than merely stated.
  */
 export async function rebuild(sessionId: string): Promise<QueueState> {
-  return await withTransaction(async (trx) => {
+  return await committed(async (trx) => {
     const session = await sessionRepo.lockForUpdate(trx, sessionId);
     if (session === null) throw notFound('session');
 
@@ -1147,8 +1199,8 @@ function assertAllowed(
   state: QueueState,
   input: AppendEventInput,
   session: sessionRepo.SessionRow,
+  settings: QueueSettings,
 ): void {
-  const settings = { ...DEFAULT_QUEUE_SETTINGS };
   const now = nowTs();
   let result: GuardResult | null = null;
 
@@ -1202,11 +1254,19 @@ function assertAllowed(
       );
       break;
 
-    // Session lifecycle and slot events carry no guard of their own: opening a
-    // session, ending one, and the offer lifecycle are decided by the service
-    // that raises them, not by the state of the queue.
-    case 'SESSION_OPENED':
+    // An end is refused while somebody is in the chamber (`BTN-B02-END`,
+    // owner's decision, 2026-10-05). Until then this had no guard, and a
+    // chamber ended around a patient left them "in the chamber" for good, in
+    // a session that takes no further action. Patients who are only waiting
+    // do not refuse it; the console states their number instead.
     case 'SESSION_ENDED':
+      result = canEndSession(state);
+      break;
+
+    // Opening a session and the offer lifecycle carry no guard of their own:
+    // they are decided by the service that raises them, not by the state of
+    // the queue.
+    case 'SESSION_OPENED':
     case 'BOOKING_CANCELLED':
     case 'SLOT_OFFERED':
     case 'SLOT_ACCEPTED':
@@ -1278,7 +1338,13 @@ export interface BatchEntry {
 
 /** What became of one entry. */
 export type BatchOutcome =
-  | { readonly kind: 'accepted'; readonly clientEventId: string; readonly seq: number }
+  | {
+      readonly kind: 'accepted';
+      readonly clientEventId: string;
+      readonly seq: number;
+      /** The stored event, which is what `POST /events/:id/undo` names (`GR-02`). */
+      readonly eventId: string;
+    }
   | {
       readonly kind: 'conflict';
       readonly clientEventId: string;
@@ -1323,7 +1389,7 @@ export async function appendBatch(input: {
   readonly actor: QueueActor;
   readonly entries: readonly BatchEntry[];
 }): Promise<BatchResult> {
-  const settled = await withTransaction(async (trx) => {
+  const settled = await committed(async (trx) => {
     const session = await lockSession(trx, input.sessionId);
     let state = await loadState(trx, session);
 
@@ -1340,6 +1406,7 @@ export async function appendBatch(input: {
           kind: 'accepted',
           clientEventId: entry.clientEventId,
           seq: already.seq,
+          eventId: already.id,
         });
         continue;
       }
@@ -1360,6 +1427,7 @@ export async function appendBatch(input: {
           kind: 'accepted',
           clientEventId: entry.clientEventId,
           seq: result.event.seq,
+          eventId: result.event.id,
         });
       } catch (error) {
         // A guard refusal is the expected outcome of a race, not a fault.
@@ -1460,7 +1528,6 @@ export async function principalHoldsBooking(
   sessionId: string,
   who: {
     readonly userId: string | null;
-    readonly guestId: string | null;
     readonly bookingId: string | null;
   },
 ): Promise<boolean> {
@@ -1493,7 +1560,7 @@ export async function createWalkinBooking(input: {
   readonly feePoisha: number;
   readonly staffUserId: string;
 }): Promise<string> {
-  return await withTransaction(async (trx) => {
+  return await committed(async (trx) => {
     const session = await sessionRepo.lockForUpdate(trx, input.sessionId);
     if (session === null) throw notFound('session');
 

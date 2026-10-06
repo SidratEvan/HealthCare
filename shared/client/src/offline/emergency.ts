@@ -80,7 +80,7 @@ export type ErSendOutcome = SendOutcome;
 export type ErSender = (action: PendingErAction) => Promise<ErSendOutcome>;
 export type ErFlushOutcome = FlushOutcome;
 
-/** In memory, as the other two consoles' outboxes are today (`docs/STATUS.md`, decision 37). */
+/** In memory: for tests, and for a browser with no IndexedDB (`persistent.ts`). */
 export function createMemoryErStore(): ErActionStore {
   return createMemoryOutboxStore<PendingErAction>();
 }

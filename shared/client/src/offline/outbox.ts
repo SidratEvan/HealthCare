@@ -20,7 +20,14 @@
  *   - **did not arrive** — the flush stops there and everything from that
  *     entry on stays queued, in order. Sending the fourth action while the
  *     third is stuck would apply them out of order.
+ *   - **failed** — the server answered with a fault of its own (a 5xx). It may
+ *     be restarting, so the flush stops as it does for an entry that did not
+ *     arrive. After `MAX_ATTEMPTS` such answers the entry is set aside as
+ *     *stuck* — kept, shown, never silently dropped — and stops blocking the
+ *     ones behind it.
  */
+
+import { MAX_ATTEMPTS } from './queue.js';
 
 /** What every queued action carries, whatever it is about. */
 export interface OutboxEntry {
@@ -29,7 +36,10 @@ export interface OutboxEntry {
   readonly hospitalId: string;
   /** The console's clock. Orders the outbox only (`SY-01`). */
   readonly clientTs: string;
+  /** How many times the server has failed to take it. */
   readonly attempts: number;
+  /** Set when the server could not take it; see `PendingEvent.stuck`. */
+  readonly stuck?: { readonly code: string };
 }
 
 export interface OutboxStore<T extends OutboxEntry> {
@@ -39,7 +49,7 @@ export interface OutboxStore<T extends OutboxEntry> {
   clear(): Promise<void>;
 }
 
-/** In memory, as the reception console's outbox is today (`docs/STATUS.md`, decision 37). */
+/** In memory: for tests, and for a browser with no IndexedDB. */
 export function createMemoryOutboxStore<T extends OutboxEntry>(): OutboxStore<T> {
   const rows = new Map<string, T>();
 
@@ -67,7 +77,8 @@ export function createMemoryOutboxStore<T extends OutboxEntry>(): OutboxStore<T>
 export type SendOutcome =
   | { readonly kind: 'accepted' }
   | { readonly kind: 'refused'; readonly code: string; readonly reason: string }
-  | { readonly kind: 'unreachable' };
+  | { readonly kind: 'unreachable' }
+  | { readonly kind: 'failed'; readonly code: string };
 
 export interface FlushOutcome {
   readonly accepted: readonly string[];
@@ -76,6 +87,8 @@ export interface FlushOutcome {
     readonly code: string;
     readonly reason: string;
   }[];
+  /** Entries set aside in this flush because the server could not take them. */
+  readonly stuck: readonly string[];
   /** True when an entry did not reach the server; it and everything after it stay queued. */
   readonly offline: boolean;
 }
@@ -83,8 +96,9 @@ export interface FlushOutcome {
 export class Outbox<T extends OutboxEntry> {
   constructor(private readonly store: OutboxStore<T>) {}
 
+  /** Everything still waiting to go, oldest first. Stuck entries are not. */
   async pending(): Promise<T[]> {
-    return await this.store.all();
+    return (await this.store.all()).filter((action) => action.stuck === undefined);
   }
 
   async enqueue(action: Omit<T, 'attempts'>): Promise<void> {
@@ -96,22 +110,37 @@ export class Outbox<T extends OutboxEntry> {
     hospitalId: string,
     send: (action: T) => Promise<SendOutcome>,
   ): Promise<FlushOutcome> {
-    const queued = (await this.store.all()).filter((action) => action.hospitalId === hospitalId);
+    const queued = (await this.pending()).filter((action) => action.hospitalId === hospitalId);
 
     const accepted: string[] = [];
     const refused: { clientEventId: string; code: string; reason: string }[] = [];
+    const stuck: string[] = [];
+    const settle = async (): Promise<void> => {
+      await this.store.remove([...accepted, ...refused.map((entry) => entry.clientEventId)]);
+    };
 
-    for (const [index, action] of queued.entries()) {
+    for (const action of queued) {
       const outcome = await send(action);
 
       if (outcome.kind === 'unreachable') {
-        // Everything from here on waits, in order, with its attempt count
-        // raised — which is what drives the stuck warning.
-        for (const waiting of queued.slice(index)) {
-          await this.store.put({ ...waiting, attempts: waiting.attempts + 1 });
+        // Everything from here on waits, in order. A dead network is not a
+        // fault of the entry and is not counted against it.
+        await settle();
+        return { accepted, refused, stuck, offline: true };
+      }
+
+      if (outcome.kind === 'failed') {
+        const attempts = action.attempts + 1;
+        if (attempts < MAX_ATTEMPTS) {
+          // The server may be restarting. Nothing behind it goes out of order.
+          await this.store.put({ ...action, attempts });
+          await settle();
+          return { accepted, refused, stuck, offline: false };
         }
-        await this.store.remove([...accepted, ...refused.map((entry) => entry.clientEventId)]);
-        return { accepted, refused, offline: true };
+
+        await this.store.put({ ...action, attempts, stuck: { code: outcome.code } });
+        stuck.push(action.clientEventId);
+        continue;
       }
 
       if (outcome.kind === 'accepted') {
@@ -125,8 +154,26 @@ export class Outbox<T extends OutboxEntry> {
       }
     }
 
-    await this.store.remove([...accepted, ...refused.map((entry) => entry.clientEventId)]);
-    return { accepted, refused, offline: false };
+    await settle();
+    return { accepted, refused, stuck, offline: false };
+  }
+
+  /** Entries the server could not take, for the operator to act on. */
+  async stuck(): Promise<T[]> {
+    return (await this.store.all()).filter((action) => action.stuck !== undefined);
+  }
+
+  /** Drops entries the operator has chosen not to send. */
+  async discard(clientEventIds: readonly string[]): Promise<void> {
+    await this.store.remove(clientEventIds);
+  }
+
+  /** Puts stuck entries back in the outbox to be sent again, in their place. */
+  async retryStuck(): Promise<void> {
+    for (const action of await this.stuck()) {
+      const { stuck: _stuck, ...rest } = action;
+      await this.store.put({ ...rest, attempts: 0 } as T);
+    }
   }
 
   async clear(): Promise<void> {

@@ -31,7 +31,24 @@ export const bdPhone = z
 // Discovery (public)
 // ---------------------------------------------------------------------------
 
+/**
+ * A hospital's code, as a scope on a public read (`FR-BRD-02`, `FR-PAT-19`).
+ *
+ * With it, discovery answers for that hospital only: it is what a
+ * hospital-branded patient app sends on every call. Not a permission — what
+ * it narrows is already public — so a wrong code is a 404, not a 403.
+ */
+export const scopeCode = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9][A-Za-z0-9-]{1,15}$/)
+  .transform((value) => value.toUpperCase());
+
+/** `GET /config`. */
+export const configQuery = z.object({ scope: scopeCode.optional() });
+
 export const hospitalQuery = z.object({
+  scope: scopeCode.optional(),
   /**
    * A department code, e.g. `CARD`.
    *
@@ -57,10 +74,36 @@ export const hospitalQuery = z.object({
 });
 
 export const doctorQuery = z.object({
+  scope: scopeCode.optional(),
   specialty: z.string().trim().min(1).max(20).optional(),
   hospitalId: uuid.optional(),
   q: z.string().trim().min(1).max(80).optional(),
   limit: z.coerce.number().int().positive().max(100).default(50),
+});
+
+/**
+ * `GET /search` (`S-A-07s`, `FR-PAT-16`).
+ *
+ * `need` is a need's key (`specialty:CARD`, `bed:icu`,
+ * `capability:burn_unit`), chosen from the chips. `q` is whatever was typed.
+ * Either, both or neither: with neither the answer is every participating
+ * hospital, which is what the screen opens on.
+ *
+ * The key's shape is checked here and its meaning by `parseNeed` in the
+ * service, so that a need the data does not hold is a 400 with a reason
+ * rather than an empty list that reads as "no hospital has it".
+ */
+export const searchQuery = z.object({
+  scope: scopeCode.optional(),
+  q: z.string().trim().min(1).max(80).optional(),
+  need: z
+    .string()
+    .trim()
+    .regex(/^(specialty|bed|capability):[A-Za-z_]{2,20}$/)
+    .optional(),
+  lat: z.coerce.number().min(20).max(27).optional(),
+  lng: z.coerce.number().min(87.5).max(93).optional(),
+  limit: z.coerce.number().int().positive().max(50).default(30),
 });
 
 export const sessionQuery = z.object({
@@ -165,7 +208,8 @@ export const demoTokenBody = z.union([
       'hospital_admin',
     ]),
   }),
-  z.strictObject({ role: z.literal('gov_viewer') }),
+  // The national consoles: `S-B-13` and, since V3.2, `S-B-12`.
+  z.strictObject({ role: z.enum(['gov_viewer', 'platform_admin']) }),
 ]);
 
 export type DemoTokenBody = z.infer<typeof demoTokenBody>;

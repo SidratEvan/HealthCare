@@ -29,7 +29,7 @@ export interface TemplateRow {
  * change at the speed of a deploy, and fetching them per send would put a
  * round trip in front of every notification a busy chamber produces.
  */
-export async function activeTemplates(): Promise<TemplateRow[]> {
+export async function activeTemplates(trx?: Tx): Promise<TemplateRow[]> {
   const result = await sql<{
     key: string;
     channel: string;
@@ -40,7 +40,7 @@ export async function activeTemplates(): Promise<TemplateRow[]> {
     SELECT key, channel::text AS channel, locale, body, version
       FROM notification_templates
      WHERE is_active
-  `.execute(db);
+  `.execute(trx ?? db);
 
   return result.rows;
 }
@@ -59,8 +59,16 @@ export interface QueuedNotification {
   readonly recipient: Recipient;
   readonly channel: 'sms' | 'push';
   readonly templateKey: string;
+  /**
+   * What filled the template, without any credential. A `link` here is
+   * refused by the table itself (`notifications_no_stored_link`, 0035).
+   */
   readonly params: Readonly<Record<string, string>>;
-  /** The rendered text, stored so what was sent can be read back verbatim. */
+  /**
+   * The text as it is kept: what was sent, with a link left as its
+   * placeholder (`notification.service` `forTheRecord`). Never the text that
+   * was sent, when that carried one.
+   */
   readonly body: string;
   /** Set when the message was decided against rather than queued. */
   readonly skipped: string | null;
@@ -156,6 +164,46 @@ export async function markNotSent(
 }
 
 /**
+ * Clears the words of messages older than `days`, at most `limit` at a time,
+ * oldest first (DATABASE.md §8).
+ *
+ * `params` is reduced to the keys in `keep`: the ids a message was about. The
+ * text and everything that filled it go; every column stays.
+ *
+ * `params ? 'body'` is the predicate of `notifications_body_kept_idx` (0035),
+ * written the same way here so the planner uses it: a cleared row has left
+ * that index, and this reads only what is still to do.
+ *
+ * @returns how many rows were cleared.
+ */
+export async function clearBodiesOlderThan(
+  days: number,
+  keep: readonly string[],
+  limit: number,
+): Promise<number> {
+  const result = await sql<{ id: string }>`
+    UPDATE notifications n
+       SET params = COALESCE(
+             (SELECT jsonb_object_agg(kept.key, kept.value)
+                FROM jsonb_each(n.params) AS kept
+               WHERE kept.key = ANY(${[...keep]}::text[])),
+             '{}'::jsonb
+           )
+     WHERE n.id IN (
+             SELECT id
+               FROM notifications
+              WHERE params ? 'body'
+                AND queued_at < now() - (${days}::int * interval '1 day')
+              ORDER BY queued_at
+              LIMIT ${limit}::int
+           )
+    RETURNING n.id
+  `.execute(db);
+
+  return result.rows.length;
+}
+
+/**
  * The bookings already told something, for the messages that are sent once.
  *
  * "Two patients away" is the obvious one: a person is told to set off, and
@@ -201,8 +249,15 @@ export interface ChamberRow {
   readonly smsBudgetMonthly: number | null;
 }
 
-/** One read for everything a session's messages need to say about the chamber. */
-export async function chamberFor(sessionId: string): Promise<ChamberRow | null> {
+/**
+ * One read for everything a session's messages need to say about the chamber.
+ *
+ * Through the caller's transaction when it has one. A queue write plans its
+ * messages while it holds the session's row lock, and a read that went back to
+ * the pool from there waited for a connection that the counters queued behind
+ * that lock were holding — five seconds, then a failed tap (`FR-QUE-53`).
+ */
+export async function chamberFor(sessionId: string, trx?: Tx): Promise<ChamberRow | null> {
   const result = await sql<{
     hospital_id: string;
     hospital_name_bn: string;
@@ -226,7 +281,7 @@ export async function chamberFor(sessionId: string): Promise<ChamberRow | null> 
       JOIN doctors d   ON d.id = s.doctor_id
       LEFT JOIN hospital_settings hs ON hs.hospital_id = h.id
      WHERE s.id = ${sessionId}::uuid
-  `.execute(db);
+  `.execute(trx ?? db);
 
   const row = result.rows[0];
   if (row === undefined) return null;
@@ -309,7 +364,7 @@ export async function recipientsForSession(
  * the channel decision in `FR-NOT-02` depends on the answer, and asking is
  * what makes "this person has no app" a fact rather than an assumption.
  */
-export async function deviceTokensFor(recipient: Recipient): Promise<string[]> {
+export async function deviceTokensFor(recipient: Recipient, trx?: Tx): Promise<string[]> {
   if (recipient.userId === null && recipient.guestId === null) return [];
 
   const result = await sql<{ token: string }>`
@@ -319,7 +374,7 @@ export async function deviceTokensFor(recipient: Recipient): Promise<string[]> {
          (${recipient.userId}::uuid  IS NOT NULL AND user_id  = ${recipient.userId}::uuid)
          OR (${recipient.guestId}::uuid IS NOT NULL AND guest_id = ${recipient.guestId}::uuid)
        )
-  `.execute(db);
+  `.execute(trx ?? db);
 
   return result.rows.map((row) => row.token);
 }
@@ -333,7 +388,7 @@ export async function deviceTokensFor(recipient: Recipient): Promise<string[]> {
  * this volume; when it stops being so, it becomes a materialised figure the
  * analytics refresh maintains.
  */
-export async function smsSentThisMonth(hospitalId: string): Promise<number> {
+export async function smsSentThisMonth(hospitalId: string, trx?: Tx): Promise<number> {
   const result = await sql<{ n: string }>`
     SELECT count(*)::text AS n
       FROM notifications n
@@ -343,7 +398,7 @@ export async function smsSentThisMonth(hospitalId: string): Promise<number> {
        AND n.channel = 'sms'
        AND n.state IN ('sent', 'delivered')
        AND n.queued_at >= date_trunc('month', now())
-  `.execute(db);
+  `.execute(trx ?? db);
 
   return Number(result.rows[0]?.n ?? '0');
 }

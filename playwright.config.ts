@@ -44,6 +44,10 @@ const DATABASE_URL = E2E_DATABASE_URL;
 export default defineConfig({
   testDir: './e2e',
 
+  // `e2e/built/` runs against the console as built, not against `next dev`
+  // (`playwright.built.config.ts`, `pnpm test:e2e:built`). Both are the gate.
+  testIgnore: ['**/built/**', '**/production/**'],
+
   /**
    * Rebuild the demo data first (`FR-DEM-06`).
    *
@@ -69,7 +73,17 @@ export default defineConfig({
     baseURL: CONSOLE_URL,
     // A failure in the two-device test is the one worth being able to watch
     // afterwards, so the trace and the video survive it.
-    trace: 'retain-on-failure',
+    //
+    // Not the trace in CI. `retain-on-failure` records every test and throws
+    // the recording away if it passed, and the recorder keeps what it has
+    // seen: the worker grows by about 18 MB a test and stands at 6.7 GB by the
+    // last of 150 (`docs/STATUS.md`, measured). This machine survives that by
+    // growing its page file; a hosted runner with 7 GB does not. So in CI a
+    // failure keeps its video, its screenshot and the page as it stood, and
+    // the step-by-step trace is what is given up. Nothing that is asserted
+    // changes. The canary's own step runs first and alone, where a trace would
+    // cost nothing — it is still off there, so that one run is one setting.
+    trace: process.env['CI'] === 'true' ? 'off' : 'retain-on-failure',
     video: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -91,6 +105,15 @@ export default defineConfig({
         DATABASE_URL,
         DEMO_MODE: 'true',
         NODE_ENV: 'development',
+        // Every patient in this suite books from this one machine, and the API
+        // limits what one address may do: thirty phone checks in ten minutes.
+        // A runner fast enough to fit the thirty-first into that window had
+        // five bookings refused (the first CI run, 3 October; `docs/STATUS.md`
+        // decision 90) — correctly, by a limit that was never meant to count a
+        // hundred and fifty people as one. This says what the machine is. The
+        // limits themselves are tested where they belong, at their defaults
+        // (`middleware.test.ts`).
+        ADDRESS_RATE_LIMIT_FACTOR: '100',
       },
     },
     {

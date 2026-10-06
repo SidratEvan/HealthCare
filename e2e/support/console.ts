@@ -75,8 +75,12 @@ export interface ConsoleSession {
  *   Serial 2's grace period (`FR-QUE-20`) has long since run out, so reception
  *   may mark them absent — which is the only honest way to reach a no-show
  *   without a spec waiting fifteen real minutes.
+ * - `scheduled` — what a schedule leaves each morning: the chamber exists,
+ *   the doctor has not arrived, and nothing has happened in it. With no
+ *   bookings asked for, it is empty; the day's patients are whoever the spec
+ *   registers at the counter (`e2e/production/reception-pilot.prod.spec.ts`).
  */
-export type SessionOpening = 'in-chamber' | 'overdue';
+export type SessionOpening = 'in-chamber' | 'overdue' | 'scheduled';
 
 async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({
@@ -92,6 +96,63 @@ async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
 }
 
 /**
+ * The room a fixture chamber is given unless a spec asks otherwise.
+ *
+ * The picker leaves this room out (`chamber.repo`), so a run's hundred
+ * fixture chambers do not pile up on `S-B-01`.
+ */
+const HIDDEN_ROOM = 'E2E';
+
+/**
+ * Where a fixture chamber is put, for the few specs that need one the picker
+ * lists: a room of its own, and optionally yesterday's date.
+ *
+ * A spec that uses this owes `hideFromPicker` afterwards, or its chambers stay
+ * on the picker for every spec that follows.
+ */
+export interface SessionPlace {
+  readonly room?: string;
+  readonly day?: 'today' | 'yesterday';
+}
+
+/** Takes fixture chambers back off the picker, whatever state a spec left them in. */
+export async function hideFromPicker(sessionIds: readonly string[]): Promise<void> {
+  if (sessionIds.length === 0) return;
+  await withClient(async (client) => {
+    await client.query('UPDATE sessions SET room = $2 WHERE id = ANY($1::uuid[])', [
+      [...sessionIds],
+      HIDDEN_ROOM,
+    ]);
+  });
+}
+
+/** A chamber as the database holds it: its status, and each booking's, by serial. */
+export async function chamberRecord(sessionId: string): Promise<{
+  readonly status: string;
+  readonly sessionDate: string;
+  readonly bookings: readonly string[];
+}> {
+  return await withClient(async (client) => {
+    const session = await client.query<{ status: string; session_date: string }>(
+      `SELECT status::text AS status, to_char(session_date, 'YYYY-MM-DD') AS session_date
+         FROM sessions WHERE id = $1`,
+      [sessionId],
+    );
+    const bookings = await client.query<{ status: string }>(
+      'SELECT status::text AS status FROM bookings WHERE session_id = $1 ORDER BY serial_number',
+      [sessionId],
+    );
+    const row = session.rows[0];
+    if (row === undefined) throw new Error(`No session ${sessionId}.`);
+    return {
+      status: row.status,
+      sessionDate: row.session_date,
+      bookings: bookings.rows.map((booking) => booking.status),
+    };
+  });
+}
+
+/**
  * A fresh session, mid-queue, driven by a real receptionist.
  *
  * Built from seeded rows — a real chamber, real patients, the fee that doctor
@@ -102,8 +163,11 @@ async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
 export async function createConsoleSession(
   bookings = 8,
   opening: SessionOpening = 'in-chamber',
+  place: SessionPlace = {},
 ): Promise<ConsoleSession> {
   const overdue = opening === 'overdue';
+  const room = place.room ?? HIDDEN_ROOM;
+  const daysAgo = place.day === 'yesterday' ? 1 : 0;
 
   return await withClient(async (client) => {
     const chamber = await client.query<{
@@ -140,16 +204,54 @@ export async function createConsoleSession(
      * filed under yesterday and never appeared in the picker — and every spec
      * that books through the UI timed out waiting for a session card. The
      * product was fine; the fixture was six hours ahead of it.
+     *
+     * And the planned start is never before that date began.
+     *
+     * "Thirty minutes ago" is yesterday for the first half hour of a Dhaka
+     * day (ninety minutes, for an overdue chamber), and the session was then
+     * dated today with a start the day before — which nothing in the product
+     * ever writes: a chamber's date is the date of its planned start. The
+     * patient app dates a remembered booking by that start, so the home
+     * strip, which shows today's serial, did not show it, and
+     * `app-shell.spec.ts` failed in a run that began at 00:25 Dhaka
+     * (6 October). In that half hour the chamber now opens at midnight, with
+     * a doctor who arrived before it was due; at every other hour nothing
+     * changes.
+     *
+     * A chamber asked for as yesterday's (`place.day`) is what a chamber left
+     * open overnight is: dated yesterday, due from six to nine in the evening
+     * there, and still running now.
      */
     const session = await client.query<{ id: string }>(
       `INSERT INTO sessions
          (hospital_id, doctor_id, department_id, room, session_date,
           planned_start, planned_end, capacity, fee_poisha)
-       VALUES ($1, $2, $3, 'E2E', (now() AT TIME ZONE 'Asia/Dhaka')::date,
-               now() - make_interval(mins => $5), now() + interval '150 minutes',
+       VALUES ($1, $2, $3, $6, (now() AT TIME ZONE 'Asia/Dhaka')::date - $7::int,
+               CASE WHEN $7::int = 0 THEN
+                 greatest(
+                   now() - make_interval(mins => $5),
+                   date_trunc('day', now() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka'
+                 )
+               ELSE
+                 date_trunc('day', now() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka'
+                   - interval '6 hours'
+               END,
+               CASE WHEN $7::int = 0 THEN now() + interval '150 minutes'
+               ELSE
+                 date_trunc('day', now() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka'
+                   - interval '3 hours'
+               END,
                40, $4)
        RETURNING id`,
-      [row.hospital_id, row.doctor_id, row.department_id, row.fee_poisha, overdue ? 90 : 30],
+      [
+        row.hospital_id,
+        row.doctor_id,
+        row.department_id,
+        row.fee_poisha,
+        overdue ? 90 : 30,
+        room,
+        daysAgo,
+      ],
     );
 
     const sessionId = session.rows[0]?.id;
@@ -191,64 +293,67 @@ export async function createConsoleSession(
     // (`DB-P1`), so a fixture that set `status` directly would be building a
     // state the reducer could never produce.
     const firstBooking = bookingsBySerial.get(1);
-    if (firstBooking === undefined) throw new Error('no serial 1');
+    if (opening !== 'scheduled' && firstBooking === undefined) throw new Error('no serial 1');
 
-    //
-    // An overdue session's events are stamped in the past, which is what
-    // `server_ts` would say had the console been driven an hour ago. The
-    // grace period reads that column, so this is the log the reducer would
-    // have produced — not a status set by hand.
-    const arrivedMinutesAgo = overdue ? 80 : 20;
+    // A chamber that has not opened has no log yet: nothing is driven.
+    if (opening !== 'scheduled' && firstBooking !== undefined) {
+      //
+      // An overdue session's events are stamped in the past, which is what
+      // `server_ts` would say had the console been driven an hour ago. The
+      // grace period reads that column, so this is the log the reducer would
+      // have produced — not a status set by hand.
+      const arrivedMinutesAgo = overdue ? 80 : 20;
 
-    await appendEvent(
-      client,
-      sessionId,
-      receptionistId,
-      'DOCTOR_ARRIVED',
-      {
-        arrivedAt: new Date(Date.now() - arrivedMinutesAgo * 60_000).toISOString(),
-        minutesLate: 10,
-      },
-      overdue ? arrivedMinutesAgo : 0,
-    );
-    await appendEvent(
-      client,
-      sessionId,
-      receptionistId,
-      'PATIENT_CALLED',
-      { bookingId: firstBooking, serial: 1 },
-      overdue ? 75 : 0,
-    );
-
-    await client.query(
-      `UPDATE sessions
-          SET status = 'running', actual_start = now() - make_interval(mins => $2)
-        WHERE id = $1`,
-      [sessionId, arrivedMinutesAgo],
-    );
-
-    if (overdue) {
       await appendEvent(
         client,
         sessionId,
         receptionistId,
-        'PATIENT_DONE',
-        { bookingId: firstBooking, consultSeconds: 300 },
-        70,
+        'DOCTOR_ARRIVED',
+        {
+          arrivedAt: new Date(Date.now() - arrivedMinutesAgo * 60_000).toISOString(),
+          minutesLate: 10,
+        },
+        overdue ? arrivedMinutesAgo : 0,
       );
+      await appendEvent(
+        client,
+        sessionId,
+        receptionistId,
+        'PATIENT_CALLED',
+        { bookingId: firstBooking, serial: 1 },
+        overdue ? 75 : 0,
+      );
+
       await client.query(
-        `UPDATE bookings
+        `UPDATE sessions
+          SET status = 'running', actual_start = now() - make_interval(mins => $2)
+        WHERE id = $1`,
+        [sessionId, arrivedMinutesAgo],
+      );
+
+      if (overdue) {
+        await appendEvent(
+          client,
+          sessionId,
+          receptionistId,
+          'PATIENT_DONE',
+          { bookingId: firstBooking, consultSeconds: 300 },
+          70,
+        );
+        await client.query(
+          `UPDATE bookings
             SET status = 'done', called_at = now() - interval '75 minutes',
                 done_at = now() - interval '70 minutes', consult_seconds = 300
           WHERE id = $1`,
-        [firstBooking],
-      );
-    } else {
-      await client.query(
-        `UPDATE bookings SET status = 'in_chamber', called_at = now() - interval '4 minutes'
+          [firstBooking],
+        );
+      } else {
+        await client.query(
+          `UPDATE bookings SET status = 'in_chamber', called_at = now() - interval '4 minutes'
           WHERE id = $1`,
-        [firstBooking],
-      );
+          [firstBooking],
+        );
+      }
     }
 
     return {
@@ -618,5 +723,42 @@ export async function consentTrail(bookingId: string): Promise<{
       revoked: Number(row.revoked),
       staffReads: Number(row.staff_reads),
     };
+  });
+}
+
+/**
+ * The events an undo compensated, in log order (`GR-02`).
+ *
+ * An `ACTION_UNDONE` row proves a request was made; this proves it named a
+ * real event. The console once sent a booking id here, and the log filled
+ * with undos that pointed at nothing.
+ */
+export async function undoneTypes(sessionId: string): Promise<string[]> {
+  return await withClient(async (client) => {
+    const result = await client.query<{ type: string }>(
+      `SELECT type FROM queue_events
+        WHERE session_id = $1 AND undone_by_event_id IS NOT NULL
+        ORDER BY seq`,
+      [sessionId],
+    );
+    return result.rows.map((r) => r.type);
+  });
+}
+
+/**
+ * Who each event in a session is attributed to, in log order (`FR-QUE-04`).
+ *
+ * An outbox kept on a shared counter PC must never let one person's unsent
+ * work go out under another's sign-in; this is what a spec checks it against.
+ */
+export async function eventActors(
+  sessionId: string,
+): Promise<{ readonly type: string; readonly staffId: string | null }[]> {
+  return await withClient(async (client) => {
+    const result = await client.query<{ type: string; actor_staff_id: string | null }>(
+      'SELECT type, actor_staff_id FROM queue_events WHERE session_id = $1 ORDER BY seq',
+      [sessionId],
+    );
+    return result.rows.map((r) => ({ type: r.type, staffId: r.actor_staff_id }));
   });
 }

@@ -56,6 +56,7 @@ export {
   clampConsultSeconds,
   currentRateSeconds,
   isMeasured,
+  measuredConsultSeconds,
   observeConsult,
   rateSpreadSeconds,
   seedRate,
@@ -69,6 +70,7 @@ export {
   bandMinutes,
   computeEtas,
   etaFor,
+  outstandingDelayMinutes,
   projectedEnd,
   shouldLeaveNow,
   twoAwayBookings,
@@ -85,6 +87,7 @@ export {
   canDeclareDelay,
   canDeclareDoctorArrived,
   canDeclareLate,
+  canEndSession,
   canMarkDone,
   canMarkNoShow,
   canPause,
@@ -99,11 +102,16 @@ export {
   lapsedOffers,
   lateReinsertIndex,
   nextToCall,
+  unseenAtEnd,
   DEFAULT_QUEUE_SETTINGS,
   MAX_DELAY_MINUTES,
+  OFFLINE_ACTION_ROLES,
+  UNDO_WINDOW_SECONDS,
+  canReplayOffline,
   MAX_QUOTED_WAIT_MINUTES,
   SLOT_OFFER_WINDOW_MINUTES,
   type GuardResult,
+  type OfflineAction,
   type QueueGuardCode,
   type QueueSettings,
 } from './queue/rules.js';
@@ -147,6 +155,61 @@ export {
   type KindTally,
   type PublicCapacity,
 } from './beds/capacity.js';
+
+// --- Onboarding ------------------------------------------------------------
+//
+// A workspace's state, who may move it, and the checklist it is ready by
+// (`FR-ONB-02`–`04`). `ORG_LIFECYCLES` itself is with the other database
+// enums in `types/enums`.
+export {
+  CHECKLIST_ITEMS,
+  ORG_ACTIONS,
+  actionNeedsNote,
+  isPublicLifecycle,
+  missingForApproval,
+  missingForReview,
+  nextLifecycle,
+  platformActions,
+  setupChecklist,
+  type ChecklistItem,
+  type ChecklistItemKey,
+  type OrgAction,
+  type SetupCounts,
+} from './org/lifecycle.js';
+
+// --- Brand -----------------------------------------------------------------
+//
+// A hospital's own colours for the patient app, and the contrast they must
+// pass before they are used (`FR-BRD-03`).
+export {
+  BRAND_TOKENS,
+  MIN_TEXT_CONTRAST,
+  brandProblems,
+  brandTheme,
+  contrastRatio,
+  readBrandTheme,
+  type BrandProblem,
+  type BrandTheme,
+  type BrandToken,
+} from './brand/theme.js';
+
+// --- Search ----------------------------------------------------------------
+//
+// What a patient can ask the network for, and how typed text is read as one
+// (`FR-PAT-16`–`18`). Shared so the API and the patient app read the same
+// words the same way.
+export {
+  SEARCH_BED_KINDS,
+  SEARCH_CAPABILITIES,
+  foldSearchText,
+  needKey,
+  parseNeed,
+  readSearch,
+  suggestNeeds,
+  type SearchNeed,
+  type SearchReading,
+} from './search/needs.js';
+export { confirmedTallyOfKind, orderForNeed, tallyOfKind } from './search/order.js';
 
 // --- Emergency -------------------------------------------------------------
 //
@@ -359,6 +422,7 @@ export { findIdentifiers } from './gov/identifiers.js';
 // construct is an action the server will accept.
 export * from './schemas/queue.schema.js';
 export * from './schemas/sync.schema.js';
+export * from './schemas/auth.schema.js';
 export * from './schemas/booking.schema.js';
 export * from './schemas/clinical.schema.js';
 export * from './schemas/bed.schema.js';
@@ -367,8 +431,96 @@ export * from './schemas/emergency.schema.js';
 export * from './schemas/referral.schema.js';
 export * from './schemas/lab.schema.js';
 export * from './schemas/payment.schema.js';
+export * from './schemas/settings.schema.js';
+export * from './schemas/registration.schema.js';
+export * from './schemas/import.schema.js';
 
 // --- Utilities -------------------------------------------------------------
 export * as money from './util/money.js';
 export * as time from './util/time.js';
+
+export {
+  addDhakaDays,
+  MATERIALISE_DAYS,
+  plannedSessions,
+  type PlannedSession,
+  type ScheduleTemplate,
+} from './sessions/materialise.js';
 export { BD_MOBILE, normaliseBdMobile } from './util/phone.js';
+
+// --- Importing a hospital's own data (pilot step 24, FR-IMP) ---------------
+export { csvField, csvLine, parseCsv, type CsvProblem, type CsvTable } from './imports/csv.js';
+// Mapping a hospital's own export onto the template (`FR-IMP-13`–`20`).
+export {
+  COLUMN_KINDS,
+  STRUCTURE_TYPES,
+  applyMapping,
+  foldHeading,
+  guessStructureType,
+  hasTemplateHeader,
+  headerLooksLikeData,
+  headerSignature,
+  kindOfValue,
+  mappingProblems,
+  modelMappingRequest,
+  profileColumns,
+  proposeMapping,
+  targetFields,
+  targetOf,
+  targetOneOf,
+  unmappedColumns,
+  withModelSuggestions,
+  type ColumnKind,
+  type ColumnMapping,
+  type ColumnProfile,
+  type FieldProposal,
+  type FileColumn,
+  type MappingProblem,
+  type MappingSource,
+  type MappingTarget,
+  type ModelColumn,
+  type ModelMappingRequest,
+  type ModelSuggestion,
+  type ProposalReason,
+  type StructureType,
+  type TargetField,
+} from './imports/mapping.js';
+export {
+  IMPORT_COLUMNS,
+  IMPORT_SETS,
+  columnIndex,
+  latinDigits,
+  missingColumns,
+  readDate,
+  readRow,
+  readTime,
+  readWeekday,
+  refKindOf,
+  takaToPoisha as importTakaToPoisha,
+  templateCsv,
+  type AppointmentRecord,
+  type ImportError,
+  type ImportErrorCode,
+  type ImportRecord,
+  type ImportSet,
+  type ImportedRole,
+  type PatientRecord,
+  type RowResult,
+  type StructureRecord,
+} from './imports/sets.js';
+export {
+  MAX_GROUPS_LISTED,
+  NO_WARNINGS,
+  SAME_PERSON_REASONS,
+  VALUE_FORMATS,
+  foldPersonName,
+  hasWarnings,
+  importWarnings,
+  type FormatKind,
+  type ImportWarnings,
+  type MixedFormat,
+  type SamePersonGroup,
+  type SamePersonReason,
+  type ValueFormat,
+  type WarnedRow,
+} from './imports/warnings.js';

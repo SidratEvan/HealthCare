@@ -9,6 +9,9 @@
 
 import { expect, type BrowserContext, type Page } from '@playwright/test';
 
+import { isProductionConfiguration } from './consoleSession.js';
+import { issueTrackingLink } from './guestLink.js';
+
 import type { ConsoleSession } from './console.js';
 
 const PATIENT = 'http://localhost:3000';
@@ -76,6 +79,34 @@ export async function joinStandbyAsGuest(
   await form.getByTestId(prepay ? 'standby-choice-prepay' : 'standby-choice-ask').click();
   await form.getByTestId('standby-confirm').click();
 
-  await expect(page).toHaveURL(/\/standby\?t=/);
-  await expect(page.getByTestId('standby-status')).toBeVisible();
+  // The first spec to land here pays for the dev server compiling `/standby`:
+  // in a full run that navigation has taken longer than the default ten
+  // seconds, with the URL already chosen and the page still building. Waiting
+  // longer for that one navigation is not a retry — it asserts the same thing.
+  await expect(page).toHaveURL(/\/standby\?t=/, { timeout: 45_000 });
+  await expect(page.getByTestId('standby-status')).toBeVisible({ timeout: 20_000 });
+}
+
+/**
+ * A patient's link to the live serial on the spec's chamber, by whichever way
+ * the configuration allows.
+ *
+ * Under the demonstration the patient books, as a guest, through the app —
+ * `bookAsGuest`, unchanged. Under the production configuration nobody can: a
+ * guest's phone is proved with a code first, the code travels by SMS, and
+ * there is no SMS provider yet (`docs/STATUS.md`, the first blocker). There
+ * the link is the one an SMS would have carried, for the last patient already
+ * waiting in the chamber (`guestLink.ts`).
+ *
+ * For specs whose subject is the counter and which only need a second screen
+ * to watch it from. A spec about booking calls `bookAsGuest` and has no place
+ * in the production configuration until an SMS provider exists.
+ */
+export async function trackingLinkOn(page: Page, session: ConsoleSession): Promise<string> {
+  if (!isProductionConfiguration()) return await bookAsGuest(page, session);
+
+  const last = Math.max(...session.bookingsBySerial.keys());
+  const booking = session.bookingsBySerial.get(last);
+  if (booking === undefined) throw new Error('the fixture holds no bookings');
+  return await issueTrackingLink(booking);
 }

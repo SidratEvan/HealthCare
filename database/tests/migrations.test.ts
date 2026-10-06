@@ -103,6 +103,30 @@ describe('migration files (DATABASE.md §7)', () => {
       '0024',
       '0025',
       '0026',
+      // Pilot step 21 (CLAUDE.md §4.2): staff sign-in.
+      '0027',
+      // Pilot step 22: each day's chambers linked to their schedule.
+      '0028',
+      // Pilot step 24: importing a hospital's own data (FR-IMP).
+      '0029',
+      '0030',
+      '0031',
+      // Pilot step 25: a patient's one-time sign-in codes.
+      '0032',
+      // Pilot step 28: a second factor for staff.
+      '0033',
+      // Plan 1.7 (docs/PLATFORM_PLAN.md): the dashboard's snapshot can be
+      // rebuilt by a role that does not own it.
+      '0034',
+      // Plan 1.9: no tracking link is stored in the outbox, and the rows whose
+      // words are due to be cleared can be found (DATABASE.md §8).
+      '0035',
+      // V1 pitch build, V2.2: a hospital's own brand tokens (FR-BRD-03).
+      '0036',
+      // V3.1: a workspace's state, and live only when approved (FR-ONB-02).
+      '0037',
+      // V4.1: a hospital's confirmed column mappings, by heading row (FR-IMP-20).
+      '0038',
     ]);
   });
 

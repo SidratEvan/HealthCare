@@ -15,12 +15,13 @@ import { LocaleDocument } from '@platform/ui';
 import '@platform/ui/styles.css';
 
 import { fontVariables } from '@/app/fonts';
+import { ServiceWorker } from '@/components/ServiceWorker';
 
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
-  title: 'হাসপাতাল কনসোল',
+  title: 'MedLiveBD — হাসপাতাল কনসোল',
   description: 'রিসেপশন কনসোল — সিরিয়াল ব্যবস্থাপনা',
 };
 
@@ -38,6 +39,9 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
       <body className="min-h-screen bg-canvas text-ink">
         {children}
         <LocaleDocument title={{ bn: t('consoleTitle', 'bn'), en: t('consoleTitle', 'en') }} />
+        {/* Keeps the shell on the device, so the console opens with no
+            network (FR-OFF-01). */}
+        <ServiceWorker />
       </body>
     </html>
   );

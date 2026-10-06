@@ -138,6 +138,18 @@ describe('Input (§5.2)', () => {
     expect(screen.getByLabelText('মোবাইল নম্বর')).toHaveAttribute('inputmode', 'tel');
   });
 
+  it('masks a password and opens the email keyboard for an email (S-B-00)', () => {
+    render(
+      <>
+        <Input label="ইমেইল" kind="email" />
+        <Input label="পাসওয়ার্ড" kind="password" />
+      </>,
+    );
+    expect(screen.getByLabelText('ইমেইল')).toHaveAttribute('type', 'email');
+    expect(screen.getByLabelText('ইমেইল')).toHaveAttribute('inputmode', 'email');
+    expect(screen.getByLabelText('পাসওয়ার্ড')).toHaveAttribute('type', 'password');
+  });
+
   it('announces an error and links it to the field', () => {
     render(<Input label="মোবাইল নম্বর" kind="phone" error="১১ সংখ্যার মোবাইল নম্বর দিন" />);
 

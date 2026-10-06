@@ -20,7 +20,8 @@
  *
  * An item with no console behind it is shown switched off with the reason
  * under it (`FRONTEND.md` §5.1): রেজিস্ট্রেশন because `S-B-03` is not built,
- * and any console the facility does not run (a clinic has no ward).
+ * বিল because `S-B-04` is not, and any console the facility does not run (a
+ * clinic has no ward).
  */
 
 import { useState } from 'react';
@@ -28,6 +29,7 @@ import { useState } from 'react';
 import { localName, t, type ConsoleKey, type Locale } from '@platform/i18n';
 
 import { mintDemoToken, readDemoSession, writeDemoSession, type DemoSession } from '@/lib/demo';
+import { signOut } from '@/lib/staffAuth';
 
 import type { ReactNode } from 'react';
 
@@ -38,6 +40,7 @@ const NAV_ITEMS = [
   'navBeds',
   'navEmergency',
   'navTests',
+  'navPharmacy',
   'navBilling',
   'navDashboard',
 ] as const satisfies readonly ConsoleKey[];
@@ -53,14 +56,16 @@ const TARGET: Readonly<
   Record<ConsoleNavKey, { readonly role: string; readonly view: string | null } | null>
 > = {
   navQueue: { role: 'receptionist', view: null },
-  // `S-B-03` is not built; reception's walk-in is the registration there is.
-  navRegistration: null,
+  // `S-B-03` (pilot step 23): the registration desk, a receptionist's.
+  navRegistration: { role: 'receptionist', view: 'registration' },
   navBeds: { role: 'ward', view: 'ward' },
   navEmergency: { role: 'emergency', view: 'er' },
   navTests: { role: 'lab', view: 'lab' },
-  // `S-B-04` is not built. The pharmacy console has sat under বিল since
-  // step 17, so the item opens it rather than going dark.
-  navBilling: { role: 'pharmacy', view: 'pharmacy' },
+  navPharmacy: { role: 'pharmacy', view: 'pharmacy' },
+  // `S-B-04` is not built. The pharmacy console used to sit under বিল, and a
+  // person who clicked "Billing" landed on medicine stock; it has its own
+  // item now, and বিল says it is not in this version.
+  navBilling: null,
   navDashboard: { role: 'hospital_admin', view: 'admin' },
 };
 
@@ -110,7 +115,12 @@ export function ConsoleRail({
     setOpening(key);
     setFailed(null);
     try {
-      const minted = await mintDemoToken(hospitalId, target.role, AbortSignal.timeout(20_000));
+      // A signed-in person's token already carries every role they hold
+      // (pilot step 21); only the demo mints one per console.
+      const minted =
+        session.authKind === 'staff'
+          ? { token: session.token, staffName: session.staffName, hospitalId: session.hospitalId }
+          : await mintDemoToken(hospitalId, target.role, AbortSignal.timeout(20_000));
       // Everything the picker knew about the facility carries over; only the
       // principal and the role change.
       writeDemoSession({
@@ -208,6 +218,20 @@ export function ConsoleRail({
 
       <div className="mt-auto flex flex-col gap-3">
         {children}
+        {session?.authKind === 'staff' ? (
+          <button
+            type="button"
+            className="flex min-h-touch items-center rounded-sm px-3 text-left text-body-sm text-brand-100 hover:bg-white/10 hover:text-ink-inverse"
+            data-testid="rail-sign-out"
+            onClick={() => {
+              void signOut().then(() => {
+                globalThis.location.assign('/');
+              });
+            }}
+          >
+            {t('signOut', locale)}
+          </button>
+        ) : null}
         <a
           href="/"
           className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-100 hover:bg-white/10 hover:text-ink-inverse"
