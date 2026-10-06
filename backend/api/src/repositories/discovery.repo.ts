@@ -33,6 +33,14 @@ export interface HospitalCard {
   readonly lng: number | null;
   readonly phone: string | null;
   readonly emergencyPhone: string | null;
+  /** What the hospital says of itself (`FR-BRD-06`); null when it has said nothing. */
+  readonly descriptionBn: string | null;
+  readonly descriptionEn: string | null;
+  /**
+   * Which logo it has, or null for none. The version goes in the address
+   * (`GET /hospitals/:id/logo?v=`), so a changed logo is a new address.
+   */
+  readonly logoVersion: string | null;
   /** Distance in kilometres when the caller gave a position, else null. */
   readonly distanceKm: number | null;
   readonly capabilities: readonly string[];
@@ -97,6 +105,9 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
     lng: number | null;
     phone: string | null;
     emergency_phone: string | null;
+    description_bn: string | null;
+    description_en: string | null;
+    logo_version: string | null;
     distance_m: number | null;
     capabilities: string[] | null;
     capability_as_of: Date | null;
@@ -106,6 +117,9 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
   }>`
     SELECT h.id, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
            h.thana, h.address_bn, h.address_en, h.lat, h.lng, h.phone, h.emergency_phone,
+           h.description_bn, h.description_en,
+           (SELECT left(l.sha256, 16) FROM hospital_logos l WHERE l.hospital_id = h.id)
+             AS logo_version,
            CASE
              WHEN ${hasPosition}::boolean AND h.geo IS NOT NULL
              THEN ST_Distance(h.geo, ST_SetSRID(ST_MakePoint(${query.lng ?? 0}, ${query.lat ?? 0}), 4326)::geography)
@@ -189,6 +203,9 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
     lng: row.lng,
     phone: row.phone,
     emergencyPhone: row.emergency_phone,
+    descriptionBn: row.description_bn,
+    descriptionEn: row.description_en,
+    logoVersion: row.logo_version,
     // Metres from PostGIS, kilometres to one decimal for a person reading it.
     distanceKm: row.distance_m === null ? null : Math.round(row.distance_m / 100) / 10,
     capabilities: row.capabilities ?? [],
@@ -522,6 +539,9 @@ export interface ScopeRow {
   readonly nameEn: string;
   /** `hospital_settings.brand` as stored; read by `readBrandTheme`. */
   readonly brand: unknown;
+  readonly descriptionBn: string | null;
+  readonly descriptionEn: string | null;
+  readonly logoVersion: string | null;
 }
 
 /**
@@ -537,16 +557,56 @@ export async function findScope(code: string): Promise<ScopeRow | null> {
     name_bn: string;
     name_en: string;
     brand: unknown;
+    description_bn: string | null;
+    description_en: string | null;
+    logo_version: string | null;
   }>`
-    SELECT h.id, h.code, h.name_bn, h.name_en, hs.brand
+    SELECT h.id, h.code, h.name_bn, h.name_en, hs.brand, h.description_bn, h.description_en,
+           left(l.sha256, 16) AS logo_version
       FROM hospitals h
       LEFT JOIN hospital_settings hs ON hs.hospital_id = h.id
+      LEFT JOIN hospital_logos l ON l.hospital_id = h.id
      WHERE h.code = ${code} AND h.deleted_at IS NULL AND h.is_live
   `.execute(db);
 
   const row = result.rows[0];
   if (row === undefined) return null;
-  return { id: row.id, code: row.code, nameBn: row.name_bn, nameEn: row.name_en, brand: row.brand };
+  return {
+    id: row.id,
+    code: row.code,
+    nameBn: row.name_bn,
+    nameEn: row.name_en,
+    brand: row.brand,
+    descriptionBn: row.description_bn,
+    descriptionEn: row.description_en,
+    logoVersion: row.logo_version,
+  };
+}
+
+/** A hospital's logo as it is served. */
+export interface LogoFile {
+  readonly contentType: string;
+  readonly bytes: Buffer;
+  /** The first sixteen characters of the bytes' sha-256, as the address carries it. */
+  readonly version: string;
+}
+
+/**
+ * A live hospital's logo (`FR-BRD-06`, migration 0045), or null.
+ *
+ * Live only, like everything public: a hospital that is not in the network
+ * shows nothing of itself, its logo included (`FR-NET-03`).
+ */
+export async function findLogo(hospitalId: string): Promise<LogoFile | null> {
+  const result = await sql<{ content_type: string; bytes: Buffer; sha256: string }>`
+    SELECT l.content_type, l.bytes, l.sha256
+      FROM hospital_logos l
+      JOIN hospitals h ON h.id = l.hospital_id
+     WHERE l.hospital_id = ${hospitalId} AND h.deleted_at IS NULL AND h.is_live
+  `.execute(db);
+  const row = result.rows[0];
+  if (row === undefined) return null;
+  return { contentType: row.content_type, bytes: row.bytes, version: row.sha256.slice(0, 16) };
 }
 
 export async function findHospital(hospitalId: string): Promise<HospitalCard | null> {

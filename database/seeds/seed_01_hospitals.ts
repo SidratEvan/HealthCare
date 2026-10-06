@@ -17,6 +17,8 @@
  *     real choice between two hospitals instead of one obvious answer.
  */
 
+import { createHash } from 'node:crypto';
+
 import { DEMO_FACILITIES } from './data/hospitals.js';
 import { composeName, rosterFor } from './data/people.js';
 import { isDeclaredDistrict, specialty } from './data/reference.js';
@@ -30,6 +32,7 @@ import {
 } from './lib/demo.js';
 import { insertRows } from './lib/insert.js';
 import { facilityIds } from './lib/lookup.js';
+import { markPng } from './lib/markPng.js';
 
 import type { SeedContext, SeedModule, SeedSummary } from './lib/runner.js';
 
@@ -159,6 +162,7 @@ export const seed01Hospitals: SeedModule = {
   writes: [
     'hospitals',
     'hospital_settings',
+    'hospital_logos',
     'departments',
     'capabilities',
     'staff_users',
@@ -195,6 +199,8 @@ export const seed01Hospitals: SeedModule = {
       facility.thana,
       facility.addressBn,
       facility.addressEn,
+      facility.descriptionBn,
+      facility.descriptionEn,
       facility.lat,
       facility.lng,
       facility.phone,
@@ -215,6 +221,8 @@ export const seed01Hospitals: SeedModule = {
           'thana',
           'address_bn',
           'address_en',
+          'description_bn',
+          'description_en',
           'lat',
           'lng',
           'phone',
@@ -406,6 +414,35 @@ export const seed01Hospitals: SeedModule = {
       'hospital_settings',
       { columns: ['hospital_id', 'numeral_style', 'refund_policy', 'brand', 'created_by'] },
       settingsRows,
+      '',
+    );
+
+    // --- hospital_logos ----------------------------------------------------
+    //
+    // A mark for each facility that has colours of its own (`FR-BRD-06`), in
+    // its main colour, so that the logo on a card, in the portal's header and
+    // on the settings screen is something to look at. The others have none,
+    // which is the ordinary state and the one a card has to look right in.
+    const logoRows: unknown[][] = [];
+    for (const facility of DEMO_FACILITIES) {
+      const brand = BRANDS[facility.slug];
+      const colour = brand?.colors['brand-600'];
+      const hospitalId = facilities.get(facility.slug);
+      if (colour === undefined || hospitalId === undefined) continue;
+      const bytes = markPng(colour);
+      logoRows.push([
+        hospitalId,
+        'image/png',
+        bytes,
+        createHash('sha256').update(bytes).digest('hex'),
+        admins.get(facility.slug) ?? null,
+      ]);
+    }
+    await insertRows(
+      client,
+      'hospital_logos',
+      { columns: ['hospital_id', 'content_type', 'bytes', 'sha256', 'created_by'] },
+      logoRows,
       '',
     );
 

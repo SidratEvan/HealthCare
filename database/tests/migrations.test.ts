@@ -139,6 +139,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0043',
       // Plan B3: a person's clinical record is their own at the database (FR-SEC-11).
       '0044',
+      // Plan C1: a hospital's description and logo (FR-BRD-06).
+      '0045',
     ]);
   });
 

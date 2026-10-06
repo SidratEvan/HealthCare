@@ -45,6 +45,7 @@ import { useLocale } from '@platform/ui';
 
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 import { DemoBanner } from '@/components/DemoBanner';
+import { HospitalMark } from '@/components/HospitalMark';
 import {
   BedIcon,
   ChevronIcon,
@@ -119,11 +120,21 @@ function Header(): ReactNode {
   const scope = useDeployment()?.scope ?? null;
   return (
     <header className="flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="font-reading text-title-lg text-brand-700" data-testid="app-name">
-          {scope === null ? tp('appName', locale) : localName(locale, scope.nameBn, scope.nameEn)}
-        </h1>
-        <p className="text-body-sm text-ink-secondary">{districtName(AREA, locale)}</p>
+      <div className="flex min-w-0 items-center gap-3">
+        {/* A hospital's own app carries its logo, when it has one (`FR-BRD-06`). */}
+        {scope?.logoVersion == null ? null : (
+          <HospitalMark
+            hospitalId={scope.hospitalId}
+            logoVersion={scope.logoVersion}
+            size="header"
+          />
+        )}
+        <div className="min-w-0">
+          <h1 className="font-reading text-title-lg text-brand-700" data-testid="app-name">
+            {scope === null ? tp('appName', locale) : localName(locale, scope.nameBn, scope.nameEn)}
+          </h1>
+          <p className="text-body-sm text-ink-secondary">{districtName(AREA, locale)}</p>
+        </div>
       </div>
 
       <a

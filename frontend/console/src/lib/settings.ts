@@ -25,8 +25,10 @@ import type {
   SetupCounts,
   BedsBody,
   DepartmentBody,
+  BrandTheme,
   DoctorBody,
   DoctorPatchBody,
+  LogoBody,
   ProfileBody,
   RulesBody,
   StaffBody,
@@ -53,6 +55,9 @@ export interface SetupSnapshot {
     readonly addressEn: string | null;
     readonly phone: string | null;
     readonly emergencyPhone: string | null;
+    /** What the hospital says of itself to patients (`FR-BRD-06`). */
+    readonly descriptionBn: string | null;
+    readonly descriptionEn: string | null;
     readonly lat: number | null;
     readonly lng: number | null;
     readonly isLive: boolean;
@@ -71,6 +76,16 @@ export interface SetupSnapshot {
     readonly lateReinsertAfter: number;
     readonly staleThresholdMinutes: number;
     readonly smsBudgetMonthly: number | null;
+  };
+  /** Its colours and its logo (`FR-BRD-06`). */
+  readonly face: {
+    /** Null: the platform's own colours. */
+    readonly theme: BrandTheme | null;
+    readonly logo: {
+      readonly version: string;
+      readonly contentType: string;
+      readonly bytes: number;
+    } | null;
   };
   readonly departments: readonly SettingsDepartment[];
   readonly doctors: readonly SettingsDoctor[];
@@ -217,6 +232,28 @@ export function signedInStaffId(): string | null {
   }
 }
 
+/**
+ * The hospital's own logo as an address this page can show, or null.
+ *
+ * Read with the administrator's token and turned into a blob address, because
+ * the public address answers for a live hospital only and an `<img>` cannot
+ * send a token. The caller revokes the address when it is done with it.
+ */
+export async function loadOwnLogo(): Promise<string | null> {
+  const token = readDemoSession()?.token;
+  if (token === undefined) return null;
+  try {
+    const response = await fetch(`${API_BASE}/hospital/logo`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    return URL.createObjectURL(await response.blob());
+  } catch {
+    return null;
+  }
+}
+
 /** Loading: `'offline'` when the request never reached the server. */
 export async function loadSetup(): Promise<SetupSnapshot | 'offline' | 'error'> {
   try {
@@ -228,6 +265,12 @@ export async function loadSetup(): Promise<SetupSnapshot | 'offline' | 'error'> 
 
 export const settingsApi = {
   profile: (body: ProfileBody) => save((api, key) => api.patch('/hospital/profile', body, key)),
+  /** The hospital's colours, or null for the platform's own (`FR-BRD-06`). */
+  brand: (theme: BrandTheme | null) =>
+    save((api, key) => api.put('/hospital/brand', { theme }, key)),
+  logo: (body: LogoBody) =>
+    save((api, key) => api.put<{ version: string }>('/hospital/logo', body, key)),
+  removeLogo: () => save((api, key) => api.delete('/hospital/logo', key)),
   rules: (body: RulesBody) => save((api, key) => api.patch('/hospital/rules', body, key)),
   addDepartment: (body: DepartmentBody) =>
     save((api, key) => api.post<{ departmentId: string }>('/hospital/departments', body, key)),

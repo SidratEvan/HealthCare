@@ -47,6 +47,13 @@ export interface DemoFacility {
   readonly thana: string;
   readonly addressBn: string;
   readonly addressEn: string;
+  /**
+   * What the facility says of itself to patients (`FR-BRD-06`). Says it is
+   * demonstration data in so many words, because it is shown on its own with
+   * no name beside it to carry the label (`FR-DEM-07`).
+   */
+  readonly descriptionBn: string;
+  readonly descriptionEn: string;
   readonly lat: number;
   readonly lng: number;
   /** Landline form; `hospitals_phone_normalised` allows `+880` + 8–11 digits. */
@@ -84,6 +91,10 @@ export const DEMO_FACILITIES: readonly DemoFacility[] = [
     thana: 'Dhanmondi',
     addressBn: 'সড়ক ৭, ধানমন্ডি, ঢাকা ১২০৫',
     addressEn: 'Road 7, Dhanmondi, Dhaka 1205',
+    descriptionBn:
+      'ধানমন্ডির একটি বড় বেসরকারি হাসপাতাল। হৃদরোগ, মেডিসিন, শিশু, স্নায়ু ও আরও বিভাগ, সঙ্গে জরুরি বিভাগ। এটি প্রদর্শনীর জন্য বানানো তথ্য।',
+    descriptionEn:
+      'A large private hospital in Dhanmondi: cardiology, medicine, paediatrics, neurology and more, with an emergency department. This is demonstration data.',
     lat: 23.7461,
     lng: 90.376,
     phone: '+880255010001',
@@ -114,6 +125,10 @@ export const DEMO_FACILITIES: readonly DemoFacility[] = [
     thana: 'Uttara',
     addressBn: 'সেক্টর ৪, উত্তরা, ঢাকা ১২৩০',
     addressEn: 'Sector 4, Uttara, Dhaka 1230',
+    descriptionBn:
+      'উত্তরার একটি বিশেষায়িত বেসরকারি হাসপাতাল, বার্ন ইউনিটসহ। এটি প্রদর্শনীর জন্য বানানো তথ্য।',
+    descriptionEn:
+      'A specialised private hospital in Uttara, with a burn unit. This is demonstration data.',
     lat: 23.8703,
     lng: 90.3984,
     phone: '+880255020001',
@@ -145,6 +160,10 @@ export const DEMO_FACILITIES: readonly DemoFacility[] = [
     thana: 'Panchlaish',
     addressBn: 'পাঁচলাইশ, চট্টগ্রাম ৪২০৩',
     addressEn: 'Panchlaish, Chattogram 4203',
+    descriptionBn:
+      'চট্টগ্রামের পাঁচলাইশে একটি মাঝারি বেসরকারি হাসপাতাল। হৃদরোগ, মেডিসিন, গাইনি, অর্থোপেডিক ও শিশু বিভাগ। এটি প্রদর্শনীর জন্য বানানো তথ্য।',
+    descriptionEn:
+      'A mid-size private hospital in Panchlaish, Chattogram: cardiology, medicine, gynaecology, orthopaedics and paediatrics. This is demonstration data.',
     lat: 22.3606,
     lng: 91.8206,
     phone: '+880316010001',
@@ -165,6 +184,9 @@ export const DEMO_FACILITIES: readonly DemoFacility[] = [
     thana: 'Mohakhali',
     addressBn: 'মহাখালী, ঢাকা ১২১২',
     addressEn: 'Mohakhali, Dhaka 1212',
+    descriptionBn: 'মহাখালীর একটি সরকারি মেডিকেল কলেজ হাসপাতাল। এটি প্রদর্শনীর জন্য বানানো তথ্য।',
+    descriptionEn:
+      'A government medical college hospital in Mohakhali. This is demonstration data.',
     lat: 23.7807,
     lng: 90.4043,
     phone: '+880255030001',
@@ -200,6 +222,10 @@ export const DEMO_FACILITIES: readonly DemoFacility[] = [
     thana: 'Mirpur',
     addressBn: 'সেকশন ৬, মিরপুর, ঢাকা ১২১৬',
     addressEn: 'Section 6, Mirpur, Dhaka 1216',
+    descriptionBn:
+      'মিরপুরের একটি ডায়াগনস্টিক সেন্টার: পরীক্ষা-নিরীক্ষা, সঙ্গে মেডিসিন, গাইনি ও চর্মরোগের চেম্বার। এটি প্রদর্শনীর জন্য বানানো তথ্য।',
+    descriptionEn:
+      'A diagnostic centre in Mirpur: tests, with medicine, gynaecology and dermatology chambers. This is demonstration data.',
     lat: 23.8069,
     lng: 90.3687,
     phone: '+880255040001',
@@ -220,6 +246,10 @@ export const DEMO_FACILITIES: readonly DemoFacility[] = [
     thana: 'Narayanganj Sadar',
     addressBn: 'চাষাঢ়া, নারায়ণগঞ্জ ১৪০০',
     addressEn: 'Chashara, Narayanganj 1400',
+    descriptionBn:
+      'নারায়ণগঞ্জ সদরের একটি ছোট ক্লিনিক: মেডিসিন, গাইনি ও শিশু বিভাগ। এটি প্রদর্শনীর জন্য বানানো তথ্য।',
+    descriptionEn:
+      'A small clinic in Narayanganj Sadar: medicine, gynaecology and paediatrics. This is demonstration data.',
     lat: 23.6238,
     lng: 90.4993,
     phone: '+880267610001',

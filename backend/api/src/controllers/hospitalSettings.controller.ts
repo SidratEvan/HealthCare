@@ -10,6 +10,8 @@
 import {
   bedPatchBody,
   bedsBody,
+  brandBody,
+  logoBody,
   declaredCapabilitiesBody,
   departmentBody,
   departmentPatchBody,
@@ -24,7 +26,7 @@ import {
   wardBody,
 } from '@platform/domain';
 
-import { authRequired, forbiddenScope } from '../errors/AppError.js';
+import { authRequired, forbiddenScope, notFound } from '../errors/AppError.js';
 import * as settings from '../services/hospitalSettings.service.js';
 
 import type { Request, Response } from 'express';
@@ -56,6 +58,36 @@ export async function getSetup(req: Request, res: Response): Promise<void> {
 export async function patchProfile(req: Request, res: Response): Promise<void> {
   await settings.updateProfile(actorOf(req), profileBody.parse(req.body));
   done(res);
+}
+
+/** `PUT /hospital/brand` — the hospital's colours, or the platform's own again. */
+export async function putBrand(req: Request, res: Response): Promise<void> {
+  await settings.updateBrand(actorOf(req), brandBody.parse(req.body));
+  done(res);
+}
+
+/** `PUT /hospital/logo`. */
+export async function putLogo(req: Request, res: Response): Promise<void> {
+  done(res, await settings.setLogo(actorOf(req), logoBody.parse(req.body)));
+}
+
+export async function deleteLogo(req: Request, res: Response): Promise<void> {
+  await settings.removeLogo(actorOf(req));
+  done(res);
+}
+
+/**
+ * `GET /hospital/logo` — the hospital's own logo, for its settings screen.
+ *
+ * The public address answers for a live hospital only; a hospital still being
+ * set up has to see what it uploaded all the same.
+ */
+export async function getOwnLogo(req: Request, res: Response): Promise<void> {
+  const file = await settings.ownLogo(actorOf(req).hospitalId);
+  if (file === null) throw notFound('logo');
+  res.setHeader('Content-Type', file.contentType);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.send(file.bytes);
 }
 
 export async function patchRules(req: Request, res: Response): Promise<void> {

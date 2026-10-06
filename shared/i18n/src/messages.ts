@@ -1745,6 +1745,86 @@ export const CONSOLE = {
     bn: 'লাইভ করার আগে অন্তত একটি বিভাগ ও একজন সক্রিয় ডাক্তার যোগ করুন।',
     en: 'Add at least one department and one active doctor before going live.',
   },
+  // What patients see of the hospital (`FR-BRD-06`, `S-B-11`).
+  settingsFaceHeading: { bn: 'রোগীরা যা দেখবে', en: 'What patients see' },
+  settingsFaceHelper: {
+    bn: 'এই বর্ণনা, লোগো ও রং রোগীর অ্যাপে আপনার হাসপাতালের কার্ডে এবং আপনার নিজস্ব পোর্টালে দেখানো হয়।',
+    en: 'This description, logo and colour are shown on your hospital’s card in the patient app and in your own portal.',
+  },
+  settingsDescriptionBn: { bn: 'সংক্ষিপ্ত বর্ণনা (বাংলায়)', en: 'Short description (Bangla)' },
+  settingsDescriptionEn: { bn: 'সংক্ষিপ্ত বর্ণনা (ইংরেজিতে)', en: 'Short description (English)' },
+  settingsDescriptionHelper: {
+    bn: 'দুই-তিন বাক্যে লিখুন: কোথায়, কী ধরনের সেবা। এমন কোনো সংখ্যা বা প্রতিশ্রুতি নয় যা রাখা যাবে না।',
+    en: 'Two or three sentences: where you are and what you offer. No figure or promise that cannot be kept.',
+  },
+  settingsDescriptionCount: { bn: '{used}/{max} অক্ষর', en: '{used}/{max} characters' },
+  settingsDescriptionTooLong: {
+    bn: 'বর্ণনাটি বেশি লম্বা হয়েছে',
+    en: 'The description is too long',
+  },
+  settingsSaveDescription: { bn: 'বর্ণনা সংরক্ষণ করুন', en: 'Save description' },
+  settingsLogoHeading: { bn: 'লোগো', en: 'Logo' },
+  settingsLogoNone: { bn: 'কোনো লোগো নেই', en: 'No logo' },
+  settingsLogoAlt: { bn: 'হাসপাতালের লোগো', en: 'The hospital’s logo' },
+  settingsLogoChoose: { bn: 'লোগোর ফাইল বেছে নিন', en: 'Choose a logo file' },
+  settingsLogoHelper: {
+    bn: 'PNG, JPEG বা WebP; সর্বোচ্চ ২৫৬ কিলোবাইট। বর্গাকার ছবি সবচেয়ে ভালো দেখায়।',
+    en: 'PNG, JPEG or WebP, up to 256 KB. A square image looks best.',
+  },
+  settingsLogoTooLarge: {
+    bn: 'ফাইলটি ২৫৬ কিলোবাইটের বেশি। ছোট একটি ছবি দিন।',
+    en: 'That file is over 256 KB. Use a smaller image.',
+  },
+  settingsLogoWrongType: {
+    bn: 'এই ধরনের ফাইল নেওয়া যায় না। PNG, JPEG বা WebP দিন।',
+    en: 'That kind of file cannot be used. Use a PNG, JPEG or WebP.',
+  },
+  settingsLogoChooseFirst: { bn: 'আগে একটি ফাইল বেছে নিন', en: 'Choose a file first' },
+  settingsLogoSave: { bn: 'লোগো সংরক্ষণ করুন', en: 'Save logo' },
+  settingsLogoRemove: { bn: 'লোগো সরান', en: 'Remove logo' },
+  settingsLogoSaved: { bn: 'লোগো সংরক্ষণ করা হয়েছে', en: 'Logo saved' },
+  settingsLogoRemoved: { bn: 'লোগো সরানো হয়েছে', en: 'Logo removed' },
+  settingsBrandHeading: { bn: 'রং', en: 'Colour' },
+  settingsBrandColour: { bn: 'আপনার হাসপাতালের রং', en: 'Your hospital’s colour' },
+  settingsBrandIsPlatform: {
+    bn: 'এখন রোগীরা আপনার হাসপাতাল প্ল্যাটফর্মের নিজস্ব রঙে দেখছেন।',
+    en: 'Patients currently see your hospital in the platform’s own colours.',
+  },
+  settingsBrandIsOwn: {
+    bn: 'রোগীরা আপনার পোর্টাল আপনার বেছে নেওয়া রঙে দেখছেন।',
+    en: 'Patients see your portal in the colour you chose.',
+  },
+  settingsBrandPreview: {
+    bn: 'রোগীর অ্যাপে যেমন দেখাবে',
+    en: 'As it will look in the patient app',
+  },
+  settingsBrandPreviewStrip: {
+    bn: 'রঙিন পটভূমিতে লেখা এমন দেখাবে',
+    en: 'Text on a tinted background looks like this',
+  },
+  settingsBrandPreviewButton: { bn: 'সিরিয়াল নিন', en: 'Take a serial' },
+  settingsBrandDarkened: {
+    bn: 'সাদা লেখা যাতে পড়া যায়, সে জন্য রংটি একটু গাঢ় করা হয়েছে।',
+    en: 'The colour was made a little darker so that white text on it can be read.',
+  },
+  settingsBrandUnchanged: {
+    bn: 'এই রংটিই এখন সংরক্ষিত আছে',
+    en: 'This is the colour already saved',
+  },
+  settingsBrandSave: { bn: 'রং সংরক্ষণ করুন', en: 'Save colour' },
+  settingsBrandReset: {
+    bn: 'প্ল্যাটফর্মের রঙে ফিরে যান',
+    en: 'Go back to the platform’s colours',
+  },
+  settingsBrandSaved: { bn: 'রং সংরক্ষণ করা হয়েছে', en: 'Colour saved' },
+  settingsBrandCleared: {
+    bn: 'প্ল্যাটফর্মের রং ফিরিয়ে আনা হয়েছে',
+    en: 'Back to the platform’s colours',
+  },
+  settingsBrandUnreadable: {
+    bn: 'এই রঙে লেখা পড়া যাবে না, তাই নেওয়া হয়নি। অন্য একটি রং বেছে নিন।',
+    en: 'Text could not be read in these colours, so they were not saved. Choose another.',
+  },
   settingsLiveNow: {
     bn: 'রোগীরা এই প্রতিষ্ঠান দেখতে পাচ্ছেন',
     en: 'Patients can see this facility',

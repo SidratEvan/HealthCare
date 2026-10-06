@@ -63,6 +63,9 @@ export const profileBody = z
     thana: optionalText(80),
     addressBn: optionalText(300),
     addressEn: optionalText(300),
+    /** What the hospital says of itself to patients (`FR-BRD-06`); null clears it. */
+    descriptionBn: optionalText(400),
+    descriptionEn: optionalText(400),
     phone: facilityPhone.nullable().optional(),
     emergencyPhone: facilityPhone.nullable().optional(),
     /** Both or neither (`hospitals_coords_paired`); null clears them. */

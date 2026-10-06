@@ -208,6 +208,7 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'GET /hospitals': { by: 'public' },
   'GET /hospitals/:id': { by: 'public' },
   'GET /hospitals/:id/doctors': { by: 'public' },
+  'GET /hospitals/:id/logo': { by: 'public' },
   'GET /doctors': { by: 'public' },
   'GET /doctors/:id': { by: 'public' },
   'GET /sessions': { by: 'public' },
@@ -581,6 +582,11 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'GET /hospital/setup': { by: 'principal', own: () => ({ path: '/hospital/setup' }) },
   'PATCH /hospital/profile': { by: 'principal' },
   'PATCH /hospital/rules': { by: 'principal' },
+  // Its public face (`FR-BRD-06`): its own, from the principal.
+  'PUT /hospital/brand': { by: 'principal' },
+  'GET /hospital/logo': { by: 'principal' },
+  'PUT /hospital/logo': { by: 'principal' },
+  'DELETE /hospital/logo': { by: 'principal' },
   'POST /hospital/departments': { by: 'principal' },
   'PATCH /hospital/departments/:id': {
     by: 'row',

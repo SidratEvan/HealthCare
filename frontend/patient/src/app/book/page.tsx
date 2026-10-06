@@ -33,6 +33,7 @@ import {
   districtName,
   numeralsFor,
   localName,
+  type Locale,
 } from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/ui';
 
@@ -40,7 +41,8 @@ import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 import { DemoBanner } from '@/components/DemoBanner';
 import { GuestCodeCard } from '@/components/GuestCodeCard';
 import { HospitalBeds } from '@/components/HospitalBeds';
-import { BackIcon, ChevronIcon, HospitalIcon } from '@/components/icons';
+import { HospitalMark } from '@/components/HospitalMark';
+import { BackIcon, ChevronIcon } from '@/components/icons';
 import { StandbyJoin } from '@/components/StandbyJoin';
 import { useDeployment } from '@/hooks/useDeployment';
 import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
@@ -377,9 +379,7 @@ function HospitalList({
             >
               <Card tone={hospital.sittingNow > 0 ? 'brand' : 'default'}>
                 <div className="flex items-start gap-3">
-                  <span className="mt-0.5 text-brand-600">
-                    <HospitalIcon size={22} />
-                  </span>
+                  <HospitalMark hospitalId={hospital.id} logoVersion={hospital.logoVersion} />
 
                   <div className="min-w-0 flex-1">
                     <p className="text-title-sm">
@@ -455,12 +455,23 @@ function DoctorList({
     <section className="flex flex-col gap-3">
       <BackLink onBack={onBack} />
 
-      <div>
-        <h1 className="font-reading text-title-lg">
-          {localName(locale, hospital.nameBn, hospital.nameEn)}
-        </h1>
-        <p className="text-body-sm text-ink-muted">{tp('chooseDoctor', locale)}</p>
+      <div className="flex items-start gap-3">
+        <HospitalMark hospitalId={hospital.id} logoVersion={hospital.logoVersion} size="header" />
+        <div className="min-w-0">
+          <h1 className="font-reading text-title-lg">
+            {localName(locale, hospital.nameBn, hospital.nameEn)}
+          </h1>
+          <p className="text-body-sm text-ink-muted">{tp('chooseDoctor', locale)}</p>
+        </div>
       </div>
+
+      {/* What the hospital says of itself (`FR-BRD-06`): its own words, shown
+          as its own, in the reader's language where it wrote both. */}
+      {describe(hospital, locale) === null ? null : (
+        <p className="text-body-md text-ink-secondary" data-testid="facility-description">
+          {describe(hospital, locale)}
+        </p>
+      )}
 
       {doctors.state === 'loading' ? (
         <p className="text-body-md text-ink-muted">{tp('loading', locale)}</p>
@@ -545,6 +556,18 @@ function DoctorList({
  * silently retried one request would leave the rest of the page in whatever
  * state it was already in.
  */
+/**
+ * A hospital's description in the reader's language, or in the other one when
+ * it wrote only that; null when it has said nothing.
+ */
+function describe(hospital: HospitalCard, locale: Locale): string | null {
+  const [first, second] =
+    locale === 'en'
+      ? [hospital.descriptionEn, hospital.descriptionBn]
+      : [hospital.descriptionBn, hospital.descriptionEn];
+  return first ?? second ?? null;
+}
+
 function LoadFailed(): ReactNode {
   const locale = useLocale();
   return (

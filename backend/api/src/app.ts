@@ -63,6 +63,7 @@ const BODY_LIMIT = '256kb';
 const OWN_BODY_LIMIT: readonly RegExp[] = [
   /^\/api\/v1\/test-orders\/[^/]+\/report$/,
   /^\/api\/v1\/hospital\/imports$/,
+  /^\/api\/v1\/hospital\/logo$/,
 ];
 
 export function createApp(): Express {

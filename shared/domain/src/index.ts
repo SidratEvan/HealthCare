@@ -185,14 +185,23 @@ export {
 // pass before they are used (`FR-BRD-03`).
 export {
   BRAND_TOKENS,
+  LOGO_FILE_TYPES,
+  LOGO_MAX_BYTES,
   MIN_TEXT_CONTRAST,
+  brandBody,
   brandProblems,
   brandTheme,
   contrastRatio,
+  logoBody,
+  logoBytesMatch,
   readBrandTheme,
+  themeFromColour,
+  type BrandBody,
   type BrandProblem,
   type BrandTheme,
   type BrandToken,
+  type LogoBody,
+  type LogoFileType,
 } from './brand/theme.js';
 
 // --- Search ----------------------------------------------------------------

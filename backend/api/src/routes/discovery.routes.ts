@@ -39,6 +39,8 @@ discoveryRoutes.get('/search', validate({ query: searchQuery }), discovery.searc
 
 discoveryRoutes.get('/hospitals', validate({ query: hospitalQuery }), discovery.listHospitals);
 discoveryRoutes.get('/hospitals/:id', validate({ params: idParams }), discovery.getHospital);
+// Its logo, public like the card it is on (`FR-BRD-06`).
+discoveryRoutes.get('/hospitals/:id/logo', validate({ params: idParams }), discovery.getLogo);
 
 /**
  * The doctors at one hospital (`S-A-05h`).
