@@ -258,6 +258,7 @@ morning:
 
 **Merged so far in this build, newest last:**
 - **V1.1 `fix/patient-v1-surface`** — nothing unfinished is offered in the patient app: ambulance and blood are gone from Home and from the emergency screens, and the "not built yet" screen no longer exists. Focused gate: typecheck, lint, format, the message tests, `app-shell.spec.ts` and `emergency-burn.spec.ts` (20 passed).
+- **V2.1 `feat/patient-search`** — a patient searches for a doctor, a hospital, a specialty, a bed kind or a capability and sees which hospitals can provide it, each with the live figure for that need and its age; Home opens on that search; a result goes straight into booking at that hospital or doctor. Found by a screenshot and fixed with a test: the bottom bar lit the serials tab on `/search`. Focused gate plus the new route's API tests: typecheck, lint, format, 33 unit and 12 API tests for search, `patient-search`, `app-shell` and `guest-booking` in the browser (42 passed, then 23 after the tab fix).
 
 **Carried over from the audit, true of the code on 5 October and worth not
 re-deriving:**

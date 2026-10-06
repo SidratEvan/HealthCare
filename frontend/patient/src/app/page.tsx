@@ -1,27 +1,37 @@
 'use client';
 
 /**
- * `S-A-02` Home (`APP_FLOW.md` A2), composed against the design canvas in
- * `FRONTEND.md` §0.4 — the `Main` artboard, 390×900.
+ * `S-A-02` Home (`APP_FLOW.md` A2).
  *
- * "Layout order is fixed and deliberate: emergency first, then care, then
- * convenience." Top to bottom: app header with area and profile, the emergency
- * card, the specialty grid, the four quick tiles, the live serial strip, and
- * the bottom navigation.
+ * Rebuilt on 2026-10-05 around the product's direction of that day
+ * (`CLAUDE.md` §1.2): this is a network of hospitals, and the first thing the
+ * app does is ask what a person needs. Top to bottom:
  *
- * ## Why this is a client component now
+ *   1. the header: the app's name, the area, the profile;
+ *   2. the live strip, only while this phone holds a serial today — if you are
+ *      waiting to be called, that is what you opened the app for;
+ *   3. **search**: one field for a doctor, a hospital, a specialty, an ICU, a
+ *      burn unit, with the needs asked for most as one-tap chips beneath it
+ *      (`FR-PAT-16`);
+ *   4. the emergency card. It moved down one place and is still on the first
+ *      screenful, above everything that is browsing (`FRONTEND.md` §6.3:
+ *      "never moved below the fold");
+ *   5. specialties, for somebody who would rather browse than type;
+ *   6. beds, reports and medicines.
  *
- * It was a server component, and that was right while nothing on it was live.
- * The active serial strip changes it: `BTN-A02-ACTIVE` "shows live position,
- * updates via the session channel while Home is open". A home screen that
- * shows a stale serial is worse than one that shows none, so the strip reads
- * the booking this device made and refreshes it.
+ * ## Why this is a client component
+ *
+ * The active serial strip is live: `BTN-A02-ACTIVE` "shows live position". A
+ * home screen that shows a stale serial is worse than one that shows none, so
+ * the strip reads the booking this device made and refreshes it.
  */
 
 import { useEffect, useState } from 'react';
 
-import { SPECIALTIES } from '@platform/domain';
+import { SPECIALTIES, needKey, type SearchNeed } from '@platform/domain';
 import {
+  bedKindName,
+  capabilityName,
   formatNumber,
   formatSerial,
   tp,
@@ -39,6 +49,7 @@ import {
   EmergencyIcon,
   ProfileIcon,
   ReportIcon,
+  SearchIcon,
   SPECIALTY_ICON,
   StethoscopeIcon,
 } from '@/components/icons';
@@ -58,6 +69,19 @@ import type { ReactNode } from 'react';
  */
 const AREA = 'Dhaka';
 
+/**
+ * The needs offered under the search field: one of each kind the network
+ * answers, chosen because they are the ones a family rings round hospitals
+ * for. Every one is a real search; the full list is on `S-A-07s`.
+ */
+const QUICK_NEEDS: readonly SearchNeed[] = [
+  { kind: 'bed', bedKind: 'icu' },
+  { kind: 'bed', bedKind: 'nicu' },
+  { kind: 'capability', capability: 'burn_unit' },
+  { kind: 'capability', capability: 'dialysis' },
+  { kind: 'bed', bedKind: 'cabin' },
+];
+
 export default function Home(): ReactNode {
   return (
     <>
@@ -65,10 +89,11 @@ export default function Home(): ReactNode {
         <DemoBanner />
 
         <Header />
+        <ActiveSerial />
+        <SearchEntry />
         <EmergencyCard />
         <Specialties />
         <QuickTiles />
-        <ActiveSerial />
 
         <BottomNavSpacer />
       </main>
@@ -96,6 +121,64 @@ function Header(): ReactNode {
         <ProfileIcon size={20} />
       </a>
     </header>
+  );
+}
+
+/**
+ * `BTN-A02-SEARCH` and `CHIP-A02-NEED-<key>` — the way into `S-A-07s`.
+ *
+ * A link drawn as a field, not a field: the typing happens on the search
+ * screen, where the results are. A real input here would be a second place to
+ * type that shows nothing, and a link works before the page has hydrated,
+ * which on a slow phone is when the first tap lands.
+ */
+function SearchEntry(): ReactNode {
+  const locale = useLocale();
+
+  const nameOf = (need: SearchNeed): string =>
+    need.kind === 'bed'
+      ? bedKindName(need.bedKind, locale)
+      : need.kind === 'capability'
+        ? capabilityName(need.capability, locale)
+        : need.code;
+
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="home-search-title">
+      <div>
+        <h2 id="home-search-title" className="font-reading text-title-md">
+          {tp('searchPrompt', locale)}
+        </h2>
+        <p className="text-body-sm text-ink-secondary">{tp('homeSearchLine', locale)}</p>
+      </div>
+
+      <a
+        href="/search"
+        data-testid="home-search"
+        className="flex min-h-[56px] items-center gap-3 rounded-md border border-line-strong bg-surface px-4 text-body-lg text-ink-secondary"
+      >
+        <span className="text-brand-600">
+          <SearchIcon size={22} />
+        </span>
+        {tp('homeSearch', locale)}
+      </a>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-caption text-ink-muted">{tp('homeNeeds', locale)}</p>
+        <ul className="flex flex-wrap gap-2">
+          {QUICK_NEEDS.map((need) => (
+            <li key={needKey(need)}>
+              <a
+                href={`/search?need=${encodeURIComponent(needKey(need))}`}
+                data-testid={`home-need-${needKey(need)}`}
+                className="flex min-h-touch items-center rounded-pill border border-line-strong bg-surface px-4 text-body-md text-ink"
+              >
+                {nameOf(need)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
@@ -140,7 +223,7 @@ function Specialties(): ReactNode {
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="font-reading text-title-sm">{tp('seeADoctor', locale)}</h2>
+        <h2 className="font-reading text-title-sm">{tp('browseBySpecialty', locale)}</h2>
         <p className="text-body-sm text-ink-secondary">{tp('seeADoctorSub', locale)}</p>
       </div>
 

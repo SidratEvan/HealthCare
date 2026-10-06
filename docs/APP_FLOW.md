@@ -218,14 +218,16 @@ Triggered automatically after an account is created with a phone that has guest 
 
 ### `S-A-02` Home
 
-Layout order is fixed and deliberate: emergency first, then care, then convenience.
+Layout order is fixed and deliberate, and was rebuilt on 2026-10-05 around the owner's direction of that day (`PRD.md` §4.2b): **what you came for, then emergency, then browsing, then convenience.** A live serial if this phone holds one; then search, because the product is a network and the first thing it does is ask what you need; then the emergency card, which is still on the first screenful and above everything that is browsing (`FRONTEND.md` §6.3); then specialties; then beds, reports and medicines. The table below lists the elements, not their order.
 
 | Element | ID | Type | Wiring |
 |---|---|---|---|
 | Language switch | `SEG-A00-LANG` | two buttons, বাংলা / English, top-right above every screen of the app | Sets the locale for every screen at once, no reload → stored on the device (`FRONTEND.md` `I18N-08`) |
 | App header: name + area | — | — | Tap area → `MOD-A02-AREA` area picker |
 | Avatar | `BTN-A02-PROFILE` | icon button | → `S-A-06` profile switcher |
-| **জরুরি অবস্থা** card | `BTN-A02-EMERGENCY` | Full-width red card, top of screen | → `S-A-10` Emergency triage. **No auth check.** Preloads nearby hospital capacity on press-down for speed |
+| **আপনার কী দরকার?** search | `BTN-A02-SEARCH` | a link drawn as a field, under the header | → `S-A-07s` Search, ready to type. A link and not an input: the typing happens where the results are, and a link works before the page has hydrated |
+| Quick need ×5 | `CHIP-A02-NEED-<key>` | chips under the search field: ICU, NICU, burn unit, dialysis, cabin | → `S-A-07s` with that need already chosen (`/search?need=<key>`). One of each kind of need the network answers; the full list is on the search screen |
+| **জরুরি অবস্থা** card | `BTN-A02-EMERGENCY` | Full-width red card, on the first screenful | → `S-A-10` Emergency triage. **No auth check.** Preloads nearby hospital capacity on press-down for speed |
 | Section: ডাক্তার দেখান | — | — | Heading + subtitle |
 | Specialty card ×N | `BTN-A02-SPEC-<code>` | grid card | → `S-A-07` Specialty results, filtered by that specialty and current area |
 | সব বিভাগ দেখুন | `BTN-A02-SPEC-ALL` | text link | → `S-A-07b` full specialty list |
@@ -244,6 +246,33 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 ---
 
 ## A3. Finding care
+
+### `S-A-07s` Search — what do you need? (`FR-PAT-16`–`18`)
+
+Added 2026-10-05. The screen the network's case rests on: a patient says what they need and sees which participating hospitals can provide it now. Public, no sign-in (`FR-GST-01`). Route `/search`; its address carries what is asked (`?q=…&need=…`), so a result can be reloaded and sent to somebody.
+
+A **need** is one of the three things hospitals publish live: a specialty, a bed kind, an emergency capability (`shared/domain` `search/needs`). Only those are offered. Blood bank and ambulance are not offered as needs, because both read as the services that are outside V1.
+
+| Element | ID | Wiring |
+|---|---|---|
+| Search field | `INP-A07S-Q` | Focused on arrival. Typing rests 300 ms, then `GET /search?q=`. Matches doctor and hospital names in Bangla and English; text that is a name for a need ("ICU", "আইসিইউ", "burn") is answered as that need, and any hospital or doctor whose name contains the word is listed after |
+| Need offered while typing | `CHIP-A07S-SUGGEST-<key>` | Shown when what is typed starts a need's name (two letters at least). Tap → that need is chosen and the field is cleared |
+| Need groups | `CHIP-A07S-NEED-<key>` | Shown while nothing is asked: ডাক্তার দেখান (the eight specialties), বেড ও আইসিইউ (ICU, CCU, NICU, HDU, cabin, general, burn), বিশেষ সেবা (burn unit, cardiac, cath lab, stroke, dialysis, trauma OT, isolation). Tap → `GET /search?need=<key>` at once |
+| Chosen need | `CHIP-A07S-CHOSEN` + `BTN-A07S-CHANGE` | The need being answered, and বদলান to drop it. With a need chosen, typed text narrows the hospitals by name |
+| Hospital result | `CARD-A07S-<hospitalId>` | Name and address, then **the figure that answers what was asked, first, with its age**: for a specialty, doctors here, sitting now and serials open today; for a bed kind, free and total of that kind and when the ward confirmed it, or "the count has not been confirmed" (`PRD.md` §3.2); for a capability, that it is there and when that was confirmed. Free beds and ICU follow, except on a bed search |
+| Its action | `BTN-A07S-OPEN-<hospitalId>` | Specialty → `S-A-05h` at that hospital in that specialty (`/book?specialty=&hospital=`). Bed kind → `S-A-11` opened on that kind. Capability or a name → every doctor at that hospital (`/book?hospital=`) |
+| Call | `BTN-A07S-CALL-<hospitalId>` | On a capability result only: `tel:` the hospital's emergency number, or its switchboard. A capability is an emergency's question |
+| Doctor result | `CARD-A07S-DOC-<doctorId>` | Name and degrees, then each chamber: hospital, specialty, fee → `S-A-07b` for that doctor at that hospital (`/book?specialty=&hospital=&doctor=`). Listed for typed text and for a specialty; not for a bed or a capability |
+
+**Order.** A specialty or a capability: nearest first when a position is known, then who is sitting now. A bed kind: most free first; a hospital that has never confirmed that kind last.
+
+**States (`GR-03`)**
+- Loading: two blocks the shape of a result.
+- Nothing found: for a name, "‘…’ নামে কোনো ডাক্তার বা হাসপাতাল পাওয়া যায়নি"; for a need, that no participating hospital reports it right now.
+- Failed: says the search could not be completed, with আবার খুঁজুন. Never the empty state's words.
+- Offline: says searching needs a connection; the needs stay on screen.
+
+**Not built:** `FR-PAT-15`'s tolerance of misspellings (matching is the text as typed, `FR-PAT-18`); sorting by distance from the patient (no position is asked for outside the emergency search); a hospital's own page (`S-A-05h`'s header and tabs — a hospital result opens its doctors).
 
 ### `S-A-07` Specialty results (hospitals offering it)
 

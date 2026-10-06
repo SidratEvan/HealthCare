@@ -42,11 +42,22 @@ interface Tab {
 
 /** হোম / সিরিয়াল / রেকর্ড / প্রোফাইল — `APP_FLOW.md` S-A-02. */
 const TABS: readonly Tab[] = [
-  { href: '/', label: 'navHome', Icon: HomeIcon, owns: ['/book'] },
+  { href: '/', label: 'navHome', Icon: HomeIcon, owns: ['/book', '/search'] },
   { href: '/serials', label: 'navSerials', Icon: SerialIcon, owns: ['/s'] },
   { href: '/records', label: 'navRecords', Icon: RecordsIcon },
   { href: '/profile', label: 'navProfile', Icon: ProfileIcon },
 ];
+
+/**
+ * Whether a path is a route or something beneath it.
+ *
+ * By whole segments, not by prefix: `/search` begins with `/s` and is not
+ * the live serial screen. Matching on the prefix lit the serials tab on the
+ * search screen.
+ */
+function within(pathname: string, base: string): boolean {
+  return pathname === base || pathname.startsWith(`${base}/`);
+}
 
 export function BottomNav(): ReactNode {
   const locale = useLocale();
@@ -64,8 +75,8 @@ export function BottomNav(): ReactNode {
         {TABS.map((tab) => {
           const active =
             pathname === tab.href ||
-            (tab.owns ?? []).some((owned) => pathname.startsWith(owned)) ||
-            (tab.href !== '/' && pathname.startsWith(tab.href));
+            (tab.owns ?? []).some((owned) => within(pathname, owned)) ||
+            (tab.href !== '/' && within(pathname, tab.href));
 
           return (
             <li key={tab.href}>

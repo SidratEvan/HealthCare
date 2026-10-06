@@ -47,6 +47,7 @@ const CONSOLE = 'http://localhost:3100';
 const ROUTES = [
   `${PATIENT}/`,
   `${PATIENT}/book`,
+  `${PATIENT}/search`,
   `${PATIENT}/s`,
   `${PATIENT}/serials`,
   `${PATIENT}/records`,
