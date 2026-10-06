@@ -8,15 +8,18 @@
  * query here is deliberately one that *forgets* to say which hospital it
  * wants — the mistake the policies exist to make harmless.
  *
- * Run as `app_tenant`, the role the policies are written for, inside a
- * transaction that is rolled back: the grant that lets it reach the tables at
- * all is made here and undone with everything else. On the seeded demo data,
- * which has six hospitals with beds, staff, chambers, bookings and visits.
+ * Run as a member of `app_tenant`, the role the policies are written for,
+ * inside a transaction that is rolled back. The member is `tenancy_probe`,
+ * which holds rows and nothing else, as the API's own role does; its rights
+ * are given once by the suite's setup (`support/tenancyProbe.ts`). On the
+ * seeded demo data, which has six hospitals with beds, staff, chambers,
+ * bookings and visits.
  */
 
 import { describe, expect, it } from 'vitest';
 
 import { expectRejection, withRollback } from './support/database.js';
+import { TENANCY_PROBE_ROLE } from './support/tenancyProbe.js';
 
 import type { Client } from 'pg';
 
@@ -42,11 +45,7 @@ async function twoHospitals(client: Client): Promise<Two> {
 
 /** From here to the end of the transaction, this connection is the API's kind of role. */
 async function asTenant(client: Client): Promise<void> {
-  await client.query(
-    'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_tenant',
-  );
-  await client.query('GRANT USAGE ON SCHEMA public, extensions TO app_tenant');
-  await client.query('SET LOCAL ROLE app_tenant');
+  await client.query(`SET LOCAL ROLE ${TENANCY_PROBE_ROLE}`);
 }
 
 async function scope(client: Client, kind: string | null, hospitalId = ''): Promise<void> {
@@ -303,7 +302,7 @@ describe('what crosses between hospitals is named, and only that crosses (FR-NET
       await client.query('UPDATE consents SET revoked_at = now() WHERE id = $1', [
         consent.rows[0]?.id,
       ]);
-      await client.query('SET LOCAL ROLE app_tenant');
+      await asTenant(client);
       await scope(client, 'hospital', reader);
       expect(await count(client, 'SELECT 1 FROM visits WHERE id = $1', [visit.id])).toBe(0);
     });

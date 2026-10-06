@@ -121,6 +121,7 @@ integration points marked ▣ and at J.
 | Q4 | Push notifications wait for a signed hospital (decision 84) and need a dependency. Still waiting? | SMS only |
 | Q5 | More than one API instance needs a shared store (Redis), which costs money. Not needed at V1's size | One instance |
 | Q6 | The Bangla spelling of MedLiveBD, and the platform's domain | Latin letters; `PLATFORM_DOMAIN` is a setting |
+| Q7 | A counter that types a mobile number is shown the people registered under it at any hospital (`FR-REC-20`, `FR-GST-12`/`13`). Does `FR-NET-02` mean a counter should see only people its own hospital has seen? | One identity per number, network-wide, as the requirements are written |
 
 Decided by the owner's note and so not asked: D2 (a hospital may apply by
 itself; nothing is public until a person approves it), D3 (the fields
@@ -593,7 +594,7 @@ In addition to `CLAUDE.md`:
 | A8 | `fix/doctor-record-scope` | **merged 6 October** — `readScope` in `clinical.service` (consent: every hospital's visits; a treatment relationship alone: this hospital's), `findVisits` narrowed in the query, `visitsFrom` on the answer and in the audit row, the note on `S-B-05`'s panel. Still at hospital grain, not per clinician (the open ruling in `STATUS.md`). **Section A is complete** |
 | B1 | `feat/tenant-rls` | **merged 6 October** (was 1.10) — migration 0043 (`app_tenant`, the scope functions, a policy on each of the 57 tables, `fn_runs_emergency_desk`), `config/dbScope.ts` and the scoped pool in `config/db.ts`, the API's role without `BYPASSRLS`, every browser suite's API as that role. `database/tests/tenancy.test.ts`, `tenantScope.test.ts`. Design: `DATABASE.md` §5.2. **Supabase needs 0039–0043 before the next release** (the demo's API connects as the owner, so the policies do not bind it there) |
 | B3 | `feat/patient-rls` | One patient kept from another by the database: under `open`, a patient's or a guest's own scope on the tables about people. B1 left this to the application, as it was |
-| B2 | `test/tenant-matrix` | |
+| B2 | `test/tenant-matrix` | **merged 6 October** — `tenantMatrix.test.ts`: every mounted route named with how it is kept to one hospital (a route not named fails), hospital A against hospital B by path, by row and by a row in the body, the platform, the nation, nobody, a patient and a tracking link, and B unchanged afterwards. Found and fixed: `POST /payments/intent` held an account to nothing. Raised: question Q7 |
 | C1 | `feat/hospital-profile` | |
 | C2 | `feat/portal-address` | |
 | C3 | `feat/portal-install` | |

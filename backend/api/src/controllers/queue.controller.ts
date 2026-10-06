@@ -578,7 +578,19 @@ async function assertSessionScope(req: Request, sessionId: string): Promise<Sess
 export async function assertBookingScope(
   req: Request,
 ): Promise<{ booking: BookingSummary; sessionId: string }> {
-  const bookingId = param(req, 'id');
+  return await assertBookingScopeFor(req, param(req, 'id'));
+}
+
+/**
+ * The same rule for a route that names its booking in the body
+ * (`POST /payments/intent`, BACKEND.md §7.7). Until the tenant matrix of plan
+ * B2 that route asked it of a tracking link only, and an account could start
+ * a payment against anybody's booking.
+ */
+export async function assertBookingScopeFor(
+  req: Request,
+  bookingId: string,
+): Promise<{ booking: BookingSummary; sessionId: string }> {
   const booking = await queueService.requireBooking(bookingId);
 
   const session = await assertSessionScope(req, booking.sessionId);
