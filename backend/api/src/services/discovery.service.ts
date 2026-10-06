@@ -15,9 +15,11 @@ import {
   orderForNeed,
   parseNeed,
   projectedEnd,
+  readBrandTheme,
   readSearch,
   time,
   type BedKind,
+  type BrandTheme,
   type PublicCapacity,
   type SearchNeed,
   type Timestamp,
@@ -58,7 +60,42 @@ export interface Stamped<T> {
  */
 export type HospitalListing = HospitalCard & { readonly beds: PublicCapacity | null };
 
+/** The hospital an app is scoped to, as `GET /config` reports it. */
+export interface ScopeInfo {
+  readonly code: string;
+  readonly hospitalId: string;
+  readonly nameBn: string;
+  readonly nameEn: string;
+  /** Its colours, if it has set some and they are readable (`FR-BRD-03`). */
+  readonly theme: BrandTheme | null;
+}
+
+/**
+ * The hospital a scope names, or a 404.
+ *
+ * A wrong code is refused rather than read as "no scope": an app built for
+ * one hospital that silently showed the whole network — its competitors —
+ * because of a typing mistake in its configuration is the failure this
+ * exists to prevent (`FR-BRD-02`).
+ */
+export async function scopeInfo(code: string): Promise<ScopeInfo> {
+  const row = await discoveryRepo.findScope(code);
+  if (row === null) throw notFound('hospital');
+  return {
+    code: row.code,
+    hospitalId: row.id,
+    nameBn: row.nameBn,
+    nameEn: row.nameEn,
+    theme: readBrandTheme(row.brand),
+  };
+}
+
+async function scopedHospitalId(scope: string | undefined): Promise<string | undefined> {
+  return scope === undefined ? undefined : (await scopeInfo(scope)).hospitalId;
+}
+
 export async function searchHospitals(query: {
+  readonly scope?: string | undefined;
   readonly specialty?: string | undefined;
   readonly district?: string | undefined;
   readonly q?: string | undefined;
@@ -68,6 +105,7 @@ export async function searchHospitals(query: {
   readonly limit?: number | undefined;
 }): Promise<Stamped<HospitalListing>> {
   const cards = await discoveryRepo.listHospitals({
+    hospitalId: await scopedHospitalId(query.scope),
     specialty: query.specialty,
     district: query.district,
     q: query.q,
@@ -119,6 +157,7 @@ const SEARCH_DOCTORS = 20;
  * published bed figures, asked the way a patient asks.
  */
 export async function search(query: {
+  readonly scope?: string | undefined;
   readonly q?: string | undefined;
   readonly need?: string | undefined;
   readonly lat?: number | undefined;
@@ -143,7 +182,9 @@ export async function search(query: {
   // text, the text has already been used; matching it against names as well
   // would ask for an ICU inside a hospital called "ICU".
   const narrowing = chosen === null ? undefined : (reading.text ?? undefined);
-  const position = { lat: query.lat, lng: query.lng };
+  // A scoped app's search is its own hospital's: every read below carries it.
+  const hospitalId = await scopedHospitalId(query.scope);
+  const position = { lat: query.lat, lng: query.lng, hospitalId };
 
   const byNeed =
     need === null
@@ -180,12 +221,13 @@ export async function search(query: {
   const doctorsByName =
     reading.text === null
       ? []
-      : await discoveryRepo.listDoctors({ q: reading.text, limit: SEARCH_DOCTORS });
+      : await discoveryRepo.listDoctors({ q: reading.text, hospitalId, limit: SEARCH_DOCTORS });
   const doctorsBySpecialty =
     need?.kind === 'specialty'
       ? await discoveryRepo.listDoctors({
           specialty: need.code,
           q: narrowing,
+          hospitalId,
           limit: SEARCH_DOCTORS,
         })
       : [];
@@ -194,6 +236,16 @@ export async function search(query: {
     ...doctorsByName,
     ...doctorsBySpecialty.filter((doctor) => !doctorIds.has(doctor.id)),
   ]
+    // A scoped app lists a doctor's chambers at its own hospital only: the
+    // same doctor's chamber elsewhere is another hospital's listing.
+    .map((doctor) =>
+      hospitalId === undefined
+        ? doctor
+        : {
+            ...doctor,
+            chambers: doctor.chambers.filter((chamber) => chamber.hospitalId === hospitalId),
+          },
+    )
     // A doctor with no chamber at a live hospital cannot be booked from here.
     .filter((doctor) => doctor.chambers.length > 0)
     .slice(0, SEARCH_DOCTORS);
@@ -227,6 +279,7 @@ export async function hospitalDetail(hospitalId: string): Promise<HospitalDetail
 }
 
 export async function searchDoctors(query: {
+  readonly scope?: string | undefined;
   readonly specialty?: string | undefined;
   readonly hospitalId?: string | undefined;
   readonly q?: string | undefined;
@@ -234,7 +287,7 @@ export async function searchDoctors(query: {
 }): Promise<readonly DoctorCard[]> {
   return await discoveryRepo.listDoctors({
     specialty: query.specialty,
-    hospitalId: query.hospitalId,
+    hospitalId: (await scopedHospitalId(query.scope)) ?? query.hospitalId,
     q: query.q,
     limit: query.limit ?? 50,
   });

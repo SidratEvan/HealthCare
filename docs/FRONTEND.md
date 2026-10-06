@@ -57,6 +57,8 @@ These are the tells that mark an app as quickly generated. None of them appear i
 - Illustrations of abstract 3D blobs or generic flat-people vector art.
 - Icon + heading + one-line-of-filler triplets used as filler.
 
+> **One exception to "the single brand colour", by configuration** (`PRD.md` `FR-BRD-03`, 2026-10-05). When the patient app is opened for one hospital it may wear that hospital's values for the six brand tokens (`brand-900` … `brand-border`), set as CSS variables on the document by `<ScopeTheme>` from `GET /config?scope=`. Nothing else is replaceable — alert, caution, neutrals, type and radii mean the same in every hospital's app — and a theme is used only if it passes the contrast this document requires (`shared/domain/src/brand/theme.ts`). The banned list above binds a hospital's theme as it binds ours. Components never know: they read tokens, as always.
+
 ### 0.3 The positive direction
 
 The visual language is **clinical calm with Bengali warmth**: a warm off-white ground rather than clinical white, a deep botanical green as the single institutional colour, a restrained clay-red reserved exclusively for emergency, type that carries the page, and generous negative space around a small number of large, confident elements.

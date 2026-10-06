@@ -259,6 +259,42 @@ morning:
 **Merged so far in this build, newest last:**
 - **V1.1 `fix/patient-v1-surface`** — nothing unfinished is offered in the patient app: ambulance and blood are gone from Home and from the emergency screens, and the "not built yet" screen no longer exists. Focused gate: typecheck, lint, format, the message tests, `app-shell.spec.ts` and `emergency-burn.spec.ts` (20 passed).
 - **V2.1 `feat/patient-search`** — a patient searches for a doctor, a hospital, a specialty, a bed kind or a capability and sees which hospitals can provide it, each with the live figure for that need and its age; Home opens on that search; a result goes straight into booking at that hospital or doctor. Found by a screenshot and fixed with a test: the bottom bar lit the serials tab on `/search`. Focused gate plus the new route's API tests: typecheck, lint, format, 33 unit and 12 API tests for search, `patient-search`, `app-shell` and `guest-booking` in the browser (42 passed, then 23 after the tab fix).
+- **V2.2 `feat/hospital-scope`** — the branded-app foundation and no more: the patient app opened with `?scope=PADMA` is Padma's, in its name and colours, showing its doctors and beds only; every patient link and the API's allowed origins are each built in one place. **Supabase needs migration 0036 before a release.** Strict gate: `pnpm test` whole (4,913, one pinned `/config` shape updated), typecheck, lint, format, and in the browser the canary, hospital-scope, patient-search, guest-booking, standby, emergency-burn, ward-board and demo-label (67 passed; one of the new spec's own waits was wrong and was fixed).
+
+**Left for the owner by this build** (none of them blocks the pitch):
+
+- **Emergency inside a hospital's own app.** With a scope set, discovery,
+  booking and beds are that hospital's only (`FR-BRD-02`). The emergency
+  search is not narrowed: it still ranks every hospital that can treat the
+  problem. A hospital will not want its app sending people to a competitor;
+  a family with a burn case needs the nearest burn unit, which may not be
+  this hospital's. Two different products. Until ruled, it stays unnarrowed,
+  which is the one that cannot send somebody to the wrong place.
+- **`FR-NET-04`** (a hospital choosing which figures it publishes) is written
+  as a requirement and not built: a live hospital publishes all of them.
+
+**Decided by this build without asking, as the direction allows:**
+
+- **Home's order** changed from "emergency first" to: a live serial if this
+  phone holds one, search, the emergency card, specialties, convenience
+  (`APP_FLOW.md` `S-A-02`). The emergency card is still on the first
+  screenful, which a browser test now measures.
+- **A word that names a need is read as the need**, and hospitals or doctors
+  whose names contain the word are listed after it. Whole text only: "burn"
+  is a need, "Burnett" is a person (`shared/domain` `search/needs`).
+- **Blood bank and ambulance are not offered as search needs**, though both
+  are capabilities a hospital publishes: a search for either reads as the two
+  services that are outside V1.
+- **A scope is not a permission.** It narrows public data, so it is read
+  from the address (`?scope=CODE`) or the build, and a code no live hospital
+  has is refused with a 404 rather than read as the whole network.
+- **A hospital's theme is six brand tokens and nothing else**, refused whole
+  if white on `brand-600`, `brand-700` on the canvas or `brand-600` on
+  `brand-100` falls under 4.5:1. Padma carries a navy one in the demo data so
+  the pitch can show it: open the patient app with `?scope=PADMA`.
+- **Hospital-aware links and origins are prepared, not switched on**:
+  `config/links.ts` `patientLink` and `allowedOrigins`, and
+  `EXTRA_ALLOWED_ORIGINS`. Nothing answers differently until it is set.
 
 **Carried over from the audit, true of the code on 5 October and worth not
 re-deriving:**

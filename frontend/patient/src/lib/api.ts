@@ -9,6 +9,8 @@
 import { ApiClient } from '@platform/client';
 import type { BedKind, EmergencyProblem, SearchNeed } from '@platform/domain';
 
+import { scopedPath } from '@/lib/scope';
+
 import type {
   AccessLog,
   BedRequestView,
@@ -39,13 +41,13 @@ export const api = new ApiClient({ baseUrl: BASE, getToken: () => null });
 
 export async function specialtyDoctors(specialty: string): Promise<DoctorCard[]> {
   const data = await api.get<{ doctors: DoctorCard[] }>(
-    `/doctors?specialty=${encodeURIComponent(specialty)}`,
+    scopedPath('/doctors', new URLSearchParams({ specialty })),
   );
   return data.doctors;
 }
 
 export async function hospitals(): Promise<HospitalCard[]> {
-  const data = await api.get<{ hospitals: HospitalCard[] }>('/hospitals');
+  const data = await api.get<{ hospitals: HospitalCard[] }>(scopedPath('/hospitals'));
   return data.hospitals;
 }
 
@@ -57,7 +59,7 @@ export async function hospitals(): Promise<HospitalCard[]> {
  */
 export async function hospitalsForSpecialty(specialty: string): Promise<StampedList<HospitalCard>> {
   const data = await api.get<{ hospitals: HospitalCard[]; asOf: string }>(
-    `/hospitals?specialty=${encodeURIComponent(specialty)}`,
+    scopedPath('/hospitals', new URLSearchParams({ specialty })),
   );
   return { items: data.hospitals, asOf: data.asOf };
 }
@@ -81,7 +83,7 @@ export async function doctorsAtHospital(
 
 /** Every participating hospital, stamped (`S-A-07` opened for a hospital by name). */
 export async function allHospitals(): Promise<StampedList<HospitalCard>> {
-  const data = await api.get<{ hospitals: HospitalCard[]; asOf: string }>('/hospitals');
+  const data = await api.get<{ hospitals: HospitalCard[]; asOf: string }>(scopedPath('/hospitals'));
   return { items: data.hospitals, asOf: data.asOf };
 }
 
@@ -108,8 +110,7 @@ export async function searchNetwork(query: {
   const params = new URLSearchParams();
   if (query.q !== '') params.set('q', query.q);
   if (query.need !== null) params.set('need', query.need);
-  const suffix = params.toString();
-  return await api.get<SearchAnswer>(suffix === '' ? '/search' : `/search?${suffix}`);
+  return await api.get<SearchAnswer>(scopedPath('/search', params));
 }
 
 export async function doctorSessions(doctorId: string): Promise<SessionCard[]> {
@@ -341,7 +342,7 @@ export async function revokeConsent(input: {
 /** Hospitals that have beds of `kind`, each with its published figures. */
 export async function hospitalsWithBeds(kind: BedKind): Promise<StampedList<HospitalCard>> {
   const data = await api.get<{ hospitals: HospitalCard[]; asOf: string }>(
-    `/hospitals?bedKind=${encodeURIComponent(kind)}`,
+    scopedPath('/hospitals', new URLSearchParams({ bedKind: kind })),
   );
   return { items: data.hospitals, asOf: data.asOf };
 }

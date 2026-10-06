@@ -197,6 +197,8 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 #### `hospital_settings`
 `hospital_id` **PK/FK**, `no_show_grace_patients` (default 2), `no_show_grace_minutes` (15), `late_reinsert_after` (3), `stale_threshold_minutes` (10), `refund_policy` jsonb, `sms_budget_monthly` int, `prepay_required` boolean, `numeral_style` text, `density_default` text.
 
+**`brand` jsonb, nullable (0036, `FR-BRD-03`).** A hospital's own values for the six brand tokens of `FRONTEND.md` §1.1 — `brand-900`, `-700`, `-600`, `-300`, `-100`, `brand-border` — as `{ "colors": { "<token>": "#rrggbb", … } }`. NULL, the ordinary state, is the platform's own colours. The shape and the contrast a theme must pass (white on `brand-600`, `brand-700` on the canvas, `brand-600` on `brand-100`, each at 4.5:1) are in `shared/domain/src/brand/theme.ts`; a stored theme that fails is read as none, so the app keeps colours that pass rather than half of somebody else's. The database checks only that it is an object. Not a logo, a font or a domain (`FR-BRD-05`).
+
 **`refund_policy` has a shape as of step 18** (`shared/domain/src/payments/refund.ts`),
 because `FR-PAY-03` needs one and no document had given it one:
 
@@ -655,6 +657,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- can rebuild the dashboard snapshot (§4, §5.1)
     0035_notification_retention.sql -- plan 1.9: links already stored in notifications.params removed,
                                    -- notifications_no_stored_link, the purge's partial index (§2.7, §8)
+    0036_hospital_brand.sql        -- V1 pitch build V2.2: hospital_settings.brand, a hospital's own
+                                   -- brand tokens for the patient app (§2.2, FR-BRD-03)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

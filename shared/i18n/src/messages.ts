@@ -2078,6 +2078,12 @@ export const PATIENT = {
     bn: 'কোন হাসপাতালে এখন কী আছে, এক জায়গায় দেখুন।',
     en: 'See which hospital has what you need, right now, in one place.',
   },
+  /** The same lines when the app is open for one hospital (`FR-PAT-19`). */
+  scopedIntro: {
+    bn: '{hospital}-এ এখন কী আছে, এক জায়গায় দেখুন।',
+    en: 'See what {hospital} has right now, in one place.',
+  },
+  scopedSearch: { bn: 'ডাক্তার, বিভাগ, আইসিইউ খুঁজুন', en: 'Search doctors, specialties, ICU' },
   searchLabel: { bn: 'নাম বা প্রয়োজন লিখুন', en: 'Type a name or what you need' },
   searchHelper: {
     bn: 'ডাক্তার, হাসপাতাল, বিভাগ, আইসিইউ, বার্ন ইউনিট',

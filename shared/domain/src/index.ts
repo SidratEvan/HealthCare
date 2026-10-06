@@ -156,6 +156,22 @@ export {
   type PublicCapacity,
 } from './beds/capacity.js';
 
+// --- Brand -----------------------------------------------------------------
+//
+// A hospital's own colours for the patient app, and the contrast they must
+// pass before they are used (`FR-BRD-03`).
+export {
+  BRAND_TOKENS,
+  MIN_TEXT_CONTRAST,
+  brandProblems,
+  brandTheme,
+  contrastRatio,
+  readBrandTheme,
+  type BrandProblem,
+  type BrandTheme,
+  type BrandToken,
+} from './brand/theme.js';
+
 // --- Search ----------------------------------------------------------------
 //
 // What a patient can ask the network for, and how typed text is read as one

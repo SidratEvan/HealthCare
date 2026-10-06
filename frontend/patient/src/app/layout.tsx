@@ -32,6 +32,7 @@ import '@platform/ui/styles.css';
 
 import { fontVariables } from '@/app/fonts';
 import { LanguageBar } from '@/components/LanguageBar';
+import { ScopeTheme } from '@/components/ScopeTheme';
 import { ServiceWorker } from '@/components/ServiceWorker';
 
 import type { Metadata, Viewport } from 'next';
@@ -78,6 +79,7 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
         tell that a standalone app is a web page.
       */}
       <body className="min-h-screen overscroll-none bg-canvas text-ink">
+        <ScopeTheme />
         <LanguageBar />
         {children}
         <ServiceWorker />

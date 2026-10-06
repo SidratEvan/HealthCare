@@ -7,7 +7,7 @@
 
 import type { PaymentIntentBody, RefundBody, SettlementQuery } from '@platform/domain';
 
-import { env } from '../env.js';
+import { patientLink } from '../config/links.js';
 import { forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as payments from '../services/payment.service.js';
 
@@ -44,7 +44,7 @@ export async function intent(req: Request, res: Response): Promise<void> {
       idempotencyKey: body.idempotencyKey,
       // Where a real provider sends the patient back to. The app's own
       // serial screen, because that is where they were going anyway.
-      returnUrl: `${env.WEB_BASE_URL}/s/${body.bookingId}`,
+      returnUrl: patientLink(`/s/${body.bookingId}`),
     },
     payerOf(req),
   );

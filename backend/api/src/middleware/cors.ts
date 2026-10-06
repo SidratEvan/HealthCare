@@ -20,14 +20,13 @@
  * is left alone.
  */
 
-import { env } from '../env.js';
+import { allowedOrigins } from '../config/links.js';
 
 import type { NextFunction, Request, Response } from 'express';
 
-/** The browser origins this API answers. */
-export function allowedOrigins(): readonly string[] {
-  return [env.WEB_BASE_URL, env.CONSOLE_BASE_URL];
-}
+// The list itself is in `config/links.ts`, which the socket handshake reads
+// too: two copies of an allowlist is how one of them comes to be wrong.
+export { allowedOrigins };
 
 /** Headers a browser app actually sends. Nothing wider. */
 const ALLOWED_HEADERS = ['authorization', 'content-type', 'idempotency-key'] as const;

@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * What this deployment offers (`GET /config`, pilot step 26).
+ * What this deployment offers, and whose app this is (`GET /config`, pilot
+ * step 26; `FR-BRD-02`).
  *
  * A hospital's own server with no merchant account runs
  * `PAYMENT_PROVIDER=off`: the app then offers paying at the hospital only,
@@ -9,23 +10,39 @@
  * arrives — or if it cannot be had — the app assumes online payment exists, as
  * it always has, and the server still refuses an online method it cannot take.
  *
+ * When the app is open for one hospital (`lib/scope`), the same answer says
+ * which: its name in both languages and, if it has set them, its colours.
+ *
  * Asked once per page load and shared.
  */
 
 import { useEffect, useState } from 'react';
 
+import type { BrandTheme } from '@platform/domain';
+
 import { api } from '@/lib/api';
+import { scopedPath } from '@/lib/scope';
+
+/** The hospital this app is open for (`FR-PAT-19`). */
+export interface ScopeConfig {
+  readonly code: string;
+  readonly nameBn: string;
+  readonly nameEn: string;
+  readonly theme: BrandTheme | null;
+}
 
 export interface DeploymentConfig {
   readonly demo: boolean;
   readonly onlinePayments: boolean;
   readonly guestPhoneCheck: boolean;
+  /** Null for the network's own app. */
+  readonly scope: ScopeConfig | null;
 }
 
 let pending: Promise<DeploymentConfig | null> | null = null;
 
 function ask(): Promise<DeploymentConfig | null> {
-  pending ??= api.get<DeploymentConfig>('/config').catch(() => null);
+  pending ??= api.get<DeploymentConfig>(scopedPath('/config')).catch(() => null);
   return pending;
 }
 

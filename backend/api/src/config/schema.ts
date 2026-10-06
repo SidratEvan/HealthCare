@@ -189,6 +189,8 @@ export interface HospitalSettingsTable {
   prepay_required: Generated<boolean>;
   numeral_style: Generated<string>;
   density_default: Generated<string>;
+  /** 0036: a hospital's own brand tokens (`FR-BRD-03`); null is the platform's. */
+  brand: Json | null;
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
   created_by: string | null;

@@ -5,7 +5,14 @@
  * route validated, call a service, shape a response.
  */
 
-import { doctorQuery, hospitalQuery, idParams, searchQuery, sessionQuery } from '@platform/domain';
+import {
+  configQuery,
+  doctorQuery,
+  hospitalQuery,
+  idParams,
+  searchQuery,
+  sessionQuery,
+} from '@platform/domain';
 
 import * as deployment from '../services/deployment.service.js';
 import * as discovery from '../services/discovery.service.js';
@@ -66,6 +73,27 @@ export async function getAvailability(req: Request, res: Response): Promise<void
  * demonstration, whether online payment exists, whether a guest proves the
  * phone before booking. Public; nothing in it is a secret.
  */
-export function getConfig(_req: Request, res: Response): void {
-  res.json({ ok: true, data: deployment.publicConfig() });
+export async function getConfig(req: Request, res: Response): Promise<void> {
+  const { scope } = configQuery.parse(req.query);
+
+  // `scope` is null for the network's own app. For a hospital's, it is whose
+  // app this is and in which colours (`FR-BRD-02`, `FR-BRD-03`); an unknown
+  // code is a 404 rather than a silent fall back to the whole network.
+  const scoped = scope === undefined ? null : await discovery.scopeInfo(scope);
+
+  res.json({
+    ok: true,
+    data: {
+      ...deployment.publicConfig(),
+      scope:
+        scoped === null
+          ? null
+          : {
+              code: scoped.code,
+              nameBn: scoped.nameBn,
+              nameEn: scoped.nameEn,
+              theme: scoped.theme,
+            },
+    },
+  });
 }

@@ -53,6 +53,7 @@ import {
   SPECIALTY_ICON,
   StethoscopeIcon,
 } from '@/components/icons';
+import { useDeployment } from '@/hooks/useDeployment';
 import { openTrackingLink } from '@/lib/api';
 import { recentBookings, type SavedBooking } from '@/lib/bookings';
 
@@ -103,13 +104,22 @@ export default function Home(): ReactNode {
   );
 }
 
-/** App name, area, and the profile control (`BTN-A02-PROFILE`). */
+/**
+ * App name, area, and the profile control (`BTN-A02-PROFILE`).
+ *
+ * The name is the hospital's when the app is open for one (`FR-PAT-19`: it
+ * "says whose app it is"), and the platform's otherwise. It is the platform's
+ * until the answer arrives: a name that changes once is better than a blank.
+ */
 function Header(): ReactNode {
   const locale = useLocale();
+  const scope = useDeployment()?.scope ?? null;
   return (
     <header className="flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="font-reading text-title-lg text-brand-700">{tp('appName', locale)}</h1>
+        <h1 className="font-reading text-title-lg text-brand-700" data-testid="app-name">
+          {scope === null ? tp('appName', locale) : localName(locale, scope.nameBn, scope.nameEn)}
+        </h1>
         <p className="text-body-sm text-ink-secondary">{districtName(AREA, locale)}</p>
       </div>
 
@@ -134,6 +144,7 @@ function Header(): ReactNode {
  */
 function SearchEntry(): ReactNode {
   const locale = useLocale();
+  const scope = useDeployment()?.scope ?? null;
 
   const nameOf = (need: SearchNeed): string =>
     need.kind === 'bed'
@@ -148,7 +159,14 @@ function SearchEntry(): ReactNode {
         <h2 id="home-search-title" className="font-reading text-title-md">
           {tp('searchPrompt', locale)}
         </h2>
-        <p className="text-body-sm text-ink-secondary">{tp('homeSearchLine', locale)}</p>
+        <p className="text-body-sm text-ink-secondary">
+          {scope === null
+            ? tp('homeSearchLine', locale)
+            : tp('scopedIntro', locale).replace(
+                '{hospital}',
+                localName(locale, scope.nameBn, scope.nameEn),
+              )}
+        </p>
       </div>
 
       <a
@@ -159,7 +177,7 @@ function SearchEntry(): ReactNode {
         <span className="text-brand-600">
           <SearchIcon size={22} />
         </span>
-        {tp('homeSearch', locale)}
+        {tp(scope === null ? 'homeSearch' : 'scopedSearch', locale)}
       </a>
 
       <div className="flex flex-col gap-2">

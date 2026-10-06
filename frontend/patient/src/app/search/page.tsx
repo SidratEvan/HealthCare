@@ -62,6 +62,7 @@ import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/u
 import { HospitalBeds } from '@/components/HospitalBeds';
 import { ChevronIcon, HospitalIcon, StethoscopeIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
+import { useDeployment } from '@/hooks/useDeployment';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
 import { searchNetwork, type SearchAnswer } from '@/lib/api';
@@ -98,6 +99,7 @@ export default function SearchPage(): ReactNode {
   const locale = useLocale();
   const online = useOnline();
   const now = useNow();
+  const scope = useDeployment()?.scope ?? null;
 
   const [text, setText] = useState('');
   const [need, setNeed] = useState<SearchNeed | null>(null);
@@ -157,7 +159,14 @@ export default function SearchPage(): ReactNode {
 
   return (
     <TabScreen title={tp('searchPrompt', locale)}>
-      <p className="-mt-3 text-body-md text-ink-secondary">{tp('searchIntro', locale)}</p>
+      <p className="-mt-3 text-body-md text-ink-secondary" data-testid="search-intro">
+        {scope === null
+          ? tp('searchIntro', locale)
+          : tp('scopedIntro', locale).replace(
+              '{hospital}',
+              localName(locale, scope.nameBn, scope.nameEn),
+            )}
+      </p>
 
       <Input
         label={tp('searchLabel', locale)}
