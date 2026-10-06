@@ -108,8 +108,8 @@ interface DemoConsole {
   readonly sessions: readonly DemoSessionCard[];
 }
 
-/** A national role the API has a seeded account for (step 20). */
-type NationalRole = 'gov_viewer';
+/** A national role the API has an account for (step 20; `S-B-12` since V3.2). */
+type NationalRole = 'gov_viewer' | 'platform_admin';
 
 /**
  * What the picker opened: a chamber, or a hospital's ward board.
@@ -124,7 +124,8 @@ export type ConsoleChoice =
   | { readonly kind: 'lab' }
   | { readonly kind: 'pharmacy' }
   | { readonly kind: 'admin' }
-  | { readonly kind: 'gov' };
+  | { readonly kind: 'gov' }
+  | { readonly kind: 'platform' };
 
 export function ConsolePicker({
   onChosen,
@@ -167,7 +168,9 @@ export function ConsolePicker({
       if (session.hospitalId === null) {
         // A national account works for no facility (`FR-ROLE-01`).
         setConsoles([]);
-        setNational(roles.includes('gov_viewer') ? ['gov_viewer'] : []);
+        setNational(
+          (['gov_viewer', 'platform_admin'] as const).filter((role) => roles.includes(role)),
+        );
         return;
       }
       const own: DemoConsole = {
@@ -351,24 +354,49 @@ export function ConsolePicker({
 
   // `S-B-13` belongs to no hospital, so it is offered whether or not any
   // hospital is running something today.
+  // And so does `S-B-12`: the platform's administrator works for no hospital
+  // either, and brings hospitals on (`FR-ONB-*`).
   const nationalSection =
     national.length === 0 ? null : (
-      <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
-        <h2 className="text-title-sm">{t('govSection', locale)}</h2>
-        <p className="text-body-sm text-ink-secondary">{t('govSectionHint', locale)}</p>
-        <div>
-          <Button
-            variant="secondary"
-            loading={busy}
-            data-testid="open-gov"
-            onClick={() => {
-              void open(null, 'gov_viewer', { kind: 'gov' });
-            }}
-          >
-            {t('openGov', locale)}
-          </Button>
-        </div>
-      </section>
+      <>
+        {national.includes('platform_admin') ? (
+          <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+            <h2 className="text-title-sm">{t('platformSection', locale)}</h2>
+            <p className="text-body-sm text-ink-secondary">{t('platformSectionHint', locale)}</p>
+            <div>
+              <Button
+                variant="secondary"
+                loading={busy}
+                data-testid="open-platform"
+                onClick={() => {
+                  void open(null, 'platform_admin', { kind: 'platform' });
+                }}
+              >
+                {t('openPlatform', locale)}
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {national.includes('gov_viewer') ? (
+          <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+            <h2 className="text-title-sm">{t('govSection', locale)}</h2>
+            <p className="text-body-sm text-ink-secondary">{t('govSectionHint', locale)}</p>
+            <div>
+              <Button
+                variant="secondary"
+                loading={busy}
+                data-testid="open-gov"
+                onClick={() => {
+                  void open(null, 'gov_viewer', { kind: 'gov' });
+                }}
+              >
+                {t('openGov', locale)}
+              </Button>
+            </div>
+          </section>
+        ) : null}
+      </>
     );
 
   if (consoles.length === 0) {

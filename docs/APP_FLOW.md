@@ -662,6 +662,7 @@ Shown when a user holds multiple roles or the hospital has multiple counters.
 | Role cards | `BTN-B01-ROLE-<role>` | রিসেপশন / ডাক্তার / ওয়ার্ড / জরুরি / ল্যাব / ফার্মেসি / ব্যবস্থাপনা → routes to that console |
 | Chamber cards | `BTN-B01-CHAMBER-<sessionId>` | The facility's chambers for today, and any still running or paused from the day before (`FR-QUE-06`). Each card says the doctor, the department, the room, **the chamber's service date and its planned start**, its status and how many are waiting. A chamber that is not today's says which day it is from, in words, so yesterday's and today's chamber for one doctor cannot be taken for each other (owner's decision, 2026-10-05). An ended chamber is not offered as current |
 | Counter selector | `SEL-B01-COUNTER` | Binds this browser to a counter; used for billing reconciliation (`FR-REC-23`) |
+| Platform administration | `BTN-B01-PLATFORM` | Shown to a platform administrator only (on a demonstration, whenever there is a seeded one): **হাসপাতাল অনবোর্ডিং খুলুন** → `S-B-12`. Beside the national dashboard's own section, and like it belonging to no hospital |
 | Remember on this computer | `CHK-B01-REMEMBER` | Skips this screen next time |
 
 ---
@@ -1014,7 +1015,21 @@ Built in pilot step 22 (`FR-SUP-01`), opened by `LNK-B10-SETTINGS` in the dashbo
 
 Hospital onboarding wizard (steps: facility → departments → doctors → sessions → beds → capabilities → counters → staff → go live), doctor verification queue, feature flags, subscriptions and invoices, review moderation, system health (sync lag, stale-data offenders, notification delivery) — `FR-SUP-01`–`06`.
 
-> **In V1 this screen is onboarding** (`PRD.md` §14c, `FR-ONB-*`), and the wizard above is the hospital's own `S-B-11` with its checklist rather than a second copy of it here. The server side is built (V3.1, `BACKEND.md` §7.7 `/platform/*`): the list of workspaces with those waiting for review first, creating a workspace with its first administrator, verifying a doctor, and approve / send back / suspend / reinstate / close. The screen itself is V3.2. It shows organisations and counts and never a patient (`FR-ONB-08`). Feature flags, subscriptions, moderation and system health wait (`FR-SUP-03`–`06`).
+> **In V1 this screen is onboarding** (`PRD.md` §14c, `FR-ONB-*`), **built in V3.1 (server) and V3.2 (screen)**. The wizard above is the hospital's own `S-B-11` with its checklist, not a second copy of it here. Feature flags, subscriptions, moderation and system health wait (`FR-SUP-03`–`06`).
+
+Opened by a platform administrator: on a demonstration from the picker's **প্ল্যাটফর্ম পরিচালনা** section (`BTN-B01-PLATFORM`, `/?view=platform`); on a real deployment by signing in as one (`pnpm staff:create --platform` makes a deployment's first, `DEPLOY.md` S3). A hospital's staff, its administrator included, cannot open it, and neither can a government viewer.
+
+Under the title, always: **"এখানে শুধু প্রতিষ্ঠান ও তাদের প্রস্তুতির হিসাব দেখা যায়। কোনো রোগীর তথ্য এখানে নেই।"** (`FR-ONB-08`).
+
+| Element | ID | Wiring |
+|---|---|---|
+| Workspace list | `LIST-B12` | `GET /platform/hospitals`. Those waiting for review first, oldest first, with how many are waiting above the list. Each row: name, kind, district, code, its state as a word (সেটআপ চলছে / পর্যালোচনার অপেক্ষায় / লাইভ / স্থগিত / বন্ধ), and its doctors, verified doctors and weekly chambers. The list says when it was read (`<FreshnessLine>`) |
+| Add a hospital | `BTN-B12-NEW` → `FORM-B12-NEW` | Name in Bangla and English, code (letters and digits, cannot be changed later), kind, division, district, registration or licence number (optional), the first administrator's name and email → `POST /platform/hospitals`. A code in use is refused with a sentence. On success the **temporary password is shown once**, with the instruction to hand it over in person; the workspace opens in "setting up" and nothing of it is public (`FR-ONB-01`) |
+| Workspace panel | `PANEL-B12-<hospitalId>` | `GET /platform/hospitals/:id`: its state, registration number, when review was asked for, the last note sent to the hospital, the same checklist the hospital sees over the same counts, its doctors, and its administrators' names and emails |
+| Verify a doctor | `BTN-B12-VERIFY-<doctorId>` | Beside each unverified doctor, with the BMDC number to check against the register → `POST /platform/hospitals/:id/doctors/:doctorId/verify` (`FR-ONB-05`). The line above the list says to mark a doctor only after checking |
+| Decision | `BTN-B12-APPROVE` / `-SENDBACK` / `-SUSPEND` / `-REINSTATE` / `-CLOSE` | Only the acts allowed from the workspace's state are shown; while it is the hospital's move the panel says so instead. **Approve** is off, with the missing items named, until the checklist's required items exist and one doctor is verified. **Send back**, **suspend** and **close** are off until a reason is written in `INP-B12-NOTE`; that reason is what the hospital's administrator reads on `S-B-11`. **Close** also needs `CHK-B12-CLOSE-SURE` ticked, because nothing reopens a closed workspace. Each → `POST /platform/hospitals/:id/<act>`; the panel and the list then show the new state. If somebody else answered first the panel says the state changed and shows the current one |
+
+**States (`GR-03`).** Loading: three blocks the shape of a row. No workspace yet: says so, and the form is one tap away. A list that could not be loaded: says that with a retry, never an empty platform. Offline: the list stays, every write is off with the reason.
 
 ## B8. Government viewer — `S-B-13`
 

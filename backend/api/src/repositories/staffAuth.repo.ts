@@ -413,11 +413,21 @@ export async function emailTakenAt(hospitalId: string, email: string): Promise<b
   return result.rows.length > 0;
 }
 
+/** Whether a national account (one with no facility) already holds this email. */
+export async function nationalEmailTaken(email: string): Promise<boolean> {
+  const result = await sql<{ one: number }>`
+    SELECT 1 AS one FROM staff_users
+     WHERE hospital_id IS NULL AND lower(email) = lower(${email}) AND deleted_at IS NULL
+  `.execute(db);
+  return result.rows.length > 0;
+}
+
 /** A new account whose password an administrator set: it must be changed on first use. */
 export async function createStaffAccount(
   trx: Tx,
   input: {
-    readonly hospitalId: string;
+    /** Null for a national account, which belongs to no facility (0024). */
+    readonly hospitalId: string | null;
     readonly email: string;
     readonly fullName: string;
     readonly staffCode: string | null;
@@ -439,7 +449,7 @@ export async function createStaffAccount(
 
 export async function grantRole(
   trx: Tx,
-  input: { readonly staffId: string; readonly hospitalId: string; readonly role: string },
+  input: { readonly staffId: string; readonly hospitalId: string | null; readonly role: string },
 ): Promise<void> {
   await sql`
     INSERT INTO staff_roles (staff_user_id, hospital_id, role)

@@ -11,6 +11,15 @@
  *     [--hospital-name-bn "…" --hospital-name-en "…" --kind hospital \
  *      --division Dhaka --district Dhaka]
  *
+ * ## `--platform`: the deployment's first platform administrator (V3.2)
+ *
+ *   pnpm staff:create --platform --email ops@example.org --name "Full Name"
+ *
+ * The account that creates hospitals' workspaces and approves them on
+ * `S-B-12` (`FR-ONB-*`). It belongs to no facility. Run once per deployment;
+ * after it, hospitals and their first administrators are made on the screen
+ * and this script is not needed for them.
+ *
  * Reads DATABASE_URL like the API. Never run it against the demo database for
  * a real person (FR-SEC-08).
  */
@@ -20,13 +29,17 @@ import { parseArgs } from 'node:util';
 import { hospitalCode } from '@platform/domain';
 
 import { db } from '../config/db.js';
-import { createFirstAdministrator } from '../services/staffAuth.service.js';
+import {
+  createFirstAdministrator,
+  createPlatformAdministrator,
+} from '../services/staffAuth.service.js';
 
 const KINDS = ['hospital', 'clinic', 'diagnostic', 'government'] as const;
 
-function required(values: Record<string, string | undefined>, key: string): string {
-  const value = values[key]?.trim();
-  if (value === undefined || value === '') throw new Error(`--${key} is required.`);
+function required(values: Record<string, string | boolean | undefined>, key: string): string {
+  const raw = values[key];
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if (value === '') throw new Error(`--${key} is required.`);
   return value;
 }
 
@@ -41,14 +54,31 @@ async function main(): Promise<void> {
       kind: { type: 'string' },
       division: { type: 'string' },
       district: { type: 'string' },
+      platform: { type: 'boolean' },
     },
     strict: true,
   });
 
-  const code = hospitalCode.parse(required(values, 'hospital-code'));
   const email = required(values, 'email');
   if (!email.includes('@')) throw new Error('--email must be an email address.');
   const fullName = required(values, 'name');
+
+  if (values.platform === true) {
+    if (values['hospital-code'] !== undefined) {
+      throw new Error('--platform belongs to no facility; leave --hospital-code out.');
+    }
+    const created = await createPlatformAdministrator({ email, fullName });
+    console.log(
+      [
+        `Platform administrator: ${email}`,
+        `Temporary password (shown once): ${created.temporaryPassword}`,
+        'It must be changed at first sign-in, and two-step verification set up.',
+      ].join('\n'),
+    );
+    return;
+  }
+
+  const code = hospitalCode.parse(required(values, 'hospital-code'));
 
   const wantsHospital =
     values['hospital-name-bn'] !== undefined || values['hospital-name-en'] !== undefined;

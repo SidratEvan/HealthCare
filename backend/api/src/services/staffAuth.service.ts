@@ -594,6 +594,44 @@ export interface FirstAdministrator {
 }
 
 /**
+ * Creates a platform administrator: the account that brings hospitals on
+ * (`S-B-12`, `FR-ONB-*`).
+ *
+ * `pnpm staff:create --platform`. A deployment's first one has to come from
+ * the command line, for the reason a hospital's first administrator once did:
+ * nobody can make one from a screen until one exists. After it, hospitals and
+ * their administrators are made on `S-B-12` and no command is needed.
+ *
+ * It belongs to no facility (`FR-ROLE-01`, 0024). Its temporary password is
+ * changed at first sign-in, and it sets up two-step verification before any
+ * console opens (`FR-SEC-10`).
+ */
+export async function createPlatformAdministrator(input: {
+  readonly email: string;
+  readonly fullName: string;
+}): Promise<{ readonly staffId: string; readonly temporaryPassword: string }> {
+  if (await staffAuthRepo.nationalEmailTaken(input.email)) {
+    throw new Error(`${input.email} already has a platform account.`);
+  }
+
+  const password = temporaryPassword();
+  const passwordHash = await hashPassword(password);
+
+  return await withTransaction(async (trx) => {
+    const staffId = await staffAuthRepo.createStaffAccount(trx, {
+      hospitalId: null,
+      email: input.email,
+      fullName: input.fullName,
+      staffCode: null,
+      passwordHash,
+      createdBy: null,
+    });
+    await staffAuthRepo.grantRole(trx, { staffId, hospitalId: null, role: 'platform_admin' });
+    return { staffId, temporaryPassword: password };
+  });
+}
+
+/**
  * Creates a facility's first administrator — and the facility itself when the
  * code is new. Nobody can create accounts from a screen until one
  * administrator exists (`S-B-11`, step 22), so this is how a fresh
