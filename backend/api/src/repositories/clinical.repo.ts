@@ -190,8 +190,18 @@ export async function findIntake(bookingId: string): Promise<Intake | null> {
  * Drafts are excluded. An unsigned visit is a doctor's unfinished note, and
  * showing one in a wallet — or to the next doctor — would present a working
  * thought as a conclusion.
+ *
+ * `hospitalId` narrows the read to the visits made at one hospital, and is
+ * how a hospital's own doctor is kept to that hospital's records when the
+ * patient has not consented to more (`FR-NET-02`, `FR-DOC-10`). The filter is
+ * in the statement, not applied to its result: what is not read cannot leak.
+ * Null reads every hospital's, for the patient themself or under consent.
  */
-export async function findVisits(patientId: string, limit = 20): Promise<VisitRecord[]> {
+export async function findVisits(
+  patientId: string,
+  hospitalId: string | null,
+  limit = 20,
+): Promise<VisitRecord[]> {
   const result = await sql<{
     id: string;
     booking_id: string;
@@ -225,6 +235,7 @@ export async function findVisits(patientId: string, limit = 20): Promise<VisitRe
       JOIN doctors d        ON d.id = v.doctor_id
       JOIN hospitals h      ON h.id = v.hospital_id
      WHERE v.patient_id = ${patientId}::uuid
+       AND (${hospitalId}::uuid IS NULL OR v.hospital_id = ${hospitalId}::uuid)
        AND v.deleted_at IS NULL
        AND v.signed_at IS NOT NULL
      ORDER BY v.signed_at DESC

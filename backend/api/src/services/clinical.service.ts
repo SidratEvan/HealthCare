@@ -10,6 +10,21 @@
  * hospital access — and one of them is answered before a single record is
  * returned. A patient reading their own wallet needs neither.
  *
+ * ## Which records, once the caller may read at all (`FR-NET-02`, plan A8)
+ *
+ * Being allowed to open a patient's record is not being allowed to read all
+ * of it. A doctor at a hospital that has treated the patient reads **that
+ * hospital's** visits. The visits another hospital made are read only under
+ * the patient's consent — "something crosses between hospitals only by a
+ * deliberate act": a consent, a referral — and never because the patient once
+ * held a serial here. Until this was written, one booking at a hospital opened
+ * the patient's history at every hospital to every doctor there.
+ *
+ * The answer says which it was (`visitsFrom`), so that the screen can tell a
+ * doctor that what they see is this hospital's part and not the whole, without
+ * saying whether there is any more: that there is a record elsewhere is itself
+ * something another hospital is not told.
+ *
  * "Their own sessions" is enforced at hospital grain rather than per clinician,
  * because no column joins a console account to a `doctors` row. The why is in
  * `treatedAtHospital`; the ruling it needs is in `docs/STATUS.md`.
@@ -45,12 +60,21 @@ import * as queueService from './queue.service.js';
 
 import type { Principal } from '../types/express.js';
 
+/** How much of a patient's history a reader is shown. */
+export type VisitsFrom = 'everywhere' | 'this_hospital';
+
 /** What `S-B-05`'s patient panel and `S-A-12`'s wallet both render. */
 export interface PatientRecords {
   readonly patient: clinicalRepo.PatientIdentity;
   /** Present only when a booking was named — the visit being consulted on. */
   readonly intake: clinicalRepo.Intake | null;
   readonly visits: readonly clinicalRepo.VisitRecord[];
+  /**
+   * Whose visits these are: every hospital's (the patient reading their own,
+   * or a doctor under the patient's consent), or only the reader's own
+   * hospital's (`FR-NET-02`).
+   */
+  readonly visitsFrom: VisitsFrom;
   /**
    * What this version cannot show, named rather than omitted.
    *
@@ -77,7 +101,7 @@ export async function patientRecords(input: {
   const patient = await clinicalRepo.findPatient(input.patientId);
   if (patient === null) throw notFound('patient');
 
-  await assertMayRead(input.principal, input.patientId);
+  const visitsFrom = await readScope(input.principal, input.patientId);
 
   let intake: clinicalRepo.Intake | null = null;
   if (input.bookingId !== undefined) {
@@ -92,7 +116,14 @@ export async function patientRecords(input: {
     intake = await clinicalRepo.findIntake(input.bookingId);
   }
 
-  const visits = await clinicalRepo.findVisits(input.patientId);
+  // Narrowed in the query, by the reader's own hospital, unless the reader
+  // is the patient or holds their consent.
+  const visits = await clinicalRepo.findVisits(
+    input.patientId,
+    visitsFrom === 'this_hospital' && input.principal.kind === 'staff'
+      ? input.principal.hospitalId
+      : null,
+  );
 
   // After the read succeeded, so a refusal leaves no row claiming it happened.
   await audit(input.principal, input.patientId, {
@@ -100,6 +131,8 @@ export async function patientRecords(input: {
     subjectId: null,
     meta: {
       visits: visits.length,
+      // What was opened: this hospital's part, or everything under consent.
+      visitsFrom,
       ...(input.bookingId === undefined ? {} : { bookingId: input.bookingId }),
     },
   });
@@ -108,6 +141,7 @@ export async function patientRecords(input: {
     patient,
     intake,
     visits,
+    visitsFrom,
     absent: ['prescriptions', 'reports'],
   };
 }
@@ -212,15 +246,18 @@ export async function saveVisit(input: {
  * booking's queue position (`FR-GST-05`) and is not consent to a medical
  * history — the two are different grants and conflating them would make an SMS
  * a key to a record.
+ *
+ * What comes back is how much the caller reads: a refusal is thrown.
  */
-async function assertMayRead(principal: Principal, patientId: string): Promise<void> {
+async function readScope(principal: Principal, patientId: string): Promise<VisitsFrom> {
   switch (principal.kind) {
     case 'patient': {
       // Ownership is the patient's own profile or one they hold
       // (`patients.owner_user_id`), which `findOwnedBy` answers.
       const owns = await clinicalRepo.patientBelongsToUser(patientId, principal.id);
       if (!owns) throw forbiddenScope({ reason: 'not_your_record' });
-      return;
+      // Their own record, wherever it was written.
+      return 'everywhere';
     }
 
     case 'staff': {
@@ -230,11 +267,15 @@ async function assertMayRead(principal: Principal, patientId: string): Promise<v
         throw forbiddenScope({ reason: 'role_not_permitted' });
       }
 
-      const treats = await clinicalRepo.treatedAtHospital(principal.hospitalId, patientId);
-      if (treats) return;
-
+      // Consent is asked first because it is the wider grant: with it the
+      // patient has said this hospital may read their record, all of it.
       const consented = await clinicalRepo.hasLiveConsent(patientId, principal.hospitalId);
-      if (consented) return;
+      if (consented) return 'everywhere';
+
+      // Without it, having treated the patient opens what this hospital
+      // itself wrote, and nothing another hospital did (`FR-NET-02`).
+      const treats = await clinicalRepo.treatedAtHospital(principal.hospitalId, patientId);
+      if (treats) return 'this_hospital';
 
       throw forbiddenScope({ reason: 'no_treatment_relationship_or_consent' });
     }

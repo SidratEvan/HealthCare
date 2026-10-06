@@ -225,8 +225,19 @@ export function PastVisits({ records }: { readonly records: PatientRecords }): R
     <section className="flex flex-col gap-2 border-t border-line pt-4">
       <h3 className="text-body-sm font-semibold">{t('pastVisits', locale)}</h3>
 
+      {/* What is shown is this hospital's part of the record, and the screen
+          says so (`FR-NET-02`). It does not say whether there is more: that
+          a record exists elsewhere is not this hospital's to be told. */}
+      {records.visitsFrom !== 'this_hospital' ? null : (
+        <p className="text-caption text-ink-muted" data-testid="past-visits-here-only">
+          {t('pastVisitsHereOnly', locale)}
+        </p>
+      )}
+
       {records.visits.length === 0 ? (
-        <p className="text-body-sm text-ink-muted">{t('noPastVisits', locale)}</p>
+        <p className="text-body-sm text-ink-muted" data-testid="past-visits-none">
+          {t(records.visitsFrom === 'this_hospital' ? 'noPastVisitsHere' : 'noPastVisits', locale)}
+        </p>
       ) : (
         <ul className="flex flex-col gap-2" data-testid="past-visits">
           {records.visits.slice(0, 5).map((visit) => (

@@ -470,6 +470,8 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 
 ### 7.6 Clinical, lab, pharmacy
 
+> **Which records, once the caller may read at all (`FR-NET-02`, plan A8).** `GET /patients/:id/records` answers `visitsFrom: 'everywhere' | 'this_hospital'`. A patient reads their own record whole. A doctor with the patient's live consent reads every hospital's visits; a doctor whose hospital has only treated the patient reads that hospital's visits, narrowed in the query (`clinical.repo` `findVisits(patientId, hospitalId)`), and nothing another hospital wrote. The audit row records which it was. Until this, one booking at a hospital opened the patient's history at every hospital.
+>
 > **Permission on the record endpoints is not a role.** `FR-DOC-10` is a
 > *relationship* — has this patient been in a chamber at this hospital, or did
 > they consent — so `clinical.routes` requires only authentication and

@@ -378,7 +378,7 @@ The highest-volume surface in the system. Optimise for keyboard and repetition.
 - `FR-DOC-07` Patient-facing output prints and delivers in Bangla, including dosage instructions. **Not in this version.**
 - `FR-DOC-08` Sign and finish advances the queue (equivalent to reception's *done*).
 - `FR-DOC-09` Session earnings summary.
-- `FR-DOC-10` Doctor may only view records of patients in their own sessions, or with explicit patient consent.
+- `FR-DOC-10` Doctor may only view records of patients in their own sessions, or with explicit patient consent. **And which records** (`FR-NET-02`; plan A8): having treated a patient opens the visits *this hospital* made; the visits another hospital made are read only under the patient's consent. The screen says that what is shown is this hospital's part, and does not say whether there is more.
 
 **Prescribing is out of scope for this version.** The owner removed it on
 2026-09-19, so `FR-DOC-04`, `FR-DOC-05` and `FR-DOC-07` are not built: there are

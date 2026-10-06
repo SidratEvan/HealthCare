@@ -516,6 +516,14 @@ export const CONSOLE = {
     en: 'The patient answered nothing beforehand. Ask directly.',
   },
   pastVisits: { bn: 'আগের ভিজিট', en: 'Past visits' },
+  pastVisitsHereOnly: {
+    bn: 'শুধু এই হাসপাতালের ভিজিট দেখানো হচ্ছে। অন্য হাসপাতালের রেকর্ড দেখতে রোগীর কোড লাগবে।',
+    en: 'Only visits at this hospital are shown. Records from another hospital need the patient’s code.',
+  },
+  noPastVisitsHere: {
+    bn: 'এই হাসপাতালে এই রোগীর আগের কোনো রেকর্ড নেই',
+    en: 'No earlier records for this patient at this hospital',
+  },
   noPastVisits: { bn: 'এই রোগীর আগের কোনো রেকর্ড নেই', en: 'No earlier records for this patient' },
   // `PRD.md` §3.2: absent is stated, never implied by a blank.
   prescriptionsAbsent: {
