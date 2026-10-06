@@ -285,7 +285,12 @@ export function emergencyInbound(
 /** `emergency.updated` — a case moved: prepared, accepted, triaged, declined, called off. */
 export function emergencyUpdated(
   hospitalId: string,
-  data: { readonly case: EmergencyCaseView; readonly load: number },
+  data: {
+    readonly case: EmergencyCaseView;
+    readonly load: number;
+    /** The console action behind the change, by its own key; null when nobody's (`SY-09`). */
+    readonly clientEventId?: string | null;
+  },
   serverTs: string,
 ): void {
   emitter().emit(ROOMS.emergency(hospitalId), 'emergency.updated', {

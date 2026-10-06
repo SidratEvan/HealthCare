@@ -111,10 +111,15 @@ export function erSender(
   return async (action) => {
     const body = { ...action.body, clientEventId: action.clientEventId, clientTs: action.clientTs };
     try {
-      if (action.method === 'PATCH') await client.patch(action.path, body, action.clientEventId);
-      else if (action.method === 'PUT') await client.put(action.path, body, action.clientEventId);
-      else await client.post(action.path, body, action.clientEventId);
-      return { kind: 'accepted' };
+      // What the server says the action produced: the case as it now stands,
+      // or the capabilities (`SY-09`).
+      const answer =
+        action.method === 'PATCH'
+          ? await client.patch<unknown>(action.path, body, action.clientEventId)
+          : action.method === 'PUT'
+            ? await client.put<unknown>(action.path, body, action.clientEventId)
+            : await client.post<unknown>(action.path, body, action.clientEventId);
+      return { kind: 'accepted', answer };
     } catch (error: unknown) {
       if (error instanceof NetworkError) return { kind: 'unreachable' };
       if (!(error instanceof ApiError)) return { kind: 'unreachable' };

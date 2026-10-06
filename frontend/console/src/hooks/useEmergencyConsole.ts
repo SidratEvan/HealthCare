@@ -48,6 +48,8 @@ import {
 } from '@platform/client';
 import {
   applyLocalCase,
+  casesAfterRead,
+  newestCases,
   applyLocalReferral,
   loadOf,
   sideOf,
@@ -159,6 +161,40 @@ export interface EmergencyConsole {
   readonly api: ReturnType<typeof erApi>;
 }
 
+/** How many named actions the console remembers not to draw again. */
+const REMEMBERED_SETTLED = 1_000;
+
+/** What an accepted action's answer may carry (`SY-09`), read without trusting its shape. */
+function readAnswer(value: unknown): {
+  readonly current: EmergencyCaseView | null;
+  readonly capabilities: readonly CapabilityState[] | null;
+  readonly serverTs: string | null;
+} {
+  const answer = (typeof value === 'object' && value !== null ? value : {}) as {
+    case?: unknown;
+    capabilities?: unknown;
+    serverTs?: unknown;
+  };
+  const current =
+    typeof answer.case === 'object' &&
+    answer.case !== null &&
+    typeof (answer.case as { version?: unknown }).version === 'number'
+      ? (answer.case as EmergencyCaseView)
+      : null;
+  return {
+    current,
+    capabilities: Array.isArray(answer.capabilities)
+      ? (answer.capabilities as CapabilityState[])
+      : null,
+    serverTs: typeof answer.serverTs === 'string' ? answer.serverTs : null,
+  };
+}
+
+/** The later of two server times; the freshness line never steps back. */
+function later(held: string | null, next: string): string {
+  return held === null || next > held ? next : held;
+}
+
 export function useEmergencyConsole(options: {
   readonly hospitalId: string;
   readonly getToken: () => string | null;
@@ -208,15 +244,27 @@ export function useEmergencyConsole(options: {
 
   // --- reading ---------------------------------------------------------------
 
+  /**
+   * When this console was first told of each case by the socket, on its own
+   * clock. A read of the board that was asked for before then cannot contain
+   * the case, and must not take it off the screen (`casesAfterRead`).
+   */
+  const toldAtRef = useRef(new Map<string, number>());
+
   const loadBoard = useCallback(async () => {
     try {
+      const askedAt = Date.now();
       const next = await api.board(hospitalId);
       setBoard(next);
-      setServerCases(next.cases);
+      // Every open case, each the newer of the two by version; a case the
+      // read was asked too early to contain stays (`SY-09`).
+      setServerCases((held) =>
+        casesAfterRead(held, next.cases, (id) => (toldAtRef.current.get(id) ?? 0) >= askedAt),
+      );
       setServerReferrals(next.referrals);
       setServerCapabilities(next.capabilities);
       setPublished(next.published);
-      setLastServerTs(next.serverTs);
+      setLastServerTs((held) => later(held, next.serverTs));
       setFailed(false);
     } catch {
       // A console already on screen stays there, ageing honestly; only one
@@ -235,11 +283,40 @@ export function useEmergencyConsole(options: {
 
   // --- sending ---------------------------------------------------------------
 
+  /** Actions a statement from the server has named: done, never drawn again (`SY-09`). */
+  const settledRef = useRef(new Set<string>());
+  /** This console's unanswered actions, to know a broadcast that names one of them. */
+  const waitingRef = useRef<readonly string[]>([]);
+  waitingRef.current = pending.map((action) => action.clientEventId);
+
+  /**
+   * A statement has named this action. If it is one this console is waiting
+   * on, it comes off the console's own drawing now — in the same turn as the
+   * case that contains it is set, so the two are one redraw — and out of the
+   * outbox, where there is nothing left to send.
+   */
+  const settle = useCallback((clientEventId: string) => {
+    if (!waitingRef.current.includes(clientEventId)) return;
+
+    const settled = settledRef.current;
+    settled.add(clientEventId);
+    for (const key of settled) {
+      if (settled.size <= REMEMBERED_SETTLED) break;
+      settled.delete(key);
+    }
+    setPending((held) => held.filter((action) => !settled.has(action.clientEventId)));
+    void outboxRef.current?.discard([clientEventId]).catch(() => undefined);
+  }, []);
+
   const refreshPending = useCallback(async () => {
     const outbox = outboxRef.current;
     if (outbox === null) return;
 
-    const here = (action: PendingErAction): boolean => action.hospitalId === hospitalId;
+    // Nothing a statement has already named: the outbox may hold it a moment
+    // longer than the console may draw it.
+    const settled = settledRef.current;
+    const here = (action: PendingErAction): boolean =>
+      action.hospitalId === hospitalId && !settled.has(action.clientEventId);
     setPending((await outbox.pending()).filter(here));
     setStuck((await outbox.stuck()).filter(here));
     setDurable(consoleStores().durable());
@@ -256,12 +333,37 @@ export function useEmergencyConsole(options: {
 
     const outcome = await outbox.flush(hospitalId, send);
     if (outcome.refused.length > 0) setLastRefusal(outcome.refused[0]?.reason ?? null);
+
+    // What the server answered goes on screen in the redraw that takes the
+    // answered actions off it (`SY-09`): the case each step changed, as it
+    // stands after the commit — which for a walk-in is the case the server
+    // made of the provisional one — and the capabilities a confirmation set.
+    let read = 0;
+    for (const entry of outcome.answers) {
+      const answer = readAnswer(entry.answer);
+      const stated = answer.current;
+      if (stated !== null) setServerCases((held) => newestCases(held, stated));
+      if (answer.capabilities !== null) setServerCapabilities(answer.capabilities);
+      if (stated !== null || answer.capabilities !== null) read += 1;
+      const at = answer.serverTs;
+      if (at !== null) setLastServerTs((held) => later(held, at));
+    }
+    const answered = new Set([
+      ...outcome.accepted,
+      ...outcome.refused.map((entry) => entry.clientEventId),
+    ]);
+    if (answered.size > 0) {
+      setPending((held) => held.filter((action) => !answered.has(action.clientEventId)));
+    }
     await refreshPending();
 
-    // The socket normally carries the server's version of each change; a
-    // re-read covers the socket being the thing that was down, and replaces a
-    // provisional walk-in with the case the server made of it.
-    if (outcome.accepted.length > 0 || outcome.refused.length > 0) await loadBoardRef.current();
+    // A refusal means the console drew on a board that was behind, and an
+    // accepted action whose answer was not one of the above (a referral's
+    // step) is not settled by it: either way, read the board. Not otherwise:
+    // the answer was enough.
+    if (outcome.refused.length > 0 || outcome.accepted.length > read) {
+      await loadBoardRef.current();
+    }
   }, [hospitalId, send, refreshPending]);
 
   const retryStuck = useCallback(async () => {
@@ -277,12 +379,12 @@ export function useEmergencyConsole(options: {
 
   // --- the channel -----------------------------------------------------------
 
+  // The newer of the two by version, never whichever arrived last. A case
+  // that has closed stays in this list, closed, so that an older statement
+  // delivered late cannot bring it back; `cases` draws the open ones.
   const upsert = useCallback((next: EmergencyCaseView) => {
-    setServerCases((current) => {
-      const without = current.filter((entry) => entry.id !== next.id);
-      // The list is the open cases; one that has closed leaves it.
-      return next.closedAt === null ? [...without, next] : without;
-    });
+    if (!toldAtRef.current.has(next.id)) toldAtRef.current.set(next.id, Date.now());
+    setServerCases((held) => newestCases(held, next));
   }, []);
 
   // Referrals stay once closed: today's are the timeline the console shows.
@@ -305,23 +407,26 @@ export function useEmergencyConsole(options: {
         if (current.hospitalId !== hospitalId) return;
         upsert(current);
         setNewCaseIds((previous) => new Set([...previous, current.id]));
-        setLastServerTs(serverTs);
+        setLastServerTs((held) => later(held, serverTs));
         alarm.ring();
       },
-      onCase: (current, _load, serverTs) => {
+      onCase: (current, _load, serverTs, clientEventId) => {
         if (current.hospitalId !== hospitalId) return;
+        // The broadcast names the action behind it. If it is this console's,
+        // the drawing comes off in the redraw that shows the case.
+        if (clientEventId !== null) settle(clientEventId);
         upsert(current);
         if (current.state === 'cancelled') setLastCancelled(current);
-        setLastServerTs(serverTs);
+        setLastServerTs((held) => later(held, serverTs));
       },
       onCapabilities: (capabilities, serverTs) => {
         setServerCapabilities(capabilities);
-        setLastServerTs(serverTs);
+        setLastServerTs((held) => later(held, serverTs));
       },
       onCapacity: (next, serverTs) => {
         if (next.hospitalId !== hospitalId) return;
         setPublished(next);
-        setLastServerTs(serverTs);
+        setLastServerTs((held) => later(held, serverTs));
       },
       onReferral: (next, incoming, serverTs) => {
         const side = sideOf(next, hospitalId);
@@ -341,7 +446,7 @@ export function useEmergencyConsole(options: {
     return () => {
       channel.close();
     };
-  }, [getToken, hospitalId, flush, upsert, upsertReferral, alarm]);
+  }, [getToken, hospitalId, flush, upsert, upsertReferral, alarm, settle]);
 
   useEffect(() => {
     setBrowserOnline(globalThis.navigator?.onLine ?? true);
@@ -456,6 +561,8 @@ export function useEmergencyConsole(options: {
           declineReason: null,
           admitBedKind: null,
           admitRequestedAt: null,
+          // Not the server's yet: any statement about it is newer.
+          version: 0,
         },
         referralChange: null,
         provisionalReferral: null,

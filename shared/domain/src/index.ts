@@ -222,6 +222,7 @@ export { confirmedTallyOfKind, orderForNeed, tallyOfKind } from './search/order.
 export {
   alreadyApplied,
   applyLocalCase,
+  casesAfterRead,
   canActOn,
   expectedArrival,
   inboundOrder,
@@ -229,6 +230,7 @@ export {
   isOnTheWay,
   isOpen,
   loadOf,
+  newestCases,
   nextTokenLabel,
   tokenLabel,
   triageOrder,

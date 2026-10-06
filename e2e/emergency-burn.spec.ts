@@ -349,3 +349,92 @@ test.describe('the ER outbox is kept on the device (FR-OFF-01)', () => {
     await expect(page.getByTestId('pending-count')).toBeHidden();
   });
 });
+
+test.describe('one action, shown once, on the ER console (SY-09)', () => {
+  /**
+   * A triage step is stated twice: in the answer to the request and in a
+   * broadcast. The console used to drop its own drawing when the answer came
+   * and read the whole board again; for as long as that read took, the row
+   * showed the case before the step. Here the socket says nothing and the
+   * board cannot be read again, so the answer is everything the console has.
+   */
+  test('the socket silent: a triage step and a walk-in settle from the answer alone', async ({
+    page,
+  }) => {
+    let held = false;
+    await page.routeWebSocket(/socket\.io/, (socket) => {
+      const server = socket.connectToServer();
+      socket.onMessage((message) => {
+        server.send(message);
+      });
+      server.onMessage((message) => {
+        if (!held) socket.send(message);
+      });
+    });
+
+    const walkIn = await registerWalkIn(shapla, 'breathing');
+    await openErConsole(page, shapla);
+    const row = page.getByTestId(`er-row-${walkIn.caseId}`);
+    await expect(row).toHaveAttribute('data-triage', 'red');
+    const rows = page.locator('[data-testid^="er-row-"]');
+    const before = await rows.count();
+
+    // Every colour the row shows from here on, in order.
+    await page.evaluate((caseId) => {
+      const read = (): string =>
+        document.querySelector(`[data-testid="er-row-${caseId}"]`)?.getAttribute('data-triage') ??
+        '';
+      const shown = [read()];
+      new MutationObserver(() => {
+        const now = read();
+        if (now !== '' && now !== shown[shown.length - 1]) shown.push(now);
+      }).observe(document.body, { subtree: true, childList: true, attributes: true });
+      (globalThis as unknown as { colours: string[] }).colours = shown;
+    }, walkIn.caseId);
+    const colours = async (): Promise<string[]> =>
+      await page.evaluate(() => (globalThis as unknown as { colours: string[] }).colours);
+
+    // From here the board cannot be read again, and the socket is silent.
+    held = true;
+    let reads = 0;
+    await page.route(`**/hospitals/${shapla.hospitalId}/emergency`, async (route) => {
+      reads += 1;
+      await route.abort('failed');
+    });
+
+    const answered = page.waitForResponse(
+      (response) =>
+        response.url().includes(`/emergency/cases/${walkIn.caseId}`) &&
+        response.request().method() === 'PATCH' &&
+        response.ok(),
+    );
+    await page.getByTestId(`er-triage-yellow-${walkIn.caseId}`).click();
+    await answered;
+
+    await expect(page.getByTestId('pending-count')).toBeHidden();
+    await expect(row).toHaveAttribute('data-triage', 'yellow');
+    expect((await caseState(walkIn.caseId)).triage).toBe('yellow');
+    // Red to yellow, and never back.
+    expect(await colours()).toEqual(['red', 'yellow']);
+
+    // Somebody walks in. The row the console drew becomes the case the
+    // server made of it, with its token, in one step: one more row, not two.
+    const filed = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/emergency/cases') &&
+        response.request().method() === 'POST' &&
+        response.ok(),
+    );
+    await page.getByTestId('er-walkin').click();
+    await page.getByRole('button', { name: 'দগ্ধ' }).click();
+    await page.getByTestId('er-walkin-save').click();
+    await filed;
+
+    await expect(page.getByTestId('pending-count')).toBeHidden();
+    await expect(rows).toHaveCount(before + 1);
+    await expect(rows.filter({ hasText: 'ER-' })).toHaveCount(before + 1);
+
+    // And the console did not need to ask the board again for either.
+    expect(reads).toBe(0);
+  });
+});
