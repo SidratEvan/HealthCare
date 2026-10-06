@@ -16,8 +16,6 @@
  * drawn from, so nothing from a row can be shown here.
  */
 
-import type { ReactNode } from 'react';
-
 import {
   hasWarnings,
   type ImportWarnings as Warnings,
@@ -33,6 +31,8 @@ import {
   type ConsoleKey,
 } from '@platform/i18n';
 import { useLocale } from '@platform/ui';
+
+import type { ReactNode } from 'react';
 
 /** Why two rows were read as one person. */
 const BECAUSE_NAME: Readonly<Record<SamePersonReason, ConsoleKey>> = {
