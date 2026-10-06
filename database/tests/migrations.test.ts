@@ -133,6 +133,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0040',
       // Plan A5: a booking remembers the request that made it (FR-QUE-51).
       '0041',
+      // Plan A6: a sign-in's identity across the rotation of its tokens (FR-SEC-06).
+      '0042',
     ]);
   });
 

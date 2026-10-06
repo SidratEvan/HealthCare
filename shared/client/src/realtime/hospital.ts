@@ -18,6 +18,8 @@ import { io, type Socket } from 'socket.io-client';
 
 import type { BedView, PublicCapacity } from '@platform/domain';
 
+import { reconnectIfDropped } from './reconnect.js';
+
 export interface HospitalChannelOptions {
   readonly url: string;
   readonly getToken: () => string | null;
@@ -54,10 +56,18 @@ export function openHospitalChannel(options: HospitalChannelOptions): {
     reconnectionDelayMax: 10_000,
   });
 
+  /** Set by `close`: a channel its owner has closed is never reopened. */
+  let closed = false;
+
   socket.on('connect', () => {
     options.onConnection(true);
   });
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    // A close the server asked for is tried once more with the credential now
+    // held: a console given a new sign-in comes back, a revoked one is refused
+    // (`reconnect.ts`, `FR-SEC-06`).
+    reconnectIfDropped(socket, reason, () => closed);
+
     // The board stays on screen, with its freshness line going stale — a
     // board that blanks when the wifi drops is useless exactly when a ward
     // needs it (`FR-OFF-02`).
@@ -82,6 +92,7 @@ export function openHospitalChannel(options: HospitalChannelOptions): {
 
   return {
     close: () => {
+      closed = true;
       socket.disconnect();
     },
     socket,

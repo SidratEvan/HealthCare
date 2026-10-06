@@ -164,6 +164,8 @@ One row per code sent. A new code consumes any open one for the number, so only 
 
 One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it: the old row is revoked and a new one written, so a stolen refresh token works once at most.
 
+**`family_id` uuid (0042, `FR-SEC-06`).** One sign-in, across the rotation of its tokens: set at sign-in and carried to every row that replaces it. A staff access token names its family (`sid`) and is honoured while the family has a row that is neither revoked nor expired, so a sign-out or a deactivation ends access at once while a renewal does not. **IX** (partial). NULL for a patient's sessions, which do not use it yet; a staff row from before 0042 was given its own id.
+
 #### `external_refs` (`FR-IMP-04`) — 0030
 | Column | Type | Notes |
 |---|---|---|
@@ -690,6 +692,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- (§2.5, SY-09)
     0041_booking_idempotency.sql   -- plan A5: bookings.idempotency_key, and guest_links no longer
                                    -- one per booking (§2.1, §2.3, FR-QUE-51)
+    0042_session_family.sql        -- plan A6: sessions_auth.family_id, a sign-in's identity across
+                                   -- the rotation of its tokens (§2.1, FR-SEC-06)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)
