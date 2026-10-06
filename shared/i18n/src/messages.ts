@@ -2335,7 +2335,16 @@ export const PATIENT = {
   seeADoctorSub: { bn: 'কোন সমস্যার জন্য দেখাবেন?', en: 'What do you need to be seen for?' },
   quickBed: { bn: 'বেড', en: 'Beds' },
   quickReport: { bn: 'রিপোর্ট', en: 'Reports' },
-  activeSerialTitle: { bn: 'আজকের সিরিয়াল চলছে', en: 'Your serial today' },
+  // Not "today's": a chamber that runs past midnight is still theirs (`FR-PAT-39`).
+  activeSerialTitle: { bn: 'আপনার সিরিয়াল চলছে', en: 'Your serial is live' },
+  serialStatusUnknown: {
+    bn: 'এখনকার অবস্থা জানা যাচ্ছে না',
+    en: 'The current status could not be checked',
+  },
+  serialStatusUnknownSince: {
+    bn: 'এখনকার অবস্থা জানা যাচ্ছে না · শেষ জানা {age}',
+    en: 'The current status could not be checked · last known {age}',
+  },
   activeSerialMeta: { bn: '{doctor} · এখন চলছে {serving}', en: '{doctor} · now serving {serving}' },
   doctorsHere: { bn: '{count} জন ডাক্তার', en: '{count} doctors' },
 

@@ -23,32 +23,58 @@
 
 import { useEffect, useState } from 'react';
 
-import { formatDateTime, formatSerial, tp, numeralsFor, localName } from '@platform/i18n';
+import {
+  formatAge,
+  formatDateTime,
+  formatSerial,
+  tp,
+  numeralsFor,
+  localName,
+} from '@platform/i18n';
 import { Card, useLocale } from '@platform/ui';
 
 import { ChevronIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
 import { useDeployment } from '@/hooks/useDeployment';
-import { bookingsInScope, recentBookings, type DatedBooking } from '@/lib/bookings';
+import { bookingsInScope, recentBookings } from '@/lib/bookings';
 import { scopedHospitalId } from '@/lib/scope';
+import { standingOf, type StoodBooking } from '@/lib/standing';
 
 import type { ReactNode } from 'react';
 
 export default function SerialsPage(): ReactNode {
   const locale = useLocale();
-  const [bookings, setBookings] = useState<readonly DatedBooking[] | null>(null);
+  const [bookings, setBookings] = useState<readonly StoodBooking[] | null>(null);
 
   // Read after mount: `localStorage` does not exist on the server, and reading
   // it during render makes the first client render disagree with it.
   // An app open for one hospital lists that hospital's serials (`FR-BRD-02`).
   const inHospital = scopedHospitalId(useDeployment());
   useEffect(() => {
-    setBookings(bookingsInScope(recentBookings(), inHospital));
+    let stale = false;
+    const mine = bookingsInScope(recentBookings(), inHospital);
+    if (mine.length === 0) {
+      setBookings([]);
+      return undefined;
+    }
+
+    // Where each one stands is the server's to say, not the calendar's
+    // (`FR-PAT-39`): the shape of the answer is shown until it has.
+    setBookings(null);
+    void standingOf(mine).then((stood) => {
+      if (!stale) setBookings(stood);
+    });
+    return () => {
+      stale = true;
+    };
   }, [inHospital]);
 
-  const today = bookings?.filter((entry) => entry.isToday) ?? [];
-  const upcoming = bookings?.filter((entry) => !entry.isToday && !entry.isPast) ?? [];
-  const past = bookings?.filter((entry) => entry.isPast) ?? [];
+  // Current, whatever the date; and one that could not be checked stays here,
+  // marked, rather than being filed under past.
+  const today =
+    bookings?.filter((entry) => entry.standing === 'current' || entry.standing === 'unknown') ?? [];
+  const upcoming = bookings?.filter((entry) => entry.standing === 'upcoming') ?? [];
+  const past = bookings?.filter((entry) => entry.standing === 'past') ?? [];
 
   return (
     <TabScreen title={tp('mySerials', locale)}>
@@ -73,9 +99,9 @@ export default function SerialsPage(): ReactNode {
         </div>
       ) : (
         <>
-          <Section title={tp('serialsToday', locale)} bookings={today} live />
-          <Section title={tp('serialsUpcoming', locale)} bookings={upcoming} />
-          <Section title={tp('serialsPast', locale)} bookings={past} />
+          <Section title={tp('serialsToday', locale)} bookings={today} live name="current" />
+          <Section title={tp('serialsUpcoming', locale)} bookings={upcoming} name="upcoming" />
+          <Section title={tp('serialsPast', locale)} bookings={past} name="past" />
 
           {/* The honest caveat, on the screen rather than in a comment. */}
           <p className="text-caption text-ink-muted">{tp('serialsOnThisDevice', locale)}</p>
@@ -88,10 +114,12 @@ export default function SerialsPage(): ReactNode {
 function Section({
   title,
   bookings,
+  name,
   live = false,
 }: {
   readonly title: string;
-  readonly bookings: readonly DatedBooking[];
+  readonly bookings: readonly StoodBooking[];
+  readonly name: 'current' | 'upcoming' | 'past';
   readonly live?: boolean;
 }): ReactNode {
   const locale = useLocale();
@@ -99,7 +127,7 @@ function Section({
   if (bookings.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-3" data-testid={`serials-${name}`}>
       <h2 className="text-title-sm">{title}</h2>
 
       <ul className="flex flex-col gap-3">
@@ -126,6 +154,26 @@ function Section({
                     <p className="text-body-sm tabular-nums text-ink-secondary">
                       {formatDateTime(booking.plannedStart, numerals)}
                     </p>
+                    {booking.standing !== 'unknown' ? null : (
+                      <p
+                        className="text-caption text-ink-muted"
+                        data-testid={`serial-unknown-${booking.bookingId}`}
+                      >
+                        {booking.knownAt === null
+                          ? tp('serialStatusUnknown', locale)
+                          : tp('serialStatusUnknownSince', locale).replace(
+                              '{age}',
+                              formatAge(
+                                Math.max(
+                                  0,
+                                  Math.round((Date.now() - Date.parse(booking.knownAt)) / 60_000),
+                                ),
+                                locale,
+                                numerals,
+                              ),
+                            )}
+                      </p>
+                    )}
                   </div>
 
                   <span className="text-brand-600">
