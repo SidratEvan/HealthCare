@@ -259,10 +259,11 @@ model's import suggestions are off on the deployed demo unless
 > inside it (`FR-SEC-07` as amended, `CLAUDE.md` §1.2). This part was written
 > for one hospital on a machine of its own, and it stays true for that case,
 > which is now the exception: the reception-pilot candidate in S8 is such a
-> deployment. The stack is the same on a shared machine. What a shared one
-> needs that is not here yet: hospitals kept apart by the database before a
-> second real hospital joins (`FR-SEC-11`, `PLATFORM_PLAN.md` 1.10), and an
-> address for each hospital's portal (`FR-BRD-04`).
+> deployment. The stack is the same on a shared machine. Hospitals are kept
+> apart by the database since plan B1 (`FR-SEC-11`, migration 0043,
+> `DATABASE.md` §5.2). What a shared machine needs that is not here yet: an
+> address for each hospital's portal (`FR-BRD-07`, plan C2), and one patient
+> kept from another by the database as well as by the application (plan B3).
 
 The pilot build (`CLAUDE.md` §4.2, pilot step 26). Everything above deploys
 the **demonstration**; this part deploys the **real** thing for one
@@ -524,8 +525,14 @@ before Docker sees them. A Linux server needs nothing.
   reads and writes rows and cannot change the schema, empty a table, create a
   role, or alter or remove an audit row. `POSTGRES_USER` owns the database
   and is used only by the migrations and the backup (`DATABASE.md` §5.1).
-  **Hospitals are not yet separated by the database itself**: that is plan
-  1.10, and until then the separation is the API's own checks.
+  **Hospitals are separated by the database itself** (plan B1, migration
+  0043, `DATABASE.md` §5.2): the API's role does not bypass row-level
+  security, and a member of one hospital's staff cannot reach another
+  hospital's rows whatever a route or a query forgets. This holds because the
+  API connects as its own role and not as the owner; **`pnpm db:role` must
+  have run after the upgrade that brings 0043**, which the `migrate` service
+  does by itself on every start. An API left connecting as `POSTGRES_USER` is
+  not bound by any of it.
 - **The API and the two web apps do not run as root** inside their
   containers. The database, the web server and the backup run as their images
   ship them.

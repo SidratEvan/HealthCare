@@ -162,7 +162,9 @@ describe('the auth matrix', () => {
       .set('Idempotency-Key', randomUUID())
       .send({ action: 'process', idempotencyKey: randomUUID() });
 
-    expect(response.status).toBe(403);
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect(response.status).toBe(404);
     expect(await orderRow(id)).toMatchObject({ state: 'sample_collected' });
   });
 
@@ -287,7 +289,9 @@ describe('ordering tests from a consultation', () => {
       .set('Authorization', bearer(shapla.doctorToken))
       .set('Idempotency-Key', key)
       .send({ bookingId, tests: [{ testCode: 'CBC' }], idempotencyKey: key })
-      .expect(403);
+      // Not 403: another hospital's row does not exist for this caller, so it is
+      // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+      .expect(404);
   });
 });
 

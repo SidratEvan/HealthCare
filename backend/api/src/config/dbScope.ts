@@ -1,0 +1,95 @@
+/**
+ * Who a database connection is working for (`PRD.md` `FR-SEC-11`,
+ * `FR-NET-02`; DATABASE.md §6; migration 0043; plan B1).
+ *
+ * Hospitals used to be kept apart by habits in application code: a scope
+ * check on each route, a hospital in each query. One forgotten check leaked
+ * across hospitals and nothing underneath stopped it. Now the database is told
+ * who every connection is working for, and its policies refuse a member of
+ * staff any row of another hospital, whatever the query forgot to say.
+ *
+ * ## How the scope travels
+ *
+ * A request's scope is decided once, from its principal, by the middleware in
+ * `app.ts`, and held for the length of the request by `AsyncLocalStorage`:
+ * every `await` of that request sees it, and no other request's. Each time a
+ * connection is taken from the pool (`config/db.ts`), the scope in force is
+ * stated on it before anything else runs. A transaction takes one connection
+ * and keeps it, so it is stated once.
+ *
+ * No route, service or repository says anything about scope, and none can
+ * forget to. That is the point.
+ *
+ * ## The four scopes
+ *
+ * - `hospital`: a member of that hospital's staff. Another hospital's rows do
+ *   not exist for it.
+ * - `national`: a platform administrator. Organisations, never a patient
+ *   (`FR-ONB-08`).
+ * - `open`: a patient, a guest holding a link, or nobody. What each may see
+ *   is still decided by the application; a patient's own scope is plan B3.
+ * - `system`: the server's own work with nobody behind it — the schedule job,
+ *   the purge, a command an operator runs — and any code that runs outside a
+ *   request, which is what makes this the value when nothing was said.
+ *
+ * `system` as the default is deliberate and is not the weak point it may look
+ * like. Nothing a request does runs outside its own scope: the middleware
+ * wraps the whole of it. What runs with no scope is code no caller reaches.
+ * And a connection the API never stated anything on — somebody connecting as
+ * the API's role by hand — has no scope at all, and the policies show it
+ * nothing.
+ */
+
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+import type { Principal } from '../types/express.js';
+
+export type DbScope =
+  | { readonly kind: 'hospital'; readonly hospitalId: string }
+  | { readonly kind: 'national' }
+  | { readonly kind: 'open' }
+  | { readonly kind: 'system' };
+
+const SYSTEM: DbScope = { kind: 'system' };
+const OPEN: DbScope = { kind: 'open' };
+const NATIONAL: DbScope = { kind: 'national' };
+
+const storage = new AsyncLocalStorage<DbScope>();
+
+/** Runs `body`, and everything it awaits, in `scope`. */
+export function runInDbScope<T>(scope: DbScope, body: () => T): T {
+  return storage.run(scope, body);
+}
+
+/** The scope in force here; `system` where nothing set one. */
+export function currentDbScope(): DbScope {
+  return storage.getStore() ?? SYSTEM;
+}
+
+/**
+ * The scope a principal works in.
+ *
+ * A member of staff is scoped to the hospital their token names, and to
+ * nothing else: the token's `hospitalId` is the only thing consulted, never
+ * anything the request says.
+ */
+export function scopeOfPrincipal(principal: Principal | undefined): DbScope {
+  if (principal === undefined) return OPEN;
+  switch (principal.kind) {
+    case 'staff':
+      return { kind: 'hospital', hospitalId: principal.hospitalId };
+    case 'national':
+      return NATIONAL;
+    case 'patient':
+    case 'guest':
+      return OPEN;
+  }
+}
+
+/** What is said to the database, and the key that tells two scopes apart. */
+export function statementOf(scope: DbScope): {
+  readonly scope: string;
+  readonly hospitalId: string;
+} {
+  return { scope: scope.kind, hospitalId: scope.kind === 'hospital' ? scope.hospitalId : '' };
+}

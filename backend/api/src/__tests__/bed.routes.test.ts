@@ -164,7 +164,9 @@ describe('who may read and change the board (FR-ROLE-01)', () => {
         .status,
     ).toBe(401);
     expect((await act(path, {}, fixture.receptionistToken)).status).toBe(403);
-    expect((await act(path, {}, await otherWardToken(fixture.hospitalId))).status).toBe(403);
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect((await act(path, {}, await otherWardToken(fixture.hospitalId))).status).toBe(404);
 
     // The bed is untouched by every refusal above.
     expect((await bedRow(bedAt(0))).state).toBe('free');

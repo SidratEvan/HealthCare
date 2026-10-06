@@ -14,25 +14,9 @@
  * compile.
  */
 
-import { Client } from 'pg';
-
-import { ensureApiRole } from '../../database/scripts/lib/role.js';
-
-import { E2E_DATABASE_URL } from './database.js';
-import { prepareDatabase } from './globalSetup.js';
-import { E2E_API_ROLE } from './production.js';
+import { prepareApiRole, prepareDatabase } from './globalSetup.js';
 
 export default async function globalSetup(): Promise<void> {
   prepareDatabase();
-
-  const owner = new Client({
-    connectionString: E2E_DATABASE_URL,
-    options: '-c search_path=public,extensions',
-  });
-  await owner.connect();
-  try {
-    await ensureApiRole(owner, E2E_API_ROLE);
-  } finally {
-    await owner.end();
-  }
+  await prepareApiRole();
 }

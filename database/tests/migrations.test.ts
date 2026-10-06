@@ -135,6 +135,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0041',
       // Plan A6: a sign-in's identity across the rotation of its tokens (FR-SEC-06).
       '0042',
+      // Plan B1: hospitals kept apart by the database (FR-SEC-11).
+      '0043',
     ]);
   });
 

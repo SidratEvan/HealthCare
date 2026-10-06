@@ -22,7 +22,7 @@
 
 import { defineConfig, devices } from '@playwright/test';
 
-import { E2E_DATABASE_URL } from './e2e/support/database.js';
+import { asApiRole } from './e2e/support/database.js';
 
 const CONSOLE_URL = 'http://localhost:3100';
 const API_URL = 'http://localhost:4000';
@@ -61,7 +61,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
       env: {
-        DATABASE_URL: E2E_DATABASE_URL,
+        DATABASE_URL: asApiRole(),
         DEMO_MODE: 'true',
         NODE_ENV: 'development',
       },

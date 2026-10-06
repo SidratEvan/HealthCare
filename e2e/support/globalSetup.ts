@@ -38,7 +38,11 @@
 
 import { execFileSync } from 'node:child_process';
 
-import { E2E_DATABASE_URL, assertLocalDatabase } from './database.js';
+import { Client } from 'pg';
+
+import { ensureApiRole } from '../../database/scripts/lib/role.js';
+
+import { E2E_API_ROLE, E2E_DATABASE_URL, assertLocalDatabase } from './database.js';
 
 const PATIENT = 'http://localhost:3000';
 const CONSOLE = 'http://localhost:3100';
@@ -80,8 +84,28 @@ export function prepareDatabase(): void {
   execFileSync('pnpm', ['db:reset'], { stdio: 'inherit', shell: true, env });
 }
 
+/**
+ * Makes the role the suites' API connects as, and renews its grants.
+ *
+ * After the migrations, every time: a table a migration has just created is
+ * the owner's until this runs, and the API would be refused on it.
+ */
+export async function prepareApiRole(): Promise<void> {
+  const owner = new Client({
+    connectionString: E2E_DATABASE_URL,
+    options: '-c search_path=public,extensions',
+  });
+  await owner.connect();
+  try {
+    await ensureApiRole(owner, E2E_API_ROLE);
+  } finally {
+    await owner.end();
+  }
+}
+
 export default async function globalSetup(): Promise<void> {
   prepareDatabase();
+  await prepareApiRole();
 
   // One at a time: compiling in parallel only makes each compile slower.
   for (const route of ROUTES) {

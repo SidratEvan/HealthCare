@@ -16,6 +16,7 @@
  * long enough that the delta is bigger than the state.
  */
 
+import { runInDbScope, scopeOfPrincipal } from '../config/dbScope.js';
 import { logger } from '../config/logger.js';
 import { AppError } from '../errors/AppError.js';
 import * as queueService from '../services/queue.service.js';
@@ -68,7 +69,11 @@ export function registerHandlers(io: Server): void {
     }
 
     socket.on('session:subscribe', (message: SubscribeMessage) => {
-      void subscribeToSession(socket, message).catch((error: unknown) => {
+      // A socket's reads are held to its principal's scope like a request's
+      // (`config/dbScope.ts`, `FR-SEC-11`).
+      void runInDbScope(scopeOfPrincipal(session.principal), async () => {
+        await subscribeToSession(socket, message);
+      }).catch((error: unknown) => {
         emitError(socket, error);
       });
     });
