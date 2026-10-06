@@ -7,7 +7,14 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/v1-direction` (5 October, evening) — **the feature
+Last updated: `chore/pitch-release` (6 October) — **the V1 pitch build is
+released as MedLiveBD: `main` and the public demo are `mvp` at `fa31157`
+(and this branch's documents), Supabase has
+migrations through 0038 and fresh demo data, and `demo` is the same commit**
+(below, *Now: the V1 pitch build* and *Running the pitch demo*). The plan's
+rule from here is the owner's: stop adding V1 features; what is next is his
+own walk through the demo and whatever it turns up. Before that,
+`chore/v1-direction` (5 October, evening) — **the feature
 freeze is lifted and the product is one shared multi-hospital platform; the
 V1 pitch build is what is being built** (below, *Now: the V1 pitch build*).
 Documents only. Before that, `chore/pilot-candidate` (5 October) —
@@ -242,8 +249,8 @@ morning:
   real data (`FR-SEC-11`, plan 1.10); they do not block the pitch.
 - **Order:** patient search and discovery; hospital onboarding from screens;
   the mapped CSV import with a model's suggestions on top; a design pass
-  walked as each role; then one full gate and a release to the public demo,
-  which is 133 commits behind `mvp`.
+  walked as each role; then one full gate and a release to the public demo
+  (made 6 October; it had been 133 commits behind `mvp`).
 - **Ambulance and blood leave the first screen.** Reschedule only if cheap.
   A significant redesign is allowed where the old screens fight the new
   structure.
@@ -267,6 +274,7 @@ morning:
 - **V5.1 `fix/pitch-walkthrough`** — the product walked by screenshot as each role: patient, Padma's own app, reception, doctor, ward, emergency, hospital administrator, platform administrator. One fault found and fixed with a test: a hospital's own app showed a serial this phone had booked at another hospital (Home's strip and সিরিয়াল); it now shows that hospital's only, and `GET /config?scope=` says which hospital that is by id. No staff screen needed changing. `PRD.md` §24 is the platform's pitch now, eleven steps, and promises no reschedule (`FR-PAT-23` marked outside V1); *Running the pitch demo* below covers search, a hospital's own app, onboarding and the mapped import. Focused gate: typecheck, lint, format, the scope API tests (21), and in the browser hospital-scope (6) then the canary, guest-booking, app-shell, patient-search and standby (50 passed).
 - **`chore/rename-medlivebd`** — **the product is MedLiveBD** (owner, 6 October, replacing the working name HealthWealthBD and the placeholder স্বাস্থ্যসেবা the patient app showed). The patient app's header, title and installed name, the console's tab, a patient's verification message, a platform administrator's authenticator entry, a downloaded import template (`medlivebd-<set>-template.csv`) and the self-hosted stack's project, image, database and role names. **Written the same in Bangla and English, which is this build's choice and not the owner's:** he gave one spelling, so none was invented; a Bangla spelling is one line in `shared/i18n` (`appName`) when he gives it. Not renamed: `@platform/*`, the repository folder, tables. **A self-hosted stack started under the old names would need its `deploy/.env` kept as it is** (none exists outside this machine's tests). Focused gate: typecheck, lint, format, the message, environment, import and TOTP tests (3,096), and in the browser hospital-scope, data-import, app-shell, patient-account and staff-2fa (23 passed).
 - **V4.3 `feat/import-warnings`** — what is not an error is still said before an import is approved (`FR-IMP-21`): patient rows under different identifiers that look like one person (same name with the same mobile number or the same birth date; a shared phone alone is a family), and a date or mobile column written more than one way, with the reading that will be used. By row number only, nothing merged, nothing refused, approval never disabled. Worked out from the batch's rows each time it is read, so **no migration**. To show it: `database/seeds/samples/hospital-export-patients-untidy.csv`. The last planned branch of the V1 pitch build. Strict gate: `pnpm test` whole (5,368), typecheck, lint, format; `data-import` and `import-mapping` in the browser (7 passed).
+- **V6 `chore/pitch-release`** — the release. Full gate on `fa31157`: `pnpm verify` (5,368 tests), `pnpm build`, `pnpm test:e2e` (191 passed), `pnpm test:e2e:built` (3 passed) and `pnpm test:e2e:prod` (25 passed), the canary in the first and the last. Then, in this order: migrations 0034–0038 applied to Supabase and `db:verify` clean there; `mvp` merged into `main` and pushed, which redeploys the API and both apps; the demo data reset from the new seeds (Padma's theme, every hospital's lifecycle, the platform administrator); `demo` moved to the same commit and pushed. **Not verified from here: the deployed pages themselves** — the public demo's addresses are not recorded in this repository, so the owner opens them. The model's import suggestions are off on the public demo until `MAPPING_PROVIDER` and `MAPPING_API_KEY` are set on Render. The morning refresh task had been skipping since 0037 was written (Supabase was behind, so `db:verify` refused); it runs again now. **The first full gate of the night was red by one test, the canary, by 186 ms** (2,186 against 2,000): it ran while a formatter and a patch script were running in a second working copy on the same machine. Alone it passed, and the gate was run again from the start on the final commit with the machine left alone, which is the run counted here. The rule it confirms: nothing else runs on this machine while the browser suite does, not even a formatter. **The second run's production suite was red by one assertion** that pinned the exact shape of `GET /config` and had not been updated when V2.2 added `scope` to it (the suite had not been run since): the test was corrected (`fix/prod-config-shape`, the only difference between `2e26cd0`, which the other four steps ran on, and `fa31157`) and the production suite run again whole, 25 of 25. So a branch that changes a public answer's shape runs `pnpm test:e2e:prod` too.
 
 **Left for the owner by this build** (none of them blocks the pitch):
 
@@ -438,13 +446,11 @@ written**. What was read for it on 3 October, so it is not read again:
    whose §9 says which have landed.
 2. **Server sizing for Marks** — measure the `deploy/` stack's CPU, memory and
    disk on this machine, so Marks' IT can say whether they can host it.
-3. **Releasing `mvp` to `main`** — `main` is still the pitch release of
-   27 September (what Marks saw). Supabase has 0027–0033; nothing records
-   0034 (plan 1.7) being applied there, so a release runs
-   `ALLOW_REMOTE_DB=1 pnpm db:migrate` against Supabase first, which applies
-   whatever is missing. Since 3 October a release no longer waits for the owner's
-   word (`CLAUDE.md` §3.1), but it has not been made: nothing in phase 1 needs
-   the public demo to change, and it is better done once, when phase 1 ends.
+3. ~~**Releasing `mvp` to `main`**~~ — **done 6 October** (`chore/pitch-release`):
+   Supabase took 0034–0038, `main` is `mvp` at `fa31157`, and the demo data
+   was reset afterwards. The next release repeats it: the full gate, then
+   `ALLOW_REMOTE_DB=1 pnpm db:migrate` and `db:verify` against Supabase, then
+   the merge and push, then the reset.
 Step 27 waits for an SMS account; push notifications wait for a signed
 hospital (decision 84). Company registration (the name is MedLiveBD since 6 October; via
 BanglaBiz) is outside the repo and paused; see the owner's notes.
@@ -4392,13 +4398,12 @@ credential.
 **From the `demo` branch** (CLAUDE.md §3.1): the demo-data version, kept at
 the last green commit of `mvp`, for pulling onto any machine to show
 somebody. It is moved to each green merge into `mvp` and pushed with it, so
-`git log -1 demo` names the commit; as of 3 October that is
-`docs/PLATFORM_PLAN.md` phase 1 through 1.9 — delay, resume, undo, the sync
-allow-list, the pool and broadcast fixes, the outboxes kept on disk, the
-console opening with no network, the hardened self-host stack, the browser
-suite in CI, and messages that leave no number, text or link behind — after
-`pnpm verify`, a clean browser run, the built suite and the production
-configuration on that commit. **Green means
+`git log -1 demo` names the commit; as of 6 October that is the V1 pitch
+build, whole (`fa31157`), under the name MedLiveBD — search across
+hospitals, a hospital's own app, onboarding from the platform administrator's
+screen, the mapped import with a model's suggestions and the warnings before
+approval — which is also what `main` and the public demo
+are. **Green means
 `pnpm verify`, `pnpm test:e2e`, `pnpm test:e2e:built` and
 `pnpm test:e2e:prod`.**
 

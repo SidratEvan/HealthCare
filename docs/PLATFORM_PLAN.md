@@ -498,7 +498,7 @@ In addition to `CLAUDE.md`:
 | V4.3 | `feat/import-warnings` | **merged 6 October**: the preview names the same patient entered twice and a column written two ways, by row number, and merges nothing. No migration. In the release of 6 October |
 | V5.1 | `fix/pitch-walkthrough` | **merged 6 October.** Walked as patient, in Padma's own app, and as reception, doctor, ward, emergency, hospital administrator and platform administrator. One fault: a hospital's own app showed a serial booked at another hospital; fixed with a test. `PRD.md` §24 rewritten for the platform and without a reschedule; the demo path in `STATUS.md` covers search, a hospital's own app, onboarding and the mapped import |
 | V5.x | `fix/pitch-*` | further findings, if the owner's own walk turns any up |
-| V6 | `chore/pitch-release` | |
+| V6 | `chore/pitch-release` | **released 6 October.** `main`, the public demo and `demo` are `mvp` at `fa31157`; Supabase has 0034–0038 and fresh demo data. From here no V1 feature is added without the owner asking |
 | 1.9c | `fix/queue-exactly-once` | after the first pilot (see §2 for what would bring it forward) |
 | 1.9d | `fix/ward-reconcile` | after the first pilot |
 | 1.9e | `fix/er-reconcile` | after the first pilot |
