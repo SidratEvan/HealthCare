@@ -62,6 +62,7 @@ import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/u
 import { HospitalBeds } from '@/components/HospitalBeds';
 import { HospitalMark } from '@/components/HospitalMark';
 import { ChevronIcon, StethoscopeIcon } from '@/components/icons';
+import { NotShared, withholds } from '@/components/NotShared';
 import { TabScreen } from '@/components/TabScreen';
 import { useDeployment } from '@/hooks/useDeployment';
 import { useNow } from '@/hooks/useNow';
@@ -448,6 +449,9 @@ function HospitalResult({
   const numerals = numeralsFor(locale);
 
   const tally = need?.kind === 'bed' ? confirmedTallyOfKind(hospital.beds, need.bedKind) : null;
+  // It has beds and keeps the figure: said as that, not as "unconfirmed"
+  // and never as none (FR-NET-04).
+  const bedsWithheld = withholds(hospital, 'beds');
 
   // Where the card leads: the next step for this need, at this hospital.
   const href =
@@ -462,7 +466,7 @@ function HospitalResult({
   const callNumber = hospital.emergencyPhone ?? hospital.phone ?? null;
 
   return (
-    <Card tone={hospital.sittingNow > 0 && need?.kind !== 'bed' ? 'brand' : 'default'}>
+    <Card tone={(hospital.sittingNow ?? 0) > 0 && need?.kind !== 'bed' ? 'brand' : 'default'}>
       <div className="flex flex-col gap-3" data-testid={`result-hospital-${hospital.id}`}>
         <div className="flex items-start gap-3">
           <HospitalMark hospitalId={hospital.id} logoVersion={hospital.logoVersion} />
@@ -478,7 +482,9 @@ function HospitalResult({
         {/* The answer to what was asked, first. */}
         {need?.kind === 'bed' ? (
           <div className="flex flex-col gap-1" data-testid="result-need-line">
-            {tally === null ? (
+            {bedsWithheld ? (
+              <NotShared figure="beds" />
+            ) : tally === null ? (
               <Chip tone="neutral">
                 {tp('searchBedUnconfirmed', locale).replace(
                   '{kind}',
@@ -493,7 +499,8 @@ function HospitalResult({
                   .replace('{total}', formatNumber(tally.total, numerals))}
               </Chip>
             )}
-            <Age asOf={tally?.asOf ?? null} now={now} />
+            {/* No age under a figure that is not there. */}
+            {bedsWithheld ? null : <Age asOf={tally?.asOf ?? null} now={now} />}
           </div>
         ) : null}
 
@@ -519,29 +526,41 @@ function HospitalResult({
                 )}
               </Chip>
             )}
-            {/* A11Y-03: the state is a sentence, not a colour. */}
-            <Chip tone={hospital.sittingNow > 0 ? 'positive' : 'neutral'}>
-              {hospital.sittingNow > 0
-                ? tp('sittingNowCount', locale).replace(
-                    '{count}',
-                    formatNumber(hospital.sittingNow, numerals),
-                  )
-                : tp('nobodySittingNow', locale)}
-            </Chip>
-            <Chip tone={hospital.openSerialsToday > 0 ? 'positive' : 'neutral'}>
-              {hospital.openSerialsToday > 0
-                ? tp('serialsOpenToday', locale).replace(
-                    '{count}',
-                    formatNumber(hospital.openSerialsToday, numerals),
-                  )
-                : tp('searchNoOpenSerials', locale)}
-            </Chip>
+            {/* A11Y-03: the state is a sentence, not a colour. Both figures
+                are one decision of the hospital's (FR-NET-04): where it keeps
+                them the line says so once, and neither reads as none. */}
+            {hospital.sittingNow === null || hospital.openSerialsToday === null ? (
+              withholds(hospital, 'serials') ? (
+                <NotShared figure="serials" />
+              ) : null
+            ) : (
+              <>
+                <Chip tone={hospital.sittingNow > 0 ? 'positive' : 'neutral'}>
+                  {hospital.sittingNow > 0
+                    ? tp('sittingNowCount', locale).replace(
+                        '{count}',
+                        formatNumber(hospital.sittingNow, numerals),
+                      )
+                    : tp('nobodySittingNow', locale)}
+                </Chip>
+                <Chip tone={hospital.openSerialsToday > 0 ? 'positive' : 'neutral'}>
+                  {hospital.openSerialsToday > 0
+                    ? tp('serialsOpenToday', locale).replace(
+                        '{count}',
+                        formatNumber(hospital.openSerialsToday, numerals),
+                      )
+                    : tp('searchNoOpenSerials', locale)}
+                </Chip>
+              </>
+            )}
           </div>
         )}
 
         {/* FR-PAT-14: free beds and ICU, with their own age — except on a bed
             search, where the kind asked for is already the line above. */}
-        {need?.kind === 'bed' ? null : <HospitalBeds beds={hospital.beds} now={now} />}
+        {need?.kind === 'bed' ? null : (
+          <HospitalBeds beds={hospital.beds} notShared={bedsWithheld} now={now} />
+        )}
 
         <div className="flex flex-wrap gap-2">
           <a

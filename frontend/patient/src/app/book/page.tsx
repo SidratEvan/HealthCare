@@ -43,6 +43,7 @@ import { GuestCodeCard } from '@/components/GuestCodeCard';
 import { HospitalBeds } from '@/components/HospitalBeds';
 import { HospitalMark } from '@/components/HospitalMark';
 import { BackIcon, ChevronIcon } from '@/components/icons';
+import { NotShared, withholds } from '@/components/NotShared';
 import { StandbyJoin } from '@/components/StandbyJoin';
 import { useDeployment } from '@/hooks/useDeployment';
 import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
@@ -377,7 +378,7 @@ function HospitalList({
               className="w-full text-left"
               data-testid={`hospital-${hospital.id}`}
             >
-              <Card tone={hospital.sittingNow > 0 ? 'brand' : 'default'}>
+              <Card tone={(hospital.sittingNow ?? 0) > 0 ? 'brand' : 'default'}>
                 <div className="flex items-start gap-3">
                   <HospitalMark hospitalId={hospital.id} logoVersion={hospital.logoVersion} />
 
@@ -400,19 +401,31 @@ function HospitalList({
                         </Chip>
                       )}
 
-                      {/* A11Y-03: the state is a sentence, not a colour. */}
-                      <Chip tone={hospital.sittingNow > 0 ? 'positive' : 'neutral'}>
-                        {hospital.sittingNow > 0
-                          ? tp('sittingNowCount', locale).replace(
-                              '{count}',
-                              formatNumber(hospital.sittingNow, numerals),
-                            )
-                          : tp('nobodySittingNow', locale)}
-                      </Chip>
+                      {/* A11Y-03: the state is a sentence, not a colour. And a
+                          hospital that keeps the figure is not said to have
+                          nobody sitting (FR-NET-04). */}
+                      {hospital.sittingNow === null ? (
+                        withholds(hospital, 'serials') ? (
+                          <NotShared figure="serials" />
+                        ) : null
+                      ) : (
+                        <Chip tone={hospital.sittingNow > 0 ? 'positive' : 'neutral'}>
+                          {hospital.sittingNow > 0
+                            ? tp('sittingNowCount', locale).replace(
+                                '{count}',
+                                formatNumber(hospital.sittingNow, numerals),
+                              )
+                            : tp('nobodySittingNow', locale)}
+                        </Chip>
+                      )}
                     </div>
 
                     {/* FR-PAT-14: free beds and ICU, with their own age. */}
-                    <HospitalBeds beds={hospital.beds} now={now} />
+                    <HospitalBeds
+                      beds={hospital.beds}
+                      notShared={withholds(hospital, 'beds')}
+                      now={now}
+                    />
                   </div>
 
                   <span className="mt-1 text-ink-muted">
@@ -496,7 +509,7 @@ function DoctorList({
                   className="w-full text-left"
                   data-testid={`doctor-${doctor.id}`}
                 >
-                  <Card tone={doctor.sittingNow ? 'brand' : 'default'}>
+                  <Card tone={doctor.sittingNow === true ? 'brand' : 'default'}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-title-sm">
@@ -509,8 +522,8 @@ function DoctorList({
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           {/* FR-PAT-13: in a chamber now, or the next time they
                             sit — never a bare "available". */}
-                          <Chip tone={doctor.sittingNow ? 'positive' : 'neutral'}>
-                            {doctor.sittingNow
+                          <Chip tone={doctor.sittingNow === true ? 'positive' : 'neutral'}>
+                            {doctor.sittingNow === true
                               ? tp('inChamberNow', locale)
                               : doctor.nextSessionAt === null
                                 ? tp('notSittingSoon', locale)
@@ -530,6 +543,11 @@ function DoctorList({
                                 : tp('sessionFull', locale)}
                             </Chip>
                           )}
+
+                          {/* When a doctor sits is a schedule and is shown;
+                              who is in a chamber now and how many serials are
+                              left are the hospital's to keep (FR-NET-04). */}
+                          {doctor.serialsShared === false ? <NotShared figure="serials" /> : null}
                         </div>
                       </div>
 
@@ -679,9 +697,14 @@ function SessionCards({
     <>
       <ul className="flex flex-col gap-3">
         {sessions.map((session) => {
+          // `taken` is null where the hospital does not share its serial
+          // figures (FR-NET-04). Whether the chamber is full is always said: a
+          // patient is not sent into a booking that can only be refused.
           const remaining =
-            session.capacity === null ? null : Math.max(0, session.capacity - session.taken);
-          const full = remaining === 0;
+            session.capacity === null || session.taken === null
+              ? null
+              : Math.max(0, session.capacity - session.taken);
+          const full = session.full ?? remaining === 0;
 
           return (
             <li key={session.id}>
@@ -711,7 +734,9 @@ function SessionCards({
                       ) : (
                         <p className="text-body-sm tabular-nums text-ink-secondary">
                           {remaining === null
-                            ? ''
+                            ? session.taken === null
+                              ? tp('serialsNotShared', locale)
+                              : ''
                             : `${formatMinutes(remaining, numerals)} ${tp('seatsLeft', locale)}`}
                         </p>
                       )}

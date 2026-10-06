@@ -16,9 +16,22 @@
 
 import { sql } from 'kysely';
 
+import { notSharedOf, type PublishableFigure } from '@platform/domain';
+
 import { db } from '../config/db.js';
 
 /** A facility as the public sees it. */
+/**
+ * Whether a hospital shares a live figure with the network (`FR-NET-04`):
+ * `fn_publishes`, for a read that builds its answer outside SQL.
+ */
+export async function publishes(hospitalId: string, figure: PublishableFigure): Promise<boolean> {
+  const result = await sql<{ shared: boolean }>`
+    SELECT fn_publishes(${hospitalId}::uuid, ${figure}) AS shared
+  `.execute(db);
+  return result.rows[0]?.shared ?? true;
+}
+
 export interface HospitalCard {
   readonly id: string;
   readonly nameBn: string;
@@ -54,9 +67,17 @@ export interface HospitalCard {
    * department answers a question nobody asked.
    */
   readonly doctorCount: number | null;
-  readonly sittingNow: number;
-  /** Serials still unclaimed today across this hospital's chambers. */
-  readonly openSerialsToday: number;
+  /** Null when the hospital does not share its serial figures (`FR-NET-04`). */
+  readonly sittingNow: number | null;
+  /** Serials still unclaimed today across this hospital's chambers; null when not shared. */
+  readonly openSerialsToday: number | null;
+  /**
+   * The live figures this hospital has and does not share (`FR-NET-04`):
+   * `serials`, `beds`, `stock`. A screen says "not shared" for each, and
+   * never a zero. A figure whose module the hospital does not run is not
+   * here: there is nothing to withhold.
+   */
+  readonly notShared: readonly PublishableFigure[];
 }
 
 export interface HospitalQuery {
@@ -112,9 +133,12 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
     capabilities: string[] | null;
     capability_as_of: Date | null;
     doctor_count: string | null;
-    sitting_now: string;
-    open_serials_today: string;
+    sitting_now: string | null;
+    open_serials_today: string | null;
+    unpublished: string[];
+    modules_off: string[];
   }>`
+    SELECT cards.* FROM (
     SELECT h.id, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
            h.thana, h.address_bn, h.address_en, h.lat, h.lng, h.phone, h.emergency_phone,
            h.description_bn, h.description_en,
@@ -145,13 +169,17 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
                 AND dep.code = ${query.specialty ?? null}
            ) END AS doctor_count,
 
+           -- NULL where the hospital withholds its serial figures (FR-NET-04):
+           -- "not shared" is not a count of none.
+           CASE WHEN fn_publishes(h.id, 'serials') THEN
            (SELECT count(*)::text FROM sessions s
              WHERE s.hospital_id = h.id AND s.status = 'running'
                AND s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
                AND s.deleted_at IS NULL
                -- A hospital that does not run serials publishes no chamber.
-               AND fn_module_on(h.id, 'queue')) AS sitting_now,
+               AND fn_module_on(h.id, 'queue')) END AS sitting_now,
 
+           CASE WHEN fn_publishes(h.id, 'serials') THEN
            (SELECT coalesce(sum(GREATEST(coalesce(s.capacity, 0) - (
                      SELECT count(*) FROM bookings b
                       WHERE b.session_id = s.id AND b.status <> 'cancelled'
@@ -161,7 +189,12 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
                AND s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
                AND s.status IN ('scheduled', 'running')
                AND s.deleted_at IS NULL
-               AND fn_module_on(h.id, 'queue')) AS open_serials_today
+               AND fn_module_on(h.id, 'queue')) END AS open_serials_today,
+
+           coalesce((SELECT hs.unpublished FROM hospital_settings hs
+                      WHERE hs.hospital_id = h.id), '{}'::text[]) AS unpublished,
+           coalesce((SELECT hs.modules_off FROM hospital_settings hs
+                      WHERE hs.hospital_id = h.id), '{}'::text[]) AS modules_off
       FROM hospitals h
      WHERE h.deleted_at IS NULL
        AND h.is_live
@@ -185,14 +218,18 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
          OR h.name_en ILIKE '%' || ${query.q ?? null} || '%'
          OR h.name_bn LIKE '%' || ${query.q ?? null} || '%'
        )
+    ) cards
      ORDER BY
        -- Nearest first when a position was given: in an emergency, minutes
        -- decide. Otherwise a chamber that is actually running beats one that
        -- is not, because "can I be seen today" is the next question after
        -- "who is near me" and the only one this list can answer.
-       distance_m NULLS LAST,
-       sitting_now DESC,
-       h.name_en
+       cards.distance_m NULLS LAST,
+       -- A hospital that withholds the figure is ordered as one with nobody
+       -- sitting: it is not given the place a running chamber earns, and is
+       -- not put below a hospital for having kept a number (FR-NET-04).
+       coalesce(cards.sitting_now, '0')::int DESC,
+       cards.name_en
      LIMIT ${query.limit}
   `.execute(db);
 
@@ -218,8 +255,9 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
     capabilities: row.capabilities ?? [],
     capabilityAsOf: row.capability_as_of?.toISOString() ?? null,
     doctorCount: row.doctor_count === null ? null : Number(row.doctor_count),
-    sittingNow: Number(row.sitting_now),
-    openSerialsToday: Number(row.open_serials_today),
+    sittingNow: row.sitting_now === null ? null : Number(row.sitting_now),
+    openSerialsToday: row.open_serials_today === null ? null : Number(row.open_serials_today),
+    notShared: notSharedOf(row.unpublished, row.modules_off),
   }));
 }
 
@@ -235,10 +273,16 @@ export interface HospitalDoctorCard {
   readonly feePoisha: number;
   readonly room: string | null;
   readonly bmdcVerifiedAt: string | null;
-  /** `FR-PAT-13`: in a chamber now, or the next time they sit. */
-  readonly sittingNow: boolean;
+  /**
+   * `FR-PAT-13`: in a chamber now, or the next time they sit. `sittingNow`
+   * and `openSerials` are null where the hospital does not share its serial
+   * figures (`FR-NET-04`); when a doctor sits is a schedule, and is shared.
+   */
+  readonly sittingNow: boolean | null;
   readonly nextSessionAt: string | null;
   readonly openSerials: number | null;
+  /** False where the two figures above are withheld, so a card can say so. */
+  readonly serialsShared: boolean;
 }
 
 /**
@@ -268,21 +312,30 @@ export async function doctorsAtHospital(
     fee_poisha: number;
     room: string | null;
     bmdc_verified_at: Date | null;
-    sitting_now: boolean;
+    sitting_now: boolean | null;
     next_session_at: Date | null;
     open_serials: string | null;
+    serials_shared: boolean;
   }>`
     SELECT d.id, d.full_name_bn AS name_bn, d.full_name_en AS name_en, d.degrees,
            dep.code AS department_code,
            dep.name_bn AS department_name_bn, dep.name_en AS department_name_en,
            dh.fee_poisha, dh.room, d.bmdc_verified_at,
+           -- A hospital that does not run serials has no chamber to show here
+           -- (FR-BRD-11); one that withholds its serial figures shows when a
+           -- doctor sits and not the two live figures (FR-NET-04).
+           CASE WHEN fn_publishes(${hospitalId}::uuid, 'serials') THEN
            EXISTS (SELECT 1 FROM sessions s
                     WHERE s.doctor_id = d.id AND s.hospital_id = ${hospitalId}::uuid
-                      AND s.status = 'running' AND s.deleted_at IS NULL) AS sitting_now,
+                      AND s.status = 'running' AND s.deleted_at IS NULL
+                      AND fn_module_on(${hospitalId}::uuid, 'queue')) END AS sitting_now,
            (SELECT min(s.planned_start) FROM sessions s
              WHERE s.doctor_id = d.id AND s.hospital_id = ${hospitalId}::uuid
                AND s.status IN ('scheduled', 'running')
-               AND s.planned_end > now() AND s.deleted_at IS NULL) AS next_session_at,
+               AND s.planned_end > now() AND s.deleted_at IS NULL
+               AND fn_module_on(${hospitalId}::uuid, 'queue')) AS next_session_at,
+           fn_publishes(${hospitalId}::uuid, 'serials') AS serials_shared,
+           CASE WHEN fn_publishes(${hospitalId}::uuid, 'serials') THEN
            (SELECT GREATEST(coalesce(s.capacity, 0) - (
                      SELECT count(*) FROM bookings b
                       WHERE b.session_id = s.id AND b.status <> 'cancelled'
@@ -291,7 +344,8 @@ export async function doctorsAtHospital(
              WHERE s.doctor_id = d.id AND s.hospital_id = ${hospitalId}::uuid
                AND s.status IN ('scheduled', 'running')
                AND s.planned_end > now() AND s.deleted_at IS NULL
-             ORDER BY s.planned_start LIMIT 1) AS open_serials
+               AND fn_module_on(${hospitalId}::uuid, 'queue')
+             ORDER BY s.planned_start LIMIT 1) END AS open_serials
       FROM doctor_hospitals dh
       JOIN doctors d       ON d.id = dh.doctor_id
       JOIN departments dep ON dep.id = dh.department_id
@@ -299,7 +353,7 @@ export async function doctorsAtHospital(
        AND dh.is_active AND dh.deleted_at IS NULL
        AND d.deleted_at IS NULL
        AND (${specialty ?? null}::text IS NULL OR dep.code = ${specialty ?? null})
-     ORDER BY sitting_now DESC, next_session_at NULLS LAST, d.full_name_en
+     ORDER BY sitting_now DESC NULLS LAST, next_session_at NULLS LAST, d.full_name_en
   `.execute(db);
 
   return result.rows.map((row) => ({
@@ -316,6 +370,7 @@ export async function doctorsAtHospital(
     sittingNow: row.sitting_now,
     nextSessionAt: row.next_session_at?.toISOString() ?? null,
     openSerials: row.open_serials === null ? null : Number(row.open_serials),
+    serialsShared: row.serials_shared,
   }));
 }
 
@@ -457,8 +512,16 @@ export interface SessionCard {
   readonly room: string | null;
   readonly feePoisha: number;
   readonly capacity: number | null;
-  /** Serials already issued — `taken` against `capacity` (`S-A-07b`). */
-  readonly taken: number;
+  /**
+   * Serials already issued — `taken` against `capacity` (`S-A-07b`). Null
+   * where the hospital does not share its serial figures (`FR-NET-04`).
+   */
+  readonly taken: number | null;
+  /**
+   * Whether the chamber has no place left. Always said, shared or not: a
+   * patient is not sent into a booking that can only be refused.
+   */
+  readonly full: boolean;
 }
 
 /**
@@ -491,6 +554,7 @@ export async function listBookableSessions(input: {
     fee_poisha: number;
     capacity: number | null;
     taken: string;
+    serials_shared: boolean;
   }>`
     SELECT s.id, s.hospital_id,
            h.name_bn AS hospital_name_bn, h.name_en AS hospital_name_en,
@@ -501,7 +565,8 @@ export async function listBookableSessions(input: {
            s.planned_start, s.planned_end, s.status::text AS status,
            s.room, s.fee_poisha, s.capacity,
            (SELECT count(*)::text FROM bookings b
-             WHERE b.session_id = s.id AND b.status <> 'cancelled') AS taken
+             WHERE b.session_id = s.id AND b.status <> 'cancelled') AS taken,
+           fn_publishes(s.hospital_id, 'serials') AS serials_shared
       FROM sessions s
       JOIN hospitals h ON h.id = s.hospital_id
       JOIN doctors d ON d.id = s.doctor_id
@@ -535,7 +600,8 @@ export async function listBookableSessions(input: {
     room: row.room,
     feePoisha: row.fee_poisha,
     capacity: row.capacity,
-    taken: Number(row.taken),
+    taken: row.serials_shared ? Number(row.taken) : null,
+    full: row.capacity !== null && Number(row.taken) >= row.capacity,
   }));
 }
 

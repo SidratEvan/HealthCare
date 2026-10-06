@@ -540,7 +540,7 @@ A hospital is brought onto the platform from screens, without a developer.
 - `FR-NET-01` What a hospital contributes to the patient network is public operational information only: its name and address, its departments, its verified doctors with their chamber times and fees, how many serials are open, beds by kind, emergency capabilities, medicine stock flags, and the age of each figure.
 - `FR-NET-02` Nothing that identifies a patient and nothing internal to a hospital (a queue by name, staff, takings, records) is visible to another hospital or to the public. Something crosses between hospitals only by a deliberate act the product already has: a referral, or a patient's consent (`FR-SEC-04`).
 - `FR-NET-03` A hospital is in the network only while its workspace is active and live (`FR-ONB-02`).
-- `FR-NET-04` A hospital decides which of these it publishes. A figure it does not publish is shown as not shared, never as zero. **Not built yet:** today a live hospital publishes all of them.
+- `FR-NET-04` A hospital decides which of these it publishes. A figure it does not publish is shown as not shared, never as zero. **Built (plan C5):** the hospital's administrator switches each of three figures on `S-B-11`: its open serials and who is sitting, its beds, and what its pharmacy has. What its emergency department can treat is not one of the three and is always shared while it runs an emergency desk; whether a hospital may keep that is the owner's to rule on (`docs/STATUS.md`, question 8).
 
 ### Branded patient apps (`FR-BRD`)
 

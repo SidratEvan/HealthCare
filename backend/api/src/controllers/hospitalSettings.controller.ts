@@ -12,6 +12,7 @@ import {
   bedsBody,
   brandBody,
   logoBody,
+  publishingBody,
   declaredCapabilitiesBody,
   departmentBody,
   departmentPatchBody,
@@ -57,6 +58,12 @@ export async function getSetup(req: Request, res: Response): Promise<void> {
 
 export async function patchProfile(req: Request, res: Response): Promise<void> {
   await settings.updateProfile(actorOf(req), profileBody.parse(req.body));
+  done(res);
+}
+
+/** `PUT /hospital/publishing` — the live figures the hospital does not share. */
+export async function putPublishing(req: Request, res: Response): Promise<void> {
+  await settings.updatePublishing(actorOf(req), publishingBody.parse(req.body));
   done(res);
 }
 

@@ -124,6 +124,21 @@ const MODULES_OFF: Readonly<Record<string, readonly string[]>> = {
   'buriganga-clinic': ['beds'],
 };
 
+/**
+ * The live figures a facility does not share with the network (`FR-NET-04`,
+ * migration 0048).
+ *
+ * One facility keeps one figure, so the demonstration shows what that looks
+ * like from both sides: the clinic's settings have the switch off, and its
+ * card in the patient app says its serial figures are not shared, where
+ * every other card gives a count. Its doctors, when they sit and its
+ * chambers are all still there to book. Every other facility shares
+ * everything, which is the ordinary state.
+ */
+const UNPUBLISHED: Readonly<Record<string, readonly string[]>> = {
+  'buriganga-clinic': ['serials'],
+};
+
 const REFUND_POLICIES: Readonly<
   Record<
     string,
@@ -426,6 +441,7 @@ export const seed01Hospitals: SeedModule = {
         BRANDS[facility.slug] === undefined ? null : JSON.stringify(BRANDS[facility.slug]),
         // A text array, written the way PostgreSQL reads one.
         `{${(MODULES_OFF[facility.slug] ?? []).join(',')}}`,
+        `{${(UNPUBLISHED[facility.slug] ?? []).join(',')}}`,
         admins.get(facility.slug) ?? null,
       ];
     });
@@ -440,6 +456,7 @@ export const seed01Hospitals: SeedModule = {
           'refund_policy',
           'brand',
           'modules_off',
+          'unpublished',
           'created_by',
         ],
       },

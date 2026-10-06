@@ -368,6 +368,8 @@ States: waiting, doctor-not-arrived, delayed (surface shifts to `--warn-*` famil
 
 ### 6.2 `<FreshnessLine>`
 
+**A figure a hospital keeps is `<NotShared>`, not a number (`FR-NET-04`).** In the place the figure would have been: one neutral chip that says it is not shared, no count, no "none", and no freshness line under a figure that is not there. It is used wherever the API answers null with `notShared`, `serialsShared: false` or `bedsShared: false`; a component that renders such a null as zero or as an empty space fails review the same way a live number without `asOf` does.
+
 A single caption beneath any live figure: "হালনাগাদ ৩ মিনিট আগে". Colour is muted under threshold, `--warn-600` over it. Used everywhere a live number appears — this component is what makes the honesty principle visible (`GR-05`, `FR-OFF-03`).
 
 ### 6.3 `<EmergencyEntry>` — home card

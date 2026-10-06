@@ -584,6 +584,7 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'PATCH /hospital/rules': { by: 'principal' },
   // Its public face (`FR-BRD-06`): its own, from the principal.
   'PUT /hospital/brand': { by: 'principal' },
+  'PUT /hospital/publishing': { by: 'principal' },
   'GET /hospital/logo': { by: 'principal' },
   'PUT /hospital/logo': { by: 'principal' },
   'DELETE /hospital/logo': { by: 'principal' },

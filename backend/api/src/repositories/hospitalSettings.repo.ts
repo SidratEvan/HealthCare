@@ -40,6 +40,8 @@ export interface SetupSnapshot {
     readonly portalDomain: string | null;
     /** The modules it does not run (`FR-BRD-11`); empty when everything is on. */
     readonly modulesOff: readonly string[];
+    /** The live figures it does not share (`FR-NET-04`); empty when it shares them all. */
+    readonly unpublished: readonly string[];
     readonly lat: number | null;
     readonly lng: number | null;
     readonly isLive: boolean;
@@ -151,6 +153,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     description_en: string | null;
     portal_domain: string | null;
     modules_off: string[] | null;
+    unpublished: string[] | null;
     brand: unknown;
     logo_sha256: string | null;
     logo_type: string | null;
@@ -170,7 +173,8 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
   }>`
     SELECT h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
            h.thana, h.address_bn, h.address_en, h.phone, h.emergency_phone,
-           h.description_bn, h.description_en, h.portal_domain, s.modules_off, s.brand,
+           h.description_bn, h.description_en, h.portal_domain, s.modules_off, s.unpublished,
+           s.brand,
            l.sha256 AS logo_sha256, l.content_type AS logo_type,
            octet_length(l.bytes) AS logo_bytes,
            h.lat::float8 AS lat, h.lng::float8 AS lng, h.is_live, h.onboarded_at,
@@ -305,6 +309,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       descriptionEn: row.description_en,
       portalDomain: row.portal_domain,
       modulesOff: row.modules_off ?? [],
+      unpublished: row.unpublished ?? [],
       lat: row.lat,
       lng: row.lng,
       isLive: row.is_live,
@@ -455,6 +460,23 @@ export async function setModulesOff(
   `.execute(trx);
   await sql`
     UPDATE hospital_settings SET modules_off = ${[...off]}::text[], updated_at = now()
+     WHERE hospital_id = ${hospitalId}
+  `.execute(trx);
+}
+
+// --- the figures it shares (FR-NET-04, migration 0048) ---------------------------
+
+export async function setUnpublished(
+  trx: Tx,
+  hospitalId: string,
+  unpublished: readonly string[],
+): Promise<void> {
+  await sql`
+    INSERT INTO hospital_settings (hospital_id) VALUES (${hospitalId})
+    ON CONFLICT (hospital_id) DO NOTHING
+  `.execute(trx);
+  await sql`
+    UPDATE hospital_settings SET unpublished = ${[...unpublished]}::text[], updated_at = now()
      WHERE hospital_id = ${hospitalId}
   `.execute(trx);
 }

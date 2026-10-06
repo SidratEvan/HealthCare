@@ -104,24 +104,34 @@ export function EmergencyResultCard({
       )}
 
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-body-sm text-ink-secondary">
+        {/* A hospital that keeps its bed figures is not said to have no
+            beds, and no ICU (FR-NET-04): one line says the figures are not
+            shared. What it can treat is on the card regardless. */}
         <li data-testid="result-beds">
-          {result.freeBeds === null
-            ? result.bedKind === null
-              ? tp('emergencyNoBeds', locale)
-              : tp('emergencyNoKind', locale).replace('{kind}', bedKindName(result.bedKind, locale))
-            : result.bedKind === null
-              ? tp('emergencyFreeBeds', locale).replace('{free}', n(result.freeBeds))
-              : tp('emergencyFreeKind', locale)
-                  .replace('{kind}', bedKindName(result.bedKind, locale))
-                  .replace('{free}', n(result.freeBeds))}
+          {result.bedsShared === false
+            ? tp('bedsNotShared', locale)
+            : result.freeBeds === null
+              ? result.bedKind === null
+                ? tp('emergencyNoBeds', locale)
+                : tp('emergencyNoKind', locale).replace(
+                    '{kind}',
+                    bedKindName(result.bedKind, locale),
+                  )
+              : result.bedKind === null
+                ? tp('emergencyFreeBeds', locale).replace('{free}', n(result.freeBeds))
+                : tp('emergencyFreeKind', locale)
+                    .replace('{kind}', bedKindName(result.bedKind, locale))
+                    .replace('{free}', n(result.freeBeds))}
         </li>
-        <li data-testid="result-icu">
-          {result.icuTotal === null || result.icuFree === null
-            ? tp('cardNoIcu', locale)
-            : tp('cardIcu', locale)
-                .replace('{free}', n(result.icuFree))
-                .replace('{total}', n(result.icuTotal))}
-        </li>
+        {result.bedsShared === false ? null : (
+          <li data-testid="result-icu">
+            {result.icuTotal === null || result.icuFree === null
+              ? tp('cardNoIcu', locale)
+              : tp('cardIcu', locale)
+                  .replace('{free}', n(result.icuFree))
+                  .replace('{total}', n(result.icuTotal))}
+          </li>
+        )}
         {/* FR-EMG-04: counted from cases, never typed. */}
         <li data-testid="result-load">
           {tp('emergencyLoad', locale).replace('{count}', n(result.erLoad))}

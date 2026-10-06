@@ -145,6 +145,7 @@ describe('migration files (DATABASE.md §7)', () => {
       '0046',
       // Plan C4: the modules a hospital runs (FR-BRD-11).
       '0047',
+      '0048',
     ]);
   });
 
