@@ -124,11 +124,13 @@ export { suggestedQuote, QUOTE_STEP_MINUTES } from './queue/quote.js';
 // it and the ward console applies it before the server answers (`FR-BED-02`).
 export {
   applyLocal,
+  boardAfterRead,
   canApply,
   canForecastDischarge,
   canReceiveTransfer,
   effectiveState,
   holdLapsed,
+  newestBeds,
   outcomeOf,
   ADMISSION_SOURCES,
   BED_ACTIONS,

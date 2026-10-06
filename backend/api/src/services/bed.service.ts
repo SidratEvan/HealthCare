@@ -789,7 +789,12 @@ async function run(
 
   // --- 5. Publish, after commit ----------------------------------------------
   if (changed.batch !== undefined) await notifications.dispatch(changed.batch);
-  const result = await publish(actor.hospitalId, changed.bedIds, changed.requests);
+  const result = await publish(
+    actor.hospitalId,
+    changed.bedIds,
+    changed.requests,
+    envelope.clientEventId,
+  );
   for (const caseId of changed.cases ?? []) await emergency.publishCase(caseId);
   return result;
 }
@@ -1024,6 +1029,8 @@ async function publish(
   hospitalId: string,
   bedIds: readonly string[],
   requestIds: readonly string[],
+  /** The console action behind this, by the console's own key, when there was one (`SY-09`). */
+  clientEventId: string | null = null,
 ): Promise<BedActionResult> {
   const [beds, published] = await Promise.all([
     currentBeds(hospitalId, bedIds),
@@ -1031,7 +1038,10 @@ async function publish(
   ]);
   const serverTs = new Date().toISOString();
 
-  if (beds.length > 0) emit.bedUpdated(hospitalId, { beds }, serverTs);
+  // Each bed carries its version, and the broadcast names the action: a board
+  // keeps the highest version it has been told, and takes its own drawing of
+  // the action off at the first statement that names it (`SY-09`).
+  if (beds.length > 0) emit.bedUpdated(hospitalId, { beds, clientEventId }, serverTs);
   if (published !== null) emit.capacityUpdated(hospitalId, published, serverTs);
 
   for (const requestId of new Set(requestIds)) {
@@ -1134,6 +1144,7 @@ function toView(bed: BedRow): BedView {
     oosReason: bed.oosReason,
     admissionId: bed.admissionId,
     heldForRequestId: bed.heldForRequestId,
+    version: bed.version,
   };
 }
 

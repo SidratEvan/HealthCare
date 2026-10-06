@@ -133,12 +133,13 @@ export function bedSender(
 
   return async (action) => {
     try {
-      await client.post(
+      const answer = await client.post<unknown>(
         action.path,
         { ...action.body, clientEventId: action.clientEventId, clientTs: action.clientTs },
         action.clientEventId,
       );
-      return { kind: 'accepted' };
+      // The beds the action changed, as they now stand (`SY-09`).
+      return { kind: 'accepted', answer };
     } catch (error: unknown) {
       if (error instanceof NetworkError) return { kind: 'unreachable' };
       if (!(error instanceof ApiError)) return { kind: 'unreachable' };

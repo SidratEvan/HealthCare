@@ -127,6 +127,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0037',
       // V4.1: a hospital's confirmed column mappings, by heading row (FR-IMP-20).
       '0038',
+      // Plan A2: a bed's version, raised by the database on every change (SY-09).
+      '0039',
     ]);
   });
 

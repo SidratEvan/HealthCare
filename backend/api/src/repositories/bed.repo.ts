@@ -54,6 +54,7 @@ interface BedSqlRow {
   oos_reason: string | null;
   current_admission_id: string | null;
   held_for_request_id: string | null;
+  version: string;
 }
 
 /**
@@ -67,7 +68,7 @@ const BED_SELECT = sql`
   b.id, b.hospital_id, b.ward_id, b.label, b.kind::text AS kind, b.state::text AS state,
   b.nightly_poisha, b.last_cleaned_at, b.state_changed_at,
   b.expected_discharge_date::text AS expected_discharge_date,
-  b.reserved_until, b.oos_reason, b.current_admission_id,
+  b.reserved_until, b.oos_reason, b.current_admission_id, b.version::text AS version,
   (SELECT r.id FROM bed_requests r
     WHERE r.bed_id = b.id AND r.state = 'held' AND r.deleted_at IS NULL
     LIMIT 1) AS held_for_request_id
@@ -89,6 +90,8 @@ function toBed(row: BedSqlRow): BedRow {
     oosReason: row.oos_reason,
     admissionId: row.current_admission_id,
     heldForRequestId: row.held_for_request_id,
+    // bigint, which the driver hands over as text.
+    version: Number(row.version),
   };
 }
 

@@ -9,8 +9,8 @@
  *   1. put the action in the outbox with a client timestamp and event id
  *   2. apply it to the board at once with `applyLocal` from `shared/domain` —
  *      the state machine the server guards with, not a copy of it
- *   3. send it when there is a network; on success the server's own
- *      `bed.updated` replaces the optimistic tile
+ *   3. send it when there is a network; on success the beds the server
+ *      answers with replace the optimistic tile, in the same redraw
  *   4. on refusal drop it, which rolls the tile back, and say why (`SY-03`)
  *   5. on no network leave it applied and counted as pending (`FR-OFF-01`)
  *
@@ -28,6 +28,24 @@
  * patient that the server audits (`DB-P7`), and a copy cached on a shared
  * ward computer would be a read nobody logged. Answering a request needs the
  * connection too, because answering it is telling a family.
+ *
+ * ## One action, shown once, and the newest statement wins (`SY-09`)
+ *
+ * The server states a change to a bed by two roads, the answer to the request
+ * and a `bed.updated`, and either can be first or missing. Three things make
+ * the board right in every order:
+ *
+ * - every bed carries a `version` the database raises on each change, and the
+ *   board keeps, per bed, the statement with the highest one (`newestBeds`,
+ *   `boardAfterRead`) — never whichever arrived last;
+ * - its own action is drawn from the tap until the first statement that names
+ *   it, the answer or the broadcast (`settle`), and never after;
+ * - the answer's beds go on screen in the redraw that takes the drawing off.
+ *
+ * The board used to drop its drawing when the answer came and then read the
+ * whole board again: for the length of that read the tile showed the bed
+ * before the tap, and with the socket silent and the read slow it stayed
+ * there.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -40,6 +58,8 @@ import {
 } from '@platform/client';
 import {
   applyLocal,
+  boardAfterRead,
+  newestBeds,
   type BedView,
   type LocalBedChange,
   type PublicCapacity,
@@ -99,6 +119,30 @@ export interface BedBoard {
   readonly api: ReturnType<typeof bedApi>;
 }
 
+/** How many named actions the board remembers not to draw again. */
+const REMEMBERED_SETTLED = 1_000;
+
+/** A bed write's answer (`BedActionResult`), read without trusting its shape. */
+function readAnswer(value: unknown): {
+  readonly beds: readonly BedView[];
+  readonly published: PublicCapacity | null;
+  readonly serverTs: string;
+} | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const answer = value as { beds?: unknown; published?: unknown; serverTs?: unknown };
+  if (!Array.isArray(answer.beds) || typeof answer.serverTs !== 'string') return null;
+  return {
+    beds: answer.beds as BedView[],
+    published: (answer.published ?? null) as PublicCapacity | null,
+    serverTs: answer.serverTs,
+  };
+}
+
+/** The later of two server times; the freshness line never steps back. */
+function later(held: string | null, next: string): string {
+  return held === null || next > held ? next : held;
+}
+
 export function useBedBoard(options: {
   readonly hospitalId: string;
   readonly getToken: () => string | null;
@@ -142,9 +186,11 @@ export function useBedBoard(options: {
     try {
       const next = await api.board(hospitalId);
       setBoard(next);
-      setServerBeds(next.beds);
+      // Every bed there is, but not newer than a statement merely for having
+      // been asked for later (`SY-09`).
+      setServerBeds((held) => boardAfterRead(held, next.beds));
       setPublished(next.published);
-      setLastServerTs(next.serverTs);
+      setLastServerTs((held) => later(held, next.serverTs));
       setFailed(false);
     } catch {
       // A board already on screen stays there, ageing honestly; only a board
@@ -177,11 +223,40 @@ export function useBedBoard(options: {
 
   // --- sending ---------------------------------------------------------------
 
+  /** Actions a statement from the server has named: done, never drawn again (`SY-09`). */
+  const settledRef = useRef(new Set<string>());
+  /** This board's unanswered actions, to know a broadcast that names one of them. */
+  const waitingRef = useRef<readonly string[]>([]);
+  waitingRef.current = pending.map((action) => action.clientEventId);
+
+  /**
+   * A statement has named this action. If it is one this board is waiting on,
+   * it comes off the board's own drawing now — in the same turn as the beds
+   * that contain it are set, so the two are one redraw — and out of the
+   * outbox, where there is nothing left to send.
+   */
+  const settle = useCallback((clientEventId: string) => {
+    if (!waitingRef.current.includes(clientEventId)) return;
+
+    const settled = settledRef.current;
+    settled.add(clientEventId);
+    for (const key of settled) {
+      if (settled.size <= REMEMBERED_SETTLED) break;
+      settled.delete(key);
+    }
+    setPending((held) => held.filter((action) => !settled.has(action.clientEventId)));
+    void outboxRef.current?.discard([clientEventId]).catch(() => undefined);
+  }, []);
+
   const refreshPending = useCallback(async () => {
     const outbox = outboxRef.current;
     if (outbox === null) return;
 
-    const here = (action: PendingBedAction): boolean => action.hospitalId === hospitalId;
+    // Nothing a statement has already named: the outbox may hold it a moment
+    // longer than the board may draw it.
+    const settled = settledRef.current;
+    const here = (action: PendingBedAction): boolean =>
+      action.hospitalId === hospitalId && !settled.has(action.clientEventId);
     setPending((await outbox.pending()).filter(here));
     setStuck((await outbox.stuck()).filter(here));
     setDurable(consoleStores().durable());
@@ -198,12 +273,39 @@ export function useBedBoard(options: {
 
     const outcome = await outbox.flush(hospitalId, send);
     if (outcome.refused.length > 0) setLastRefusal(outcome.refused[0]?.reason ?? null);
+
+    // What the server answered goes on the board in the redraw that takes
+    // the answered actions off it (`SY-09`): the beds each one changed, as
+    // they stand after the commit, kept where they are the newer.
+    const answers = outcome.answers.flatMap((entry) => {
+      const answer = readAnswer(entry.answer);
+      return answer === null ? [] : [answer];
+    });
+    if (answers.length > 0) {
+      setServerBeds((held) =>
+        answers.reduce<readonly BedView[]>((beds, answer) => newestBeds(beds, answer.beds), held),
+      );
+      const last = answers[answers.length - 1];
+      if (last !== undefined) {
+        if (last.published !== null) setPublished(last.published);
+        setLastServerTs((held) => later(held, last.serverTs));
+      }
+    }
+    const answered = new Set([
+      ...outcome.accepted,
+      ...outcome.refused.map((entry) => entry.clientEventId),
+    ]);
+    if (answered.size > 0) {
+      setPending((held) => held.filter((action) => !answered.has(action.clientEventId)));
+    }
     await refreshPending();
 
-    // The socket normally delivers the server's version of each change; a
-    // re-read after a flush covers the case where it is the socket that was
-    // down, so the board never shows an optimistic tile the server rejected.
-    if (outcome.accepted.length > 0 || outcome.refused.length > 0) await loadBoardRef.current();
+    // A refusal means the board this console drew on was behind, and an
+    // accepted action with no answer to read came from a server that sent
+    // none: either way, read the board. Not otherwise: the answer was enough.
+    if (outcome.refused.length > 0 || outcome.accepted.length > answers.length) {
+      await loadBoardRef.current();
+    }
   }, [hospitalId, send, refreshPending]);
 
   // --- the channel -----------------------------------------------------------
@@ -221,21 +323,19 @@ export function useBedBoard(options: {
           void flush();
         }
       },
-      onBeds: (beds, serverTs) => {
-        setServerBeds((current) => {
-          const changed = new Map(beds.map((bed) => [bed.id, bed]));
-          const known = new Set(current.map((bed) => bed.id));
-          return [
-            ...current.map((bed) => changed.get(bed.id) ?? bed),
-            ...beds.filter((bed) => !known.has(bed.id)),
-          ];
-        });
-        setLastServerTs(serverTs);
+      onBeds: (beds, serverTs, clientEventId) => {
+        // The broadcast names the action behind it. If it is this board's,
+        // the drawing comes off in the redraw that shows these beds.
+        if (clientEventId !== null) settle(clientEventId);
+        // Per bed, the higher version: a broadcast delivered late does not
+        // put a bed back (`SY-09`).
+        setServerBeds((held) => newestBeds(held, beds));
+        setLastServerTs((held) => later(held, serverTs));
       },
       onCapacity: (next, serverTs) => {
         if (next.hospitalId !== hospitalId) return;
         setPublished(next);
-        setLastServerTs(serverTs);
+        setLastServerTs((held) => later(held, serverTs));
       },
       onRequest: () => {
         void loadRequests();
@@ -248,7 +348,7 @@ export function useBedBoard(options: {
     return () => {
       channel.close();
     };
-  }, [getToken, hospitalId, flush, loadRequests]);
+  }, [getToken, hospitalId, flush, loadRequests, settle]);
 
   useEffect(() => {
     setBrowserOnline(globalThis.navigator?.onLine ?? true);

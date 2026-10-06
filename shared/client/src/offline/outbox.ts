@@ -75,13 +75,20 @@ export function createMemoryOutboxStore<T extends OutboxEntry>(): OutboxStore<T>
 
 /** What sending one action produced. Injected, so a test needs no network. */
 export type SendOutcome =
-  | { readonly kind: 'accepted' }
+  /**
+   * `answer` is what the server said the action produced: the rows it
+   * changed, as they stand after the commit (`SY-09`). A console shows it in
+   * the redraw that takes its own drawing of the action off.
+   */
+  | { readonly kind: 'accepted'; readonly answer?: unknown }
   | { readonly kind: 'refused'; readonly code: string; readonly reason: string }
   | { readonly kind: 'unreachable' }
   | { readonly kind: 'failed'; readonly code: string };
 
 export interface FlushOutcome {
   readonly accepted: readonly string[];
+  /** What the server answered for each accepted entry that it answered, in order. */
+  readonly answers: readonly { readonly clientEventId: string; readonly answer: unknown }[];
   readonly refused: readonly {
     readonly clientEventId: string;
     readonly code: string;
@@ -113,6 +120,7 @@ export class Outbox<T extends OutboxEntry> {
     const queued = (await this.pending()).filter((action) => action.hospitalId === hospitalId);
 
     const accepted: string[] = [];
+    const answers: { clientEventId: string; answer: unknown }[] = [];
     const refused: { clientEventId: string; code: string; reason: string }[] = [];
     const stuck: string[] = [];
     const settle = async (): Promise<void> => {
@@ -126,7 +134,7 @@ export class Outbox<T extends OutboxEntry> {
         // Everything from here on waits, in order. A dead network is not a
         // fault of the entry and is not counted against it.
         await settle();
-        return { accepted, refused, stuck, offline: true };
+        return { accepted, answers, refused, stuck, offline: true };
       }
 
       if (outcome.kind === 'failed') {
@@ -135,7 +143,7 @@ export class Outbox<T extends OutboxEntry> {
           // The server may be restarting. Nothing behind it goes out of order.
           await this.store.put({ ...action, attempts });
           await settle();
-          return { accepted, refused, stuck, offline: false };
+          return { accepted, answers, refused, stuck, offline: false };
         }
 
         await this.store.put({ ...action, attempts, stuck: { code: outcome.code } });
@@ -145,6 +153,9 @@ export class Outbox<T extends OutboxEntry> {
 
       if (outcome.kind === 'accepted') {
         accepted.push(action.clientEventId);
+        if (outcome.answer !== undefined) {
+          answers.push({ clientEventId: action.clientEventId, answer: outcome.answer });
+        }
       } else {
         refused.push({
           clientEventId: action.clientEventId,
@@ -155,7 +166,7 @@ export class Outbox<T extends OutboxEntry> {
     }
 
     await settle();
-    return { accepted, refused, stuck, offline: false };
+    return { accepted, answers, refused, stuck, offline: false };
   }
 
   /** Entries the server could not take, for the operator to act on. */
