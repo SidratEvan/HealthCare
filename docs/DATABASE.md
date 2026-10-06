@@ -199,6 +199,11 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 
 **The workspace's state (0037, `FR-ONB-02`).** `lifecycle` org_lifecycle NOT NULL DEFAULT `'setup'`, `registration_no` text (free text: licences do not share a shape), `review_requested_at`, `reviewed_at`, `reviewed_by` → `staff_users`, `review_note` (why the platform sent it back or suspended it; the hospital's administrator reads it). **CHK** `hospitals_live_requires_workspace_active`: `NOT is_live OR lifecycle = 'active'`. `is_live` stays the one switch every public query reads; the CHECK means nothing unapproved, suspended or closed can be live whatever a route forgets, and the two are always written in one statement (`platform.repo` `moveLifecycle`). **IX** `(lifecycle, review_requested_at)`. Hospitals live when 0037 ran were backfilled to `active`. The transitions and who may take each are `shared/domain/src/org/lifecycle.ts`; readiness is counted from what exists and never stored (`FR-ONB-03`).
 
+**What it says of itself (0045, `FR-BRD-06`).** `description_bn`, `description_en` text, nullable, 1 to 400 characters each (`hospitals_description_length`). Written by the hospital's administrator on `S-B-11`, shown on its card and page.
+
+#### `hospital_logos` (0045, `FR-BRD-06`)
+`hospital_id` **PK/FK** (cascade), `content_type` (**CHK** `image/png`, `image/jpeg` or `image/webp`; no SVG), `bytes` bytea (**CHK** 1 to 262,144), `sha256` (of the bytes; its first sixteen characters are the version in the public address), `created_by` → `staff_users` (SET NULL), `created_at`, `updated_at`. One row a hospital; absent means no logo. **A row and not a file**: every other file is a clinical document behind a signed, expiring address, and a logo is the opposite — public, small, the same for everybody. As a row it survives a restart whatever store the deployment uses, is in the same backup as its hospital, can be seeded, and is served by one read. Its own table so that reading settings never carries an image. **RLS**: published like a session — anybody reads, only the hospital changes (§5.2).
+
 #### `hospital_settings`
 `hospital_id` **PK/FK**, `no_show_grace_patients` (default 2), `no_show_grace_minutes` (15), `late_reinsert_after` (3), `stale_threshold_minutes` (10), `refund_policy` jsonb, `sms_budget_monthly` int, `prepay_required` boolean, `numeral_style` text, `density_default` text.
 
@@ -618,12 +623,12 @@ The role is created and brought back to exactly these privileges by `pnpm db:rol
 
 **Who the policies are for.** `app_tenant` (NOLOGIN), which `pnpm db:role` makes the API's role a member of, in the step that takes away its `BYPASSRLS`. Not `PUBLIC`: on a hosted database other roles can reach these tables, and a policy is a grant.
 
-**The kinds of table** (`0043` has the policy for each of the 57; `database/tests/tenancy.test.ts` fails if a table has none):
+**The kinds of table** (`0043` has the policy for each of the 57 there were, and each table added since brings its own; `database/tests/tenancy.test.ts` fails if a table has none):
 
 | Kind | Tables | Rule under `hospital` scope |
 |---|---|---|
 | An organisation's own | `staff_users`, `staff_roles`, `wards`, `beds`, `ambulances`, `subscriptions`, `invoices`, `sync_cursors`, `import_batches`, `import_mapping_profiles`, `external_refs` | `hospital_id` is the caller's |
-| What a hospital publishes (`FR-NET-01`) | `departments`, `doctor_hospitals`, `sessions`, `session_templates`, `capabilities`, `pharmacy_stock`, `hospital_settings` | Anybody reads; only the hospital changes |
+| What a hospital publishes (`FR-NET-01`) | `departments`, `doctor_hospitals`, `sessions`, `session_templates`, `capabilities`, `pharmacy_stock`, `hospital_settings`, `hospital_logos` (0045) | Anybody reads; only the hospital changes |
 | A hospital's rows about its patients | `admissions`, `bed_events`, `bed_requests`, `blood_requests`, `consents`, `counter_shifts`, `feedback`, `test_orders`, `visits`, `emergency_cases` | `hospital_id` is the caller's |
 | The same, through a parent | `bookings`, `queue_events`, `queue_state`, `standby_list`, `slot_offers` (the session); `guest_links`, `payments` (the booking, or what else was paid for); `reports` (the order); `prescriptions`, `prescription_items` (the visit); `import_rows` (the batch) | The parent is the caller's hospital's |
 | People | `patients`, `users`, `guest_identities`, `device_tokens`, `otp_challenges`, `patient_documents`, `notifications` | Reachable; they belong to no hospital. A patient a hospital imported (`owner_hospital_id`) is that hospital's alone (`FR-IMP-10`) |
@@ -751,6 +756,12 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- one per booking (§2.1, §2.3, FR-QUE-51)
     0042_session_family.sql        -- plan A6: sessions_auth.family_id, a sign-in's identity across
                                    -- the rotation of its tokens (§2.1, FR-SEC-06)
+    0043_tenant_policies.sql       -- plan B1: app_tenant, the scope functions and a policy on every
+                                   -- table, so one hospital's rows are not another's (§5.2, FR-SEC-11)
+    0044_patient_policies.sql      -- plan B3: the patient and guest scopes; a person's clinical
+                                   -- record is their own (§5.3, FR-SEC-11, FR-GST-05)
+    0045_hospital_face.sql         -- plan C1: hospitals.description_bn/_en and hospital_logos
+                                   -- (§2.2, FR-BRD-06)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

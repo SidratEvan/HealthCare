@@ -29,16 +29,23 @@
  *   A deactivated account's sessions end at once.
  */
 
+import { createHash } from 'node:crypto';
+
 import {
   BED_UNCONFIRMED_REASON,
   type FacilityRole,
   type BedPatchBody,
+  LOGO_MAX_BYTES,
+  brandProblems,
+  logoBytesMatch,
   type BedsBody,
+  type BrandBody,
   type DeclaredCapabilitiesBody,
   type DepartmentBody,
   type DepartmentPatchBody,
   type DoctorBody,
   type DoctorPatchBody,
+  type LogoBody,
   type ProfileBody,
   type RulesBody,
   type StaffBody,
@@ -51,7 +58,7 @@ import {
 } from '@platform/domain';
 
 import { hashPassword, temporaryPassword } from '../config/password.js';
-import { AppError, notFound } from '../errors/AppError.js';
+import { AppError, notFound, validationFailed } from '../errors/AppError.js';
 import * as repo from '../repositories/hospitalSettings.repo.js';
 import * as platformRepo from '../repositories/platform.repo.js';
 import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
@@ -122,6 +129,70 @@ export async function updateProfile(actor: Actor, body: ProfileBody): Promise<vo
     });
     return { result: undefined, subjectId: actor.hospitalId };
   });
+}
+
+// --- its public face: colours and a logo (FR-BRD-06) -----------------------------
+
+/**
+ * The hospital's colours, or the platform's own again.
+ *
+ * Checked here whatever the screen checked: a set that cannot carry text is
+ * refused with which rule it broke, and nothing is stored, so the app is never
+ * half in somebody's colours (`brand/theme.ts`).
+ */
+export async function updateBrand(actor: Actor, body: BrandBody): Promise<void> {
+  if (body.theme !== null) {
+    const problems = brandProblems(body.theme);
+    if (problems.length > 0) throw notAllowed('brand_unreadable', { problems });
+  }
+  await change(
+    actor,
+    { table: 'hospital_settings', change: body.theme === null ? 'brand_cleared' : 'brand' },
+    async (trx) => {
+      await repo.setBrand(trx, actor.hospitalId, body.theme);
+      return { result: undefined, subjectId: actor.hospitalId };
+    },
+  );
+}
+
+/**
+ * A logo: the image it says it is, and no larger than the ceiling. The
+ * answer is its version, which the public address carries.
+ */
+export async function setLogo(actor: Actor, body: LogoBody): Promise<{ version: string }> {
+  const bytes = Buffer.from(body.content, 'base64');
+  if (bytes.length === 0 || bytes.length > LOGO_MAX_BYTES) {
+    throw validationFailed({ field: 'content', reason: 'logo_too_large' });
+  }
+  if (!logoBytesMatch(body.fileType, bytes)) {
+    throw validationFailed({ field: 'content', reason: 'logo_not_that_image' });
+  }
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  await change(actor, { table: 'hospital_logos', change: 'logo' }, async (trx) => {
+    await repo.setLogo(trx, {
+      hospitalId: actor.hospitalId,
+      contentType: body.fileType,
+      bytes,
+      sha256,
+      staffId: actor.staffId,
+    });
+    return { result: undefined, subjectId: actor.hospitalId };
+  });
+  return { version: sha256.slice(0, 16) };
+}
+
+export async function removeLogo(actor: Actor): Promise<void> {
+  await change(actor, { table: 'hospital_logos', change: 'logo_removed' }, async (trx) => {
+    await repo.removeLogo(trx, actor.hospitalId);
+    return { result: undefined, subjectId: actor.hospitalId };
+  });
+}
+
+/** The hospital's own logo, for its own settings screen; null when it has none. */
+export async function ownLogo(
+  hospitalId: string,
+): Promise<{ contentType: string; bytes: Buffer } | null> {
+  return await repo.ownLogo(hospitalId);
 }
 
 export async function updateRules(actor: Actor, body: RulesBody): Promise<void> {

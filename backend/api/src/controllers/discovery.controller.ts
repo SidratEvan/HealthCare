@@ -14,6 +14,7 @@ import {
   sessionQuery,
 } from '@platform/domain';
 
+import { notFound } from '../errors/AppError.js';
 import * as deployment from '../services/deployment.service.js';
 import * as discovery from '../services/discovery.service.js';
 
@@ -97,7 +98,35 @@ export async function getConfig(req: Request, res: Response): Promise<void> {
               nameBn: scoped.nameBn,
               nameEn: scoped.nameEn,
               theme: scoped.theme,
+              // Its own words and its logo (`FR-BRD-06`): what the app shows
+              // in place of the platform's name and mark.
+              descriptionBn: scoped.descriptionBn,
+              descriptionEn: scoped.descriptionEn,
+              logoVersion: scoped.logoVersion,
             },
     },
   });
+}
+
+/**
+ * `GET /hospitals/:id/logo` — a hospital's logo (`FR-BRD-06`).
+ *
+ * Public, like the card it is shown on. The address the app is given carries
+ * the logo's version (`?v=`), so what such an address names never changes
+ * and a phone may keep it for a year; an address without the current version
+ * is kept for five minutes. Another origin may show it: a hospital's portal
+ * can be on the hospital's own domain (`FR-BRD-07`).
+ */
+export async function getLogo(req: Request, res: Response): Promise<void> {
+  const { id } = idParams.parse(req.params);
+  const file = await discovery.logo(id);
+  if (file === null) throw notFound('logo');
+
+  res.setHeader('Content-Type', file.contentType);
+  res.setHeader(
+    'Cache-Control',
+    req.query['v'] === file.version ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
+  );
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.send(file.bytes);
 }

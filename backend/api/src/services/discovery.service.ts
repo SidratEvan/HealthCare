@@ -68,6 +68,10 @@ export interface ScopeInfo {
   readonly nameEn: string;
   /** Its colours, if it has set some and they are readable (`FR-BRD-03`). */
   readonly theme: BrandTheme | null;
+  /** What it says of itself, and which logo it has (`FR-BRD-06`). */
+  readonly descriptionBn: string | null;
+  readonly descriptionEn: string | null;
+  readonly logoVersion: string | null;
 }
 
 /**
@@ -87,7 +91,15 @@ export async function scopeInfo(code: string): Promise<ScopeInfo> {
     nameBn: row.nameBn,
     nameEn: row.nameEn,
     theme: readBrandTheme(row.brand),
+    descriptionBn: row.descriptionBn,
+    descriptionEn: row.descriptionEn,
+    logoVersion: row.logoVersion,
   };
+}
+
+/** A live hospital's logo, or null when it has none (`FR-BRD-06`). */
+export async function logo(hospitalId: string): Promise<discoveryRepo.LogoFile | null> {
+  return await discoveryRepo.findLogo(hospitalId);
 }
 
 async function scopedHospitalId(scope: string | undefined): Promise<string | undefined> {

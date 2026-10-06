@@ -15,11 +15,13 @@
  * the facility never declared.
  */
 
-import { Router } from 'express';
+import { json, Router } from 'express';
 
 import {
   bedPatchBody,
   bedsBody,
+  brandBody,
+  logoBody,
   declaredCapabilitiesBody,
   departmentBody,
   departmentPatchBody,
@@ -56,6 +58,27 @@ hospitalSettingsRoutes.patch(
   validate({ body: profileBody }),
   settings.patchProfile,
 );
+// Its public face (`FR-BRD-06`): colours, and a logo. The logo's body is an
+// image in base64, larger than the API's ordinary limit, so it brings its own
+// parser (`app.ts` `OWN_BODY_LIMIT`), as a lab report does.
+hospitalSettingsRoutes.put(
+  '/hospital/brand',
+  ...admin,
+  write,
+  validate({ body: brandBody }),
+  settings.putBrand,
+);
+hospitalSettingsRoutes.get('/hospital/logo', ...admin, settings.getOwnLogo);
+hospitalSettingsRoutes.put(
+  '/hospital/logo',
+  json({ limit: '512kb' }),
+  ...admin,
+  write,
+  validate({ body: logoBody }),
+  settings.putLogo,
+);
+hospitalSettingsRoutes.delete('/hospital/logo', ...admin, write, settings.deleteLogo);
+
 hospitalSettingsRoutes.patch(
   '/hospital/rules',
   ...admin,

@@ -69,6 +69,7 @@ import {
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { DemoBanner } from '@/components/DemoBanner';
+import { HospitalFace } from '@/components/HospitalFace';
 import {
   expandBedLabels,
   loadSetup,
@@ -681,6 +682,9 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
           {t('settingsSaveProfile', locale)}
         </SaveButton>
       </form>
+
+      {/* What patients see of it: its words, its logo, its colour (`FR-BRD-06`). */}
+      <HospitalFace snapshot={snapshot} offline={offline} run={run} />
 
       <form
         className="flex flex-col gap-4"
@@ -1930,6 +1934,7 @@ function failureText(failure: SaveFailure, locale: Locale): string {
         doctor_verified: 'settingsNotAllowedVerified',
         doctor_shared: 'settingsNotAllowedShared',
         nothing_to_publish: 'settingsNotAllowedNothing',
+        brand_unreadable: 'settingsBrandUnreadable',
       };
       return t(byReason[failure.reason] ?? 'settingsSaveFailed', locale);
     }

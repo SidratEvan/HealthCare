@@ -30,6 +30,10 @@ export interface ScopeConfig {
   readonly nameBn: string;
   readonly nameEn: string;
   readonly theme: BrandTheme | null;
+  /** Its own words and its logo (`FR-BRD-06`). */
+  readonly descriptionBn?: string | null;
+  readonly descriptionEn?: string | null;
+  readonly logoVersion?: string | null;
 }
 
 export interface DeploymentConfig {

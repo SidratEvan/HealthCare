@@ -36,6 +36,15 @@ const BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1
 /** Where the socket connects. Same origin as the API, without the path. */
 export const SOCKET_URL = process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:4000';
 
+/**
+ * Where a hospital's logo is (`FR-BRD-06`). The version is part of the
+ * address, so a changed logo is a new address and an unchanged one is kept by
+ * the phone.
+ */
+export function logoUrl(hospitalId: string, version: string): string {
+  return `${BASE}/hospitals/${hospitalId}/logo?v=${encodeURIComponent(version)}`;
+}
+
 /** No token: every discovery surface is public, and booking is guest-first. */
 export const api = new ApiClient({ baseUrl: BASE, getToken: () => null });
 

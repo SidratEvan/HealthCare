@@ -40,6 +40,10 @@ export interface HospitalCard {
   /** The switchboard and the emergency department, as the hospital publishes them. */
   readonly phone?: string | null;
   readonly emergencyPhone?: string | null;
+  /** What the hospital says of itself, and which logo it has (`FR-BRD-06`). */
+  readonly descriptionBn?: string | null;
+  readonly descriptionEn?: string | null;
+  readonly logoVersion?: string | null;
   readonly capabilities: readonly string[];
   readonly capabilityAsOf: string | null;
   /** Doctors here in the specialty asked for; null when none was (`S-A-07`). */

@@ -60,7 +60,8 @@ import type { Locale } from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/ui';
 
 import { HospitalBeds } from '@/components/HospitalBeds';
-import { ChevronIcon, HospitalIcon, StethoscopeIcon } from '@/components/icons';
+import { HospitalMark } from '@/components/HospitalMark';
+import { ChevronIcon, StethoscopeIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
 import { useDeployment } from '@/hooks/useDeployment';
 import { useNow } from '@/hooks/useNow';
@@ -464,9 +465,7 @@ function HospitalResult({
     <Card tone={hospital.sittingNow > 0 && need?.kind !== 'bed' ? 'brand' : 'default'}>
       <div className="flex flex-col gap-3" data-testid={`result-hospital-${hospital.id}`}>
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 text-brand-600">
-            <HospitalIcon size={22} />
-          </span>
+          <HospitalMark hospitalId={hospital.id} logoVersion={hospital.logoVersion} />
           <div className="min-w-0 flex-1">
             <p className="text-title-sm">{localName(locale, hospital.nameBn, hospital.nameEn)}</p>
             <p className="text-body-sm text-ink-muted">

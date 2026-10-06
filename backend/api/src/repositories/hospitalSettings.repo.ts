@@ -11,7 +11,7 @@
 
 import { sql } from 'kysely';
 
-import type { OrgLifecycle } from '@platform/domain';
+import { readBrandTheme, type BrandTheme, type OrgLifecycle } from '@platform/domain';
 
 import { db } from '../config/db.js';
 
@@ -33,6 +33,9 @@ export interface SetupSnapshot {
     readonly addressEn: string | null;
     readonly phone: string | null;
     readonly emergencyPhone: string | null;
+    /** What the hospital says of itself to patients (`FR-BRD-06`). */
+    readonly descriptionBn: string | null;
+    readonly descriptionEn: string | null;
     readonly lat: number | null;
     readonly lng: number | null;
     readonly isLive: boolean;
@@ -49,6 +52,16 @@ export interface SetupSnapshot {
     readonly lateReinsertAfter: number;
     readonly staleThresholdMinutes: number;
     readonly smsBudgetMonthly: number | null;
+  };
+  /** Its public face beyond words (`FR-BRD-06`): colours and a logo. */
+  readonly face: {
+    /** Null: the platform's own colours. */
+    readonly theme: BrandTheme | null;
+    readonly logo: {
+      readonly version: string;
+      readonly contentType: string;
+      readonly bytes: number;
+    } | null;
   };
   readonly departments: readonly {
     readonly id: string;
@@ -130,6 +143,12 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     address_en: string | null;
     phone: string | null;
     emergency_phone: string | null;
+    description_bn: string | null;
+    description_en: string | null;
+    brand: unknown;
+    logo_sha256: string | null;
+    logo_type: string | null;
+    logo_bytes: number | null;
     lat: number | null;
     lng: number | null;
     is_live: boolean;
@@ -145,12 +164,16 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
   }>`
     SELECT h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
            h.thana, h.address_bn, h.address_en, h.phone, h.emergency_phone,
+           h.description_bn, h.description_en, s.brand,
+           l.sha256 AS logo_sha256, l.content_type AS logo_type,
+           octet_length(l.bytes) AS logo_bytes,
            h.lat::float8 AS lat, h.lng::float8 AS lng, h.is_live, h.onboarded_at,
            h.lifecycle::text AS lifecycle, h.review_requested_at, h.review_note,
            s.no_show_grace_patients, s.no_show_grace_minutes, s.late_reinsert_after,
            s.stale_threshold_minutes, s.sms_budget_monthly
       FROM hospitals h
       LEFT JOIN hospital_settings s ON s.hospital_id = h.id
+      LEFT JOIN hospital_logos l ON l.hospital_id = h.id
      WHERE h.id = ${hospitalId} AND h.deleted_at IS NULL
   `.execute(db);
   const row = hospital.rows[0];
@@ -272,6 +295,8 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       addressEn: row.address_en,
       phone: row.phone,
       emergencyPhone: row.emergency_phone,
+      descriptionBn: row.description_bn,
+      descriptionEn: row.description_en,
       lat: row.lat,
       lng: row.lng,
       isLive: row.is_live,
@@ -286,6 +311,17 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       lateReinsertAfter: row.late_reinsert_after ?? 3,
       staleThresholdMinutes: row.stale_threshold_minutes ?? 10,
       smsBudgetMonthly: row.sms_budget_monthly,
+    },
+    face: {
+      theme: readBrandTheme(row.brand),
+      logo:
+        row.logo_sha256 === null || row.logo_type === null || row.logo_bytes === null
+          ? null
+          : {
+              version: row.logo_sha256.slice(0, 16),
+              contentType: row.logo_type,
+              bytes: row.logo_bytes,
+            },
     },
     departments: departments.rows.map((d) => ({
       id: d.id,
@@ -359,6 +395,8 @@ export interface ProfileFields {
   readonly addressEn?: string | null | undefined;
   readonly phone?: string | null | undefined;
   readonly emergencyPhone?: string | null | undefined;
+  readonly descriptionBn?: string | null | undefined;
+  readonly descriptionEn?: string | null | undefined;
   readonly lat?: number | null | undefined;
   readonly lng?: number | null | undefined;
 }
@@ -379,11 +417,74 @@ export async function updateProfile(
       address_en = CASE WHEN ${has('addressEn')} THEN ${fields.addressEn ?? null} ELSE address_en END,
       phone = CASE WHEN ${has('phone')} THEN ${fields.phone ?? null} ELSE phone END,
       emergency_phone = CASE WHEN ${has('emergencyPhone')} THEN ${fields.emergencyPhone ?? null} ELSE emergency_phone END,
+      description_bn = CASE WHEN ${has('descriptionBn')} THEN ${fields.descriptionBn ?? null} ELSE description_bn END,
+      description_en = CASE WHEN ${has('descriptionEn')} THEN ${fields.descriptionEn ?? null} ELSE description_en END,
       lat = CASE WHEN ${has('lat')} THEN ${fields.lat ?? null}::float8 ELSE lat END,
       lng = CASE WHEN ${has('lng')} THEN ${fields.lng ?? null}::float8 ELSE lng END,
       updated_at = now()
     WHERE id = ${hospitalId}
   `.execute(trx);
+}
+
+// --- its public face: colours and a logo (FR-BRD-06) ---------------------------
+
+/** The hospital's colours, or null for the platform's own. */
+export async function setBrand(
+  trx: Tx,
+  hospitalId: string,
+  theme: BrandTheme | null,
+): Promise<void> {
+  await sql`
+    INSERT INTO hospital_settings (hospital_id) VALUES (${hospitalId})
+    ON CONFLICT (hospital_id) DO NOTHING
+  `.execute(trx);
+  await sql`
+    UPDATE hospital_settings
+       SET brand = ${theme === null ? null : JSON.stringify(theme)}::jsonb, updated_at = now()
+     WHERE hospital_id = ${hospitalId}
+  `.execute(trx);
+}
+
+export async function setLogo(
+  trx: Tx,
+  input: {
+    readonly hospitalId: string;
+    readonly contentType: string;
+    readonly bytes: Buffer;
+    readonly sha256: string;
+    readonly staffId: string;
+  },
+): Promise<void> {
+  await sql`
+    INSERT INTO hospital_logos (hospital_id, content_type, bytes, sha256, created_by)
+    VALUES (${input.hospitalId}, ${input.contentType}, ${input.bytes}, ${input.sha256},
+            ${input.staffId})
+    ON CONFLICT (hospital_id) DO UPDATE
+       SET content_type = EXCLUDED.content_type, bytes = EXCLUDED.bytes,
+           sha256 = EXCLUDED.sha256, created_by = EXCLUDED.created_by
+  `.execute(trx);
+}
+
+/** True when there was one to remove. */
+export async function removeLogo(trx: Tx, hospitalId: string): Promise<boolean> {
+  const result = await sql`
+    DELETE FROM hospital_logos WHERE hospital_id = ${hospitalId}
+  `.execute(trx);
+  return Number(result.numAffectedRows ?? 0) > 0;
+}
+
+/**
+ * The hospital's own logo, live or not: the settings screen shows it before
+ * the hospital is in the network, when the public address does not answer.
+ */
+export async function ownLogo(
+  hospitalId: string,
+): Promise<{ contentType: string; bytes: Buffer } | null> {
+  const result = await sql<{ content_type: string; bytes: Buffer }>`
+    SELECT content_type, bytes FROM hospital_logos WHERE hospital_id = ${hospitalId}
+  `.execute(db);
+  const row = result.rows[0];
+  return row === undefined ? null : { contentType: row.content_type, bytes: row.bytes };
 }
 
 export interface RuleFields {
