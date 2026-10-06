@@ -1861,6 +1861,14 @@ export const CONSOLE = {
     bn: 'এগুলোর যেকোনো একটির কলাম বেছে নিন: {fields}',
     en: 'Choose a column for at least one of these: {fields}',
   },
+  importMapModelUsed: {
+    bn: 'যেসব কলাম নিয়মে মেলেনি, সেগুলোর জন্য এআই প্রস্তাব দিয়েছে। এগুলো শুধু প্রস্তাব; দেখে তবেই নিশ্চিত করুন। ফাইলের কোনো সারি এআইকে পাঠানো হয়নি, শুধু কলামের নাম ও ধরন।',
+    en: 'AI suggested columns for what the rules could not match. These are suggestions only; check them before you confirm. No row of the file was sent to the AI, only column names and kinds.',
+  },
+  importMapModelUnavailable: {
+    bn: 'এআইয়ের প্রস্তাব এখন পাওয়া যায়নি। নিয়ম ও আপনার নিজের বাছাই দিয়ে কাজ চলবে।',
+    en: 'AI suggestions are not available right now. The rules and your own choices are enough to go on.',
+  },
   importMapConfirm: { bn: 'মিল নিশ্চিত করে যাচাই করুন', en: 'Confirm the matching and check' },
   importMapCancel: { bn: 'বাতিল করুন', en: 'Cancel' },
   settingsHospitalCode: { bn: 'হাসপাতাল কোড: {code}', en: 'Hospital code: {code}' },

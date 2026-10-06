@@ -119,6 +119,8 @@ export interface MappingAnalysis {
   readonly proposal: readonly FieldProposal[];
   /** The proposal is this hospital's last confirmed mapping for these headings. */
   readonly fromSaved: boolean;
+  /** What part a model played in the proposal (`FR-IMP-16`). */
+  readonly model: 'used' | 'nothing' | 'unavailable' | 'not_asked';
 }
 
 export const importApi = {

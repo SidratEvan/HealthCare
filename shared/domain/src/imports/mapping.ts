@@ -801,3 +801,208 @@ export function applyMapping(set: ImportSet, table: CsvTable, mapping: ColumnMap
 
   return `${lines.join('\n')}\n`;
 }
+
+// ---------------------------------------------------------------------------
+// A model's suggestions (`FR-IMP-16`, `FR-IMP-17`)
+// ---------------------------------------------------------------------------
+
+/**
+ * What each template field means, in a sentence, for a model that has never
+ * seen the template. English, because it is read by the model and by nobody
+ * else; the administrator reads `importFieldName` in their own language.
+ */
+const FIELD_MEANING: Readonly<Record<string, string>> = {
+  ref: 'The identifier the hospital itself uses for this row: a patient number, a doctor code, a bed id.',
+  name_bn: 'The name written in Bangla script.',
+  name_en: 'The name written in English (Latin script).',
+  code: 'A short code for a department, such as MED or CARD.',
+  bmdc_number: 'The Bangladesh Medical and Dental Council registration number of a doctor.',
+  degrees: 'The degrees and qualifications of a doctor, such as MBBS, FCPS.',
+  specialties: 'The specialties of a doctor.',
+  department_ref: 'The identifier or code the hospital uses for the department a doctor sits in.',
+  room: 'A room or chamber number.',
+  fee_taka: 'A consultation fee in Bangladeshi taka.',
+  doctor_ref: 'The identifier the hospital uses for a doctor.',
+  weekday: 'A day of the week.',
+  start: 'A start time.',
+  end: 'An end time.',
+  serials: 'How many patients a doctor sees in one sitting.',
+  ward_ref: 'The identifier the hospital uses for a ward.',
+  floor: 'A floor number.',
+  bed_kind: 'The kind of bed: general, cabin, hdu, icu, ccu, nicu, isolation or burn.',
+  bed_label: 'The number or label painted on a bed.',
+  nightly_taka: 'The price of a bed per night in Bangladeshi taka.',
+  role: 'The role or designation of a staff member.',
+  email: 'An email address.',
+  full_name: 'The full name of a patient.',
+  date_of_birth: 'The date of birth of a patient.',
+  age_years: 'The age of a patient in years.',
+  sex: 'The sex or gender of a patient.',
+  mobile: 'The mobile phone number of a patient.',
+  blood_group: 'The blood group of a patient, such as B+ or O-.',
+  patient_ref: 'The identifier the hospital uses for a patient.',
+  date: 'The date of an appointment.',
+  serial: 'The serial or token number of a patient in the queue.',
+  paid: 'Whether the appointment has been paid for.',
+};
+
+/**
+ * What a value of this kind looks like, made up from the kind alone.
+ *
+ * `FR-IMP-17`: a model is given "example values made up from the profile;
+ * never a value copied from a row". These are constants. There is no input
+ * through which a cell could reach them, which is the point of making them
+ * here rather than sampling the file.
+ */
+const EXAMPLE_OF_KIND: Readonly<Record<ColumnKind, string | null>> = {
+  empty: null,
+  text: null,
+  integer: '123',
+  money: '1,250.00',
+  date: 'DD/MM/YYYY',
+  time: 'HH:MM',
+  phone: '01XXXXXXXXX',
+  email: 'name@example.org',
+};
+
+/** What a model is told about one column: its heading and its profile. Nothing from a row. */
+export interface ModelColumn {
+  readonly index: number;
+  readonly heading: string;
+  readonly holds: ColumnKind;
+  /** The share of rows filled, 0 to 1. */
+  readonly filled: number;
+  readonly variety: ColumnProfile['distinct'];
+  /** A made-up value of this kind, or null where the kind has no fixed shape. */
+  readonly looksLike: string | null;
+}
+
+/** Everything a model is sent (`FR-IMP-17`). */
+export interface ModelMappingRequest {
+  readonly set: ImportSet;
+  readonly rowType: StructureType | null;
+  /** The fields the rules could not place; the only ones a suggestion may name. */
+  readonly fields: readonly {
+    readonly field: string;
+    readonly required: boolean;
+    readonly means: string;
+  }[];
+  /** The columns the rules left unused; the only ones a suggestion may name. */
+  readonly columns: readonly ModelColumn[];
+  /** What the rules already placed, as context: field and heading. */
+  readonly alreadyMatched: readonly { readonly field: string; readonly heading: string }[];
+}
+
+/**
+ * What to ask a model, or null when there is nothing to ask: every field has
+ * a column, or no column is left over.
+ *
+ * Built from column profiles and headings only. Its parameters have no place
+ * for a row: `FileColumn` carries a heading and a profile, and a profile
+ * carries no value (`profileColumns`). So "no patient row is sent to a model"
+ * is a property of this function's type, not a promise about its body.
+ */
+export function modelMappingRequest(
+  target: MappingTarget,
+  columns: readonly FileColumn[],
+  rules: readonly FieldProposal[],
+): ModelMappingRequest | null {
+  const placed = new Map(
+    rules.flatMap((proposal) =>
+      proposal.column === null ? [] : [[proposal.field, proposal.column] as const],
+    ),
+  );
+  const usedColumns = new Set(placed.values());
+
+  const openFields = targetFields(target).filter((field) => !placed.has(field.field));
+  const freeColumns = columns.filter(
+    (column) => !usedColumns.has(column.index) && column.profile.kind !== 'empty',
+  );
+  if (openFields.length === 0 || freeColumns.length === 0) return null;
+
+  return {
+    set: target.set,
+    rowType: target.rowType,
+    fields: openFields.map((field) => ({
+      field: field.field,
+      required: field.required,
+      means: FIELD_MEANING[field.field] ?? field.field,
+    })),
+    columns: freeColumns.map((column) => ({
+      index: column.index,
+      heading: column.name,
+      holds: column.profile.kind,
+      filled: column.profile.filled,
+      variety: column.profile.distinct,
+      looksLike: EXAMPLE_OF_KIND[column.profile.kind],
+    })),
+    alreadyMatched: [...placed.entries()].map(([field, index]) => ({
+      field,
+      heading: columns[index]?.name ?? '',
+    })),
+  };
+}
+
+/** One suggestion as a model returns it, before anything has checked it. */
+export interface ModelSuggestion {
+  readonly field: string;
+  readonly column: number;
+  readonly confidence: 'high' | 'medium' | 'low';
+  readonly reason: string;
+}
+
+const MODEL_CONFIDENCE: Readonly<Record<ModelSuggestion['confidence'], number>> = {
+  high: 0.8,
+  medium: 0.65,
+  low: 0.5,
+};
+
+/** The longest reason shown. A sentence from a model is a note, not an essay. */
+const MAX_NOTE = 200;
+
+/**
+ * Adds a model's suggestions to the rules' proposal (`FR-IMP-16`).
+ *
+ * **A model's answer is untrusted input.** A suggestion is kept only if it
+ * names a field that was asked about and a column that was offered, each at
+ * most once; anything else is dropped, not repaired. It can therefore fill a
+ * gap the rules left and can never change what the rules decided, name a
+ * field the template does not have, or point at a column that does not exist.
+ * What is kept is still only a proposal: the administrator confirms, and the
+ * check decides.
+ *
+ * A model's confidence is capped below a rule's exact match: it is a guess by
+ * something that has not seen this hospital before.
+ */
+export function withModelSuggestions(
+  rules: readonly FieldProposal[],
+  asked: ModelMappingRequest,
+  suggestions: readonly ModelSuggestion[],
+): readonly FieldProposal[] {
+  const openFields = new Set(asked.fields.map((field) => field.field));
+  const freeColumns = new Set(asked.columns.map((column) => column.index));
+  const accepted = new Map<string, ModelSuggestion>();
+  const takenColumns = new Set<number>();
+
+  for (const suggestion of suggestions) {
+    if (!openFields.has(suggestion.field) || accepted.has(suggestion.field)) continue;
+    if (!Number.isInteger(suggestion.column) || !freeColumns.has(suggestion.column)) continue;
+    if (takenColumns.has(suggestion.column)) continue;
+    accepted.set(suggestion.field, suggestion);
+    takenColumns.add(suggestion.column);
+  }
+
+  return rules.map((proposal) => {
+    const suggestion = accepted.get(proposal.field);
+    if (suggestion === undefined || proposal.column !== null) return proposal;
+    return {
+      field: proposal.field,
+      column: suggestion.column,
+      confidence: MODEL_CONFIDENCE[suggestion.confidence],
+      source: 'model' as const,
+      reason: null,
+      // Plain text, shortened, on one line. It is shown as written.
+      note: suggestion.reason.replace(/\s+/g, ' ').trim().slice(0, MAX_NOTE),
+    };
+  });
+}

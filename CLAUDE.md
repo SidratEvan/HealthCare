@@ -407,6 +407,8 @@ pnpm db:role          # self-host only: the role the API connects as (DEPLOY.md 
 pnpm db:seed
 pnpm db:reset         # truncate + reseed demo data
 pnpm db:verify        # schema invariants
+pnpm staff:create     # a hospital's first administrator; --platform for a deployment's first platform administrator (DEPLOY.md S3)
+pnpm mapping:try      # what a model would be sent for a CSV, and its suggestions when one is configured (FR-IMP-17)
 pnpm typecheck
 pnpm lint
 pnpm test

@@ -389,6 +389,24 @@ It prints a temporary password once; the first sign-in changes it and sets up tw
 
 On a deployment that holds a single hospital it is still two accounts, by design: the hospital's administrator and the platform's. A hospital that was already live before 0037 stays live.
 
+### Import suggestions from a model (optional, off by default)
+
+The import maps a hospital's own export with rules and the administrator's choices, and needs nothing else. A model can additionally suggest columns for the headings the rules do not know (`FR-IMP-16`). It is switched on in `deploy/.env`:
+
+```
+MAPPING_PROVIDER=claude
+MAPPING_API_KEY=…          # an Anthropic API key
+```
+
+**What leaves the server when it is on:** for a file whose headings are not already known, the column *headings* and what kind of value each column holds. Never a row, never a patient (`FR-IMP-17`). To see exactly what would be sent for a given file before switching anything on:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
+  pnpm mapping:try --set patients --file /path/to/export.csv
+```
+
+It costs one short request per new export format; a format a hospital has confirmed once is remembered and costs nothing. If the provider is unreachable or the key is wrong, the import screen says suggestions are not available and carries on without them.
+
 ## S4. Updating
 
 ```bash

@@ -19,6 +19,13 @@ import { sql } from 'kysely';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import type { ModelMappingRequest } from '@platform/domain';
+
+import {
+  resetMappingProvider,
+  setMappingProvider,
+  type MappingAnswer,
+} from '../adapters/mapping.js';
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
@@ -449,6 +456,180 @@ describe('the same export next time (FR-IMP-20)', () => {
   });
 });
 
+describe('a model’s suggestions, on top of the rules (FR-IMP-16, FR-IMP-17)', () => {
+  /** A register whose headings no rule knows, except the one phone column. */
+  const AWKWARD = [
+    'MR#,Pt. Nm,Yrs,Sx,Pt. Cell,Vill,Father',
+    `A-${suffix}-1,Rahima Khatun (Demo),38,F,01712345678,Mirpur,Abdul Karim (Demo)`,
+    `A-${suffix}-2,Karim Uddin (Demo),51,M,01812345678,Dhanmondi,Rahim Uddin (Demo)`,
+  ].join('\r\n');
+
+  /** Stands in for the model: records what it was asked, answers as told. */
+  function fakeModel(answer: MappingAnswer | (() => never)): { asked: ModelMappingRequest[] } {
+    const asked: ModelMappingRequest[] = [];
+    setMappingProvider({
+      name: 'fake',
+      propose: async (request) => {
+        asked.push(request);
+        if (typeof answer === 'function') return answer();
+        return await Promise.resolve(answer);
+      },
+    });
+    return { asked };
+  }
+
+  const SUGGESTIONS: MappingAnswer = {
+    kind: 'suggestions',
+    suggestions: [
+      { field: 'ref', column: 0, confidence: 'high', reason: 'MR# is a medical record number.' },
+      {
+        field: 'full_name',
+        column: 1,
+        confidence: 'high',
+        reason: 'Pt. Nm abbreviates patient name.',
+      },
+      { field: 'age_years', column: 2, confidence: 'medium', reason: 'Yrs is age in years.' },
+      { field: 'sex', column: 3, confidence: 'medium', reason: 'Sx abbreviates sex.' },
+      // What a model must never get through: a field the template lacks, a
+      // column a rule already used, a column that does not exist.
+      { field: 'guardian', column: 6, confidence: 'high', reason: 'Father is the guardian.' },
+      { field: 'blood_group', column: 4, confidence: 'high', reason: 'Overriding the rule.' },
+      { field: 'date_of_birth', column: 40, confidence: 'low', reason: 'No such column.' },
+    ],
+  };
+
+  afterAll(() => {
+    resetMappingProvider();
+  });
+
+  it('with no model configured, the rules stand alone and nobody is asked', async () => {
+    resetMappingProvider();
+    const response = await post('/hospital/imports/analyse', { set: 'patients', csv: AWKWARD });
+    const data = response.body.data as {
+      model: string;
+      proposal: { field: string; column: number | null; source: string | null }[];
+    };
+
+    expect(data.model).toBe('not_asked');
+    // The one thing a rule could place: the only phone column.
+    expect(data.proposal.find((entry) => entry.field === 'mobile')).toMatchObject({
+      column: 4,
+      source: 'rule',
+    });
+    expect(data.proposal.find((entry) => entry.field === 'ref')?.column).toBeNull();
+  });
+
+  it('is asked only about what the rules left open, and is sent no value from any row', async () => {
+    const model = fakeModel(SUGGESTIONS);
+    await post('/hospital/imports/analyse', { set: 'patients', csv: AWKWARD });
+
+    expect(model.asked).toHaveLength(1);
+    const sent = JSON.stringify(model.asked[0]);
+    for (const value of ['Rahima', 'Karim', 'Abdul', '01712345678', 'Mirpur', suffix]) {
+      expect(sent, value).not.toContain(value);
+    }
+    expect(model.asked[0]?.columns.map((column) => column.heading)).toEqual([
+      'MR#',
+      'Pt. Nm',
+      'Yrs',
+      'Sx',
+      'Vill',
+      'Father',
+    ]);
+    expect(model.asked[0]?.fields.map((field) => field.field)).not.toContain('mobile');
+  });
+
+  it('fills the gaps with its suggestions, each marked as its own and with its reason', async () => {
+    fakeModel(SUGGESTIONS);
+    const response = await post('/hospital/imports/analyse', { set: 'patients', csv: AWKWARD });
+    const data = response.body.data as {
+      model: string;
+      proposal: {
+        field: string;
+        column: number | null;
+        source: string | null;
+        note?: string;
+        confidence: number | null;
+      }[];
+    };
+    const by = Object.fromEntries(data.proposal.map((entry) => [entry.field, entry]));
+
+    expect(data.model).toBe('used');
+    expect(by['ref']).toMatchObject({
+      column: 0,
+      source: 'model',
+      note: 'MR# is a medical record number.',
+    });
+    expect(by['sex']).toMatchObject({ column: 3, source: 'model' });
+    // The rule's own choice is untouched, and nothing unasked got in.
+    expect(by['mobile']).toMatchObject({ column: 4, source: 'rule' });
+    expect(by['blood_group']?.column).toBeNull();
+    expect(by['date_of_birth']?.column).toBeNull();
+    expect(by['guardian']).toBeUndefined();
+  });
+
+  it('carries on with the rules when the model cannot answer, and says so', async () => {
+    fakeModel({ kind: 'unavailable', reason: 'timeout' });
+    const slow = await post('/hospital/imports/analyse', { set: 'patients', csv: AWKWARD });
+    expect(slow.status).toBe(200);
+    expect(slow.body.data.model).toBe('unavailable');
+    expect(
+      (slow.body.data.proposal as { field: string; column: number | null }[]).find(
+        (entry) => entry.field === 'mobile',
+      )?.column,
+    ).toBe(4);
+
+    // Even one that throws, which a provider must not do.
+    fakeModel(() => {
+      throw new Error('provider exploded');
+    });
+    const broken = await post('/hospital/imports/analyse', { set: 'patients', csv: AWKWARD });
+    expect(broken.status).toBe(200);
+    expect(broken.body.data.model).toBe('unavailable');
+  });
+
+  it('is not asked when this hospital has already confirmed a mapping for these headings', async () => {
+    const model = fakeModel(SUGGESTIONS);
+    // The register from the earlier tests: confirmed, so remembered.
+    const response = await post('/hospital/imports/analyse', { set: 'patients', csv: REGISTER });
+
+    expect(response.body.data).toMatchObject({ fromSaved: true, model: 'not_asked' });
+    expect(model.asked).toHaveLength(0);
+  });
+
+  it('is still only a proposal: confirmed by a person, checked by the importer, audited as the model’s', async () => {
+    fakeModel(SUGGESTIONS);
+    const confirmed = await post('/hospital/imports/mapped', {
+      set: 'patients',
+      fileName: 'awkward.csv',
+      csv: AWKWARD,
+      // What the administrator confirmed: the model's four and the rule's one.
+      mapping: { rowType: null, fields: { ref: 0, full_name: 1, age_years: 2, sex: 3, mobile: 4 } },
+      suggestedByModel: ['ref', 'full_name', 'age_years', 'sex', 'mobile'],
+    });
+
+    expect(confirmed.status).toBe(200);
+    // The same check as any import decided what is importable.
+    expect(confirmed.body.data.counts).toMatchObject({ add: 2, error: 0 });
+
+    const audit = await sql<{
+      meta: { fields: Record<string, { heading: string; source: string }> };
+    }>`
+      SELECT meta FROM audit_log
+       WHERE hospital_id = ${hospitalId} AND subject_id = ${confirmed.body.data.id as string}
+         AND meta ->> 'change' = 'import_mapping_confirmed'
+    `.execute(db);
+    const fields = audit.rows[0]?.meta.fields ?? {};
+
+    expect(fields['ref']).toEqual({ heading: 'MR#', source: 'model' });
+    expect(fields['sex']).toEqual({ heading: 'Sx', source: 'model' });
+    // Saying the model suggested it does not make it so: a rule placed this one.
+    expect(fields['mobile']).toEqual({ heading: 'Pt. Cell', source: 'rule' });
+
+    await post(`/hospital/imports/${confirmed.body.data.id as string}/discard`, {});
+  });
+});
+
 describe('what is kept about a mapping (FR-IMP-20)', () => {
   it('audits who confirmed which heading for which field, and from where', async () => {
     const rows = await sql<{ meta: Record<string, unknown>; actor: string | null }>`
@@ -468,14 +649,13 @@ describe('what is kept about a mapping (FR-IMP-20)', () => {
     expect(first.notImported).toEqual(['Address', 'NID']);
     expect(rows.rows.every((row) => row.actor !== null)).toBe(true);
 
-    // The last confirmation left the blood group out: that was a person's choice,
-    // and what the others carried over was the saved mapping.
-    const last = rows.rows.at(-1)?.meta as {
-      fields: Record<string, { source: string }>;
-      notImported: string[];
-    };
-    expect(last.fields['blood_group']).toBeUndefined();
-    expect(last.notImported).toContain('Blood Grp');
+    // The confirmation that left the blood group out: that was a person's
+    // choice, and it is on the record as a column not imported.
+    const leftOut = rows.rows
+      .map((row) => row.meta as { fields: Record<string, unknown>; notImported: string[] })
+      .find((meta) => meta.notImported.includes('Blood Grp'));
+    expect(leftOut).toBeDefined();
+    expect(leftOut?.fields['blood_group']).toBeUndefined();
   });
 
   it('keeps headings and positions, and no value from any row, anywhere', async () => {

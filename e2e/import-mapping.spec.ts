@@ -40,6 +40,13 @@ const NO_HEADINGS = [
   'P-1002,Karim Uddin (Demo),12/11/1975,M,01812345678',
 ].join('\r\n');
 
+/** Headings no rule knows, except the one phone column. */
+const AWKWARD = [
+  'MR#,Pt. Nm,Yrs,Sx,Pt. Cell,Vill,Father',
+  'M-1,Rahima Khatun (Demo),38,F,01712345678,Mirpur,Abdul Karim (Demo)',
+  'M-2,Karim Uddin (Demo),51,M,01812345678,Dhanmondi,Rahim Uddin (Demo)',
+].join('\r\n');
+
 const made: NewFacility[] = [];
 
 test.afterAll(async () => {
@@ -212,5 +219,127 @@ test.describe('S-B-14: a hospital’s own export, mapped (FR-IMP-13 to FR-IMP-20
 
     await page.getByTestId('map-cancel').click();
     await expect(mapping).toHaveCount(0);
+  });
+
+  /**
+   * The model's part on the screen (`FR-IMP-16`, `FR-IMP-17`).
+   *
+   * No test calls a model. The server here has none configured, so the answer
+   * to `analyse` is the rules' own, and this stands in for the model by
+   * adding to that answer what one would add: suggestions for the fields the
+   * rules left open, marked as the model's. What the model adapter sends and
+   * accepts is `mappingProvider.test.ts` and `importMapping.routes.test.ts`;
+   * this is how an administrator is shown it.
+   */
+  test('a model’s suggestions are shown as suggestions, with what the model was not given', async ({
+    page,
+  }) => {
+    const facility = await newFacility(PASSWORD);
+    made.push(facility);
+    await openImport(page, facility);
+
+    const suggested: Record<string, { column: number; note: string; confidence: number }> = {
+      ref: { column: 0, note: 'MR# is a medical record number.', confidence: 0.8 },
+      full_name: { column: 1, note: 'Pt. Nm abbreviates patient name.', confidence: 0.8 },
+      age_years: { column: 2, note: 'Yrs is age in years.', confidence: 0.65 },
+      sex: { column: 3, note: 'Sx abbreviates sex.', confidence: 0.5 },
+    };
+    await page.route('**/hospital/imports/analyse', async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        data: { model: string; proposal: { field: string; column: number | null }[] };
+      };
+      body.data.model = 'used';
+      body.data.proposal = body.data.proposal.map((entry) => {
+        const suggestion = suggested[entry.field];
+        return suggestion === undefined || entry.column !== null
+          ? entry
+          : { ...entry, ...suggestion, source: 'model', reason: null };
+      });
+      await route.fulfill({ response, json: body });
+    });
+
+    let confirmedBody: { suggestedByModel?: string[] } | null = null;
+    page.on('request', (request) => {
+      if (request.url().endsWith('/hospital/imports/mapped')) {
+        confirmedBody = request.postDataJSON() as { suggestedByModel?: string[] };
+      }
+    });
+
+    await page.getByRole('button', { name: 'খ রোগীর তালিকা' }).click();
+    await choose(page, 'awkward-register.csv', AWKWARD);
+    await page.getByTestId('import-check').click();
+
+    const mapping = page.getByTestId('import-mapping');
+    await expect(mapping).toBeVisible();
+
+    // Said at the top: these are suggestions, and no row went to the model.
+    const banner = page.getByTestId('map-model-used');
+    await expect(banner).toContainText('শুধু প্রস্তাব');
+    await expect(banner).toContainText('কোনো সারি এআইকে পাঠানো হয়নি');
+
+    // A suggested field: whose suggestion, how sure, and why in its own words.
+    expect(await chosenFor(page, 'ref')).toBe('MR#');
+    const whyRef = page.getByTestId('map-why-ref');
+    await expect(whyRef).toContainText('এআইয়ের প্রস্তাব');
+    await expect(whyRef).toContainText('MR# is a medical record number.');
+    // A low-confidence one asks to be looked at.
+    await expect(page.getByTestId('map-why-sex')).toContainText('দেখে নিন');
+    // The rule's own choice is still the rule's.
+    await expect(page.getByTestId('map-why-mobile')).toContainText('নিয়ম থেকে প্রস্তাব');
+    // What stays behind is still named.
+    await expect(page.getByTestId('map-not-imported')).toContainText('Father');
+
+    // Overruling the model makes the choice the administrator's.
+    await page.getByTestId('map-age_years').selectOption('');
+    await page.getByTestId('map-age_years').selectOption({ label: 'Yrs' });
+    await page.getByTestId('map-sex').selectOption({ label: 'Vill' });
+    await expect(page.getByTestId('map-why-sex')).toContainText('আপনি বেছে নিয়েছেন');
+    await page.getByTestId('map-sex').selectOption({ label: 'Sx' });
+
+    // Confirming is still the administrator's act, and the check still decides.
+    await page.getByTestId('map-confirm').click();
+    await expect(page.getByTestId('import-preview')).toBeVisible();
+    await expect(page.getByTestId('import-count-add')).toContainText('২');
+    await expect(page.getByTestId('import-count-error')).toContainText('০');
+
+    // The audit is told which fields still hold what the model suggested.
+    expect(confirmedBody).not.toBeNull();
+    expect([...(confirmedBody?.suggestedByModel ?? [])].sort()).toEqual([
+      'age_years',
+      'full_name',
+      'ref',
+      'sex',
+    ]);
+    await page.getByTestId('import-discard').click();
+  });
+
+  test('when the model cannot answer, the screen says so and the import carries on', async ({
+    page,
+  }) => {
+    const facility = await newFacility(PASSWORD);
+    made.push(facility);
+    await openImport(page, facility);
+
+    await page.route('**/hospital/imports/analyse', async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as { data: { model: string } };
+      body.data.model = 'unavailable';
+      await route.fulfill({ response, json: body });
+    });
+
+    await page.getByRole('button', { name: 'খ রোগীর তালিকা' }).click();
+    await choose(page, 'patient-register.csv', REGISTER);
+    await page.getByTestId('import-check').click();
+
+    await expect(page.getByTestId('map-model-unavailable')).toContainText(
+      'নিয়ম ও আপনার নিজের বাছাই দিয়ে কাজ চলবে',
+    );
+    await expect(page.getByTestId('map-model-used')).toHaveCount(0);
+    // The rules' proposal is all there, and confirming works as it does with no model.
+    expect(await chosenFor(page, 'ref')).toBe('Patient ID');
+    await page.getByTestId('map-confirm').click();
+    await expect(page.getByTestId('import-count-add')).toContainText('৩');
+    await page.getByTestId('import-discard').click();
   });
 });
