@@ -237,8 +237,24 @@ test.describe('S-B-11 with the connection gone (GR-03)', () => {
     await expect(save).toBeDisabled();
     await expect(save).toHaveAttribute('title', 'সংরক্ষণ করতে ইন্টারনেট সংযোগ লাগবে');
 
+    // A browser says "online" when a network is attached, which is before the
+    // server can be reached. The first read after that announcement is made to
+    // fail here, as it does on a router still dialling: the screen has to try
+    // again by itself, not stay "offline" until somebody reloads it.
+    let refused = 0;
+    await page.route(
+      '**/hospital/setup',
+      async (route) => {
+        refused += 1;
+        await route.abort('internetdisconnected');
+      },
+      { times: 1 },
+    );
     await context.setOffline(false);
     await expect(page.getByTestId('settings-offline-banner')).toHaveCount(0);
+    expect(refused).toBe(1);
+    // The button no longer blames the connection for being unavailable.
+    await expect(save).not.toHaveAttribute('title', 'সংরক্ষণ করতে ইন্টারনেট সংযোগ লাগবে');
   });
 });
 

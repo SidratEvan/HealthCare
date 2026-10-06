@@ -27,6 +27,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
+import { retryDelayMs } from '@platform/client';
 import {
   BED_KINDS,
   CAPABILITY_KINDS,
@@ -144,16 +145,20 @@ function SettingsScreen(): ReactNode {
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const [tab, setTab] = useState<Tab>('profile');
   const [now, setNow] = useState(() => new Date());
+  /** Reads in a row that could not reach the server; spaces out the next one. */
+  const [unreached, setUnreached] = useState(0);
 
   const reload = useCallback(async () => {
     const answer = await loadSetup();
     if (answer === 'offline' || answer === 'error') {
       // What was on screen stays there, with its age.
       setState(answer);
+      if (answer === 'offline') setUnreached((count) => count + 1);
       return;
     }
     setSnapshot(answer);
     setLoadedAt(new Date(answer.serverTs));
+    setUnreached(0);
     setState('ready');
   }, []);
 
@@ -178,6 +183,22 @@ function SettingsScreen(): ReactNode {
       globalThis.removeEventListener('online', back);
     };
   }, [reload]);
+
+  // "Online" is the browser's word for a network being attached, not for the
+  // server being reachable: a router still dialling, a phone changing towers.
+  // One read on that announcement can fail, and the screen used to say offline
+  // from then until somebody reloaded it. So while it says offline and the
+  // browser says there is a network, it reads again, with the outbox's backoff
+  // (GR-03). With no network at all there is nothing to try; `back` starts it.
+  useEffect(() => {
+    if (state !== 'offline' || !globalThis.navigator.onLine) return undefined;
+    const timer = setTimeout(() => {
+      void reload();
+    }, retryDelayMs(unreached));
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [state, unreached, reload]);
 
   // The freshness line has to age with nothing else happening.
   useEffect(() => {
