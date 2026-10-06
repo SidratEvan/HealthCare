@@ -584,7 +584,7 @@ In addition to `CLAUDE.md`:
 | A1 | `fix/queue-exactly-once` | **merged 6 October** (was 1.9c) — `applied` on `queue.updated` and on a subscriber's catch-up, `unanswered` on subscribe, `takeStatement` in `@platform/client`, and in `useSessionQueue` `settle`, `settledRef` and `tapRef`. `e2e/one-action-once.spec.ts`: the broadcast first, the answer lost, and a reconnect with a tap unanswered; each fails on the code before |
 | A2 | `fix/ward-reconcile` | **merged 6 October** (was 1.9d) — migration 0039 (`beds.version`, `fn_raise_version`), `version` on `BedView`, `clientEventId` on `bed.updated`, `newestBeds` and `boardAfterRead` in `shared/domain`, an accepted outbox entry hands back the server's answer, and `useBedBoard` settles from it. **Supabase needs 0039 before the next release** |
 | A3 | `fix/er-reconcile` | **merged 6 October** (was 1.9e) — migration 0040 (`emergency_cases.version`), `version` on `EmergencyCaseView`, `clientEventId` on `emergency.updated`, `newestCases` and `casesAfterRead` in `shared/domain`, and `useEmergencyConsole` settles a triage step, a walk-in and a capabilities confirmation from the answer. A referral's step still reads the board. **Supabase needs 0039 and 0040 before the next release** |
-| A4 | `fix/serial-past-midnight` | (was 1.9f) |
+| A4 | `fix/serial-past-midnight` | **merged 6 October** (was 1.9f) — `bookingStanding` in `shared/domain` (no date in it), `lib/standing.ts` in the patient app, Home's strip and My serials on it, "unknown" with its age. `e2e/serial-past-midnight.spec.ts`: a booking dated yesterday in a chamber still running; each fails on the code before |
 | A5 | `fix/booking-retry-safe` | |
 | A6 | `fix/session-revocation` | |
 | A7 | `fix/audit-append-only` | |

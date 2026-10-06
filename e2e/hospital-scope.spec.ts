@@ -73,6 +73,14 @@ test('in scope, another hospital cannot be found by name, and booking is this ho
 test('a hospital’s own app shows that hospital’s serials, not another hospital’s (FR-BRD-02)', async ({
   page,
 }) => {
+  // The serial below is a stand-in with no real link behind it, so its
+  // status cannot be asked. It is then "unknown", which keeps a serial on
+  // screen rather than filing it as past (`FR-PAT-39`) — what this test
+  // needs, since it is about whose serial is shown, not about its status.
+  await page.route('**/guest/link/**', async (route) => {
+    await route.abort('failed');
+  });
+
   // What this phone holds: a serial today at some other hospital.
   await page.goto(PATIENT);
   await page.evaluate(() => {

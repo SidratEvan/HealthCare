@@ -32,12 +32,14 @@ import { SPECIALTIES, needKey, type SearchNeed } from '@platform/domain';
 import {
   bedKindName,
   capabilityName,
+  formatAge,
   formatNumber,
   formatSerial,
   tp,
   numeralsFor,
   districtName,
   localName,
+  type Locale,
 } from '@platform/i18n';
 import { useLocale } from '@platform/ui';
 
@@ -54,9 +56,9 @@ import {
   StethoscopeIcon,
 } from '@/components/icons';
 import { useDeployment } from '@/hooks/useDeployment';
-import { openTrackingLink } from '@/lib/api';
-import { bookingsInScope, recentBookings, type SavedBooking } from '@/lib/bookings';
+import { bookingsInScope, recentBookings } from '@/lib/bookings';
 import { scopedHospitalId } from '@/lib/scope';
+import { standingFromMemory, standingOf, type StoodBooking } from '@/lib/standing';
 
 import type { ReactNode } from 'react';
 
@@ -339,40 +341,47 @@ function QuickTiles(): ReactNode {
 function ActiveSerial(): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
-  const [booking, setBooking] = useState<SavedBooking | null>(null);
-  const [nowServing, setNowServing] = useState<number | null>(null);
+  const [booking, setBooking] = useState<StoodBooking | null>(null);
   // An app open for one hospital shows that hospital's serial only, and
   // nothing until it knows which hospital that is (`FR-BRD-02`).
   const inHospital = scopedHospitalId(useDeployment());
 
   useEffect(() => {
-    const today = bookingsInScope(recentBookings(), inHospital).find((saved) => saved.isToday);
-    if (today === undefined) {
-      setBooking(null);
-      return;
-    }
+    let stale = false;
+    const mine = bookingsInScope(recentBookings(), inHospital);
 
-    setBooking(today);
-
+    // At once, from what this phone already knows; then from the server,
+    // which is the only thing that can say a serial is still current: not the
+    // date, which a chamber running past midnight outlives (`FR-PAT-39`).
     // One read, not a socket. Home is a screen somebody passes through; the
     // live channel belongs to `S-A-08`, which is where they go to watch.
-    void openTrackingLink(today.token)
-      .then((view) => {
-        const serving = view.state.entries.find((entry) => entry.status === 'in_chamber');
-        setNowServing(serving?.serial ?? null);
-      })
-      .catch(() => {
-        // The strip still shows their own serial. A failed lookup is not a
-        // reason to hide the booking they have.
-      });
+    setBooking(standingFromMemory(mine).find((entry) => entry.standing === 'current') ?? null);
+    void standingOf(mine).then((stood) => {
+      if (stale) return;
+      // A status that could not be checked is not a reason to hide the
+      // booking they have: the strip stays, and says so.
+      setBooking(
+        stood.find((entry) => entry.standing === 'current') ??
+          stood.find((entry) => entry.standing === 'unknown') ??
+          null,
+      );
+    });
+
+    return () => {
+      stale = true;
+    };
   }, [inHospital]);
 
   if (booking === null) return null;
+
+  const nowServing = booking.nowServing;
+  const doctor = localName(locale, booking.doctorNameBn, booking.doctorNameEn);
 
   return (
     <a
       href={booking.url}
       data-testid="active-serial"
+      data-standing={booking.standing}
       className="flex items-center gap-3 rounded-md border border-brand-border bg-brand-100 p-4"
     >
       <span className="flex size-11 shrink-0 items-center justify-center rounded-pill bg-brand-600 text-title-sm font-bold text-white tabular-nums">
@@ -383,16 +392,31 @@ function ActiveSerial(): ReactNode {
         <span className="block text-body-md font-semibold">{tp('activeSerialTitle', locale)}</span>
         <span className="block truncate text-body-sm text-ink-secondary">
           {nowServing === null
-            ? localName(locale, booking.doctorNameBn, booking.doctorNameEn)
+            ? doctor
             : tp('activeSerialMeta', locale)
-                .replace('{doctor}', localName(locale, booking.doctorNameBn, booking.doctorNameEn))
+                .replace('{doctor}', doctor)
                 .replace('{serving}', formatNumber(nowServing, numerals))}
         </span>
+        {booking.standing !== 'unknown' ? null : (
+          <span className="block text-caption text-ink-muted" data-testid="active-serial-unknown">
+            {unknownLine(booking.knownAt, locale)}
+          </span>
+        )}
       </span>
 
       <span className="text-brand-600">
         <ChevronIcon size={18} />
       </span>
     </a>
+  );
+}
+
+/** "Could not be checked", with the age of the last answer when there was one (`FR-PAT-39`). */
+function unknownLine(knownAt: string | null, locale: Locale): string {
+  if (knownAt === null) return tp('serialStatusUnknown', locale);
+  const minutes = Math.max(0, Math.round((Date.now() - Date.parse(knownAt)) / 60_000));
+  return tp('serialStatusUnknownSince', locale).replace(
+    '{age}',
+    formatAge(minutes, locale, numeralsFor(locale)),
   );
 }
