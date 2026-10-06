@@ -374,17 +374,20 @@ export async function insertBooking(
     readonly bookedByGuestId: string | null;
     readonly reasonText: string | null;
     readonly intake: Record<string, unknown>;
+    /** The request's own key, so the same request sent again finds this row (`FR-QUE-51`). */
+    readonly idempotencyKey?: string | null;
   },
 ): Promise<string> {
   const result = await sql<{ id: string }>`
     INSERT INTO bookings
       (session_id, patient_id, serial_number, source, fee_poisha,
-       booked_by_user_id, booked_by_guest_id, reason_text, intake)
+       booked_by_user_id, booked_by_guest_id, reason_text, intake, idempotency_key)
     VALUES (
       ${input.sessionId}, ${input.patientId}, ${input.serial},
       ${input.source}::booking_source, ${input.feePoisha},
       ${input.bookedByUserId}, ${input.bookedByGuestId},
-      ${input.reasonText}, ${JSON.stringify(input.intake)}::jsonb
+      ${input.reasonText}, ${JSON.stringify(input.intake)}::jsonb,
+      ${input.idempotencyKey ?? null}
     )
     RETURNING id
   `.execute(trx);
@@ -392,6 +395,62 @@ export async function insertBooking(
   const id = result.rows[0]?.id;
   if (id === undefined) throw new Error('bookings insert returned no id.');
   return id;
+}
+
+/**
+ * The booking a request's key has already made, if any (`FR-QUE-51`).
+ *
+ * Whatever its status: a booking that was made and then cancelled was still
+ * made by that request, and the request is not run a second time.
+ */
+export async function findByIdempotencyKey(
+  trx: Tx,
+  idempotencyKey: string,
+): Promise<{
+  readonly id: string;
+  readonly sessionId: string;
+  readonly patientId: string;
+  readonly serial: number;
+} | null> {
+  const result = await sql<{
+    id: string;
+    session_id: string;
+    patient_id: string;
+    serial_number: number;
+  }>`
+    SELECT id, session_id, patient_id, serial_number
+      FROM bookings
+     WHERE idempotency_key = ${idempotencyKey}
+  `.execute(trx);
+
+  const row = result.rows[0];
+  return row === undefined
+    ? null
+    : {
+        id: row.id,
+        sessionId: row.session_id,
+        patientId: row.patient_id,
+        serial: row.serial_number,
+      };
+}
+
+/**
+ * How many bookings this guest identity has made since `since`
+ * (`FR-GST-14`). Cancelled ones count: the limit is on what a number asks
+ * for, and booking and cancelling in a loop is the thing it is there to stop.
+ */
+export async function countGuestBookingsSince(
+  trx: Tx,
+  guestId: string,
+  since: Date,
+): Promise<number> {
+  const result = await sql<{ n: string }>`
+    SELECT count(*)::text AS n
+      FROM bookings
+     WHERE booked_by_guest_id = ${guestId}
+       AND created_at > ${since}
+  `.execute(trx);
+  return Number(result.rows[0]?.n ?? '0');
 }
 
 /**

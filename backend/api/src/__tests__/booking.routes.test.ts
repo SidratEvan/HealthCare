@@ -509,22 +509,16 @@ describe('the rules that protect a chamber', () => {
 
     expect(first.status).toBe(201);
 
-    // Not a replayed 201 — a refusal. The idempotency middleware validates
-    // keys but stores nothing: the durable record belongs with the resource,
-    // and `bookings` has no key column (that would need migration 0007). What
-    // makes the double-tap *safe* is FR-PAT-24, which refuses the same patient
-    // with the same doctor on the same day.
-    //
-    // Safe, because no second serial is allocated and no second charge is
-    // possible. Not idempotent, because the caller gets 409 rather than the
-    // original booking — recorded in docs/STATUS.md.
-    expect(second.status).toBe(409);
-    expect(second.body.error.code).toBe('BOOKING_DUPLICATE');
-
-    // The refusal names the booking they already have, so the app can show it
-    // rather than an error.
-    expect(second.body.error.details.bookingId).toBe(first.body.data.bookingId);
-    expect(second.body.error.details.serial).toBe(first.body.data.serial);
+    // The same request, answered again with what it made (`FR-QUE-51`,
+    // `bookings.idempotency_key`, migration 0041). It used to be refused as a
+    // duplicate booking, which was safe and left the patient without their
+    // tracking link; `bookingRetry.routes.test.ts` covers the rest.
+    expect(second.status).toBe(200);
+    expect(second.body.data).toMatchObject({
+      bookingId: first.body.data.bookingId,
+      serial: first.body.data.serial,
+      duplicate: true,
+    });
   });
 
   it('refuses a booking on a session that has ended', async () => {

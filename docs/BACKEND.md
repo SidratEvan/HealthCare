@@ -392,7 +392,7 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| POST | `/bookings` | user \| guest | Idempotency-Key required; allocates serial via `fn_next_serial`; emits `queue.updated`; queues confirmation SMS (`FR-PAT-20`) |
+| POST | `/bookings` | user \| guest | Idempotency-Key required and **kept on the booking** (`bookings.idempotency_key`, plan A5): the same request sent again — a confirm whose answer was lost — is answered `200` with the same booking, `duplicate: true`, and for a guest a tracking link that works (a new one beside the first, since only a hash is stored); nothing is made, told or charged a second time. The key under a different chamber or patient is `IDEMPOTENCY_KEY_REUSED`. Otherwise `201`: allocates the serial under the session lock; emits `queue.updated`; queues the confirmation SMS (`FR-PAT-20`). `FR-GST-14`: a number with no account may make `GUEST_BOOKINGS_PER_PHONE_PER_DAY` bookings in a rolling day, cancelled ones included (`BOOKING_LIMIT_REACHED`), and the route has a flood guard per address (300 an hour, times `ADDRESS_RATE_LIMIT_FACTOR`) |
 | GET | `/bookings/:id` | owner \| staff | |
 | GET | `/me/bookings?scope=today\|upcoming\|past` | user \| guest | |
 | POST | `/bookings/:id/cancel` | owner \| staff | appends `BOOKING_CANCELLED`, triggers refund eligibility |
@@ -642,7 +642,10 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `IMPORT_UNDO_BLOCKED` | 409 | rows outside the batch refer to its rows; `details.blocking` lists them |
 | `GUEST_LINK_EXPIRED` | 410 | tracking link past expiry |
 | `BOOKING_SLOT_TAKEN` | 409 | serial no longer available |
-| `BOOKING_DUPLICATE` | 409 | same patient, same doctor, same day |
+| `BOOKING_DUPLICATE` | 409 | same patient, same doctor, same day (a *new* request; the same request sent again is answered with its booking) |
+| `BOOKING_LIMIT_REACHED` | 429 | a phone number with no account has made its day's bookings (`FR-GST-14`) |
+| `IDEMPOTENCY_KEY_REUSED` | 422 | the key has already made something else |
+| `WRITE_CONFLICT` | 409 | a unique index refused a write that a check a moment earlier allowed: two requests raced. Answered as a conflict, logged as unexpected, never a 500 |
 | `QUEUE_CONFLICT` | 409 | another counter already advanced |
 | `QUEUE_GUARD_FAILED` | 422 | rule violation (e.g. no-show before grace) |
 | `QUEUE_EVENT_DUPLICATE` | 200 | idempotent replay — returns stored result |
@@ -670,6 +673,7 @@ STORAGE_PROVIDER=mock|local|supabase, STORAGE_DIR   # local: files on this serve
 JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, JWT_ACCESS_TTL=15m, JWT_REFRESH_TTL=30d
 GUEST_LINK_SECRET, GUEST_LINK_TTL_DAYS=30
 GUEST_BOOKING_OTP=true|false # a guest proves the phone before booking (FR-GST-03); unset: on unless DEMO_MODE
+GUEST_BOOKINGS_PER_PHONE_PER_DAY=10 # bookings one number may make without an account in a rolling day (FR-GST-14)
 OTP_TTL_SECONDS=300, OTP_MAX_PER_HOUR=5
 MAPPING_PROVIDER=off|claude, MAPPING_API_KEY, MAPPING_MODEL=claude-opus-5-5, MAPPING_BASE_URL, MAPPING_TIMEOUT_MS=20000   # the model that suggests import column mappings; off needs nothing (FR-IMP-16)
 EXTRA_ALLOWED_ORIGINS=      # comma-separated exact origins the API also answers (a hospital's portal, a branded app's web origin); empty by default (FR-BRD-04)

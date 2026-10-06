@@ -181,7 +181,7 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 |---|---|---|
 | `id` | uuid | **PK** |
 | `token_hash` | text | **U**, 32-byte random, hashed |
-| `booking_id` | uuid | **FK**, scope is one booking |
+| `booking_id` | uuid | **FK**, scope is one booking. **IX**, not unique since 0041: a booking may hold a few live links (the API keeps the newest four), because a link is handed over once and only its hash is kept, so a second one is the only way to give it again, and replacing the first killed the one already in an SMS. They are revoked together, by booking |
 | `guest_id` | uuid | **FK** |
 | `expires_at` | timestamptz | session end + grace |
 | `revoked_at` | timestamptz | |
@@ -280,7 +280,8 @@ Recurring chamber schedules: `id`, `doctor_hospital_id` **FK**, `weekday` int, `
 | `serial_number` | int | per-session |
 | `status` | booking_status | |
 | `source` | booking_source | |
-| `intake` | jsonb | pre-visit answers (`FR-PAT-33` / `FR-DOC-03`) |
+| `intake` | jsonb | pre-visit answers (`FR-PAT-33` / `FR-DOC-03`). `demo: true` only on a demonstration server (`FR-DEM-07`) |
+| `idempotency_key` | text | **U** (partial), 0041. The `Idempotency-Key` of the `POST /bookings` that made the row; the same request sent again is answered with this booking (`FR-QUE-51`). NULL for a booking made before 0041 or by a route keyed another way |
 | `reason_text` | text | |
 | `fee_poisha` | int | |
 | `payment_id` | uuid | **FK** nullable |
@@ -687,6 +688,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- which statement about a bed is the newer (§2.5, SY-09)
     0040_emergency_case_version.sql -- plan A3: emergency_cases.version, the same rule for a case
                                    -- (§2.5, SY-09)
+    0041_booking_idempotency.sql   -- plan A5: bookings.idempotency_key, and guest_links no longer
+                                   -- one per booking (§2.1, §2.3, FR-QUE-51)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

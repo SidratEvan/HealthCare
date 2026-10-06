@@ -239,7 +239,7 @@ Many people will never create an account. Guest mode is a first-class path, not 
 - `FR-GST-11` A guest is never blocked, nagged mid-flow, or shown an account wall. Account creation is offered exactly once, **after** a successful booking, framed as "সব রেকর্ড এক জায়গায় রাখুন".
 - `FR-GST-12` Repeated guest bookings from the same phone reuse the stored guest identity: the second booking asks only to confirm the details, not to retype them.
 - `FR-GST-13` Reception can create the same guest identity at the counter for a walk-in or phone booking, using phone + name; no account is created (`FR-REC-20`).
-- `FR-GST-14` Abuse control: guest bookings are rate-limited per phone number and per device; three no-shows on a phone number within a rolling window may require prepayment for the next guest booking, configurable per hospital.
+- `FR-GST-14` (**Built, plan A5:** the limit per phone number, and a flood guard per address, which is as near to "per device" as a request without a device identity gets. **Not built:** the no-show rule below; it needs online payment to mean anything and is plan F3.) Abuse control: guest bookings are rate-limited per phone number and per device; three no-shows on a phone number within a rolling window may require prepayment for the next guest booking, configurable per hospital.
 - `FR-GST-15` Privacy: guest data follows the same retention, consent, audit, and deletion rules as account data (`FR-SEC-03`, `FR-SEC-09`); a guest can request deletion by phone verification.
 
 **Acceptance:** a man with no account books a cardiology serial in under 60 seconds with name, phone, one OTP, and a bKash payment; he tracks the live queue from the SMS link; two weeks later he signs up and his prescription is waiting for him.

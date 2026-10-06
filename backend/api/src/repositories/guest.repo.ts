@@ -119,22 +119,42 @@ export async function insertTrackingLink(input: {
   readonly tokenHash: string;
   readonly expiresAt: Date;
 }): Promise<void> {
+  // Added beside the links the booking already has, never in place of them
+  // (migration 0041). A link is handed over once and only its hash is kept,
+  // so a second one is the only way to give a patient a link again — after
+  // an answer lost on the way (`FR-QUE-51`) — and replacing the first would
+  // kill the one already in their SMS.
   await sql`
     INSERT INTO guest_links (booking_id, guest_id, token_hash, expires_at)
     VALUES (${input.bookingId}, ${input.guestId}, ${input.tokenHash}, ${input.expiresAt})
-    ON CONFLICT (booking_id) DO UPDATE
-      SET token_hash = excluded.token_hash,
-          expires_at = excluded.expires_at,
-          revoked_at = NULL
+  `.execute(db);
+
+  // Only the newest few stay live, so that a retry sent in a loop cannot
+  // grow the table or leave a pile of working links behind it. Revoked, not
+  // deleted: the retention job removes them with the rest.
+  await sql`
+    UPDATE guest_links
+       SET revoked_at = now()
+     WHERE booking_id = ${input.bookingId}
+       AND revoked_at IS NULL
+       AND id NOT IN (
+         SELECT id FROM guest_links
+          WHERE booking_id = ${input.bookingId} AND revoked_at IS NULL
+          ORDER BY created_at DESC, id DESC
+          LIMIT ${MAX_LIVE_LINKS_PER_BOOKING}
+       )
   `.execute(db);
 }
+
+/** How many tracking links for one booking may be live at once. */
+export const MAX_LIVE_LINKS_PER_BOOKING = 4;
 
 /**
  * Whether a booking already has a live tracking link.
  *
- * Minting one replaces the last (`ON CONFLICT … DO UPDATE`), which would kill
- * the link already in somebody's SMS. A caller that only wants to issue a link
- * when there is none asks this first.
+ * For a caller that only wants to issue a link when there is none: a link
+ * goes into an SMS, and a second message with a second link for the same
+ * booking is noise.
  */
 export async function hasTrackingLink(bookingId: string): Promise<boolean> {
   const result = await sql<{ present: boolean }>`

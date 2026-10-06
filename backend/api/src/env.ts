@@ -281,6 +281,13 @@ const schema = z.object({
   GUEST_BOOKING_OTP: boolish.optional(),
 
   /**
+   * How many bookings one phone number may make without an account in a
+   * rolling day (`FR-GST-14`). One phone often books for a household, so
+   * this is generous; it stops a number being used to fill a doctor's list.
+   */
+  GUEST_BOOKINGS_PER_PHONE_PER_DAY: positiveInt.max(1_000).default(10),
+
+  /**
    * How many reverse proxies sit in front of this process.
    *
    * Render terminates TLS and forwards the caller's address in
