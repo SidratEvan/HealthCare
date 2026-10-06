@@ -43,7 +43,88 @@ the same day, `docs/HANDOVER.md`, and the code on `mvp` at `87d3dd2`.
 
 ## 2. Order of work
 
-### Now: the V1 pitch build (owner, 5 October, evening)
+### Now: V1 completion (owner, 6 October)
+
+The pitch build was released on 6 October (below). The same day the owner
+replaced "then stop adding scope": **build MedLiveBD to the complete V1, and
+leave undone only what needs an account, credential, contract or approval he
+has not provided** (`CLAUDE.md` §4.5). This table is the remaining work, from
+an audit of the code on that day. One branch per row, in order; a row that
+waits on a decision is skipped, not waited for.
+
+**Gate** is `CLAUDE.md` §6: F focused, S strict. The full gate runs at the
+integration points marked ▣ and at J.
+
+| # | Branch | What is missing today | What it changes | Gate |
+|---|---|---|---|---|
+| **A** | | **Correctness, security, realtime** | | |
+| A1 | `fix/queue-exactly-once` | The reception console is right only when the broadcast arrives first and promptly (plan 1.9c; contract `SY-08`, `SY-09`, `FRONTEND.md` §11.1) | `queue.updated` names the actions it took in; a subscribing console sends its unanswered keys; an action leaves the console's own drawing at the first statement that names it; a tap's events travel as one | S + canary |
+| A2 | `fix/ward-reconcile` | The ward board has the same shape (1.9d) | `version` on a bed, raised in the statement that changes it; the board keeps the highest version from any road | S |
+| A3 | `fix/er-reconcile` | So has the emergency console (1.9e) | The same for an emergency case | S |
+| A4 | `fix/serial-past-midnight` | A patient still waiting after midnight loses their serial from Home (1.9f; `FR-QUE-06`, `FR-PAT-39`) | A booking is current until it is settled or its session ends; Home and My serials ask the server | S + canary |
+| A5 | `fix/booking-retry-safe` | A booking whose answer is lost cannot be retried: the retry is refused as a duplicate and the patient never gets a link (handover 19); races surface as 500 (28); every booking is stamped `intake.demo` (26); no abuse limit (`FR-GST-14`) | The same request answers with the same booking; a race answers with its code; the stamp follows the server; guest bookings limited per phone and per device | S |
+| A6 | `fix/session-revocation` | A signed-out or deactivated account keeps its live connection and up to 15 minutes of access (handover 17) | Sign-out, deactivation and a password reset close that account's sockets and refuse its token at once | S |
+| A7 | `fix/audit-append-only` | `audit_log` can be edited (handover 16); no security headers (22) | The audit log refuses UPDATE and DELETE for the API's role; the API and both apps send the standard security headers | S |
+| A8 | `fix/doctor-record-scope` | A doctor reads a patient's visits at every hospital once the patient has any booking at theirs (handover 8) | A doctor sees their own hospital's visits; another hospital's only by referral or the patient's consent (`FR-NET-02`, `FR-BRD-10`) | S |
+| **B** | | **Tenancy** | | |
+| B1 | `feat/tenant-rls` | Hospitals are kept apart by application code only; RLS is enabled with no policy and the API's role bypasses it (plan 1.10, `FR-SEC-11`) | A design note first. A policy on every hospital-scoped table keyed on a per-transaction hospital; the API's role loses `BYPASSRLS`; the public and network-wide reads are named exceptions | S ▣ |
+| B2 | `test/tenant-matrix` | No single place proves isolation | One matrix: staff, patient, branded scope, imports, records, bookings, queues, hospital admin, platform admin; hospital A against hospital B on every route | S |
+| **C** | | **Branding and white-label** | | |
+| C1 | `feat/hospital-profile` | A hospital cannot set its own public face; the theme is seed data only | `FR-BRD-06`: profile, logo (through the storage adapter) and colours on `S-B-11`; shown in the network and in the portal | S |
+| C2 | `feat/portal-address` | A portal is reached only by `?scope=` | `FR-BRD-07`, `FR-BRD-04`: scope from the request's host (`<code>.<PLATFORM_DOMAIN>` or a recorded domain); links and allowed origins become hospital-aware | S |
+| C3 | `feat/portal-install` | The installed app is always ours | `FR-BRD-08`: a manifest and icon per portal | F |
+| C4 | `feat/hospital-modules` | Every hospital has every module | `FR-BRD-11`, `FR-SUP-03`: modules per hospital, honoured by the consoles, the API and what is published | S |
+| C5 | `feat/publish-controls` | A live hospital publishes every figure (`FR-NET-04`) | The hospital chooses; an unpublished figure reads "not shared", never zero | S |
+| C6 | `fix/portal-scope-rules` | Emergency and records inside a portal were left for the owner | `FR-BRD-09`, `FR-BRD-10` as decided: emergency network-wide and said so; records the patient's own; each with a test | F |
+| **D** | | **Self-service onboarding** | | |
+| D1 | `feat/org-signup` | A workspace is made only by a platform administrator | `FR-ONB-09`, `FR-ONB-10`: the public application form | S |
+| D2 | `feat/setup-complete` | Whatever of capabilities, counters, public information and operational settings `S-B-11` cannot yet set | Audited in the branch; the checklist names each | S ▣ |
+| **E** | | **Import** | | |
+| E1 | `feat/import-spreadsheet` | `FR-IMP-22`: only CSV is read | **Waits: Q2** (a parsing dependency) | S |
+| **F** | | **Remaining approved workflows** | | |
+| F1 | `feat/patient-bookings-account` | A signed-in patient still books as a guest and My serials is this phone's list | A signed-in patient books as themselves; My serials and Home come from the server on any device | S + canary |
+| F2 | `feat/report-ready` | `lab.report_ready` reaches nobody; `FR-QUE-15` computed and not enforced; an offline action is timed at its sync (handover 24, 25, 27) | The patient is told a report is ready; an earlier time is never shown without notice; an offline tap keeps its own time; the arrival button records lateness | S |
+| **G** | | **Platform administration** | | |
+| G1 | `feat/platform-entitlements` | No screen for modules or agreement state | `S-B-12`: a workspace's modules, its agreement state (trial, active, overdue, ended) and usage counters. No plan names, no amounts | S |
+| G2 | `feat/platform-health` | `FR-SUP-06`: nothing shows which hospital is stale or failing | Per workspace: sync lag, stale figures, message delivery, last backup known; and its audit trail. No patient, ever (`FR-ONB-08`) | S |
+| **H** | | **Adapters, to the credential line** | | |
+| H1 | `feat/notification-worker` | Sending is awaited inside the request; nothing retries; offers lapse only when read (plan 2.1; handover 14, 15) | A worker loop claims unsent rows, retries with backoff, gives up visibly; timers for offers and "leave now". No queue tap waits for a message | S + canary |
+| H2 | `feat/sms-adapter-ready` | No delivery reports, no budget cap (`FR-NOT-06`) | `/webhooks/sms-dlr` against a fake aggregator, per-hospital caps and delivery figures, the settings a real provider needs documented. **Activation waits: X1** | S |
+| H3 | `feat/payment-adapters-ready` | Only the mock is exercised | The bKash and Nagad adapters, callbacks, refunds and idempotency proven against fakes; the settings documented. **Activation waits: X2** | S |
+| **I** | | **Hardening** | | |
+| I1 | `chore/api-build` | The API runs TypeScript through `tsx`; images carry dev dependencies (handover 21) | A compiled API in a slim image | S |
+| I2 | `chore/ops-signals` | Nothing alerts; rate limits and secrets not reviewed since the pilot steps | Health and readiness that report backup age, queue depth and worker lag; a rate-limit and secret-handling pass; a patient is no longer sent other patients' ids (handover 30) | S |
+| **J** | `chore/v1-release` | | The full gate, the migrations applied, `mvp` → `main`, demo data reset | Full ▣ |
+
+**Blocked outside the repository** (built up to the adapter; activation only):
+
+| | What | Needs |
+|---|---|---|
+| X1 | Live SMS, a sender ID, delivery reports from a real aggregator | An aggregator account |
+| X2 | Live bKash, Nagad or card payments | Merchant credentials |
+| X3 | A real portal address | The platform's domain, DNS, certificates; a hospital's own domain |
+| X4 | Store builds | Apple and Google accounts |
+| X5 | A hospital's HMS | Access from that hospital |
+| X6 | The model's suggestions tried against the real service | An API key (`pnpm mapping:try`) |
+| X7 | Hosting in Bangladesh for real patients | A hosting account |
+| X8 | An independent security test | Procurement. Nothing here claims one |
+
+**Questions for the owner** (each skipped, none waited for; `docs/STATUS.md` carries them):
+
+| | Question | Until answered |
+|---|---|---|
+| Q1 | An operations assistant (questions answered from a hospital's own verified figures)? The approved documents exclude any AI beyond the import mapping (`PRD.md` §27) | Not built |
+| Q2 | Reading a spreadsheet file directly needs a parsing library, a new dependency (free). Approve one, or keep "save as CSV"? | CSV only |
+| Q3 | Reschedule (`FR-PAT-23`) was put outside V1 on 5 October. Still outside? | Outside |
+| Q4 | Push notifications wait for a signed hospital (decision 84) and need a dependency. Still waiting? | SMS only |
+| Q5 | More than one API instance needs a shared store (Redis), which costs money. Not needed at V1's size | One instance |
+| Q6 | The Bangla spelling of MedLiveBD, and the platform's domain | Latin letters; `PLATFORM_DOMAIN` is a setting |
+
+Decided by the owner's note and so not asked: D2 (a hospital may apply by
+itself; nothing is public until a person approves it), D3 (the fields
+`FR-ONB-09` lists), D7 (the modules are the console's own: `FR-BRD-11`).
+
+### Done: the V1 pitch build (owner, 5 October, evening)
 
 After reading an audit of the code against a clarified product direction, the
 owner lifted the freeze below and set the direction that `CLAUDE.md` §1.2 and
@@ -499,12 +580,37 @@ In addition to `CLAUDE.md`:
 | V5.1 | `fix/pitch-walkthrough` | **merged 6 October.** Walked as patient, in Padma's own app, and as reception, doctor, ward, emergency, hospital administrator and platform administrator. One fault: a hospital's own app showed a serial booked at another hospital; fixed with a test. `PRD.md` §24 rewritten for the platform and without a reschedule; the demo path in `STATUS.md` covers search, a hospital's own app, onboarding and the mapped import |
 | V5.x | `fix/pitch-*` | further findings, if the owner's own walk turns any up |
 | V6 | `chore/pitch-release` | **released 6 October.** `main`, the public demo and `demo` are `mvp` at `fa31157`; Supabase has 0034–0038 and fresh demo data. From here no V1 feature is added without the owner asking |
-| 1.9c | `fix/queue-exactly-once` | after the first pilot (see §2 for what would bring it forward) |
-| 1.9d | `fix/ward-reconcile` | after the first pilot |
-| 1.9e | `fix/er-reconcile` | after the first pilot |
-| 1.9f | `fix/serial-past-midnight` | after the first pilot |
-| 1.10 | `feat/tenant-rls` | after the pitch; before a second real hospital shares the deployment (`FR-SEC-11`) |
-| 2.1 | `feat/notification-worker` | |
+| — | `chore/v1-completion-plan` | merged 6 October — the owner's direction of that day: §2 *Now: V1 completion*, `CLAUDE.md` §4.5, `FR-BRD-06`–`11`, `FR-ONB-09`–`10`, `FR-SUP-03`/`04`/`06` brought into V1 |
+| A1 | `fix/queue-exactly-once` | (was 1.9c) |
+| A2 | `fix/ward-reconcile` | (was 1.9d) |
+| A3 | `fix/er-reconcile` | (was 1.9e) |
+| A4 | `fix/serial-past-midnight` | (was 1.9f) |
+| A5 | `fix/booking-retry-safe` | |
+| A6 | `fix/session-revocation` | |
+| A7 | `fix/audit-append-only` | |
+| A8 | `fix/doctor-record-scope` | |
+| B1 | `feat/tenant-rls` | (was 1.10) |
+| B2 | `test/tenant-matrix` | |
+| C1 | `feat/hospital-profile` | |
+| C2 | `feat/portal-address` | |
+| C3 | `feat/portal-install` | |
+| C4 | `feat/hospital-modules` | |
+| C5 | `feat/publish-controls` | |
+| C6 | `fix/portal-scope-rules` | |
+| D1 | `feat/org-signup` | (was 3.2) |
+| D2 | `feat/setup-complete` | |
+| E1 | `feat/import-spreadsheet` | waits: Q2 |
+| F1 | `feat/patient-bookings-account` | |
+| F2 | `feat/report-ready` | |
+| G1 | `feat/platform-entitlements` | |
+| G2 | `feat/platform-health` | |
+| H1 | `feat/notification-worker` | (was 2.1) |
+| H2 | `feat/sms-adapter-ready` | activation waits: X1 |
+| H3 | `feat/payment-adapters-ready` | activation waits: X2 |
+| I1 | `chore/api-build` | |
+| I2 | `chore/ops-signals` | |
+| J | `chore/v1-release` | |
+| 2.1 | `feat/notification-worker` | now H1 |
 | 2.2 | `feat/sms-live` | waits: D1 |
 | 3.0–3.4 | onboarding | 3.2 waits: D2, D3 |
 | 4.0–4.3 | mapped import | 4.2 waits: D4, D5 |

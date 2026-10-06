@@ -82,7 +82,9 @@ Decided with it, and replacing what stood before:
   tables. The domain is still undecided.
 
 Do not add commercial content to this repository — pricing, what a module
-costs, subscription tiers, or the data terms offered to a hospital. Those are
+costs, the names and contents of subscription tiers, or the data terms offered
+to a hospital. (Which modules a hospital has on, and whether its agreement is
+active, are product state and are built: §4.5.) Those are
 negotiated per agreement and live outside the repo. Product requirements that
 *handle* money stay (`FR-PAY-*`, `FR-SUP-04`, the fee breakdown in
 `FR-PAT-21`): the code has to charge, itemise and invoice. What it charges is
@@ -311,6 +313,52 @@ Rules for it, all the owner's:
 - The only AI is the import mapping. It proposes; a person confirms; the
   existing checker decides what is written. No patient row goes to a model
   (`FR-IMP-17`).
+
+### 4.5 V1 completion — the active plan (owner, 2026-10-06)
+
+**This is what is being built now.** After the pitch release of 6 October the
+owner replaced "then stop adding scope" (§4.4): development does not stop
+because a pilot or a pitch is ready. The target is the finished V1.
+
+- **Build everything that needs nothing from outside.** Left undone are only
+  the things that need an account, a credential, a contract or an approval the
+  owner has not provided: a real SMS provider and sender ID; bKash, Nagad or
+  card merchant credentials; a hospital's domain and DNS; store accounts; a
+  hospital's own HMS. Up to that line everything is built, tested and
+  documented, behind an adapter with a safe fake for tests.
+- **A configurable white-label platform, never a fork.** A hospital may have a
+  presence in the MedLiveBD network, its own branded portal (name, logo,
+  colours, address, installable app, enabled modules), or both. The network
+  is itself one context of the same product.
+- **Decided with it:** emergency discovery stays network-wide inside a
+  hospital's own portal (patient safety before brand); every other page there
+  is that hospital's; a record crosses between hospitals only under the
+  consent rules already written (`FR-NET-02`, `FR-SEC-04`), whatever the
+  shared screen would allow.
+- **Not an ERP.** No payroll, HR, general accounting, inventory ERP, insurance
+  administration or PACS.
+- **AI is the import mapping**, which proposes and never writes
+  (`FR-IMP-16`, `FR-IMP-17`). An operations assistant is built only if the
+  documents approve one; on 6 October they did not (`PRD.md` §27), so it is a
+  question for the owner in `docs/STATUS.md`, not a branch.
+- **Entitlements without commerce.** Which modules a hospital has switched on,
+  and the state of its agreement, are product state and are built. Plan names,
+  prices and terms still stay out of the repository (§1.2).
+- **One missing decision never stops the build.** Finish what does not depend
+  on it, write the question in `docs/STATUS.md`, go on to the next branch.
+- **Testing is layered** (§6): what a change touches while building; the wider
+  suites for the area when a branch is finished; the full gate at an
+  integration or release point, and not again for a document or for a test
+  correction whose effect is already proven.
+- **After each meaningful branch**, a short plain report: what was wrong or
+  missing, what changed, what a user or a hospital can now do, the tests, what
+  remains.
+
+The order, branch by branch with its state, is `docs/PLATFORM_PLAN.md` §2
+(*Now: V1 completion*): A correctness, security and realtime; B tenancy;
+C branding; D onboarding; E import; F remaining workflows; G platform
+administration; H notification and payment adapters; I hardening; J the gate.
+The rules of §4.4 that are not replaced here still hold.
 
 ## 5. Definition of Done (every branch)
 

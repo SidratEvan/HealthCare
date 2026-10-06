@@ -7,7 +7,10 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/pitch-release` (6 October) — **the V1 pitch build is
+Last updated: `chore/v1-completion-plan` (6 October) — **the build goes on
+to the complete V1: the plan is `docs/PLATFORM_PLAN.md` §2, *Now: V1
+completion*, and `CLAUDE.md` §4.5** (below, *Now: V1 completion*). Documents
+only. Before that, `chore/pitch-release` (6 October) — **the V1 pitch build is
 released as MedLiveBD: `main` and the public demo are `mvp` at `fa31157`
 (and this branch's documents), Supabase has
 migrations through 0038 and fresh demo data, and `demo` is the same commit**
@@ -223,7 +226,61 @@ every pilot step in §4.2 but 27, which waits for an SMS aggregator account.
 What remains is the owner's: the open decisions below, applying migrations to
 Supabase, and whether `mvp` goes to `main`.
 
-### Now: the V1 pitch build (owner, 5 October, evening)
+### Now: V1 completion (owner, 6 October)
+
+**Read `CLAUDE.md` §4.5, then `docs/PLATFORM_PLAN.md` §2, *Now: V1
+completion*.** After the pitch release the owner wrote that development does
+not stop there: build MedLiveBD to the complete V1, and leave undone only
+what needs an account, credential, contract or approval he has not provided.
+The plan's table is the remaining work, from an audit of the code that day.
+
+**Completed** (before this plan; none of it is rebuilt): every hospital
+console, the patient app with search, guest booking, phone verification, live
+serial, records and consent, emergency search, the hospital-scoped app, the
+organisation lifecycle and the platform administrator's screen, the template
+and mapped imports with the model's suggestions and the warnings, the
+reception console's offline queue, the self-hosted stack, CI with the browser
+suites. Branches of this plan as they merge are listed under **Merged in V1
+completion** below.
+
+**Currently building:** A1 `fix/queue-exactly-once`.
+
+**Merged in V1 completion, newest last:**
+- **`chore/v1-completion-plan`** — the direction written down: `CLAUDE.md` §4.5, the plan's table, and the requirements it adds (`FR-BRD-06`–`11`, `FR-ONB-09`–`10`, `FR-SUP-03`/`04`/`06` into V1). Documents only.
+
+**Blocked outside the repository** (built to the adapter; only switching on
+waits): live SMS and a sender ID; live bKash, Nagad or cards; the platform's
+domain, DNS and certificates, and a hospital's own domain; store accounts; a
+hospital's HMS; an API key to try the model's import suggestions against the
+real service; hosting in Bangladesh; an independent security test.
+
+**Blocked on the owner** (each is skipped, nothing waits for it):
+
+1. **An operations assistant?** The approved documents exclude any AI beyond
+   the import mapping (`PRD.md` §27, `CLAUDE.md` §4.4), so it is not built.
+   If wanted: read-only over a hospital's own verified figures, facts told
+   apart from suggestions, no action taken, nothing clinical.
+2. **A spreadsheet file read directly** (`FR-IMP-22`) needs a parsing library:
+   a new dependency, free. Approve one, or keep "save as CSV".
+3. **Reschedule** (`FR-PAT-23`) was put outside V1 on 5 October. Still outside?
+4. **Push notifications** wait for a signed hospital (decision 84) and need a
+   dependency. Still waiting?
+5. **More than one API instance** needs a shared store that costs money. Not
+   needed at V1's size; say if a hospital's load changes that.
+6. **The Bangla spelling of MedLiveBD**, and the platform's domain.
+
+**Decided by the owner's note of 6 October** (were open above): emergency
+search inside a hospital's portal stays network-wide (`FR-BRD-09`); a shared
+screen shares no record (`FR-BRD-10`); a hospital may apply by itself and is
+public only after a person approves it (`FR-ONB-09`, `FR-ONB-10`).
+
+**Tests:** the last full gate was the release of 6 October (below). Each
+branch's line says what it ran.
+
+**Known limitations:** the plan's own left-hand column, row by row, is the
+list of what is still wrong or missing.
+
+### Done: the V1 pitch build (owner, 5 October, evening)
 
 **Read `CLAUDE.md` §1.2 and §4.4, then `docs/PLATFORM_PLAN.md` §2, *Now: the
 V1 pitch build*.** The owner read an audit of the code against a clarified

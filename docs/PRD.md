@@ -476,7 +476,7 @@ change when `S-A-13` lands.
 - `FR-SUP-05` Review moderation and abuse handling.
 - `FR-SUP-06` System health view: sync lag per hospital, stale-data offenders, notification delivery rates.
 
-> **In V1** (owner, 2026-10-05): `S-B-12` is built for onboarding — creating a workspace, review and go-live, doctor verification, suspension (`FR-ONB-*`, §14c). `FR-SUP-03`–`06` wait.
+> **In V1** (owner, 2026-10-05): `S-B-12` is built for onboarding — creating a workspace, review and go-live, doctor verification, suspension (`FR-ONB-*`, §14c). **Added 2026-10-06:** `FR-SUP-03` (modules per hospital, `FR-BRD-11`), the state half of `FR-SUP-04` (whether a hospital's agreement is in trial, active, overdue or ended, and its usage counters — no plan names, no amounts, no invoice until a billing provider is chosen), `FR-SUP-06` (the health view) and a workspace's audit trail are V1. `FR-SUP-05` waits: there is no patient review form to moderate.
 
 ---
 
@@ -524,13 +524,15 @@ Added 2026-10-05 with the owner's direction of that day (§4.2b).
 
 A hospital is brought onto the platform from screens, without a developer.
 
-- `FR-ONB-01` A platform administrator creates a hospital's workspace from `S-B-12`: its name in both languages, its kind, division and district, a unique hospital code (`FR-BRD-01`), and the name and email of its first administrator, whose temporary password is shown once. Opening registration to hospitals themselves comes later.
+- `FR-ONB-01` A platform administrator creates a hospital's workspace from `S-B-12`: its name in both languages, its kind, division and district, a unique hospital code (`FR-BRD-01`), and the name and email of its first administrator, whose temporary password is shown once. A hospital can also apply by itself (`FR-ONB-09`).
 - `FR-ONB-02` A workspace has a state: **setting up** → **ready for review** → **active**, and from active **suspended** or **closed**. Only an active workspace can be live, whatever a route forgets.
 - `FR-ONB-03` The hospital's administrator sees a checklist on `S-B-11`: what exists and what is still missing (departments, doctors and how many are verified, schedules, beds confirmed, staff), counted from the records and never stored, with the three ways to fill it (by hand, the template CSV, the hospital's own export).
 - `FR-ONB-04` **Going live is asked for by the hospital and approved by the platform.** The hospital's administrator requests review when the checklist allows it; a platform administrator approves, or sends it back with a note the hospital sees. Until approval nothing of the hospital is public.
 - `FR-ONB-05` A platform administrator records a doctor's BMDC verification from `S-B-12` (`FR-SUP-02`).
 - `FR-ONB-06` A platform administrator can suspend a workspace, which takes it out of every public surface at once and leaves its staff able to sign in, and reinstate it.
 - `FR-ONB-07` Every one of these acts is audited: who, when, which workspace, and the note.
+- `FR-ONB-09` **A hospital can apply by itself** (owner, 6 October 2026). A public form takes the facility's name in both languages, its kind, division and district, a phone number, its registration number, and its administrator's name, email, mobile and password. It creates a workspace that is **setting up** and nothing else: nothing public, no code a patient can open, no figure in the network. The form is rate-limited by address, and the administrator sets up two-step verification at first sign-in like any other.
+- `FR-ONB-10` An application is a workspace like any other: the platform administrator sees it among those waiting, with that it was self-registered, and it goes live only by `FR-ONB-04`. Creating an account never publishes a hospital.
 - `FR-ONB-08` The platform administrator's screen shows organisations and counts. It never shows a patient, a booking or a record (`FR-NET-02`).
 
 ### The patient network (`FR-NET`)
@@ -540,7 +542,7 @@ A hospital is brought onto the platform from screens, without a developer.
 - `FR-NET-03` A hospital is in the network only while its workspace is active and live (`FR-ONB-02`).
 - `FR-NET-04` A hospital decides which of these it publishes. A figure it does not publish is shown as not shared, never as zero. **Not built yet:** today a live hospital publishes all of them.
 
-### Branded patient apps (`FR-BRD`) — foundation only in V1
+### Branded patient apps (`FR-BRD`)
 
 After an agreement a hospital may be offered the patient app in its own name. It is the same app on the same API.
 
@@ -548,7 +550,13 @@ After an agreement a hospital may be offered the patient app in its own name. It
 - `FR-BRD-02` The patient app has a **hospital scope**. Unset, it is the whole network. Set to a hospital's code, discovery, booking and beds are that hospital's only, and so are the serials the app lists from what this phone booked. It is configuration, never a second codebase.
 - `FR-BRD-03` Everything a patient sees is drawn from tokens (`FRONTEND.md` §1–3) and one app name, so that a hospital's name and colours replace ours by configuration read from the server.
 - `FR-BRD-04` The links sent to a patient and the addresses the API answers are built in one place each, so that they can later differ by hospital (`code.platform-domain`) without changing what calls them.
-- `FR-BRD-05` Not in V1: store builds per hospital, custom domains, a logo upload, any automation of these.
+- `FR-BRD-05` Not in V1: store builds per hospital and any automation of them. (A logo and a hospital's own address were here until 6 October 2026; they are `FR-BRD-06` and `FR-BRD-07` now.)
+- `FR-BRD-06` **A hospital's public face is its own to set** (owner, 6 October 2026): its name in both languages, a short description, its public phone numbers and address, a logo, and its colours (the six brand tokens, refused if they fail contrast). Set by the hospital's administrator on `S-B-11`, shown wherever the hospital is shown, and in its own portal in place of ours.
+- `FR-BRD-07` **A hospital's portal has an address.** The patient app opened at `<code>.<platform domain>`, or at a domain the hospital owns and a platform administrator has recorded for it, is that hospital's portal with no parameter. The platform's own address is the network. Pointing a domain's DNS at the platform and its certificate are outside the product; recording the domain and answering for it are inside.
+- `FR-BRD-08` **A hospital's portal installs as that hospital's app**: the name, icon and colour a phone shows after "Add to Home Screen" are the hospital's, from the same build.
+- `FR-BRD-09` **Inside a hospital's portal, emergency search is still the whole network** (owner, 6 October 2026): somebody with a burn case is shown the nearest unit that can treat it, whoever runs it. Every other page is the hospital's only.
+- `FR-BRD-10` **A shared screen shares no record.** In a hospital's portal a patient sees what they would see in the network's app: their own records, wherever made. A hospital's staff see another hospital's record only by referral or the patient's consent (`FR-NET-02`, `FR-SEC-04`), never because the patient used that hospital's portal.
+- `FR-BRD-11` **Modules.** A hospital runs the modules switched on for it (`FR-SUP-03`): serials and reception, doctor's console, beds, emergency, lab, pharmacy, dashboard, import. A module that is off is not offered on that hospital's consoles, refused by the API, and absent from what the hospital publishes; nothing it already holds is deleted.
 
 ---
 
