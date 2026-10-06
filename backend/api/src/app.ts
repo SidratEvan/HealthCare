@@ -30,6 +30,7 @@ import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { attachGuestFromLink } from './middleware/guestAuth.js';
 import { idempotency } from './middleware/idempotency.js';
 import { requestLog } from './middleware/requestLog.js';
+import { securityHeaders } from './middleware/securityHeaders.js';
 import { API_BASE_PATH, buildApiRouter, rootRoutes } from './routes/index.js';
 
 /**
@@ -83,6 +84,10 @@ export function createApp(): Express {
   app.set('json spaces', 0);
 
   app.use(requestLog);
+
+  // On every answer, a refusal and a preflight included: set before anything
+  // can end the request (`middleware/securityHeaders.ts`).
+  app.use(securityHeaders);
 
   // Before the body parser and before auth: a preflight carries neither a body
   // nor a token, and answering it is not something to do after deciding who
