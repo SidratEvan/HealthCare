@@ -9,9 +9,9 @@ written to a log rather than sent, and payments always succeed. That is the
 correct configuration for showing a hospital director what the product does —
 not a staging environment on its way to production.
 
-`docs/STATUS.md` records what is and is not built. At the time of writing that
-is the patient app and the reception console; the doctor console, wallet, beds,
-emergency and admin dashboard are later build steps.
+`docs/STATUS.md` records what is and is not built, and its *Running the pitch
+demo* is the full walk: every console, the platform administrator's screen, a
+hospital's own app and the import.
 
 ---
 
@@ -194,8 +194,9 @@ Both matter for more than tidiness:
 
 Open the two URLs on two devices, or two windows side by side.
 
-1. **Patient** → pick a specialty → pick the doctor and the chamber → fill in
-   name, phone and age → confirm. You get a serial.
+1. **Patient** → search for what you need, or pick a specialty → pick the
+   hospital, the doctor and the chamber → fill in name, phone and age →
+   confirm. You get a serial.
 2. Tap **লাইভ সিরিয়াল দেখুন**. This is `S-A-08`, the screen the product is for.
 3. **Console** → it opens on a picker: choose the hospital, then the chamber
    the patient booked, then **রিসেপশন**. There is no password, and the screen
@@ -207,8 +208,14 @@ and the estimate moves. That is the product (`NFR-01`), and
 `e2e/two-device-queue.spec.ts` is the test that keeps it true.
 
 Also worth showing: **আমি দেরি করছি** and **বাতিল করুন** on the patient screen
-both write real events the console sees, and the Render logs print every SMS
-the demo would have sent.
+both write real events the console sees, and the Render logs record that each
+SMS the demo would have sent was written, without its number or text.
+
+The rest of the pitch — a hospital's own app at `/?scope=PADMA`, onboarding a
+hospital from the picker's **প্ল্যাটফর্ম পরিচালনা**, and importing a hospital's
+own export — is `docs/STATUS.md`, *Running the pitch demo*, steps 6–9. The
+model's import suggestions are off on the deployed demo unless
+`MAPPING_PROVIDER=claude` and `MAPPING_API_KEY` are set on Render.
 
 ---
 
@@ -233,9 +240,12 @@ the demo would have sent.
 - **Not a build.** The API runs TypeScript through `tsx` rather than compiled
   output. Fine for a pitch; a bundler decision before a pilot
   (`docs/STATUS.md`).
-- **Not private.** Anyone with the console URL can open a console, because
-  authentication is deferred (`CLAUDE.md` §4.1) and the demo picker is what
-  stands in for it. Share the link accordingly.
+- **Not private.** Anyone with the console URL can open a console: under
+  `DEMO_MODE=true` the picker lets a visitor in as any role with no password,
+  the platform administrator included, and says so on the screen. Staff login
+  and the second factor are built (`CLAUDE.md` §4.1) and are what a real
+  deployment runs on; the demo keeps the picker so that it can be explored.
+  Share the link accordingly.
 - **Not holding real data, ever** (`FR-SEC-08`). If a real patient's details
   are ever typed into this deployment, reset it.
 
