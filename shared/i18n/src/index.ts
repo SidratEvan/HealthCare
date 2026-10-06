@@ -34,6 +34,14 @@ export {
 } from './locale.js';
 
 export { BED_KIND_NAMES, bedKindName, type BedKindName } from './beds.js';
+export {
+  COLUMN_KIND_NAMES,
+  IMPORT_FIELD_NAMES,
+  STRUCTURE_TYPE_NAMES,
+  columnKindName,
+  importFieldName,
+  structureTypeName,
+} from './imports.js';
 
 export { LAB_TEST_NAMES, isLabTestCode, labTestName, type LabTestCode } from './lab.js';
 

@@ -157,7 +157,18 @@ export async function view(hospitalId: string, batchId: string): Promise<BatchVi
 
 export async function check(
   actor: ImportActor,
-  input: { readonly set: ImportSet; readonly fileName: string; readonly csv: string },
+  input: {
+    readonly set: ImportSet;
+    readonly fileName: string;
+    readonly csv: string;
+    /**
+     * The fingerprint of the file the hospital uploaded, when `csv` is that
+     * file rewritten into the template's shape by a confirmed mapping
+     * (`importMapping.service`). The batch records the file that was given
+     * (`FR-IMP-08`), not the rewriting of it.
+     */
+    readonly fileSha256?: string | undefined;
+  },
 ): Promise<BatchView> {
   const table = parseCsv(input.csv);
   if (table === 'empty' || table === 'unterminated_quote') throw refused(table);
@@ -204,7 +215,8 @@ export async function check(
 
   const counts = { add: 0, update: 0, skip: 0, error: 0 };
   for (const row of rows) counts[row.action] += 1;
-  const fileSha256 = createHash('sha256').update(input.csv, 'utf8').digest('hex');
+  const fileSha256 =
+    input.fileSha256 ?? createHash('sha256').update(input.csv, 'utf8').digest('hex');
 
   const batchId = await withTransaction(async (trx) => {
     const id = await repo.createBatch(trx, {

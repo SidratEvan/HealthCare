@@ -125,6 +125,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0036',
       // V3.1: a workspace's state, and live only when approved (FR-ONB-02).
       '0037',
+      // V4.1: a hospital's confirmed column mappings, by heading row (FR-IMP-20).
+      '0038',
     ]);
   });
 

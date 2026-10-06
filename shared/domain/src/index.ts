@@ -450,6 +450,36 @@ export { BD_MOBILE, normaliseBdMobile } from './util/phone.js';
 
 // --- Importing a hospital's own data (pilot step 24, FR-IMP) ---------------
 export { csvField, csvLine, parseCsv, type CsvProblem, type CsvTable } from './imports/csv.js';
+// Mapping a hospital's own export onto the template (`FR-IMP-13`–`20`).
+export {
+  COLUMN_KINDS,
+  STRUCTURE_TYPES,
+  applyMapping,
+  foldHeading,
+  guessStructureType,
+  hasTemplateHeader,
+  headerLooksLikeData,
+  headerSignature,
+  kindOfValue,
+  mappingProblems,
+  profileColumns,
+  proposeMapping,
+  targetFields,
+  targetOf,
+  targetOneOf,
+  unmappedColumns,
+  type ColumnKind,
+  type ColumnMapping,
+  type ColumnProfile,
+  type FieldProposal,
+  type FileColumn,
+  type MappingProblem,
+  type MappingSource,
+  type MappingTarget,
+  type ProposalReason,
+  type StructureType,
+  type TargetField,
+} from './imports/mapping.js';
 export {
   IMPORT_COLUMNS,
   IMPORT_SETS,
