@@ -22,6 +22,7 @@ import {
   bedsBody,
   brandBody,
   logoBody,
+  publishingBody,
   declaredCapabilitiesBody,
   departmentBody,
   departmentPatchBody,
@@ -69,6 +70,14 @@ hospitalSettingsRoutes.put(
   settings.putBrand,
 );
 hospitalSettingsRoutes.get('/hospital/logo', ...admin, settings.getOwnLogo);
+// Which live figures it shares with the network (`FR-NET-04`): its own to decide.
+hospitalSettingsRoutes.put(
+  '/hospital/publishing',
+  ...admin,
+  write,
+  validate({ body: publishingBody }),
+  settings.putPublishing,
+);
 hospitalSettingsRoutes.put(
   '/hospital/logo',
   json({ limit: '512kb' }),

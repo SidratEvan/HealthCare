@@ -48,8 +48,14 @@ export interface HospitalCard {
   readonly capabilityAsOf: string | null;
   /** Doctors here in the specialty asked for; null when none was (`S-A-07`). */
   readonly doctorCount: number | null;
-  readonly sittingNow: number;
-  readonly openSerialsToday: number;
+  /** Null where the hospital does not share its serial figures (`FR-NET-04`). */
+  readonly sittingNow: number | null;
+  readonly openSerialsToday: number | null;
+  /**
+   * The live figures this hospital has and does not share: `serials`, `beds`,
+   * `stock`. A card says so in words and never shows a zero for one.
+   */
+  readonly notShared?: readonly string[];
   /**
    * The published bed figures (`FR-PAT-14`), from `v_public_hospital_capacity`.
    * Each kind carries its own `asOf`; a hospital with no inpatient beds has
@@ -95,7 +101,10 @@ export interface HospitalDoctorCard {
   readonly feePoisha: number;
   readonly room: string | null;
   readonly bmdcVerifiedAt: string | null;
-  readonly sittingNow: boolean;
+  /** Null, like `openSerials`, where the hospital does not share its serial figures. */
+  readonly sittingNow: boolean | null;
+  /** False where they are withheld (`FR-NET-04`), so the card can say so. */
+  readonly serialsShared?: boolean;
   readonly nextSessionAt: string | null;
   readonly openSerials: number | null;
 }
@@ -136,13 +145,17 @@ export interface SessionCard {
   readonly room: string | null;
   readonly feePoisha: number;
   readonly capacity: number | null;
-  readonly taken: number;
+  /** Null where the hospital does not share its serial figures (`FR-NET-04`). */
+  readonly taken: number | null;
+  /** Whether no place is left. Said whether the figures are shared or not. */
+  readonly full?: boolean;
 }
 
 export interface Availability {
   readonly sessionId: string;
   readonly capacity: number | null;
-  readonly taken: number;
+  /** Null, with `remaining`, where the hospital does not share its serial figures. */
+  readonly taken: number | null;
   readonly remaining: number | null;
   readonly full: boolean;
   readonly nextSerial: number;
@@ -376,6 +389,8 @@ export interface EmergencyResult {
   readonly erLoad: number;
   /** Free beds of `bedKind`, or of every kind when that is null. */
   readonly freeBeds: number | null;
+  /** False where the hospital has beds and does not share the figure (`FR-NET-04`). */
+  readonly bedsShared?: boolean;
   readonly bedKind: BedKind | null;
   readonly icuTotal: number | null;
   readonly icuFree: number | null;

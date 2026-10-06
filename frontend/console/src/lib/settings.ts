@@ -57,6 +57,8 @@ export interface SetupSnapshot {
     readonly emergencyPhone: string | null;
     /** The modules it does not run (`FR-BRD-11`); empty when everything is on. */
     readonly modulesOff: readonly string[];
+    /** The live figures it does not share with the network (`FR-NET-04`). */
+    readonly unpublished: readonly string[];
     /** What the hospital says of itself to patients (`FR-BRD-06`). */
     readonly descriptionBn: string | null;
     readonly descriptionEn: string | null;
@@ -276,6 +278,9 @@ export const settingsApi = {
   /** The hospital's colours, or null for the platform's own (`FR-BRD-06`). */
   brand: (theme: BrandTheme | null) =>
     save((api, key) => api.put('/hospital/brand', { theme }, key)),
+  /** Which live figures the hospital keeps to itself (`FR-NET-04`). */
+  publishing: (unpublished: readonly string[]) =>
+    save((api, key) => api.put('/hospital/publishing', { unpublished }, key)),
   logo: (body: LogoBody) =>
     save((api, key) => api.put<{ version: string }>('/hospital/logo', body, key)),
   removeLogo: () => save((api, key) => api.delete('/hospital/logo', key)),

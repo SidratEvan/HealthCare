@@ -105,6 +105,7 @@ const NOBODYS: readonly string[] = [
   'PATCH /hospital/profile',
   'PATCH /hospital/rules',
   'PUT /hospital/brand',
+  'PUT /hospital/publishing',
   'GET /hospital/logo',
   'PUT /hospital/logo',
   'DELETE /hospital/logo',

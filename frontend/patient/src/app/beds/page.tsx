@@ -46,6 +46,7 @@ import { Button, Card, FilterChip, FreshnessLine, Input, Sheet, useLocale } from
 
 import { GuestCodeCard } from '@/components/GuestCodeCard';
 import { HospitalIcon } from '@/components/icons';
+import { NotShared, withholds } from '@/components/NotShared';
 import { TabScreen } from '@/components/TabScreen';
 import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
 import { useNow } from '@/hooks/useNow';
@@ -280,7 +281,47 @@ function HospitalBedCard({
   const locale = useLocale();
   const numerals = numeralsFor(locale);
   const entry = hospital.beds?.byKind.find((row) => row.kind === kind);
-  if (entry === undefined) return null;
+  if (entry === undefined) {
+    // It has this kind of bed and keeps the count (FR-NET-04). The card says
+    // so and still takes a request, which is how a family finds out.
+    if (!withholds(hospital, 'beds')) return null;
+    return (
+      <Card>
+        <div
+          className="flex flex-col gap-2"
+          data-testid={`bed-card-${hospital.id}`}
+          data-shared="false"
+        >
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 text-brand-600">
+              <HospitalIcon size={22} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-title-sm">{localName(locale, hospital.nameBn, hospital.nameEn)}</p>
+              <p className="text-body-sm text-ink-muted">
+                {hospital.thana === null
+                  ? hospital.district
+                  : `${hospital.thana}, ${hospital.district}`}
+              </p>
+            </div>
+          </div>
+          <div>
+            <NotShared figure="beds" />
+          </div>
+          <p className="text-body-sm text-ink-secondary">{tp('bedsNotSharedHint', locale)}</p>
+          <Button
+            variant="secondary"
+            data-testid={`request-bed-${hospital.id}`}
+            onClick={() => {
+              onRequest(hospital);
+            }}
+          >
+            {tp('requestBed', locale)}
+          </Button>
+        </div>
+      </Card>
+    );
+  }
 
   const stale = isStale(entry.asOf, now);
   const price =

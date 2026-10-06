@@ -459,12 +459,28 @@ export async function publicCapacity(
     SELECT hospital_id, bed_total, bed_free, icu_total, icu_free, icu_as_of, beds_as_of, by_kind
       FROM v_public_hospital_capacity
      WHERE hospital_id = ANY(${[...hospitalIds]}::uuid[])
-       -- A hospital that does not run beds publishes no bed figure: absent,
-       -- which a card reads as "not shared", never as none free (FR-BRD-11).
+       -- A hospital that does not run beds has no bed figure (FR-BRD-11), and
+       -- one that withholds it shares none (FR-NET-04). Absent either way; a
+       -- card is told which (notShared), and never says none are free.
        AND fn_module_on(hospital_id, 'beds')
+       AND fn_publishes(hospital_id, 'beds')
   `.execute(db);
 
   return new Map(result.rows.map((row) => [row.hospital_id, toCapacity(row)]));
+}
+
+/**
+ * Of these hospitals, the ones that run beds and do not share the figure
+ * (`FR-NET-04`): where a card has to say "not shared" and not "none".
+ */
+export async function withholdingBeds(hospitalIds: readonly string[]): Promise<Set<string>> {
+  if (hospitalIds.length === 0) return new Set();
+  const result = await sql<{ id: string }>`
+    SELECT h.id FROM hospitals h
+     WHERE h.id = ANY(${[...hospitalIds]}::uuid[])
+       AND fn_module_on(h.id, 'beds') AND NOT fn_publishes(h.id, 'beds')
+  `.execute(db);
+  return new Set(result.rows.map((row) => row.id));
 }
 
 /** Hospitals with at least one bed of `kind` (`CHIP-A11-<type>`). */

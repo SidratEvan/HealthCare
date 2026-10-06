@@ -47,6 +47,7 @@ import {
   type DoctorPatchBody,
   type LogoBody,
   type ProfileBody,
+  type PublishingBody,
   type RulesBody,
   type StaffBody,
   type StaffPatchBody,
@@ -140,6 +141,21 @@ export async function updateProfile(actor: Actor, body: ProfileBody): Promise<vo
         ? {}
         : { lat: coordinates?.lat ?? null, lng: coordinates?.lng ?? null }),
     });
+    return { result: undefined, subjectId: actor.hospitalId };
+  });
+}
+
+// --- the figures it shares (FR-NET-04) ---------------------------------------------
+
+/**
+ * Which live figures the hospital shares with the network: the whole list of
+ * what it withholds. Its own decision, and so its administrator's to make.
+ * A figure withheld is said to be not shared wherever it would have been
+ * shown, from the next read.
+ */
+export async function updatePublishing(actor: Actor, body: PublishingBody): Promise<void> {
+  await change(actor, { table: 'hospital_settings', change: 'publishing' }, async (trx) => {
+    await repo.setUnpublished(trx, actor.hospitalId, body.unpublished);
     return { result: undefined, subjectId: actor.hospitalId };
   });
 }

@@ -204,6 +204,17 @@ export {
   type LogoFileType,
 } from './brand/theme.js';
 
+// Which live figures a hospital shares with the network (`FR-NET-04`).
+export {
+  MODULE_OF_FIGURE,
+  PUBLISHABLE_FIGURES,
+  isPublishableFigure,
+  notSharedOf,
+  publishingBody,
+  type PublishableFigure,
+  type PublishingBody,
+} from './network/publishing.js';
+
 // The modules a hospital runs, and which module a staff request belongs to
 // (`FR-BRD-11`, `FR-SUP-03`).
 export {

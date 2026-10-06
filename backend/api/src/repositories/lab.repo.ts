@@ -537,8 +537,12 @@ export async function searchMedicineAvailability(input: {
            SELECT 1 FROM pharmacy_stock ps
             WHERE ps.hospital_id = h.id AND ps.deleted_at IS NULL
          )
-         -- And that runs its pharmacy here (FR-BRD-11).
+         -- And that runs its pharmacy here (FR-BRD-11), and shares what is on
+         -- its shelf (FR-NET-04). One that does not is not named at all: a row
+         -- per medicine saying "not shared" would be noise where the question
+         -- is who has it.
          AND fn_module_on(h.id, 'pharmacy')
+         AND fn_publishes(h.id, 'stock')
     )
     -- **Capped per medicine, not across the whole result.** A flat row limit
     -- truncates mid-medicine, and the medicines past the cut then come back

@@ -130,6 +130,8 @@ export interface EmergencyResult {
   readonly erLoad: number;
   /** Free beds of `bedKind`, or of every kind when that is null. Null: no such beds here. */
   readonly freeBeds: number | null;
+  /** False where the bed figures are withheld, which is not the same as having none. */
+  readonly bedsShared: boolean;
   readonly bedKind: BedKind | null;
   /** Null when the facility has no ICU — which is not a full one. */
   readonly icuTotal: number | null;
@@ -200,8 +202,9 @@ export async function search(query: {
     geography === null ? candidates : candidates.filter((hospital) => geography.has(hospital.id));
   const ids = inRange.map((hospital) => hospital.id);
 
-  const [capacity, figures, thresholds, capable] = await Promise.all([
+  const [capacity, withheld, figures, thresholds, capable] = await Promise.all([
     bedRepo.publicCapacity(ids),
+    bedRepo.withholdingBeds(ids),
     emergencyRepo.emergencyFigures(ids),
     emergencyRepo.staleThresholds(ids),
     geography === null && capability !== null
@@ -238,6 +241,9 @@ export async function search(query: {
       hasCapability,
       erLoad: er?.erActive ?? 0,
       freeBeds: freeBedsFor(need, cardFigures),
+      // False where the hospital has beds and does not share the figure
+      // (`FR-NET-04`): the card then says so, and not that it has none.
+      bedsShared: !withheld.has(hospital.id),
       bedKind: need.bedKind,
       icuTotal: beds?.icuTotal ?? null,
       icuFree: beds?.icuFree ?? null,

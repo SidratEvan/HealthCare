@@ -1874,6 +1874,28 @@ export const CONSOLE = {
     en: 'Go back to the platform’s colours',
   },
   settingsBrandSaved: { bn: 'রং সংরক্ষণ করা হয়েছে', en: 'Colour saved' },
+
+  // --- What the hospital shares with the network (FRM-B11-PUBLISHING) -------
+  settingsPublishingTitle: {
+    bn: 'রোগীদের যা জানানো হয়',
+    en: 'What patients are told',
+  },
+  settingsPublishingHelper: {
+    bn: 'কোন সংখ্যাগুলো রোগীদের অ্যাপে দেখানো হবে তা আপনারাই ঠিক করেন। যেটি বন্ধ রাখবেন, সেখানে লেখা থাকবে "জানানো হয়নি"; শূন্য দেখানো হবে না।',
+    en: 'You decide which figures the patient app shows. One you turn off reads "not shared" there. It is never shown as zero.',
+  },
+  settingsPublishingEmergency: {
+    bn: 'জরুরি বিভাগে কী চিকিৎসা হয় তা সব সময় দেখানো হয়; এটি বন্ধ করা যায় না। বেডের সংখ্যা বন্ধ রাখলে জরুরি খোঁজেও লেখা থাকবে "জানানো হয়নি"।',
+    en: 'What the emergency department can treat is always shown and cannot be turned off. With bed figures off, an emergency search also reads "not shared".',
+  },
+  settingsPublishSerials: { bn: 'খালি সিরিয়াল ও কে বসছেন', en: 'Open serials and who is sitting' },
+  settingsPublishBeds: { bn: 'খালি বেড ও আইসিইউ', en: 'Free beds and ICU' },
+  settingsPublishStock: { bn: 'ফার্মেসিতে কোন ওষুধ আছে', en: 'Which medicines the pharmacy has' },
+  settingsPublishingSave: { bn: 'সংরক্ষণ করুন', en: 'Save' },
+  settingsPublishingSaved: { bn: 'সংরক্ষণ করা হয়েছে', en: 'Saved' },
+  settingsPublishingSame: { bn: 'কিছু বদলানো হয়নি', en: 'Nothing has changed' },
+  settingsPublishingShared: { bn: 'দেখানো হচ্ছে', en: 'Shared' },
+  settingsPublishingWithheld: { bn: 'জানানো হচ্ছে না', en: 'Not shared' },
   settingsBrandCleared: {
     bn: 'প্ল্যাটফর্মের রং ফিরিয়ে আনা হয়েছে',
     en: 'Back to the platform’s colours',
@@ -2852,6 +2874,20 @@ export const PATIENT = {
   cardIcu: { bn: 'আইসিইউ {free}/{total}', en: 'ICU {free}/{total}' },
   cardNoIcu: { bn: 'আইসিইউ নেই', en: 'No ICU' },
   cardNoBeds: { bn: 'ভর্তির ব্যবস্থা নেই', en: 'No inpatient beds' },
+
+  // --- A figure a hospital keeps to itself (FR-NET-04) ----------------------
+  //
+  // Said in the place the figure would have been. Never a zero and never
+  // "none": the hospital has it and has not shared it.
+  serialsNotShared: {
+    bn: 'সিরিয়ালের সংখ্যা জানানো হয়নি',
+    en: 'Serial figures not shared',
+  },
+  bedsNotShared: { bn: 'বেডের সংখ্যা জানানো হয়নি', en: 'Bed figures not shared' },
+  bedsNotSharedHint: {
+    bn: 'এই হাসপাতাল বেডের সংখ্যা জানায় না। অনুরোধ পাঠিয়ে জেনে নিন।',
+    en: 'This hospital does not share its bed figures. Send a request to find out.',
+  },
 
   // --- Emergency (S-A-10, S-A-10b, S-A-10c; FR-PAT-40..47) ------------------
   //

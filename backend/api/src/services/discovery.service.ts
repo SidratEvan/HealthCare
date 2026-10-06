@@ -380,8 +380,13 @@ export async function doctorsAt(
 export interface Availability {
   readonly sessionId: string;
   readonly capacity: number | null;
-  readonly taken: number;
-  /** Null when the session has no capacity limit. */
+  /**
+   * Null, with `remaining`, where the hospital does not share its serial
+   * figures (`FR-NET-04`). `full` and `nextSerial` are not withheld: they are
+   * the booking's own answer, to the person about to make it.
+   */
+  readonly taken: number | null;
+  /** Null when the session has no capacity limit, or the figure is not shared. */
   readonly remaining: number | null;
   readonly full: boolean;
   /** The serial the next booking would be given. */
@@ -408,6 +413,7 @@ export async function availability(sessionId: string): Promise<Availability> {
 
   const taken = state.entries.filter((entry) => entry.status !== 'cancelled').length;
   const capacity = session.capacity;
+  const shared = await discoveryRepo.publishes(session.hospitalId, 'serials');
 
   // The serial allocator is the authority; this only previews what it would
   // give, so a patient is not shown a number the transaction then changes.
@@ -416,8 +422,8 @@ export async function availability(sessionId: string): Promise<Availability> {
   return {
     sessionId,
     capacity,
-    taken,
-    remaining: capacity === null ? null : Math.max(0, capacity - taken),
+    taken: shared ? taken : null,
+    remaining: capacity === null || !shared ? null : Math.max(0, capacity - taken),
     full: capacity !== null && taken >= capacity,
     nextSerial,
     expectedWaitMinutes: waitForNextSerial(state, now),

@@ -4,8 +4,9 @@
  * What patients see of this hospital (`S-B-11`, `FR-BRD-06`; plan C1;
  * `APP_FLOW.md` B6 `FRM-B11-DESCRIPTION`, `FRM-B11-LOGO`, `FRM-B11-BRAND`).
  *
- * Three things the hospital chooses for itself, each saved on its own: what
- * it says of itself in both languages, a logo, and a colour.
+ * Four things the hospital chooses for itself, each saved on its own: what
+ * it says of itself in both languages, a logo, a colour, and which of its
+ * live figures the network is given (`FR-NET-04`, `FRM-B11-PUBLISHING`).
  *
  * ## One colour, not six
  *
@@ -38,11 +39,14 @@ import {
   BRAND_TOKENS,
   LOGO_FILE_TYPES,
   LOGO_MAX_BYTES,
+  MODULE_OF_FIGURE,
+  PUBLISHABLE_FIGURES,
   themeFromColour,
   type LogoFileType,
+  type PublishableFigure,
 } from '@platform/domain';
-import { format, formatNumber, numeralsFor, t } from '@platform/i18n';
-import { Button, COLOUR, Card, useLocale } from '@platform/ui';
+import { format, formatNumber, numeralsFor, t, type ConsoleKey } from '@platform/i18n';
+import { Button, COLOUR, Card, FilterChip, useLocale } from '@platform/ui';
 
 import { loadOwnLogo, settingsApi, type Saved, type SetupSnapshot } from '@/lib/settings';
 
@@ -68,7 +72,111 @@ export function HospitalFace({ snapshot, offline, run }: FaceProps): ReactNode {
       <Description snapshot={snapshot} offline={offline} run={run} />
       <Logo snapshot={snapshot} offline={offline} run={run} />
       <Colours snapshot={snapshot} offline={offline} run={run} />
+      <Publishing snapshot={snapshot} offline={offline} run={run} />
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Which figures it shares (`FR-NET-04`)
+// ---------------------------------------------------------------------------
+
+const FIGURE_KEY: Readonly<Record<PublishableFigure, ConsoleKey>> = {
+  serials: 'settingsPublishSerials',
+  beds: 'settingsPublishBeds',
+  stock: 'settingsPublishStock',
+};
+
+/**
+ * The live figures the hospital gives the network, each a switch.
+ *
+ * A switch that is on is a figure shared. Only the figures the hospital has
+ * are offered: one whose module it does not run is nothing to withhold
+ * (`FR-BRD-11`), and a switch for it would be a promise about nothing. What
+ * its emergency department can treat is not here, and the card says why.
+ */
+function Publishing({ snapshot, offline, run }: FaceProps): ReactNode {
+  const locale = useLocale();
+  const saved = snapshot.hospital.unpublished;
+  const [withheld, setWithheld] = useState<readonly string[]>(saved);
+  const [busy, setBusy] = useState(false);
+
+  // What is saved changed under the switches: show what is true now.
+  useEffect(() => {
+    setWithheld(saved);
+  }, [saved]);
+
+  const offered = PUBLISHABLE_FIGURES.filter(
+    (figure) => !snapshot.hospital.modulesOff.includes(MODULE_OF_FIGURE[figure]),
+  );
+  if (offered.length === 0) return null;
+
+  const same = withheld.length === saved.length && withheld.every((entry) => saved.includes(entry));
+
+  function toggle(figure: PublishableFigure): void {
+    setWithheld((current) =>
+      current.includes(figure) ? current.filter((entry) => entry !== figure) : [...current, figure],
+    );
+  }
+
+  function save(): void {
+    if (busy || offline || same) return;
+    setBusy(true);
+    void run(
+      () =>
+        settingsApi.publishing(PUBLISHABLE_FIGURES.filter((figure) => withheld.includes(figure))),
+      () => t('settingsPublishingSaved', locale),
+    ).finally(() => {
+      setBusy(false);
+    });
+  }
+
+  return (
+    <Card data-testid="settings-publishing">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-body-md font-semibold">{t('settingsPublishingTitle', locale)}</h3>
+          <p className="text-body-sm text-ink-secondary">{t('settingsPublishingHelper', locale)}</p>
+        </div>
+        <ul className="flex flex-col gap-2">
+          {offered.map((figure) => {
+            const shared = !withheld.includes(figure);
+            return (
+              <li key={figure} className="flex flex-wrap items-center gap-2">
+                <FilterChip
+                  selected={shared}
+                  data-testid={`settings-publish-${figure}`}
+                  onToggle={() => {
+                    toggle(figure);
+                  }}
+                >
+                  {t(FIGURE_KEY[figure], locale)}
+                </FilterChip>
+                {/* The state in words, not only in the chip's colour (A11Y-03). */}
+                <span
+                  className="text-body-sm text-ink-secondary"
+                  data-testid={`settings-publish-${figure}-state`}
+                >
+                  {t(shared ? 'settingsPublishingShared' : 'settingsPublishingWithheld', locale)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="text-body-sm text-ink-muted">{t('settingsPublishingEmergency', locale)}</p>
+        <div>
+          <SaveButton
+            offline={offline}
+            busy={busy}
+            {...(same ? { blocked: t('settingsPublishingSame', locale) } : {})}
+            testId="settings-publishing-save"
+            onClick={save}
+          >
+            {t('settingsPublishingSave', locale)}
+          </SaveButton>
+        </div>
+      </div>
+    </Card>
   );
 }
 

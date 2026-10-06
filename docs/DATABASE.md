@@ -211,6 +211,8 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 
 **`modules_off` text[] NOT NULL DEFAULT `{}` (0047, `FR-BRD-11`).** The modules this hospital does not run; empty, the ordinary state, is everything on, so a hospital made before or after has everything with nothing written and a module added later is on for everybody. **CHK** `hospital_settings_modules_known` (a subset of the eight) and `hospital_settings_doctor_needs_queue` (the doctor's console is never on where serials are off). `fn_module_on(hospital, module)` is the one definition of "on" that every published read asks.
 
+**`unpublished` text[] NOT NULL DEFAULT `{}` (0048, `FR-NET-04`).** The live figures this hospital does not share with the network, from `serials`, `beds`, `stock`; empty, the ordinary state, is everything shared. **CHK** `hospital_settings_unpublished_known` (a subset of the three). `fn_publishes(hospital, figure)` is the one definition of "shares" that every public read of a figure asks, beside `fn_module_on`: a module that is off has no figure, a figure that is kept is said to be kept.
+
 **`brand` jsonb, nullable (0036, `FR-BRD-03`).** A hospital's own values for the six brand tokens of `FRONTEND.md` §1.1 — `brand-900`, `-700`, `-600`, `-300`, `-100`, `brand-border` — as `{ "colors": { "<token>": "#rrggbb", … } }`. NULL, the ordinary state, is the platform's own colours. The shape and the contrast a theme must pass (white on `brand-600`, `brand-700` on the canvas, `brand-600` on `brand-100`, each at 4.5:1) are in `shared/domain/src/brand/theme.ts`; a stored theme that fails is read as none, so the app keeps colours that pass rather than half of somebody else's. The database checks only that it is an object. Not a logo, a font or a domain (`FR-BRD-05`).
 
 **`refund_policy` has a shape as of step 18** (`shared/domain/src/payments/refund.ts`),
@@ -769,6 +771,7 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0046_portal_domain.sql         -- plan C2: hospitals.portal_domain, a hospital's own domain for
                                    -- its portal (§2.2, FR-BRD-07)
     0047_hospital_modules.sql      -- plan C4: hospital_settings.modules_off and fn_module_on
+    0048_publishing.sql            -- plan C5: hospital_settings.unpublished and fn_publishes
                                    -- (§2.2, FR-BRD-11, FR-SUP-03)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample

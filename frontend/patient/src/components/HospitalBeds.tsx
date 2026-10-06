@@ -9,23 +9,39 @@
  * figures carry their own age — the oldest kind's, because a total built
  * partly from a ward nobody has confirmed for hours is that old in part
  * (`v_public_hospital_capacity`, `PRD.md` §3.2).
+ *
+ * A fourth, since a hospital chooses what it shares (`FR-NET-04`): *it has
+ * beds and does not share the figure*. That is said, and is none of the
+ * other three.
  */
 
 import type { PublicCapacity } from '@platform/domain';
 import { formatNumber, tp, formatAge, numeralsFor } from '@platform/i18n';
 import { Chip, FreshnessLine, useLocale } from '@platform/ui';
 
+import { NotShared } from '@/components/NotShared';
+
 import type { ReactNode } from 'react';
 
 export function HospitalBeds({
   beds,
+  notShared = false,
   now,
 }: {
   readonly beds: PublicCapacity | null;
+  /** The hospital runs beds and keeps the figure to itself. */
+  readonly notShared?: boolean;
   readonly now: Date;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
+  if (notShared) {
+    return (
+      <div className="mt-2" data-testid="card-beds">
+        <NotShared figure="beds" />
+      </div>
+    );
+  }
   // No row at all is not a figure; saying nothing is the honest render.
   if (beds === null) return null;
 
