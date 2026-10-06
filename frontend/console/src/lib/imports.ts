@@ -9,7 +9,13 @@
  */
 
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
-import type { ImportSet } from '@platform/domain';
+import type {
+  ColumnMapping,
+  FieldProposal,
+  FileColumn,
+  ImportSet,
+  StructureType,
+} from '@platform/domain';
 
 import { readDemoSession } from '@/lib/demo';
 
@@ -99,7 +105,55 @@ async function attempt<T>(call: (api: ApiClient) => Promise<T>): Promise<ImportR
   }
 }
 
+/** What `POST /hospital/imports/analyse` answers (`FR-IMP-13`–`15`). */
+export interface MappingAnalysis {
+  /** The file already has the template's columns; nothing to map. */
+  readonly templateShaped: boolean;
+  readonly rowCount: number;
+  readonly columns: readonly FileColumn[];
+  readonly rowType: StructureType | null;
+  /** A structure file whose kind of row has to be chosen first. */
+  readonly needsRowType: boolean;
+  readonly fields: readonly { readonly field: string; readonly required: boolean }[];
+  readonly oneOf: readonly (readonly string[])[];
+  readonly proposal: readonly FieldProposal[];
+  /** The proposal is this hospital's last confirmed mapping for these headings. */
+  readonly fromSaved: boolean;
+}
+
 export const importApi = {
+  /** Reads a file and proposes a mapping. Writes nothing. */
+  analyse: (set: ImportSet, csv: string, rowType?: StructureType) =>
+    attempt(
+      async (api) =>
+        await api.post<MappingAnalysis>('/hospital/imports/analyse', {
+          set,
+          csv,
+          ...(rowType === undefined ? {} : { rowType }),
+        }),
+    ),
+  /** A confirmed mapping: the file goes to the ordinary check and preview. */
+  checkMapped: (
+    set: ImportSet,
+    fileName: string,
+    csv: string,
+    mapping: ColumnMapping,
+    suggestedByModel: readonly string[] = [],
+  ) =>
+    attempt(
+      async (api) =>
+        await api.post<ImportBatchView>(
+          '/hospital/imports/mapped',
+          {
+            set,
+            fileName,
+            csv,
+            mapping,
+            ...(suggestedByModel.length === 0 ? {} : { suggestedByModel }),
+          },
+          crypto.randomUUID(),
+        ),
+    ),
   history: () =>
     attempt(
       async (api) => (await api.get<{ batches: ImportBatch[] }>('/hospital/imports')).batches,

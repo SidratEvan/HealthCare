@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
-import type { ImportSet } from '@platform/domain';
+import type { ImportSet, StructureType } from '@platform/domain';
 import {
   format,
   formatDateTime,
@@ -43,12 +43,14 @@ import {
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { DemoBanner } from '@/components/DemoBanner';
+import { ImportMapping } from '@/components/ImportMapping';
 import {
   downloadTemplate,
   importApi,
   type ImportBatch,
   type ImportBatchView,
   type ImportFailure,
+  type MappingAnalysis,
 } from '@/lib/imports';
 
 const SETS: readonly {
@@ -112,6 +114,15 @@ function ImportScreen(): ReactNode {
   const [set, setSet] = useState<ImportSet>('structure');
   const [file, setFile] = useState<{ readonly name: string; readonly text: string } | null>(null);
   const [preview, setPreview] = useState<ImportBatchView | null>(null);
+  /**
+   * The mapping step (`FR-IMP-15`–`18`): shown when the file's columns are
+   * not the template's. `chosen` starts as the server's proposal and becomes
+   * the administrator's; nothing is saved until they confirm.
+   */
+  const [mapping, setMapping] = useState<{
+    readonly analysis: MappingAnalysis;
+    readonly chosen: Readonly<Record<string, number | null>>;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<{
@@ -163,6 +174,8 @@ function ImportScreen(): ReactNode {
           });
         }
         if (failure.reason === 'too_many_rows') return t('importFileTooManyRows', locale);
+        if (failure.reason === 'no_header_row') return t('importFileNoHeader', locale);
+        if (failure.reason === 'mapping_invalid') return t('importMappingInvalid', locale);
         return t('importFileUnreadable', locale);
       case 'state':
         if (failure.reason === 'conflict' && failure.rowNumber !== null) {
@@ -180,10 +193,36 @@ function ImportScreen(): ReactNode {
     }
   }
 
+  /** The choices a proposal starts the administrator on. */
+  function chosenFrom(analysis: MappingAnalysis): Record<string, number | null> {
+    return Object.fromEntries(analysis.proposal.map((entry) => [entry.field, entry.column]));
+  }
+
+  /**
+   * `BTN-B14-CHECK`. A file in the template's shape goes straight to the
+   * check, as it always has. Any other file is read first: the server says
+   * what its columns hold and proposes which is which, and the mapping step
+   * opens (`FR-IMP-13`).
+   */
   async function check(): Promise<void> {
     if (file === null || busy) return;
     setBusy(true);
     setProblem(null);
+    setMapping(null);
+
+    const analysed = await importApi.analyse(set, file.text);
+    if (!analysed.ok) {
+      setBusy(false);
+      if (analysed.failure.kind === 'offline') setOnline(false);
+      setProblem(failureText(analysed.failure));
+      return;
+    }
+    if (!analysed.value.templateShaped) {
+      setBusy(false);
+      setMapping({ analysis: analysed.value, chosen: chosenFrom(analysed.value) });
+      return;
+    }
+
     const result = await importApi.check(set, file.name, file.text);
     setBusy(false);
     if (!result.ok) {
@@ -191,6 +230,50 @@ function ImportScreen(): ReactNode {
       setProblem(failureText(result.failure));
       return;
     }
+    setPreview(result.value);
+    void reload();
+  }
+
+  /** A structure file is one kind of row; choosing another re-reads it as that. */
+  async function chooseRowType(rowType: StructureType): Promise<void> {
+    if (file === null || busy) return;
+    setBusy(true);
+    setProblem(null);
+    const analysed = await importApi.analyse(set, file.text, rowType);
+    setBusy(false);
+    if (!analysed.ok) {
+      if (analysed.failure.kind === 'offline') setOnline(false);
+      setProblem(failureText(analysed.failure));
+      return;
+    }
+    setMapping({ analysis: analysed.value, chosen: chosenFrom(analysed.value) });
+  }
+
+  /** `BTN-B14-MAP-CONFIRM`: the confirmed mapping goes to the ordinary check. */
+  async function confirmMapping(): Promise<void> {
+    if (file === null || mapping === null || busy) return;
+    setBusy(true);
+    setProblem(null);
+
+    // Which fields still hold a column a model suggested, for the audit.
+    const byModel = mapping.analysis.proposal
+      .filter((entry) => entry.source === 'model' && mapping.chosen[entry.field] === entry.column)
+      .map((entry) => entry.field);
+
+    const result = await importApi.checkMapped(
+      set,
+      file.name,
+      file.text,
+      { rowType: mapping.analysis.rowType, fields: mapping.chosen },
+      byModel,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      if (result.failure.kind === 'offline') setOnline(false);
+      setProblem(failureText(result.failure));
+      return;
+    }
+    setMapping(null);
     setPreview(result.value);
     void reload();
   }
@@ -268,6 +351,7 @@ function ImportScreen(): ReactNode {
                   onToggle={() => {
                     setSet(entry.set);
                     setPreview(null);
+                    setMapping(null);
                     setProblem(null);
                   }}
                 >
@@ -308,6 +392,7 @@ function ImportScreen(): ReactNode {
                 onChange={(event) => {
                   const chosen = event.target.files?.[0];
                   setPreview(null);
+                  setMapping(null);
                   setProblem(null);
                   if (chosen === undefined) {
                     setFile(null);
@@ -337,7 +422,10 @@ function ImportScreen(): ReactNode {
               </Button>
             )}
           </div>
-          {problem === null ? null : (
+          <p className="mt-3 text-caption text-ink-muted" data-testid="import-own-file">
+            {t('importOwnFile', locale)}
+          </p>
+          {problem === null || mapping !== null ? null : (
             <p
               role="alert"
               className="mt-3 text-body-sm text-alert-700"
@@ -347,6 +435,35 @@ function ImportScreen(): ReactNode {
             </p>
           )}
         </Card>
+
+        {/* --- TBL-B14-MAP, BTN-B14-MAP-CONFIRM: the file's own columns, matched --- */}
+        {mapping === null ? null : (
+          <ImportMapping
+            set={set}
+            analysis={mapping.analysis}
+            fields={mapping.chosen}
+            busy={busy}
+            offlineReason={offlineReason}
+            problem={problem}
+            onChoose={(field, column) => {
+              setMapping((current) =>
+                current === null
+                  ? current
+                  : { ...current, chosen: { ...current.chosen, [field]: column } },
+              );
+            }}
+            onRowType={(rowType) => {
+              void chooseRowType(rowType);
+            }}
+            onConfirm={() => {
+              void confirmMapping();
+            }}
+            onCancel={() => {
+              setMapping(null);
+              setProblem(null);
+            }}
+          />
+        )}
 
         {/* --- TBL-B14-PREVIEW, BTN-B14-COMMIT, BTN-B14-DISCARD ------------------- */}
         {preview === null ? null : (

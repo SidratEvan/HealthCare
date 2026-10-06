@@ -3,10 +3,17 @@
  * administrator's own, from the principal, never the request (`FR-ROLE-01`).
  */
 
-import { importParams, importSetParams, importUploadBody } from '@platform/domain';
+import {
+  importAnalyseBody,
+  importMappedBody,
+  importParams,
+  importSetParams,
+  importUploadBody,
+} from '@platform/domain';
 
 import { authRequired, forbiddenScope } from '../errors/AppError.js';
 import * as imports from '../services/import.service.js';
+import * as mapping from '../services/importMapping.service.js';
 
 import type { Request, Response } from 'express';
 
@@ -44,6 +51,22 @@ export async function getOne(req: Request, res: Response): Promise<void> {
 
 export async function check(req: Request, res: Response): Promise<void> {
   res.json({ ok: true, data: await imports.check(actorOf(req), importUploadBody.parse(req.body)) });
+}
+
+/** `POST /hospital/imports/analyse` — reads a file and proposes; writes nothing. */
+export async function analyse(req: Request, res: Response): Promise<void> {
+  res.json({
+    ok: true,
+    data: await mapping.analyse(actorOf(req), importAnalyseBody.parse(req.body)),
+  });
+}
+
+/** `POST /hospital/imports/mapped` — a confirmed mapping, handed to the check. */
+export async function checkMapped(req: Request, res: Response): Promise<void> {
+  res.json({
+    ok: true,
+    data: await mapping.confirm(actorOf(req), importMappedBody.parse(req.body)),
+  });
 }
 
 export async function commit(req: Request, res: Response): Promise<void> {

@@ -466,6 +466,22 @@ report computed from rows that could disagree with themselves is fiction.
 
 **U:** `(batch_id, row_number)`. Committing writes every target in one transaction; undoing refuses while any target is referenced by a row the batch did not write (`FR-IMP-07`).
 
+#### `import_mapping_profiles` (0038, `FR-IMP-20`)
+A hospital's confirmed column mapping for one export format, so the same export maps itself next time.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | **PK** |
+| `hospital_id` | uuid | **FK**, cascade |
+| `set_kind` | import_set | |
+| `header_sha256` | text | sha-256 of the folded heading row (`headerSignature` in `shared/domain`): case, spacing and separators do not change it; a different order of headings does |
+| `row_type` | text | `department` `doctor` `schedule` `ward` `bed` `staff` for a structure file, which is one kind of row throughout; NULL for the other sets. **CHK** it is set exactly when `set_kind = 'structure'` |
+| `mapping` | jsonb | `{ "<template field>": <column position> \| null }` |
+| `sources` | jsonb | `{ "<template field>": "rule" \| "saved" \| "model" \| "manual" }`: where each choice came from when it was confirmed |
+| `approved_by`, `approved_at` | uuid, timestamptz | who confirmed it; **FK** → `staff_users.id`, set null |
+
+**U:** `(hospital_id, set_kind, header_sha256)`; confirming another mapping for the same headings replaces it. **Headings' hash and column positions only: no value from any row of any file is in this table, and none could be.** So it has no retention rule, unlike `import_rows.raw`. The audit row a confirmation writes (`SETTINGS_CHANGE`, `change: import_mapping_confirmed`) carries the headings chosen and their sources, and no cell value either.
+
 ### 2.7 Messaging, feedback, audit
 
 #### `notification_templates`
@@ -664,6 +680,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- brand tokens for the patient app (§2.2, FR-BRD-03)
     0037_org_lifecycle.sql         -- V3.1: org_lifecycle, hospitals.lifecycle and the review columns,
                                    -- hospitals_live_requires_workspace_active (§2.2, FR-ONB-02)
+    0038_import_mapping_profiles.sql -- V4.1: a hospital's confirmed column mappings, by heading row
+                                   -- (§2.6b, FR-IMP-20)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

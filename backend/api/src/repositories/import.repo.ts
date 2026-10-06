@@ -10,6 +10,8 @@
 
 import { sql } from 'kysely';
 
+import type { ImportSet, StructureType } from '@platform/domain';
+
 import { db } from '../config/db.js';
 
 import type { Tx } from './transaction.js';
@@ -618,4 +620,98 @@ export async function retireStaff(trx: Tx, staffId: string): Promise<void> {
 /** A schedule an import replaced, brought back when the import is undone. */
 export async function reviveTemplate(trx: Tx, templateId: string): Promise<void> {
   await sql`UPDATE session_templates SET deleted_at = NULL WHERE id = ${templateId}`.execute(trx);
+}
+
+// ---------------------------------------------------------------------------
+// Saved column mappings (`FR-IMP-20`, 0038)
+// ---------------------------------------------------------------------------
+
+/** A hospital's last confirmed mapping for one heading row. */
+export interface MappingProfile {
+  readonly rowType: StructureType | null;
+  /** Template field → column position, or null where the field was left out. */
+  readonly mapping: Readonly<Record<string, number | null>>;
+}
+
+export async function findMappingProfile(input: {
+  readonly hospitalId: string;
+  readonly set: ImportSet;
+  readonly headerSha256: string;
+}): Promise<MappingProfile | null> {
+  const result = await sql<{ row_type: string | null; mapping: unknown }>`
+    SELECT row_type, mapping
+      FROM import_mapping_profiles
+     WHERE hospital_id = ${input.hospitalId}
+       AND set_kind = ${input.set}::import_set
+       AND header_sha256 = ${input.headerSha256}
+  `.execute(db);
+
+  const row = result.rows[0];
+  if (row === undefined) return null;
+
+  // Read defensively: only positions, and only whole ones.
+  const mapping: Record<string, number | null> = {};
+  if (typeof row.mapping === 'object' && row.mapping !== null) {
+    for (const [field, column] of Object.entries(row.mapping as Record<string, unknown>)) {
+      mapping[field] = typeof column === 'number' && Number.isInteger(column) ? column : null;
+    }
+  }
+  return { rowType: row.row_type as StructureType | null, mapping };
+}
+
+/**
+ * Keeps a confirmed mapping and writes its audit row, together.
+ *
+ * One `SETTINGS_CHANGE` row: who confirmed, for which set and batch, and for
+ * each field the heading chosen and where the choice came from. Headings are
+ * a file's column names; no cell value is passed in here, so none can be
+ * stored (`FR-IMP-20`).
+ */
+export async function saveMappingProfile(input: {
+  readonly hospitalId: string;
+  readonly set: ImportSet;
+  readonly headerSha256: string;
+  readonly rowType: StructureType | null;
+  readonly mapping: Readonly<Record<string, number | null>>;
+  readonly sources: Readonly<Record<string, string>>;
+  readonly approvedBy: string;
+  readonly audit: {
+    readonly ip: string | null;
+    readonly userAgent: string | null;
+    readonly batchId: string;
+    readonly fields: Readonly<
+      Record<string, { readonly heading: string; readonly source: string }>
+    >;
+    readonly notImported: readonly string[];
+  };
+}): Promise<void> {
+  await db.transaction().execute(async (trx) => {
+    await sql`
+      INSERT INTO import_mapping_profiles
+        (hospital_id, set_kind, header_sha256, row_type, mapping, sources, approved_by, approved_at)
+      VALUES (${input.hospitalId}, ${input.set}::import_set, ${input.headerSha256}, ${input.rowType},
+              ${JSON.stringify(input.mapping)}::jsonb, ${JSON.stringify(input.sources)}::jsonb,
+              ${input.approvedBy}, now())
+      ON CONFLICT (hospital_id, set_kind, header_sha256) DO UPDATE
+        SET row_type = EXCLUDED.row_type,
+            mapping = EXCLUDED.mapping,
+            sources = EXCLUDED.sources,
+            approved_by = EXCLUDED.approved_by,
+            approved_at = now()
+    `.execute(trx);
+
+    await sql`
+      INSERT INTO audit_log (actor_staff_id, hospital_id, action, subject_table, subject_id, ip, user_agent, meta)
+      VALUES (${input.approvedBy}, ${input.hospitalId}, 'SETTINGS_CHANGE', 'import_batches',
+              ${input.audit.batchId}, ${input.audit.ip}::inet, ${input.audit.userAgent},
+              ${JSON.stringify({
+                change: 'import_mapping_confirmed',
+                set: input.set,
+                rowType: input.rowType,
+                headerSha256: input.headerSha256,
+                fields: input.audit.fields,
+                notImported: input.audit.notImported,
+              })}::jsonb)
+    `.execute(trx);
+  });
 }

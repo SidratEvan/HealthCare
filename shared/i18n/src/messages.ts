@@ -1781,9 +1781,88 @@ export const CONSOLE = {
   settingsItemSchedules: { bn: 'সাপ্তাহিক চেম্বার', en: 'a weekly chamber' },
   settingsItemStaff: { bn: 'কর্মী', en: 'a staff member' },
   settingsWays: {
-    bn: 'পূরণ করার উপায়: এই পাতায় হাতে লিখে, অথবা ইমপোর্ট পাতায় CSV ফাইল দিয়ে।',
-    en: 'Two ways to fill these in: by hand on this page, or with CSV files on the import page.',
+    bn: 'পূরণ করার তিন উপায়: এই পাতায় হাতে লিখে, আমাদের ছকের CSV দিয়ে, অথবা আপনাদের নিজস্ব সিস্টেমের এক্সপোর্ট ফাইল দিয়ে।',
+    en: 'Three ways to fill these in: by hand on this page, with our template CSV, or with your own system’s export file.',
   },
+
+  // --- S-B-14, mapping a hospital's own export (FR-IMP-13 to FR-IMP-18) -----
+  importOwnFile: {
+    bn: 'আপনাদের নিজস্ব সিস্টেমের এক্সপোর্ট ফাইলও দিতে পারেন। কলামের নাম আলাদা হলে মিলিয়ে নেওয়ার সুযোগ পাবেন।',
+    en: 'You can also give your own system’s export. If its column names differ, you will be asked to match them.',
+  },
+  importFileNoHeader: {
+    bn: 'ফাইলের প্রথম সারিতে কলামের নাম থাকতে হবে। এই ফাইলের প্রথম সারিতে তথ্য আছে বলে মনে হচ্ছে। উপরে নামের একটি সারি যোগ করে আবার দিন।',
+    en: 'The file’s first row must hold column names. This file’s first row looks like data. Add a row of names at the top and try again.',
+  },
+  importMappingInvalid: {
+    bn: 'মিলটি সম্পূর্ণ নয়। আবশ্যক সব তথ্যের কলাম বেছে নিন।',
+    en: 'The matching is not complete. Choose a column for everything required.',
+  },
+  importMapTitle: { bn: 'আপনার ফাইলের কলাম মিলিয়ে নিন', en: 'Match your file’s columns' },
+  importMapIntro: {
+    bn: 'এই ফাইলের কলামের নাম আমাদের ছকের মতো নয়, তাই কোন কলামে কী আছে মিলিয়ে নিতে হবে। {rows}টি সারি পাওয়া গেছে। আপনি নিশ্চিত করার আগে কিছুই সংরক্ষণ হবে না।',
+    en: 'This file’s column names are not our template’s, so each has to be matched. {rows} rows were found. Nothing is saved before you confirm.',
+  },
+  importMapSaved: {
+    bn: 'এই ছকের ফাইল আপনি আগে একবার মিলিয়েছিলেন। সেই মিলই দেখানো হলো। দরকার হলে বদলে নিন।',
+    en: 'You matched a file with these headings before. That matching is shown. Change it if you need to.',
+  },
+  importMapRowType: { bn: 'এই ফাইলে কীসের তালিকা আছে?', en: 'What is this file a list of?' },
+  importMapRowTypeHint: {
+    bn: 'একটি ফাইলে এক ধরনের তথ্যই থাকবে: শুধু ডাক্তার, বা শুধু বেড।',
+    en: 'One file holds one kind of thing: only doctors, or only beds.',
+  },
+  importMapFieldHead: { bn: 'আমাদের যা দরকার', en: 'What we need' },
+  importMapColumnHead: { bn: 'আপনার ফাইলের কলাম', en: 'Your file’s column' },
+  importMapWhyHead: { bn: 'কেন এই কলাম', en: 'Why this column' },
+  importMapRequired: { bn: 'আবশ্যক', en: 'Required' },
+  importMapNone: { bn: 'এই তথ্য নেওয়া হবে না', en: 'Do not import this' },
+  importMapHolds: {
+    bn: 'এই কলামে আছে: {kind}। {filled}% সারিতে পূরণ করা।',
+    en: 'This column holds {kind}. Filled in {filled}% of rows.',
+  },
+  importMapSourceRule: { bn: 'নিয়ম থেকে প্রস্তাব', en: 'Proposed by a rule' },
+  importMapSourceSaved: { bn: 'আগের নিশ্চিত করা মিল', en: 'Your last confirmed matching' },
+  importMapSourceModel: { bn: 'এআইয়ের প্রস্তাব', en: 'Suggested by AI' },
+  importMapSourceManual: { bn: 'আপনি বেছে নিয়েছেন', en: 'Chosen by you' },
+  importMapSourceNothing: { bn: 'কোনো কলাম মেলেনি', en: 'No column matched' },
+  importMapSureHigh: { bn: 'নিশ্চয়তা বেশি', en: 'High confidence' },
+  importMapSureMedium: { bn: 'নিশ্চয়তা মাঝারি', en: 'Medium confidence' },
+  importMapSureLow: { bn: 'নিশ্চয়তা কম, দেখে নিন', en: 'Low confidence, please check' },
+  importMapReasonSame: {
+    bn: 'কলামের নাম আমাদের ছকের নামই।',
+    en: 'The column has our template’s own name.',
+  },
+  importMapReasonKnown: {
+    bn: 'কলামের নাম এই তথ্যের একটি পরিচিত নাম।',
+    en: 'The column’s name is a known name for this.',
+  },
+  importMapReasonSimilar: {
+    bn: 'কলামের নামের ভেতরে এই তথ্যের পরিচিত নাম আছে।',
+    en: 'The column’s name contains a known name for this.',
+  },
+  importMapReasonShape: {
+    bn: 'নাম মেলেনি, তবে শুধু এই কলামের মানগুলোই এই ধরনের।',
+    en: 'The name did not match, but only this column holds values of this kind.',
+  },
+  importMapNotImported: {
+    bn: 'এই কলামগুলো আমদানি হবে না: {columns}',
+    en: 'These columns will not be imported: {columns}',
+  },
+  importMapAllUsed: {
+    bn: 'ফাইলের সব কলাম ব্যবহার হচ্ছে।',
+    en: 'Every column of the file is used.',
+  },
+  importMapMissing: {
+    bn: 'নিশ্চিত করার আগে এগুলোর কলাম বেছে নিন: {fields}',
+    en: 'Choose a column for these before confirming: {fields}',
+  },
+  importMapOneOf: {
+    bn: 'এগুলোর যেকোনো একটির কলাম বেছে নিন: {fields}',
+    en: 'Choose a column for at least one of these: {fields}',
+  },
+  importMapConfirm: { bn: 'মিল নিশ্চিত করে যাচাই করুন', en: 'Confirm the matching and check' },
+  importMapCancel: { bn: 'বাতিল করুন', en: 'Cancel' },
   settingsHospitalCode: { bn: 'হাসপাতাল কোড: {code}', en: 'Hospital code: {code}' },
   settingsCountDepartments: { bn: 'বিভাগ: {count}', en: 'Departments: {count}' },
   settingsCountDoctors: { bn: 'সক্রিয় ডাক্তার: {count}', en: 'Active doctors: {count}' },

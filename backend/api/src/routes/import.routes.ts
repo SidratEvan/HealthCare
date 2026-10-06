@@ -11,7 +11,14 @@
 
 import { Router, json } from 'express';
 
-import { emptyBody, importParams, importSetParams, importUploadBody } from '@platform/domain';
+import {
+  emptyBody,
+  importAnalyseBody,
+  importMappedBody,
+  importParams,
+  importSetParams,
+  importUploadBody,
+} from '@platform/domain';
 
 import * as imports from '../controllers/import.controller.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -46,6 +53,27 @@ importRoutes.post(
   write,
   validate({ body: importUploadBody }),
   imports.check,
+);
+
+// A hospital's own export, mapped onto the template (`FR-IMP-13`–`20`).
+//
+// `analyse` reads and proposes and writes nothing, so it carries no
+// idempotency key: asking twice is asking twice. `mapped` is the upload
+// itself, by another door, and is keyed like the one above.
+importRoutes.post(
+  '/hospital/imports/analyse',
+  json({ limit: '6mb' }),
+  ...admin,
+  validate({ body: importAnalyseBody }),
+  imports.analyse,
+);
+importRoutes.post(
+  '/hospital/imports/mapped',
+  json({ limit: '6mb' }),
+  ...admin,
+  write,
+  validate({ body: importMappedBody }),
+  imports.checkMapped,
 );
 
 for (const [path, handler] of [
