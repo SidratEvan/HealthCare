@@ -320,6 +320,26 @@ const schema = z.object({
   ADDRESS_RATE_LIMIT_FACTOR: positiveInt.max(100).default(1),
 
   /**
+   * The model that suggests import column mappings (`FR-IMP-16`), or `off`.
+   *
+   * `off` is the default and a complete product: the rules and the
+   * administrator's own choices carry an import with no model at all. `claude`
+   * asks Anthropic's Messages API for the columns the rules could not place.
+   * It is sent headings and column profiles and never a row (`FR-IMP-17`), so
+   * where it runs does not move patient data.
+   */
+  MAPPING_PROVIDER: z.enum(['off', 'claude']).default('off'),
+  /** The provider's API key. Required when `MAPPING_PROVIDER` is not `off`. */
+  MAPPING_API_KEY: z.string().default(''),
+  MAPPING_MODEL: z.string().trim().min(1).default('claude-opus-5-5'),
+  MAPPING_BASE_URL: httpUrl.default('https://api.anthropic.com'),
+  /**
+   * How long an administrator waits for suggestions before the screen opens
+   * without them. Suggestions are a convenience; the wait is bounded.
+   */
+  MAPPING_TIMEOUT_MS: positiveInt.max(120_000).default(20_000),
+
+  /**
    * Browser origins this API answers besides the patient app's and the
    * console's (`FR-BRD-04`): a hospital's portal at a name of its own, a
    * hospital-branded app's web origin. Comma-separated, each an exact origin
@@ -376,6 +396,12 @@ const PRODUCTION_REQUIREMENTS: readonly {
     key: 'TOTP_ENCRYPTION_KEY',
     because:
       "administrators' second factors would be encrypted with a key derived from JWT_REFRESH_SECRET, and rotating that secret would lock every one of them out (FR-SEC-10)",
+  },
+  {
+    key: 'MAPPING_API_KEY',
+    because:
+      'MAPPING_PROVIDER names a model and there is no key to ask it with; set the key, or MAPPING_PROVIDER=off, which needs none (FR-IMP-16)',
+    unless: (env) => env.MAPPING_PROVIDER === 'off',
   },
   // VAPID keys are not required either: no adapter sends Web Push yet
   // (`adapters/push.ts` has only the unconfigured one), so notifications go by

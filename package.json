@@ -23,6 +23,7 @@
     "staff:create": "pnpm --filter @platform/api staff:create",
     "doctor:verify": "pnpm --filter @platform/api doctor:verify",
     "staff:reset-2fa": "pnpm --filter @platform/api staff:reset-2fa",
+    "mapping:try": "pnpm --filter @platform/api mapping:try",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

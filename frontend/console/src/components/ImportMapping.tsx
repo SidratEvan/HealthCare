@@ -151,6 +151,24 @@ export function ImportMapping({
           </p>
         ) : null}
 
+        {/* FR-IMP-16, FR-IMP-17: what part a model played, and what it was
+            not given. Said only when one was asked. */}
+        {analysis.model === 'used' ? (
+          <p
+            className="rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
+            data-testid="map-model-used"
+          >
+            {t('importMapModelUsed', locale)}
+          </p>
+        ) : analysis.model === 'unavailable' ? (
+          <p
+            className="rounded-sm bg-sunken px-3 py-2 text-body-sm text-ink-secondary"
+            data-testid="map-model-unavailable"
+          >
+            {t('importMapModelUnavailable', locale)}
+          </p>
+        ) : null}
+
         {set === 'structure' ? (
           <fieldset className="flex flex-col gap-2">
             <legend className="text-body-md font-semibold">{t('importMapRowType', locale)}</legend>

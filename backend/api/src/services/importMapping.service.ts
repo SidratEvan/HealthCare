@@ -42,6 +42,7 @@ import {
   headerLooksLikeData,
   headerSignature,
   mappingProblems,
+  modelMappingRequest,
   parseCsv,
   profileColumns,
   proposeMapping,
@@ -49,6 +50,7 @@ import {
   targetOf,
   targetOneOf,
   unmappedColumns,
+  withModelSuggestions,
   type ColumnMapping,
   type CsvTable,
   type FieldProposal,
@@ -58,6 +60,7 @@ import {
   type StructureType,
 } from '@platform/domain';
 
+import { proposeSafely } from '../adapters/mapping.js';
 import { AppError } from '../errors/AppError.js';
 import * as repo from '../repositories/import.repo.js';
 
@@ -85,6 +88,14 @@ export interface MappingAnalysis {
   readonly proposal: readonly FieldProposal[];
   /** True when the proposal is this hospital's last confirmed mapping for these headings. */
   readonly fromSaved: boolean;
+  /**
+   * What part a model played (`FR-IMP-16`):
+   * `used` — it suggested at least one column, marked `source: 'model'`;
+   * `nothing` — it was asked and suggested nothing that could be used;
+   * `unavailable` — it was asked and could not answer, so the rules stand alone;
+   * `not_asked` — there was nothing to ask, or no model is configured.
+   */
+  readonly model: 'used' | 'nothing' | 'unavailable' | 'not_asked';
 }
 
 function readFile(csv: string): CsvTable {
@@ -136,6 +147,7 @@ export async function analyse(
       oneOf: [],
       proposal: [],
       fromSaved: false,
+      model: 'not_asked',
     };
   }
 
@@ -169,12 +181,50 @@ export async function analyse(
       oneOf: [],
       proposal: [],
       fromSaved: false,
+      model: 'not_asked',
     };
   }
 
   const fields = targetFields(target).map(({ field, required }) => ({ field, required }));
   // A saved mapping is offered only for the kind of row it was confirmed for.
   const useSaved = saved !== null && saved.rowType === rowType;
+
+  if (useSaved) {
+    // The hospital's own confirmed mapping: nothing to ask anybody.
+    return {
+      templateShaped: false,
+      rowCount: table.rows.length,
+      columns,
+      rowType,
+      needsRowType: false,
+      fields,
+      oneOf: targetOneOf(target),
+      proposal: proposalsFromSaved(saved, fields, columns.length),
+      fromSaved: true,
+      model: 'not_asked',
+    };
+  }
+
+  // Rules first. A model is asked only about what they left open, and only
+  // with headings and profiles: `modelMappingRequest` is built from
+  // `columns`, which hold no value from any row (`FR-IMP-17`).
+  const rules = proposeMapping(target, columns);
+  const asked = modelMappingRequest(target, columns, rules);
+  let proposal = rules;
+  let model: MappingAnalysis['model'] = 'not_asked';
+
+  if (asked !== null) {
+    const answer = await proposeSafely(asked);
+    if (answer.kind === 'suggestions') {
+      // Untrusted: kept only where it names a field that was asked about and
+      // a column that was offered (`withModelSuggestions`).
+      proposal = withModelSuggestions(rules, asked, answer.suggestions);
+      model = proposal.some((entry) => entry.source === 'model') ? 'used' : 'nothing';
+    } else if (answer.reason !== 'off') {
+      // It could not answer. The rules stand, and the screen says so.
+      model = 'unavailable';
+    }
+  }
 
   return {
     templateShaped: false,
@@ -184,10 +234,9 @@ export async function analyse(
     needsRowType: false,
     fields,
     oneOf: targetOneOf(target),
-    proposal: useSaved
-      ? proposalsFromSaved(saved, fields, columns.length)
-      : proposeMapping(target, columns),
-    fromSaved: useSaved,
+    proposal,
+    fromSaved: false,
+    model,
   };
 }
 

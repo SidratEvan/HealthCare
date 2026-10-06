@@ -430,8 +430,8 @@ approved. The rules alone carry the feature when the provider is off.
 | D1 | Which SMS aggregator, and its account, API key and sender ID | Whichever the first hospital can hold an account with itself; the adapter is about a day once there is an API to call | 2.2 only |
 | D2 | Signup open to anyone, or by invitation | An open form that creates nothing public, with a rate limit; every workspace waits for a person to verify it | 3.2 |
 | D3 | Fields required at registration | Facility name in both languages, kind, division, district, phone, registration number; administrator's name, email, mobile, password. Everything else at setup | 3.2 |
-| D4 | CSV only, or XLSX from the first release | CSV only. XLSX adds a parsing dependency and is Phase 5 | 4.2 scope |
-| D5 | Model provider, where it runs, what is sent | What §4 lists and nothing else; off by default; one provider behind the adapter, called over HTTPS | 4.2 |
+| D4 | ~~CSV only, or XLSX from the first release~~ | **Decided 5 October:** CSV first; a spreadsheet file follows (`FR-IMP-22`) | — |
+| D5 | ~~Model provider, where it runs, what is sent~~ | **Built as recommended (V4.2):** what §4 lists and nothing else; `MAPPING_PROVIDER=off` by default; Claude behind the adapter over HTTPS, no SDK. Switching it on needs an API key, which is the owner's to arrange | — |
 | D6 | ~~The network architecture for many hospitals~~ | **Decided 5 October:** one shared deployment in Bangladesh | — |
 | D7 | Module names for entitlement | The modules the console rail already has | 3.1 |
 | D8 | Any change to "real patient data stays in Bangladesh" | None proposed | — |
@@ -494,7 +494,7 @@ In addition to `CLAUDE.md`:
 | V3.1 | `feat/org-lifecycle` | merged — migration 0037 (`org_lifecycle`, `hospitals.lifecycle`, `hospitals_live_requires_workspace_active`), `shared/domain` `org/lifecycle`, `POST /hospital/request-review` in place of `/hospital/go-live`, the `/platform/*` routes (list, create with first administrator, approve, send back, suspend, reinstate, close, verify a doctor), the checklist on `S-B-11`, `HOSPITAL_NOT_LIVE` on a public booking, a seeded platform administrator, `platform.routes.test.ts`. The platform's screen is V3.2. Supabase does not have 0037 yet |
 | V3.2 | `feat/platform-console` | merged — `S-B-12` (`PlatformConsole.tsx`, `lib/platform.ts`), the picker's platform section and `/?view=platform`, `platform_admin` on the demo door, `pnpm staff:create --platform` (`createPlatformAdministrator`), `platform-onboarding.spec.ts`. Not built: feature flags, subscriptions, moderation, system health (`FR-SUP-03`–`06`) |
 | V4.1 | `feat/import-mapping` | merged — `shared/domain` `imports/mapping` (profile, header guard, rules and other names in both languages, `applyMapping`), migration 0038 (`import_mapping_profiles`), `POST /hospital/imports/analyse` and `/mapped`, the mapping step on `S-B-14` (`ImportMapping.tsx`), four synthetic sample exports in `database/seeds/samples`, `import-mapping.spec.ts`. No model yet (V4.2). Supabase does not have 0038 |
-| V4.2 | `feat/import-mapping-ai` | |
+| V4.2 | `feat/import-mapping-ai` | merged — `adapters/mapping.ts` (`MAPPING_PROVIDER`, off by default; Claude over HTTPS, no SDK), `modelMappingRequest` and `withModelSuggestions` in `shared/domain`, `model` on the analyse answer, the model's part on the mapping step, `pnpm mapping:try`, a fifth sample export, `mappingProvider.test.ts`. **Not run against the live service: no key exists on the build machine** |
 | V4.3 | `feat/import-warnings` | if V5 has room |
 | V5.x | `fix/pitch-*` | |
 | V6 | `chore/pitch-release` | |
