@@ -2272,7 +2272,10 @@ export type ConsoleKey = keyof typeof CONSOLE;
  */
 export const PATIENT = {
   // --- Home (S-A-02) -------------------------------------------------------
-  appName: { bn: 'স্বাস্থ্যসেবা', en: 'Healthcare' },
+  // The product's name (owner, 2026-10-06). A name is not translated, and
+  // the owner gave it in one spelling: it is written the same in both
+  // languages until he gives a Bangla one.
+  appName: { bn: 'MedLiveBD', en: 'MedLiveBD' },
   findDoctor: { bn: 'ডাক্তার খুঁজুন', en: 'Find a doctor' },
   findHospital: { bn: 'হাসপাতাল খুঁজুন', en: 'Find a hospital' },
   emergency: { bn: 'জরুরি', en: 'Emergency' },

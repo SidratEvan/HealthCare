@@ -5,7 +5,7 @@
 **Version:** 1.0
 **Owner:** Sidrat — Technical Founder
 **Audience:** the build agent (Claude Code), future engineers, and pitch reviewers
-**Product name:** `[TBD]` — referred to in this document as **the Platform**
+**Product name:** **MedLiveBD** (owner, 6 October 2026) — referred to in this document as **the Platform**
 
 > **How to use this file.** This is the source of truth for *what* to build and *why*.
 > It does not prescribe file structure, frameworks, endpoints, or component names —
@@ -782,7 +782,7 @@ Not in the script, because it is not in V1: rescheduling (`FR-PAT-23`), ambulanc
 
 | # | Decision | Owner | Needed by |
 |---|---|---|---|
-| 1 | Product name and domain | Founders | Before pitch |
+| 1 | ~~Product name~~ **MedLiveBD**, decided 6 October 2026. The domain is still open | Founders | Before pitch |
 | 2 | Legal entity in Bangladesh and contract signatory | Founders | First agreement |
 | 3 | Whether to pursue national record integration before or after private traction | Founders | v2 |
 | 4 | SMS aggregator | Tech | Pilot |

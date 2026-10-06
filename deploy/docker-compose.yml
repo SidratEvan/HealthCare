@@ -1,4 +1,4 @@
-# HealthWealthBD on a hospital's own server (pilot step 26, `FR-SEC-07`).
+# MedLiveBD on a hospital's own server (pilot step 26, `FR-SEC-07`).
 #
 #   cp deploy/.env.example deploy/.env      then fill it in (DEPLOY.md §S2)
 #   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
@@ -17,7 +17,7 @@
 # API_DB_USER, which can read and write rows and nothing else — the `migrate`
 # service creates it, and narrows it again on every start.
 
-name: healthwealthbd
+name: medlivebd
 
 # A container's log is a file on the host that grows until the disk is full,
 # unless it is told otherwise. Fifty megabytes each, the oldest dropped.
@@ -86,7 +86,7 @@ services:
   # owner besides the backup.
   migrate:
     build: { context: .., target: api }
-    image: healthwealthbd-api
+    image: medlivebd-api
     logging: *logging
     command: ["sh", "-c", "pnpm db:migrate && pnpm db:role"]
     environment:
@@ -101,7 +101,7 @@ services:
     healthcheck: { disable: true }
 
   api:
-    image: healthwealthbd-api
+    image: medlivebd-api
     restart: unless-stopped
     logging: *logging
     environment: *api-env

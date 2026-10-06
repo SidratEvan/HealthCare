@@ -1,6 +1,6 @@
 # Technical handover
 
-A critical description of the HealthWealthBD codebase as it actually is, for a
+A critical description of the MedLiveBD codebase (called HealthWealthBD when this was written) as it actually is, for a
 founder who did not write most of it and for whoever works on it next.
 
 - **Written:** 2 October 2026, against `mvp` at `ebfcf14` (the same commit as

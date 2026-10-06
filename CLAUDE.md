@@ -73,7 +73,13 @@ Decided with it, and replacing what stood before:
   tenant isolation, scope enforcement, and the cross-hospital reads the
   handover found (`docs/PLATFORM_PLAN.md` 1.10). It does not block a pitch on
   synthetic data; it blocks the second real hospital.
-- **The name is temporary.** No time is spent renaming.
+- **The name is MedLiveBD** (owner, 2026-10-06, replacing the working name
+  HealthWealthBD). It is what the patient app's header, the installed app, the
+  console's tab, a verification message and a downloaded template say. It is
+  written the same in Bangla and in English until the owner gives a Bangla
+  spelling. Not renamed, because nobody outside the code reads them: the
+  `@platform/*` package scope, the repository's folder, and the names of
+  tables. The domain is still undecided.
 
 Do not add commercial content to this repository — pricing, what a module
 costs, subscription tiers, or the data terms offered to a hospital. Those are

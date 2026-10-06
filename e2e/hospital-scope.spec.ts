@@ -27,7 +27,7 @@ async function brand600(page: Page): Promise<string> {
 test('the network’s own app is nobody’s, in the platform’s colours', async ({ page }) => {
   await page.goto(PATIENT);
 
-  await expect(page.getByTestId('app-name')).toHaveText('স্বাস্থ্যসেবা');
+  await expect(page.getByTestId('app-name')).toHaveText('MedLiveBD');
   expect(await brand600(page)).toBe(PLATFORM_BRAND);
   await expect(page.locator('html')).not.toHaveAttribute('data-scope', /.+/);
 });
@@ -115,7 +115,7 @@ test('leaving the scope gives the network back', async ({ page }) => {
   await expect(page.getByTestId('app-name')).toContainText('পদ্মা');
 
   await page.goto(`${PATIENT}/?scope=`);
-  await expect(page.getByTestId('app-name')).toHaveText('স্বাস্থ্যসেবা');
+  await expect(page.getByTestId('app-name')).toHaveText('MedLiveBD');
   expect(await brand600(page)).toBe(PLATFORM_BRAND);
 
   await page.goto(`${PATIENT}/search?need=bed:icu`);
@@ -130,7 +130,7 @@ test('a code no hospital has shows the network, not somebody else’s app', asyn
   // themed. What the screens then ask for is refused too, and they say so.
   await page.goto(`${PATIENT}/?scope=NOSUCH`);
 
-  await expect(page.getByTestId('app-name')).toHaveText('স্বাস্থ্যসেবা');
+  await expect(page.getByTestId('app-name')).toHaveText('MedLiveBD');
   expect(await brand600(page)).toBe(PLATFORM_BRAND);
 
   await page.goto(`${PATIENT}/search?need=bed:icu`);

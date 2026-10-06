@@ -39,13 +39,13 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
-  title: 'স্বাস্থ্যসেবা',
+  title: 'MedLiveBD',
   description: 'ডাক্তারের সিরিয়াল নিন, আর অপেক্ষা সরাসরি দেখুন।',
   manifest: '/manifest.webmanifest',
-  applicationName: 'স্বাস্থ্যসেবা',
+  applicationName: 'MedLiveBD',
   appleWebApp: {
     capable: true,
-    title: 'স্বাস্থ্যসেবা',
+    title: 'MedLiveBD',
     // The ground, so the status bar matches the page rather than fighting it.
     statusBarStyle: 'default',
   },
