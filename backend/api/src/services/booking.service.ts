@@ -46,6 +46,7 @@ import * as guestRepo from '../repositories/guest.repo.js';
 import * as sessionRepo from '../repositories/session.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
+import * as modules from './modules.service.js';
 import * as notifications from './notification.service.js';
 import * as payments from './payment.service.js';
 import * as portals from './portal.service.js';
@@ -140,6 +141,8 @@ export interface BookingResult {
  */
 export async function createBooking(input: CreateBookingInput): Promise<BookingResult> {
   const session = await queueService.requireSession(input.sessionId);
+  // A hospital that does not run serials takes none (`FR-BRD-11`).
+  await modules.requireOn(session.hospitalId, 'queue');
 
   if (session.status === 'ended' || session.status === 'cancelled') {
     throw new AppError('QUEUE_GUARD_FAILED', {

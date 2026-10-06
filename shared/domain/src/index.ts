@@ -204,6 +204,22 @@ export {
   type LogoFileType,
 } from './brand/theme.js';
 
+// The modules a hospital runs, and which module a staff request belongs to
+// (`FR-BRD-11`, `FR-SUP-03`).
+export {
+  HOSPITAL_MODULES,
+  MODULE_OF_ROLE,
+  MODULE_ROUTES,
+  isHospitalModule,
+  moduleOn,
+  modulesBody,
+  modulesOfRequest,
+  modulesProblems,
+  type HospitalModule,
+  type ModulesBody,
+  type ModulesProblem,
+} from './modules/modules.js';
+
 // What a phone is told when the app is added to its home screen: the
 // network's own description, or a hospital's (`FR-BRD-08`).
 export {

@@ -31,6 +31,7 @@ import { cors } from './middleware/cors.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { attachGuestFromLink } from './middleware/guestAuth.js';
 import { idempotency } from './middleware/idempotency.js';
+import { moduleGate } from './middleware/modules.js';
 import { requestLog } from './middleware/requestLog.js';
 import { securityHeaders } from './middleware/securityHeaders.js';
 import { API_BASE_PATH, buildApiRouter, rootRoutes } from './routes/index.js';
@@ -136,6 +137,10 @@ export function createApp(): Express {
   app.use((req, _res, next) => {
     runInDbScope(scopeOfPrincipal(req.principal), next);
   });
+
+  // A member of staff reaches only the modules their hospital runs
+  // (`middleware/modules.ts`, `FR-BRD-11`).
+  app.use(moduleGate);
 
   // Global pass: validates a key when one is supplied. Endpoints where a
   // duplicate costs money or a place in a queue apply `idempotency({

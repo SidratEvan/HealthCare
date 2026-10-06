@@ -38,6 +38,7 @@ import * as standbyRepo from '../repositories/standby.repo.js';
 import { withTransaction } from '../repositories/transaction.js';
 
 import * as bookings from './booking.service.js';
+import * as modules from './modules.service.js';
 import * as payments from './payment.service.js';
 import * as queueService from './queue.service.js';
 import { standbyToken, standbyUrl } from './standbyLink.js';
@@ -75,6 +76,7 @@ export interface JoinStandbyResult {
  */
 export async function join(input: JoinStandbyInput): Promise<JoinStandbyResult> {
   const session = await queueService.requireSession(input.sessionId);
+  await modules.requireOn(session.hospitalId, 'queue');
   if (session.status === 'ended' || session.status === 'cancelled') {
     throw guardFailed('SESSION_CLOSED', 'This chamber is no longer taking anybody.');
   }

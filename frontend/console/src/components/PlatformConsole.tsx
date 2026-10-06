@@ -41,6 +41,8 @@ import {
   actionNeedsNote,
   type FacilityKind,
   type OrgLifecycle,
+  HOSPITAL_MODULES,
+  type HospitalModule,
 } from '@platform/domain';
 import {
   DIVISION_NAMES,
@@ -60,6 +62,7 @@ import { Button, Card, Chip, FilterChip, FreshnessLine, Input, useLocale } from 
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { DemoBanner } from '@/components/DemoBanner';
+import { MODULE_KEY } from '@/components/HospitalSettings';
 import { readDemoSession } from '@/lib/demo';
 import {
   platformApi,
@@ -749,6 +752,15 @@ function WorkspacePanel({
           </ul>
         </section>
 
+        <Modules
+          detail={detail}
+          online={online}
+          busy={busy === 'modules'}
+          onSet={(off) => {
+            settle('modules', platformApi.setModules(token, hospitalId, off));
+          }}
+        />
+
         <PortalAddress
           detail={detail}
           online={online}
@@ -853,6 +865,92 @@ function WorkspacePanel({
         </section>
       </div>
     </Card>
+  );
+}
+
+/**
+ * The modules a hospital runs (`FR-BRD-11`, `FR-SUP-03`, `FRM-B12-MODULES`).
+ *
+ * Each module is a switch; what is saved is the whole set. The doctor's
+ * console works a chamber's queue, so switching serials off switches it off
+ * with them, here, where it can be seen, and not as a refusal afterwards.
+ * Nothing the hospital holds is deleted by a switch.
+ */
+function Modules({
+  detail,
+  online,
+  busy,
+  onSet,
+}: {
+  readonly detail: WorkspaceDetail;
+  readonly online: boolean;
+  readonly busy: boolean;
+  readonly onSet: (off: readonly string[]) => void;
+}): ReactNode {
+  const locale = useLocale();
+  const [off, setOff] = useState<readonly string[]>(detail.modulesOff);
+
+  // What is saved changed under the switches: show what is true now.
+  useEffect(() => {
+    setOff(detail.modulesOff);
+  }, [detail.modulesOff]);
+
+  const toggle = (module: HospitalModule): void => {
+    setOff((current) => {
+      if (current.includes(module)) {
+        // Back on. The doctor's console needs serials, so serials come with it.
+        const next = current.filter((entry) => entry !== module);
+        return module === 'doctor' ? next.filter((entry) => entry !== 'queue') : next;
+      }
+      const next = [...current, module];
+      return module === 'queue' && !next.includes('doctor') ? [...next, 'doctor'] : next;
+    });
+  };
+
+  const same =
+    off.length === detail.modulesOff.length &&
+    off.every((entry) => detail.modulesOff.includes(entry));
+  const reason = !online
+    ? t('platformOffline', locale)
+    : same
+      ? t('platformModulesSame', locale)
+      : null;
+
+  return (
+    <section
+      className="flex flex-col gap-3 border-t border-line pt-4"
+      data-testid="platform-modules"
+    >
+      <h3 className="text-body-md font-semibold">{t('platformModulesTitle', locale)}</h3>
+      <p className="text-body-sm text-ink-secondary">{t('platformModulesHelper', locale)}</p>
+      <div className="flex flex-wrap gap-2">
+        {HOSPITAL_MODULES.map((module) => (
+          <FilterChip
+            key={module}
+            selected={!off.includes(module)}
+            data-testid={`platform-module-${module}`}
+            onToggle={() => {
+              toggle(module);
+            }}
+          >
+            {t(MODULE_KEY[module], locale)}
+          </FilterChip>
+        ))}
+      </div>
+      <div>
+        <GuardedButton
+          size="sm"
+          loading={busy}
+          reason={reason}
+          data-testid="platform-modules-save"
+          onClick={() => {
+            onSet(off);
+          }}
+        >
+          {t('platformModulesSave', locale)}
+        </GuardedButton>
+      </div>
+    </section>
   );
 }
 

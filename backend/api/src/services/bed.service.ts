@@ -59,6 +59,7 @@ import * as referralRepo from '../repositories/referral.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import * as emergency from './emergency.service.js';
+import * as modules from './modules.service.js';
 import * as notifications from './notification.service.js';
 
 import type { BedRow, BedRequestRow, BedRequestState } from '../repositories/bed.repo.js';
@@ -459,6 +460,8 @@ export async function createRequest(input: {
   readonly idempotencyKey: string | null;
 }): Promise<CreatedRequest> {
   if (!(await bedRepo.hospitalExists(input.hospitalId))) throw notFound('hospital');
+  // A hospital that does not run beds takes no request for one (`FR-BRD-11`).
+  await modules.requireOn(input.hospitalId, 'beds');
 
   // A request for a kind of bed the hospital does not have is a family told
   // "we'll let you know" by a ward that cannot say yes.

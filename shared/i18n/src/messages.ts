@@ -1476,6 +1476,27 @@ export const CONSOLE = {
   platformUnverified: { bn: 'যাচাই বাকি', en: 'Not verified' },
   platformVerify: { bn: 'যাচাই হয়েছে বলে চিহ্নিত করুন', en: 'Mark as verified' },
   platformAdmins: { bn: 'হাসপাতালের প্রশাসক', en: 'The hospital’s administrators' },
+  // The modules a hospital runs (`FR-BRD-11`, `FRM-B12-MODULES`).
+  moduleQueue: { bn: 'সিরিয়াল ও রিসেপশন', en: 'Serials and reception' },
+  moduleDoctor: { bn: 'ডাক্তারের কনসোল', en: 'Doctor’s console' },
+  moduleBeds: { bn: 'বেড', en: 'Beds' },
+  moduleEmergency: { bn: 'জরুরি বিভাগ', en: 'Emergency' },
+  moduleLab: { bn: 'ল্যাব', en: 'Lab' },
+  modulePharmacy: { bn: 'ফার্মেসি', en: 'Pharmacy' },
+  moduleDashboard: { bn: 'ড্যাশবোর্ড', en: 'Dashboard' },
+  moduleImport: { bn: 'তথ্য আমদানি', en: 'Data import' },
+  platformModulesTitle: { bn: 'মডিউল', en: 'Modules' },
+  platformModulesHelper: {
+    bn: 'যেটি বন্ধ, সেটি এই হাসপাতালের কনসোলে দেখানো হয় না, সার্ভার তা নেয় না, আর রোগীরাও তা দেখেন না। হাসপাতালের আগের কোনো তথ্য মোছা হয় না। সিরিয়াল বন্ধ করলে ডাক্তারের কনসোলও বন্ধ হয়।',
+    en: 'A module that is off is not shown on this hospital’s consoles, is refused by the server, and is not shown to patients. Nothing the hospital holds is deleted. Switching serials off switches the doctor’s console off with it.',
+  },
+  platformModulesSave: { bn: 'মডিউল সংরক্ষণ করুন', en: 'Save modules' },
+  platformModulesSame: { bn: 'এই বাছাইটিই এখন সংরক্ষিত আছে', en: 'This choice is already saved' },
+  settingsModulesOff: {
+    bn: 'আপনার হাসপাতালে এই মডিউলগুলো চালু নেই: {modules}। চালু করতে প্ল্যাটফর্মকে জানান।',
+    en: 'Your hospital does not run these modules: {modules}. To switch one on, ask the platform.',
+  },
+  pickerOpenSettings: { bn: 'সেটিংস খুলুন', en: 'Open settings' },
   // Where a hospital's portal is (`FR-BRD-07`, `FRM-B12-DOMAIN`).
   platformPortalTitle: { bn: 'পোর্টালের ঠিকানা', en: 'Portal address' },
   platformPortalAt: { bn: 'প্ল্যাটফর্মের ডোমেইনে', en: 'Under the platform’s domain' },

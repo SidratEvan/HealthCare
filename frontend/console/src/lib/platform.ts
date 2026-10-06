@@ -28,6 +28,8 @@ export interface Workspace {
   readonly registrationNo: string | null;
   /** A domain the hospital owns, recorded for its portal (`FR-BRD-07`). */
   readonly portalDomain: string | null;
+  /** The modules it does not run (`FR-BRD-11`); empty when everything is on. */
+  readonly modulesOff: readonly string[];
   readonly lifecycle: OrgLifecycle;
   readonly isLive: boolean;
   readonly reviewRequestedAt: string | null;
@@ -168,6 +170,21 @@ export const platformApi = {
     );
   },
 
+  /** Switches the hospital's modules: the whole list of what is off (`FR-BRD-11`). */
+  async setModules(
+    token: string,
+    hospitalId: string,
+    off: readonly string[],
+  ): Promise<PlatformResult<WorkspaceDetail>> {
+    return await attempt(
+      async () =>
+        await client(token).put<WorkspaceDetail>(
+          `/platform/hospitals/${hospitalId}/modules`,
+          { off },
+          crypto.randomUUID(),
+        ),
+    );
+  },
   /** Records the hospital's own domain for its portal, or removes it with null (`FR-BRD-07`). */
   async setDomain(
     token: string,

@@ -21,6 +21,7 @@ import { Router } from 'express';
 import {
   emptyBody,
   lifecycleNoteBody,
+  modulesBody,
   platformDoctorParams,
   portalDomainBody,
   settingsIdParams,
@@ -107,4 +108,14 @@ platformRoutes.post(
   write,
   validate({ ...byId, body: portalDomainBody }),
   platform.postPortalDomain,
+);
+
+// The modules a hospital runs (`FR-BRD-11`, `FR-SUP-03`): the whole list of
+// what is off. The platform's to switch, since it follows what was agreed.
+platformRoutes.put(
+  '/platform/hospitals/:id/modules',
+  ...admin,
+  write,
+  validate({ ...byId, body: modulesBody }),
+  platform.putModules,
 );

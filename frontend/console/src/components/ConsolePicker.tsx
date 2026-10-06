@@ -28,6 +28,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { MODULE_OF_ROLE } from '@platform/domain';
 import {
   format,
   formatClock,
@@ -42,7 +43,7 @@ import { Button, Card, CardMeta, CardTitle, useLocale } from '@platform/ui';
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { mintDemoToken, readDemoSession, writeDemoSession } from '@/lib/demo';
-import { fetchStaffChambers, signOut } from '@/lib/staffAuth';
+import { fetchStaffChambers, fetchStaffModulesOff, signOut } from '@/lib/staffAuth';
 
 import type { ReactNode } from 'react';
 
@@ -105,7 +106,28 @@ interface DemoConsole {
   readonly nameEn: string;
   readonly district: string;
   readonly roles: readonly string[];
+  /** The modules this hospital does not run (`FR-BRD-11`). */
+  readonly modulesOff?: readonly string[];
   readonly sessions: readonly DemoSessionCard[];
+}
+
+/**
+ * A hospital as the picker offers it: only the consoles of modules it runs
+ * (`FR-BRD-11`). A role whose module is off has no console here, and a
+ * hospital that does not run serials has no chamber to open. The server
+ * refuses what is off whatever this shows.
+ */
+function offered(hospital: DemoConsole): DemoConsole {
+  const off = hospital.modulesOff ?? [];
+  if (off.length === 0) return hospital;
+  return {
+    ...hospital,
+    roles: hospital.roles.filter((role) => {
+      const module = MODULE_OF_ROLE[role];
+      return module == null || !off.includes(module);
+    }),
+    sessions: off.includes('queue') ? [] : hospital.sessions,
+  };
 }
 
 /** A national role the API has an account for (step 20; `S-B-12` since V3.2). */
@@ -124,6 +146,8 @@ export type ConsoleChoice =
   | { readonly kind: 'lab' }
   | { readonly kind: 'pharmacy' }
   | { readonly kind: 'admin' }
+  /** The administrator's settings, where the hospital does not run the dashboard. */
+  | { readonly kind: 'settings' }
   | { readonly kind: 'gov' }
   | { readonly kind: 'platform' };
 
@@ -173,14 +197,16 @@ export function ConsolePicker({
         );
         return;
       }
-      const own: DemoConsole = {
+      const own = offered({
         hospitalId: session.hospitalId,
         nameBn: session.hospitalNameBn ?? '',
         nameEn: session.hospitalNameEn ?? '',
         district: '',
         roles,
+        modulesOff: await fetchStaffModulesOff(),
         sessions: chambers,
-      };
+      });
+      if (cancelled) return;
       setConsoles([own]);
       setHospital(own);
     }
@@ -209,7 +235,7 @@ export function ConsolePicker({
           };
           if (cancelled) return;
 
-          setConsoles(body.data.consoles);
+          setConsoles(body.data.consoles.map(offered));
           // Absent from an API older than step 20, which offers nothing
           // national rather than failing the picker.
           setNational(body.data.national ?? []);
@@ -592,14 +618,27 @@ function FacilityConsoles({
   readonly onOpen: (role: string, choice: ConsoleChoice) => void;
 }): ReactNode {
   const locale = useLocale();
-  const offered = FACILITY_CONSOLES.filter((entry) => hospital.roles.includes(entry.role));
-  if (offered.length === 0) return null;
+  const dashboardOff = (hospital.modulesOff ?? []).includes('dashboard');
+  const entries = FACILITY_CONSOLES.filter((entry) => hospital.roles.includes(entry.role)).map(
+    (entry) =>
+      // An administrator whose hospital does not run the dashboard still has
+      // its settings to open (`FR-BRD-11`: settings are nobody's module).
+      entry.id === 'admin' && dashboardOff
+        ? {
+            ...entry,
+            choice: { kind: 'settings' } as const,
+            title: 'settingsTitle' as const,
+            action: 'pickerOpenSettings' as const,
+          }
+        : entry,
+  );
+  if (entries.length === 0) return null;
 
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-title-sm">{t('facilityConsoles', locale)}</h2>
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {offered.map((entry) => (
+        {entries.map((entry) => (
           <li key={entry.id}>
             <Card>
               <CardTitle>{t(entry.title, locale)}</CardTitle>

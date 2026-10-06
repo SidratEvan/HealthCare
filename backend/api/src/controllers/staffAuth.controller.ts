@@ -12,6 +12,7 @@ import {
 } from '@platform/domain';
 
 import { authRequired, forbiddenScope } from '../errors/AppError.js';
+import * as modules from '../services/modules.service.js';
 import * as staffAuth from '../services/staffAuth.service.js';
 
 import type { Request, Response } from 'express';
@@ -79,5 +80,13 @@ export async function chambers(req: Request, res: Response): Promise<void> {
   const principal = req.principal;
   if (principal === undefined) throw authRequired();
   if (principal.kind !== 'staff') throw forbiddenScope({ reason: 'no_facility' });
-  res.json({ ok: true, data: { chambers: await staffAuth.chambers(principal.hospitalId) } });
+  res.json({
+    ok: true,
+    data: {
+      chambers: await staffAuth.chambers(principal.hospitalId),
+      // What this hospital does not run (`FR-BRD-11`), so the picker offers
+      // no console that would be refused.
+      modulesOff: await modules.modulesOff(principal.hospitalId),
+    },
+  });
 }

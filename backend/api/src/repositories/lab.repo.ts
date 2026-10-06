@@ -537,6 +537,8 @@ export async function searchMedicineAvailability(input: {
            SELECT 1 FROM pharmacy_stock ps
             WHERE ps.hospital_id = h.id AND ps.deleted_at IS NULL
          )
+         -- And that runs its pharmacy here (FR-BRD-11).
+         AND fn_module_on(h.id, 'pharmacy')
     )
     -- **Capped per medicine, not across the whole result.** A flat row limit
     -- truncates mid-medicine, and the medicines past the cut then come back

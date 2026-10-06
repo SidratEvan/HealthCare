@@ -81,6 +81,8 @@ export interface WorkspaceRow {
   readonly registrationNo: string | null;
   /** A domain the hospital owns, recorded for its portal (`FR-BRD-07`); null for none. */
   readonly portalDomain: string | null;
+  /** The modules it does not run (`FR-BRD-11`); empty when everything is on. */
+  readonly modulesOff: readonly string[];
   readonly lifecycle: OrgLifecycle;
   readonly isLive: boolean;
   readonly reviewRequestedAt: string | null;
@@ -100,6 +102,7 @@ interface WorkspaceColumns extends CountColumns {
   district: string;
   registration_no: string | null;
   portal_domain: string | null;
+  modules_off: string[];
   lifecycle: OrgLifecycle;
   is_live: boolean;
   review_requested_at: Date | null;
@@ -119,6 +122,7 @@ function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
     district: row.district,
     registrationNo: row.registration_no,
     portalDomain: row.portal_domain,
+    modulesOff: row.modules_off,
     lifecycle: row.lifecycle,
     isLive: row.is_live,
     reviewRequestedAt: row.review_requested_at?.toISOString() ?? null,
@@ -131,7 +135,10 @@ function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
 
 const WORKSPACE_COLUMNS = sql`
   h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
-  h.registration_no, h.portal_domain, h.lifecycle::text AS lifecycle, h.is_live,
+  h.registration_no, h.portal_domain,
+  coalesce((SELECT s.modules_off FROM hospital_settings s WHERE s.hospital_id = h.id),
+           '{}'::text[]) AS modules_off,
+  h.lifecycle::text AS lifecycle, h.is_live,
   h.review_requested_at, h.reviewed_at, h.review_note, h.created_at
 `;
 

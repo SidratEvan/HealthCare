@@ -209,6 +209,8 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 #### `hospital_settings`
 `hospital_id` **PK/FK**, `no_show_grace_patients` (default 2), `no_show_grace_minutes` (15), `late_reinsert_after` (3), `stale_threshold_minutes` (10), `refund_policy` jsonb, `sms_budget_monthly` int, `prepay_required` boolean, `numeral_style` text, `density_default` text.
 
+**`modules_off` text[] NOT NULL DEFAULT `{}` (0047, `FR-BRD-11`).** The modules this hospital does not run; empty, the ordinary state, is everything on, so a hospital made before or after has everything with nothing written and a module added later is on for everybody. **CHK** `hospital_settings_modules_known` (a subset of the eight) and `hospital_settings_doctor_needs_queue` (the doctor's console is never on where serials are off). `fn_module_on(hospital, module)` is the one definition of "on" that every published read asks.
+
 **`brand` jsonb, nullable (0036, `FR-BRD-03`).** A hospital's own values for the six brand tokens of `FRONTEND.md` §1.1 — `brand-900`, `-700`, `-600`, `-300`, `-100`, `brand-border` — as `{ "colors": { "<token>": "#rrggbb", … } }`. NULL, the ordinary state, is the platform's own colours. The shape and the contrast a theme must pass (white on `brand-600`, `brand-700` on the canvas, `brand-600` on `brand-100`, each at 4.5:1) are in `shared/domain/src/brand/theme.ts`; a stored theme that fails is read as none, so the app keeps colours that pass rather than half of somebody else's. The database checks only that it is an object. Not a logo, a font or a domain (`FR-BRD-05`).
 
 **`refund_policy` has a shape as of step 18** (`shared/domain/src/payments/refund.ts`),
@@ -766,6 +768,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- (§2.2, FR-BRD-06)
     0046_portal_domain.sql         -- plan C2: hospitals.portal_domain, a hospital's own domain for
                                    -- its portal (§2.2, FR-BRD-07)
+    0047_hospital_modules.sql      -- plan C4: hospital_settings.modules_off and fn_module_on
+                                   -- (§2.2, FR-BRD-11, FR-SUP-03)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

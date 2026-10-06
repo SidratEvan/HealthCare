@@ -6,6 +6,7 @@
 
 import {
   lifecycleNoteBody,
+  modulesBody,
   platformDoctorParams,
   portalDomainBody,
   settingsIdParams,
@@ -49,6 +50,13 @@ export function postAct(action: platform.PlatformAction): RequestHandler {
     const { note } = lifecycleNoteBody.parse(req.body);
     res.json({ ok: true, data: await platform.act(actorOf(req), id, action, note) });
   };
+}
+
+/** `PUT /platform/hospitals/:id/modules` — the modules the hospital does not run. */
+export async function putModules(req: Request, res: Response): Promise<void> {
+  const { id } = settingsIdParams.parse(req.params);
+  const { off } = modulesBody.parse(req.body);
+  res.json({ ok: true, data: await platform.setModules(actorOf(req), id, off) });
 }
 
 /** `POST /platform/hospitals/:id/domain` — the hospital's own domain, or null to remove it. */
