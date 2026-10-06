@@ -489,7 +489,7 @@ In addition to `CLAUDE.md`:
 | P5 | `chore/deploy-lan-https` | deferred until the first hospital's IT has chosen how its server is reached |
 | V0 | `chore/v1-direction` | merged — the owner's direction of 5 October (evening): the freeze lifted, one shared platform, the V1 pitch build (§2) |
 | V1.1 | `fix/patient-v1-surface` | merged — the ambulance and blood tiles, their two routes and the two ambulance links on the emergency screens are gone; `NotBuiltYet` is deleted; `app-shell.spec.ts` asserts nothing on the first screen leads to an unbuilt one |
-| V2.1 | `feat/patient-search` | |
+| V2.1 | `feat/patient-search` | merged — `GET /search` (`need`, `q`), `shared/domain` `search/needs` and `search/order`, `S-A-07s` at `/search`, Home rebuilt around it (`BTN-A02-SEARCH`, five quick needs), deep links into booking (`/book?specialty=&hospital=&doctor=`), `patient-search.spec.ts`. Not built: misspelling tolerance, distance from the patient, a hospital's own page |
 | V2.2 | `feat/hospital-scope` | |
 | V3.1 | `feat/org-lifecycle` | |
 | V3.2 | `feat/platform-console` | |

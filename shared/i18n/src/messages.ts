@@ -2072,6 +2072,65 @@ export const PATIENT = {
   bookHere: { bn: 'সিরিয়াল নিন', en: 'Book' },
   back: { bn: 'পিছনে', en: 'Back' },
 
+  // --- Search (S-A-07s, FR-PAT-16–18) ---------------------------------------
+  searchPrompt: { bn: 'আপনার কী দরকার?', en: 'What do you need?' },
+  searchIntro: {
+    bn: 'কোন হাসপাতালে এখন কী আছে, এক জায়গায় দেখুন।',
+    en: 'See which hospital has what you need, right now, in one place.',
+  },
+  searchLabel: { bn: 'নাম বা প্রয়োজন লিখুন', en: 'Type a name or what you need' },
+  searchHelper: {
+    bn: 'ডাক্তার, হাসপাতাল, বিভাগ, আইসিইউ, বার্ন ইউনিট',
+    en: 'Doctor, hospital, specialty, ICU, burn unit',
+  },
+  /** The field on Home that opens the search screen (`BTN-A02-SEARCH`). */
+  homeSearch: {
+    bn: 'ডাক্তার, হাসপাতাল, আইসিইউ খুঁজুন',
+    en: 'Search doctors, hospitals, ICU',
+  },
+  homeSearchLine: {
+    bn: 'কোন হাসপাতালে এখন জায়গা আছে, সরাসরি দেখুন।',
+    en: 'See which hospitals have room, live.',
+  },
+  searchGroupBeds: { bn: 'বেড ও আইসিইউ', en: 'Beds and ICU' },
+  searchGroupCare: { bn: 'বিশেষ সেবা', en: 'Specialised care' },
+  searchClearNeed: { bn: 'বদলান', en: 'Change' },
+  searchAllHospitals: { bn: 'যেসব হাসপাতাল যুক্ত আছে', en: 'Participating hospitals' },
+  searchHospitals: { bn: 'হাসপাতাল', en: 'Hospitals' },
+  searchHospitalsWith: { bn: '{need} আছে যেসব হাসপাতালে', en: 'Hospitals with {need}' },
+  searchDoctors: { bn: 'ডাক্তার', en: 'Doctors' },
+  searchBedFree: { bn: '{kind}: খালি {free}, মোট {total}', en: '{kind}: {free} free of {total}' },
+  searchBedUnconfirmed: {
+    bn: '{kind}: সংখ্যা এখনো নিশ্চিত করা হয়নি',
+    en: '{kind}: the count has not been confirmed',
+  },
+  searchHasCapability: { bn: '{capability} আছে', en: 'Has {capability}' },
+  searchNoOpenSerials: { bn: 'আজ সিরিয়াল খালি নেই', en: 'No serials open today' },
+  searchSeeDoctors: { bn: 'ডাক্তার দেখুন', en: 'See doctors' },
+  searchSeeBeds: { bn: 'বেডের অনুরোধ করুন', en: 'Request a bed' },
+  searchCall: { bn: 'কল করুন', en: 'Call' },
+  searchFee: { bn: 'ফি {fee}', en: 'Fee {fee}' },
+  searchNoneForText: {
+    bn: '“{text}” নামে কোনো ডাক্তার বা হাসপাতাল পাওয়া যায়নি।',
+    en: 'No doctor or hospital was found for “{text}”.',
+  },
+  searchNoneForNeed: {
+    bn: 'যুক্ত কোনো হাসপাতাল এই মুহূর্তে {need} জানায়নি।',
+    en: 'No participating hospital reports {need} right now.',
+  },
+  searchFailed: {
+    bn: 'খোঁজা যায়নি। সংযোগ দেখে আবার চেষ্টা করুন।',
+    en: 'The search could not be completed. Check your connection and try again.',
+  },
+  searchRetry: { bn: 'আবার খুঁজুন', en: 'Search again' },
+  searchOffline: {
+    bn: 'ইন্টারনেট নেই। খুঁজতে সংযোগ লাগবে।',
+    en: 'You are offline. Searching needs a connection.',
+  },
+  /** The quick needs under the field on Home. */
+  homeNeeds: { bn: 'সবচেয়ে বেশি খোঁজা হয়', en: 'Most searched' },
+  browseBySpecialty: { bn: 'বিভাগ ধরে ডাক্তার দেখান', en: 'See a doctor by specialty' },
+
   // --- My serials (S-A-09) --------------------------------------------------
   serialsToday: { bn: 'আজ', en: 'Today' },
   serialsUpcoming: { bn: 'আসছে', en: 'Upcoming' },

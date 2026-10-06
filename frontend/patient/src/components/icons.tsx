@@ -195,6 +195,15 @@ export function EmergencyIcon(props: IconProps): ReactNode {
   );
 }
 
+export function SearchIcon(props: IconProps): ReactNode {
+  return (
+    <Svg {...props}>
+      <circle cx="11" cy="11" r="6" />
+      <path d="M20 20l-4.5-4.5" />
+    </Svg>
+  );
+}
+
 export function ChevronIcon(props: IconProps): ReactNode {
   return (
     <Svg {...props}>

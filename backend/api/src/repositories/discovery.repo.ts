@@ -62,6 +62,12 @@ export interface HospitalQuery {
    * question a patient actually has: where can I see a cardiologist.
    */
   readonly specialty?: string | undefined;
+  /**
+   * An emergency capability the hospital says it has now (`FR-PAT-16`). Only
+   * hospitals whose row for it is switched on; when that was last confirmed
+   * travels on the card as `capabilityAsOf`.
+   */
+  readonly capability?: string | undefined;
   readonly limit: number;
 }
 
@@ -146,6 +152,10 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
                         WHERE dh.hospital_id = h.id AND dh.is_active
                           AND dh.deleted_at IS NULL
                           AND dep.code = ${query.specialty ?? null}))
+       AND (${query.capability ?? null}::text IS NULL
+            OR EXISTS (SELECT 1 FROM capabilities c
+                        WHERE c.hospital_id = h.id AND c.is_available
+                          AND c.kind::text = ${query.capability ?? null}))
        AND (
          ${query.q ?? null}::text IS NULL
          OR h.name_en ILIKE '%' || ${query.q ?? null} || '%'

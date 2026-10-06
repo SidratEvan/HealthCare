@@ -63,6 +63,30 @@ export const doctorQuery = z.object({
   limit: z.coerce.number().int().positive().max(100).default(50),
 });
 
+/**
+ * `GET /search` (`S-A-07s`, `FR-PAT-16`).
+ *
+ * `need` is a need's key (`specialty:CARD`, `bed:icu`,
+ * `capability:burn_unit`), chosen from the chips. `q` is whatever was typed.
+ * Either, both or neither: with neither the answer is every participating
+ * hospital, which is what the screen opens on.
+ *
+ * The key's shape is checked here and its meaning by `parseNeed` in the
+ * service, so that a need the data does not hold is a 400 with a reason
+ * rather than an empty list that reads as "no hospital has it".
+ */
+export const searchQuery = z.object({
+  q: z.string().trim().min(1).max(80).optional(),
+  need: z
+    .string()
+    .trim()
+    .regex(/^(specialty|bed|capability):[A-Za-z_]{2,20}$/)
+    .optional(),
+  lat: z.coerce.number().min(20).max(27).optional(),
+  lng: z.coerce.number().min(87.5).max(93).optional(),
+  limit: z.coerce.number().int().positive().max(50).default(30),
+});
+
 export const sessionQuery = z.object({
   doctorId: uuid.optional(),
   hospitalId: uuid.optional(),

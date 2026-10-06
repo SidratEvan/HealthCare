@@ -5,7 +5,7 @@
  * route validated, call a service, shape a response.
  */
 
-import { doctorQuery, hospitalQuery, idParams, sessionQuery } from '@platform/domain';
+import { doctorQuery, hospitalQuery, idParams, searchQuery, sessionQuery } from '@platform/domain';
 
 import * as deployment from '../services/deployment.service.js';
 import * as discovery from '../services/discovery.service.js';
@@ -17,6 +17,12 @@ export async function listHospitals(req: Request, res: Response): Promise<void> 
   const { items, asOf } = await discovery.searchHospitals(query);
 
   res.json({ ok: true, data: { hospitals: items, asOf } });
+}
+
+/** `GET /search` — one search across the network (`S-A-07s`, `FR-PAT-16`). */
+export async function search(req: Request, res: Response): Promise<void> {
+  const query = searchQuery.parse(req.query);
+  res.json({ ok: true, data: await discovery.search(query) });
 }
 
 export async function getHospital(req: Request, res: Response): Promise<void> {

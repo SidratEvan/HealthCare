@@ -47,6 +47,7 @@ import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
 import {
+  allHospitals,
   availability,
   book,
   doctorSessions,
@@ -75,9 +76,30 @@ import type { ReactNode } from 'react';
  */
 type Step = 'hospital' | 'doctor' | 'session' | 'confirm' | 'standby' | 'done';
 
+/**
+ * No specialty: a hospital opened by name from the search screen
+ * (`S-A-07s`), where the answer is every doctor there. Not a code any
+ * department carries, so it cannot be mistaken for one.
+ */
+const ANY_SPECIALTY = '';
+
+/**
+ * Where a search result enters the flow.
+ *
+ * A result already names the hospital, and sometimes the doctor, so the flow
+ * opens on the step after them rather than asking again (`FR-PAT-17`: "without
+ * searching again"). Each is taken once; going back from there is the
+ * ordinary flow.
+ */
+interface Entry {
+  hospital: string | null;
+  doctor: string | null;
+}
+
 export default function BookPage(): ReactNode {
   const locale = useLocale();
   const [specialty, setSpecialty] = useState<string | null>(null);
+  const [entry, setEntry] = useState<Entry>({ hospital: null, doctor: null });
   const [step, setStep] = useState<Step>('hospital');
   const online = useOnline();
 
@@ -94,13 +116,16 @@ export default function BookPage(): ReactNode {
   // Read after mount: the server has no `location`, and reading it during
   // render makes the first client render disagree with the server's.
   useEffect(() => {
-    setSpecialty(new URLSearchParams(globalThis.location.search).get('specialty') ?? 'MED');
+    const params = new URLSearchParams(globalThis.location.search);
+    const hospital = params.get('hospital');
+    setEntry({ hospital, doctor: params.get('doctor') });
+    setSpecialty(params.get('specialty') ?? (hospital === null ? 'MED' : ANY_SPECIALTY));
   }, []);
 
   useEffect(() => {
     if (specialty === null) return;
     setPlaces({ state: 'loading' });
-    void hospitalsForSpecialty(specialty)
+    void (specialty === ANY_SPECIALTY ? allHospitals() : hospitalsForSpecialty(specialty))
       .then((list) => {
         setPlaces({ state: 'ready', ...list });
       })
@@ -115,7 +140,7 @@ export default function BookPage(): ReactNode {
       setPlace(chosen);
       setDoctors({ state: 'loading' });
       setStep('doctor');
-      void doctorsAtHospital(chosen.id, specialty ?? 'MED')
+      void doctorsAtHospital(chosen.id, specialty === ANY_SPECIALTY ? null : (specialty ?? 'MED'))
         .then((list) => {
           setDoctors({ state: 'ready', ...list });
         })
@@ -136,6 +161,31 @@ export default function BookPage(): ReactNode {
         setSessions([]);
       });
   }, []);
+
+  // A search result's hospital, then its doctor, each taken once the list
+  // that holds it has arrived. One that is no longer there (a hospital that
+  // has left the network, a doctor no longer listed) leaves the person on the
+  // list they would have chosen from, which is the honest place to be.
+  useEffect(() => {
+    if (entry.hospital === null || places.state === 'loading') return;
+    const found =
+      places.state === 'ready'
+        ? places.items.find((candidate) => candidate.id === entry.hospital)
+        : undefined;
+    setEntry((current) => ({ ...current, hospital: null }));
+    if (found !== undefined) chooseHospital(found);
+  }, [entry.hospital, places, chooseHospital]);
+
+  useEffect(() => {
+    if (entry.doctor === null || entry.hospital !== null) return;
+    if (step !== 'doctor' || doctors.state === 'loading') return;
+    const found =
+      doctors.state === 'ready'
+        ? doctors.items.find((candidate) => candidate.id === entry.doctor)
+        : undefined;
+    setEntry((current) => ({ ...current, doctor: null }));
+    if (found !== undefined) chooseDoctor(found);
+  }, [entry.doctor, entry.hospital, step, doctors, chooseDoctor]);
 
   const chooseSession = useCallback((chosen: SessionCard) => {
     setSession(chosen);
@@ -180,7 +230,14 @@ export default function BookPage(): ReactNode {
           </p>
         )}
 
-        {step === 'hospital' ? <HospitalList hospitals={places} onChoose={chooseHospital} /> : null}
+        {step === 'hospital' ? (
+          // A result that names its hospital waits for the list rather than
+          // showing it for a moment and then leaving it.
+          <HospitalList
+            hospitals={entry.hospital === null ? places : { state: 'loading' }}
+            onChoose={chooseHospital}
+          />
+        ) : null}
 
         {step === 'doctor' && place !== null ? (
           <DoctorList

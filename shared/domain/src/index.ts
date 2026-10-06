@@ -156,6 +156,24 @@ export {
   type PublicCapacity,
 } from './beds/capacity.js';
 
+// --- Search ----------------------------------------------------------------
+//
+// What a patient can ask the network for, and how typed text is read as one
+// (`FR-PAT-16`–`18`). Shared so the API and the patient app read the same
+// words the same way.
+export {
+  SEARCH_BED_KINDS,
+  SEARCH_CAPABILITIES,
+  foldSearchText,
+  needKey,
+  parseNeed,
+  readSearch,
+  suggestNeeds,
+  type SearchNeed,
+  type SearchReading,
+} from './search/needs.js';
+export { confirmedTallyOfKind, orderForNeed, tallyOfKind } from './search/order.js';
+
 // --- Emergency -------------------------------------------------------------
 //
 // The case state machine, shared the way the bed board is: the API guards with

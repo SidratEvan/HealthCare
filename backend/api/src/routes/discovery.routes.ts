@@ -13,7 +13,7 @@
 
 import { Router } from 'express';
 
-import { doctorQuery, hospitalQuery, idParams, sessionQuery } from '@platform/domain';
+import { doctorQuery, hospitalQuery, idParams, searchQuery, sessionQuery } from '@platform/domain';
 
 import * as discovery from '../controllers/discovery.controller.js';
 import { validate } from '../middleware/validate.js';
@@ -21,6 +21,15 @@ import { validate } from '../middleware/validate.js';
 export const discoveryRoutes: Router = Router();
 
 discoveryRoutes.get('/config', discovery.getConfig);
+/**
+ * One search for what a patient needs (`S-A-07s`, `FR-PAT-16`–`18`).
+ *
+ * Public for the reason everything here is: it answers with what a hospital
+ * already publishes — who is sitting, what is open, which beds are free, what
+ * the emergency department can treat — and with nothing about a person.
+ */
+discoveryRoutes.get('/search', validate({ query: searchQuery }), discovery.search);
+
 discoveryRoutes.get('/hospitals', validate({ query: hospitalQuery }), discovery.listHospitals);
 discoveryRoutes.get('/hospitals/:id', validate({ params: idParams }), discovery.getHospital);
 

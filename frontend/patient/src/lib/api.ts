@@ -7,7 +7,7 @@
  */
 
 import { ApiClient } from '@platform/client';
-import type { BedKind, EmergencyProblem } from '@platform/domain';
+import type { BedKind, EmergencyProblem, SearchNeed } from '@platform/domain';
 
 import type {
   AccessLog,
@@ -62,15 +62,54 @@ export async function hospitalsForSpecialty(specialty: string): Promise<StampedL
   return { items: data.hospitals, asOf: data.asOf };
 }
 
-/** `S-A-05h` — the doctors at one hospital, in the specialty asked for. */
+/**
+ * `S-A-05h` — the doctors at one hospital, in the specialty asked for.
+ *
+ * With no specialty, every doctor there: what a search result for a hospital
+ * by name opens onto (`S-A-07s`), where nobody has named a specialty.
+ */
 export async function doctorsAtHospital(
   hospitalId: string,
-  specialty: string,
+  specialty: string | null,
 ): Promise<StampedList<HospitalDoctorCard>> {
+  const suffix = specialty === null ? '' : `?specialty=${encodeURIComponent(specialty)}`;
   const data = await api.get<{ doctors: HospitalDoctorCard[]; asOf: string }>(
-    `/hospitals/${hospitalId}/doctors?specialty=${encodeURIComponent(specialty)}`,
+    `/hospitals/${hospitalId}/doctors${suffix}`,
   );
   return { items: data.doctors, asOf: data.asOf };
+}
+
+/** Every participating hospital, stamped (`S-A-07` opened for a hospital by name). */
+export async function allHospitals(): Promise<StampedList<HospitalCard>> {
+  const data = await api.get<{ hospitals: HospitalCard[]; asOf: string }>('/hospitals');
+  return { items: data.hospitals, asOf: data.asOf };
+}
+
+/** What `GET /search` answers (`S-A-07s`, `FR-PAT-16`–`18`). */
+export interface SearchAnswer {
+  /** The need answered for: the one chosen, or the one the text names. */
+  readonly need: SearchNeed | null;
+  readonly text: string | null;
+  readonly hospitals: readonly HospitalCard[];
+  readonly doctors: readonly DoctorCard[];
+  readonly asOf: string;
+}
+
+/**
+ * One search across every participating hospital.
+ *
+ * `need` is a need's key from `needKey`; `q` is what was typed. Either, both
+ * or neither — neither answers with every hospital in the network.
+ */
+export async function searchNetwork(query: {
+  readonly q: string;
+  readonly need: string | null;
+}): Promise<SearchAnswer> {
+  const params = new URLSearchParams();
+  if (query.q !== '') params.set('q', query.q);
+  if (query.need !== null) params.set('need', query.need);
+  const suffix = params.toString();
+  return await api.get<SearchAnswer>(suffix === '' ? '/search' : `/search?${suffix}`);
 }
 
 export async function doctorSessions(doctorId: string): Promise<SessionCard[]> {
