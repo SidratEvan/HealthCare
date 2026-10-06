@@ -14,6 +14,7 @@ import type {
   FieldProposal,
   FileColumn,
   ImportSet,
+  ImportWarnings,
   StructureType,
 } from '@platform/domain';
 
@@ -48,6 +49,13 @@ export interface ImportBatchView extends ImportBatch {
     readonly field: string;
     readonly code: string;
   }[];
+  /**
+   * What is not an error and is still worth a look before approving
+   * (`FR-IMP-21`). Optional because the console and the API are deployed
+   * separately: for the minutes a newer screen talks to an older server, the
+   * field is not there, and the import must still open.
+   */
+  readonly warnings?: ImportWarnings;
 }
 
 export type ImportFailure =

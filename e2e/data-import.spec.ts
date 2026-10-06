@@ -32,6 +32,20 @@ const PATIENTS_WITH_A_MISTAKE = [
   'P-2,ভুল রোগী (ডেমো),,40,M,12345,',
 ].join('\r\n');
 
+/** Nothing here is refused: one patient under two identifiers, and dates written two ways. */
+const PATIENTS_UNTIDY = [
+  'ref,full_name,date_of_birth,age_years,sex,mobile,blood_group',
+  'U-1,অগোছালো রোগী (ডেমো),05/10/1975,,F,01812345673,',
+  'U-2,অন্য রোগী (ডেমো),1980-02-03,,M,01912345673,',
+  'U-OLD,অগোছালো রোগী (ডেমো),,48,F,8801812345673,',
+].join('\r\n');
+
+const PATIENTS_TIDY = [
+  'ref,full_name,date_of_birth,age_years,sex,mobile,blood_group',
+  'T-1,গোছানো রোগী (ডেমো),05/10/1975,,F,01812345674,',
+  'T-2,আরেক রোগী (ডেমো),06/11/1980,,M,01912345674,',
+].join('\r\n');
+
 const made: NewFacility[] = [];
 
 test.afterAll(async () => {
@@ -110,5 +124,55 @@ test.describe('S-B-14: a hospital imports its own data', () => {
     await page.getByTestId('import-confirm-yes').click();
     await expect(page.getByText('আমদানি ফিরিয়ে নেওয়া হয়েছে').first()).toBeVisible();
     await expect(page.getByTestId('import-history')).toContainText('ফিরিয়ে নেওয়া');
+  });
+
+  test('what is not an error is still said before approving, and stops nothing (FR-IMP-21)', async ({
+    page,
+  }) => {
+    const facility = await newFacility(PASSWORD);
+    made.push(facility);
+    await openImport(page, facility);
+    await page.getByRole('button', { name: 'খ রোগীর তালিকা' }).click();
+
+    // A tidy file: counts, and no warning block at all.
+    await choose(page, 'tidy.csv', PATIENTS_TIDY);
+    await page.getByTestId('import-check').click();
+    await expect(page.getByTestId('import-count-add')).toContainText('২');
+    await expect(page.getByTestId('import-warnings')).toHaveCount(0);
+    await page.getByTestId('import-discard').click();
+
+    // An untidy one: every row is still taken.
+    await choose(page, 'untidy.csv', PATIENTS_UNTIDY);
+    await page.getByTestId('import-check').click();
+    await expect(page.getByTestId('import-count-add')).toContainText('৩');
+    await expect(page.getByTestId('import-count-error')).toContainText('০');
+
+    const warnings = page.getByTestId('import-warnings');
+    await expect(warnings).toBeVisible();
+    await expect(warnings).toContainText('এগুলো ভুল নয়');
+
+    // The same patient twice: which rows, why, and that nothing is merged.
+    const same = page.getByTestId('import-warn-same-person');
+    await expect(same).toContainText('এক করা হবে না');
+    await expect(same).toContainText('সারি ২, ৪');
+    await expect(same).toContainText('একই নাম ও মোবাইল নম্বর');
+
+    // Dates written two ways: named, with the reading that will be used.
+    const dates = page.getByTestId('import-warn-format-date_of_birth');
+    await expect(dates).toContainText('জন্ম তারিখ');
+    await expect(dates).toContainText('দিন/মাস/বছর');
+    await expect(dates).toContainText('বছর-মাস-দিন');
+    await expect(dates).toContainText('দিন আগে ধরা হবে');
+    await expect(page.getByTestId('import-warn-format-mobile')).toContainText('+৮৮০১');
+
+    // A warning shows no patient: not a name, not a number.
+    await expect(warnings).not.toContainText('অগোছালো');
+    await expect(warnings).not.toContainText('1812345673');
+
+    // It warns; it does not refuse. Approving is still the administrator's.
+    await expect(page.getByTestId('import-commit')).toBeEnabled();
+    await page.getByTestId('import-commit').click();
+    await page.getByTestId('import-confirm-yes').click();
+    await expect(page.getByText('আমদানি সংরক্ষণ করা হয়েছে').first()).toBeVisible();
   });
 });

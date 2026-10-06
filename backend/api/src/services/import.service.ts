@@ -21,6 +21,14 @@
  * Every one is audited (`FR-IMP-08`). The rows' contents are kept while a batch
  * is open and cleared 30 days after it closes (`purgeExpired`, hourly).
  *
+ * A checked batch's view also carries **warnings** (`FR-IMP-21`): what the
+ * check does not refuse and a person should still look at — rows that look
+ * like one patient under two identifiers, a column that writes its dates or
+ * its numbers in more than one way. They are worked out from the batch's own
+ * rows each time it is read (`importWarnings`, `shared/domain`), stored
+ * nowhere, name rows by number only, and stop nothing: approving is still the
+ * administrator's, and nothing is ever merged.
+ *
  * ## Rules a reader would not guess
  *
  * - Every row keeps the hospital's own identifier (`external_refs`); the same
@@ -45,7 +53,9 @@ import { createHash } from 'node:crypto';
 
 import {
   IMPORT_COLUMNS,
+  NO_WARNINGS,
   columnIndex,
+  importWarnings,
   missingColumns,
   parseCsv,
   readRow,
@@ -56,6 +66,7 @@ import {
   type AppointmentRecord,
   type ImportError,
   type ImportSet,
+  type ImportWarnings,
   type PatientRecord,
   type StructureRecord,
 } from '@platform/domain';
@@ -83,6 +94,8 @@ export interface BatchView extends repo.BatchRow {
     readonly field: string;
     readonly code: string;
   }[];
+  /** What is not an error and is still worth a look before approving (`FR-IMP-21`). */
+  readonly warnings: ImportWarnings;
 }
 
 /** The largest file taken, and the most rows. A hospital's register is split by year beyond that. */
@@ -148,6 +161,10 @@ export async function view(hospitalId: string, batchId: string): Promise<BatchVi
         code: error.code,
       })),
     ),
+    // Only while there is still something to decide. A closed batch has been
+    // approved or dropped, and its rows' contents are on their way out.
+    warnings:
+      batch.state === 'checked' ? importWarnings(batch.setKind as ImportSet, rows) : NO_WARNINGS,
   };
 }
 
@@ -217,6 +234,9 @@ export async function check(
   for (const row of rows) counts[row.action] += 1;
   const fileSha256 =
     input.fileSha256 ?? createHash('sha256').update(input.csv, 'utf8').digest('hex');
+  // How many warnings the administrator was shown, for the record. Counts
+  // only: a warning names rows by number, and the audit names none.
+  const warned = importWarnings(input.set, rows);
 
   const batchId = await withTransaction(async (trx) => {
     const id = await repo.createBatch(trx, {
@@ -233,7 +253,16 @@ export async function check(
       hospitalId: actor.hospitalId,
       batchId: id,
       event: 'checked',
-      meta: { set: input.set, fileName: input.fileName, fileSha256, counts },
+      meta: {
+        set: input.set,
+        fileName: input.fileName,
+        fileSha256,
+        counts,
+        warnings: {
+          samePerson: warned.samePersonTotal,
+          mixedFormats: warned.mixedFormats.map((mixed) => mixed.field),
+        },
+      },
       ip: actor.ip,
       userAgent: actor.userAgent,
     });

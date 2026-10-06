@@ -2152,6 +2152,35 @@ export const CONSOLE = {
     bn: 'ভুল থাকা অবস্থায় সংরক্ষণ করা যায় না — ফাইল ঠিক করে আবার যাচাই করুন',
     en: 'It cannot be saved with errors — correct the file and check it again',
   },
+  importWarnHeading: { bn: 'অনুমোদনের আগে দেখে নিন', en: 'Look at these before approving' },
+  importWarnNote: {
+    bn: 'এগুলো ভুল নয়, তাই আমদানি আটকাবে না। ঠিক মনে না হলে ফাইল ঠিক করে আবার যাচাই করুন।',
+    en: 'These are not errors and do not stop the import. If one looks wrong, correct the file and check it again.',
+  },
+  importWarnSamePerson: {
+    bn: '{count}টি জায়গায় একই রোগী একাধিকবার আছে বলে মনে হচ্ছে। এদের এক করা হবে না: প্রতিটি সারি আলাদা রোগী হিসেবে আমদানি হবে।',
+    en: 'In {count} places the same patient appears to be listed more than once. They will not be merged: each row is imported as a separate patient.',
+  },
+  importWarnSamePersonRows: { bn: 'সারি {rows} — {because}', en: 'Rows {rows}: {because}' },
+  importWarnBecausePhone: { bn: 'একই নাম ও মোবাইল নম্বর', en: 'same name and mobile number' },
+  importWarnBecauseBirth: { bn: 'একই নাম ও জন্ম তারিখ', en: 'same name and date of birth' },
+  importWarnSamePersonMore: {
+    bn: 'আরও {count}টি এখানে দেখানো হয়নি।',
+    en: '{count} more are not listed here.',
+  },
+  importWarnMixedDate: {
+    bn: '“{column}” কলামে তারিখ একাধিকভাবে লেখা: {formats}। দিন/মাস/বছর লেখা তারিখে দিন আগে ধরা হবে — ০৫/১০/২০২৬ মানে ৫ অক্টোবর ২০২৬।',
+    en: 'The “{column}” column writes dates in more than one way: {formats}. A day/month/year date is read day first: 05/10/2026 is 5 October 2026.',
+  },
+  importWarnMixedPhone: {
+    bn: '“{column}” কলামে নম্বর একাধিকভাবে লেখা: {formats}। সব নম্বর +৮৮০১… আকারে রাখা হবে।',
+    en: 'The “{column}” column writes numbers in more than one way: {formats}. Every number is stored as +8801….',
+  },
+  importWarnFormatCount: { bn: '{format} — {count}টি সারি', en: '{format}: {count} rows' },
+  importFormatIso: { bn: 'বছর-মাস-দিন', en: 'year-month-day' },
+  importFormatDayFirst: { bn: 'দিন/মাস/বছর', en: 'day/month/year' },
+  importFormatLocal: { bn: '০১ দিয়ে শুরু', en: 'starting with 01' },
+  importFormatCountry: { bn: '৮৮০ দিয়ে শুরু', en: 'starting with 880' },
   importCommitTitle: { bn: 'আমদানি অনুমোদন করবেন?', en: 'Approve this import?' },
   importCommitBody: {
     bn: 'সব সারি একসঙ্গে সংরক্ষণ হবে। পরে দরকার হলে পুরো আমদানি ফিরিয়ে নেওয়া যাবে, যদি এর ওপর এরপর কোনো কাজ না হয়ে থাকে।',

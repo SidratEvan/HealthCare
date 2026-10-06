@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
-import type { ImportSet, StructureType } from '@platform/domain';
+import { NO_WARNINGS, type ImportSet, type StructureType } from '@platform/domain';
 import {
   format,
   formatDateTime,
@@ -44,6 +44,7 @@ import {
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { DemoBanner } from '@/components/DemoBanner';
 import { ImportMapping } from '@/components/ImportMapping';
+import { ImportWarnings } from '@/components/ImportWarnings';
 import {
   downloadTemplate,
   importApi,
@@ -492,6 +493,11 @@ function ImportScreen(): ReactNode {
                 </div>
               ))}
             </dl>
+
+            {/* --- TXT-B14-WARN (FR-IMP-21): not errors, and not hidden either ----- */}
+            {preview.state !== 'checked' ? null : (
+              <ImportWarnings warnings={preview.warnings ?? NO_WARNINGS} />
+            )}
 
             {preview.errors.length === 0 ? null : (
               <table className="mt-4 w-full text-left text-body-sm" data-testid="import-errors">
