@@ -2043,8 +2043,6 @@ export const PATIENT = {
   seeADoctor: { bn: 'ডাক্তার দেখান', en: 'See a doctor' },
   seeADoctorSub: { bn: 'কোন সমস্যার জন্য দেখাবেন?', en: 'What do you need to be seen for?' },
   quickBed: { bn: 'বেড', en: 'Beds' },
-  quickAmbulance: { bn: 'অ্যাম্বুলেন্স', en: 'Ambulance' },
-  quickBlood: { bn: 'রক্ত', en: 'Blood' },
   quickReport: { bn: 'রিপোর্ট', en: 'Reports' },
   activeSerialTitle: { bn: 'আজকের সিরিয়াল চলছে', en: 'Your serial today' },
   activeSerialMeta: { bn: '{doctor} · এখন চলছে {serving}', en: '{doctor} · now serving {serving}' },
@@ -2253,7 +2251,6 @@ export const PATIENT = {
   },
 
   // --- Tabs not built in this version --------------------------------------
-  comingSoon: { bn: 'শীঘ্রই আসছে', en: 'Coming soon' },
   profileComing: {
     bn: 'অ্যাকাউন্ট আর প্রোফাইল এখনো তৈরি হয়নি। সিরিয়াল নিতে অ্যাকাউন্ট লাগে না।',
     en: 'Accounts are not built yet. Booking a serial needs no account.',
@@ -2345,14 +2342,6 @@ export const PATIENT = {
   cardIcu: { bn: 'আইসিইউ {free}/{total}', en: 'ICU {free}/{total}' },
   cardNoIcu: { bn: 'আইসিইউ নেই', en: 'No ICU' },
   cardNoBeds: { bn: 'ভর্তির ব্যবস্থা নেই', en: 'No inpatient beds' },
-  ambulanceComing: {
-    bn: 'কাছের অ্যাম্বুলেন্স ডাকা আর ভাড়া দেখা এখানে আসবে। এখন জরুরি প্রয়োজনে ৯৯৯ এ কল করুন।',
-    en: 'Calling a nearby ambulance and seeing the fare will come here. For now, call 999 in an emergency.',
-  },
-  bloodComing: {
-    bn: 'রক্তের গ্রুপ ধরে ব্লাড ব্যাংক আর ডোনার খোঁজা এখানে আসবে।',
-    en: 'Searching blood banks and donors by group will come here.',
-  },
 
   // --- Emergency (S-A-10, S-A-10b, S-A-10c; FR-PAT-40..47) ------------------
   //
@@ -2373,7 +2362,6 @@ export const PATIENT = {
     en: 'Say what happened — we show hospitals that can treat it.',
   },
   emergencyWhatHappened: { bn: 'কী হয়েছে?', en: 'What happened?' },
-  emergencyAmbulance: { bn: 'অ্যাম্বুলেন্স ডাকুন', en: 'Call an ambulance' },
 
   // Where the phone is. The browser asks; nothing is stored.
   emergencyLocating: { bn: 'আপনার অবস্থান দেখা হচ্ছে', en: 'Finding where you are' },

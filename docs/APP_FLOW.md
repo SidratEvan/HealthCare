@@ -230,8 +230,8 @@ Layout order is fixed and deliberate: emergency first, then care, then convenien
 | Specialty card ×N | `BTN-A02-SPEC-<code>` | grid card | → `S-A-07` Specialty results, filtered by that specialty and current area |
 | সব বিভাগ দেখুন | `BTN-A02-SPEC-ALL` | text link | → `S-A-07b` full specialty list |
 | Quick tile: বেড | `BTN-A02-BED` | tile | → `S-A-11` Bed search |
-| Quick tile: অ্যাম্বুলেন্স | `BTN-A02-AMB` | tile | → `S-A-16` Ambulance |
-| Quick tile: রক্ত | `BTN-A02-BLOOD` | tile | → `S-A-17` Blood |
+| ~~Quick tile: অ্যাম্বুলেন্স~~ | ~~`BTN-A02-AMB`~~ | — | **Not in V1** (owner, 2026-10-05; `PRD.md` §7.8). `S-A-16` is not built, and nothing unfinished is offered on the first screen |
+| ~~Quick tile: রক্ত~~ | ~~`BTN-A02-BLOOD`~~ | — | **Not in V1**, as above (`S-A-17`) |
 | Quick tile: রিপোর্ট | `BTN-A02-REPORT` | tile | → `S-A-12` Wallet (Reports tab) |
 | **Active serial strip** | `BTN-A02-ACTIVE` | appears while this device holds a *current* booking (`FR-PAT-39`): unresolved, in a session that has not ended, whatever its date. A chamber that runs or is paused past midnight keeps its strip; the strip goes when the patient has been seen or has cancelled, or the session has ended. When that cannot be checked the strip stays and says the status is unknown, with its age | → `S-A-08` Live serial. Shows live position, updates via the session channel while Home is open |
 | Bottom nav | `NAV-A` | হোম / সিরিয়াল / রেকর্ড / প্রোফাইল | Tabs → `S-A-02`, `S-A-09`, `S-A-12`, `S-A-19` |
@@ -389,8 +389,8 @@ Opened from the join, or from the SMS an offer or a seat sends; the signed statu
 ## A6. Emergency
 
 > **Built in this version** (step 15): `S-A-10`, `S-A-10b` and `S-A-10c`, every
-> control below except the ambulance flow behind `BTN-A10-AMB` (step 17; the
-> button leads to the screen that says so).
+> control below except the ambulance flow behind `BTN-A10-AMB`, which is
+> outside V1 and has no button (owner, 2026-10-05).
 >
 > - **The critical/urgent split (`FR-PAT-41`)** had no control here; the owner
 >   ruled (2026-09-21) two, under the call: `BTN-A10-CRITICAL` জীবন ঝুঁকিতে →
@@ -431,7 +431,7 @@ Opened from the join, or from the SMS an offer or a seat sends; the signed statu
 | জরুরি | `BTN-A10-URGENT` | Opens the problem chips (`FR-PAT-41`) |
 | Critical warning text | — | Names the conditions that mean "call first" |
 | Problem chips | `CHIP-A10-<type>` | দগ্ধ / দুর্ঘটনা / হৃদরোগ / স্ট্রোক / শ্বাসকষ্ট / শিশু / প্রসূতি / অন্যান্য. Selecting one → loads `S-A-10b` results filtered by required capability |
-| অ্যাম্বুলেন্স | `BTN-A10-AMB` | → `S-A-16` with urgency pre-set |
+| ~~অ্যাম্বুলেন্স~~ | ~~`BTN-A10-AMB`~~ | **Not in V1** (owner, 2026-10-05). The call to 999 above it is what `FR-PAT-47` keeps on this screen |
 
 ### `S-A-10b` Emergency results (`FR-PAT-43`–`46`)
 
@@ -553,6 +553,8 @@ Prescription QR → nearby partner pharmacies with stock status → reserve or r
 
 ### `S-A-15` Telemedicine
 Same session/queue mechanics; live serial screen switches its primary action to "কলে যোগ দিন", enabled when called (`FR-PAT-73`).
+
+> **`S-A-15`, `S-A-16` and `S-A-17` are outside V1** (owner, 2026-10-05; `PRD.md` §7.8). They are kept here as specified for a later version; no screen, tile or link in the patient app leads to them.
 
 ### `S-A-16` Ambulance (`FR-PAT-74`)
 Type selector (basic / ICU / freezer) → pickup location (auto or pin) → destination (optional) → **fare quote shown before dispatch** → নিশ্চিত করুন → driver identity + live ETA → completion. The quoted fare is locked; any change attempt is a violation flagged to support.

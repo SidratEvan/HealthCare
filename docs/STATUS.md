@@ -256,6 +256,9 @@ morning:
 
 **Where it stands:** the table in `docs/PLATFORM_PLAN.md` §9 (rows V0–V6).
 
+**Merged so far in this build, newest last:**
+- **V1.1 `fix/patient-v1-surface`** — nothing unfinished is offered in the patient app: ambulance and blood are gone from Home and from the emergency screens, and the "not built yet" screen no longer exists. Focused gate: typecheck, lint, format, the message tests, `app-shell.spec.ts` and `emergency-burn.spec.ts` (20 passed).
+
 **Carried over from the audit, true of the code on 5 October and worth not
 re-deriving:**
 

@@ -116,16 +116,22 @@ test.describe('NAV-A the bottom navigation', () => {
     await expect(page.getByTestId('not-built')).toHaveCount(0);
   });
 
-  test('the quick tiles all reach a screen (S-A-02)', async ({ page }) => {
-    // Beds became a real screen at step 14 (`S-A-11`); ambulance and blood are
-    // step 17 and still say what will be there.
+  test('everything on the first screen leads somewhere that works (S-A-02, PRD §7.8)', async ({
+    page,
+  }) => {
+    // Ambulance and blood were tiles that led to "not built yet". They are
+    // outside V1, so they are not offered: not on Home, not on the emergency
+    // screens.
+    await page.goto(PATIENT);
+    await expect(page.getByTestId('emergency-card')).toBeVisible();
+    await expect(page.locator('a[href="/ambulance"], a[href="/blood"]')).toHaveCount(0);
+
+    await page.goto(`${PATIENT}/emergency`);
+    await expect(page.getByTestId('call-999')).toBeVisible();
+    await expect(page.locator('a[href="/ambulance"]')).toHaveCount(0);
+
     await page.goto(`${PATIENT}/beds`);
     await expect(page.getByTestId('bed-search')).toBeVisible();
-
-    for (const path of ['ambulance', 'blood']) {
-      await page.goto(`${PATIENT}/${path}`);
-      await expect(page.getByTestId('not-built')).toBeVisible();
-    }
   });
 });
 

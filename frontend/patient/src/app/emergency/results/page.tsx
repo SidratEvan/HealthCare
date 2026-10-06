@@ -183,13 +183,8 @@ export default function Page(): ReactNode {
         </section>
       ) : null}
 
-      {/* FR-PAT-47: and the ambulance (BTN-A10-AMB; the flow is step 17). */}
-      <a
-        href="/ambulance"
-        className="flex min-h-touch items-center justify-center rounded-md border border-line px-4 text-body-md text-ink"
-      >
-        {tp('emergencyAmbulance', locale)}
-      </a>
+      {/* No ambulance request here: it is outside V1 (PRD.md §7.8). The call
+          to 999 at the top of this screen is what FR-PAT-47 keeps. */}
     </TabScreen>
   );
 }
