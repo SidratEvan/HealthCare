@@ -14,6 +14,7 @@
 import {
   orderForNeed,
   parseNeed,
+  pngSize,
   projectedEnd,
   readBrandTheme,
   readSearch,
@@ -72,6 +73,16 @@ export interface ScopeInfo {
   readonly descriptionBn: string | null;
   readonly descriptionEn: string | null;
   readonly logoVersion: string | null;
+  /**
+   * What the logo is as an image, for the description a phone is given when
+   * the portal is installed (`FR-BRD-08`). The size is known for a PNG, read
+   * from the file's own header; null for any other type, and for no logo.
+   */
+  readonly logoImage: {
+    readonly type: string;
+    readonly width: number;
+    readonly height: number;
+  } | null;
 }
 
 /**
@@ -94,7 +105,14 @@ export async function scopeInfo(code: string): Promise<ScopeInfo> {
     descriptionBn: row.descriptionBn,
     descriptionEn: row.descriptionEn,
     logoVersion: row.logoVersion,
+    logoImage: logoImageOf(row.logoType, row.logoHeadHex),
   };
+}
+
+function logoImageOf(type: string | null, headHex: string | null): ScopeInfo['logoImage'] {
+  if (type !== 'image/png' || headHex === null) return null;
+  const size = pngSize(headHex);
+  return size === null ? null : { type, ...size };
 }
 
 /** A live hospital's logo, or null when it has none (`FR-BRD-06`). */

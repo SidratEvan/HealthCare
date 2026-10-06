@@ -1804,8 +1804,8 @@ export const CONSOLE = {
   settingsLogoAlt: { bn: 'হাসপাতালের লোগো', en: 'The hospital’s logo' },
   settingsLogoChoose: { bn: 'লোগোর ফাইল বেছে নিন', en: 'Choose a logo file' },
   settingsLogoHelper: {
-    bn: 'PNG, JPEG বা WebP; সর্বোচ্চ ২৫৬ কিলোবাইট। বর্গাকার ছবি সবচেয়ে ভালো দেখায়।',
-    en: 'PNG, JPEG or WebP, up to 256 KB. A square image looks best.',
+    bn: 'PNG, JPEG বা WebP; সর্বোচ্চ ২৫৬ কিলোবাইট। বর্গাকার ছবি সবচেয়ে ভালো দেখায়। রোগীর ফোনে আপনার পোর্টালের আইকন হতে হলে বর্গাকার PNG লাগবে, প্রতি পাশে কমপক্ষে ১৯২ পিক্সেল।',
+    en: 'PNG, JPEG or WebP, up to 256 KB. A square image looks best. To be your portal’s icon on a patient’s phone it has to be a square PNG, at least 192 pixels a side.',
   },
   settingsLogoTooLarge: {
     bn: 'ফাইলটি ২৫৬ কিলোবাইটের বেশি। ছোট একটি ছবি দিন।',

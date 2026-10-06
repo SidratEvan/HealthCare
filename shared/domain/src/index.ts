@@ -204,6 +204,20 @@ export {
   type LogoFileType,
 } from './brand/theme.js';
 
+// What a phone is told when the app is added to its home screen: the
+// network's own description, or a hospital's (`FR-BRD-08`).
+export {
+  INSTALL_ICON_MIN_PIXELS,
+  PLATFORM_INSTALL,
+  installIconUsable,
+  installManifest,
+  pngSize,
+  shortInstallName,
+  type InstallIcon,
+  type InstallSubject,
+  type WebManifest,
+} from './brand/manifest.js';
+
 // Whose address a host is: the network's, a hospital's portal, or somebody
 // else's (`FR-BRD-07`).
 export {

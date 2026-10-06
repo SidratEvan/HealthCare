@@ -542,6 +542,9 @@ export interface ScopeRow {
   readonly descriptionBn: string | null;
   readonly descriptionEn: string | null;
   readonly logoVersion: string | null;
+  /** The logo's type, and the start of the file, from which its size is read. */
+  readonly logoType: string | null;
+  readonly logoHeadHex: string | null;
 }
 
 /**
@@ -560,9 +563,12 @@ export async function findScope(code: string): Promise<ScopeRow | null> {
     description_bn: string | null;
     description_en: string | null;
     logo_version: string | null;
+    logo_type: string | null;
+    logo_head: string | null;
   }>`
     SELECT h.id, h.code, h.name_bn, h.name_en, hs.brand, h.description_bn, h.description_en,
-           left(l.sha256, 16) AS logo_version
+           left(l.sha256, 16) AS logo_version, l.content_type AS logo_type,
+           encode(substring(l.bytes from 1 for 24), 'hex') AS logo_head
       FROM hospitals h
       LEFT JOIN hospital_settings hs ON hs.hospital_id = h.id
       LEFT JOIN hospital_logos l ON l.hospital_id = h.id
@@ -580,6 +586,8 @@ export async function findScope(code: string): Promise<ScopeRow | null> {
     descriptionBn: row.description_bn,
     descriptionEn: row.description_en,
     logoVersion: row.logo_version,
+    logoType: row.logo_type,
+    logoHeadHex: row.logo_head,
   };
 }
 
