@@ -488,7 +488,7 @@ In addition to `CLAUDE.md`:
 | P4 | `chore/e2e-pilot-path` | merged — `e2e/production/reception-pilot.prod.spec.ts`: one receptionist's day end to end, and late, absent and bring back with the counters, under the production configuration. It found nothing. **Stopped here for the owner's review** (`docs/STATUS.md`, *Pilot readiness*) |
 | P5 | `chore/deploy-lan-https` | deferred until the first hospital's IT has chosen how its server is reached |
 | V0 | `chore/v1-direction` | merged — the owner's direction of 5 October (evening): the freeze lifted, one shared platform, the V1 pitch build (§2) |
-| V1.1 | `fix/patient-v1-surface` | |
+| V1.1 | `fix/patient-v1-surface` | merged — the ambulance and blood tiles, their two routes and the two ambulance links on the emergency screens are gone; `NotBuiltYet` is deleted; `app-shell.spec.ts` asserts nothing on the first screen leads to an unbuilt one |
 | V2.1 | `feat/patient-search` | |
 | V2.2 | `feat/hospital-scope` | |
 | V3.1 | `feat/org-lifecycle` | |

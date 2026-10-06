@@ -30,7 +30,7 @@ import { EMERGENCY_PROBLEMS } from '@platform/domain';
 import { problemName, tp } from '@platform/i18n';
 import { useLocale } from '@platform/ui';
 
-import { AmbulanceIcon, EmergencyIcon } from '@/components/icons';
+import { EmergencyIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
 
 import type { ReactNode } from 'react';
@@ -118,15 +118,9 @@ export default function EmergencyPage(): ReactNode {
         </details>
       </div>
 
-      {/* BTN-A10-AMB (FR-PAT-47). The ambulance flow is build step 17. */}
-      <a
-        href="/ambulance"
-        data-testid="emergency-ambulance"
-        className="flex min-h-touch items-center gap-3 rounded-md border border-line bg-surface px-4 py-3 text-body-md text-ink"
-      >
-        <AmbulanceIcon size={22} />
-        {tp('emergencyAmbulance', locale)}
-      </a>
+      {/* No BTN-A10-AMB: requesting an ambulance is outside V1 (PRD.md §7.8),
+          and a control that led to "not built yet" has no place on the one
+          screen somebody opens in an emergency. 999 above is the ambulance. */}
     </TabScreen>
   );
 }

@@ -53,8 +53,6 @@ const ROUTES = [
   `${PATIENT}/profile`,
   `${PATIENT}/beds`,
   `${PATIENT}/beds/request`,
-  `${PATIENT}/ambulance`,
-  `${PATIENT}/blood`,
   `${PATIENT}/emergency`,
   `${PATIENT}/emergency/results`,
   `${PATIENT}/emergency/onway`,

@@ -34,9 +34,7 @@ import { useLocale } from '@platform/ui';
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 import { DemoBanner } from '@/components/DemoBanner';
 import {
-  AmbulanceIcon,
   BedIcon,
-  BloodIcon,
   ChevronIcon,
   EmergencyIcon,
   ProfileIcon,
@@ -175,25 +173,23 @@ function Specialties(): ReactNode {
 }
 
 /**
- * The four convenience tiles.
+ * The convenience tiles.
  *
- * Beds, ambulance, blood and reports are build steps 14, 17 and 13. They are
- * on screen because the canvas has them and because a home screen missing a
- * quarter of itself looks broken — and each one lands on an honest "not built
- * yet" rather than a dead link.
+ * Beds and reports, and medicines beneath them. Ambulance and blood were here
+ * as tiles that led to a sentence saying they were not built; they are
+ * outside V1 (`PRD.md` §7.8, owner's direction of 2026-10-05), and a first
+ * screen on which everything shown works is the requirement.
  */
 function QuickTiles(): ReactNode {
   const locale = useLocale();
   const tiles = [
     { href: '/beds', label: 'quickBed', Icon: BedIcon },
-    { href: '/ambulance', label: 'quickAmbulance', Icon: AmbulanceIcon },
-    { href: '/blood', label: 'quickBlood', Icon: BloodIcon },
     { href: '/records', label: 'quickReport', Icon: ReportIcon },
   ] as const;
 
   return (
     <div className="flex flex-col gap-2.5">
-      <ul className="grid grid-cols-4 gap-2.5">
+      <ul className="grid grid-cols-2 gap-2.5">
         {tiles.map((tile) => (
           <li key={tile.href}>
             <a
@@ -212,10 +208,8 @@ function QuickTiles(): ReactNode {
       {/*
         Medicine availability (`FR-PHR-02`, step 17).
 
-        A wide row rather than a fifth tile: five tiles across a 360px screen
-        leaves each about sixty pixels, which is under the touch target
-        `MIN_TOUCH_TARGET_PX` sets and too narrow for a Bangla label. The four
-        the canvas declares keep their grid.
+        A wide row rather than a third tile: it carries a line saying what
+        it answers, which a tile has no room for.
       */}
       <a
         href="/medicines"
