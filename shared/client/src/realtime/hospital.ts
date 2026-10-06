@@ -22,7 +22,15 @@ export interface HospitalChannelOptions {
   readonly url: string;
   readonly getToken: () => string | null;
   readonly onConnection: (connected: boolean) => void;
-  readonly onBeds: (beds: readonly BedView[], serverTs: string) => void;
+  /**
+   * `clientEventId` is the console action behind the change, when there was
+   * one: a board whose own action it is stops drawing it (`SY-09`).
+   */
+  readonly onBeds: (
+    beds: readonly BedView[],
+    serverTs: string,
+    clientEventId: string | null,
+  ) => void;
   readonly onCapacity: (published: PublicCapacity, serverTs: string) => void;
   readonly onRequest: (requestId: string, state: string) => void;
   /** The ER half of the pending list changed (`BTN-B07-ADMIT`). Re-read it. */
@@ -56,9 +64,12 @@ export function openHospitalChannel(options: HospitalChannelOptions): {
     options.onConnection(false);
   });
 
-  socket.on('bed.updated', (message: { serverTs: string; data: { beds: BedView[] } }) => {
-    options.onBeds(message.data.beds, message.serverTs);
-  });
+  socket.on(
+    'bed.updated',
+    (message: { serverTs: string; data: { beds: BedView[]; clientEventId?: string | null } }) => {
+      options.onBeds(message.data.beds, message.serverTs, message.data.clientEventId ?? null);
+    },
+  );
   socket.on('capacity.updated', (message: { serverTs: string; data: PublicCapacity }) => {
     options.onCapacity(message.data, message.serverTs);
   });

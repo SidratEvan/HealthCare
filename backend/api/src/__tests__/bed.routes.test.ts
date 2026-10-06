@@ -228,6 +228,67 @@ describe('an admit, and what it changes (FR-BED-02, FR-BED-05)', () => {
     expect(serialised).not.toContain(patient.phone);
   });
 
+  it('every statement about a bed carries its version, and each change raises it (SY-09)', async () => {
+    const start = (await boardOf()).beds.find((bed) => bed.id === bedAt(0));
+    expect(start?.version).toBeGreaterThanOrEqual(1);
+    const before = start?.version ?? 0;
+    const untouched = (await boardOf()).beds.find((bed) => bed.id === bedAt(1))?.version;
+    expect(untouched).toBeGreaterThanOrEqual(1);
+
+    // The answer to the write: the bed as it stands after the commit.
+    const clientEventId = randomUUID();
+    const admitted = await act(
+      `/beds/${bedAt(0)}/admit`,
+      { patient: deskPatient() },
+      undefined,
+      clientEventId,
+    );
+    const answered = (admitted.body.data.beds as BedView[])[0];
+    expect(answered?.version).toBeGreaterThan(before);
+
+    // The broadcast: the same bed at the same version, and the action by the
+    // console's own key, so a board can tell its own action when it hears it.
+    const said = emitted
+      .forRoom(ROOMS.beds(fixture.hospitalId))
+      .filter((entry) => entry.event === 'bed.updated')
+      .at(-1)?.envelope.data as { beds: BedView[]; clientEventId: string | null };
+    expect(said.clientEventId).toBe(clientEventId);
+    expect(said.beds.find((bed) => bed.id === bedAt(0))?.version).toBe(answered?.version);
+
+    // A board read agrees, and the next change is higher again.
+    expect((await boardOf()).beds.find((bed) => bed.id === bedAt(0))?.version).toBe(
+      answered?.version,
+    );
+    const discharged = await act(`/beds/${bedAt(0)}/discharge`);
+    expect((discharged.body.data.beds as BedView[])[0]?.version).toBeGreaterThan(
+      answered?.version ?? 0,
+    );
+
+    // A bed nothing happened to is where it was.
+    expect((await boardOf()).beds.find((bed) => bed.id === bedAt(1))?.version).toBe(untouched);
+  });
+
+  it('a replay answers with the bed as it stands now, at its present version (SY-02, SY-09)', async () => {
+    const clientEventId = randomUUID();
+    const first = await act(
+      `/beds/${bedAt(0)}/admit`,
+      { patient: deskPatient() },
+      undefined,
+      clientEventId,
+    );
+    const again = await act(
+      `/beds/${bedAt(0)}/admit`,
+      { patient: deskPatient() },
+      undefined,
+      clientEventId,
+    );
+    expect(again.body.data.duplicate).toBe(true);
+    // Nothing changed the bed in between, so the replay raised nothing.
+    expect((again.body.data.beds as BedView[])[0]?.version).toBe(
+      (first.body.data.beds as BedView[])[0]?.version,
+    );
+  });
+
   it('answers a replay with what already happened, and admits once (SY-02)', async () => {
     const clientEventId = randomUUID();
     const first = await act(

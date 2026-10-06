@@ -41,6 +41,7 @@ function bed(overrides: Partial<BedView> = {}): BedView {
     oosReason: null,
     admissionId: null,
     heldForRequestId: null,
+    version: 1,
     ...overrides,
   };
 }

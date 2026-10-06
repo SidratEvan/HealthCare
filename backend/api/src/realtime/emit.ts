@@ -206,7 +206,11 @@ export function patientCalled(
  */
 export function bedUpdated(
   hospitalId: string,
-  data: { readonly beds: readonly BedView[] },
+  data: {
+    readonly beds: readonly BedView[];
+    /** The console action behind the change, by its own key; null when nobody's (`SY-09`). */
+    readonly clientEventId?: string | null;
+  },
   serverTs: string,
 ): void {
   emitter().emit(ROOMS.beds(hospitalId), 'bed.updated', {

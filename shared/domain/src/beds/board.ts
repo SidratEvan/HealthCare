@@ -100,6 +100,51 @@ export interface BedView {
   readonly admissionId: string | null;
   /** The bed request this bed is held for, when the hold came from one. */
   readonly heldForRequestId: string | null;
+  /**
+   * Raised by the database on every change to the bed's row (`SY-09`,
+   * migration 0039). Which of two statements about a bed is the newer is
+   * decided by this and by nothing else: not by which arrived last, and not
+   * by a clock. A console's own drawing of a change keeps the version of the
+   * statement it was drawn on.
+   */
+  readonly version: number;
+}
+
+/**
+ * The beds a board holds after a statement about some of them (`SY-09`).
+ *
+ * A statement is an answer to a write or a broadcast: the beds one action
+ * changed. For each, the board keeps whichever it has been told with the
+ * higher version, by whichever road. An equal version is the same row, so the
+ * one held stays (and the board does not redraw for nothing). A bed the board
+ * has not seen before is added.
+ */
+export function newestBeds(held: readonly BedView[], stated: readonly BedView[]): BedView[] {
+  const incoming = new Map(stated.map((bed) => [bed.id, bed]));
+  const known = new Set(held.map((bed) => bed.id));
+  return [
+    ...held.map((bed) => {
+      const next = incoming.get(bed.id);
+      return next !== undefined && next.version > bed.version ? next : bed;
+    }),
+    ...stated.filter((bed) => !known.has(bed.id)),
+  ];
+}
+
+/**
+ * The beds a board holds after reading the whole board (`SY-09`).
+ *
+ * A read is every bed there is, so a bed it does not list is gone. But a read
+ * is not newer than a broadcast merely because it was asked for later: it may
+ * have been answered from before a change the board has already been told of.
+ * So each bed it lists is still the higher version of the two.
+ */
+export function boardAfterRead(held: readonly BedView[], read: readonly BedView[]): BedView[] {
+  const known = new Map(held.map((bed) => [bed.id, bed]));
+  return read.map((bed) => {
+    const mine = known.get(bed.id);
+    return mine !== undefined && mine.version > bed.version ? mine : bed;
+  });
 }
 
 /** One ward, as a tab on the board (`TAB-B06-<ward>`). */
