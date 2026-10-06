@@ -523,7 +523,7 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/payments/intent` | patient \| guest. Idempotent three ways (`FR-PAY-06`). **The amount is not in the body** — it is read from the booking's own `fee_poisha`, so a client cannot decide what it owes. Only a booking is chargeable in this version |
+| POST | `/payments/intent` | patient \| guest, **for a booking that is theirs**: an account pays for a booking it made and a tracking link for the one it names, the fence `GET /bookings/:id/payments` has (until plan B2 only the link was held to it). Idempotent three ways (`FR-PAY-06`). **The amount is not in the body** — it is read from the booking's own `fee_poisha`, so a client cannot decide what it owes. Only a booking is chargeable in this version |
 | GET | `/bookings/:id/payments` | owner (a guest link only for its own booking) \| staff at the booking's hospital — the fence `GET /bookings/:id` has. What was charged against one booking |
 | POST | `/payments/:id/refund` | hospital_admin. **The amount is not in the body either** — the *reason* picks the rule and `refundFor` computes it (`FR-PAY-03`). `FR-PAY-07`'s automatic eligibility does not come through here: it is raised when a session ends |
 | GET | `/hospitals/:id/settlement?from=&to=` | hospital_admin (`FR-PAY-05`) |
@@ -711,6 +711,7 @@ TOTP_ENCRYPTION_KEY         # staff second factors (step 28); required in produc
 | Domain | Vitest | reducer against every event type; replay determinism (random event sequences → same state); ETA maths; late re-insertion; grace rules |
 | Repos | Vitest + test DB | serial allocation under concurrency; append-only enforcement |
 | API | Supertest | every endpoint's auth matrix (patient / guest / each staff role / wrong hospital) |
+| Tenancy | Supertest, as the API's own database role | `tenantMatrix.test.ts` (plan B2, `FR-SEC-11`): **every route the server mounts is named there with how it is kept to one hospital, and a route that is not named fails the suite.** A new route is added to `KEPT` with its kind (`public`, `token`, `account`, `patient`, `principal`, `path`, `row`, `body`, `platform`, `national`) and, where it names a hospital or a row, the request that aims it at the other hospital |
 | Realtime | Socket.IO test client | resume-from-seq, room scoping |
 | Sync | Vitest | offline batch replay, idempotency, conflict responses |
 | E2E | Playwright | **two-device queue test**: console taps next → patient page updates < 2 s; guest booking via SMS link; no-show → offer → accept |
