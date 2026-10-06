@@ -48,6 +48,7 @@ import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import * as notifications from './notification.service.js';
 import * as payments from './payment.service.js';
+import * as portals from './portal.service.js';
 import * as queueService from './queue.service.js';
 
 import type { AppendEventResult } from './queue.service.js';
@@ -467,7 +468,13 @@ export async function issueTrackingLink(
 
   await guestRepo.insertTrackingLink({ bookingId, guestId, tokenHash, expiresAt });
 
-  return patientLink('/s', { b: bookingId, t: token });
+  // Inside a portal the link is that portal's (`config/links.ts`). Issued by a
+  // counter or a worker, it goes to the hospital's own domain if it has one.
+  return patientLink(
+    '/s',
+    { b: bookingId, t: token },
+    { hospitalOrigin: await portals.hospitalLinkOrigin(session.hospitalId) },
+  );
 }
 
 // ---------------------------------------------------------------------------

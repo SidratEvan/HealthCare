@@ -149,8 +149,12 @@ describe('patient links are built in one place (FR-BRD-04)', () => {
     expect(patientLink('/standby')).toBe(`${env.WEB_BASE_URL}/standby`);
   });
 
-  it('accepts a hospital and, until hospitals have addresses, answers the same', () => {
-    expect(patientLink('/s', { t: 'x' }, { hospitalCode: 'PADMA' })).toBe(
+  it('goes to a hospital’s own domain when it is given one and no patient is behind the request', () => {
+    // `portalAddress.routes.test.ts` has the rest: where the patient is comes first.
+    expect(
+      patientLink('/s', { t: 'x' }, { hospitalOrigin: 'https://portal.hospital.example' }),
+    ).toBe('https://portal.hospital.example/s?t=x');
+    expect(patientLink('/s', { t: 'x' }, { hospitalOrigin: null })).toBe(
       patientLink('/s', { t: 'x' }),
     );
   });
@@ -171,14 +175,16 @@ describe('the origins this API answers (FR-BRD-04)', () => {
   it('answers an origin that has been added, and still refuses one that has not', async () => {
     mutable.EXTRA_ALLOWED_ORIGINS = ['https://padma.example.org'];
 
+    // `/hospitals`, not `/config`: whose address this is may be asked from
+    // anywhere since plan C2 (`portalAddress.routes.test.ts`), and nothing else.
     const added = await request(app)
-      .get(`${BASE}/config`)
+      .get(`${BASE}/hospitals`)
       .set('Origin', 'https://padma.example.org');
     expect(added.status).toBe(200);
     expect(added.headers['access-control-allow-origin']).toBe('https://padma.example.org');
 
     const stranger = await request(app)
-      .get(`${BASE}/config`)
+      .get(`${BASE}/hospitals`)
       .set('Origin', 'https://padma.example.org.evil.test');
     // Refused the way this API refuses an origin: no CORS headers, so the
     // browser discards the answer (`middleware/cors.ts`).

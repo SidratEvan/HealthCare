@@ -102,11 +102,14 @@ test.describe('what is running is the production configuration', () => {
     };
     // If any of these three read otherwise, every test below is the
     // demonstration again and proves nothing about a hospital's server.
-    // `scope` is whose app was asked about (`FR-BRD-02`): nobody's, here.
+    // `scope` is whose app was asked about (`FR-BRD-02`): nobody's, here. And
+    // `address` is what the address it was asked at is (`FR-BRD-07`): with no
+    // host named, and no platform domain on this server, the network's.
     expect(settings.data).toEqual({
       demo: false,
       onlinePayments: false,
       guestPhoneCheck: true,
+      address: 'network',
       scope: null,
     });
   });

@@ -702,6 +702,7 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'POST /platform/hospitals/:id/reinstate': { by: 'platform' },
   'POST /platform/hospitals/:id/close': { by: 'platform' },
   'POST /platform/hospitals/:id/doctors/:doctorId/verify': { by: 'platform' },
+  'POST /platform/hospitals/:id/domain': { by: 'platform' },
   'GET /gov/capacity': { by: 'national' },
   'GET /gov/er-load': { by: 'national' },
   'GET /gov/signals': { by: 'national' },

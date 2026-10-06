@@ -7,6 +7,7 @@
 import {
   lifecycleNoteBody,
   platformDoctorParams,
+  portalDomainBody,
   settingsIdParams,
   workspaceBody,
 } from '@platform/domain';
@@ -48,6 +49,13 @@ export function postAct(action: platform.PlatformAction): RequestHandler {
     const { note } = lifecycleNoteBody.parse(req.body);
     res.json({ ok: true, data: await platform.act(actorOf(req), id, action, note) });
   };
+}
+
+/** `POST /platform/hospitals/:id/domain` — the hospital's own domain, or null to remove it. */
+export async function postPortalDomain(req: Request, res: Response): Promise<void> {
+  const { id } = settingsIdParams.parse(req.params);
+  const { domain } = portalDomainBody.parse(req.body);
+  res.json({ ok: true, data: await platform.setPortalDomain(actorOf(req), id, domain) });
 }
 
 export async function postVerifyDoctor(req: Request, res: Response): Promise<void> {

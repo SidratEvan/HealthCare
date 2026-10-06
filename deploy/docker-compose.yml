@@ -53,6 +53,8 @@ x-api-env: &api-env
   ADDRESS_RATE_LIMIT_FACTOR: ${ADDRESS_RATE_LIMIT_FACTOR:-1}
   GUEST_BOOKINGS_PER_PHONE_PER_DAY: ${GUEST_BOOKINGS_PER_PHONE_PER_DAY:-10}
   EXTRA_ALLOWED_ORIGINS: ${EXTRA_ALLOWED_ORIGINS:-}
+  # The platform's own domain: <code>.<this> is a hospital's portal (FR-BRD-07).
+  PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-}
   MAPPING_PROVIDER: ${MAPPING_PROVIDER:-off}
   MAPPING_API_KEY: ${MAPPING_API_KEY:-}
   MAPPING_MODEL: ${MAPPING_MODEL:-claude-opus-5-5}
@@ -130,6 +132,8 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${API_ORIGIN}/api/v1
         NEXT_PUBLIC_SOCKET_URL: ${API_ORIGIN}
+        # The same value the API has, baked in when the app is built.
+        NEXT_PUBLIC_PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-}
     restart: unless-stopped
     logging: *logging
     depends_on:

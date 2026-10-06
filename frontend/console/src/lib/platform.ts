@@ -26,6 +26,8 @@ export interface Workspace {
   readonly division: string;
   readonly district: string;
   readonly registrationNo: string | null;
+  /** A domain the hospital owns, recorded for its portal (`FR-BRD-07`). */
+  readonly portalDomain: string | null;
   readonly lifecycle: OrgLifecycle;
   readonly isLive: boolean;
   readonly reviewRequestedAt: string | null;
@@ -48,6 +50,8 @@ export interface WorkspaceDoctor {
 }
 
 export interface WorkspaceDetail extends Workspace {
+  /** Where its portal is: under the platform's domain, and at its own. */
+  readonly portal: { readonly platform: string | null; readonly own: string | null };
   readonly doctors: readonly WorkspaceDoctor[];
   readonly administrators: readonly { readonly fullName: string; readonly email: string }[];
   /** What stops an approval now; empty when nothing does. */
@@ -84,6 +88,8 @@ export type PlatformFailure =
   | { readonly kind: 'not_ready'; readonly missing: readonly string[] }
   | { readonly kind: 'note_required' }
   | { readonly kind: 'changed' }
+  | { readonly kind: 'domain_taken' }
+  | { readonly kind: 'domain_is_the_platforms' }
   | { readonly kind: 'invalid' }
   | { readonly kind: 'failed' };
 
@@ -109,6 +115,8 @@ function failureOf(error: unknown): PlatformFailure {
       const missing = Array.isArray(details['missing']) ? (details['missing'] as string[]) : [];
       return { kind: 'not_ready', missing };
     }
+    if (details['reason'] === 'domain_taken') return { kind: 'domain_taken' };
+    if (details['reason'] === 'domain_is_the_platforms') return { kind: 'domain_is_the_platforms' };
     // The workspace moved while this screen was open: somebody else answered.
     return { kind: 'changed' };
   }
@@ -160,6 +168,21 @@ export const platformApi = {
     );
   },
 
+  /** Records the hospital's own domain for its portal, or removes it with null (`FR-BRD-07`). */
+  async setDomain(
+    token: string,
+    hospitalId: string,
+    domain: string | null,
+  ): Promise<PlatformResult<WorkspaceDetail>> {
+    return await attempt(
+      async () =>
+        await client(token).post<WorkspaceDetail>(
+          `/platform/hospitals/${hospitalId}/domain`,
+          { domain },
+          crypto.randomUUID(),
+        ),
+    );
+  },
   async verifyDoctor(
     token: string,
     hospitalId: string,

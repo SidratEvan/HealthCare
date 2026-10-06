@@ -204,6 +204,19 @@ export {
   type LogoFileType,
 } from './brand/theme.js';
 
+// Whose address a host is: the network's, a hospital's portal, or somebody
+// else's (`FR-BRD-07`).
+export {
+  RESERVED_PORTAL_LABELS,
+  normaliseHost,
+  portalDomain,
+  portalDomainBody,
+  portalHostFor,
+  portalHostOf,
+  type PortalDomainBody,
+  type PortalHost,
+} from './brand/portal.js';
+
 // --- Search ----------------------------------------------------------------
 //
 // What a patient can ask the network for, and how typed text is read as one

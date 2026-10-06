@@ -107,6 +107,9 @@ export default defineConfig({
         DATABASE_URL,
         DEMO_MODE: 'true',
         NODE_ENV: 'development',
+        // This machine is the platform (`FR-BRD-07`): `padma.localhost` is
+        // Padma's portal, as `padma.<the platform's domain>` is on a server.
+        PLATFORM_DOMAIN: 'localhost',
         // Every patient in this suite books from this one machine, and the API
         // limits what one address may do: thirty phone checks in ten minutes.
         // A runner fast enough to fit the thirty-first into that window had
@@ -136,6 +139,11 @@ export default defineConfig({
       env: {
         NEXT_PUBLIC_API_URL: `${API_URL}/api/v1`,
         NEXT_PUBLIC_SOCKET_URL: API_URL,
+        // The same domain the API was given, so the app reads a portal's
+        // address the way the server does (`e2e/portal-address.spec.ts`).
+        NEXT_PUBLIC_PLATFORM_DOMAIN: 'localhost',
+        // A hospital's own domain, as that spec maps one to this machine.
+        DEV_PORTAL_HOSTS: 'portal.hospital-own.test',
       },
     },
   ],

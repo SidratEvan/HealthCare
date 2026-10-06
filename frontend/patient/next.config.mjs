@@ -8,9 +8,28 @@
  * drift.
  */
 
+/**
+ * Names the development server answers its own assets at, besides
+ * `localhost`.
+ *
+ * A hospital's portal is this app at another name (`FR-BRD-07`): under the
+ * platform's domain, or at a domain of the hospital's own. On a developer's
+ * machine those are `padma.localhost` and whatever name a test maps to this
+ * machine, and Next's development server refuses its scripts to a name it was
+ * not told about. Development only: a built app serves whoever asks.
+ */
+const DEV_ORIGINS = [
+  '*.localhost',
+  ...(process.env.DEV_PORTAL_HOSTS ?? '')
+    .split(',')
+    .map((host) => host.trim())
+    .filter((host) => host !== ''),
+];
+
 /** @type {import('next').NextConfig} */
 export default {
   reactStrictMode: true,
+  allowedDevOrigins: DEV_ORIGINS,
   transpilePackages: ['@platform/ui', '@platform/client', '@platform/domain', '@platform/i18n'],
 
   // The patient app is a PWA served to phones on 3G. Nothing here is

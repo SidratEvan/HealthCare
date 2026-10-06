@@ -65,6 +65,7 @@ import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import { revokeStaffSessions } from './accessGuard.service.js';
+import * as portals from './portal.service.js';
 import { materialise } from './sessionMaterialise.service.js';
 
 /** Who is changing what, for the audit row. */
@@ -105,7 +106,15 @@ async function change<T>(
 // --- reading -------------------------------------------------------------------
 
 /** The setup screen's whole view, with what the checklist counts (`FR-ONB-03`). */
-export type SetupView = repo.SetupSnapshot & { readonly counts: SetupCounts };
+export type SetupView = repo.SetupSnapshot & {
+  readonly counts: SetupCounts;
+  /**
+   * Where patients reach this hospital's own portal (`FR-BRD-07`): under the
+   * platform's domain, when the deployment has one, and at the hospital's own
+   * domain, when the platform has recorded one. Both null: by `?scope=` only.
+   */
+  readonly portal: { readonly platform: string | null; readonly own: string | null };
+};
 
 export async function setup(hospitalId: string): Promise<SetupView> {
   const [snapshot, counts] = await Promise.all([
@@ -113,7 +122,11 @@ export async function setup(hospitalId: string): Promise<SetupView> {
     platformRepo.setupCounts(hospitalId),
   ]);
   if (snapshot === null || counts === null) throw notFound('hospital');
-  return { ...snapshot, counts };
+  return {
+    ...snapshot,
+    counts,
+    portal: portals.portalAddresses(snapshot.hospital.code, snapshot.hospital.portalDomain),
+  };
 }
 
 // --- profile and rules ---------------------------------------------------------

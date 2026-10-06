@@ -498,6 +498,10 @@ function failureLine(failure: PlatformFailure, locale: 'bn' | 'en'): string {
       return t('platformNoteRequired', locale);
     case 'changed':
       return t('platformChanged', locale);
+    case 'domain_taken':
+      return t('platformDomainTaken', locale);
+    case 'domain_is_the_platforms':
+      return t('platformDomainIsOurs', locale);
     case 'invalid':
       return t('platformInvalid', locale);
     case 'not_ready':
@@ -745,6 +749,15 @@ function WorkspacePanel({
           </ul>
         </section>
 
+        <PortalAddress
+          detail={detail}
+          online={online}
+          busy={busy === 'domain'}
+          onSet={(domain) => {
+            settle('domain', platformApi.setDomain(token, hospitalId, domain));
+          }}
+        />
+
         <section className="flex flex-col gap-3 border-t border-line pt-4">
           <h3 className="text-body-md font-semibold">{t('platformActionsTitle', locale)}</h3>
 
@@ -840,6 +853,112 @@ function WorkspacePanel({
         </section>
       </div>
     </Card>
+  );
+}
+
+/**
+ * Where a hospital's portal is, and the one part of that the platform
+ * records: a domain the hospital itself owns (`FR-BRD-07`, `FRM-B12-DOMAIN`).
+ *
+ * The address under the platform's domain needs nothing done: it is the
+ * hospital's code. The hospital's own domain is typed here once the hospital
+ * has pointed it at the platform; from then on the whole deployment answers
+ * for it, which is why it is the platform's to record and not the hospital's.
+ */
+function PortalAddress({
+  detail,
+  online,
+  busy,
+  onSet,
+}: {
+  readonly detail: WorkspaceDetail;
+  readonly online: boolean;
+  readonly busy: boolean;
+  readonly onSet: (domain: string | null) => void;
+}): ReactNode {
+  const locale = useLocale();
+  const [domain, setDomain] = useState(detail.portalDomain ?? '');
+
+  // What is recorded changed under the field: show what is true now.
+  useEffect(() => {
+    setDomain(detail.portalDomain ?? '');
+  }, [detail.portalDomain]);
+
+  const typed = domain.trim().toLowerCase();
+  const reason = !online
+    ? t('platformOffline', locale)
+    : typed === ''
+      ? t('platformDomainNeed', locale)
+      : typed === (detail.portalDomain ?? '')
+        ? t('platformDomainSame', locale)
+        : null;
+
+  return (
+    <section
+      className="flex flex-col gap-3 border-t border-line pt-4"
+      data-testid="platform-portal"
+    >
+      <h3 className="text-body-md font-semibold">{t('platformPortalTitle', locale)}</h3>
+
+      {detail.portal.platform === null ? (
+        <p className="text-body-sm text-ink-secondary" data-testid="platform-portal-none">
+          {t('platformPortalNoDomain', locale)}
+        </p>
+      ) : (
+        <p className="text-body-sm text-ink-secondary">
+          {t('platformPortalAt', locale)}
+          {': '}
+          <span className="font-mono text-ink" data-testid="platform-portal-address">
+            {detail.portal.platform}
+          </span>
+        </p>
+      )}
+
+      <form
+        className="flex flex-col gap-3"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (reason === null && !busy) onSet(typed);
+        }}
+      >
+        <Input
+          label={t('platformDomainLabel', locale)}
+          helper={t('platformDomainHelper', locale)}
+          density="console"
+          value={domain}
+          data-testid="platform-domain-input"
+          onChange={(event) => {
+            setDomain(event.target.value);
+          }}
+        />
+        <div className="flex flex-wrap gap-2">
+          <GuardedButton
+            type="submit"
+            size="sm"
+            loading={busy}
+            reason={reason}
+            data-testid="platform-domain-save"
+          >
+            {t('platformDomainSave', locale)}
+          </GuardedButton>
+          {detail.portalDomain === null ? null : (
+            <GuardedButton
+              variant="secondary"
+              size="sm"
+              loading={busy}
+              reason={online ? null : t('platformOffline', locale)}
+              data-testid="platform-domain-remove"
+              onClick={() => {
+                onSet(null);
+              }}
+            >
+              {t('platformDomainRemove', locale)}
+            </GuardedButton>
+          )}
+        </div>
+      </form>
+    </section>
   );
 }
 

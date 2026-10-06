@@ -24,6 +24,7 @@ import express, { json, type Express } from 'express';
 
 import { runInDbScope, scopeOfPrincipal } from './config/dbScope.js';
 import { rememberRawBody } from './config/rawBody.js';
+import { runWithPatientOrigin } from './config/requestOrigin.js';
 import { env } from './env.js';
 import { attachPrincipal } from './middleware/auth.js';
 import { cors } from './middleware/cors.js';
@@ -33,6 +34,7 @@ import { idempotency } from './middleware/idempotency.js';
 import { requestLog } from './middleware/requestLog.js';
 import { securityHeaders } from './middleware/securityHeaders.js';
 import { API_BASE_PATH, buildApiRouter, rootRoutes } from './routes/index.js';
+import { patientOriginOf } from './services/portal.service.js';
 
 /**
  * Largest request body accepted.
@@ -112,6 +114,16 @@ export function createApp(): Express {
       return;
     }
     parseJson(req, res, next);
+  });
+
+  // Which of this deployment's patient-app addresses the request came from,
+  // the network's or a hospital's portal, so that a link issued while
+  // answering it opens where the patient is (`config/requestOrigin.ts`,
+  // `FR-BRD-04`).
+  app.use((req, _res, next) => {
+    patientOriginOf(req.get('origin')).then((origin) => {
+      runWithPatientOrigin(origin, next);
+    }, next);
   });
 
   app.use(attachPrincipal);

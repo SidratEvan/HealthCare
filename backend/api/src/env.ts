@@ -130,6 +130,34 @@ const schema = z.object({
   /** The patient PWA. What a guest tracking link is built from (`FR-GST-05`). */
   WEB_BASE_URL: httpUrl.default('http://localhost:3000'),
   /**
+   * The platform's own domain, without a scheme: `medlivebd.example`
+   * (`FR-BRD-07`, plan C2).
+   *
+   * With it, the patient app opened at `<code>.<this domain>` is that
+   * hospital's portal, a hospital's own recorded domain is too, and both are
+   * let through CORS and the socket handshake. Empty, which is the default,
+   * means the deployment has no domain of its own: every address is the
+   * network and a portal is opened with `?scope=`, as before.
+   *
+   * `localhost` is accepted, so a developer's machine and the browser tests
+   * can open `padma.localhost`.
+   */
+  PLATFORM_DOMAIN: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .default('')
+    .refine(
+      (value) =>
+        value === '' ||
+        value === 'localhost' ||
+        /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(
+          value,
+        ),
+      'must be a domain name with no scheme or path, e.g. medlivebd.example',
+    ),
+
+  /**
    * The staff console.
    *
    * A separate origin from the patient app, and always has been: they are two
