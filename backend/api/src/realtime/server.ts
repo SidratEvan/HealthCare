@@ -13,7 +13,7 @@ import { Server as SocketServer } from 'socket.io';
 import { allowedOrigins } from '../config/links.js';
 import { logger } from '../config/logger.js';
 
-import { authenticateSocket } from './auth.js';
+import { authenticateSocket, sweepRevoked } from './auth.js';
 import { setEmitter, type RealtimeEmitter } from './emit.js';
 import { registerHandlers } from './handlers.js';
 
@@ -38,6 +38,9 @@ class SocketIoEmitter implements RealtimeEmitter {
  * a queue mutation that reaches the emitter has done everything asked of it,
  * and the only thing missing is a listener.
  */
+/** How long access ended by a road this process did not see may keep a connection. */
+const REVOKED_SWEEP_MS = 60_000;
+
 export function attachRealtime(httpServer: HttpServer): SocketServer {
   const io = new SocketServer(httpServer, {
     // The consoles and the patient PWA are served from different origins than
@@ -65,6 +68,19 @@ export function attachRealtime(httpServer: HttpServer): SocketServer {
 
   registerHandlers(io);
   setEmitter(new SocketIoEmitter(io));
+
+  // Access ended by a road this process did not see — a command run on the
+  // server, a row changed by hand — closes its connections within a minute
+  // (`realtime/auth.ts`). Ended here, it closes them at once.
+  const sweep = setInterval(() => {
+    void sweepRevoked().catch((error: unknown) => {
+      logger.error({ err: error }, 'could not sweep revoked connections');
+    });
+  }, REVOKED_SWEEP_MS);
+  sweep.unref();
+  httpServer.on('close', () => {
+    clearInterval(sweep);
+  });
 
   logger.info({ corsOrigins: allowedOrigins() }, 'realtime attached');
   return io;

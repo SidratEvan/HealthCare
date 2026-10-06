@@ -57,6 +57,7 @@ import * as platformRepo from '../repositories/platform.repo.js';
 import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
+import { revokeStaffSessions } from './accessGuard.service.js';
 import { materialise } from './sessionMaterialise.service.js';
 
 /** Who is changing what, for the audit row. */
@@ -433,7 +434,7 @@ export async function updateStaff(
   // A deactivated account, or one whose roles changed, signs in again: its
   // refresh tokens were issued for access it no longer has.
   if (body.isActive === false || body.roles !== undefined) {
-    await staffAuthRepo.revokeOtherSessions(staffId, null);
+    await revokeStaffSessions(staffId);
   }
 }
 
@@ -450,7 +451,7 @@ export async function resetStaffPassword(
     await staffAuthRepo.setPassword(staffId, passwordHash, true, trx);
     return { result: undefined, subjectId: staffId };
   });
-  await staffAuthRepo.revokeOtherSessions(staffId, null);
+  await revokeStaffSessions(staffId);
   return { temporaryPassword: password };
 }
 
@@ -469,7 +470,7 @@ export async function resetStaffTwoFactor(actor: Actor, staffId: string): Promis
     await staffAuthRepo.clearTwoFactor(staffId, trx);
     return { result: undefined, subjectId: staffId };
   });
-  await staffAuthRepo.revokeOtherSessions(staffId, null);
+  await revokeStaffSessions(staffId);
 }
 
 // --- capabilities (FR-EMG-05) ----------------------------------------------------

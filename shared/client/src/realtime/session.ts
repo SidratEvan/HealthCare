@@ -17,6 +17,8 @@ import { io, type Socket } from 'socket.io-client';
 
 import type { Eta, QueueState } from '@platform/domain';
 
+import { reconnectIfDropped } from './reconnect.js';
+
 /**
  * How long before a live figure is called stale.
  *
@@ -226,6 +228,9 @@ export function openSessionChannel(options: SessionChannelOptions): {
     reconnectionDelayMax: 10_000,
   });
 
+  /** Set by `close`: a channel its owner has closed is never reopened. */
+  let closed = false;
+
   socket.on('connect', () => {
     publish({ connected: true });
     // The resume handshake: tell the server how far we got and receive what
@@ -239,7 +244,12 @@ export function openSessionChannel(options: SessionChannelOptions): {
     });
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    // A close the server asked for is tried once more with the credential now
+    // held: a console given a new sign-in comes back, a revoked one is refused
+    // (`reconnect.ts`, `FR-SEC-06`).
+    reconnectIfDropped(socket, reason, () => closed);
+
     // The state stays on screen. A console that blanks when the wifi drops is
     // useless precisely when a receptionist most needs the queue in front of
     // her — the freshness line is what tells her it has stopped moving
@@ -271,6 +281,7 @@ export function openSessionChannel(options: SessionChannelOptions): {
 
   return {
     close: () => {
+      closed = true;
       socket.disconnect();
     },
     fold,

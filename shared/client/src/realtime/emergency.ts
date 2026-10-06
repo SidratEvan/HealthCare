@@ -22,6 +22,8 @@ import { io, type Socket } from 'socket.io-client';
 
 import type { EmergencyCaseView, PublicCapacity, ReferralView } from '@platform/domain';
 
+import { reconnectIfDropped } from './reconnect.js';
+
 export interface CapabilityState {
   readonly kind: string;
   readonly available: boolean;
@@ -65,10 +67,18 @@ export function openEmergencyChannel(options: EmergencyChannelOptions): {
     reconnectionDelayMax: 10_000,
   });
 
+  /** Set by `close`: a channel its owner has closed is never reopened. */
+  let closed = false;
+
   socket.on('connect', () => {
     options.onConnection(true);
   });
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    // A close the server asked for is tried once more with the credential now
+    // held: a console given a new sign-in comes back, a revoked one is refused
+    // (`reconnect.ts`, `FR-SEC-06`).
+    reconnectIfDropped(socket, reason, () => closed);
+
     // The console stays on screen with what it knew, and says it is offline.
     // An ER screen that blanks when the wifi drops is useless exactly when a
     // bus crash fills the corridor (`FR-OFF-01`).
@@ -119,6 +129,7 @@ export function openEmergencyChannel(options: EmergencyChannelOptions): {
 
   return {
     close: () => {
+      closed = true;
       socket.disconnect();
     },
     socket,
