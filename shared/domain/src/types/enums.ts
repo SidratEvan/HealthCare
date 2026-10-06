@@ -295,6 +295,19 @@ export const EXTERNAL_KINDS = [
 ] as const;
 export type ExternalKind = (typeof EXTERNAL_KINDS)[number];
 
+/**
+ * A hospital workspace's state (0037, `FR-ONB-02`). The transitions between
+ * them, and who may take each, are `org/lifecycle.ts`.
+ */
+export const ORG_LIFECYCLES = [
+  'setup',
+  'ready_for_review',
+  'active',
+  'suspended',
+  'closed',
+] as const;
+export type OrgLifecycle = (typeof ORG_LIFECYCLES)[number];
+
 export const DATABASE_ENUMS = {
   user_kind: USER_KINDS,
   sex: SEXES,
@@ -324,6 +337,7 @@ export const DATABASE_ENUMS = {
   import_set: IMPORT_SET_KINDS,
   import_state: IMPORT_STATES,
   external_kind: EXTERNAL_KINDS,
+  org_lifecycle: ORG_LIFECYCLES,
 } as const satisfies Record<string, readonly string[]>;
 
 /** Booking statuses that still occupy a place in the queue. */

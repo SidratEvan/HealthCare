@@ -280,10 +280,13 @@ describe('a facility with no seed data, set up from the screen (FR-SUP-01)', () 
     });
   });
 
-  it('will not go live with nothing a patient could book', async () => {
-    const response = await send('post', '/hospital/go-live', facility.token);
+  it('will not ask for review with nothing a patient could book (FR-ONB-03)', async () => {
+    const response = await send('post', '/hospital/request-review', facility.token);
     expect(response.status).toBe(422);
-    expect(response.body.error.details.reason).toBe('nothing_to_publish');
+    expect(response.body.error.details).toMatchObject({
+      reason: 'not_ready',
+      missing: ['doctors', 'schedules'],
+    });
   });
 
   it('adds a doctor, unverified until the platform checks the register (FR-SUP-02)', async () => {
@@ -516,13 +519,15 @@ describe('a facility with no seed data, set up from the screen (FR-SUP-01)', () 
     expect(fees.rows.map((row) => row.fee_poisha)).toEqual([90_000, 90_000]);
   });
 
-  it('goes live once there is something to book', async () => {
-    const response = await send('post', '/hospital/go-live', facility.token);
+  it('asks for review once there is something to book, and publishes nothing itself (FR-ONB-04)', async () => {
+    // Going live is the platform's answer to this request; the whole path is
+    // `platform.routes.test.ts`.
+    const response = await send('post', '/hospital/request-review', facility.token);
     expect(response.status).toBe(200);
-    const row = await sql<{ is_live: boolean; onboarded: boolean }>`
-      SELECT is_live, onboarded_at IS NOT NULL AS onboarded FROM hospitals WHERE id = ${facility.hospitalId}
+    const row = await sql<{ lifecycle: string; is_live: boolean }>`
+      SELECT lifecycle::text AS lifecycle, is_live FROM hospitals WHERE id = ${facility.hospitalId}
     `.execute(db);
-    expect(row.rows[0]).toEqual({ is_live: true, onboarded: true });
+    expect(row.rows[0]).toEqual({ lifecycle: 'ready_for_review', is_live: false });
   });
 
   it('removes a schedule’s future chambers that nobody booked', async () => {

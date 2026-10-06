@@ -376,6 +376,10 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec api \
 
 Both are written to the audit log.
 
+### Since V3.1: a hospital asks to go live, and the platform approves
+
+The administrator made by `pnpm staff:create` sets the hospital up on `S-B-11` and then **asks for review**; nothing is public until a platform administrator approves it (`FR-ONB-04`). On a deployment that holds one hospital that is still two people, by design. Until the platform's own screen and a way to create its first administrator from the command line exist (V3.2), a single-hospital deployment made before V3.1 is unaffected — a hospital that was already live stays live — and a new one waits for V3.2.
+
 ## S4. Updating
 
 ```bash

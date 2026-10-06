@@ -220,6 +220,7 @@ export const seed01Hospitals: SeedModule = {
           'phone',
           'emergency_phone',
           'is_live',
+          'lifecycle',
           'onboarded_at',
         ],
         // Every demo facility is published and onboarded: an unverified
@@ -234,7 +235,12 @@ export const seed01Hospitals: SeedModule = {
         // answers nothing. `seed_04_history` reaches back twenty-one days and
         // runs its chambers closer to plan after this date, so the chart has a
         // before and an after and the marker sits between them.
-        expressions: { is_live: 'true', onboarded_at: `now() - interval '12 days'` },
+        // Live, so the workspace is `active`: 0037 ties the two (`FR-ONB-02`).
+        expressions: {
+          is_live: 'true',
+          lifecycle: `'active'`,
+          onboarded_at: `now() - interval '12 days'`,
+        },
       },
       hospitalRows,
       '',
@@ -323,13 +329,15 @@ export const seed01Hospitals: SeedModule = {
       ]);
     }
 
-    // --- the national account (step 20) ------------------------------------
+    // --- the national accounts (step 20; V3.1) -----------------------------
     //
-    // One government viewer, belonging to no facility (`FR-ROLE-01`, R11;
-    // migration 0024). It is what `S-B-13` is opened as. No `platform_admin`:
-    // `S-B-12` is not built, and an account for a screen that does not exist
-    // is a door to nothing. Its own name stream, so adding it moved no
-    // hospital's staff names.
+    // Two, each belonging to no facility (`FR-ROLE-01`, R10 and R11;
+    // migration 0024). The government viewer is what `S-B-13` is opened as.
+    // The platform administrator answers hospitals' requests to go live
+    // (`FR-ONB-04`, `S-B-12`) and is the actor on those audit rows, so it has
+    // to be a real row. Their own name stream, so adding them moved no
+    // hospital's staff names; the viewer is first, so adding the
+    // administrator did not move the viewer's.
     const nationalNames = rng.stream('national-staff-names');
     const nationalIds = await insertRows<{ id: string }>(
       client,
@@ -345,11 +353,24 @@ export const seed01Hospitals: SeedModule = {
           labelBn(composeName(nationalNames, nationalNames.chance(0.5) ? 'female' : 'male')),
           passwordHash,
         ],
+        [
+          null,
+          demoEmail('platform', 'national'),
+          'NAT-PLT-01',
+          labelBn(composeName(nationalNames, nationalNames.chance(0.5) ? 'female' : 'male')),
+          passwordHash,
+        ],
       ],
     );
     const nationalId = nationalIds[0]?.id;
     if (nationalId === undefined) throw new Error('staff_users returned no id for gov_viewer.');
     roleRows.push([nationalId, null, 'gov_viewer', JSON.stringify(DEMO_MARKER)]);
+
+    const platformId = nationalIds[1]?.id;
+    if (platformId === undefined) {
+      throw new Error('staff_users returned no id for platform_admin.');
+    }
+    roleRows.push([platformId, null, 'platform_admin', JSON.stringify(DEMO_MARKER)]);
 
     await insertRows(
       client,

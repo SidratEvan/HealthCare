@@ -57,6 +57,7 @@ CREATE TYPE symptom_signal    AS ENUM ('dengue','diarrhoeal','fever');   -- 0025
 CREATE TYPE import_set        AS ENUM ('structure','patients','appointments','records');   -- 0031, FR-IMP-01
 CREATE TYPE import_state      AS ENUM ('checked','committed','undone','discarded');        -- 0031, FR-IMP-05..07
 CREATE TYPE external_kind     AS ENUM ('patient','appointment','department','doctor','schedule','ward','bed','staff');  -- 0030, FR-IMP-04
+CREATE TYPE org_lifecycle     AS ENUM ('setup','ready_for_review','active','suspended','closed');   -- 0037, FR-ONB-02
 ```
 
 ---
@@ -193,6 +194,8 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 #### `hospitals`
 `id`, `name_bn`, `name_en`, `kind` (facility_kind), `division`, `district`, `thana`, `address_bn`, `address_en`, `lat`, `lng`, `phone`, `emergency_phone`, `is_live` (boolean), `onboarded_at`, `settings_id`.
 **IX:** `(district)`, GiST on `(lat,lng)` via `earthdistance` or PostGIS `geography`.
+
+**The workspace's state (0037, `FR-ONB-02`).** `lifecycle` org_lifecycle NOT NULL DEFAULT `'setup'`, `registration_no` text (free text: licences do not share a shape), `review_requested_at`, `reviewed_at`, `reviewed_by` → `staff_users`, `review_note` (why the platform sent it back or suspended it; the hospital's administrator reads it). **CHK** `hospitals_live_requires_workspace_active`: `NOT is_live OR lifecycle = 'active'`. `is_live` stays the one switch every public query reads; the CHECK means nothing unapproved, suspended or closed can be live whatever a route forgets, and the two are always written in one statement (`platform.repo` `moveLifecycle`). **IX** `(lifecycle, review_requested_at)`. Hospitals live when 0037 ran were backfilled to `active`. The transitions and who may take each are `shared/domain/src/org/lifecycle.ts`; readiness is counted from what exists and never stored (`FR-ONB-03`).
 
 #### `hospital_settings`
 `hospital_id` **PK/FK**, `no_show_grace_patients` (default 2), `no_show_grace_minutes` (15), `late_reinsert_after` (3), `stale_threshold_minutes` (10), `refund_policy` jsonb, `sms_budget_monthly` int, `prepay_required` boolean, `numeral_style` text, `density_default` text.
@@ -659,6 +662,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- notifications_no_stored_link, the purge's partial index (§2.7, §8)
     0036_hospital_brand.sql        -- V1 pitch build V2.2: hospital_settings.brand, a hospital's own
                                    -- brand tokens for the patient app (§2.2, FR-BRD-03)
+    0037_org_lifecycle.sql         -- V3.1: org_lifecycle, hospitals.lifecycle and the review columns,
+                                   -- hospitals_live_requires_workspace_active (§2.2, FR-ONB-02)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

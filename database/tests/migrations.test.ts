@@ -123,6 +123,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0035',
       // V1 pitch build, V2.2: a hospital's own brand tokens (FR-BRD-03).
       '0036',
+      // V3.1: a workspace's state, and live only when approved (FR-ONB-02).
+      '0037',
     ]);
   });
 

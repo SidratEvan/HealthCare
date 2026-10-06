@@ -126,7 +126,7 @@ export async function putCapabilities(req: Request, res: Response): Promise<void
   done(res);
 }
 
-export async function postGoLive(req: Request, res: Response): Promise<void> {
-  await settings.goLive(actorOf(req));
-  done(res, { live: true });
+export async function postRequestReview(req: Request, res: Response): Promise<void> {
+  await settings.requestReview(actorOf(req));
+  done(res, { requested: true });
 }

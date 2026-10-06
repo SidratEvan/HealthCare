@@ -168,10 +168,13 @@ hospitalSettingsRoutes.put(
   settings.putCapabilities,
 );
 
+// `FR-ONB-04`: the hospital asks, the platform answers
+// (`POST /platform/hospitals/:id/approve`). There is no route by which a
+// hospital publishes itself.
 hospitalSettingsRoutes.post(
-  '/hospital/go-live',
+  '/hospital/request-review',
   ...admin,
   write,
   validate({ body: emptyBody }),
-  settings.postGoLive,
+  settings.postRequestReview,
 );

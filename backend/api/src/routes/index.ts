@@ -29,6 +29,7 @@ import { importRoutes } from './import.routes.js';
 import { labRoutes } from './lab.routes.js';
 import { patientAuthRoutes } from './patientAuth.routes.js';
 import { paymentRoutes } from './payment.routes.js';
+import { platformRoutes } from './platform.routes.js';
 import { queueRoutes } from './queue.routes.js';
 import { referralRoutes } from './referral.routes.js';
 import { registrationRoutes } from './registration.routes.js';
@@ -103,6 +104,9 @@ export function buildApiRouter(): Router {
   router.use(hospitalSettingsRoutes);
   // The hospital's own data, set by set (pilot step 24, S-B-14).
   router.use(importRoutes);
+
+  // Onboarding, the platform's side (`S-B-12`, `FR-ONB-*`).
+  router.use(platformRoutes);
   // The national layer (step 20). Districts and facility kinds only, read as a
   // database role that can open nothing else (FR-GOV-06).
   router.use(govRoutes);

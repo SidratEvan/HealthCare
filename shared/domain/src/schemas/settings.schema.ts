@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 
-import { BED_KINDS, CAPABILITY_KINDS } from '../types/enums.js';
+import { BED_KINDS, CAPABILITY_KINDS, FACILITY_KINDS } from '../types/enums.js';
 
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(120);
@@ -236,8 +236,44 @@ export const declaredCapabilitiesBody = z.strictObject({
     .refine((list) => new Set(list).size === list.length, 'each kind once'),
 });
 
-/** `POST /hospital/go-live` and `POST /hospital/staff/:id/reset-password` carry nothing. */
+/** `POST /hospital/request-review` and `POST /hospital/staff/:id/reset-password` carry nothing. */
 export const emptyBody = z.strictObject({});
+
+// --- onboarding, the platform's side (S-B-12, FR-ONB-*) ----------------------
+
+/**
+ * `POST /platform/hospitals` (`FR-ONB-01`): a workspace and its first
+ * administrator. Everything else about the hospital is set up by that
+ * administrator on `S-B-11`; this asks only for what identifies it.
+ */
+export const workspaceBody = z.strictObject({
+  code: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9-]{1,15}$/)
+    .transform((value) => value.toUpperCase()),
+  nameBn: name,
+  nameEn: name,
+  kind: z.enum(FACILITY_KINDS),
+  division: z.string().trim().min(2).max(40),
+  district: z.string().trim().min(2).max(60),
+  /** The licence or registration number, as the hospital gives it. */
+  registrationNo: z.string().trim().min(2).max(60).optional(),
+  adminName: name,
+  adminEmail: z.string().trim().toLowerCase().email().max(254),
+});
+export type WorkspaceBody = z.infer<typeof workspaceBody>;
+
+/**
+ * The body of every act on a workspace. `note` is the reason, required by
+ * the service for the acts a hospital has to act on (sending back,
+ * suspending, closing) and ignored for the others.
+ */
+export const lifecycleNoteBody = z.strictObject({
+  note: z.string().trim().min(3).max(500).optional(),
+});
+
+export const platformDoctorParams = z.object({ id: uuid, doctorId: uuid });
 
 export type ProfileBody = z.infer<typeof profileBody>;
 export type RulesBody = z.infer<typeof rulesBody>;

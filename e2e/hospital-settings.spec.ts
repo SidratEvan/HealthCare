@@ -20,7 +20,6 @@ import {
   chamberDates,
   newFacility,
   removeFacility,
-  verifyDoctor,
   type NewFacility,
 } from './support/facility.js';
 import { passSecondFactor } from './support/twoFactor.js';
@@ -185,16 +184,36 @@ test.describe('S-B-11: a facility with no seed data sets itself up', () => {
     expect(temporary.length).toBeGreaterThanOrEqual(12);
     await receptionistSignsIn(browser, email, temporary);
 
-    // --- publishing --------------------------------------------------------
-    // The platform checks the BMDC register (`FR-SUP-02`); then the
-    // administrator publishes, and the chamber reaches the patient app.
-    await verifyDoctor(bmdc);
-    await page.getByTestId('settings-go-live').click();
-    await expect(page.getByTestId('settings-live')).toBeVisible();
+    // --- asking to go live (FR-ONB-03, FR-ONB-04) ---------------------------
+    // The checklist has what it requires, so the administrator can ask. A
+    // hospital does not publish itself: the request is all this screen does,
+    // and nothing of the hospital is public until the platform approves
+    // (`platform-onboarding.spec.ts` takes it from there).
+    await page.reload();
+    const status = page.getByTestId('settings-status');
+    await expect(status).toHaveAttribute('data-lifecycle', 'setup');
+    await expect(page.getByTestId('settings-check-departments')).toHaveAttribute(
+      'data-done',
+      'true',
+    );
+    await expect(page.getByTestId('settings-check-schedules')).toHaveAttribute('data-done', 'true');
+    // Verifying doctors is the platform's part, and the card says so.
+    await expect(page.getByTestId('settings-check-verified_doctors')).toContainText(
+      'প্ল্যাটফর্ম যাচাই করবে',
+    );
+    await expect(page.getByTestId('settings-missing')).toHaveCount(0);
+
+    await page.getByTestId('settings-request-review').click();
+    await expect(status).toHaveAttribute('data-lifecycle', 'ready_for_review');
+    await expect(page.getByTestId('settings-request-review')).toHaveCount(0);
+    await expect(page.getByTestId('settings-live')).toHaveCount(0);
 
     const published = await fetch(`${API}/sessions?hospitalId=${facility.hospitalId}`);
     const body = (await published.json()) as { data: { sessions: { sessionDate?: string }[] } };
-    expect(body.data.sessions.length).toBeGreaterThanOrEqual(1);
+    expect(body.data.sessions).toHaveLength(0);
+    const listed = await fetch(`${API}/hospitals?limit=100`);
+    const hospitals = (await listed.json()) as { data: { hospitals: { id: string }[] } };
+    expect(hospitals.data.hospitals.some((entry) => entry.id === facility.hospitalId)).toBe(false);
   });
 });
 
