@@ -129,6 +129,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0038',
       // Plan A2: a bed's version, raised by the database on every change (SY-09).
       '0039',
+      // Plan A3: the same for an emergency case.
+      '0040',
     ]);
   });
 

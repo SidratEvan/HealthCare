@@ -426,3 +426,52 @@ describe('fn_nearby_hospitals (DATABASE.md §4, FR-PAT-43)', () => {
     });
   });
 });
+
+describe('a case says which statement about it is newer (SY-09, migration 0040)', () => {
+  async function versionOf(client: Client, caseId: string): Promise<number> {
+    const { rows } = await client.query<{ version: string }>(
+      'SELECT version::text AS version FROM emergency_cases WHERE id = $1',
+      [caseId],
+    );
+    return Number(rows[0]?.version ?? '-1');
+  }
+
+  it('starts at one, and every change to the row raises it by one', async () => {
+    await withRollback(async (client) => {
+      const hospitalId = await seededHospital(client, 'Shapla General');
+      const caseId = await insertCase(client, hospitalId, arrived('ER-91'));
+      expect(await versionOf(client, caseId)).toBe(1);
+
+      await client.query(`UPDATE emergency_cases SET triage = 'red' WHERE id = $1`, [caseId]);
+      expect(await versionOf(client, caseId)).toBe(2);
+      await client.query(`UPDATE emergency_cases SET triage = 'yellow' WHERE id = $1`, [caseId]);
+      expect(await versionOf(client, caseId)).toBe(3);
+    });
+  });
+
+  it('cannot be set or lowered by the statement that changes the case', async () => {
+    await withRollback(async (client) => {
+      const hospitalId = await seededHospital(client, 'Shapla General');
+      const caseId = await insertCase(client, hospitalId, arrived('ER-92'));
+
+      await client.query('UPDATE emergency_cases SET version = 500 WHERE id = $1', [caseId]);
+      expect(await versionOf(client, caseId)).toBe(2);
+      await client.query('UPDATE emergency_cases SET version = 0 WHERE id = $1', [caseId]);
+      expect(await versionOf(client, caseId)).toBe(3);
+    });
+  });
+
+  it('a change that is rolled back raises nothing', async () => {
+    await withRollback(async (client) => {
+      const hospitalId = await seededHospital(client, 'Shapla General');
+      const caseId = await insertCase(client, hospitalId, arrived('ER-93'));
+
+      await client.query('SAVEPOINT attempt');
+      await client.query(`UPDATE emergency_cases SET triage = 'red' WHERE id = $1`, [caseId]);
+      expect(await versionOf(client, caseId)).toBe(2);
+      await client.query('ROLLBACK TO SAVEPOINT attempt');
+
+      expect(await versionOf(client, caseId)).toBe(1);
+    });
+  });
+});

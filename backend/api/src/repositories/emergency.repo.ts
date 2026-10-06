@@ -305,6 +305,7 @@ interface CaseSqlRow {
   admit_bed_kind: BedKind | null;
   admit_requested_at: Date | null;
   created_at: Date;
+  version: string;
 }
 
 const CASE_COLUMNS = sql`
@@ -313,7 +314,7 @@ const CASE_COLUMNS = sql`
   ec.patient_sex::text AS patient_sex, (ec.contact_phone IS NOT NULL) AS has_phone,
   ec.inbound_at, ec.inbound_eta_minutes, ec.acknowledged_at, ec.arrived_at, ec.closed_at,
   ec.decline_reason, ec.admit_bed_kind::text AS admit_bed_kind, ec.admit_requested_at,
-  ec.created_at
+  ec.created_at, ec.version::text AS version
 `;
 
 function toCase(row: CaseSqlRow): CaseRow {
@@ -337,6 +338,8 @@ function toCase(row: CaseSqlRow): CaseRow {
     admitBedKind: row.admit_bed_kind,
     admitRequestedAt: iso(row.admit_requested_at),
     createdAt: row.created_at.toISOString() as Timestamp,
+    // bigint, which the driver hands over as text.
+    version: Number(row.version),
   };
 }
 

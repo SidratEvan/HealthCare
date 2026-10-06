@@ -33,7 +33,16 @@ export interface EmergencyChannelOptions {
   readonly getToken: () => string | null;
   readonly onConnection: (connected: boolean) => void;
   readonly onInbound: (current: EmergencyCaseView, serverTs: string) => void;
-  readonly onCase: (current: EmergencyCaseView, load: number, serverTs: string) => void;
+  /**
+   * `clientEventId` is the console action behind the change, when there was
+   * one: a console whose own action it is stops drawing it (`SY-09`).
+   */
+  readonly onCase: (
+    current: EmergencyCaseView,
+    load: number,
+    serverTs: string,
+    clientEventId: string | null,
+  ) => void;
   readonly onCapabilities: (capabilities: readonly CapabilityState[], serverTs: string) => void;
   readonly onCapacity: (published: PublicCapacity, serverTs: string) => void;
   /** `incoming` is true for a referral this ER has just been sent. */
@@ -74,8 +83,16 @@ export function openEmergencyChannel(options: EmergencyChannelOptions): {
   );
   socket.on(
     'emergency.updated',
-    (message: { serverTs: string; data: { case: EmergencyCaseView; load: number } }) => {
-      options.onCase(message.data.case, message.data.load, message.serverTs);
+    (message: {
+      serverTs: string;
+      data: { case: EmergencyCaseView; load: number; clientEventId?: string | null };
+    }) => {
+      options.onCase(
+        message.data.case,
+        message.data.load,
+        message.serverTs,
+        message.data.clientEventId ?? null,
+      );
     },
   );
   socket.on(

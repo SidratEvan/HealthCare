@@ -4,6 +4,8 @@ import {
   alreadyApplied,
   applyLocalCase,
   canActOn,
+  casesAfterRead,
+  newestCases,
   expectedArrival,
   inboundOrder,
   loadOf,
@@ -28,6 +30,7 @@ function inbound(overrides: Partial<EmergencyCaseView> = {}): EmergencyCaseView 
     problem: 'burn',
     triage: null,
     tokenLabel: null,
+    version: 1,
     ageYears: null,
     sex: null,
     hasPhone: false,
@@ -249,5 +252,67 @@ describe('tokens called aloud', () => {
   it("numbers from today's arrivals and skips a label an open case still answers to", () => {
     expect(nextTokenLabel(0, new Set())).toBe('ER-1');
     expect(nextTokenLabel(6, new Set(['ER-7', 'ER-8']))).toBe('ER-9');
+  });
+});
+
+describe('which statement about a case is the newer one (SY-09)', () => {
+  const v1 = arrived({ id: 'case-a', version: 1, triage: null });
+  const v2 = arrived({ id: 'case-a', version: 2, triage: 'red' });
+  const v3 = arrived({ id: 'case-a', version: 3, triage: 'yellow' });
+  const closed = arrived({ id: 'case-a', version: 4, state: 'discharged', closedAt: NOW });
+  const other = arrived({ id: 'case-b', version: 1 });
+  const never = (): boolean => false;
+
+  it('takes a statement with a higher version, and adds a case it has not seen', () => {
+    expect(newestCases([v1, other], v2)).toEqual([v2, other]);
+    expect(newestCases([other], v1)).toEqual([other, v1]);
+  });
+
+  it('keeps what it holds when an older statement arrives after a newer one', () => {
+    const afterNewer = newestCases([v1], v3);
+    const afterOlder = newestCases(afterNewer, v2);
+    expect(afterOlder).toEqual([v3]);
+    // The very list, so nothing redraws.
+    expect(afterOlder).toBe(afterNewer);
+  });
+
+  it('ends on the same case whatever order three statements arrive in', () => {
+    for (const order of [
+      [v1, v2, v3],
+      [v1, v3, v2],
+      [v2, v1, v3],
+      [v2, v3, v1],
+      [v3, v1, v2],
+      [v3, v2, v1],
+    ]) {
+      const held = order.reduce<EmergencyCaseView[]>((list, next) => newestCases(list, next), []);
+      expect(held).toEqual([v3]);
+    }
+  });
+
+  it('keeps a closed case, closed, so an older statement cannot bring it back', () => {
+    const held = newestCases([v3], closed);
+    expect(held).toEqual([closed]);
+    expect(newestCases(held, v3)).toEqual([closed]);
+    // What a screen draws is the open ones.
+    expect(newestCases(held, v3).filter((entry) => entry.closedAt === null)).toEqual([]);
+  });
+
+  it('a read of the board lists every open case, and is still not newer than a statement', () => {
+    expect(casesAfterRead([v3, other], [v2, other], never)).toEqual([v3, other]);
+    expect(casesAfterRead([v1, other], [v2, other], never)).toEqual([v2, other]);
+  });
+
+  it('a case the read does not list leaves, unless it is held closed', () => {
+    // Closed since the console last heard: it is not on the board any more.
+    expect(casesAfterRead([v1, other], [other], never)).toEqual([other]);
+    // Held closed: kept as the marker, and still not drawn.
+    expect(casesAfterRead([closed, other], [other], never)).toEqual([other, closed]);
+  });
+
+  it('an alert that arrived after the read was asked for is not taken off by it', () => {
+    const alert = inbound({ id: 'case-new', version: 1 });
+    const toldSince = (id: string): boolean => id === 'case-new';
+    expect(casesAfterRead([other, alert], [other], toldSince)).toEqual([other, alert]);
   });
 });

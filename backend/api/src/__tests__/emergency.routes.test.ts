@@ -23,6 +23,8 @@ import { sql } from 'kysely';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { EmergencyCaseView } from '@platform/domain';
+
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
@@ -691,5 +693,67 @@ describe('PUT /hospitals/:id/capabilities — published to the network (FR-EMG-0
 
     const padma = await erFixture('Padma Specialised');
     expect((await put(shapla.hospitalId, same, padma.erToken)).status).toBe(403);
+  });
+});
+
+describe('every statement about a case carries its version, and names the action (SY-09)', () => {
+  interface Said {
+    readonly case: EmergencyCaseView;
+    readonly clientEventId: string | null;
+  }
+  const lastSaid = (hospitalId: string): Said =>
+    emitted
+      .forRoom(ROOMS.emergency(hospitalId))
+      .filter((entry) => entry.event === 'emergency.updated')
+      .at(-1)?.envelope.data as Said;
+
+  it('a walk-in is answered and broadcast at one version, under the console’s own key', async () => {
+    const clientEventId = randomUUID();
+    const filed = await walkIn({}, clientEventId);
+    expect(filed.status).toBe(201);
+    const answered = filed.body.data.case as EmergencyCaseView;
+    expect(answered.version).toBeGreaterThanOrEqual(1);
+
+    const said = lastSaid(shapla.hospitalId);
+    expect(said.clientEventId).toBe(clientEventId);
+    expect(said.case).toMatchObject({ id: answered.id, version: answered.version });
+  });
+
+  it('each step raises the version, in the answer, the broadcast and the board alike', async () => {
+    const filed = await walkIn();
+    const caseId = (filed.body.data.case as EmergencyCaseView).id;
+    const before = (filed.body.data.case as EmergencyCaseView).version;
+
+    const clientEventId = randomUUID();
+    const triaged = await request(app)
+      .patch(`${BASE}/emergency/cases/${caseId}`)
+      .set('Authorization', bearer(shapla.erToken))
+      .set('Idempotency-Key', randomUUID())
+      .send({ clientEventId, clientTs: new Date().toISOString(), action: 'triage', triage: 'red' });
+    expect(triaged.status).toBe(200);
+    const answered = triaged.body.data.case as EmergencyCaseView;
+    expect(answered.version).toBeGreaterThan(before);
+
+    const said = lastSaid(shapla.hospitalId);
+    expect(said.clientEventId).toBe(clientEventId);
+    expect(said.case.version).toBe(answered.version);
+
+    const board = await request(app)
+      .get(`${BASE}/hospitals/${shapla.hospitalId}/emergency`)
+      .set('Authorization', bearer(shapla.erToken));
+    const onBoard = (board.body.data.cases as EmergencyCaseView[]).find(
+      (entry) => entry.id === caseId,
+    );
+    expect(onBoard?.version).toBe(answered.version);
+  });
+
+  it('a change nobody at a console made names no action', async () => {
+    const { token } = await alertWithPhone();
+    const cancelled = await request(app)
+      .post(`${BASE}/emergency/track/${token}/cancel`)
+      .set('Idempotency-Key', randomUUID())
+      .send({});
+    expect(cancelled.status).toBe(200);
+    expect(lastSaid(shapla.hospitalId).clientEventId).toBeNull();
   });
 });

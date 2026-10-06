@@ -376,7 +376,7 @@ Patient-uploaded paper records (`FR-PAT-62`): `id`, `patient_id`, `file_url`, `d
 #### `beds`
 `id`, `hospital_id`, `ward_id`, `label` (`301`), `kind` bed_kind, `state` bed_state, `nightly_poisha`, `last_cleaned_at`, `expected_discharge_date`, `current_admission_id`, `reserved_until`, `oos_reason`, `state_changed_at`, `version` bigint NOT NULL DEFAULT 1 (0039).
 **IX:** `(hospital_id, kind, state)` — powers public bed counts.
-**`version` (`SY-09`).** Raised by `trg_beds_version` (`fn_raise_version`, BEFORE UPDATE: `NEW.version = OLD.version + 1`, whatever the statement supplied) on every change to the row, in the statement that makes it; a change that rolls back raises nothing. It is how a board decides which of two statements about a bed is the newer, and nothing else may be used for that: a timestamp is read after the row and can be in the opposite order. Everything a board draws for a bed is on this row except the request a reserved bed is held for, which is made and released in the same transaction as the bed's own change of state.
+**`version` (`SY-09`).** (`emergency_cases.version`, 0040, is the same column under the same rule, raised by `trg_emergency_cases_version`.) Raised by `trg_beds_version` (`fn_raise_version`, BEFORE UPDATE: `NEW.version = OLD.version + 1`, whatever the statement supplied) on every change to the row, in the statement that makes it; a change that rolls back raises nothing. It is how a board decides which of two statements about a bed is the newer, and nothing else may be used for that: a timestamp is read after the row and can be in the opposite order. Everything a board draws for a bed is on this row except the request a reserved bed is held for, which is made and released in the same transaction as the bed's own change of state.
 `(ward_id, hospital_id)` references `wards (id, hospital_id)`, so a bed cannot be filed under another hospital's ward. CHECKs make each state say what it must: occupied ⇔ `current_admission_id`, reserved ⇔ `reserved_until`, out of service ⇔ a non-blank `oos_reason`; a discharge forecast only on an occupied bed.
 A bed added from `S-B-11` (pilot step 22) starts `out_of_service` with `oos_reason = 'setup:unconfirmed'`, a code the board translates, so a bed nobody at the ward has looked at never counts as free. `reserved_until` and `oos_reason` exist because `BTN-B06-RESERVE` ("hold with expiry") and `BTN-B06-OOS` ("with reason") need them somewhere a query can read — the public view counts a lapsed hold as free. `state_changed_at` drives the cleaning timer and "occupied for N days".
 
@@ -685,6 +685,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- (§2.6b, FR-IMP-20)
     0039_bed_version.sql           -- plan A2: beds.version and fn_raise_version, so a board knows
                                    -- which statement about a bed is the newer (§2.5, SY-09)
+    0040_emergency_case_version.sql -- plan A3: emergency_cases.version, the same rule for a case
+                                   -- (§2.5, SY-09)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

@@ -118,6 +118,62 @@ export interface EmergencyCaseView {
   readonly declineReason: string | null;
   readonly admitBedKind: BedKind | null;
   readonly admitRequestedAt: Timestamp | null;
+  /**
+   * Raised by the database on every change to the case's row (`SY-09`,
+   * migration 0040). Which of two statements about a case is the newer is
+   * decided by this and by nothing else. A case the console has drawn before
+   * the server made it (an offline walk-in) is version 0.
+   */
+  readonly version: number;
+}
+
+/**
+ * The cases a console holds after a statement about one of them (`SY-09`).
+ *
+ * The statement is kept if it is newer than what is held, by version, and
+ * dropped if it is not. A case that has closed is *kept in the list*, closed:
+ * it is what stops an older statement, delivered late, from bringing the case
+ * back as though it were still open. What a screen draws is the open ones.
+ */
+export function newestCases(
+  held: readonly EmergencyCaseView[],
+  stated: EmergencyCaseView,
+): EmergencyCaseView[] {
+  const mine = held.find((entry) => entry.id === stated.id);
+  if (mine === undefined) return [...held, stated];
+  if (mine.version >= stated.version) return held as EmergencyCaseView[];
+  return held.map((entry) => (entry.id === stated.id ? stated : entry));
+}
+
+/**
+ * The cases a console holds after reading the whole board (`SY-09`).
+ *
+ * A read lists every open case, each kept if it is the newer of the two. A
+ * case it does not list is one of three things:
+ *
+ * - closed, and held closed: it stays, as the marker `newestCases` relies on;
+ * - closed since the console last heard: it leaves;
+ * - one the console was told of *after it asked* — an alert that arrived
+ *   while the read was on its way, which the read was answered too early to
+ *   contain. `toldSince` says so, and it stays: an inbound alert must not
+ *   vanish because a read crossed it.
+ */
+export function casesAfterRead(
+  held: readonly EmergencyCaseView[],
+  read: readonly EmergencyCaseView[],
+  toldSince: (caseId: string) => boolean,
+): EmergencyCaseView[] {
+  const known = new Map(held.map((entry) => [entry.id, entry]));
+  const listed = new Set(read.map((entry) => entry.id));
+  return [
+    ...read.map((entry) => {
+      const mine = known.get(entry.id);
+      return mine !== undefined && mine.version > entry.version ? mine : entry;
+    }),
+    ...held.filter(
+      (entry) => !listed.has(entry.id) && (entry.closedAt !== null || toldSince(entry.id)),
+    ),
+  ];
 }
 
 export type EmergencyGuardCode =
