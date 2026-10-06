@@ -23,14 +23,15 @@
  *   queue_events  no DELETE. UPDATE stays, for the one change its trigger
  *                 allows — `undone_by_event_id` being set (`GR-02`).
  *
- * ## The one thing it still has that it should not
+ * ## Bound by the tenant policies (plan B1, migration 0043)
  *
- * `BYPASSRLS`. Every table has row-level security switched on (`DB-P8`) and no
- * policy yet, which for any role but the owner means "sees nothing". The
- * policies are plan 1.10, which removes this attribute in the same step.
- * Until then hospital scoping is enforced where it has been all along — in the
- * API's own checks — and this role is a narrowing of what the API could do
- * yesterday, not a claim that the database isolates hospitals.
+ * It does not bypass row-level security, and it is a member of `app_tenant`,
+ * the role the policies are written for. So what this role can reach on any
+ * connection is what that connection has said it is working for
+ * (`backend/api` `config/dbScope.ts`): a hospital's staff reach that
+ * hospital's rows, and a connection that has said nothing reaches none. Until
+ * B1 it held BYPASSRLS, because there were no policies and without it the API
+ * would have seen an empty database.
  *
  * Everything here can be run again: after every migration, on every start.
  */
@@ -85,7 +86,7 @@ export async function ensureApiRole(client: Client, role: ApiRole): Promise<void
     await run(
       client,
       `ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION
-         BYPASSRLS PASSWORD %L`,
+         NOBYPASSRLS PASSWORD %L`,
       [role.name, role.password],
     );
 
@@ -125,6 +126,11 @@ export async function ensureApiRole(client: Client, role: ApiRole): Promise<void
     // transaction (0026); the connection's own role has to be a member to
     // switch to it.
     await run(client, 'GRANT gov_reader TO %I', [role.name]);
+
+    // The tenant policies (0043) are written for `app_tenant`. Being a member
+    // is what makes them apply to this role; not bypassing row-level security,
+    // above, is what makes them bind it.
+    await run(client, 'GRANT app_tenant TO %I', [role.name]);
 
     await client.query('COMMIT');
   } catch (error) {

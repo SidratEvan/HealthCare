@@ -125,7 +125,11 @@ describe('a government viewer opens nothing written for a hospital (FR-ROLE-04)'
 
     for (const path of paths) {
       const response = await get(path, token);
-      expect(response.status, path).toBe(403);
+      // Refused either way. A queue, a ward, a bench and a dashboard are
+      // refused by role. A patient is not found: nothing about a person
+      // exists for a national account, in the database itself (`FR-ONB-08`,
+      // migration 0043).
+      expect(response.status, path).toBe(path.endsWith('/records') ? 404 : 403);
     }
   });
 });

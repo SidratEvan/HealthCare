@@ -7,8 +7,9 @@
  * patient app is not started for these specs at all.
  */
 
-import { prepareDatabase } from './globalSetup.js';
+import { prepareApiRole, prepareDatabase } from './globalSetup.js';
 
-export default function globalSetupBuilt(): void {
+export default async function globalSetupBuilt(): Promise<void> {
   prepareDatabase();
+  await prepareApiRole();
 }

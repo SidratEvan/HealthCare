@@ -22,6 +22,7 @@
 
 import express, { json, type Express } from 'express';
 
+import { runInDbScope, scopeOfPrincipal } from './config/dbScope.js';
 import { rememberRawBody } from './config/rawBody.js';
 import { env } from './env.js';
 import { attachPrincipal } from './middleware/auth.js';
@@ -114,6 +115,14 @@ export function createApp(): Express {
 
   app.use(attachPrincipal);
   app.use(attachGuestFromLink);
+
+  // Everything after this runs in the scope of whoever is asking, and the
+  // database holds it to that (`config/dbScope.ts`, `FR-SEC-11`): a member
+  // of staff reaches their own hospital's rows and no other's, whatever a
+  // route or a query below forgets to check.
+  app.use((req, _res, next) => {
+    runInDbScope(scopeOfPrincipal(req.principal), next);
+  });
 
   // Global pass: validates a key when one is supplied. Endpoints where a
   // duplicate costs money or a place in a queue apply `idempotency({

@@ -378,11 +378,15 @@ describe('the auth matrix', () => {
 
     it('refuses staff at another hospital', async () => {
       const elsewhere = await otherHospitalId(fixture.hospitalId);
-      expect(await read(booking(0), await staffToken(['hospital_admin'], elsewhere))).toBe(403);
+      // Not 403: another hospital's row does not exist for this caller, so it is
+      // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+      expect(await read(booking(0), await staffToken(['hospital_admin'], elsewhere))).toBe(404);
     });
 
     it('refuses a national account', async () => {
-      expect(await read(booking(0), await nationalToken())).toBe(403);
+      // Not 403: another hospital's row does not exist for this caller, so it is
+      // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+      expect(await read(booking(0), await nationalToken())).toBe(404);
     });
 
     it('refuses anybody not signed in', async () => {

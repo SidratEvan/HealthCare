@@ -476,8 +476,10 @@ describe('writing a visit (FR-DOC-08)', () => {
       await staff(['doctor'], elsewhere, await staffIdFor(elsewhere, 'doctor')),
     );
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.details.reason).toBe('hospital_scope');
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('NOT_FOUND');
   });
 
   // BACKEND.md §7.6: a visit is a doctor's. Found by the security review of

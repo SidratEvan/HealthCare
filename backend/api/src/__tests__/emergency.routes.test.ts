@@ -406,7 +406,9 @@ describe('the ER console — who may read and act (FR-ROLE-01)', () => {
     const { caseId } = await alertWithPhone();
     const padma = await erFixture('Padma Specialised');
 
-    expect((await acknowledge(caseId, padma.erToken)).status).toBe(403);
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect((await acknowledge(caseId, padma.erToken)).status).toBe(404);
     expect((await acknowledge(caseId, shapla.wardToken)).status).toBe(403);
     expect((await patch(caseId, { action: 'accept' }, shapla.receptionistToken)).status).toBe(403);
     expect((await caseRow(caseId)).state).toBe('inbound');

@@ -594,13 +594,47 @@ Added by plan 1.7 (`docs/PLATFORM_PLAN.md`). A self-hosted deployment has two ro
 | Role | Who connects as it | What it may do |
 |---|---|---|
 | The owner (`POSTGRES_USER`) | The `migrate` service and the `backup` service | Everything: it owns the schema. Serves no request |
-| The API's role (`API_DB_USER`) | The API, its workers, and the `pnpm staff:*` commands | `SELECT, INSERT, UPDATE, DELETE` on rows, `USAGE` on sequences, `EXECUTE` on functions, membership of `gov_reader`. **Not** `TRUNCATE`, not any schema change, not `SUPERUSER`/`CREATEROLE`/`CREATEDB`/`REPLICATION` |
+| The API's role (`API_DB_USER`) | The API, its workers, and the `pnpm staff:*` commands | `SELECT, INSERT, UPDATE, DELETE` on rows, `USAGE` on sequences, `EXECUTE` on functions, membership of `gov_reader` and of `app_tenant`. **Not** `TRUNCATE`, not any schema change, not `SUPERUSER`/`CREATEROLE`/`CREATEDB`/`REPLICATION`, and **not `BYPASSRLS`** (§5.2): what it reaches on a connection is what that connection has said it is working for |
 
 Three tables are narrower still: `audit_log` and `bed_events` are `INSERT` and `SELECT` only for the API's role, and `queue_events` has no `DELETE` (its `UPDATE` stays, for the one change its trigger allows — `undone_by_event_id`). `schema_migrations` is `SELECT` only. For `audit_log`, which has no trigger, that grant is what keeps a written row written.
 
 The role is created and brought back to exactly these privileges by `pnpm db:role` (`database/scripts/lib/role.ts`), which the `migrate` service runs after every migration. The API test suite connects as an identical role, so every endpoint is tested without ownership (`backend/api/src/__tests__/apiRole.test.ts` is the list of what is refused).
 
-**Not yet true:** the table above describes policies that are not written. Row-level security is enabled on every table with **no policy**, which for a role that is not the owner means "sees nothing" — so until plan 1.10 writes the policies the API's role carries `BYPASSRLS`, and hospital scoping is enforced by the API's own checks, as it always has been. 1.10 removes the attribute in the step that adds the policies. On the demonstration deployment (Supabase) the API still connects as the owner.
+### 5.2 Hospitals kept apart by the database (plan B1, migration 0043, `FR-SEC-11`)
+
+**The table at the top of this section is the intent as first written; this is what is built.** Until 0043 there was row-level security on every table and not one policy, the API's role carried `BYPASSRLS`, and hospitals were kept apart by three habits in application code. A route that forgot its scope check, or a query that filtered by id and not by hospital, leaked across hospitals with nothing underneath.
+
+**The scope.** Every connection the API takes from its pool states who it is working for before anything else runs on it (`backend/api` `config/dbScope.ts`, `config/db.ts`): two session settings, `app.scope` and `app.hospital_id`. The scope is decided once per request, from the principal and from nothing the request says, and held for the request by `AsyncLocalStorage`. No route, service or repository mentions it, so none can forget it.
+
+| `app.scope` | Who | What the policies let it reach |
+|---|---|---|
+| `hospital` (+ `app.hospital_id`) | A member of that hospital's staff | That hospital's rows. Another hospital's do not exist for it: not to read, not to write, not to move a row of its own into |
+| `national` | A platform administrator | Organisations: hospitals, their staff, wards, beds, schedules. **Nothing about a person** — no patient, booking, visit, case, order, consent, message (`FR-ONB-08`) |
+| `open` | A patient, a guest holding a link, nobody | Everything, as before: what each may see is still decided by the application. A patient's own scope is plan B3 |
+| `system` | The server's own work: the schedule job, the purge, an operator's command, anything outside a request | Everything |
+| unset, or anything else | A connection that has said nothing | **Nothing** |
+
+**Who the policies are for.** `app_tenant` (NOLOGIN), which `pnpm db:role` makes the API's role a member of, in the step that takes away its `BYPASSRLS`. Not `PUBLIC`: on a hosted database other roles can reach these tables, and a policy is a grant.
+
+**The kinds of table** (`0043` has the policy for each of the 57; `database/tests/tenancy.test.ts` fails if a table has none):
+
+| Kind | Tables | Rule under `hospital` scope |
+|---|---|---|
+| An organisation's own | `staff_users`, `staff_roles`, `wards`, `beds`, `ambulances`, `subscriptions`, `invoices`, `sync_cursors`, `import_batches`, `import_mapping_profiles`, `external_refs` | `hospital_id` is the caller's |
+| What a hospital publishes (`FR-NET-01`) | `departments`, `doctor_hospitals`, `sessions`, `session_templates`, `capabilities`, `pharmacy_stock`, `hospital_settings` | Anybody reads; only the hospital changes |
+| A hospital's rows about its patients | `admissions`, `bed_events`, `bed_requests`, `blood_requests`, `consents`, `counter_shifts`, `feedback`, `test_orders`, `visits`, `emergency_cases` | `hospital_id` is the caller's |
+| The same, through a parent | `bookings`, `queue_events`, `queue_state`, `standby_list`, `slot_offers` (the session); `guest_links`, `payments` (the booking, or what else was paid for); `reports` (the order); `prescriptions`, `prescription_items` (the visit); `import_rows` (the batch) | The parent is the caller's hospital's |
+| People | `patients`, `users`, `guest_identities`, `device_tokens`, `otp_challenges`, `patient_documents`, `notifications` | Reachable; they belong to no hospital. A patient a hospital imported (`owner_hospital_id`) is that hospital's alone (`FR-IMP-10`) |
+| The platform's and everybody's | `hospitals` (read by anybody, changed by itself or the platform), `doctors`, `medicines`, `notification_templates`, `blood_donors`, `analytics_refresh`, `sessions_auth`, `schema_migrations` (read) | Reachable |
+| `audit_log` | | Anybody appends; a hospital reads its own |
+
+**What crosses between hospitals** is named in 0043 and nowhere else: what a hospital publishes; a **referral**, to its two ends, and through it the two emergency cases it links; a **visit**, and the booking behind it, to a hospital the patient has given a live consent; and `fn_runs_emergency_desk(hospital)`, which answers yes or no from `staff_roles` with its owner's rights, because who works at a hospital is its own and that it has an emergency desk is what it publishes.
+
+**What it does not do.** It does not bind the owner: row-level security never applies to a table's owner, so migrations, seeds and backups are unaffected, **and so is a deployment whose API still connects as the owner — the public demonstration on Supabase.** The policies protect a deployment that runs the API as its own role, which is what one holding real patients does (`DEPLOY.md` Part S). It does not yet separate one patient from another: under `open` the application decides, as before (plan B3). And a hospital's staff asking for another hospital's row by id are now answered **404**, not 403: the row is not found, because for them it is not there.
+
+**The schedule job** (`sessionMaterialise.service`) runs in the `system` scope whoever prompted it: a hospital approving an import asks for it to run now, and what runs writes the chambers every hospital's schedules call for.
+
+**How it is tested.** `database/tests/tenancy.test.ts` asks the policies directly, as `app_tenant`, with queries that forget their hospital. `backend/api/src/__tests__/tenantScope.test.ts` asks that the API states the scope on a single query, in a transaction, across reused connections and with two hospitals' work interleaved. The whole API suite and **every browser suite** run with the API as a role the policies bind (`e2e/support/database.ts`), so a flow the policies refuse fails a test.
 
 ---
 

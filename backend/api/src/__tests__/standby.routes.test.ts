@@ -189,7 +189,9 @@ describe('who may offer a chair (FR-ROLE-01)', () => {
       )
       .set('Idempotency-Key', randomUUID())
       .send({})
-      .expect(403);
+      // Not 403: another hospital's row does not exist for this caller, so it is
+      // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+      .expect(404);
   });
 
   it('demands an idempotency key', async () => {

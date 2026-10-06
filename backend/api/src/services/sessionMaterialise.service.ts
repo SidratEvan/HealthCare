@@ -16,6 +16,7 @@
 
 import { MATERIALISE_DAYS, id, plannedSessions, time, type DhakaDate } from '@platform/domain';
 
+import { runInDbScope } from '../config/dbScope.js';
 import * as repo from '../repositories/sessionMaterialise.repo.js';
 
 /** How often the loop runs. Hourly, so a missed midnight is caught within the hour. */
@@ -26,6 +27,19 @@ export const MATERIALISE_INTERVAL_MS = 60 * 60 * 1000;
  * yet. Returns how many it wrote. `onlyTemplate` limits it to one schedule.
  */
 export async function materialise(
+  options: { readonly from?: DhakaDate; readonly onlyTemplate?: string } = {},
+): Promise<number> {
+  // The server's own work, whoever prompted it. A hospital approving an
+  // import or switching a schedule on asks for this to run now instead of on
+  // the hour; what runs is the same job, which writes the chambers every
+  // hospital's schedules call for. So it runs in the system's scope and not
+  // in the scope of the member of staff whose request happened to prompt it
+  // (`config/dbScope.ts`, `FR-SEC-11`). It takes nothing from the request
+  // but the one schedule to limit itself to, and gives back a count.
+  return await runInDbScope({ kind: 'system' }, async () => await materialiseNow(options));
+}
+
+async function materialiseNow(
   options: { readonly from?: DhakaDate; readonly onlyTemplate?: string } = {},
 ): Promise<number> {
   const from = options.from ?? time.toDhakaDate(time.fromDate(new Date()));

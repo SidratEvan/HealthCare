@@ -81,15 +81,10 @@ export async function erHospitals(onlyIds?: readonly string[]): Promise<ErHospit
      WHERE h.deleted_at IS NULL
        AND h.is_live
        AND (${onlyIds === undefined}::boolean OR h.id = ANY(${[...(onlyIds ?? [])]}::uuid[]))
-       AND EXISTS (
-         SELECT 1
-           FROM staff_roles sr
-           JOIN staff_users su ON su.id = sr.staff_user_id
-          WHERE sr.hospital_id = h.id
-            AND sr.role = 'emergency'
-            AND sr.deleted_at IS NULL
-            AND su.deleted_at IS NULL
-       )
+       -- Who works at a hospital is its own, and another hospital's ER
+       -- cannot read it; that it has an emergency desk is what it publishes.
+       -- The function answers that and nothing else (migration 0043).
+       AND fn_runs_emergency_desk(h.id)
      ORDER BY h.id
   `.execute(db);
 

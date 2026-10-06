@@ -21,7 +21,7 @@
 
 import { defineConfig, devices } from '@playwright/test';
 
-import { E2E_DATABASE_URL } from './e2e/support/database.js';
+import { asApiRole } from './e2e/support/database.js';
 
 /** The three servers these specs drive. */
 const CONSOLE_URL = 'http://localhost:3100';
@@ -39,7 +39,9 @@ const API_URL = 'http://localhost:4000';
  * the fixtures the specs use cannot end up on different databases — which is
  * exactly what happened while this was a second, independent copy of the URL.
  */
-const DATABASE_URL = E2E_DATABASE_URL;
+// As the API's own role, which the tenant policies bind, and not as the
+// owner, which they do not (`e2e/support/database.ts`, migration 0043).
+const DATABASE_URL = asApiRole();
 
 export default defineConfig({
   testDir: './e2e',
