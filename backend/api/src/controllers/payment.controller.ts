@@ -11,7 +11,7 @@ import { patientLink } from '../config/links.js';
 import { forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as payments from '../services/payment.service.js';
 
-import { assertBookingScope } from './queue.controller.js';
+import { assertBookingScope, assertBookingScopeFor } from './queue.controller.js';
 
 import type { Payer } from '../services/payment.service.js';
 import type { Request, Response } from 'express';
@@ -36,6 +36,11 @@ export async function intent(req: Request, res: Response): Promise<void> {
   if (principal?.kind === 'guest' && principal.bookingId !== body.bookingId) {
     throw forbiddenScope({ reason: 'link_is_for_a_different_booking' });
   }
+  // And whoever it is pays for a booking that is theirs: the fence
+  // `GET /bookings/:id/payments` has, asked before anything is written. Found
+  // missing by the tenant matrix (plan B2): an account could start a payment
+  // against anybody's booking. (Staff are refused just below, by `payerOf`.)
+  await assertBookingScopeFor(req, body.bookingId);
 
   const result = await payments.createIntent(
     {

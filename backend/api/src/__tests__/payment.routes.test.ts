@@ -395,6 +395,36 @@ describe('the auth matrix', () => {
     });
   });
 
+  it('refuses an account paying for a booking that is not its own, and writes nothing', async () => {
+    // Until the tenant matrix of plan B2 only a tracking link was held to its
+    // booking: an account could start a payment against anybody's, and the
+    // answer told it that booking's fee.
+    const { bookingId } = await payableBooking();
+    const somebodyElse = await sql<{ owner_user_id: string }>`
+      SELECT owner_user_id FROM patients
+       WHERE owner_user_id IS NOT NULL AND deleted_at IS NULL
+         AND owner_user_id NOT IN (
+               SELECT p.owner_user_id FROM bookings b JOIN patients p ON p.id = b.patient_id
+                WHERE b.id = ${bookingId}::uuid AND p.owner_user_id IS NOT NULL)
+       ORDER BY created_at, id
+       LIMIT 1
+    `.execute(db);
+    const accountId = somebodyElse.rows[0]?.owner_user_id;
+    if (accountId === undefined) throw new Error('The seed should hold patient accounts.');
+
+    const before = await paymentCount(bookingId);
+    const key = randomUUID();
+    const response = await request(app)
+      .post(`${BASE}/payments/intent`)
+      .set('Authorization', bearer(await patientToken(accountId)))
+      .set('Idempotency-Key', key)
+      .send({ bookingId, method: 'at_hospital', idempotencyKey: key });
+
+    expect(response.status).toBe(403);
+    expect(JSON.stringify(response.body)).not.toContain('amountPoisha');
+    expect(await paymentCount(bookingId)).toBe(before);
+  });
+
   it('refuses staff paying, because paying is the patient’s', async () => {
     const { bookingId } = await payableBooking();
     const key = randomUUID();
