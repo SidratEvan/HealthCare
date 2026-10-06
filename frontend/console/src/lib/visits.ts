@@ -70,6 +70,11 @@ export interface PatientRecords {
   };
   readonly intake: Intake | null;
   readonly visits: readonly VisitRecord[];
+  /**
+   * Whose visits these are: every hospital's, under the patient's consent, or
+   * only this hospital's (`FR-NET-02`). Absent from a server older than this.
+   */
+  readonly visitsFrom?: 'everywhere' | 'this_hospital';
   /** What this version cannot show, so the screen can say so. */
   readonly absent: readonly string[];
 }
