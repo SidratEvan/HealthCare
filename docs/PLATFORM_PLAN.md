@@ -96,6 +96,7 @@ integration points marked ▣ and at J.
 | **I** | | **Hardening** | | |
 | I1 | `chore/api-build` | The API runs TypeScript through `tsx`; images carry dev dependencies (handover 21) | A compiled API in a slim image | S |
 | I2 | `chore/ops-signals` | Nothing alerts; rate limits and secrets not reviewed since the pilot steps | Health and readiness that report backup age, queue depth and worker lag; a rate-limit and secret-handling pass; a patient is no longer sent other patients' ids (handover 30) | S |
+| I3 | `feat/patient-rls-queue` | After B3, one patient is kept from another by the database for the clinical record only. A booking, a payment and a message are still reachable by any patient's connection, because the live serial is worked out from every booking in a chamber and a serial is allocated against all of them | The queue's reads for a patient take the operational columns of a chamber through one function that hands back no identity; then policies for `patient` and `guest` on `bookings`, `payments`, `notifications`, `guest_links`, `standby_list` and `patients`. Strict, with the canary | S |
 | **J** | `chore/v1-release` | | The full gate, the migrations applied, `mvp` → `main`, demo data reset | Full ▣ |
 
 **Blocked outside the repository** (built up to the adapter; activation only):
@@ -593,7 +594,7 @@ In addition to `CLAUDE.md`:
 | A7 | `fix/audit-append-only` | **merged 6 October** — the security headers: `middleware/securityHeaders.ts` on the API, `headers()` in both apps' `next.config.mjs`, `securityHeaders.test.ts`, `e2e/security-headers.spec.ts`. **The audit log half was already done**: since plan 1.7 the API's database role holds INSERT and SELECT on `audit_log` and nothing else, and `apiRole.test.ts` proves an UPDATE and a DELETE are refused; nothing was rebuilt. A script-restricting Content-Security-Policy for the apps moves to I2 |
 | A8 | `fix/doctor-record-scope` | **merged 6 October** — `readScope` in `clinical.service` (consent: every hospital's visits; a treatment relationship alone: this hospital's), `findVisits` narrowed in the query, `visitsFrom` on the answer and in the audit row, the note on `S-B-05`'s panel. Still at hospital grain, not per clinician (the open ruling in `STATUS.md`). **Section A is complete** |
 | B1 | `feat/tenant-rls` | **merged 6 October** (was 1.10) — migration 0043 (`app_tenant`, the scope functions, a policy on each of the 57 tables, `fn_runs_emergency_desk`), `config/dbScope.ts` and the scoped pool in `config/db.ts`, the API's role without `BYPASSRLS`, every browser suite's API as that role. `database/tests/tenancy.test.ts`, `tenantScope.test.ts`. Design: `DATABASE.md` §5.2. **Supabase needs 0039–0043 before the next release** (the demo's API connects as the owner, so the policies do not bind it there) |
-| B3 | `feat/patient-rls` | One patient kept from another by the database: under `open`, a patient's or a guest's own scope on the tables about people. B1 left this to the application, as it was |
+| B3 | `feat/patient-rls` | **merged 6 October** — migration 0044: the scopes `patient` and `guest`, stated on the connection like a hospital's; of the clinical record (visits, prescriptions, tests, reports, documents, consents, stays) an account reaches its own profiles', a tracking link its booking's, nobody none. `guest.service` runs as the link once it resolves; the claim preview is read as the server. Design: `DATABASE.md` §5.3. **Left, as I3:** bookings, payments and messages between patients, which need the queue's reads changed first. **Supabase needs 0039–0044 before the next release** |
 | B2 | `test/tenant-matrix` | **merged 6 October** — `tenantMatrix.test.ts`: every mounted route named with how it is kept to one hospital (a route not named fails), hospital A against hospital B by path, by row and by a row in the body, the platform, the nation, nobody, a patient and a tracking link, and B unchanged afterwards. Found and fixed: `POST /payments/intent` held an account to nothing. Raised: question Q7 |
 | C1 | `feat/hospital-profile` | |
 | C2 | `feat/portal-address` | |
@@ -614,6 +615,7 @@ In addition to `CLAUDE.md`:
 | H3 | `feat/payment-adapters-ready` | activation waits: X2 |
 | I1 | `chore/api-build` | |
 | I2 | `chore/ops-signals` | |
+| I3 | `feat/patient-rls-queue` | |
 | J | `chore/v1-release` | |
 | 2.1 | `feat/notification-worker` | now H1 |
 | 2.2 | `feat/sms-live` | waits: D1 |
