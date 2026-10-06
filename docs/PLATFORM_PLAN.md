@@ -47,6 +47,15 @@ work is frozen**: no new product features, no self-service onboarding, no AI
 import, no network architecture, no refactor that a pilot does not need.
 Phases 2–4 and rows 1.9c–1.10 below wait.
 
+**The pilot candidate is `fb1d1d8`** (owner, 5 October): P1 to P4, the whole
+gate and all three CI jobs. The dry run and any first deployment use that
+exact commit (`DEPLOY.md` S8); `main` is not moved for it. **No feature
+coding until a hospital agrees to pilot.** What is left is operational:
+the hospital's IT says how its server is reached, the dry run is done on
+their hardware, and a blocker it finds is fixed alone on a small branch.
+When a hospital agrees, the owner gets one short deployment sheet
+(`docs/STATUS.md`, *Pilot readiness*).
+
 **The pilot this is for.** One hospital, one department, one to three
 chambers, on that hospital's own server and database. Supervised closely.
 Pay at the hospital. The hospital's own system keeps running beside it, and

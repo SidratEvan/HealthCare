@@ -7,7 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/e2e-pilot-path` (5 October) — **P4: the pilot's own path
+Last updated: `chore/pilot-candidate` (5 October) — **`fb1d1d8` is the
+reception-pilot candidate, approved by the owner, and all product work is
+stopped until a hospital agrees to pilot** (below, *Pilot readiness*).
+Documents only. Before that,
+`chore/e2e-pilot-path` (5 October) — **P4: the pilot's own path
 runs under the production configuration, and the answer is go, on three
 conditions that are not code** (below, *Pilot readiness*). **Work has
 stopped there, as the owner directed: nothing from the plan resumes until
@@ -420,18 +424,41 @@ three conditions, none of which is code:**
    (`DEPLOY.md` S1). If the hospital's IT says its server is reachable only
    inside the hospital, that is P5 and it is a blocker for *that* hospital
    until designed and built.
-2. **The pilot is deployed from this code.** `DEPLOY.md` S1 says `git checkout
-   main`, and `main` is still the pitch release of 27 September: none of
-   phase 1 and none of P1–P4 is on it. Either `mvp` is released to `main`
-   (which also redeploys the public demonstration, and needs migrations 0034
-   and 0035 applied to Supabase first), or the pilot server checks out this
-   commit of `mvp`. The owner's choice; not made.
+2. **The pilot is deployed from the exact commit that was tested — decided.**
+   The owner approved `fb1d1d8` as the reception-pilot candidate on
+   5 October. The dry run and any first deployment check out
+   `fb1d1d816c8204f68fe1c0c95666baf68b0dbb76` and nothing else (`DEPLOY.md` S8).
+   `main` is still the pitch release of 27 September, is **not** what a
+   pilot deploys, and is not to be moved merely to tidy this up.
 3. **The dry run passes on the hospital's own hardware and network** (the
    twelve steps given to the owner on 5 October: start, first administrator
    and two-step, settings to chambers, sign-in from every counter PC, a mock
    chamber, a pulled cable, two counters at once, end of day and next
    morning, backup and restore, the morning check, the operating rules,
    clocks and browsers). Nothing in this repository has run on their machine.
+
+**Where this leaves the work (owner, 5 October).** No new feature coding
+until there is a hospital to deploy to: not AI import, not self-service
+onboarding, not white-labelling, not ward or ER work, nothing else from the
+plan. What remains is operational:
+
+- The hospital's IT says whether its server is publicly reachable with
+  HTTPS names, or reachable only inside the hospital. Certificates for the
+  second are not built unless a real pilot hospital chooses it.
+- Before real patients, the dry run in `DEPLOY.md` S8 is run on the actual
+  hardware and network.
+- If that finds a real blocker, only that is fixed, on a small branch, and
+  the relevant gate is run again. The new commit then replaces the one in
+  `DEPLOY.md` S8.
+
+**When a hospital agrees to pilot, the owner is given one short deployment
+sheet, and not a documentation project.** It holds: the exact commit; what
+the server and network need; the environment variables and secrets; the
+setup commands; setting up the first administrator; setting up a
+receptionist; the dry-run steps; backup and restore; how to roll back; and
+what the pilot does and does not include. Almost all of it is already in
+`DEPLOY.md` Part S; the sheet is that, cut down to one page for one
+hospital.
 
 **What the go rests on, all under the production configuration** (built
 apps, `DEMO_MODE=false`, the database role that owns nothing): sign-in with

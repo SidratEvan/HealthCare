@@ -266,7 +266,8 @@ built from the root `Dockerfile`).
   (patients), `console.hospital.com.bd` (staff) and `api.hospital.com.bd` —
   and ports **80 and 443** open to the internet. Certificates are obtained and
   renewed automatically.
-- The repository checked out on it (`git clone`, then `git checkout main`).
+- The repository checked out on it: `git clone`, then the commit being deployed.
+  **For the reception pilot that is the commit named in `S8`, not `main`.**
 
   **Before a pilot, the hospital's IT is asked one question, and the answer
   comes back before anything else is set up** (owner's decision,
@@ -493,3 +494,64 @@ before Docker sees them. A Linux server needs nothing.
 | The console signs in but shows nothing | The facility has no departments or doctors yet: `S-B-11` |
 | A patient cannot find the hospital | Not live yet, or no doctor's BMDC number verified (`S3`) |
 | Every administrator's two-step code is refused after a restore or a move | `TOTP_ENCRYPTION_KEY` is not the value the database was written with (the API log says the secret does not open). Put the old value back; failing that, `pnpm staff:reset-2fa` each administrator (`S3`) |
+
+## S8. The reception pilot: which code, and the dry run
+
+**The code.** The reception pilot is deployed from one exact commit, and the
+dry run and any first deployment use that same commit (owner's decision,
+2026-10-05):
+
+```
+fb1d1d816c8204f68fe1c0c95666baf68b0dbb76
+```
+
+```bash
+git fetch origin
+git checkout fb1d1d816c8204f68fe1c0c95666baf68b0dbb76
+git rev-parse HEAD        # must print the line above, and nothing else
+```
+
+Not `main`: `main` is the demonstration's release of 27 September and has
+none of the pilot's work on it, and it is not moved for this. That commit
+passed the whole gate here and all three CI jobs, the reception pilot's own
+path under the production configuration among them
+(`e2e/production/reception-pilot.prod.spec.ts`). If the dry run finds a real
+blocker, only that is fixed, on a small branch, the gate is run again, and
+the new commit replaces the one above, here, before anything is redeployed.
+
+**What the pilot is.** One hospital on its own server and database, one
+department, one to three chambers, reception only: staff sign-in,
+registration at the counter and walk-ins, doctor arrived, call next, done,
+late, absent, bring back, pause and resume, undo, end chamber, and the four
+counters on the console. Pay at the hospital. Outside it for now: the
+doctor's screen, the ward board, the ER console, the lab, the pharmacy, the
+patient app and live tracking, SMS, online payment.
+
+**The dry run**, on the hospital's own hardware and network, before any real
+patient. Each step either passes or is written down as what happened.
+
+1. The stack starts from one command (`S3`); `GET /api/v1/config` says
+   `demo: false`; the database holds no demonstration data.
+2. The first administrator is made by the command in `S3`, signs in, sets up
+   two-step verification and keeps the recovery codes.
+3. A department, the doctors and their schedules are entered in settings;
+   today's and tomorrow's chambers appear.
+4. A receptionist's account is made in settings and signs in **from every
+   counter PC**, with no certificate warning on any of them.
+5. A whole mock chamber on the reception console: register twenty walk-ins,
+   doctor arrived, call, done, late, absent, bring back, pause, resume, undo.
+6. The network cable is pulled mid-chamber: five actions are taken, the page
+   is reloaded, the cable goes back. All five arrive once, in order.
+7. Two counters on one chamber press *next* together: one calls the patient,
+   the other is told the queue moved.
+8. The chamber is ended. The next morning only that day's chamber is
+   offered, and anything left from the day before says which day it is from.
+9. The nightly backup runs to the second disk; it is restored onto a spare
+   machine and the administrator signs in there (`S5`).
+10. The morning check is written down and given to a named person: the
+    backup is healthy and the API is ready (`docker compose … ps`).
+11. The operating rules are agreed with the desk: nobody changes shift with
+    a pending count showing; if the server is out of reach the queue on
+    screen is still worked and new patients go on paper; a chamber is ended
+    by a person.
+12. The counter PCs' clocks are right, and each uses one supported browser.
