@@ -140,6 +140,38 @@ export async function findByClientEventId(
   return row === undefined ? null : toQueueEvent(row);
 }
 
+/**
+ * Which of these console keys this session's log holds, up to a sequence
+ * (`SY-08`).
+ *
+ * For a console that subscribes with actions still unanswered: an answer lost
+ * on the way is settled by the socket alone. Bounded by the session, so a key
+ * tells nobody anything about another chamber, and by `uptoSeq`, so nothing
+ * is named that the state sent beside it does not yet contain.
+ */
+export async function appliedAmong(
+  sessionId: string,
+  clientEventIds: readonly string[],
+  uptoSeq: number,
+): Promise<{ clientEventId: string; seq: number; eventId: string }[]> {
+  if (clientEventIds.length === 0) return [];
+
+  const result = await sql<{ client_event_id: string; seq: string; id: string }>`
+    SELECT client_event_id, seq, id
+      FROM queue_events
+     WHERE session_id = ${sessionId}
+       AND client_event_id = ANY(${[...clientEventIds]}::uuid[])
+       AND seq <= ${uptoSeq}
+     ORDER BY seq
+  `.execute(db);
+
+  return result.rows.map((row) => ({
+    clientEventId: row.client_event_id,
+    seq: Number(row.seq),
+    eventId: row.id,
+  }));
+}
+
 export async function findById(eventId: string): Promise<QueueEvent | null> {
   const result = await sql<EventQueryRow>`
     SELECT ${EVENT_COLUMNS} FROM queue_events WHERE id = ${eventId}

@@ -33,7 +33,7 @@ import type {
 
 import { logger } from '../config/logger.js';
 
-import { ROOMS, type RealtimeEnvelope } from './rooms.js';
+import { ROOMS, type AppliedAction, type RealtimeEnvelope } from './rooms.js';
 
 /** What a transport must be able to do. Deliberately tiny. */
 export interface RealtimeEmitter {
@@ -121,17 +121,24 @@ export function resetEmitter(): RecordingEmitter {
  * a client that missed one message must not be left holding a queue that is
  * quietly wrong; the resume-from-seq path exists for the case where a client
  * wants the events it missed instead.
+ *
+ * `applied` names the console actions the write behind this broadcast put in
+ * the log (`SY-08`): those and nothing older. It is empty when no action is
+ * behind it — a roster change. The answer to the request says the same thing
+ * by another road, and a console acts on whichever it hears first.
  */
 export function queueUpdated(
   sessionId: string,
   payload: QueueUpdatedPayload,
   seq: number,
   serverTs: string,
+  applied: readonly AppliedAction[] = [],
 ): void {
   emitter().emit(ROOMS.session(sessionId), 'queue.updated', {
     type: 'queue.updated',
     seq,
     serverTs,
+    applied,
     data: payload,
   });
 }
