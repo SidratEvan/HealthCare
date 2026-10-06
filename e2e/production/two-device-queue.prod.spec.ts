@@ -102,7 +102,13 @@ test.describe('what is running is the production configuration', () => {
     };
     // If any of these three read otherwise, every test below is the
     // demonstration again and proves nothing about a hospital's server.
-    expect(settings.data).toEqual({ demo: false, onlinePayments: false, guestPhoneCheck: true });
+    // `scope` is whose app was asked about (`FR-BRD-02`): nobody's, here.
+    expect(settings.data).toEqual({
+      demo: false,
+      onlinePayments: false,
+      guestPhoneCheck: true,
+      scope: null,
+    });
   });
 
   test('the password-less picker is refused', async ({ request }) => {
