@@ -444,7 +444,7 @@ written**. What was read for it on 3 October, so it is not read again:
    word (`CLAUDE.md` §3.1), but it has not been made: nothing in phase 1 needs
    the public demo to change, and it is better done once, when phase 1 ends.
 Step 27 waits for an SMS account; push notifications wait for a signed
-hospital (decision 84). Company registration (HealthWealthBD Limited, via
+hospital (decision 84). Company registration (the name is MedLiveBD since 6 October; via
 BanglaBiz) is outside the repo and paused; see the owner's notes.
 
 Four unplanned branches after step 11:

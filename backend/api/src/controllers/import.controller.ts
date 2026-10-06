@@ -36,7 +36,7 @@ export function getTemplate(req: Request, res: Response): void {
   // A byte order mark, so a spreadsheet reads the Bangla as UTF-8 on open.
   res
     .type('text/csv; charset=utf-8')
-    .attachment(`healthwealthbd-${set}-template.csv`)
+    .attachment(`medlivebd-${set}-template.csv`)
     .send('\uFEFF' + imports.template(set));
 }
 

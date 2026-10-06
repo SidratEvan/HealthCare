@@ -1,4 +1,4 @@
-# National Healthcare Platform — Bangladesh
+# MedLiveBD — a national healthcare platform for Bangladesh
 
 A two-sided healthcare platform: a Bangla-first patient PWA and a set of hospital
 staff consoles, built around a **live queue engine** that keeps a doctor's chamber

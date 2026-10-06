@@ -76,7 +76,7 @@ test.describe('S-B-14: a hospital imports its own data', () => {
     // BTN-B14-TEMPLATE: the set's template, as a file.
     const download = page.waitForEvent('download');
     await page.getByTestId('import-template').click();
-    expect((await download).suggestedFilename()).toBe('healthwealthbd-structure-template.csv');
+    expect((await download).suggestedFilename()).toBe('medlivebd-structure-template.csv');
 
     // --- set A: checked, nothing written, then approved -----------------------
     await choose(page, 'structure.csv', STRUCTURE);

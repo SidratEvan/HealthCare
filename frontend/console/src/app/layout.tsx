@@ -21,7 +21,7 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
-  title: 'হাসপাতাল কনসোল',
+  title: 'MedLiveBD — হাসপাতাল কনসোল',
   description: 'রিসেপশন কনসোল — সিরিয়াল ব্যবস্থাপনা',
 };
 

@@ -40,8 +40,19 @@ describe('every key carries both languages', () => {
   });
 });
 
+/**
+ * The one string that is the same in both languages on purpose: the product's
+ * name, which the owner gave in one spelling (2026-10-06). Everything else in
+ * the Bangla slot is Bangla.
+ */
+const NAMES = new Set(['patient.appName']);
+
 describe('the Bangla is written, not transliterated', () => {
-  it.each(entries)('%s is in Bengali script', (key, message) => {
+  it('writes the product’s name the way the owner gave it, in both languages', () => {
+    expect(PATIENT.appName).toEqual({ bn: 'MedLiveBD', en: 'MedLiveBD' });
+  });
+
+  it.each(entries.filter(([key]) => !NAMES.has(key)))('%s is in Bengali script', (key, message) => {
     // Every Bangla string must contain Bengali codepoints. A key that slipped
     // through as English text in the bn slot is the most common way a
     // "translated" product ships half-English.
