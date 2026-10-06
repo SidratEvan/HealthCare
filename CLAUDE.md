@@ -40,6 +40,41 @@ What that means in practice:
   and a hospital director who sees a real console is being shown something that
   will still be true in six months.
 
+### 1.2 What the product is becoming (owner, 2026-10-05)
+
+One platform, not software written again for each hospital. It has three
+faces over one API and one database:
+
+- **The main patient app** — a multi-hospital network. A patient searches for
+  what they need (a doctor, a specialty, a hospital, an ICU, a burn unit, a
+  bed, an open serial) and sees which participating hospitals can provide it
+  now, live figures before listed ones, each with its age (`FR-PAT-16`–`19`).
+- **A private portal for each hospital** — the consoles that exist, inside
+  that hospital's own workspace. Hospital A never sees hospital B's patients
+  or internal data. A hospital contributes only public operational figures to
+  the patient network: beds, capabilities, who is sitting, open serials, and
+  how old each figure is (`FR-NET-01`–`03`).
+- **Later, optionally, a hospital-branded patient app** — the same app and the
+  same API, limited to one hospital and in its colours (`FR-BRD-01`–`04`).
+  Only the foundation is built now.
+
+Decided with it, and replacing what stood before:
+
+- **One shared deployment hosted in Bangladesh is the default** (`FR-SEC-07`,
+  as amended). A hospital on its own server is an exception for a later day,
+  and V1 is not designed around it. The self-hosted stack (`DEPLOY.md` Part S)
+  stays what it is: the same stack, on whichever machine holds it.
+- **External providers do not block the product build**: a real SMS
+  aggregator and sender ID, bKash, Nagad, merchant accounts, store
+  publication, a paid penetration test. They follow company registration and
+  hospital agreements (§1.1). Simulated codes, mock payment and demo data are
+  what the pitch runs on.
+- **What may not wait for two real hospitals on one database**: database-level
+  tenant isolation, scope enforcement, and the cross-hospital reads the
+  handover found (`docs/PLATFORM_PLAN.md` 1.10). It does not block a pitch on
+  synthetic data; it blocks the second real hospital.
+- **The name is temporary.** No time is spent renaming.
+
 Do not add commercial content to this repository — pricing, what a module
 costs, subscription tiers, or the data terms offered to a hospital. Those are
 negotiated per agreement and live outside the repo. Product requirements that
@@ -230,6 +265,47 @@ per row, in order, merged into `mvp` only when §5 is met.
 - The decisions that plan lists as the owner's (§7 there) are not to be chosen
   silently.
 
+### 4.4 The V1 pitch build — the active plan (owner, 2026-10-05)
+
+**This is what is being built now.** It replaces the client-readiness freeze
+of the same morning ("no feature coding until a hospital agrees to pilot"),
+which the owner lifted that evening. The reception-pilot candidate `fb1d1d8`
+stays what it was: a tested commit for one hospital's own server.
+
+The goal is a pitch that shows one platform connecting patients and hospitals,
+not a reception pilot. Build until that experience is complete, then stop
+adding scope. The order, branch by branch with its state, is
+`docs/PLATFORM_PLAN.md` §2 (*Now: the V1 pitch build*):
+
+| Phase | What |
+|---|---|
+| 0 | The direction written into the documents (`chore/v1-direction`) |
+| 1 | Pitch foundation: nothing unfinished on show (ambulance and blood leave the patient app's first screen), the navigation the new structure needs |
+| 2 | Patient search and discovery across hospitals (`FR-PAT-16`–`19`) |
+| 3 | Hospital onboarding from screens: create, set up, checklist, review, go live (`FR-ONB-*`, `S-B-12`) |
+| 4 | Mapped CSV import: rules and manual mapping, then a model's suggestions on top (`FR-IMP-13`–`22`) |
+| 5 | Design and copy walked through as each role |
+| 6 | The whole suite once, demo data reset, `mvp` released to `main` and the public demo |
+
+Rules for it, all the owner's:
+
+- One branch at a time, as always. Say in a line or two what a branch changes
+  and why, then build it; **no approval is waited for between branches**, and
+  the ten-file rule of §9 is suspended for this build.
+- Stop and ask only where two materially different product outcomes are
+  possible. Small implementation choices are decided and noted.
+- **Redesign is allowed** where a screen fights the new structure, never for
+  decoration. `FRONTEND.md` §0.2 still bans what it bans.
+- **Not now:** real bKash, Nagad or SMS; merchant onboarding; a production
+  monitoring stack; iOS publishing; branded app-store automation; ambulance;
+  blood; telemedicine; prescriptions and dispensing; a direct HMS or FHIR
+  connection; national integrations.
+- **Reschedule** is built only if it is cheap and clean; otherwise it leaves
+  the pitch script.
+- The only AI is the import mapping. It proposes; a person confirms; the
+  existing checker decides what is written. No patient row goes to a model
+  (`FR-IMP-17`).
+
 ## 5. Definition of Done (every branch)
 
 A step is not done until all of these are true:
@@ -256,6 +332,19 @@ pnpm test:e2e:built  # Playwright, against the console as built (e2e/built/)
 pnpm test:e2e:prod   # Playwright, against the production configuration (e2e/production/)
 pnpm db:reset        # rebuild demo data
 ```
+
+**Two levels of gate (owner, 2026-10-05).** Tests are still written with the
+feature. What changed is how much is *run* before a branch merges:
+
+| Level | For a branch that touches | Run before merging |
+|---|---|---|
+| **Focused** | Screens, navigation, design, copy, search and discovery UI, onboarding and mapping UI | `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, the unit and component tests for what changed, and the browser spec(s) for the flow touched |
+| **Strict** | The queue engine, migrations, tenant isolation, auth and permissions, patient records, import writes, realtime and sync, anything destructive | The above, plus the API and schema suites for the area and the browser specs that stand on it. The canary whenever the queue, the live serial screen or realtime is touched |
+
+Before a release to `main`: `pnpm verify`, `pnpm build` and every browser
+suite, once, and nothing red goes out (§3.1). Before real patients: the whole
+production validation again (`pnpm test:e2e:prod`, the dry run in `DEPLOY.md`
+S8). A branch's update says which level it ran.
 
 - **Tests are written with the feature, in the same branch. Never "later".**
 - Every test runs against seeded demo data, never against hand-written fixtures scattered in test files. If a test needs new data, add it to the seeds.
@@ -299,6 +388,7 @@ pnpm db:reset        # rebuild demo data
 - **Plan before building.** For each step, state the files you will create or change, and wait for my go-ahead if the step touches more than ten files.
 - **One step at a time.** Finish, test, merge, report, then ask for the next.
 - **Report like this:** what you built, requirement IDs covered, tests added and their result, demo data added, anything you could not do and why.
+- **During the V1 pitch build (§4.4), report shorter:** after each merged branch, four things in plain words — what changed, what I can now see or do, which tests were run, what the next branch is. Detail only if I ask. Do not wait for my go-ahead between branches.
 - **Ask when the documents are silent.** Do not guess product behaviour. Guessing stack details is fine if `BACKEND.md` already fixed the stack.
 - If I ask for something that contradicts a document, say so in one line, then do what I ask and note the doc that needs updating.
 
@@ -330,7 +420,7 @@ pnpm test:e2e:prod    # the canary and the counter, DEMO_MODE=false, built apps,
 ## 11. Non-negotiables (repeat of the things most likely to be dropped under pressure)
 
 1. Branch per step, off `mvp`, merged back only when green.
-2. **Push only what is green.** The owner gave standing permission to push and merge on 2026-10-03 (§3.1); a force-push still needs asking.
+2. **Push only what is green.** The owner gave standing permission to push and merge on 2026-10-03 (§3.1); a force-push still needs asking. Green is measured at the level §6 gives the branch.
 3. Tests and demo data in the same branch as the feature.
 4. The two-device queue test never gets skipped.
 5. Bangla is the default language, set properly (line-height ≥ 1.65, Bengali numerals, no letter-spacing).

@@ -7,10 +7,14 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: `chore/pilot-candidate` (5 October) — **`fb1d1d8` is the
-reception-pilot candidate, approved by the owner, and all product work is
-stopped until a hospital agrees to pilot** (below, *Pilot readiness*).
-Documents only. Before that,
+Last updated: `chore/v1-direction` (5 October, evening) — **the feature
+freeze is lifted and the product is one shared multi-hospital platform; the
+V1 pitch build is what is being built** (below, *Now: the V1 pitch build*).
+Documents only. Before that, `chore/pilot-candidate` (5 October) —
+**`fb1d1d8` is the reception-pilot candidate, approved by the owner**; the
+stop that came with it ("all product work is stopped until a hospital agrees
+to pilot") **was lifted the same evening and no longer holds** (below,
+*Pilot readiness*, for what is still true of it). Before that,
 `chore/e2e-pilot-path` (5 October) — **P4: the pilot's own path
 runs under the production configuration, and the answer is go, on three
 conditions that are not code** (below, *Pilot readiness*). **Work has
@@ -212,11 +216,76 @@ every pilot step in §4.2 but 27, which waits for an SMS aggregator account.
 What remains is the owner's: the open decisions below, applying migrations to
 Supabase, and whether `mvp` goes to `main`.
 
-**Now: client-readiness mode (owner, 5 October). Read
-`docs/PLATFORM_PLAN.md` §2, *Now: client-readiness mode*, before anything
-else.** The priority is one supervised reception pilot, and feature work is
-frozen until its path is green. What a new session needs from that day's
-decisions, all the owner's, each given in a written note:
+### Now: the V1 pitch build (owner, 5 October, evening)
+
+**Read `CLAUDE.md` §1.2 and §4.4, then `docs/PLATFORM_PLAN.md` §2, *Now: the
+V1 pitch build*.** The owner read an audit of the code against a clarified
+direction and decided, in one written note, overriding the freeze of that
+morning:
+
+- **The product is one platform**: a multi-hospital patient app (search for
+  what you need, see which hospitals can provide it now), a private portal
+  per hospital, and later an optional hospital-branded patient app on the
+  same API. Not software rewritten per hospital.
+- **One shared deployment hosted in Bangladesh is the default** (`FR-SEC-07`
+  amended). A hospital's own server is a later exception. Do not design
+  around one server per hospital.
+- **The freeze is lifted.** Build until the pitch-ready V1 experience is
+  complete, then stop adding scope. The pitch is the whole platform, not
+  "only a reception pilot".
+- **Not blockers now:** a real SMS provider and sender ID, bKash, Nagad,
+  merchant accounts, store publication, a paid penetration test. The company
+  is still being registered; these follow it. Simulated codes, mock payment
+  and demo data are what the pitch runs on.
+- **Security is split.** Tenant isolation in the database, scope enforcement
+  and the cross-hospital reads must be done before two real hospitals share
+  real data (`FR-SEC-11`, plan 1.10); they do not block the pitch.
+- **Order:** patient search and discovery; hospital onboarding from screens;
+  the mapped CSV import with a model's suggestions on top; a design pass
+  walked as each role; then one full gate and a release to the public demo,
+  which is 133 commits behind `mvp`.
+- **Ambulance and blood leave the first screen.** Reschedule only if cheap.
+  A significant redesign is allowed where the old screens fight the new
+  structure.
+- **Testing has two levels** (`CLAUDE.md` §6): focused for screens and copy,
+  strict for the queue, migrations, auth, tenancy, records and import writes;
+  everything once before a release.
+- **How the owner wants it worked:** a line on what a branch changes, build
+  it, a short plain update when it merges (what changed, what he can see,
+  tests run, next branch), and no waiting for approval in between.
+
+**Where it stands:** the table in `docs/PLATFORM_PLAN.md` §9 (rows V0–V6).
+
+**Carried over from the audit, true of the code on 5 October and worth not
+re-deriving:**
+
+- The patient app's discovery is specialty → hospital → doctor only. The API
+  already takes `q` on `/hospitals` and `/doctors` (substring, both scripts)
+  and `bedKind` on `/hospitals`; no screen sends `q`.
+- `hospitals.code` exists and is unique (0027). There are no brand columns.
+- The API answers exactly two browser origins (`middleware/cors.ts`,
+  `realtime/server.ts`), and every patient link is built from one
+  `WEB_BASE_URL` (booking, bed request, emergency, standby).
+- A hospital administrator's go-live publishes the hospital with one
+  department and one doctor; nobody outside the hospital approves it. A
+  hospital and its first administrator are made by `pnpm staff:create`; a
+  doctor is verified by `pnpm doctor:verify`. `platform_admin` is a role with
+  no screen.
+- The import takes only a file whose headings are the template's
+  (`missingColumns`). No mapping code exists.
+- `booking.service.ts` stamps `intake.demo = true` on every booking, real
+  ones included; notification sending is still awaited inside the request;
+  `audit_log` can be edited; no security headers. All after the pitch.
+- A signed-in patient still books as a guest, My serials is this phone's
+  list, and nothing reschedules (no route, no screen).
+
+### Superseded the same day: client-readiness mode (owner, 5 October, morning)
+
+**The freeze in this section was lifted that evening (above). It is kept for
+the record of P1–P4 and of the reception-pilot candidate, which stand.**
+The priority was one supervised reception pilot, and feature work was
+frozen until its path was green. What that day's decisions were, all the
+owner's, each given in a written note:
 
 - **Where it stands: P1 to P4 are merged and the work has stopped for the
   owner's review** (below, *Pilot readiness*). The order was:
@@ -437,7 +506,10 @@ three conditions, none of which is code:**
    morning, backup and restore, the morning check, the operating rules,
    clocks and browsers). Nothing in this repository has run on their machine.
 
-**Where this leaves the work (owner, 5 October).** No new feature coding
+**Where this left the work (owner, 5 October, morning) — superseded that
+evening:** feature work has resumed (above, *Now: the V1 pitch build*). What
+is still true is the operational half, for a hospital that runs on its own
+server. As written then: no new feature coding
 until there is a hospital to deploy to: not AI import, not self-service
 onboarding, not white-labelling, not ward or ER work, nothing else from the
 plan. What remains is operational:

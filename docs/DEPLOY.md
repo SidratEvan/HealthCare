@@ -244,6 +244,16 @@ the demo would have sent.
 
 # Part S — On a hospital's own server in Bangladesh
 
+> **Read this first (owner, 2026-10-05).** The default for real patients is
+> now **one shared platform hosted in Bangladesh**, every hospital a workspace
+> inside it (`FR-SEC-07` as amended, `CLAUDE.md` §1.2). This part was written
+> for one hospital on a machine of its own, and it stays true for that case,
+> which is now the exception: the reception-pilot candidate in S8 is such a
+> deployment. The stack is the same on a shared machine. What a shared one
+> needs that is not here yet: hospitals kept apart by the database before a
+> second real hospital joins (`FR-SEC-11`, `PLATFORM_PLAN.md` 1.10), and an
+> address for each hospital's portal (`FR-BRD-04`).
+
 The pilot build (`CLAUDE.md` §4.2, pilot step 26). Everything above deploys
 the **demonstration**; this part deploys the **real** thing for one
 hospital, on a machine the hospital controls, in Bangladesh (`FR-SEC-07`).

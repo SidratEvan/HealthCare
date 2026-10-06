@@ -8,6 +8,9 @@ the same day, `docs/HANDOVER.md`, and the code on `mvp` at `87d3dd2`.
   the order of work. Where a phase adds scope, its first branch adds the
   requirements to `PRD.md` and the other documents, and the code follows them.
 - **Kept current:** the progress table in §9 is updated as each branch merges.
+- **What is active:** §2, *Now: the V1 pitch build* (owner, 5 October, evening).
+  It replaced the client-readiness freeze of that morning, which is kept below
+  it, marked superseded, for what it records.
   `docs/STATUS.md` still carries what changed and what is undecided.
 
 ---
@@ -40,7 +43,66 @@ the same day, `docs/HANDOVER.md`, and the code on `mvp` at `87d3dd2`.
 
 ## 2. Order of work
 
-### Now: client-readiness mode (owner, 5 October)
+### Now: the V1 pitch build (owner, 5 October, evening)
+
+After reading an audit of the code against a clarified product direction, the
+owner lifted the freeze below and set the direction that `CLAUDE.md` §1.2 and
+§4.4 and `PRD.md` §4.2b now carry. In short:
+
+- **One platform**: a multi-hospital patient app, a private portal per
+  hospital, and later an optional hospital-branded patient app on the same
+  API.
+- **One shared deployment hosted in Bangladesh is the default.** A hospital on
+  its own server is an exception, not the design (conflict C in §6 is
+  decided).
+- **Build until the pitch-ready V1 experience is complete, then stop adding
+  scope.** The pitch is the whole platform, not a reception pilot.
+- **Providers do not block it**: SMS, bKash, Nagad, the stores and a paid
+  penetration test follow company registration and agreements.
+- **Tenant isolation in the database (1.10) blocks the second real hospital,
+  not the pitch.**
+
+One branch at a time, each gated at the level `CLAUDE.md` §6 gives it, no
+approval waited for between them.
+
+| # | Branch | What it does | Gate | Done when |
+|---|---|---|---|---|
+| V0 | `chore/v1-direction` | The direction in `CLAUDE.md`, `PRD.md` (§4.2b, `FR-PAT-16`–`19`, `FR-IMP-13`–`22`, §14c `FR-ONB`, `FR-NET`, `FR-BRD`, `FR-SEC-07` amended, `FR-SEC-11`), this plan, `STATUS.md`, `BACKEND.md` §12, `DEPLOY.md` | Documents | A new session reads the new direction and not the freeze |
+| V1.1 | `fix/patient-v1-surface` | Nothing unfinished on show: ambulance and blood leave the patient app's first screen and its routes say nothing is promised (`PRD.md` §7.8) | Focused | No control on the patient app leads to "not built yet" |
+| V2.1 | `feat/patient-search` | `GET /search` and `S-A-07s`: free text over doctors, hospitals and specialties, and the needs hospitals publish (specialty, bed kind, capability); results are hospitals with the live figures for that need, and doctors. The first screen is rebuilt around it (`FR-PAT-16`–`18`) | Focused, plus the API tests for the new route | A patient types or taps a need and sees which hospitals can provide it, with ages, and reaches booking from there |
+| V2.2 | `feat/hospital-scope` | The branded-app foundation, and no more: a scope the patient app passes on every discovery call, patient links built in one place, the API's allowed origins as a list (`FR-PAT-19`, `FR-BRD-02`–`04`) | Strict for the origin and link change; focused for the app | The same build opened with a hospital's code shows that hospital only |
+| V3.1 | `feat/org-lifecycle` | A workspace's state (migration), its rules in `shared/domain`, every public read gated on active, the checklist and "request review" on `S-B-11` (`FR-ONB-02`–`04`, `FR-NET-03`) | Strict | A hospital that is not approved appears nowhere public, proven per public route |
+| V3.2 | `feat/platform-console` | `S-B-12`: workspaces and their state, create one with its first administrator, approve or send back, suspend and reinstate, verify doctors; a platform administrator made without touching a hospital (`FR-ONB-01`, `05`–`08`) | Strict | A hospital goes from nothing to live on synthetic data with no command line after the deployment's first platform administrator |
+| V4.1 | `feat/import-mapping` | Upload a hospital's own CSV; profile, header guard, rules and aliases in both languages, the mapping screen, saved mappings, hand-off to the existing check (`FR-IMP-13`–`15`, `18`–`20`) | Strict | A deliberately mismatched synthetic export is mapped and imported with no model |
+| V4.2 | `feat/import-mapping-ai` | The model adapter on top (`MAPPING_PROVIDER`, off by default): proposals with confidence and reason, typed, validated, never trusted (`FR-IMP-16`, `17`) | Strict for what is sent; focused for the screen | The same file is mapped with the model's help; with it off or failing V4.1's path is unchanged |
+| V4.3 | `feat/import-warnings` | Near-duplicate patients and mixed formats named before the preview (`FR-IMP-21`) | Focused | Only if V5 has room; otherwise after the pitch |
+| V5.x | `fix/pitch-*` | The product walked as each role; what is confusing is fixed, one small branch per finding. Reschedule only if it is cheap; otherwise it leaves `PRD.md` §24 | Focused | Each role's path reads as one product |
+| V6 | `chore/pitch-release` | `pnpm verify`, `pnpm build`, every browser suite, once; the migrations Supabase lacks applied; `mvp` → `main`; demo data reset; `demo` moved | Full | The public demo is the current product |
+
+**Then stop adding scope.** What follows the pitch is in the order a real
+deployment needs it:
+
+| Before | Branch |
+|---|---|
+| A second real hospital on the shared deployment | 1.10 `feat/tenant-rls`, and the doctor's read of another hospital's visits (`FR-SEC-11`) |
+| Patients on a real deployment | 2.1 `feat/notification-worker`, 2.2 `feat/sms-live` (waits for an account), 1.9f `fix/serial-past-midnight` |
+| The ward board or the ER console in a real hospital | 1.9d, 1.9e; 1.9c with a slow SMS gateway |
+| A store listing | a native shell, push, account deletion, privacy and terms pages |
+
+**Decisions this build makes without asking, and where they are recorded:**
+the smallest lifecycle that fits a hospital created by a platform
+administrator (three working states, §3); the model is called over HTTPS with
+no SDK and is off unless configured (§4); hospital-aware links and origins are
+prepared, not switched on.
+
+### Superseded: client-readiness mode (owner, 5 October, morning)
+
+**Lifted by the owner the same evening** (above). Kept because the
+reception-pilot candidate and its conditions are still true of a
+single-hospital deployment: `fb1d1d8` is still the commit that was tested for
+one, and P5 still waits for a hospital's IT. What no longer holds: the
+freeze, "reception only" as the goal, and one server per hospital as the
+default.
 
 The priority is signing a hospital pilot, not finishing this plan. **Feature
 work is frozen**: no new product features, no self-service onboarding, no AI
@@ -352,7 +414,7 @@ approved. The rules alone carry the feature when the provider is off.
 |---|---|---|
 | A | `CLAUDE.md` §2 says nothing is built that is not in `PRD.md`. The brief adds onboarding and mapped import, which are not | Each phase opens with a documents-only branch (3.0, 4.0). The owner reads the requirement list before code is written |
 | B | `CLAUDE.md` §1.1 keeps plans and prices out of the repository. The brief asks for "plan/package and entitlement state" | Entitlement is modules on or off and an agreement state. No names, no amounts (§3) |
-| C | `FR-SEC-07` puts each real hospital on its own server in Bangladesh. Self-service signup, emergency search, referrals and the wallet across hospitals need hospitals on one deployment | Not solved here, and not pretended. Phase 3 is built to run on whatever deployment it is on: many organisations on a shared one, one on a hospital's own. Phase 6 writes the proposal. Opening signup to real hospitals waits for it (D6) |
+| C | `FR-SEC-07` puts each real hospital on its own server in Bangladesh. Self-service signup, emergency search, referrals and the wallet across hospitals need hospitals on one deployment | **Decided by the owner, 5 October:** one shared platform hosted in Bangladesh is the default, and a hospital's own server is a later exception (`FR-SEC-07` as amended). What that makes necessary before a second real hospital is 1.10 (`FR-SEC-11`) |
 | D | The brief says to prefer the handover over an older document where the handover found a mismatch | The documents in handover §14.3 are corrected in the branch that fixes the thing each one is wrong about, so the rule in `CLAUDE.md` §2 keeps holding |
 | E | `CLAUDE.md` §7: no new dependency without asking. XLSX needs a parser; a model SDK is a dependency | Phase 4 uses `fetch`, no SDK. XLSX is D4. Phase 1 needs none: Dexie is already installed |
 | F | The brief lists tenant policies as a blocker but leaves them out of its Phase 1 list | Added as 1.10 |
@@ -370,7 +432,7 @@ approved. The rules alone carry the feature when the provider is off.
 | D3 | Fields required at registration | Facility name in both languages, kind, division, district, phone, registration number; administrator's name, email, mobile, password. Everything else at setup | 3.2 |
 | D4 | CSV only, or XLSX from the first release | CSV only. XLSX adds a parsing dependency and is Phase 5 | 4.2 scope |
 | D5 | Model provider, where it runs, what is sent | What §4 lists and nothing else; off by default; one provider behind the adapter, called over HTTPS | 4.2 |
-| D6 | The network architecture for many hospitals | Phase 6 writes the options. No decision needed before then | opening signup to real hospitals |
+| D6 | ~~The network architecture for many hospitals~~ | **Decided 5 October:** one shared deployment in Bangladesh | — |
 | D7 | Module names for entitlement | The modules the console rail already has | 3.1 |
 | D8 | Any change to "real patient data stays in Bangladesh" | None proposed | — |
 
@@ -425,11 +487,22 @@ In addition to `CLAUDE.md`:
 | P3 | `fix/chamber-end-of-day` | merged — `BTN-B02-END` and `MOD-B02-END` on the reception console; the server refuses an end while a patient is in the chamber (`canEndSession`); patients left unseen are counted, need a tick and are not changed; the picker says which day a chamber is from and no longer lists an ended one; `chamber-end.spec.ts` |
 | P4 | `chore/e2e-pilot-path` | merged — `e2e/production/reception-pilot.prod.spec.ts`: one receptionist's day end to end, and late, absent and bring back with the counters, under the production configuration. It found nothing. **Stopped here for the owner's review** (`docs/STATUS.md`, *Pilot readiness*) |
 | P5 | `chore/deploy-lan-https` | deferred until the first hospital's IT has chosen how its server is reached |
+| V0 | `chore/v1-direction` | merged — the owner's direction of 5 October (evening): the freeze lifted, one shared platform, the V1 pitch build (§2) |
+| V1.1 | `fix/patient-v1-surface` | |
+| V2.1 | `feat/patient-search` | |
+| V2.2 | `feat/hospital-scope` | |
+| V3.1 | `feat/org-lifecycle` | |
+| V3.2 | `feat/platform-console` | |
+| V4.1 | `feat/import-mapping` | |
+| V4.2 | `feat/import-mapping-ai` | |
+| V4.3 | `feat/import-warnings` | if V5 has room |
+| V5.x | `fix/pitch-*` | |
+| V6 | `chore/pitch-release` | |
 | 1.9c | `fix/queue-exactly-once` | after the first pilot (see §2 for what would bring it forward) |
 | 1.9d | `fix/ward-reconcile` | after the first pilot |
 | 1.9e | `fix/er-reconcile` | after the first pilot |
 | 1.9f | `fix/serial-past-midnight` | after the first pilot |
-| 1.10 | `feat/tenant-rls` | after the first pilot; before a second hospital shares a database |
+| 1.10 | `feat/tenant-rls` | after the pitch; before a second real hospital shares the deployment (`FR-SEC-11`) |
 | 2.1 | `feat/notification-worker` | |
 | 2.2 | `feat/sms-live` | waits: D1 |
 | 3.0–3.4 | onboarding | 3.2 waits: D2, D3 |
