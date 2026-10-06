@@ -42,7 +42,7 @@
 21. Security, privacy, and compliance
 22. Non-functional requirements
 23. Demo data for the prototype
-24. The five-minute pitch demo script
+24. The pitch demo script
 25. Success metrics
 26. Release plan
 27. Out of scope
@@ -263,7 +263,7 @@ Many people will never create an account. Guest mode is a first-class path, not 
 - `FR-PAT-20` Booking flow: choose doctor → choose session → confirm profile → pay or choose pay-at-hospital → receive serial.
 - `FR-PAT-21` Fees display as a breakdown: consultation, platform fee, total, and what is due at the hospital.
 - `FR-PAT-22` Confirmation is delivered in-app **and** by SMS, containing hospital, doctor, date, serial number, and expected time window.
-- `FR-PAT-23` A patient can reschedule to another session or cancel; policy and any refund rule are stated before confirming.
+- `FR-PAT-23` A patient can reschedule to another session or cancel; policy and any refund rule are stated before confirming. **Rescheduling is outside V1** (owner, 5 October 2026): here, as the middle option of `FR-PAT-34`, and as the offer in `FR-REC-04`. A patient cancels and books again. No screen, message or pitch step offers a reschedule until it is built.
 - `FR-PAT-24` The app prevents double-booking the same profile with the same doctor on the same day.
 - `FR-PAT-25` If a session is full, the patient may join a **standby list** from the app and will be offered released slots automatically (see `FR-QUE-30`). Joining asks what a guest booking asks (`FR-GST-02`) and returns a status link that is the patient's place on the list.
 - `FR-PAT-26` **Prepaid standby.** A patient may pay the consultation fee when joining. A prepaid patient is **seated automatically** when a slot is offered to them — nobody asks — and told by SMS and on the status link which serial is theirs. A prepayment for a slot that never comes is refunded in full, whether the patient leaves the list or the session ends. Owner's ruling, 2026-09-23.
@@ -545,7 +545,7 @@ A hospital is brought onto the platform from screens, without a developer.
 After an agreement a hospital may be offered the patient app in its own name. It is the same app on the same API.
 
 - `FR-BRD-01` Every hospital has a stable, unique code. It names the hospital in an address and in an app's configuration, and does not change.
-- `FR-BRD-02` The patient app has a **hospital scope**. Unset, it is the whole network. Set to a hospital's code, discovery, booking and beds are that hospital's only. It is configuration, never a second codebase.
+- `FR-BRD-02` The patient app has a **hospital scope**. Unset, it is the whole network. Set to a hospital's code, discovery, booking and beds are that hospital's only, and so are the serials the app lists from what this phone booked. It is configuration, never a second codebase.
 - `FR-BRD-03` Everything a patient sees is drawn from tokens (`FRONTEND.md` §1–3) and one app name, so that a hospital's name and colours replace ours by configuration read from the server.
 - `FR-BRD-04` The links sent to a patient and the addresses the API answers are built in one place each, so that they can later differ by hospital (`code.platform-domain`) without changing what calls them.
 - `FR-BRD-05` Not in V1: store builds per hospital, custom domains, a logo upload, any automation of these.
@@ -718,16 +718,23 @@ This is the heart of the system. Specified tightly because everything else depen
 
 ---
 
-## 24. The five-minute pitch demo script
+## 24. The pitch demo script
 
-1. Patient books a cardiology serial and sees serial 18 with an estimated time.
+The pitch is the whole platform (§4.2b): what a patient sees across hospitals, what one hospital's staff do, and how a hospital joins. Steps 1–8 are a hospital's day and take five minutes; 9–11 are the platform and take three more. Every step runs on demonstration data (`FR-DEM-*`).
+
+1. A patient searches for what they need — a doctor, a specialty, an ICU bed — and sees which hospitals can provide it, each with its live figure and how old that figure is (`FR-PAT-16`–`19`). They pick a cardiologist, book a serial and see it with an estimated time.
 2. Reception marks the doctor arrived; the patient screen updates live on a second device.
-3. Doctor declares a 30-minute delay; all waiting patients are notified; one reschedules in a tap.
+3. Doctor declares a 30-minute delay; every waiting patient's screen and message carry the new expected time.
 4. Reception calls next three times; the patient's position and ETA move in real time.
 5. A no-show is marked; the slot is offered to standby; acceptance appears; recovered revenue shows on the admin dashboard.
 6. Doctor writes the visit record — diagnosis, advice in Bangla, follow-up — and signs; it lands in the patient's wallet and the next patient is called in the same tap; a lab report arrives minutes later. (Prescribing itself is out of scope for this version; see §9.)
 7. Emergency: a burn case searches nearby hospitals, sees which has a free burn bed with fresh data, taps "I'm on my way"; the emergency console shows the inbound alert.
-8. Close on the admin dashboard: waits down, no-show loss recovered, occupancy visible.
+8. The admin dashboard: waits down, no-show loss recovered, occupancy visible.
+9. The same patient app opened as one hospital's own (`FR-BRD-01`–`05`): that hospital's name and colours, its doctors, beds and serials only, on the same server.
+10. A hospital joins (`FR-ONB-01`–`08`): the platform administrator adds it and its first administrator from a screen; the hospital's administrator signs in, sees what is still missing, and asks for review; the platform administrator verifies a doctor and approves; the hospital appears in the patient's search. No command line.
+11. A hospital brings what it already holds (`FR-IMP-13`–`20`): its own patient export, with its own column names, is uploaded; the columns are matched by rules, with a model suggesting the ones the rules do not know; a person confirms; the file is checked, previewed, imported, and can be undone. The model is sent headings, never a row.
+
+Not in the script, because it is not in V1: rescheduling (`FR-PAT-23`), ambulance and blood (`FR-PAT-73`–`75`), prescriptions (§9).
 
 ---
 

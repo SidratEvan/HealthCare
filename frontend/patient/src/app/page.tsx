@@ -55,7 +55,8 @@ import {
 } from '@/components/icons';
 import { useDeployment } from '@/hooks/useDeployment';
 import { openTrackingLink } from '@/lib/api';
-import { recentBookings, type SavedBooking } from '@/lib/bookings';
+import { bookingsInScope, recentBookings, type SavedBooking } from '@/lib/bookings';
+import { scopedHospitalId } from '@/lib/scope';
 
 import type { ReactNode } from 'react';
 
@@ -340,10 +341,16 @@ function ActiveSerial(): ReactNode {
   const numerals = numeralsFor(locale);
   const [booking, setBooking] = useState<SavedBooking | null>(null);
   const [nowServing, setNowServing] = useState<number | null>(null);
+  // An app open for one hospital shows that hospital's serial only, and
+  // nothing until it knows which hospital that is (`FR-BRD-02`).
+  const inHospital = scopedHospitalId(useDeployment());
 
   useEffect(() => {
-    const today = recentBookings().find((saved) => saved.isToday);
-    if (today === undefined) return;
+    const today = bookingsInScope(recentBookings(), inHospital).find((saved) => saved.isToday);
+    if (today === undefined) {
+      setBooking(null);
+      return;
+    }
 
     setBooking(today);
 
@@ -358,7 +365,7 @@ function ActiveSerial(): ReactNode {
         // The strip still shows their own serial. A failed lookup is not a
         // reason to hide the booking they have.
       });
-  }, []);
+  }, [inHospital]);
 
   if (booking === null) return null;
 

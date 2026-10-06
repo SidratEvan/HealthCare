@@ -496,7 +496,8 @@ In addition to `CLAUDE.md`:
 | V4.1 | `feat/import-mapping` | merged — `shared/domain` `imports/mapping` (profile, header guard, rules and other names in both languages, `applyMapping`), migration 0038 (`import_mapping_profiles`), `POST /hospital/imports/analyse` and `/mapped`, the mapping step on `S-B-14` (`ImportMapping.tsx`), four synthetic sample exports in `database/seeds/samples`, `import-mapping.spec.ts`. No model yet (V4.2). Supabase does not have 0038 |
 | V4.2 | `feat/import-mapping-ai` | merged — `adapters/mapping.ts` (`MAPPING_PROVIDER`, off by default; Claude over HTTPS, no SDK), `modelMappingRequest` and `withModelSuggestions` in `shared/domain`, `model` on the analyse answer, the model's part on the mapping step, `pnpm mapping:try`, a fifth sample export, `mappingProvider.test.ts`. **Not run against the live service: no key exists on the build machine** |
 | V4.3 | `feat/import-warnings` | if V5 has room |
-| V5.x | `fix/pitch-*` | |
+| V5.1 | `fix/pitch-walkthrough` | **merged 6 October.** Walked as patient, in Padma's own app, and as reception, doctor, ward, emergency, hospital administrator and platform administrator. One fault: a hospital's own app showed a serial booked at another hospital; fixed with a test. `PRD.md` §24 rewritten for the platform and without a reschedule; the demo path in `STATUS.md` covers search, a hospital's own app, onboarding and the mapped import |
+| V5.x | `fix/pitch-*` | further findings, if the owner's own walk turns any up |
 | V6 | `chore/pitch-release` | |
 | 1.9c | `fix/queue-exactly-once` | after the first pilot (see §2 for what would bring it forward) |
 | 1.9d | `fix/ward-reconcile` | after the first pilot |

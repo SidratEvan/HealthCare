@@ -26,6 +26,7 @@ import { scopedPath } from '@/lib/scope';
 /** The hospital this app is open for (`FR-PAT-19`). */
 export interface ScopeConfig {
   readonly code: string;
+  readonly hospitalId: string;
   readonly nameBn: string;
   readonly nameEn: string;
   readonly theme: BrandTheme | null;

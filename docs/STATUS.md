@@ -264,6 +264,7 @@ morning:
 - **V3.2 `feat/platform-console`** — the platform administrator's screen: hospitals with those waiting first, add a hospital with its first administrator (temporary password shown once), verify a doctor, approve / send back / suspend / reinstate / close with a reason where one is owed. A hospital now goes from nothing to live with no command line after the deployment's first platform administrator (`pnpm staff:create --platform`, `DEPLOY.md` S3). On the demo it is the picker's **প্ল্যাটফর্ম পরিচালনা** section. Strict gate: `pnpm test` whole (5,134), typecheck, lint, format; in the browser the canary, platform-onboarding, gov-dashboard, console-cold-start, staff-login, staff-2fa, hospital-settings, console-rail and demo-label (41 passed).
 - **V4.1 `feat/import-mapping`** — a hospital uploads its own CSV export: the server says what each column holds and proposes which is which with a reason, an administrator corrects and confirms on a screen that never shows a row, and the file goes to the importer that already exists (check, preview, approve, undo). The same export maps itself next time. Rules and a person only; the model is V4.2. Sample exports to show it with: `database/seeds/samples/`. **Supabase needs 0036–0038 before a release.** Strict gate: `pnpm test` whole (5,274), typecheck, lint, format; `import-mapping` and `data-import` in the browser (4 passed).
 - **V4.2 `feat/import-mapping-ai`** — a model's suggestions on top of the rules, for the columns the rules could not place. It is sent headings and column profiles and never a row; its answer is filtered to the fields and columns it was asked about; each kept suggestion is shown as a suggestion with its reason; a person confirms; the same importer decides. Off by default, and off, slow or failing it changes nothing. **To show it in a pitch the owner sets `MAPPING_PROVIDER=claude` and `MAPPING_API_KEY`; it has only been run against a stand-in network, so try `pnpm mapping:try` with the key first.** Strict gate for what is sent, focused for the screen: `pnpm test` whole (5,318), typecheck, lint, format; `import-mapping` in the browser (5 passed).
+- **V5.1 `fix/pitch-walkthrough`** — the product walked by screenshot as each role: patient, Padma's own app, reception, doctor, ward, emergency, hospital administrator, platform administrator. One fault found and fixed with a test: a hospital's own app showed a serial this phone had booked at another hospital (Home's strip and সিরিয়াল); it now shows that hospital's only, and `GET /config?scope=` says which hospital that is by id. No staff screen needed changing. `PRD.md` §24 is the platform's pitch now, eleven steps, and promises no reschedule (`FR-PAT-23` marked outside V1); *Running the pitch demo* below covers search, a hospital's own app, onboarding and the mapped import. Focused gate: typecheck, lint, format, the scope API tests (21), and in the browser hospital-scope (6) then the canary, guest-booking, app-shell, patient-search and standby (50 passed).
 
 **Left for the owner by this build** (none of them blocks the pitch):
 
@@ -276,6 +277,14 @@ morning:
   which is the one that cannot send somebody to the wrong place.
 - **`FR-NET-04`** (a hospital choosing which figures it publishes) is written
   as a requirement and not built: a live hospital publishes all of them.
+- **Records inside a hospital's own app.** A scoped app shows only that
+  hospital's serials, on Home and on সিরিয়াল (V5.1). **রেকর্ড** is not
+  narrowed: the wallet is the patient's, and it lists visits at every
+  hospital. Whether a hospital's app should show a visit made elsewhere is the
+  same kind of question as the emergency one above.
+- **A serial booked before V5.1 is not shown in a scoped app.** The phone's
+  saved booking did not record which hospital it was at. It still shows in the
+  network's own app, and it is a matter of a day's bookings on a demo.
 
 **Decided by this build without asking, as the direction allows:**
 
@@ -4413,11 +4422,15 @@ pnpm dev:console                     # :3100  — reception
 pnpm dev:patient                     # :3000  — the patient
 ```
 
-1. **Patient**: `http://localhost:3000` — the home screen, with the emergency
-   card, the specialty grid and the bottom navigation. Tap a specialty, then
-   **the hospital**, then the doctor, then the chamber; fill in name / phone /
-   age and confirm. The success screen shows the serial and **লাইভ সিরিয়াল
-   দেখুন** — tap it.
+1. **Patient**: `http://localhost:3000` — the home screen: the search box
+   first, then the emergency card, the specialty grid and the bottom
+   navigation. Tap the search box and type what somebody needs — **আইসিইউ**,
+   **বার্ন**, **কার্ডিওলজি**, a doctor's or a hospital's name — or tap one of
+   the chips. Each hospital that can provide it is listed with the live figure
+   for that need and its age. Tap a hospital or a doctor to go straight into
+   booking there (or tap a specialty on Home, then the hospital, the doctor
+   and the chamber); fill in name / phone / age and confirm. The success
+   screen shows the serial and **লাইভ সিরিয়াল দেখুন** — tap it.
 2. **Reception**: `http://localhost:3100`. The console picker (`S-B-01`) opens
    first: choose the hospital, the chamber and the role, no password. There is
    no login screen by design (CLAUDE.md §4.1) and the screen says so. Pick the
@@ -4445,7 +4458,46 @@ version.
    district's count on the next reload.
 
 The patient screen also carries **আমি দেরি করছি** and **বাতিল করুন**, both of
-which write real events the console sees.
+which write real events the console sees. **Nothing reschedules** — do not
+offer it in a pitch (`PRD.md` `FR-PAT-23`, §24).
+
+**The platform half of the pitch** (`PRD.md` §24 steps 9–11), added by the V1
+pitch build:
+
+6. **A hospital's own app**: `http://localhost:3000/?scope=PADMA`. The same
+   app is Padma's: its name in the header, its navy in place of the green,
+   its doctors, beds and search results only, and only the serials this phone
+   booked at Padma. `http://localhost:3000/?scope=` gives the network back.
+   The scope is kept for the tab, so open it in its own tab or window.
+7. **A hospital joins**: on the console picker, **প্ল্যাটফর্ম পরিচালনা →
+   হাসপাতাল অনবোর্ডিং খুলুন**. The list is every hospital with those waiting
+   first. **নতুন হাসপাতাল যোগ করুন** makes one with its first administrator and shows
+   the temporary password once. To show the rest live — the administrator
+   signing in (**স্টাফ অ্যাকাউন্টে লগ ইন** on the picker), changing the
+   password, the checklist on settings, **পর্যালোচনার অনুরোধ করুন**, then back
+   on the platform screen verifying a doctor and approving — have an
+   authenticator app ready: an administrator cannot sign in without the second
+   factor (`FR-SEC-06`), and the demo does not waive it. It takes about three
+   minutes. The short version: create the hospital, show it sitting in
+   **সেটআপ চলছে** with nothing a patient can see, then open a live hospital's
+   row to show suspend and reinstate with a reason.
+8. **A hospital's own export**: picker → any hospital → **ড্যাশবোর্ড খুলুন →
+   সেটিংস খুলুন → পুরোনো তথ্য আমদানি করুন**. Choose **খ রোগীর তালিকা** and upload
+   `database/seeds/samples/hospital-export-patients.csv` (English headings
+   of the hospital's own) or `hospital-export-patients-bangla.csv`. The
+   mapping step shows which column was read as what and why, and what will
+   not be imported; confirm, and the ordinary check, preview, approve and
+   undo follow. Upload the same file again and it maps itself. Every row in
+   those files is marked demonstration data.
+9. **The model's suggestions** need `MAPPING_PROVIDER=claude` and
+   `MAPPING_API_KEY` in `.env`, and the API restarted. Then upload
+   `hospital-export-patients-abbreviated.csv`: the rules place only the phone
+   column, and the model suggests the rest, each marked **এআইয়ের প্রস্তাব**
+   with its reason. Without the key the same file is matched by hand, which is
+   also worth showing. **It has only ever been run against a stand-in for the
+   network: run `pnpm mapping:try --set patients --file
+   database/seeds/samples/hospital-export-patients-abbreviated.csv` with the
+   key before a meeting, not in one.**
 
 **Next is pinned to `--webpack`.** The shared packages import with the `.js`
 extensions Node ESM requires; webpack resolves those through `extensionAlias`

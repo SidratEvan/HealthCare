@@ -44,6 +44,11 @@ describe('GET /config says whose app it is (FR-BRD-02, FR-PAT-19)', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.scope).toMatchObject({ code: 'PADMA' });
+    // Its id too, the one every hospital card already carries.
+    const listed = await request(app).get(`${BASE}/hospitals?scope=PADMA`);
+    expect(response.body.data.scope.hospitalId).toBe(
+      (listed.body.data.hospitals as { id: string }[])[0]?.id,
+    );
     expect(response.body.data.scope.nameEn).toMatch(/^Padma/);
     expect(response.body.data.scope.nameBn).toContain('পদ্মা');
   });

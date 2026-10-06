@@ -374,7 +374,7 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | Method | Path | Result |
 |---|---|---|
 | GET | `/search?q&need&lat&lng&limit` | one search across the network (`S-A-07s`, `FR-PAT-16`–`18`). `need` is a need's key — `specialty:<code>`, `bed:<kind>`, `capability:<kind>` — and `q` is typed text. Returns `{ need, text, hospitals, doctors, asOf }`: the hospitals that can provide the need, each a hospital card with its live figures and beds (most free first for a bed kind, never-confirmed counts last), and the doctors matched by name or in the specialty. Text that names a need ("ICU", "বার্ন") is read as that need by `readSearch` in `shared/domain`, the same table the patient app offers needs from; a need the data does not hold is a 400, not an empty list |
-| GET | `/config?scope` | what this deployment offers (`demo`, `onlinePayments`, `guestPhoneCheck`) and, with `scope`, whose app this is: `scope: { code, nameBn, nameEn, theme }`, where `theme` is the hospital's brand tokens if it has set readable ones (`FR-BRD-02`, `FR-BRD-03`); `scope: null` without it |
+| GET | `/config?scope` | what this deployment offers (`demo`, `onlinePayments`, `guestPhoneCheck`) and, with `scope`, whose app this is: `scope: { code, hospitalId, nameBn, nameEn, theme }`, where `theme` is the hospital's brand tokens if it has set readable ones (`FR-BRD-02`, `FR-BRD-03`); `scope: null` without it |
 | GET | `/hospitals?lat&lng&district&q&bedKind` | list + live capacity from `v_public_hospital_capacity`; `bedKind` keeps hospitals that have that kind of bed, full or not (`S-A-11`) |
 | GET | `/hospitals/:id` | detail + departments + capabilities + beds summary |
 | GET | `/doctors?specialty&hospitalId&q&availableToday` | list + live status |

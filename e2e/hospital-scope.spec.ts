@@ -70,6 +70,46 @@ test('in scope, another hospital cannot be found by name, and booking is this ho
   await expect(places.first()).toContainText('পদ্মা');
 });
 
+test('a hospital’s own app shows that hospital’s serials, not another hospital’s (FR-BRD-02)', async ({
+  page,
+}) => {
+  // What this phone holds: a serial today at some other hospital.
+  await page.goto(PATIENT);
+  await page.evaluate(() => {
+    globalThis.localStorage.setItem(
+      'patient.bookings',
+      JSON.stringify([
+        {
+          bookingId: '00000000-0000-7000-8000-000000000001',
+          serial: 7,
+          sessionId: '00000000-0000-7000-8000-000000000002',
+          doctorNameBn: 'ডা. অন্য (ডেমো)',
+          hospitalNameBn: 'অন্য হাসপাতাল (ডেমো)',
+          hospitalId: '00000000-0000-7000-8000-000000000003',
+          plannedStart: new Date().toISOString(),
+          url: '/s?b=x&t=y',
+          token: 'not-a-real-token',
+          savedAt: new Date().toISOString(),
+        },
+      ]),
+    );
+  });
+
+  // The network's own app shows it: it is this phone's serial.
+  await page.goto(PATIENT);
+  await expect(page.getByTestId('active-serial')).toBeVisible();
+
+  // Padma's app does not, on Home or in the list.
+  await page.goto(`${PATIENT}/?scope=PADMA`);
+  await expect(page.getByTestId('app-name')).toContainText('পদ্মা');
+  await expect(page.getByTestId('active-serial')).toHaveCount(0);
+  await page.goto(`${PATIENT}/serials`);
+  await expect(page.getByTestId('serials-empty')).toBeVisible();
+
+  await page.goto(`${PATIENT}/?scope=`);
+  await expect(page.getByTestId('active-serial')).toBeVisible();
+});
+
 test('leaving the scope gives the network back', async ({ page }) => {
   await page.goto(`${PATIENT}/?scope=PADMA`);
   await expect(page.getByTestId('app-name')).toContainText('পদ্মা');
