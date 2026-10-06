@@ -262,8 +262,10 @@ model's import suggestions are off on the deployed demo unless
 > deployment. The stack is the same on a shared machine. Hospitals are kept
 > apart by the database since plan B1 (`FR-SEC-11`, migration 0043,
 > `DATABASE.md` §5.2). What a shared machine needs that is not here yet: an
-> address for each hospital's portal (`FR-BRD-07`, plan C2), and one patient
-> kept from another by the database as well as by the application (plan B3).
+> address for each hospital's portal (`FR-BRD-07`, plan C2). One patient is
+> kept from another by the database for the clinical record (plan B3,
+> migration 0044); for bookings, payments and messages the application still
+> decides (plan I3).
 
 The pilot build (`CLAUDE.md` §4.2, pilot step 26). Everything above deploys
 the **demonstration**; this part deploys the **real** thing for one

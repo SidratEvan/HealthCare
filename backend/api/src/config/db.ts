@@ -83,13 +83,16 @@ const stated = new WeakMap<PoolClient, string>();
 async function connectScoped(): Promise<PoolClient> {
   const client = await pool.connect();
   const saying = statementOf(currentDbScope());
-  const key = `${saying.scope}|${saying.hospitalId}`;
+  const key = `${saying.scope}|${saying.hospitalId}|${saying.personId}|${saying.bookingId}`;
   if (stated.get(client) === key) return client;
 
   try {
+    // All four, every time: a connection last used for one person must not
+    // keep that person's id under the next one's scope.
     await client.query(
-      "SELECT set_config('app.scope', $1, false), set_config('app.hospital_id', $2, false)",
-      [saying.scope, saying.hospitalId],
+      "SELECT set_config('app.scope', $1, false), set_config('app.hospital_id', $2, false), " +
+        "set_config('app.person_id', $3, false), set_config('app.booking_id', $4, false)",
+      [saying.scope, saying.hospitalId, saying.personId, saying.bookingId],
     );
     stated.set(client, key);
     return client;

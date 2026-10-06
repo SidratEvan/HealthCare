@@ -154,6 +154,76 @@ describe('a scope reaches the database and holds (FR-SEC-11)', () => {
   });
 });
 
+describe('a person’s scope reaches the database and holds (plan B3, migration 0044)', () => {
+  const visitCount = async (): Promise<number> => {
+    const result = await sql<{ n: string }>`SELECT count(*)::text AS n FROM visits`.execute(db);
+    return Number(result.rows[0]?.n ?? '-1');
+  };
+
+  /** Two seeded accounts, and how many visits the profiles of each hold. */
+  const twoAccounts = async (): Promise<{ id: string; visits: number }[]> => {
+    const result = await sql<{ id: string; visits: string }>`
+      SELECT u.id,
+             (SELECT count(*) FROM visits v JOIN patients p ON p.id = v.patient_id
+               WHERE p.owner_user_id = u.id)::text AS visits
+        FROM users u
+       WHERE u.deleted_at IS NULL
+       ORDER BY 2 DESC, u.id
+       LIMIT 2
+    `.execute(db);
+    return result.rows.map((row) => ({ id: row.id, visits: Number(row.visits) }));
+  };
+
+  it('a query that forgets whose record it wants returns only the caller’s', async () => {
+    const [first, second] = await twoAccounts();
+    if (first === undefined || second === undefined) {
+      throw new Error('The seed should hold two patient accounts.');
+    }
+    const all = await visitCount();
+    expect(all).toBeGreaterThan(first.visits);
+
+    await runInDbScope({ kind: 'patient', userId: first.id }, async () => {
+      expect(await visitCount()).toBe(first.visits);
+    });
+    await runInDbScope({ kind: 'patient', userId: second.id }, async () => {
+      expect(await visitCount()).toBe(second.visits);
+    });
+  });
+
+  it('a connection handed from one person to the next says the new one', async () => {
+    const [first, second] = await twoAccounts();
+    if (first === undefined || second === undefined) throw new Error('two accounts');
+    for (let round = 0; round < 12; round += 1) {
+      const mine = round % 2 === 0 ? first : second;
+      await runInDbScope({ kind: 'patient', userId: mine.id }, async () => {
+        expect(await visitCount()).toBe(mine.visits);
+      });
+    }
+    // And a link after an account does not keep the account's id.
+    await runInDbScope({ kind: 'guest', guestId: first.id, bookingId: null }, async () => {
+      expect(await visitCount()).toBe(0);
+    });
+  });
+
+  it('two people’s work running at once each see their own', async () => {
+    const [first, second] = await twoAccounts();
+    if (first === undefined || second === undefined) throw new Error('two accounts');
+    const work = async (mine: { id: string; visits: number }): Promise<void> => {
+      await runInDbScope({ kind: 'patient', userId: mine.id }, async () => {
+        for (let step = 0; step < 8; step += 1) expect(await visitCount()).toBe(mine.visits);
+      });
+    };
+    await Promise.all([work(first), work(second), work(first), work(second)]);
+  });
+
+  it('nobody reads no clinical record, and the server’s own work reads all of it', async () => {
+    await runInDbScope({ kind: 'open' }, async () => {
+      expect(await visitCount()).toBe(0);
+    });
+    expect(await visitCount()).toBeGreaterThan(0);
+  });
+});
+
 describe('the scope comes from the principal, and from nothing a request says', () => {
   it('a member of staff is scoped to the hospital their token names', () => {
     expect(
@@ -165,8 +235,20 @@ describe('the scope comes from the principal, and from nothing a request says', 
     expect(scopeOfPrincipal({ kind: 'national', id: 'x', roles: ['platform_admin'] })).toEqual({
       kind: 'national',
     });
-    expect(scopeOfPrincipal({ kind: 'patient', id: 'x' })).toEqual({ kind: 'open' });
-    expect(scopeOfPrincipal({ kind: 'guest', id: 'x', bookingId: null })).toEqual({ kind: 'open' });
+    expect(scopeOfPrincipal({ kind: 'patient', id: 'x' })).toEqual({
+      kind: 'patient',
+      userId: 'x',
+    });
+    expect(scopeOfPrincipal({ kind: 'guest', id: 'x', bookingId: 'y' })).toEqual({
+      kind: 'guest',
+      guestId: 'x',
+      bookingId: 'y',
+    });
+    expect(scopeOfPrincipal({ kind: 'guest', id: 'x', bookingId: null })).toEqual({
+      kind: 'guest',
+      guestId: 'x',
+      bookingId: null,
+    });
     expect(scopeOfPrincipal(undefined)).toEqual({ kind: 'open' });
   });
 

@@ -1,6 +1,7 @@
 /**
  * Who a database connection is working for (`PRD.md` `FR-SEC-11`,
- * `FR-NET-02`; DATABASE.md §6; migration 0043; plan B1).
+ * `FR-NET-02`; DATABASE.md §5.2 and §5.3; migrations 0043 and 0044; plans B1
+ * and B3).
  *
  * Hospitals used to be kept apart by habits in application code: a scope
  * check on each route, a hospital in each query. One forgotten check leaked
@@ -20,14 +21,21 @@
  * No route, service or repository says anything about scope, and none can
  * forget to. That is the point.
  *
- * ## The four scopes
+ * ## The scopes
  *
  * - `hospital`: a member of that hospital's staff. Another hospital's rows do
  *   not exist for it.
  * - `national`: a platform administrator. Organisations, never a patient
  *   (`FR-ONB-08`).
- * - `open`: a patient, a guest holding a link, or nobody. What each may see
- *   is still decided by the application; a patient's own scope is plan B3.
+ * - `patient`: a signed-in account. Of the clinical record (visits, test
+ *   orders, reports, consents and the rest; migration 0044) it reaches its
+ *   own profiles' and nobody else's.
+ * - `guest`: a tracking link, or the short token it is exchanged for. Of the
+ *   clinical record it reaches what was written at the one booking it names
+ *   (`FR-GST-05`). A guest token that names no booking reaches none.
+ * - `open`: nobody. Of the clinical record, nothing. Everything else is as
+ *   it was for these three: what each may see of a booking or a queue is
+ *   still decided by the application.
  * - `system`: the server's own work with nobody behind it — the schedule job,
  *   the purge, a command an operator runs — and any code that runs outside a
  *   request, which is what makes this the value when nothing was said.
@@ -47,6 +55,8 @@ import type { Principal } from '../types/express.js';
 export type DbScope =
   | { readonly kind: 'hospital'; readonly hospitalId: string }
   | { readonly kind: 'national' }
+  | { readonly kind: 'patient'; readonly userId: string }
+  | { readonly kind: 'guest'; readonly guestId: string; readonly bookingId: string | null }
   | { readonly kind: 'open' }
   | { readonly kind: 'system' };
 
@@ -71,7 +81,8 @@ export function currentDbScope(): DbScope {
  *
  * A member of staff is scoped to the hospital their token names, and to
  * nothing else: the token's `hospitalId` is the only thing consulted, never
- * anything the request says.
+ * anything the request says. An account is scoped to itself, and a link to
+ * the booking its token names, in the same way.
  */
 export function scopeOfPrincipal(principal: Principal | undefined): DbScope {
   if (principal === undefined) return OPEN;
@@ -81,8 +92,9 @@ export function scopeOfPrincipal(principal: Principal | undefined): DbScope {
     case 'national':
       return NATIONAL;
     case 'patient':
+      return { kind: 'patient', userId: principal.id };
     case 'guest':
-      return OPEN;
+      return { kind: 'guest', guestId: principal.id, bookingId: principal.bookingId };
   }
 }
 
@@ -90,6 +102,26 @@ export function scopeOfPrincipal(principal: Principal | undefined): DbScope {
 export function statementOf(scope: DbScope): {
   readonly scope: string;
   readonly hospitalId: string;
+  /** The account, or the identity a link was issued to. */
+  readonly personId: string;
+  readonly bookingId: string;
 } {
-  return { scope: scope.kind, hospitalId: scope.kind === 'hospital' ? scope.hospitalId : '' };
+  const nothing = { hospitalId: '', personId: '', bookingId: '' };
+  switch (scope.kind) {
+    case 'hospital':
+      return { ...nothing, scope: scope.kind, hospitalId: scope.hospitalId };
+    case 'patient':
+      return { ...nothing, scope: scope.kind, personId: scope.userId };
+    case 'guest':
+      return {
+        ...nothing,
+        scope: scope.kind,
+        personId: scope.guestId,
+        bookingId: scope.bookingId ?? '',
+      };
+    case 'national':
+    case 'open':
+    case 'system':
+      return { ...nothing, scope: scope.kind };
+  }
 }

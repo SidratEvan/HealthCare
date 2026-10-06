@@ -137,6 +137,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0042',
       // Plan B1: hospitals kept apart by the database (FR-SEC-11).
       '0043',
+      // Plan B3: a person's clinical record is their own at the database (FR-SEC-11).
+      '0044',
     ]);
   });
 

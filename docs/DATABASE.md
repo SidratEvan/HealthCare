@@ -610,7 +610,9 @@ The role is created and brought back to exactly these privileges by `pnpm db:rol
 |---|---|---|
 | `hospital` (+ `app.hospital_id`) | A member of that hospital's staff | That hospital's rows. Another hospital's do not exist for it: not to read, not to write, not to move a row of its own into |
 | `national` | A platform administrator | Organisations: hospitals, their staff, wards, beds, schedules. **Nothing about a person** — no patient, booking, visit, case, order, consent, message (`FR-ONB-08`) |
-| `open` | A patient, a guest holding a link, nobody | Everything, as before: what each may see is still decided by the application. A patient's own scope is plan B3 |
+| `patient` (+ `app.person_id`) | A signed-in account | §5.3: of the clinical record, its own profiles' and nobody else's. Otherwise as `open` |
+| `guest` (+ `app.person_id`, `app.booking_id`) | A tracking link, or the short token it is exchanged for | §5.3: of the clinical record, what was written at the one booking it names. Otherwise as `open` |
+| `open` | Nobody | §5.3: of the clinical record, nothing. Everything else, as before: what may be seen of a booking or a queue is still decided by the application |
 | `system` | The server's own work: the schedule job, the purge, an operator's command, anything outside a request | Everything |
 | unset, or anything else | A connection that has said nothing | **Nothing** |
 
@@ -630,11 +632,32 @@ The role is created and brought back to exactly these privileges by `pnpm db:rol
 
 **What crosses between hospitals** is named in 0043 and nowhere else: what a hospital publishes; a **referral**, to its two ends, and through it the two emergency cases it links; a **visit**, and the booking behind it, to a hospital the patient has given a live consent; and `fn_runs_emergency_desk(hospital)`, which answers yes or no from `staff_roles` with its owner's rights, because who works at a hospital is its own and that it has an emergency desk is what it publishes.
 
-**What it does not do.** It does not bind the owner: row-level security never applies to a table's owner, so migrations, seeds and backups are unaffected, **and so is a deployment whose API still connects as the owner — the public demonstration on Supabase.** The policies protect a deployment that runs the API as its own role, which is what one holding real patients does (`DEPLOY.md` Part S). It does not yet separate one patient from another: under `open` the application decides, as before (plan B3). And a hospital's staff asking for another hospital's row by id are now answered **404**, not 403: the row is not found, because for them it is not there.
+**What it does not do.** It does not bind the owner: row-level security never applies to a table's owner, so migrations, seeds and backups are unaffected, **and so is a deployment whose API still connects as the owner — the public demonstration on Supabase.** The policies protect a deployment that runs the API as its own role, which is what one holding real patients does (`DEPLOY.md` Part S). One patient is kept from another by the database for the clinical record only (§5.3); for bookings, payments and messages the application still decides. And a hospital's staff asking for another hospital's row by id are now answered **404**, not 403: the row is not found, because for them it is not there.
 
 **The schedule job** (`sessionMaterialise.service`) runs in the `system` scope whoever prompted it: a hospital approving an import asks for it to run now, and what runs writes the chambers every hospital's schedules call for.
 
 **How it is tested.** `database/tests/tenancy.test.ts` asks the policies directly, as a member of `app_tenant` that holds rows and nothing else (`tenancy_probe`, given its rights once by the suite's setup), with queries that forget their hospital. `backend/api/src/__tests__/tenantScope.test.ts` asks that the API states the scope on a single query, in a transaction, across reused connections and with two hospitals' work interleaved. The whole API suite and **every browser suite** run with the API as a role the policies bind (`e2e/support/database.ts`), so a flow the policies refuse fails a test. And `backend/api/src/__tests__/tenantMatrix.test.ts` (plan B2) sets one hospital against another on every route the server mounts: by path, by row, by a row named in a body, as the platform, as the nation, as nobody, as a patient and as a tracking link, and then checks the other hospital is row for row what it was. A route that the matrix does not name fails it (`BACKEND.md` §11).
+
+### 5.3 A person's clinical record is their own (plan B3, migration 0044, `FR-SEC-11`, `FR-NET-02`, `FR-GST-05`)
+
+**What was left by 5.2.** A patient, a tracking link and nobody at all shared one scope, `open`, which reached everything. One hospital was kept from another by the database; one person was kept from another by the application alone, so a patient-facing query that forgot whose record it wanted returned somebody else's.
+
+**The scopes.** A connection now also says `app.person_id` and `app.booking_id`. An account is `patient` with its own id. A tracking link, and the short token it is exchanged for, is `guest` with the identity it was issued to and the one booking it names. `open` is what is left: nobody. As in 5.2 the scope comes from the principal and from nothing the request says, and no route says it.
+
+**The clinical record** is `visits`, `prescriptions`, `prescription_items`, `test_orders`, `reports`, `patient_documents`, `consents`, `admissions`.
+
+| Scope | Reads | Writes |
+|---|---|---|
+| `patient` | What is about a profile the account owns (`patients.owner_user_id`). Nobody else's, whatever the query leaves out | Its own consents (`FR-PAT-63`, `FR-PAT-64`). Nothing else: a visit, an order, a report and an admission are a hospital's to write |
+| `guest` | The visit made at the booking the token names, the tests ordered at it and their reports. **Not that person's other visits**: a link opens one booking (`FR-GST-05`). A guest token that names no booking, the one a number is given to book with, reads none | Nothing |
+| `open` | Nothing | Nothing |
+| `hospital`, `national`, `system` | As 5.2 | As 5.2 |
+
+**Three places say a scope themselves, and why.** A request with a token in its path arrives as nobody. `guest.service` resolves the tracking link and then runs the rest as that link (`asLink`), for the page and for a report's address alike. `patientAuth.service` reads what a verified number may take over (`FR-GST-09`) as the server's own work, because those profiles are not the account's yet and saying how many visits they hold is the point of the preview; the number is the account's own, from its row. The third is 5.2's schedule job.
+
+**What it does not do, said plainly.** Outside the clinical record a patient and a link reach what `open` reached before: a booking, a queue event, a payment, a message, a profile. The live serial is worked out from every booking in a chamber and a serial is allocated against all of them, so those rows cannot be one person's at the database without the queue's reads changing first. Between patients, those tables are still kept apart by the application, and `tenantMatrix.test.ts` is what holds it to that (plan I3 is the rest). `patient_documents` is a person's own to a patient and a link, and still reachable by a hospital's connection, as 5.2 left it; nothing in the application reads it yet.
+
+**How it is tested.** `database/tests/tenancy.test.ts` asks the policies as a person: an account reads its own profiles' visits, tests and reports and no others with no `WHERE` at all, reads and does not write, and gives a consent for its own profile only; a link reads the one visit of its booking when the same person has another; nobody reads none of the eight tables. `tenantScope.test.ts` asks that the API states a person's scope on reused connections and with two people's work interleaved. The whole API suite and every browser suite run under it.
 
 ---
 
