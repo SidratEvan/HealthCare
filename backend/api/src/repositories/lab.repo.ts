@@ -486,6 +486,8 @@ interface AvailabilitySqlRow {
  * third answer.
  */
 export async function searchMedicineAvailability(input: {
+  /** Only this hospital's pharmacy: a portal's own search (`FR-BRD-09`). Null for the network. */
+  readonly hospitalId: string | null;
   readonly query: string;
   readonly lat: number | null;
   readonly lng: number | null;
@@ -531,6 +533,7 @@ export async function searchMedicineAvailability(input: {
                ON s.hospital_id = h.id AND s.medicine_id = m.id AND s.deleted_at IS NULL
        WHERE h.deleted_at IS NULL
          AND h.is_live
+         AND (${input.hospitalId}::uuid IS NULL OR h.id = ${input.hospitalId}::uuid)
          -- Only facilities that keep a shelf at all. A hospital with no
          -- pharmacy is not "unknown" about a medicine; it is not a pharmacy.
          AND EXISTS (

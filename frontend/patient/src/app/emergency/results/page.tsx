@@ -32,11 +32,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { EMERGENCY_PROBLEMS, type EmergencyProblem } from '@platform/domain';
-import { formatAge, problemName, tp, numeralsFor } from '@platform/i18n';
+import { formatAge, localName, problemName, tp, numeralsFor } from '@platform/i18n';
 import { Button, FreshnessLine, useLocale } from '@platform/ui';
 
 import { EmergencyResultCard } from '@/components/EmergencyResult';
 import { TabScreen } from '@/components/TabScreen';
+import { useDeployment } from '@/hooks/useDeployment';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
 import { usePosition } from '@/hooks/usePosition';
@@ -121,6 +122,7 @@ export default function Page(): ReactNode {
 
   const problem = query?.problem ?? null;
   const critical = query?.critical ?? false;
+  const scope = useDeployment()?.scope ?? null;
 
   const title =
     problem === null
@@ -131,6 +133,21 @@ export default function Page(): ReactNode {
     <TabScreen title={title}>
       {/* FR-PAT-47: the national number, on every emergency screen. */}
       <Call999 />
+
+      {/* FR-BRD-09: inside a hospital's own portal every other page is that
+          hospital's. This one is not, and says so: the nearest place that
+          can treat the problem comes first, whoever runs it. */}
+      {scope === null ? null : (
+        <p
+          className="rounded-sm bg-sunken px-3 py-2 text-body-sm text-ink-secondary"
+          data-testid="emergency-network-wide"
+        >
+          {tp('emergencyNetworkWide', locale).replace(
+            '{hospital}',
+            localName(locale, scope.nameBn, scope.nameEn),
+          )}
+        </p>
+      )}
 
       {position.kind === 'locating' ? (
         <p className="text-body-md text-ink-secondary" role="status" data-testid="locating">

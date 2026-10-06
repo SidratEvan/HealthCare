@@ -34,6 +34,12 @@ export interface ScopeConfig {
   readonly descriptionBn?: string | null;
   readonly descriptionEn?: string | null;
   readonly logoVersion?: string | null;
+  /**
+   * The modules it does not run (`FR-BRD-11`) and the figures it keeps
+   * (`FR-NET-04`): its own portal offers nothing of either.
+   */
+  readonly modulesOff?: readonly string[];
+  readonly notShared?: readonly string[];
   /** True when the address itself is this hospital's portal (`FR-BRD-07`). */
   readonly byAddress?: boolean;
   /** What its logo is as an image, when that is known (`FR-BRD-08`). */

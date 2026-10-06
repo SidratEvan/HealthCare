@@ -12,6 +12,7 @@
  */
 
 import {
+  notSharedOf,
   orderForNeed,
   parseNeed,
   pngSize,
@@ -84,6 +85,14 @@ export interface ScopeInfo {
     readonly width: number;
     readonly height: number;
   } | null;
+  /**
+   * The modules it does not run (`FR-BRD-11`) and the figures it keeps
+   * (`FR-NET-04`), so that its own portal offers nothing that would only
+   * ever answer with nothing: no bed search where there is no ward, no
+   * medicine search where there is no shelf to ask.
+   */
+  readonly modulesOff: readonly string[];
+  readonly notShared: readonly string[];
 }
 
 /**
@@ -107,6 +116,8 @@ export async function scopeInfo(code: string): Promise<ScopeInfo> {
     descriptionEn: row.descriptionEn,
     logoVersion: row.logoVersion,
     logoImage: logoImageOf(row.logoType, row.logoHeadHex),
+    modulesOff: row.modulesOff,
+    notShared: notSharedOf(row.unpublished, row.modulesOff),
   };
 }
 

@@ -297,18 +297,28 @@ function Specialties(): ReactNode {
  */
 function QuickTiles(): ReactNode {
   const locale = useLocale();
+  // In a hospital's own portal the bed search and the medicine search are
+  // about that hospital only (`FR-BRD-09`), so one that runs no ward or no
+  // pharmacy, or keeps its shelf to itself (`FR-NET-04`), has nothing there
+  // to answer with and the tile is not offered. Records are the patient's
+  // own, wherever made (`FR-BRD-10`), and are always here.
+  const scope = useDeployment()?.scope ?? null;
+  const off = scope?.modulesOff ?? [];
+  const beds = !off.includes('beds');
+  const medicines = !off.includes('pharmacy') && scope?.notShared?.includes('stock') !== true;
   const tiles = [
-    { href: '/beds', label: 'quickBed', Icon: BedIcon },
-    { href: '/records', label: 'quickReport', Icon: ReportIcon },
-  ] as const;
+    ...(beds ? [{ href: '/beds', label: 'quickBed', Icon: BedIcon } as const] : []),
+    { href: '/records', label: 'quickReport', Icon: ReportIcon } as const,
+  ];
 
   return (
     <div className="flex flex-col gap-2.5">
-      <ul className="grid grid-cols-2 gap-2.5">
+      <ul className={tiles.length === 1 ? 'grid grid-cols-1 gap-2.5' : 'grid grid-cols-2 gap-2.5'}>
         {tiles.map((tile) => (
           <li key={tile.href}>
             <a
               href={tile.href}
+              data-testid={`quick-${tile.label === 'quickBed' ? 'beds' : 'records'}`}
               className="flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-sm border border-line bg-surface px-1.5 py-3 text-center"
             >
               <span className="text-brand-600">
@@ -326,14 +336,18 @@ function QuickTiles(): ReactNode {
         A wide row rather than a third tile: it carries a line saying what
         it answers, which a tile has no room for.
       */}
-      <a
-        href="/medicines"
-        data-testid="quick-medicines"
-        className="flex min-h-touch items-center justify-between rounded-sm border border-line bg-surface px-4 py-3"
-      >
-        <span className="text-body-md">{tp('medicinesTitle', locale)}</span>
-        <span className="text-body-sm text-ink-muted">{tp('medicinesIntro', locale)}</span>
-      </a>
+      {medicines ? (
+        <a
+          href="/medicines"
+          data-testid="quick-medicines"
+          className="flex min-h-touch items-center justify-between rounded-sm border border-line bg-surface px-4 py-3"
+        >
+          <span className="text-body-md">{tp('medicinesTitle', locale)}</span>
+          <span className="text-body-sm text-ink-muted">
+            {tp(scope === null ? 'medicinesIntro' : 'scopedMedicinesShort', locale)}
+          </span>
+        </a>
+      ) : null}
     </div>
   );
 }

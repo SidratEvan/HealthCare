@@ -144,3 +144,115 @@ test('a code no hospital has shows the network, not somebody else’s app', asyn
   await page.goto(`${PATIENT}/search?need=bed:icu`);
   await expect(page.getByTestId('search-failed')).toBeVisible();
 });
+
+// ---------------------------------------------------------------------------
+// What a portal is, and is not (`FR-BRD-09`; plan C6)
+// ---------------------------------------------------------------------------
+
+const API = 'http://localhost:4000/api/v1';
+
+/** A hospital's id from its code, as the public is told it. */
+async function hospitalIdOf(code: string): Promise<string> {
+  const response = await fetch(`${API}/config?scope=${code}`);
+  const body = (await response.json()) as { data: { scope: { hospitalId: string } | null } };
+  const id = body.data.scope?.hospitalId;
+  if (id === undefined) throw new Error(`The seed should hold ${code} (FR-DEM-01).`);
+  return id;
+}
+
+test('inside a portal the emergency search is still the whole network, and says so (FR-BRD-09)', async ({
+  page,
+}) => {
+  const padma = await hospitalIdOf('PADMA');
+
+  const asked = await fetch(`${API}/emergency/search?problem=accident`);
+  const ranked = (
+    (await asked.json()) as { data: { results: { hospitalId: string }[] } }
+  ).data.results.map((entry) => entry.hospitalId);
+  const other = ranked.find((id) => id !== padma);
+  if (other === undefined) throw new Error('The seed should have more than one emergency desk.');
+
+  // The network's own app: every hospital, and nothing to explain.
+  await page.goto(`${PATIENT}/emergency/results?problem=accident&scope=`);
+  await expect(page.getByTestId('results')).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByTestId(`result-${other}`)).toBeVisible();
+  await expect(page.getByTestId('emergency-network-wide')).toHaveCount(0);
+
+  // Padma's: the same search, not narrowed to Padma, with a line that says so.
+  await page.goto(`${PATIENT}/emergency/results?problem=accident&scope=PADMA`);
+  await expect(page.locator('html')).toHaveAttribute('data-scope', 'PADMA');
+  await expect(page.getByTestId('results')).toBeVisible({ timeout: 45_000 });
+  const line = page.getByTestId('emergency-network-wide');
+  await expect(line).toBeVisible();
+  await expect(line).toContainText('পদ্মা');
+  await expect(line).toContainText('যুক্ত সব হাসপাতাল');
+  // A hospital that is not the portal's own is on the screen.
+  await expect(page.getByTestId(`result-${other}`)).toBeVisible();
+
+  await page.goto(`${PATIENT}/?scope=`);
+});
+
+test('inside a portal the medicine search is that hospital’s pharmacy only (FR-BRD-09)', async ({
+  page,
+}) => {
+  const karnaphuli = await hospitalIdOf('KARNAPHULI');
+  const everywhere = await fetch(`${API}/medicines?q=para&limit=50`);
+  const medicines = (
+    (await everywhere.json()) as {
+      data: { medicines: { genericName: string; pharmacies: { hospitalId: string }[] }[] };
+    }
+  ).data.medicines;
+  const stocked = medicines.find(
+    (entry) =>
+      entry.pharmacies.some((p) => p.hospitalId === karnaphuli) && entry.pharmacies.length > 1,
+  );
+  if (stocked === undefined) {
+    throw new Error('The seed should have a medicine at Karnaphuli and at another pharmacy.');
+  }
+
+  // The network's app names more than one pharmacy for it.
+  await page.goto(`${PATIENT}/medicines`);
+  await page.getByTestId('medicine-search').fill(stocked.genericName);
+  await expect(page.getByTestId('medicine-list')).toBeVisible({ timeout: 45_000 });
+  expect(await page.locator('[data-testid^="pharmacy-"]').count()).toBeGreaterThan(1);
+
+  // Karnaphuli's names its own and no other, and says whose search this is.
+  await page.goto(`${PATIENT}/medicines?scope=KARNAPHULI`);
+  await expect(page.locator('html')).toHaveAttribute('data-scope', 'KARNAPHULI');
+  await expect(page.getByTestId('medicines-intro')).toContainText('কর্ণফুলী');
+  await page.getByTestId('medicine-search').fill(stocked.genericName);
+  await expect(page.getByTestId('medicine-list')).toBeVisible({ timeout: 45_000 });
+  const pharmacies = page.locator('[data-testid^="pharmacy-"]');
+  await expect(pharmacies).toHaveCount(1);
+  await expect(page.getByTestId(`pharmacy-${karnaphuli}`)).toBeVisible();
+});
+
+test('a portal’s first screen offers what its hospital runs, and the emergency card always', async ({
+  page,
+}) => {
+  // The network's own app has all three.
+  await page.goto(`${PATIENT}/?scope=`);
+  await expect(page.getByTestId('emergency-card')).toBeVisible();
+  await expect(page.getByTestId('quick-beds')).toBeVisible();
+  await expect(page.getByTestId('quick-records')).toBeVisible();
+  await expect(page.getByTestId('quick-medicines')).toBeVisible();
+
+  // Meghna keeps no pharmacy shelf: no medicine search that could only answer nothing.
+  await page.goto(`${PATIENT}/?scope=MEGHNA`);
+  await expect(page.locator('html')).toHaveAttribute('data-scope', 'MEGHNA');
+  await expect(page.getByTestId('quick-records')).toBeVisible();
+  await expect(page.getByTestId('quick-beds')).toBeVisible();
+  await expect(page.getByTestId('quick-medicines')).toHaveCount(0);
+  await expect(page.getByTestId('emergency-card')).toBeVisible();
+
+  // Buriganga runs no ward: no bed search. Its records and the emergency card stay.
+  await page.goto(`${PATIENT}/?scope=BURIGANGA`);
+  await expect(page.locator('html')).toHaveAttribute('data-scope', 'BURIGANGA');
+  await expect(page.getByTestId('quick-records')).toBeVisible();
+  await expect(page.getByTestId('quick-beds')).toHaveCount(0);
+  await expect(page.getByTestId('quick-medicines')).toBeVisible();
+  await expect(page.getByTestId('emergency-card')).toBeVisible();
+
+  await page.goto(`${PATIENT}/?scope=`);
+  await expect(page.getByTestId('quick-beds')).toBeVisible();
+});

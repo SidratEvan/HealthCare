@@ -244,8 +244,10 @@ export async function openTrackingLink(token: string): Promise<TrackingLinkView>
  * which is the honest fallback rather than a guessed coordinate.
  */
 export async function searchMedicines(q: string): Promise<readonly MedicineAvailability[]> {
+  // Scoped: inside a hospital's own portal the answer is about that
+  // hospital's pharmacy and no other (`FR-BRD-09`).
   const result = await api.get<{ medicines: readonly MedicineAvailability[] }>(
-    `/medicines?q=${encodeURIComponent(q)}`,
+    scopedPath('/medicines', new URLSearchParams({ q })),
   );
   return result.medicines;
 }

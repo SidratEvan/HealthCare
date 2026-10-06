@@ -144,6 +144,31 @@ test.describe('S-A-12 the timeline', () => {
     await expect(list).toContainText(ASSESSMENT?.adviceBn ?? '');
   });
 
+  test('inside another hospital’s portal the wallet is still the patient’s own (FR-BRD-10)', async ({
+    page,
+  }) => {
+    const bookingId = await bookAsGuest(page);
+    await seeTheGuest(bookingId);
+
+    // A portal that is not the hospital the visit was made at.
+    const asked = await fetch('http://localhost:4000/api/v1/config?scope=PADMA');
+    const padma = ((await asked.json()) as { data: { scope: { hospitalId: string } } }).data.scope
+      .hospitalId;
+    const portal = padma === demo.hospitalId ? 'KARNAPHULI' : 'PADMA';
+
+    await page.goto(`${PATIENT}/records?scope=${portal}`);
+    await expect(page.locator('html')).toHaveAttribute('data-scope', portal);
+
+    // The record was made somewhere else, and it is this person's: it is here.
+    const list = page.getByTestId('record-list');
+    await expect(list).toBeVisible();
+    await expect(list).toContainText(ASSESSMENT?.diagnosisBn ?? '');
+
+    // Leaving the portal changes nothing about it either.
+    await page.goto(`${PATIENT}/records?scope=`);
+    await expect(page.getByTestId('record-list')).toContainText(ASSESSMENT?.diagnosisBn ?? '');
+  });
+
   test('an expired link is said, not hidden (FR-GST-08)', async ({ page }) => {
     const bookingId = await bookAsGuest(page);
     await revokeTrackingLink(bookingId);

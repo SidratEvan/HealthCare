@@ -119,6 +119,10 @@ export async function getConfig(req: Request, res: Response): Promise<void> {
               descriptionEn: scoped.descriptionEn,
               logoVersion: scoped.logoVersion,
               logoImage: scoped.logoImage,
+              // What it does not run and what it keeps (`FR-BRD-11`,
+              // `FR-NET-04`): its portal offers nothing of either.
+              modulesOff: scoped.modulesOff,
+              notShared: scoped.notShared,
               // True when the address itself is this hospital's portal, so
               // the app knows the scope is not the visitor's to change.
               byAddress: atPortal !== null,

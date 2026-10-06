@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import { LAB_ACTIONS } from '../lab/orders.js';
 
+import { scopeCode } from './booking.schema.js';
 import { queueCommandEnvelope } from './queue.schema.js';
 
 const uuid = z.string().uuid();
@@ -158,8 +159,13 @@ export type StockFlagsBody = z.infer<typeof stockFlagsBody>;
  * `q` matches generic or brand name. Position is optional and, when absent,
  * the results are ranked by freshness instead of distance — the app does not
  * ask for location before it has something to show (`S-A-01` is not built).
+ *
+ * `scope` is a hospital's code (`FR-BRD-02`, `FR-BRD-09`): inside a
+ * hospital's own portal the search answers for that hospital's pharmacy and
+ * no other.
  */
 export const medicineSearchQuery = z.object({
+  scope: scopeCode.optional(),
   q: z.string().trim().min(2).max(80),
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),

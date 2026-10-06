@@ -620,6 +620,9 @@ export interface ScopeRow {
   /** The logo's type, and the start of the file, from which its size is read. */
   readonly logoType: string | null;
   readonly logoHeadHex: string | null;
+  /** The modules it does not run, and the figures it does not share. */
+  readonly modulesOff: readonly string[];
+  readonly unpublished: readonly string[];
 }
 
 /**
@@ -640,10 +643,14 @@ export async function findScope(code: string): Promise<ScopeRow | null> {
     logo_version: string | null;
     logo_type: string | null;
     logo_head: string | null;
+    modules_off: string[];
+    unpublished: string[];
   }>`
     SELECT h.id, h.code, h.name_bn, h.name_en, hs.brand, h.description_bn, h.description_en,
            left(l.sha256, 16) AS logo_version, l.content_type AS logo_type,
-           encode(substring(l.bytes from 1 for 24), 'hex') AS logo_head
+           encode(substring(l.bytes from 1 for 24), 'hex') AS logo_head,
+           coalesce(hs.modules_off, '{}'::text[]) AS modules_off,
+           coalesce(hs.unpublished, '{}'::text[]) AS unpublished
       FROM hospitals h
       LEFT JOIN hospital_settings hs ON hs.hospital_id = h.id
       LEFT JOIN hospital_logos l ON l.hospital_id = h.id
@@ -663,6 +670,8 @@ export async function findScope(code: string): Promise<ScopeRow | null> {
     logoVersion: row.logo_version,
     logoType: row.logo_type,
     logoHeadHex: row.logo_head,
+    modulesOff: row.modules_off,
+    unpublished: row.unpublished,
   };
 }
 
