@@ -30,6 +30,7 @@ import { AppError, notFound } from '../errors/AppError.js';
 import * as bedRepo from '../repositories/bed.repo.js';
 import * as discoveryRepo from '../repositories/discovery.repo.js';
 
+import * as modules from './modules.service.js';
 import * as queueService from './queue.service.js';
 
 import type { DoctorCard, HospitalCard, SessionCard } from '../repositories/discovery.repo.js';
@@ -400,6 +401,8 @@ export interface Availability {
 
 export async function availability(sessionId: string): Promise<Availability> {
   const session = await queueService.requireSession(sessionId);
+  // Not published where the hospital does not run serials (`FR-BRD-11`).
+  await modules.requireOn(session.hospitalId, 'queue');
   const state = await queueService.getState(sessionId);
   const now: Timestamp = time.fromDate(new Date());
 

@@ -32,10 +32,12 @@ import {
   BED_KINDS,
   CAPABILITY_KINDS,
   FACILITY_ROLES,
+  isHospitalModule,
   missingForReview,
   setupChecklist,
   type ChecklistItemKey,
   type FacilityRole,
+  type HospitalModule,
   type OrgLifecycle,
 } from '@platform/domain';
 import {
@@ -94,6 +96,18 @@ const TABS: readonly { readonly id: Tab; readonly key: ConsoleKey }[] = [
   { id: 'capabilities', key: 'settingsTabCapabilities' },
   { id: 'staff', key: 'settingsTabStaff' },
 ];
+
+/** A module's name, as the settings and the platform's screen say it. */
+export const MODULE_KEY: Readonly<Record<HospitalModule, ConsoleKey>> = {
+  queue: 'moduleQueue',
+  doctor: 'moduleDoctor',
+  beds: 'moduleBeds',
+  emergency: 'moduleEmergency',
+  lab: 'moduleLab',
+  pharmacy: 'modulePharmacy',
+  dashboard: 'moduleDashboard',
+  import: 'moduleImport',
+};
 
 const ROLE_KEY: Readonly<Record<FacilityRole, ConsoleKey>> = {
   receptionist: 'roleReceptionist',
@@ -249,6 +263,15 @@ function SettingsScreen(): ReactNode {
   const offline = state === 'offline';
   const props: TabProps = { snapshot, offline, run };
 
+  // A module this hospital does not run has no tab here (`FR-BRD-11`): its
+  // wards and beds, and what it can treat in an emergency.
+  const modulesOff = snapshot.hospital.modulesOff;
+  const tabs = TABS.filter(
+    (entry) =>
+      !(entry.id === 'beds' && modulesOff.includes('beds')) &&
+      !(entry.id === 'capabilities' && modulesOff.includes('emergency')),
+  );
+
   return (
     <Shell snapshot={snapshot}>
       {offline ? (
@@ -280,7 +303,17 @@ function SettingsScreen(): ReactNode {
 
       <SetupStatus {...props} />
 
-      <Tabs selected={tab} onSelect={setTab} />
+      {modulesOff.length === 0 ? null : (
+        <p className="text-body-sm text-ink-secondary" data-testid="settings-modules-off">
+          {format('settingsModulesOff', locale, {
+            modules: modulesOff
+              .map((module) => (isHospitalModule(module) ? t(MODULE_KEY[module], locale) : module))
+              .join(', '),
+          })}
+        </p>
+      )}
+
+      <Tabs tabs={tabs} selected={tab} onSelect={setTab} />
 
       <div
         role="tabpanel"
@@ -333,20 +366,24 @@ function Shell({
           </div>
           <div className="flex items-center gap-3">
             <ConsoleLanguageSwitch className="" />
-            <a
-              href="/?view=admin"
-              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
-              data-testid="settings-back"
-            >
-              {t('settingsBackToDashboard', locale)}
-            </a>
-            <a
-              href="/?view=imports"
-              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
-              data-testid="settings-open-import"
-            >
-              {t('importOpen', locale)}
-            </a>
+            {hospital?.modulesOff.includes('dashboard') === true ? null : (
+              <a
+                href="/?view=admin"
+                className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
+                data-testid="settings-back"
+              >
+                {t('settingsBackToDashboard', locale)}
+              </a>
+            )}
+            {hospital?.modulesOff.includes('import') === true ? null : (
+              <a
+                href="/?view=imports"
+                className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
+                data-testid="settings-open-import"
+              >
+                {t('importOpen', locale)}
+              </a>
+            )}
           </div>
         </header>
 
@@ -504,9 +541,11 @@ function SetupStatus({ snapshot, offline, run }: TabProps): ReactNode {
 }
 
 function Tabs({
+  tabs,
   selected,
   onSelect,
 }: {
+  readonly tabs: typeof TABS;
   readonly selected: Tab;
   readonly onSelect: (tab: Tab) => void;
 }): ReactNode {
@@ -518,16 +557,16 @@ function Tabs({
       onKeyDown={(event) => {
         if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
         event.preventDefault();
-        const index = TABS.findIndex((entry) => entry.id === selected);
+        const index = tabs.findIndex((entry) => entry.id === selected);
         const next =
-          TABS[(index + (event.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length];
+          tabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length];
         if (next === undefined) return;
         onSelect(next.id);
         globalThis.document.getElementById(`settings-tab-${next.id}`)?.focus();
       }}
       className="flex flex-wrap gap-1 border-b border-line pb-2"
     >
-      {TABS.map((entry) => {
+      {tabs.map((entry) => {
         const active = entry.id === selected;
         return (
           <button

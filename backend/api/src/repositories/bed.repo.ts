@@ -459,6 +459,9 @@ export async function publicCapacity(
     SELECT hospital_id, bed_total, bed_free, icu_total, icu_free, icu_as_of, beds_as_of, by_kind
       FROM v_public_hospital_capacity
      WHERE hospital_id = ANY(${[...hospitalIds]}::uuid[])
+       -- A hospital that does not run beds publishes no bed figure: absent,
+       -- which a card reads as "not shared", never as none free (FR-BRD-11).
+       AND fn_module_on(hospital_id, 'beds')
   `.execute(db);
 
   return new Map(result.rows.map((row) => [row.hospital_id, toCapacity(row)]));
@@ -467,7 +470,9 @@ export async function publicCapacity(
 /** Hospitals with at least one bed of `kind` (`CHIP-A11-<type>`). */
 export async function hospitalsWithKind(kind: BedKind): Promise<Set<string>> {
   const result = await sql<{ hospital_id: string }>`
-    SELECT DISTINCT hospital_id FROM beds WHERE kind = ${kind}::bed_kind AND deleted_at IS NULL
+    SELECT DISTINCT hospital_id FROM beds
+     WHERE kind = ${kind}::bed_kind AND deleted_at IS NULL
+       AND fn_module_on(hospital_id, 'beds')
   `.execute(db);
   return new Set(result.rows.map((row) => row.hospital_id));
 }

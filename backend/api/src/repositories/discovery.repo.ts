@@ -127,8 +127,11 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
            END AS distance_m,
            (SELECT array_agg(c.kind::text ORDER BY c.kind)
               FROM capabilities c
-             WHERE c.hospital_id = h.id AND c.is_available) AS capabilities,
-           (SELECT max(c.updated_at) FROM capabilities c WHERE c.hospital_id = h.id)
+             WHERE c.hospital_id = h.id AND c.is_available
+               -- What it can treat is its emergency module's to say (FR-BRD-11).
+               AND fn_module_on(h.id, 'emergency')) AS capabilities,
+           (SELECT max(c.updated_at) FROM capabilities c
+             WHERE c.hospital_id = h.id AND fn_module_on(h.id, 'emergency'))
              AS capability_as_of,
 
            -- Doctors in the named specialty, and how many are in a chamber
@@ -145,7 +148,9 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
            (SELECT count(*)::text FROM sessions s
              WHERE s.hospital_id = h.id AND s.status = 'running'
                AND s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
-               AND s.deleted_at IS NULL) AS sitting_now,
+               AND s.deleted_at IS NULL
+               -- A hospital that does not run serials publishes no chamber.
+               AND fn_module_on(h.id, 'queue')) AS sitting_now,
 
            (SELECT coalesce(sum(GREATEST(coalesce(s.capacity, 0) - (
                      SELECT count(*) FROM bookings b
@@ -155,7 +160,8 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
              WHERE s.hospital_id = h.id
                AND s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
                AND s.status IN ('scheduled', 'running')
-               AND s.deleted_at IS NULL) AS open_serials_today
+               AND s.deleted_at IS NULL
+               AND fn_module_on(h.id, 'queue')) AS open_serials_today
       FROM hospitals h
      WHERE h.deleted_at IS NULL
        AND h.is_live
@@ -172,6 +178,7 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
        AND (${query.capability ?? null}::text IS NULL
             OR EXISTS (SELECT 1 FROM capabilities c
                         WHERE c.hospital_id = h.id AND c.is_available
+                          AND fn_module_on(h.id, 'emergency')
                           AND c.kind::text = ${query.capability ?? null}))
        AND (
          ${query.q ?? null}::text IS NULL
@@ -501,6 +508,8 @@ export async function listBookableSessions(input: {
       JOIN departments dep ON dep.id = s.department_id
      WHERE s.deleted_at IS NULL
        AND h.is_live
+       -- A hospital that does not run serials has none to book (FR-BRD-11).
+       AND fn_module_on(s.hospital_id, 'queue')
        AND s.session_date >= ${input.fromDate}::date
        AND s.session_date < ${input.fromDate}::date + ${input.days}::integer
        AND s.status IN ('scheduled', 'running', 'paused')

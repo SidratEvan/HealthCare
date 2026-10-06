@@ -85,6 +85,9 @@ export async function erHospitals(onlyIds?: readonly string[]): Promise<ErHospit
        -- cannot read it; that it has an emergency desk is what it publishes.
        -- The function answers that and nothing else (migration 0043).
        AND fn_runs_emergency_desk(h.id)
+       -- And runs the module at all (FR-BRD-11): off, it is in no emergency
+       -- search and is nowhere to refer to.
+       AND fn_module_on(h.id, 'emergency')
      ORDER BY h.id
   `.execute(db);
 

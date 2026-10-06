@@ -105,6 +105,25 @@ const BRANDS: Readonly<Record<string, { colors: Record<string, string> }>> = {
   },
 };
 
+/**
+ * The modules a facility does not run (`FR-BRD-11`, migration 0047).
+ *
+ * A diagnostic centre keeps no pharmacy shelf; a small clinic has no ward.
+ * Each holds nothing of what is off here (the centre stocks no medicine,
+ * `data/beds.ts` gives the clinic no bed), so the demonstration has two
+ * facilities whose settings and whose workspace on the platform's screen show
+ * a module switched off. Every other facility runs everything, which is the
+ * ordinary state.
+ *
+ * The centre's beds stay on though it has none: "runs beds and has none" is a
+ * state of its own, which a card says as zero and not as "not shared", and
+ * the bed tests stand on it.
+ */
+const MODULES_OFF: Readonly<Record<string, readonly string[]>> = {
+  'meghna-diagnostic': ['pharmacy'],
+  'buriganga-clinic': ['beds'],
+};
+
 const REFUND_POLICIES: Readonly<
   Record<
     string,
@@ -405,6 +424,8 @@ export const seed01Hospitals: SeedModule = {
         // and an empty one is what `readRefundPolicy` reads as "no policy".
         JSON.stringify(REFUND_POLICIES[facility.slug] ?? {}),
         BRANDS[facility.slug] === undefined ? null : JSON.stringify(BRANDS[facility.slug]),
+        // A text array, written the way PostgreSQL reads one.
+        `{${(MODULES_OFF[facility.slug] ?? []).join(',')}}`,
         admins.get(facility.slug) ?? null,
       ];
     });
@@ -412,7 +433,16 @@ export const seed01Hospitals: SeedModule = {
     await insertRows(
       client,
       'hospital_settings',
-      { columns: ['hospital_id', 'numeral_style', 'refund_policy', 'brand', 'created_by'] },
+      {
+        columns: [
+          'hospital_id',
+          'numeral_style',
+          'refund_policy',
+          'brand',
+          'modules_off',
+          'created_by',
+        ],
+      },
       settingsRows,
       '',
     );

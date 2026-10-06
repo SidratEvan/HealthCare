@@ -55,6 +55,8 @@ export interface SetupSnapshot {
     readonly addressEn: string | null;
     readonly phone: string | null;
     readonly emergencyPhone: string | null;
+    /** The modules it does not run (`FR-BRD-11`); empty when everything is on. */
+    readonly modulesOff: readonly string[];
     /** What the hospital says of itself to patients (`FR-BRD-06`). */
     readonly descriptionBn: string | null;
     readonly descriptionEn: string | null;

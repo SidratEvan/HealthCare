@@ -143,6 +143,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0045',
       // Plan C2: a hospital's own domain for its portal (FR-BRD-07).
       '0046',
+      // Plan C4: the modules a hospital runs (FR-BRD-11).
+      '0047',
     ]);
   });
 

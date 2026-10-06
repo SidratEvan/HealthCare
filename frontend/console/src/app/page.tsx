@@ -81,6 +81,7 @@ const VIEW_OF: Readonly<Record<Exclude<ConsoleChoice['kind'], 'chamber'>, string
   lab: 'lab',
   pharmacy: 'pharmacy',
   admin: 'admin',
+  settings: 'settings',
   gov: 'gov',
   platform: 'platform',
 };

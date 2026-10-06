@@ -27,10 +27,12 @@
 import {
   actionNeedsNote,
   missingForApproval,
+  modulesProblems,
   nextLifecycle,
   platformActions,
   setupChecklist,
   type ChecklistItem,
+  type HospitalModule,
   type OrgAction,
   type WorkspaceBody,
 } from '@platform/domain';
@@ -41,6 +43,7 @@ import * as repo from '../repositories/platform.repo.js';
 import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
 import { withTransaction } from '../repositories/transaction.js';
 
+import * as modules from './modules.service.js';
 import * as portals from './portal.service.js';
 import { createFirstAdministrator } from './staffAuth.service.js';
 
@@ -104,6 +107,43 @@ export async function workspace(hospitalId: string): Promise<WorkspaceDetail> {
     administrators,
     missingForApproval: missingForApproval(row.counts),
   };
+}
+
+/**
+ * Switches a hospital's modules (`FR-BRD-11`, `FR-SUP-03`): the whole list of
+ * what is off, as the screen shows it.
+ *
+ * The platform's act. What a hospital runs follows what was agreed with it,
+ * which is settled outside this product; here it is only switched. Nothing
+ * the hospital holds is touched: a module switched back on finds its beds,
+ * its cases and its orders where they were.
+ */
+export async function setModules(
+  actor: PlatformActor,
+  hospitalId: string,
+  off: readonly HospitalModule[],
+): Promise<WorkspaceDetail> {
+  if ((await repo.findWorkspace(hospitalId)) === null) throw notFound('hospital');
+
+  const problems = modulesProblems(off);
+  if (problems.length > 0) throw notAllowed(problems[0] ?? 'modules', { problems });
+
+  await withTransaction(async (trx) => {
+    await settingsRepo.setModulesOff(trx, hospitalId, off);
+    await settingsRepo.recordChange(trx, {
+      actorStaffId: actor.staffId,
+      hospitalId,
+      subjectTable: 'hospital_settings',
+      subjectId: hospitalId,
+      change: 'modules',
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+    });
+  });
+  // Refused, and unpublished, from the next request.
+  modules.forgetModules(hospitalId);
+
+  return await workspace(hospitalId);
 }
 
 /**

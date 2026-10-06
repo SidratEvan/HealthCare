@@ -72,6 +72,7 @@ import * as emergencyRepo from '../repositories/emergency.repo.js';
 import * as referralRepo from '../repositories/referral.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
+import * as modules from './modules.service.js';
 import * as notifications from './notification.service.js';
 
 import type { CapabilityRow, CaseRow, CaseStatusRow } from '../repositories/emergency.repo.js';
@@ -309,6 +310,12 @@ export async function inbound(input: {
   readonly sex: Sex | null;
   readonly idempotencyKey: string | null;
 }): Promise<InboundResult> {
+  // Not a hospital that does not run its emergency module here
+  // (`FR-BRD-11`). Asked first, and said as what it is: such a hospital is in
+  // no emergency search either, so the desk check below would refuse it too,
+  // with a reason that is not the true one.
+  await modules.requireOn(input.hospitalId, 'emergency');
+
   // Only a facility with somebody to ring. A family told "the hospital has
   // been notified" by a facility with no ER console has been told a lie.
   if (!(await emergencyRepo.hasEmergencyDesk(input.hospitalId))) {

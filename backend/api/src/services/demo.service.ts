@@ -35,6 +35,8 @@ import { env } from '../env.js';
 import { AppError, notFound } from '../errors/AppError.js';
 import * as demoRepo from '../repositories/demo.repo.js';
 
+import * as modules from './modules.service.js';
+
 /**
  * Roles the demo console offers, in the order they are shown.
  *
@@ -86,6 +88,8 @@ export interface DemoConsole {
   readonly district: string;
   /** Only the roles this version has a console for. */
   readonly roles: readonly string[];
+  /** The modules this hospital does not run (`FR-BRD-11`): the picker offers none of them. */
+  readonly modulesOff: readonly string[];
   readonly sessions: readonly demoRepo.DemoSessionRow[];
 }
 
@@ -95,16 +99,19 @@ export async function listConsoles(): Promise<readonly DemoConsole[]> {
 
   const rows = await demoRepo.listConsoles();
 
-  return rows.map((row) => ({
-    hospitalId: row.hospitalId,
-    nameBn: row.nameBn,
-    nameEn: row.nameEn,
-    district: row.district,
-    // Filtered to what exists, and ordered by `OFFERED` rather than by name:
-    // a clinic with no ward staff offers no ward board (`data/people.ts`).
-    roles: OFFERED.filter((role) => row.roles.includes(role)),
-    sessions: row.sessions,
-  }));
+  return await Promise.all(
+    rows.map(async (row) => ({
+      hospitalId: row.hospitalId,
+      nameBn: row.nameBn,
+      nameEn: row.nameEn,
+      district: row.district,
+      // Filtered to what exists, and ordered by `OFFERED` rather than by name:
+      // a clinic with no ward staff offers no ward board (`data/people.ts`).
+      roles: OFFERED.filter((role) => row.roles.includes(role)),
+      modulesOff: await modules.modulesOff(row.hospitalId),
+      sessions: row.sessions,
+    })),
+  );
 }
 
 export interface DemoPrincipal {

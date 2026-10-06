@@ -63,6 +63,15 @@ export const ERROR_CODES = {
   SETTINGS_DUPLICATE: { status: 409, message: 'Something with that value already exists here.' },
   SETTINGS_NOT_ALLOWED: { status: 422, message: 'That change is not allowed.' },
 
+  // --- Modules (plan C4, FR-BRD-11) ------------------------------------------
+  //
+  // The hospital does not run the module the request belongs to. A 403 that
+  // names the module in `details.module`: the hospital is there, and saying
+  // what it does not do is how a console hides the screen and a patient goes
+  // elsewhere. It fails however often it is sent, until the platform switches
+  // the module on.
+  MODULE_OFF: { status: 403, message: 'This hospital does not run that module.' },
+
   // --- Imports (pilot step 24, FR-IMP-05..07) -------------------------------
   //
   // A file that cannot be read as the set at all — empty, a quote never
