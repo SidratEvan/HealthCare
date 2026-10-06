@@ -860,7 +860,9 @@ function Confirm({
           ? tp('alreadyBooked', locale)
           : code === 'SESSION_FULL'
             ? tp('chamberFull', locale)
-            : tp('bookingFailed', locale),
+            : code === 'BOOKING_LIMIT_REACHED'
+              ? tp('bookingLimitReached', locale)
+              : tp('bookingFailed', locale),
       );
     } finally {
       setBusy(false);

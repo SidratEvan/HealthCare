@@ -83,6 +83,7 @@ integration points marked ▣ and at J.
 | E1 | `feat/import-spreadsheet` | `FR-IMP-22`: only CSV is read | **Waits: Q2** (a parsing dependency) | S |
 | **F** | | **Remaining approved workflows** | | |
 | F1 | `feat/patient-bookings-account` | A signed-in patient still books as a guest and My serials is this phone's list | A signed-in patient books as themselves; My serials and Home come from the server on any device | S + canary |
+| F3 | `feat/noshow-prepay` | The second half of `FR-GST-14`: after three no-shows on a number in a rolling window, the next guest booking may be asked to pay first, set per hospital | A hospital setting, the guard, and the patient app saying why. After H3: it means nothing without online payment | S |
 | F2 | `feat/report-ready` | `lab.report_ready` reaches nobody; `FR-QUE-15` computed and not enforced; an offline action is timed at its sync (handover 24, 25, 27) | The patient is told a report is ready; an earlier time is never shown without notice; an offline tap keeps its own time; the arrival button records lateness | S |
 | **G** | | **Platform administration** | | |
 | G1 | `feat/platform-entitlements` | No screen for modules or agreement state | `S-B-12`: a workspace's modules, its agreement state (trial, active, overdue, ended) and usage counters. No plan names, no amounts | S |
@@ -585,7 +586,7 @@ In addition to `CLAUDE.md`:
 | A2 | `fix/ward-reconcile` | **merged 6 October** (was 1.9d) — migration 0039 (`beds.version`, `fn_raise_version`), `version` on `BedView`, `clientEventId` on `bed.updated`, `newestBeds` and `boardAfterRead` in `shared/domain`, an accepted outbox entry hands back the server's answer, and `useBedBoard` settles from it. **Supabase needs 0039 before the next release** |
 | A3 | `fix/er-reconcile` | **merged 6 October** (was 1.9e) — migration 0040 (`emergency_cases.version`), `version` on `EmergencyCaseView`, `clientEventId` on `emergency.updated`, `newestCases` and `casesAfterRead` in `shared/domain`, and `useEmergencyConsole` settles a triage step, a walk-in and a capabilities confirmation from the answer. A referral's step still reads the board. **Supabase needs 0039 and 0040 before the next release** |
 | A4 | `fix/serial-past-midnight` | **merged 6 October** (was 1.9f) — `bookingStanding` in `shared/domain` (no date in it), `lib/standing.ts` in the patient app, Home's strip and My serials on it, "unknown" with its age. `e2e/serial-past-midnight.spec.ts`: a booking dated yesterday in a chamber still running; each fails on the code before |
-| A5 | `fix/booking-retry-safe` | |
+| A5 | `fix/booking-retry-safe` | **merged 6 October** — migration 0041 (`bookings.idempotency_key`; several live links per booking), the replay path in `booking.service`, `IDEMPOTENCY_KEY_REUSED`, `WRITE_CONFLICT` for a unique violation, `BOOKING_LIMIT_REACHED` and `GUEST_BOOKINGS_PER_PHONE_PER_DAY`, the demo stamp only on a demonstration. `bookingRetry.routes.test.ts`. **Supabase needs 0039–0041 before the next release** |
 | A6 | `fix/session-revocation` | |
 | A7 | `fix/audit-append-only` | |
 | A8 | `fix/doctor-record-scope` | |
@@ -602,6 +603,7 @@ In addition to `CLAUDE.md`:
 | E1 | `feat/import-spreadsheet` | waits: Q2 |
 | F1 | `feat/patient-bookings-account` | |
 | F2 | `feat/report-ready` | |
+| F3 | `feat/noshow-prepay` | after H3 |
 | G1 | `feat/platform-entitlements` | |
 | G2 | `feat/platform-health` | |
 | H1 | `feat/notification-worker` | (was 2.1) |

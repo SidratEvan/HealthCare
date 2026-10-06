@@ -3073,6 +3073,10 @@ export const PATIENT = {
   reconnecting: { bn: 'আবার যুক্ত হচ্ছে…', en: 'Reconnecting…' },
 
   // --- Failures ------------------------------------------------------------
+  bookingLimitReached: {
+    bn: 'এই নম্বর থেকে আজ আর সিরিয়াল নেওয়া যাবে না। কাল আবার চেষ্টা করুন, অথবা হাসপাতালের কাউন্টারে যোগাযোগ করুন।',
+    en: 'No more serials can be taken from this number today. Try again tomorrow, or ask at the hospital counter.',
+  },
   alreadyBooked: {
     bn: 'এই ডাক্তারের কাছে আজ আপনার সিরিয়াল আগেই নেওয়া আছে।',
     en: 'You already have a serial with this doctor today.',

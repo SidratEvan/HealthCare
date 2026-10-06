@@ -199,7 +199,30 @@ export const ERROR_CODES = {
     status: 400,
     message: 'This endpoint requires an Idempotency-Key header.',
   },
+  /**
+   * The key has already made something else (`FR-QUE-51`). A key names one
+   * request: the same request sent again is answered with what it made, and a
+   * different request under the same key is the caller's mistake.
+   */
+  IDEMPOTENCY_KEY_REUSED: {
+    status: 422,
+    message: 'This Idempotency-Key was already used for a different request.',
+  },
+  /**
+   * Two writes reached for the same thing at the same moment and the database
+   * let one through. Not a fault of the server: the caller reads again and
+   * decides. Used where no route has a more precise word for the race.
+   */
+  WRITE_CONFLICT: {
+    status: 409,
+    message: 'Something else changed this at the same moment. Please try again.',
+  },
   RATE_LIMITED: { status: 429, message: 'Too many requests.' },
+  /** Too many bookings from one phone number in a day (`FR-GST-14`). */
+  BOOKING_LIMIT_REACHED: {
+    status: 429,
+    message: 'This phone number has made too many bookings today.',
+  },
   /** A body over its route's limit (256kb, or the report and import routes' own). */
   PAYLOAD_TOO_LARGE: { status: 413, message: 'The request body is too large.' },
   NOT_FOUND: { status: 404, message: 'No such resource.' },

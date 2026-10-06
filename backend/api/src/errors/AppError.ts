@@ -85,6 +85,14 @@ export function asAppError(thrown: unknown): AppError {
   if (type === 'entity.parse.failed') {
     return new AppError('VALIDATION_FAILED', { details: { body: 'not_json' }, cause: thrown });
   }
+  // A unique index refused a write that a check a moment earlier allowed:
+  // two requests raced, and one of them is this one. It is answered as the
+  // conflict it is, not as a server fault (handover finding 28). The cause is
+  // still logged: a race nobody expected is worth seeing.
+  const code =
+    typeof thrown === 'object' && thrown !== null ? (thrown as { code?: unknown }).code : undefined;
+  if (code === '23505') return new AppError('WRITE_CONFLICT', { cause: thrown });
+
   return new AppError('INTERNAL', { cause: thrown });
 }
 

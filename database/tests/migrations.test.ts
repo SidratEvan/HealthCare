@@ -131,6 +131,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0039',
       // Plan A3: the same for an emergency case.
       '0040',
+      // Plan A5: a booking remembers the request that made it (FR-QUE-51).
+      '0041',
     ]);
   });
 

@@ -21,12 +21,25 @@ import * as booking from '../controllers/booking.controller.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireBookingScope } from '../middleware/guestAuth.js';
 import { idempotency } from '../middleware/idempotency.js';
+import { byIp, rateLimit } from '../middleware/rateLimit.js';
 import { validate } from '../middleware/validate.js';
 
 export const bookingRoutes: Router = Router();
 
+/**
+ * `FR-GST-14`, as far as an address can carry it: a flood guard on bookings
+ * from one address. An address is not a device. A hospital's waiting room on
+ * the hospital's own wifi is one address and many phones, so the limit is far
+ * above what any one person does, and is stretched again where a deployment
+ * says its callers share an address (`ADDRESS_RATE_LIMIT_FACTOR`). The limit
+ * that is a person's is the phone number's, in the service, counted against
+ * the booking rows themselves.
+ */
+const bookingLimit = rateLimit({ limit: 300, windowSeconds: 3_600, keyFor: byIp });
+
 bookingRoutes.post(
   '/bookings',
+  bookingLimit,
   idempotency({ required: true }),
   validate({ body: createBookingBody }),
   booking.createBooking,

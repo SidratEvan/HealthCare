@@ -104,7 +104,12 @@ export interface CreateBookingInput {
   readonly method: PaymentMethod;
   readonly reason?: string | null;
   readonly intake?: Record<string, unknown> | undefined;
-  /** Replay safety for the confirm button (`FR-QUE-51`). */
+  /**
+   * The request's Idempotency-Key (`FR-QUE-51`). The same request sent again
+   * — a confirm whose answer was lost on the way — is answered with the
+   * booking it already made, and makes nothing new: no second serial, no
+   * second message, no second charge.
+   */
   readonly clientEventId?: string | null;
 }
 
@@ -121,6 +126,8 @@ export interface BookingResult {
    */
   readonly trackingUrl: string | null;
   readonly paid: boolean;
+  /** True when this request had already made the booking and is being answered again. */
+  readonly duplicate: boolean;
 }
 
 /**
@@ -161,6 +168,28 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
 
     const patientId = await resolvePatient(trx, input.booker);
 
+    // `FR-QUE-51`: the same request, sent again. Looked for under the lock,
+    // so a retry that overlaps the first attempt waits for it and then finds
+    // what it made. Its booking is the answer, whatever has happened since.
+    const key = input.clientEventId ?? null;
+    if (key !== null) {
+      const made = await bookingRepo.findByIdempotencyKey(trx, key);
+      if (made !== null) {
+        // A key names one request. Under it, a different chamber or a
+        // different patient is not a retry.
+        if (made.sessionId !== input.sessionId || made.patientId !== patientId) {
+          throw new AppError('IDEMPOTENCY_KEY_REUSED');
+        }
+        return {
+          bookingId: made.id,
+          serial: made.serial,
+          patientId,
+          payer: await payerOf(trx, input.booker),
+          replayed: true,
+        };
+      }
+    }
+
     // `FR-PAT-24`: never the same profile with the same doctor on the same
     // day. The database enforces the same-session half as a unique index; the
     // other half spans two chambers — a morning and an evening — and can only
@@ -194,6 +223,19 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
     const bookedByGuestId =
       input.booker.kind === 'guest' ? await guestIdFor(trx, input.booker) : null;
 
+    // `FR-GST-14`: a number with no account behind it may ask for only so
+    // many serials in a day. Counted here, under the lock, against the guest
+    // identity the number resolves to; cancelling does not give one back.
+    if (bookedByGuestId !== null) {
+      const since = new Date(Date.now() - 24 * 3_600_000);
+      const made = await bookingRepo.countGuestBookingsSince(trx, bookedByGuestId, since);
+      if (made >= env.GUEST_BOOKINGS_PER_PHONE_PER_DAY) {
+        throw new AppError('BOOKING_LIMIT_REACHED', {
+          details: { limit: env.GUEST_BOOKINGS_PER_PHONE_PER_DAY, windowHours: 24 },
+        });
+      }
+    }
+
     const bookingId = await bookingRepo.insertBooking(trx, {
       sessionId: input.sessionId,
       patientId,
@@ -203,7 +245,11 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
       bookedByUserId: input.booker.kind === 'user' ? input.booker.userId : null,
       bookedByGuestId,
       reasonText: input.reason ?? null,
-      intake: { ...(input.intake ?? {}), demo: true },
+      // Stamped as demonstration data only where the server is one
+      // (`FR-DEM-07`). It used to be stamped on every booking, a real
+      // hospital's included (handover finding 26).
+      intake: { ...(input.intake ?? {}), ...(env.DEMO_MODE ? { demo: true } : {}) },
+      idempotencyKey: key,
     });
 
     const payer: payments.Payer =
@@ -211,7 +257,7 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
         ? { kind: 'user', userId: input.booker.userId }
         : { kind: 'guest', guestId: bookedByGuestId ?? '' };
 
-    return { bookingId, serial, patientId, payer };
+    return { bookingId, serial, patientId, payer, replayed: false };
   });
 
   // Outside the transaction: the link is derived from the row, and minting it
@@ -220,6 +266,23 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
     input.booker.kind === 'guest'
       ? await issueTrackingLink(created.bookingId, input.sessionId, input.booker.phone)
       : null;
+
+  // Answered again, not made again. The link is minted afresh because only
+  // its hash is ever stored (`FR-GST-05`): the one the first answer carried
+  // cannot be read back, and the patient who never received that answer needs
+  // one that works. Nobody is told twice and nothing is charged twice: the
+  // payment below is keyed by the same request and finds its own row.
+  if (created.replayed) {
+    return {
+      bookingId: created.bookingId,
+      serial: created.serial,
+      sessionId: input.sessionId,
+      fee,
+      trackingUrl,
+      paid: await recordBookingPayment(created, input),
+      duplicate: true,
+    };
+  }
 
   // The console's queue gains a row. `FR-QUE-52`: a booking made while a
   // console was offline arrives in its next seed rather than being dropped, so
@@ -252,7 +315,15 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
     fee,
     trackingUrl,
     paid,
+    duplicate: false,
   };
+}
+
+/** Who pays for a booking: the account, or the guest identity behind the number. */
+async function payerOf(trx: Tx, booker: Booker): Promise<payments.Payer> {
+  return booker.kind === 'user'
+    ? { kind: 'user', userId: booker.userId }
+    : { kind: 'guest', guestId: await guestIdFor(trx, booker) };
 }
 
 /**

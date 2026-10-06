@@ -37,9 +37,14 @@ export async function createBooking(req: Request, res: Response): Promise<void> 
     method: body.method,
     reason: body.reason ?? null,
     intake: body.intake,
+    // The route requires the header; this is what makes it mean something
+    // (`FR-QUE-51`). It was read, validated and dropped before.
+    clientEventId: req.idempotencyKey ?? null,
   });
 
-  res.status(201).json({ ok: true, data: result });
+  // 201 the first time and 200 for the same request answered again: made
+  // once, told twice.
+  res.status(result.duplicate ? 200 : 201).json({ ok: true, data: result });
 }
 
 /**
