@@ -885,8 +885,17 @@ async function settle(
   //
   // Said once the transaction has committed (`committed`, below), never from
   // inside it. See there for what telling the room early cost.
+  //
+  // It names the actions this write took in (`SY-08`): a console that hears
+  // this before the answer to its own request stops drawing them on top of a
+  // queue that already holds them. Only this write's, never older ones.
+  const applied = events.flatMap((event) =>
+    event.clientEventId === null
+      ? []
+      : [{ clientEventId: event.clientEventId, seq: event.seq, eventId: event.id }],
+  );
   afterCommit(trx, () => {
-    emit.queueUpdated(session.id, { state, etas }, last.seq, last.serverTs);
+    emit.queueUpdated(session.id, { state, etas }, last.seq, last.serverTs, applied);
     for (const event of events) broadcastSpecific(session.id, state, event);
   });
 
@@ -1326,6 +1335,18 @@ export async function bookingOwner(
 /** The roster with patient names, for the console's table. */
 export async function listBookings(sessionId: string): Promise<bookingRepo.BookingRow[]> {
   return await bookingRepo.listForSession(sessionId);
+}
+
+/**
+ * Which of a console's unanswered actions this session's log already holds
+ * (`SY-08`), for the catch-up that follows a subscribe.
+ */
+export async function appliedAmong(
+  sessionId: string,
+  clientEventIds: readonly string[],
+  uptoSeq: number,
+): Promise<{ clientEventId: string; seq: number; eventId: string }[]> {
+  return await eventRepo.appliedAmong(sessionId, clientEventIds, uptoSeq);
 }
 
 /** One event from an offline batch, as the console queued it. */

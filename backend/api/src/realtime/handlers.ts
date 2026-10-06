@@ -31,7 +31,14 @@ interface SubscribeMessage {
   readonly sessionId?: unknown;
   /** The highest sequence number this client has already folded (`SY-01`). */
   readonly lastSeq?: unknown;
+  /** A console's own actions the server has not yet answered (`SY-08`). */
+  readonly unanswered?: unknown;
 }
+
+/** The most keys a subscribe may ask about. A shift's outbox is far below it. */
+const MAX_UNANSWERED = 500;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * How far behind a client may be and still get a delta.
@@ -121,6 +128,14 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
   const etas = await queueService.getEtas(sessionId);
   const serverTs = new Date().toISOString();
 
+  // `SY-08`: a console that subscribes with actions it has not been answered
+  // for says which. Those the log already holds are named beside the state
+  // that contains them, so an answer lost on the way is settled here. Staff
+  // only: nobody else has actions. Read after the state and bounded by its
+  // sequence, so nothing is named that this state does not yet show.
+  const unanswered = session.principal.kind === 'staff' ? readUnanswered(message) : [];
+  const applied = await queueService.appliedAmong(sessionId, unanswered, state.lastSeq);
+
   // Far enough behind, or never subscribed: send the state rather than a
   // delta. A client that has to fold five hundred events to learn it is
   // number eighteen is a client on a cheap phone locking up (`SY-06`).
@@ -129,6 +144,7 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
       type: 'queue.updated',
       seq: state.lastSeq,
       serverTs,
+      applied,
       data: { state, etas },
     });
     return;
@@ -151,8 +167,22 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
     type: 'queue.updated',
     seq: state.lastSeq,
     serverTs,
+    applied,
     data: { state, etas },
   });
+}
+
+/** The keys a console asks about: well-formed, distinct, and not too many. */
+function readUnanswered(message: SubscribeMessage): string[] {
+  const value = message.unanswered;
+  if (!Array.isArray(value)) return [];
+
+  const keys = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry === 'string' && UUID.test(entry)) keys.add(entry.toLowerCase());
+    if (keys.size >= MAX_UNANSWERED) break;
+  }
+  return [...keys];
 }
 
 /** Whether this principal holds a booking in the session. */

@@ -36,6 +36,35 @@
  * left to arrive on the socket, which is another connection: whenever it was
  * the slower of the two, the counter was shown the queue *before* her tap
  * until it caught up, and with the socket silent she was left there.
+ *
+ * ## One action, shown once (`SY-08`, FRONTEND.md §11.1)
+ *
+ * The server states the result of a tap by two roads, the answer to the push
+ * and a broadcast, and either can be first or missing. So an action of this
+ * console's is drawn on top of the server's queue from the tap until **the
+ * first statement that names it**, whichever road that comes by, and never
+ * after:
+ *
+ * - the answer names it in `accepted` (or refuses it);
+ * - a `queue.updated` names it in `applied`, and so does the catch-up after a
+ *   subscribe, which is asked about the actions still unanswered.
+ *
+ * Taking the action off and showing the queue that contains it are one
+ * redraw. Before this the broadcast named nothing: when it beat the answer —
+ * and the answer waits for messages to be sent, so it usually did — the action
+ * was on screen twice, once in the server's queue and once folded on top. A
+ * doctor who declared thirty minutes was shown sixty until the answer came.
+ *
+ * `settledRef` is what makes "never after" hold across the store: a named
+ * action is gone from the screen at once and from the outbox a moment later,
+ * and nothing that reads the outbox in between may draw it again.
+ *
+ * ## A tap is recorded whole
+ *
+ * A tap can be two events (this patient done, the next one called). They are
+ * written to the outbox one after the other, and nothing reads the outbox
+ * between them (`tapRef`): not a redraw, which would show half a tap, and not
+ * a push, which would send half of one.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -45,6 +74,7 @@ import {
   openSessionChannel,
   readKept,
   retryDelayMs,
+  type AppliedAction,
   type ConsoleStores,
   type PendingEvent,
   type QueueUpdatedMessage,
@@ -86,6 +116,13 @@ export type EndOutcome = 'ended' | 'in-chamber' | 'offline' | 'refused';
 
 /** How many sent actions the console remembers the event ids of. */
 const REMEMBERED_EVENTS = 200;
+
+/**
+ * How many named actions the console remembers not to draw again. Only the
+ * moment between a statement and the outbox catching up matters, so this is
+ * generous; it is bounded so that a long shift does not grow it for ever.
+ */
+const REMEMBERED_SETTLED = 1_000;
 
 export interface SessionQueue {
   /** What the screen renders: server state plus anything queued locally. */
@@ -248,18 +285,68 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     readonly fold: (message: QueueUpdatedMessage) => void;
   } | null>(null);
 
+  /** Actions a statement from the server has named: in the log, never drawn again (`SY-08`). */
+  const settledRef = useRef(new Set<string>());
+  /** The taps being written to the outbox. Nothing reads it until they are whole. */
+  const tapRef = useRef<Promise<void>>(Promise.resolve());
+  /** This chamber's unanswered actions, for the next subscribe to ask about. */
+  const unansweredRef = useRef<readonly string[]>([]);
+  unansweredRef.current = pending.map((event) => event.clientEventId);
+
   const refreshPending = useCallback(async () => {
     const queue = queueRef.current;
     if (queue === null) return;
 
+    // Never half a tap (see the header).
+    await tapRef.current;
+
     // This chamber's only. After a reload the store may still hold another
     // chamber's unsent work, and folding that into this queue would draw
-    // patients who are not in it.
-    const here = (event: PendingEvent): boolean => event.sessionId === sessionId;
+    // patients who are not in it. And nothing a statement has already named:
+    // the outbox may hold it a moment longer than the screen may show it.
+    const settled = settledRef.current;
+    const here = (event: PendingEvent): boolean =>
+      event.sessionId === sessionId && !settled.has(event.clientEventId);
     setPending((await queue.pending()).filter(here));
     setStuck((await queue.stuck()).filter(here));
     setDurable(storesRef.current?.durable() ?? false);
   }, [sessionId]);
+
+  /**
+   * A statement of the queue has named these actions: they are in the log.
+   *
+   * Called in the same turn as the snapshot that contains them is set, so the
+   * two are one redraw (`SY-08`). Only keys this console is still waiting on
+   * are acted on; a statement names every counter's actions, and the others
+   * are nothing to this one.
+   */
+  const settle = useCallback((applied: readonly AppliedAction[]) => {
+    const waiting = new Set(unansweredRef.current);
+    const mine = applied.filter((entry) => waiting.has(entry.clientEventId));
+    if (mine.length === 0) return;
+
+    const settled = settledRef.current;
+    const sent = sentRef.current;
+    for (const entry of mine) {
+      settled.add(entry.clientEventId);
+      // What an undo names. The answer may never arrive to say it.
+      sent.set(entry.clientEventId, entry.eventId);
+    }
+    for (const key of settled) {
+      if (settled.size <= REMEMBERED_SETTLED) break;
+      settled.delete(key);
+    }
+    for (const key of sent.keys()) {
+      if (sent.size <= REMEMBERED_EVENTS) break;
+      sent.delete(key);
+    }
+
+    setPending((held) => held.filter((event) => !settled.has(event.clientEventId)));
+
+    // And out of the outbox: there is nothing left to send. A push already on
+    // its way is answered "accepted" as a replay, which changes nothing.
+    void queueRef.current?.discard(mine.map((entry) => entry.clientEventId)).catch(() => undefined);
+  }, []);
 
   // What was queued before this page loaded is on the screen again at once,
   // and goes with the first flush after the channel connects.
@@ -280,6 +367,8 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     if (queue === null) return;
 
     const run = (async (): Promise<void> => {
+      // A tap is sent whole or not yet (see the header).
+      await tapRef.current;
       const outcome = await queue.flush(sessionId, transport);
 
       // The answer is the queue with these actions in it, and it goes on
@@ -375,7 +464,11 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
                 lastSeq: kept.lastSeq,
               },
             }),
-        onSnapshot: (next) => {
+        unanswered: () => unansweredRef.current,
+        onSnapshot: (next, applied) => {
+          // What the statement named comes off this console's own drawing in
+          // the same redraw that shows the queue containing it (`SY-08`).
+          if (applied !== undefined && applied.length > 0) settle(applied);
           setSnapshot(next);
           if (next.state === null) return;
           setLoading(false);
@@ -407,7 +500,7 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
       channel?.close();
       if (channelRef.current === held) channelRef.current = null;
     };
-  }, [sessionId, socketUrl, getToken]);
+  }, [sessionId, socketUrl, getToken, settle]);
 
   // --- flush on reconnect --------------------------------------------------
   //
@@ -455,18 +548,24 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
       // random key (`SY-01`), so actions from one tap — made in the same
       // millisecond — are a millisecond apart, in the order they were taken.
       const at = now().getTime();
-      const ids: string[] = [];
-      for (const [index, action] of actions.entries()) {
-        const clientEventId = crypto.randomUUID();
-        ids.push(clientEventId);
-        await queue.enqueue({
-          clientEventId,
-          sessionId,
-          type: action.type,
-          payload: action.payload,
-          clientTs: new Date(at + index).toISOString(),
-        });
-      }
+      const ids = actions.map(() => crypto.randomUUID());
+
+      // Written one after the other, behind any tap still being written, and
+      // with nothing reading the outbox in between: a tap is drawn whole and
+      // sent whole (see the header).
+      const recorded = tapRef.current.then(async () => {
+        for (const [index, action] of actions.entries()) {
+          await queue.enqueue({
+            clientEventId: ids[index] ?? crypto.randomUUID(),
+            sessionId,
+            type: action.type,
+            payload: action.payload,
+            clientTs: new Date(at + index).toISOString(),
+          });
+        }
+      });
+      tapRef.current = recorded.catch(() => undefined);
+      await recorded;
       lastActionRef.current = { ids, at };
 
       // Applied to the screen before anything touches the network. A
@@ -496,8 +595,11 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
       await Promise.allSettled([...flushesRef.current]);
 
       // Never sent: simply never send it. No event is written for an action
-      // that was taken back before the server heard of it.
-      const unsent = await queue.discard(clientEventIds);
+      // that was taken back before the server heard of it. An action a
+      // statement has named is in the log, whatever the outbox still holds for
+      // a moment, and is undone below by the event it became.
+      const settled = settledRef.current;
+      const unsent = await queue.discard(clientEventIds.filter((key) => !settled.has(key)));
       if (unsent.length > 0) await refreshPending();
       let outcome: UndoOutcome = unsent.length > 0 ? 'undone' : 'nothing';
 

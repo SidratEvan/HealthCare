@@ -243,10 +243,11 @@ reception console's offline queue, the self-hosted stack, CI with the browser
 suites. Branches of this plan as they merge are listed under **Merged in V1
 completion** below.
 
-**Currently building:** A1 `fix/queue-exactly-once`.
+**Currently building:** A2 `fix/ward-reconcile`.
 
 **Merged in V1 completion, newest last:**
 - **`chore/v1-completion-plan`** — the direction written down: `CLAUDE.md` §4.5, the plan's table, and the requirements it adds (`FR-BRD-06`–`11`, `FR-ONB-09`–`10`, `FR-SUP-03`/`04`/`06` into V1). Documents only.
+- **A1 `fix/queue-exactly-once`** — one action is drawn once on the reception and doctor consoles, whichever of the server's two answers comes first (`SY-08`). **What was wrong:** the broadcast named nothing, so when it beat the answer to the console's own request — and the answer waits for messages to be sent, so it usually did — the action was on screen twice: a doctor who declared thirty minutes was shown sixty until the answer came; and an answer lost on the way left the console resending, or waiting for ever if it could not. **What changed:** `queue.updated` names the actions of the write behind it (`applied`), a subscribing console says which of its actions are unanswered and the catch-up names those the log holds, and the console takes an action off its own drawing at the first statement that names it, in the redraw that shows the queue containing it. A tap of two events is written to the outbox whole before anything draws or sends it. **Left, deliberately:** `applied` goes to the whole chamber room, patients' phones included; the keys are opaque, and they leave that room with plan I2. Strict gate: lint, format, `pnpm test` whole, and in the browser the canary, offline-console, console-undo, pause-resume, doctor-console, chamber-end, no-show-recovery and the three new tests.
 
 **Blocked outside the repository** (built to the adapter; only switching on
 waits): live SMS and a sender ID; live bKash, Nagad or cards; the platform's

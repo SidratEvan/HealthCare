@@ -94,10 +94,13 @@ export {
 
 export {
   DEFAULT_STALE_AFTER_MS,
+  MAX_UNANSWERED,
   foldUpdate,
   isStale,
   openSessionChannel,
   startingFrom,
+  takeStatement,
+  type AppliedAction,
   type QueueUpdatedMessage,
   type SessionChannelOptions,
   type SessionSnapshot,

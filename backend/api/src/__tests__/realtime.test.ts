@@ -12,6 +12,7 @@
  * else's queue are both refused here.
  */
 
+import { randomUUID } from 'node:crypto';
 import { createServer, type Server as HttpServer } from 'node:http';
 import { type AddressInfo } from 'node:net';
 
@@ -313,5 +314,129 @@ describe('the broadcast the product is built on (NFR-01)', () => {
     // Everything after the sequence it reported, and nothing it already had.
     expect(replayed.length).toBeGreaterThan(0);
     for (const seq of replayed) expect(seq).toBeGreaterThan(first.seq);
+  });
+});
+
+describe('a statement of the queue names the actions it took in (SY-08)', () => {
+  const actor = (): Parameters<typeof queueService.appendBatch>[0]['actor'] => ({
+    kind: 'staff' as const,
+    staffUserId: fixture.receptionistId as never,
+    role: 'receptionist' as const,
+  });
+
+  interface Named {
+    readonly seq: number;
+    readonly applied: readonly { clientEventId: string; seq: number; eventId: string }[];
+  }
+
+  it('a broadcast names the actions of the write behind it, and nothing older', async () => {
+    const socket = open(await staffToken());
+    await once(socket, 'connect');
+    socket.emit('session:subscribe', { sessionId: fixture.sessionId });
+    // The catch-up for a console waiting on nothing names nothing.
+    expect((await once<Named>(socket, 'queue.updated')).applied).toEqual([]);
+
+    const arrived = randomUUID();
+    const first$ = once<Named>(socket, 'queue.updated');
+    const batch = await queueService.appendBatch({
+      sessionId: fixture.sessionId,
+      actor: actor(),
+      entries: [
+        {
+          clientEventId: arrived,
+          type: 'DOCTOR_ARRIVED',
+          payload: { arrivedAt: new Date().toISOString(), minutesLate: 0 },
+          clientTs: new Date().toISOString(),
+        },
+      ],
+    });
+    const first = await first$;
+    const accepted = batch.outcomes[0];
+    if (accepted?.kind !== 'accepted') throw new Error('the batch was refused');
+    // By the console's own key, with what the log made of it: the same thing
+    // the answer says, by the other road.
+    expect(first.applied).toEqual([
+      { clientEventId: arrived, seq: accepted.seq, eventId: accepted.eventId },
+    ]);
+    expect(first.seq).toBe(accepted.seq);
+
+    // The next write names its own action only.
+    const delayed = randomUUID();
+    const second$ = once<Named>(socket, 'queue.updated');
+    await queueService.appendBatch({
+      sessionId: fixture.sessionId,
+      actor: actor(),
+      entries: [
+        {
+          clientEventId: delayed,
+          type: 'DELAY_DECLARED',
+          payload: { minutes: 30, reason: null, declaredBy: 'reception' },
+          clientTs: new Date().toISOString(),
+        },
+      ],
+    });
+    const second = await second$;
+    expect(second.applied.map((entry) => entry.clientEventId)).toEqual([delayed]);
+    expect(second.seq).toBeGreaterThan(first.seq);
+  });
+
+  it('a catch-up names the unanswered actions the log holds, and only those', async () => {
+    const taken = randomUUID();
+    const batch = await queueService.appendBatch({
+      sessionId: fixture.sessionId,
+      actor: actor(),
+      entries: [
+        {
+          clientEventId: taken,
+          type: 'DOCTOR_ARRIVED',
+          payload: { arrivedAt: new Date().toISOString(), minutesLate: 0 },
+          clientTs: new Date().toISOString(),
+        },
+      ],
+    });
+    const accepted = batch.outcomes[0];
+    if (accepted?.kind !== 'accepted') throw new Error('the batch was refused');
+
+    // A console reconnects still waiting on two actions: the one above, whose
+    // answer it never got, and one that never reached the server.
+    const neverSent = randomUUID();
+    const socket = open(await staffToken());
+    await once(socket, 'connect');
+    socket.emit('session:subscribe', {
+      sessionId: fixture.sessionId,
+      unanswered: [taken, neverSent, 'not-a-key', 42],
+    });
+    const caughtUp = await once<Named>(socket, 'queue.updated');
+    expect(caughtUp.applied).toEqual([
+      { clientEventId: taken, seq: accepted.seq, eventId: accepted.eventId },
+    ]);
+    // Named beside a queue that contains it.
+    expect(caughtUp.seq).toBeGreaterThanOrEqual(accepted.seq);
+  });
+
+  it('does not name another chamber’s action, whatever key is asked about', async () => {
+    const elsewhere = await createQueueFixture(2);
+    const key = randomUUID();
+    await queueService.appendBatch({
+      sessionId: elsewhere.sessionId,
+      actor: {
+        kind: 'staff' as const,
+        staffUserId: elsewhere.receptionistId as never,
+        role: 'receptionist' as const,
+      },
+      entries: [
+        {
+          clientEventId: key,
+          type: 'DOCTOR_ARRIVED',
+          payload: { arrivedAt: new Date().toISOString(), minutesLate: 0 },
+          clientTs: new Date().toISOString(),
+        },
+      ],
+    });
+
+    const socket = open(await staffToken());
+    await once(socket, 'connect');
+    socket.emit('session:subscribe', { sessionId: fixture.sessionId, unanswered: [key] });
+    expect((await once<Named>(socket, 'queue.updated')).applied).toEqual([]);
   });
 });

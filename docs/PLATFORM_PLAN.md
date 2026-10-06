@@ -581,7 +581,7 @@ In addition to `CLAUDE.md`:
 | V5.x | `fix/pitch-*` | further findings, if the owner's own walk turns any up |
 | V6 | `chore/pitch-release` | **released 6 October.** `main`, the public demo and `demo` are `mvp` at `fa31157`; Supabase has 0034–0038 and fresh demo data. From here no V1 feature is added without the owner asking |
 | — | `chore/v1-completion-plan` | merged 6 October — the owner's direction of that day: §2 *Now: V1 completion*, `CLAUDE.md` §4.5, `FR-BRD-06`–`11`, `FR-ONB-09`–`10`, `FR-SUP-03`/`04`/`06` brought into V1 |
-| A1 | `fix/queue-exactly-once` | (was 1.9c) |
+| A1 | `fix/queue-exactly-once` | **merged 6 October** (was 1.9c) — `applied` on `queue.updated` and on a subscriber's catch-up, `unanswered` on subscribe, `takeStatement` in `@platform/client`, and in `useSessionQueue` `settle`, `settledRef` and `tapRef`. `e2e/one-action-once.spec.ts`: the broadcast first, the answer lost, and a reconnect with a tap unanswered; each fails on the code before |
 | A2 | `fix/ward-reconcile` | (was 1.9d) |
 | A3 | `fix/er-reconcile` | (was 1.9e) |
 | A4 | `fix/serial-past-midnight` | (was 1.9f) |

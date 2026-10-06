@@ -15,6 +15,9 @@ import {
   DEFAULT_STALE_AFTER_MS,
   foldUpdate,
   isStale,
+  startingFrom,
+  takeStatement,
+  type QueueUpdatedMessage,
   type SessionSnapshot,
 } from '../realtime/session.js';
 
@@ -178,5 +181,47 @@ describe('foldUpdate (FR-QUE-05)', () => {
     if (held === null) throw new Error('the first update was refused');
     expect(foldUpdate(held.snapshot, held.stateSeq, update(6))?.snapshot.state).toEqual(stateAt(6));
     expect(foldUpdate(held.snapshot, held.stateSeq, update(7))?.snapshot.lastSeq).toBe(7);
+  });
+});
+
+describe('takeStatement (SY-08: one action, shown once)', () => {
+  const queue = (lastSeq: number): QueueUpdatedMessage['data']['state'] =>
+    ({ lastSeq }) as unknown as QueueUpdatedMessage['data']['state'];
+  const statement = (
+    seq: number,
+    applied?: QueueUpdatedMessage['applied'],
+  ): QueueUpdatedMessage => ({
+    seq,
+    serverTs: `2026-10-06T10:00:${String(seq).padStart(2, '0')}.000Z`,
+    ...(applied === undefined ? {} : { applied }),
+    data: { state: queue(seq), etas: [] },
+  });
+  const named = [{ clientEventId: 'k-1', seq: 7, eventId: 'e-7' }];
+
+  it('shows a newer statement and reports what it named', () => {
+    const start = startingFrom(undefined);
+    const taken = takeStatement(start.snapshot, start.stateSeq, statement(7, named));
+    expect(taken.shown).toBe(true);
+    expect(taken.stateSeq).toBe(7);
+    expect(taken.snapshot.state).toEqual(queue(7));
+    expect(taken.applied).toEqual(named);
+  });
+
+  it('does not show an older statement, and still reports what it named', () => {
+    // The answer came first and the queue held is already at 9. The broadcast
+    // for the tap at 7 arrives late: it changes nothing on screen, and the
+    // queue held contains the action it names.
+    const start = startingFrom(undefined);
+    const held = takeStatement(start.snapshot, start.stateSeq, statement(9));
+    const late = takeStatement(held.snapshot, held.stateSeq, statement(7, named));
+    expect(late.shown).toBe(false);
+    expect(late.snapshot).toBe(held.snapshot);
+    expect(late.stateSeq).toBe(9);
+    expect(late.applied).toEqual(named);
+  });
+
+  it('names nothing for a statement from a server that does not say', () => {
+    const start = startingFrom(undefined);
+    expect(takeStatement(start.snapshot, start.stateSeq, statement(3)).applied).toEqual([]);
   });
 });
