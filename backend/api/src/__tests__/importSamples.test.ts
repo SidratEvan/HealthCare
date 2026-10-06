@@ -18,6 +18,7 @@ import {
   readRow,
   applyMapping,
   guessStructureType,
+  importWarnings,
   mappingProblems,
   profileColumns,
   proposeMapping,
@@ -26,6 +27,7 @@ import {
   type ColumnMapping,
   type StructureType,
   type ImportSet,
+  type WarnedRow,
 } from '@platform/domain';
 
 function sample(name: string): string {
@@ -39,7 +41,12 @@ function sample(name: string): string {
 function mapByRules(
   set: ImportSet,
   name: string,
-): { readonly rowType: StructureType | null; readonly notImported: readonly string[] } {
+): {
+  readonly rowType: StructureType | null;
+  readonly notImported: readonly string[];
+  /** Each row as the check keeps it: the template's columns, by name. */
+  readonly rows: readonly WarnedRow[];
+} {
   const table = parseCsv(sample(name));
   if (typeof table === 'string') throw new Error(`${name}: ${table}`);
 
@@ -64,7 +71,14 @@ function mapByRules(
     expect(result.ok, `${name} row ${String(row.rowNumber)}`).toBe(true);
   }
 
-  return { rowType, notImported: unmappedColumns(mapping, columns).map((column) => column.name) };
+  return {
+    rowType,
+    notImported: unmappedColumns(mapping, columns).map((column) => column.name),
+    rows: rewritten.rows.map((row) => ({
+      rowNumber: row.rowNumber,
+      raw: Object.fromEntries(rewritten.header.map((column, at) => [column, row.cells[at] ?? ''])),
+    })),
+  };
 }
 
 describe('the sample exports (database/seeds/samples)', () => {
@@ -86,8 +100,20 @@ describe('the sample exports (database/seeds/samples)', () => {
     expect(mapByRules('structure', 'hospital-export-doctors.csv').rowType).toBe('doctor');
   });
 
+  it('an untidy register: every row is taken, and what is untidy about it is named (FR-IMP-21)', () => {
+    const result = mapByRules('patients', 'hospital-export-patients-untidy.csv');
+    expect(result.notImported).toEqual([]);
+    const warnings = importWarnings('patients', result.rows);
+    expect(warnings.samePerson).toEqual([
+      { rows: [2, 6], because: ['phone_and_name', 'name_and_birth'] },
+      { rows: [3, 8], because: ['phone_and_name', 'name_and_birth'] },
+    ]);
+    expect(warnings.mixedFormats.map((mixed) => mixed.field)).toEqual(['date_of_birth', 'mobile']);
+  });
+
   it('says every sample row is demonstration data (FR-DEM-07)', () => {
     for (const name of [
+      'hospital-export-patients-untidy.csv',
       'hospital-export-patients.csv',
       'hospital-export-patients-bangla.csv',
       'hospital-export-departments.csv',

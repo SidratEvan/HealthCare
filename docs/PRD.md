@@ -511,7 +511,7 @@ A hospital's export does not arrive in our template. A mapping step sits between
 - `FR-IMP-18` The administrator sees every column beside the field proposed for it, changes any of them, and confirms before anything else happens. A required field with no column blocks confirmation and says which. Columns mapped to nothing are listed as not imported (`FR-IMP-02`).
 - `FR-IMP-19` A confirmed mapping rewrites the file into the template's shape and hands it to the existing check. Preview, approval, the all-or-nothing write, undo and the audit (`FR-IMP-05`–`08`) are unchanged, and nothing in the mapping step writes to a hospital's records.
 - `FR-IMP-20` A confirmed mapping is kept for that hospital, set and heading row, and offered when the same export arrives again. Who confirmed which columns, and from which source, is audited; cell values are not.
-- `FR-IMP-21` Before the preview the administrator is warned of what the check does not refuse: patients in the file who look like the same person (flagged, never merged), and columns that mix date or phone formats, with the reading that will be used.
+- `FR-IMP-21` Before approving, on the preview, the administrator is warned of what the check does not refuse: patients in the file who look like the same person (flagged, never merged), and columns that mix date or phone formats, with the reading that will be used.
 - `FR-IMP-22` CSV first. Reading a spreadsheet file directly follows; until then a spreadsheet is saved as CSV (`FR-IMP-09`).
 
 ---

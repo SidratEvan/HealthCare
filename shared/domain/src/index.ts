@@ -508,3 +508,19 @@ export {
   type RowResult,
   type StructureRecord,
 } from './imports/sets.js';
+export {
+  MAX_GROUPS_LISTED,
+  NO_WARNINGS,
+  SAME_PERSON_REASONS,
+  VALUE_FORMATS,
+  foldPersonName,
+  hasWarnings,
+  importWarnings,
+  type FormatKind,
+  type ImportWarnings,
+  type MixedFormat,
+  type SamePersonGroup,
+  type SamePersonReason,
+  type ValueFormat,
+  type WarnedRow,
+} from './imports/warnings.js';

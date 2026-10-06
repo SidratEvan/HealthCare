@@ -261,6 +261,95 @@ describe('checking a file writes nothing but the batch (FR-IMP-05)', () => {
       'discarded',
     );
   });
+
+  it('warns of what it does not refuse: one patient under two identifiers, a column written two ways (FR-IMP-21)', async () => {
+    const response = await upload(
+      'patients',
+      [
+        'ref,full_name,date_of_birth,age_years,sex,mobile,blood_group',
+        'W-1,সতর্ক রোগী (ডেমো),05/10/1975,,F,01812345671,',
+        'W-2,অন্য রোগী (ডেমো),1980-02-03,,M,01912345671,',
+        'W-OLD,সতর্ক রোগী (ডেমো),,48,F,8801812345671,',
+      ].join('\n'),
+      'warned.csv',
+    );
+    expect(response.status).toBe(200);
+    // Nothing is refused, and nothing is merged: three rows, three patients.
+    expect(response.body.data.counts).toEqual({ add: 3, update: 0, skip: 0, error: 0 });
+    expect(response.body.data.errors).toEqual([]);
+    const expected = {
+      samePerson: [{ rows: [2, 4], because: ['phone_and_name'] }],
+      samePersonTotal: 1,
+      mixedFormats: [
+        {
+          field: 'date_of_birth',
+          kind: 'date',
+          formats: [
+            { format: 'day_first', rows: 1, firstRow: 2 },
+            { format: 'iso', rows: 1, firstRow: 3 },
+          ],
+        },
+        {
+          field: 'mobile',
+          kind: 'phone',
+          formats: [
+            { format: 'local', rows: 2, firstRow: 2 },
+            { format: 'country', rows: 1, firstRow: 4 },
+          ],
+        },
+      ],
+    };
+    expect(response.body.data.warnings).toEqual(expected);
+    // A warning names rows by number and carries nothing from them.
+    const said = JSON.stringify(response.body.data.warnings);
+    for (const value of ['সতর্ক', '1812345671', '1975', 'W-OLD']) expect(said).not.toContain(value);
+
+    // The same when the batch is opened again: worked out from its rows, not kept.
+    const batchId = response.body.data.id as string;
+    const again = await request(app)
+      .get(`${BASE}/hospital/imports/${batchId}`)
+      .set('Authorization', bearer(token));
+    expect(again.body.data.warnings).toEqual(expected);
+
+    // The audit records that the administrator was warned, in counts.
+    const audit = await sql<{ warnings: unknown }>`
+      SELECT meta->'warnings' AS warnings FROM audit_log
+       WHERE hospital_id = ${hospitalId} AND action = 'IMPORT' AND subject_id = ${batchId}
+    `.execute(db);
+    expect(audit.rows[0]?.warnings).toEqual({
+      samePerson: 1,
+      mixedFormats: ['date_of_birth', 'mobile'],
+    });
+
+    // Once it is closed there is nothing left to decide, and nothing is said.
+    const dropped = await act(batchId, 'discard');
+    expect(dropped.body.data.state).toBe('discarded');
+    expect(dropped.body.data.warnings).toEqual({
+      samePerson: [],
+      samePersonTotal: 0,
+      mixedFormats: [],
+    });
+  });
+
+  it('says nothing of a file with nothing to warn about', async () => {
+    const response = await upload(
+      'patients',
+      [
+        'ref,full_name,date_of_birth,age_years,sex,mobile,blood_group',
+        'Q-1,প্রথম রোগী (ডেমো),05/10/1975,,F,01812345672,',
+        'Q-2,দ্বিতীয় জন (ডেমো),06/11/1980,,M,01812345672,',
+      ].join('\n'),
+      'quiet.csv',
+    );
+    expect(response.body.data.counts).toMatchObject({ add: 2, error: 0 });
+    // One phone, two names: a family, not a duplicate.
+    expect(response.body.data.warnings).toEqual({
+      samePerson: [],
+      samePersonTotal: 0,
+      mixedFormats: [],
+    });
+    await act(response.body.data.id as string, 'discard');
+  });
 });
 
 describe('set A, then B, then C — and undoing them (FR-IMP-01…07)', () => {
