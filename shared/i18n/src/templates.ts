@@ -364,11 +364,23 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
     en: '{hospital} cannot take you right now — see other hospitals',
   },
 
-  // `FR-LAB-03`. **Push only**, because BACKEND.md §8's mapping says push and
-  // nothing else — a report is not a summons, and it is already in the wallet
-  // by the time this is written. In this version that means the row is
-  // recorded and skipped with `no_device_token`, like every other push: the
-  // delivery itself is what FR-LAB-03 promises, and it has already happened.
+  // `FR-LAB-03`, and since plan F2 `FR-NOT-02`/`FR-NOT-03`: "report ready" is
+  // a material event, so somebody without the app is told by SMS, like every
+  // other. Until then it was push only, and with no screen asking for
+  // notification permission every row was skipped: nobody was told at all.
+  //
+  // The message names the test and the hospital and nothing else. A result on
+  // a lock screen is read by whoever is holding the phone (`DB-P7`), so it
+  // says where to read the report, never what the report says. The link is
+  // the Records page and carries no token: what opens the report there is the
+  // phone's own booking, or signing in with the number.
+  {
+    key: 'lab.report_ready',
+    channel: 'sms',
+    version: 1,
+    bn: '{hospital}: আপনার {test}-এর রিপোর্ট এসেছে। রেকর্ড অংশে দেখুন: {link}',
+    en: '{hospital}: your {test} report is ready. See it under Records: {link}',
+  },
   {
     key: 'lab.report_ready',
     channel: 'push',

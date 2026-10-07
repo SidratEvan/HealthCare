@@ -116,12 +116,17 @@ describe('placeholders', () => {
     // `FR-LAB-03`. The test's name is what lets somebody match the notice to
     // the report; the result is never in it, because a notification is read
     // on a lock screen by whoever is holding the phone (`DB-P7`).
-    expect(placeholdersFor('lab.report_ready')).toEqual(['hospital', 'test']);
+    // And, since plan F2, where to read it: the SMS carries a link to the
+    // Records page, which holds no token and opens nothing by itself.
+    expect(placeholdersFor('lab.report_ready')).toEqual(['hospital', 'link', 'test']);
 
-    for (const template of TEMPLATES.filter((entry) => entry.key.startsWith('lab.'))) {
+    const lab = TEMPLATES.filter((entry) => entry.key.startsWith('lab.'));
+    for (const template of lab) {
       expect(placeholdersIn(template.bn)).not.toContain('result');
       expect(placeholdersIn(template.bn)).not.toContain('name');
     }
+    // By SMS as well as push: "report ready" is a material event (`FR-NOT-03`).
+    expect(lab.map((template) => template.channel).sort()).toEqual(['push', 'sms']);
   });
 
   it('names the hospital in every emergency message, and links the SMS to the case', () => {
