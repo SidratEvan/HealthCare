@@ -61,8 +61,7 @@ import {
 } from '@platform/domain';
 
 import { travelTime } from '../adapters/traveltime.js';
-import { signToken, verifyToken } from '../config/jwt.js';
-import { patientLink } from '../config/links.js';
+import { verifyToken } from '../config/jwt.js';
 import { env } from '../env.js';
 import { AppError, forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
@@ -72,6 +71,7 @@ import * as emergencyRepo from '../repositories/emergency.repo.js';
 import * as referralRepo from '../repositories/referral.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
+import { emergencyCaseToken, emergencyCaseUrl } from './emergencyLink.js';
 import * as modules from './modules.service.js';
 import * as notifications from './notification.service.js';
 
@@ -368,11 +368,11 @@ export async function inbound(input: {
     emit.emergencyInbound(input.hospitalId, { case: toView(created) }, now());
   }
 
-  const token = await caseToken(filed.id);
+  const token = await emergencyCaseToken(filed.id);
   return {
     case: await statusView(filed.id),
     token,
-    trackUrl: trackUrlFor(token),
+    trackUrl: emergencyCaseUrl(token),
     duplicate: filed.duplicate,
   };
 }
@@ -492,7 +492,7 @@ export async function acknowledge(
     return await notifications.queueEmergencyAnswer(trx, {
       caseId,
       outcome: 'acknowledged',
-      link: trackUrlFor(await caseToken(caseId)),
+      link: emergencyCaseUrl(await emergencyCaseToken(caseId)),
     });
   });
 }
@@ -541,7 +541,7 @@ export async function command(
           return await notifications.queueEmergencyAnswer(trx, {
             caseId,
             outcome: 'declined',
-            link: trackUrlFor(await caseToken(caseId)),
+            link: emergencyCaseUrl(await emergencyCaseToken(caseId)),
           });
         },
       );
@@ -769,13 +769,6 @@ function assertScope(current: CaseRow, actor: ErActor): void {
   if (current.hospitalId !== actor.hospitalId) throw forbiddenScope({ reason: 'wrong_hospital' });
 }
 
-async function caseToken(caseId: string): Promise<string> {
-  return await signToken({
-    kind: 'emergency_case',
-    claims: { sub: caseId, kind: 'guest', emergencyCaseId: caseId },
-  });
-}
-
 async function caseIdFrom(token: string): Promise<string> {
   const verified = await verifyToken(token, 'emergency_case');
   if (!verified.ok) {
@@ -788,11 +781,6 @@ async function caseIdFrom(token: string): Promise<string> {
     throw new AppError('AUTH_TOKEN_INVALID', { details: { reason: 'no_case' } });
   }
   return caseId;
-}
-
-/** The family's status page in the patient app (`S-A-10c`). */
-function trackUrlFor(token: string): string {
-  return patientLink('/emergency/onway', { t: token });
 }
 
 function now(): Timestamp {

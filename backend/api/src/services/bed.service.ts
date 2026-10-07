@@ -47,8 +47,7 @@ import {
   type WardView,
 } from '@platform/domain';
 
-import { signToken, verifyToken } from '../config/jwt.js';
-import { patientLink } from '../config/links.js';
+import { verifyToken } from '../config/jwt.js';
 import { AppError, forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
 import * as bedRepo from '../repositories/bed.repo.js';
@@ -58,6 +57,7 @@ import * as guestRepo from '../repositories/guest.repo.js';
 import * as referralRepo from '../repositories/referral.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
+import { bedRequestToken, bedRequestUrl } from './bedRequestLink.js';
 import * as emergency from './emergency.service.js';
 import * as modules from './modules.service.js';
 import * as notifications from './notification.service.js';
@@ -503,7 +503,7 @@ export async function createRequest(input: {
     return { request, guestId, duplicate: false };
   });
 
-  const token = await statusToken(filed.request.id, filed.guestId);
+  const token = await bedRequestToken(filed.request.id, filed.guestId);
   const serverTs = new Date().toISOString();
 
   if (!filed.duplicate) {
@@ -517,7 +517,7 @@ export async function createRequest(input: {
   return {
     request: await requestView(filed.request.id),
     token,
-    trackUrl: trackUrlFor(token),
+    trackUrl: bedRequestUrl(token),
     duplicate: filed.duplicate,
   };
 }
@@ -632,8 +632,8 @@ export async function respond(
 
   const result = await run(bedIds, input, actor, async (trx, locked) => {
     const current = await pendingRequest(trx, requestId, actor);
-    const link = trackUrlFor(
-      await statusToken(current.id, current.requestedByGuestId ?? current.patientId),
+    const link = bedRequestUrl(
+      await bedRequestToken(current.id, current.requestedByGuestId ?? current.patientId),
     );
 
     switch (input.action) {
@@ -1084,18 +1084,6 @@ async function requestView(requestId: string): Promise<RequestView> {
     state: lapsed ? 'expired' : status.state,
     serverTs: new Date().toISOString(),
   };
-}
-
-async function statusToken(requestId: string, subject: string): Promise<string> {
-  return await signToken({
-    kind: 'bed_request',
-    claims: { sub: subject, kind: 'guest', bedRequestId: requestId },
-  });
-}
-
-/** The family's status page in the patient app. */
-function trackUrlFor(token: string): string {
-  return patientLink('/beds/request', { t: token });
 }
 
 function guard(bed: BedRow, action: BedAction, context: BedActionContext = {}): void {

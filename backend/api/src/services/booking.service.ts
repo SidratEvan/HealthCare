@@ -25,7 +25,7 @@
  * tracking link directly.
  */
 
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import {
   bookingStanding,
@@ -54,6 +54,7 @@ import * as notifications from './notification.service.js';
 import * as payments from './payment.service.js';
 import * as portals from './portal.service.js';
 import * as queueService from './queue.service.js';
+import { mintTrackingToken } from './trackingLink.js';
 
 import type { AppendEventResult } from './queue.service.js';
 
@@ -446,6 +447,8 @@ async function guestIdFor(trx: Tx, booker: Extract<Booker, { kind: 'guest' }>): 
  *
  * Only the SHA-256 of the token is stored, so a database read cannot open
  * somebody's queue — the token itself exists in the SMS and nowhere else.
+ * The token is minted in `trackingLink.ts`, which the notification sender
+ * also asks when it sends a confirmation from the stored row (plan H1).
  *
  * ## Why the URL carries only the opaque token
  *
@@ -466,27 +469,14 @@ export async function issueTrackingLink(
   sessionId: string,
   phone: string,
 ): Promise<string> {
-  const token = randomBytes(32).toString('base64url');
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-
-  const guestId = await guestRepo.identityIdForPhone(phone);
-  if (guestId === null) throw notFound('guest identity');
-
-  const session = await queueService.requireSession(sessionId);
-
-  // Session end plus a day. A patient reads the SMS on the way home as often
-  // as on the way in, and a link that died the moment the chamber closed would
-  // be useless exactly then (DATABASE.md §8 keeps the row for 30 days).
-  const expiresAt = new Date(new Date(session.plannedEnd).getTime() + 24 * 3_600_000);
-
-  await guestRepo.insertTrackingLink({ bookingId, guestId, tokenHash, expiresAt });
+  const { token, hospitalId } = await mintTrackingToken({ bookingId, sessionId, phone });
 
   // Inside a portal the link is that portal's (`config/links.ts`). Issued by a
   // counter or a worker, it goes to the hospital's own domain if it has one.
   return patientLink(
     '/s',
     { b: bookingId, t: token },
-    { hospitalOrigin: await portals.hospitalLinkOrigin(session.hospitalId) },
+    { hospitalOrigin: await portals.hospitalLinkOrigin(hospitalId) },
   );
 }
 
