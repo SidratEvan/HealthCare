@@ -31,12 +31,11 @@ import {
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
-import * as demoRepo from '../repositories/demo.repo.js';
 import { buildApiRouter } from '../routes/index.js';
 import { forgetModules } from '../services/modules.service.js';
 
 import { asOwner } from './support/ownerDb.js';
-import { staffIdFor } from './support/queueFixture.js';
+import { seededPlatformAdminId, staffIdFor } from './support/queueFixture.js';
 import { bearer, nationalToken, patientToken, staffToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -215,8 +214,7 @@ beforeAll(async () => {
   if (id === undefined) throw new Error(`The seed should hold ${CODE} (FR-DEM-01).`);
   hospitalId = id;
 
-  const account = await demoRepo.nationalStaffFor('platform_admin');
-  if (account === null) throw new Error('The seed has no platform administrator.');
+  const account = { id: await seededPlatformAdminId() };
   platform = await signToken({
     kind: 'access',
     claims: { sub: account.id, kind: 'staff', roles: ['platform_admin'] },

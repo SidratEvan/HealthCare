@@ -22,9 +22,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
-import * as demoRepo from '../repositories/demo.repo.js';
 
 import { asOwner } from './support/ownerDb.js';
+import { seededPlatformAdminId } from './support/queueFixture.js';
 import { bearer, nationalToken, patientToken, staffToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -74,8 +74,7 @@ async function read(id: string = hospitalId): Promise<request.Response> {
 beforeAll(async () => {
   app = createApp();
 
-  const account = await demoRepo.nationalStaffFor('platform_admin');
-  if (account === null) throw new Error('The seed has no platform administrator.');
+  const account = { id: await seededPlatformAdminId() };
   platformStaffId = account.id;
   platform = await signToken({
     kind: 'access',

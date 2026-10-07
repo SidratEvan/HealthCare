@@ -23,9 +23,9 @@ import { createApp } from '../app.js';
 import { signToken } from '../config/jwt.js';
 import { env } from '../env.js';
 import { counter } from '../middleware/rateLimit.js';
-import * as demoRepo from '../repositories/demo.repo.js';
 
 import { asOwner } from './support/ownerDb.js';
+import { seededPlatformAdminId } from './support/queueFixture.js';
 import { bearer } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -110,8 +110,7 @@ const originalMax = mutable.ORG_APPLICATIONS_OPEN_MAX;
 
 beforeAll(async () => {
   app = createApp();
-  const account = await demoRepo.nationalStaffFor('platform_admin');
-  if (account === null) throw new Error('The seed has no platform administrator.');
+  const account = { id: await seededPlatformAdminId() };
   platform = await signToken({
     kind: 'access',
     claims: { sub: account.id, kind: 'staff', roles: ['platform_admin'] },
