@@ -618,12 +618,12 @@ In addition to `CLAUDE.md`:
 | F2c | `feat/eta-earlier-notice` | **merged 6 October** — migration 0050 (`bookings.told_eta_at`); `earlierThanTold` (shared, pure); the `queue.earlier` template; `planEarlier` and `timesTold` in `notification.service`, planned in `settle` on every queue write and written in its transaction. `eta.test.ts` (+5), `notifications.test.ts` (+4). **Decided here:** "told" is one time and the window is the estimate's band; a checked-in patient is not messaged. **Supabase needs 0039–0050 before the next release** |
 | F3 | `feat/noshow-prepay` | after H3 |
 | G1 | `feat/platform-entitlements` | **merged 6 October** — migration 0051 (`agreement_state`, `hospitals.agreement_*`, `fn_workspace_usage`); `PUT /platform/hospitals/:id/agreement`; `agreement` on a workspace and `usage` on an opened one; `FRM-B12-AGREEMENT` and `TXT-B12-USAGE` on `S-B-12`, and a chip in the list for an agreement that is overdue or ended. Modules were already there (C4). `platformAgreement.routes.test.ts`, `tenancy.test.ts` (+2), `e2e/platform-agreement.spec.ts`. **Decided, and raised as Q12:** the state is a record and switches nothing |
-| G2 | `feat/platform-health` | |
+| G2 | `feat/platform-health` | **merged 6 October** — `shared/domain` `org/health` (the rule: what is flagged, what is ranked) and `org/audit` (the codes a trail can hold); migration 0052 (`fn_workspace_health`); `health` on an opened workspace, `attention` and `stalest` on every row; `GET /platform/hospitals/:id/audit`; `TXT-B12-HEALTH`, `LIST-B12-TRAIL` and the list's chips and oldest-figure line on `S-B-12`; `auditChangeName` in `@platform/i18n`. Seed: Karnaphuli's counter works offline for a stretch and its provider fails some messages; every workspace has the trail of how it was brought on. `health.test.ts`, `platformHealth.routes.test.ts`, `tenancy.test.ts` (+2), `e2e/platform-health.spec.ts`. **Decided:** a stale figure is ranked and not flagged; late sync is shown and not flagged. **Moved to I2:** the age of the last backup, which is the deployment's and not a hospital's |
 | H1 | `feat/notification-worker` | (was 2.1) |
 | H2 | `feat/sms-adapter-ready` | activation waits: X1 |
 | H3 | `feat/payment-adapters-ready` | activation waits: X2 |
 | I1 | `chore/api-build` | |
-| I2 | `chore/ops-signals` | |
+| I2 | `chore/ops-signals` | takes "last backup known" from G2 |
 | I3 | `feat/patient-rls-queue` | |
 | J | `chore/v1-release` | |
 | 2.1 | `feat/notification-worker` | now H1 |

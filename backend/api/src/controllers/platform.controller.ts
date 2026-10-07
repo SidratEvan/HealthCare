@@ -59,6 +59,12 @@ export async function getWorkspace(req: Request, res: Response): Promise<void> {
   res.json({ ok: true, data: await platform.workspace(id) });
 }
 
+/** `GET /platform/hospitals/:id/audit` — what was done to the organisation, newest first. */
+export async function getAuditTrail(req: Request, res: Response): Promise<void> {
+  const { id } = settingsIdParams.parse(req.params);
+  res.json({ ok: true, data: await platform.auditTrail(id) });
+}
+
 export async function postWorkspace(req: Request, res: Response): Promise<void> {
   const created = await platform.createWorkspace(actorOf(req), workspaceBody.parse(req.body));
   res.status(201).json({ ok: true, data: created });

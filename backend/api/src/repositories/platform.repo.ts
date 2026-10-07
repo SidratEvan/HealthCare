@@ -15,7 +15,15 @@
 
 import { sql } from 'kysely';
 
-import type { AgreementState, OrgLifecycle, SetupCounts } from '@platform/domain';
+import type {
+  AgreementState,
+  FigureStamp,
+  MessageCounts,
+  OrgLifecycle,
+  SetupCounts,
+  SyncCounts,
+  Timestamp,
+} from '@platform/domain';
 
 import { db } from '../config/db.js';
 
@@ -426,4 +434,165 @@ export async function verifyDoctorAt(
     RETURNING d.id
   `.execute(trx);
   return result.rows.length === 1;
+}
+
+// --- health and the trail of changes (`FR-SUP-06`, `FR-ONB-07`, plan G2) ------
+
+/** What was counted for one workspace's health. The rule that reads it is the domain's. */
+export interface HealthCounts {
+  readonly live: boolean;
+  /** The hospital's own threshold, the one a patient's screen uses for it. */
+  readonly staleAfterMinutes: number;
+  /** One per figure the hospital has to report: none for a module it does not run. */
+  readonly stamps: readonly FigureStamp[];
+  readonly messages: MessageCounts;
+  readonly sync: SyncCounts;
+}
+
+interface HealthColumns {
+  id: string;
+  is_live: boolean;
+  stale_after: number;
+  reports_beds: boolean;
+  shares_beds: boolean;
+  beds_as_of: Date | null;
+  reports_capabilities: boolean;
+  capabilities_as_of: Date | null;
+  messages_sent: number | null;
+  messages_failed: number | null;
+  messages_held: number | null;
+  messages_waiting: number | null;
+  late_actions: number | null;
+  slowest_seconds: number | null;
+  last_late_at: Date | null;
+}
+
+const stamp = (value: Date | null): Timestamp | null =>
+  value === null ? null : (value.toISOString() as Timestamp);
+
+function healthOfRow(row: HealthColumns): HealthCounts {
+  const stamps: FigureStamp[] = [];
+  if (row.reports_beds) {
+    stamps.push({ figure: 'beds', shared: row.shares_beds, asOf: stamp(row.beds_as_of) });
+  }
+  if (row.reports_capabilities) {
+    stamps.push({ figure: 'capabilities', shared: true, asOf: stamp(row.capabilities_as_of) });
+  }
+  return {
+    live: row.is_live,
+    staleAfterMinutes: row.stale_after,
+    stamps,
+    messages: {
+      sent: row.messages_sent ?? 0,
+      failed: row.messages_failed ?? 0,
+      held: row.messages_held ?? 0,
+      waiting: row.messages_waiting ?? 0,
+    },
+    sync: {
+      lateActions: row.late_actions ?? 0,
+      slowestSeconds: row.slowest_seconds ?? 0,
+      lastLateAt: stamp(row.last_late_at),
+    },
+  };
+}
+
+/**
+ * The health of one workspace, or of every one (`hospitalId` null).
+ *
+ * The ages are of what the hospital publishes, read where a patient's screen
+ * reads them: the bed figure's is the public view's own `beds_as_of`, the
+ * oldest kind's; the emergency services' is the oldest declaration's. A
+ * figure is reported only where the hospital has it to report: beds where it
+ * runs the module and has a bed, emergency services where it runs that
+ * module and has declared any.
+ *
+ * The messages and the late actions come from `fn_workspace_health` (0052),
+ * because this connection reads neither table, and must not.
+ */
+async function healthRows(hospitalId: string | null): Promise<HealthColumns[]> {
+  const result = await sql<HealthColumns>`
+    SELECT h.id, h.is_live,
+           coalesce(s.stale_threshold_minutes, 10) AS stale_after,
+           (fn_module_on(h.id, 'beds') AND coalesce(c.bed_total, 0) > 0) AS reports_beds,
+           fn_publishes(h.id, 'beds') AS shares_beds,
+           c.beds_as_of,
+           (fn_module_on(h.id, 'emergency')
+             AND EXISTS (SELECT 1 FROM capabilities cp WHERE cp.hospital_id = h.id))
+             AS reports_capabilities,
+           (SELECT min(cp.updated_at) FROM capabilities cp WHERE cp.hospital_id = h.id)
+             AS capabilities_as_of,
+           w.messages_sent, w.messages_failed, w.messages_held, w.messages_waiting,
+           w.late_actions, w.slowest_seconds, w.last_late_at
+      FROM hospitals h
+      LEFT JOIN hospital_settings s ON s.hospital_id = h.id
+      LEFT JOIN v_public_hospital_capacity c ON c.hospital_id = h.id
+      LEFT JOIN LATERAL fn_workspace_health(h.id) w ON true
+     WHERE h.deleted_at IS NULL
+       AND (${hospitalId}::uuid IS NULL OR h.id = ${hospitalId}::uuid)
+  `.execute(db);
+  return result.rows;
+}
+
+export async function healthOf(hospitalId: string): Promise<HealthCounts | null> {
+  const row = (await healthRows(hospitalId))[0];
+  return row === undefined ? null : healthOfRow(row);
+}
+
+export async function healthOfAll(): Promise<Map<string, HealthCounts>> {
+  return new Map((await healthRows(null)).map((row) => [row.id, healthOfRow(row)]));
+}
+
+/** One line of an organisation's trail: what was done, by whom, when. */
+export interface TrailRow {
+  readonly id: string;
+  readonly at: string;
+  /** A code of `AUDIT_CHANGES`, or one this version does not name. */
+  readonly change: string;
+  readonly actorName: string | null;
+  /** True for a platform administrator; false for the hospital's own staff. */
+  readonly byPlatform: boolean;
+}
+
+/**
+ * What was done to an organisation, newest first (`FR-ONB-07`).
+ *
+ * Three kinds of row and no other: a settings change, an import's step, an
+ * export. **Never a row about a person**: a record opened and a queue action
+ * are in the same table with the patient they concern, and are left out
+ * twice over, by the action and by `patient_id IS NULL`, so that a new kind
+ * of row about a patient cannot arrive here by being given an action this
+ * list happens to name (`FR-ONB-08`). No column of a patient is selected.
+ */
+export async function auditTrailOf(hospitalId: string, limit: number): Promise<TrailRow[]> {
+  const result = await sql<{
+    id: string;
+    created_at: Date;
+    change: string | null;
+    actor_name: string | null;
+    by_platform: boolean;
+  }>`
+    SELECT a.id, a.created_at,
+           CASE a.action
+             WHEN 'SETTINGS_CHANGE' THEN a.meta ->> 'change'
+             WHEN 'IMPORT' THEN 'import_' || (a.meta ->> 'event')
+             ELSE 'export'
+           END AS change,
+           su.full_name AS actor_name,
+           (su.id IS NOT NULL AND su.hospital_id IS NULL) AS by_platform
+      FROM audit_log a
+      LEFT JOIN staff_users su ON su.id = a.actor_staff_id
+     WHERE a.hospital_id = ${hospitalId}::uuid
+       AND a.action IN ('SETTINGS_CHANGE', 'IMPORT', 'EXPORT')
+       AND a.patient_id IS NULL
+     ORDER BY a.created_at DESC, a.id DESC
+     LIMIT ${limit}
+  `.execute(db);
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    at: row.created_at.toISOString(),
+    change: row.change ?? '',
+    actorName: row.actor_name,
+    byPlatform: row.by_platform,
+  }));
 }

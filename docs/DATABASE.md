@@ -207,6 +207,8 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 
 **Its agreement (0051, `FR-SUP-04`, the state half).** `agreement_state` agreement_state NOT NULL DEFAULT `'trial'`, `agreement_note` text (**CHK** 1 to 500 characters), `agreement_changed_at`, `agreement_changed_by` → `staff_users` (SET NULL). Set by a platform administrator on the workspace. **A record: nothing reads it to decide anything.** No query that publishes a hospital, gates a module or refuses a route looks at it; what takes a hospital out of the network is `lifecycle` (`FR-ONB-06`). No plan name and no amount has a column. **What it has used is not stored**: `fn_workspace_usage(hospital)` counts it when asked, three integers (serials taken and chambers begun in thirty days; SMS sent this calendar month, the same count `FR-NOT-06`'s cap uses). It is SECURITY DEFINER because a platform administrator's connection reaches no booking and no message (§6, `FR-ONB-08`) and the counts are not about a person; it answers the `national` and `system` scopes and gives every other connection no row, a hospital's own staff included: how busy a hospital is, is not a figure it publishes (`FR-NET-01`). EXECUTE is `app_tenant`'s, not PUBLIC's.
 
+**Its health (0052, `FR-SUP-06`).** Nothing is stored. The ages of what it publishes are read where a patient's screen reads them: `v_public_hospital_capacity.beds_as_of` and the oldest `capabilities.updated_at`, against `hospital_settings.stale_threshold_minutes`. The rest is `fn_workspace_health(hospital)`: over seven days, messages for its chambers that were sent or delivered, that failed, that were skipped, and that are still queued after five minutes; and queue events whose `server_ts` is more than a minute after their `client_ts`, how many, how late the slowest (capped at the week), and when the last arrived. The one other use of `client_ts` beside ordering a batch (`SY-01`): it is compared with the server's clock and trusted for nothing. SECURITY DEFINER for the reason `fn_workspace_usage` is, answering `national` and `system` and nobody else; EXECUTE is `app_tenant`'s. **Its trail of changes** is `audit_log` read by `hospital_id` for `SETTINGS_CHANGE`, `IMPORT` and `EXPORT` rows with no `patient_id` (§2.9); the platform's scope reads that table's rows for an organisation (`app_org`), and the query, not the policy, is what keeps a row about a patient out.
+
 **What it says of itself (0045, `FR-BRD-06`).** `description_bn`, `description_en` text, nullable, 1 to 400 characters each (`hospitals_description_length`). Written by the hospital's administrator on `S-B-11`, shown on its card and page.
 
 #### `hospital_logos` (0045, `FR-BRD-06`)
@@ -786,6 +788,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- told (§2.3, FR-QUE-15)
     0051_agreement_state.sql       -- plan G1: agreement_state, hospitals.agreement_* and
                                    -- fn_workspace_usage (§2.2, FR-SUP-04)
+    0052_workspace_health.sql      -- plan G2: fn_workspace_health, a hospital's messages by
+                                   -- outcome and its late actions (§2.2, FR-SUP-06)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

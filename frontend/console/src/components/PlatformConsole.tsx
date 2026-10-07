@@ -34,20 +34,33 @@
  * off with the reason.
  */
 
-import { Fragment, useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 
 import {
   AGREEMENT_STATES,
   FACILITY_KINDS,
+  HEALTH_WINDOW_DAYS,
   actionNeedsNote,
+  deliveryPercent,
   type AgreementState,
   type FacilityKind,
+  type HealthFigure,
+  type WorkspaceAttention,
   type OrgLifecycle,
   HOSPITAL_MODULES,
   type HospitalModule,
 } from '@platform/domain';
 import {
   DIVISION_NAMES,
+  auditChangeName,
   divisionName,
   districtName,
   facilityKindName,
@@ -72,6 +85,7 @@ import {
   type CreatedWorkspace,
   type PlatformAct,
   type PlatformFailure,
+  type Trail,
   type Workspace,
   type WorkspaceDetail,
 } from '@/lib/platform';
@@ -94,6 +108,17 @@ const STATE_NAME: Readonly<Record<OrgLifecycle, ConsoleKey>> = {
   active: 'platformStateActive',
   suspended: 'platformStateSuspended',
   closed: 'platformStateClosed',
+};
+
+/** What asks for attention at a workspace, as words (`FR-SUP-06`). */
+const ATTENTION_NAME: Readonly<Record<WorkspaceAttention, ConsoleKey>> = {
+  unconfirmed_figures: 'platformAttentionUnconfirmed',
+  messages: 'platformAttentionMessages',
+};
+
+const FIGURE_NAME: Readonly<Record<HealthFigure, ConsoleKey>> = {
+  beds: 'platformHealthFigureBeds',
+  capabilities: 'platformHealthFigureCapabilities',
 };
 
 /** The agreement's state as a word (`FR-SUP-04`). */
@@ -494,6 +519,13 @@ function WorkspaceList({
                         </Chip>
                       </span>
                     ) : null}
+                    {/* `FR-SUP-06`: which hospital is stale or failing, said
+                        where every hospital is in view. */}
+                    {item.attention.map((entry) => (
+                      <span key={entry} data-testid={`platform-row-attention-${entry}`}>
+                        <Chip tone="caution">{t(ATTENTION_NAME[entry], locale)}</Chip>
+                      </span>
+                    ))}
                     <StateChip lifecycle={item.lifecycle} />
                   </span>
                 </span>
@@ -519,6 +551,17 @@ function WorkspaceList({
                     }),
                   ].join(' · ')}
                 </span>
+                {/* `FR-SUP-06`, the stale-data offenders: said as an age on
+                    every row that has one, so the worst can be read against
+                    the rest, and not as a flag that is on everywhere. */}
+                {item.stalest === null ? null : (
+                  <span className="text-caption text-ink-muted" data-testid="platform-row-stalest">
+                    {format('platformRowStalest', locale, {
+                      figure: t(FIGURE_NAME[item.stalest.figure], locale),
+                      age: formatAge(item.stalest.ageMinutes, locale, numerals),
+                    })}
+                  </span>
+                )}
               </button>
             </li>
           );
@@ -817,6 +860,8 @@ function WorkspacePanel({
           }}
         />
 
+        <Health detail={detail} />
+
         <Modules
           detail={detail}
           online={online}
@@ -833,6 +878,13 @@ function WorkspacePanel({
           onSet={(domain) => {
             settle('domain', platformApi.setDomain(token, hospitalId, domain));
           }}
+        />
+
+        <AuditTrail
+          token={token}
+          hospitalId={hospitalId}
+          online={online}
+          revision={detail.health.asOf}
         />
 
         <section className="flex flex-col gap-3 border-t border-line pt-4">
@@ -1099,6 +1151,352 @@ function Agreement({
           formatMinutes={(value) => formatAge(value, locale, numerals)}
         />
       </div>
+    </section>
+  );
+}
+
+/**
+ * How a hospital is doing (`FR-SUP-06`, `TXT-B12-HEALTH`).
+ *
+ * Three plain blocks: how old each figure it publishes is, what became of a
+ * week's messages, and how much of its counters' work arrived late. A figure
+ * is stale here by the hospital's own threshold, the one a patient's screen
+ * uses, and the line under the figures says so. Late work is explained and
+ * never drawn as a fault: a counter that kept working offline did its job.
+ *
+ * Organisations and counts (`FR-ONB-08`): nothing here is about a person.
+ */
+function Health({ detail }: { readonly detail: WorkspaceDetail }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const now = useNow();
+  const { health } = detail;
+  const days = formatNumber(HEALTH_WINDOW_DAYS, numerals);
+  const percent = deliveryPercent(health.messages);
+
+  const messages: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly count: number;
+  }[] = [
+    { key: 'sent', label: t('platformHealthSent', locale), count: health.messages.sent },
+    { key: 'failed', label: t('platformHealthFailed', locale), count: health.messages.failed },
+    { key: 'held', label: t('platformHealthHeld', locale), count: health.messages.held },
+    { key: 'waiting', label: t('platformHealthWaiting', locale), count: health.messages.waiting },
+  ];
+
+  const slowestMinutes = Math.floor(health.sync.slowestSeconds / 60);
+
+  return (
+    <section
+      className="flex flex-col gap-4 border-t border-line pt-4"
+      data-testid="platform-health"
+      data-attention={health.attention.join(' ')}
+    >
+      <div className="flex flex-col gap-2">
+        <h3 className="text-body-md font-semibold">{t('platformHealthTitle', locale)}</h3>
+        {health.attention.length === 0 ? (
+          <p className="text-body-sm text-ink-secondary" data-testid="platform-health-fine">
+            {t('platformHealthFine', locale)}
+          </p>
+        ) : (
+          <p className="flex flex-wrap gap-2">
+            {health.attention.map((entry) => (
+              <Chip key={entry} tone="caution">
+                {t(ATTENTION_NAME[entry], locale)}
+              </Chip>
+            ))}
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2" data-testid="platform-health-figures">
+        <h4 className="text-body-sm font-semibold">{t('platformHealthFigures', locale)}</h4>
+        {health.figures.length === 0 ? (
+          <p className="text-body-sm text-ink-secondary">
+            {t('platformHealthFiguresNone', locale)}
+          </p>
+        ) : (
+          <>
+            <ul className="flex flex-col gap-1 text-body-sm">
+              {health.figures.map((figure) => (
+                <li
+                  key={figure.figure}
+                  className="flex flex-wrap items-center gap-2"
+                  data-testid={`platform-health-figure-${figure.figure}`}
+                  data-stale={figure.stale ? 'true' : 'false'}
+                >
+                  <span className="text-ink-secondary">
+                    {t(FIGURE_NAME[figure.figure], locale)}
+                  </span>
+                  {/* A11Y-03: the state is a word; the tone only repeats it. */}
+                  {!figure.shared ? (
+                    <Chip tone="neutral">{t('platformHealthNotShared', locale)}</Chip>
+                  ) : figure.ageMinutes === null ? (
+                    <Chip tone="caution">{t('platformHealthNever', locale)}</Chip>
+                  ) : (
+                    <>
+                      <Chip tone={figure.stale ? 'caution' : 'positive'}>
+                        {t(figure.stale ? 'platformHealthStale' : 'platformHealthFresh', locale)}
+                      </Chip>
+                      <span>
+                        {figure.ageMinutes === 0
+                          ? t('updatedJustNow', locale)
+                          : format('platformHealthAge', locale, {
+                              age: formatAge(figure.ageMinutes, locale, numerals),
+                            })}
+                      </span>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="text-caption text-ink-muted">
+              {format('platformHealthThreshold', locale, {
+                age: formatAge(health.staleAfterMinutes, locale, numerals),
+              })}
+            </p>
+          </>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2" data-testid="platform-health-messages">
+        <h4 className="text-body-sm font-semibold">
+          {format('platformHealthMessages', locale, { days })}
+        </h4>
+        <dl className="grid w-fit grid-cols-2 gap-x-6 gap-y-1 text-body-sm">
+          {messages.map((line) => (
+            <Fragment key={line.key}>
+              <dt className="text-ink-secondary">{line.label}</dt>
+              <dd className="text-right tabular-nums" data-testid={`platform-health-${line.key}`}>
+                {formatNumber(line.count, numerals)}
+              </dd>
+            </Fragment>
+          ))}
+        </dl>
+        <p className="text-caption text-ink-muted">
+          {percent === null
+            ? t('platformHealthNoMessages', locale)
+            : format('platformHealthDelivery', locale, {
+                percent: formatNumber(percent, numerals),
+              })}{' '}
+          {t('platformHealthHeldHelper', locale)}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2" data-testid="platform-health-sync">
+        <h4 className="text-body-sm font-semibold">
+          {format('platformHealthSync', locale, { days })}
+        </h4>
+        {health.sync.lateActions === 0 ? (
+          <p className="text-body-sm text-ink-secondary">{t('platformHealthNoLate', locale)}</p>
+        ) : (
+          <dl className="grid w-fit grid-cols-2 gap-x-6 gap-y-1 text-body-sm">
+            <dt className="text-ink-secondary">{t('platformHealthLateCount', locale)}</dt>
+            <dd className="text-right tabular-nums" data-testid="platform-health-late">
+              {formatNumber(health.sync.lateActions, numerals)}
+            </dd>
+            <dt className="text-ink-secondary">{t('platformHealthLateSlowest', locale)}</dt>
+            <dd className="text-right">
+              {slowestMinutes === 0
+                ? t('platformHealthUnderMinute', locale)
+                : formatAge(slowestMinutes, locale, numerals)}
+            </dd>
+            {health.sync.lastLateAt === null ? null : (
+              <>
+                <dt className="text-ink-secondary">{t('platformHealthLateLast', locale)}</dt>
+                <dd className="text-right">{formatDateTime(health.sync.lastLateAt, numerals)}</dd>
+              </>
+            )}
+          </dl>
+        )}
+        <p className="text-caption text-ink-muted">{t('platformHealthSyncHelper', locale)}</p>
+      </div>
+
+      <FreshnessLine
+        asOf={new Date(health.asOf)}
+        now={now}
+        labels={{
+          justNow: t('updatedJustNow', locale),
+          ago: t('updatedAgo', locale),
+          never: t('platformListAge', locale),
+          stale: t('staleWarning', locale),
+        }}
+        formatMinutes={(value) => formatAge(value, locale, numerals)}
+      />
+    </section>
+  );
+}
+
+/** How many of the trail's lines are drawn before "show more". */
+const TRAIL_FIRST = 8;
+
+type TrailState =
+  | { readonly state: 'closed' }
+  | { readonly state: 'loading' }
+  | { readonly state: 'failed' }
+  | { readonly state: 'ready'; readonly trail: Trail; readonly all: boolean };
+
+/**
+ * What was done to the organisation (`FR-ONB-07`, `LIST-B12-TRAIL`).
+ *
+ * Asked for, not loaded with the workspace: most visits to a workspace are to
+ * answer a review, and the trail is for the day somebody asks "who switched
+ * that off". Each line is what was done, when, by whom, and whether they were
+ * the hospital's or the platform's. Nothing done for a patient is in it.
+ *
+ * The four states (`GR-03`): the shape of three lines while it loads; a
+ * sentence when nothing has been changed; a sentence and a retry when it
+ * could not be read; offline, the button is off with the reason.
+ */
+function AuditTrail({
+  token,
+  hospitalId,
+  online,
+  revision,
+}: {
+  readonly token: string;
+  readonly hospitalId: string;
+  readonly online: boolean;
+  /** Changes when the workspace was changed from this screen: a shown trail is read again. */
+  readonly revision: string;
+}): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const now = useNow();
+  const [view, setView] = useState<TrailState>({ state: 'closed' });
+  const open = view.state !== 'closed';
+
+  const read = useCallback(async (): Promise<void> => {
+    try {
+      const trail = await platformApi.trail(token, hospitalId);
+      setView((held) => ({ state: 'ready', trail, all: held.state === 'ready' && held.all }));
+    } catch {
+      setView({ state: 'failed' });
+    }
+  }, [token, hospitalId]);
+
+  // Another workspace: its trail is not this one's.
+  useEffect(() => {
+    setView({ state: 'closed' });
+  }, [hospitalId]);
+
+  // The workspace was changed here: what is on show is now a line short.
+  // Only `revision` brings this about; whether the trail is open is read at
+  // that moment and not followed, or opening it would read it twice.
+  const openRef = useRef(open);
+  openRef.current = open;
+  useEffect(() => {
+    if (openRef.current) void read();
+  }, [revision, read]);
+
+  return (
+    <section className="flex flex-col gap-3 border-t border-line pt-4" data-testid="platform-trail">
+      <h3 className="text-body-md font-semibold">{t('platformTrailTitle', locale)}</h3>
+      <p className="text-body-sm text-ink-secondary">{t('platformTrailHelper', locale)}</p>
+
+      {view.state === 'closed' ? (
+        <div>
+          <GuardedButton
+            variant="secondary"
+            size="sm"
+            reason={online ? null : t('platformOffline', locale)}
+            data-testid="platform-trail-show"
+            onClick={() => {
+              setView({ state: 'loading' });
+              void read();
+            }}
+          >
+            {t('platformTrailShow', locale)}
+          </GuardedButton>
+        </div>
+      ) : null}
+
+      {view.state === 'loading' ? (
+        <div className="flex flex-col gap-2" aria-busy="true">
+          <div className="h-10 rounded-sm bg-sunken" />
+          <div className="h-10 rounded-sm bg-sunken" />
+          <div className="h-10 rounded-sm bg-sunken" />
+        </div>
+      ) : null}
+
+      {view.state === 'failed' ? (
+        <div role="alert" className="flex flex-col gap-2">
+          <p className="text-body-sm">{t('platformTrailFailed', locale)}</p>
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setView({ state: 'loading' });
+                void read();
+              }}
+            >
+              {t('retry', locale)}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {view.state === 'ready' ? (
+        view.trail.entries.length === 0 ? (
+          <p className="text-body-sm text-ink-secondary" data-testid="platform-trail-empty">
+            {t('platformTrailEmpty', locale)}
+          </p>
+        ) : (
+          <>
+            <ol className="flex flex-col gap-2" data-testid="platform-trail-list">
+              {(view.all ? view.trail.entries : view.trail.entries.slice(0, TRAIL_FIRST)).map(
+                (entry) => (
+                  <li
+                    key={entry.id}
+                    className="flex flex-col gap-0.5 rounded-sm border border-line px-3 py-2"
+                    data-testid="platform-trail-entry"
+                    data-change={entry.change}
+                  >
+                    <span className="text-body-sm">{auditChangeName(entry.change, locale)}</span>
+                    <span className="text-caption text-ink-muted">
+                      {[
+                        formatDateTime(entry.at, numerals),
+                        entry.actorName ?? t('platformTrailUnknownActor', locale),
+                        t(
+                          entry.byPlatform ? 'platformTrailByPlatform' : 'platformTrailByHospital',
+                          locale,
+                        ),
+                      ].join(' · ')}
+                    </span>
+                  </li>
+                ),
+              )}
+            </ol>
+            {!view.all && view.trail.entries.length > TRAIL_FIRST ? (
+              <div>
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  data-testid="platform-trail-more"
+                  onClick={() => {
+                    setView({ state: 'ready', trail: view.trail, all: true });
+                  }}
+                >
+                  {t('platformTrailMore', locale)}
+                </Button>
+              </div>
+            ) : null}
+            <FreshnessLine
+              asOf={new Date(view.trail.asOf)}
+              now={now}
+              labels={{
+                justNow: t('updatedJustNow', locale),
+                ago: t('updatedAgo', locale),
+                never: t('platformListAge', locale),
+                stale: t('staleWarning', locale),
+              }}
+              formatMinutes={(value) => formatAge(value, locale, numerals)}
+            />
+          </>
+        )
+      ) : null}
     </section>
   );
 }

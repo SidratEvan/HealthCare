@@ -159,6 +159,32 @@ export {
   type PublicCapacity,
 } from './beds/capacity.js';
 
+// --- A workspace's health and its trail of changes --------------------------
+//
+// What the platform's screen says about how a hospital is doing (`FR-SUP-06`)
+// and what was done to it (`FR-ONB-07`). Organisations and counts only.
+export {
+  HEALTH_FIGURES,
+  HEALTH_WINDOW_DAYS,
+  LATE_ACTION_SECONDS,
+  MESSAGE_WAITING_MINUTES,
+  WORKSPACE_ATTENTIONS,
+  deliveryPercent,
+  figureHealth,
+  stalestFigure,
+  workspaceAttention,
+  workspaceHealth,
+  type FigureHealth,
+  type FigureStamp,
+  type HealthFigure,
+  type MessageCounts,
+  type StalestFigure,
+  type SyncCounts,
+  type WorkspaceAttention,
+  type WorkspaceHealth,
+} from './org/health.js';
+export { AUDIT_CHANGES, isAuditChange, type AuditChange } from './org/audit.js';
+
 // --- Onboarding ------------------------------------------------------------
 //
 // A workspace's state, who may move it, and the checklist it is ready by
