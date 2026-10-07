@@ -472,7 +472,7 @@ change when `S-A-13` lands.
 - `FR-SUP-01` Hospital onboarding wizard: departments, doctors, sessions, fees, beds, capabilities, counters.
 - `FR-SUP-02` Doctor verification workflow against BMDC registration; unverified doctors cannot be published.
 - `FR-SUP-03` Feature flags per hospital (queue only, queue + beds, full suite). **Built as modules** (`FR-BRD-11`, plan C4): the platform administrator switches each of the eight on the workspace; the change is audited. What a module costs, and which an agreement includes, are not in the product.
-- `FR-SUP-04` Subscription and invoicing per hospital, with usage counters.
+- `FR-SUP-04` Subscription and invoicing per hospital, with usage counters. **The state half is built** (plan G1, migration 0051): the platform administrator records on the workspace whether a hospital's agreement is in trial, active, overdue or ended, with a note and who set it when, and the change is audited; and reads what the hospital has used as three counts (serials taken and chambers held in thirty days, SMS sent this month), never a row. **The state is a record and switches nothing**: an agreement that has ended does not unlist a hospital or switch a module off. Taking a hospital out of the network stays suspending its workspace (`FR-ONB-06`), a separate act with a reason the hospital reads. No plan name, no amount and no invoice is in the product until a billing provider is chosen.
 - `FR-SUP-05` Review moderation and abuse handling.
 - `FR-SUP-06` System health view: sync lag per hospital, stale-data offenders, notification delivery rates.
 

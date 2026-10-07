@@ -58,6 +58,7 @@ CREATE TYPE import_set        AS ENUM ('structure','patients','appointments','re
 CREATE TYPE import_state      AS ENUM ('checked','committed','undone','discarded');        -- 0031, FR-IMP-05..07
 CREATE TYPE external_kind     AS ENUM ('patient','appointment','department','doctor','schedule','ward','bed','staff');  -- 0030, FR-IMP-04
 CREATE TYPE org_lifecycle     AS ENUM ('setup','ready_for_review','active','suspended','closed');   -- 0037, FR-ONB-02
+CREATE TYPE agreement_state   AS ENUM ('trial','active','overdue','ended');   -- 0051, FR-SUP-04
 ```
 
 ---
@@ -203,6 +204,8 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 **Applied for by the hospital (0049, `FR-ONB-09`, `FR-ONB-10`).** `self_registered` boolean NOT NULL DEFAULT false: true for a workspace the hospital applied for through the public form; it is the same row in the same state, `setup`, and goes live only by review. `application_key` text, nullable: the Idempotency-Key the form was sent with, so a form sent twice makes one workspace; **UQ** where not null (`hospitals_application_key_key`), **CHK** `hospitals_application_key_is_an_application` (only a self-registered row has one). The form's facility phone is `phone`, its registration number `registration_no`.
 
 **Its own domain (0046, `FR-BRD-07`).** `portal_domain` text, nullable: a domain the hospital owns, recorded by a platform administrator, at which the patient app is this hospital's portal. Lower-case, a host name and nothing else (`hospitals_portal_domain_shape`); **UQ** where not null (`hospitals_portal_domain_key`): an address is one hospital's or nobody's. The address under the platform's domain needs no column: it is `code`.
+
+**Its agreement (0051, `FR-SUP-04`, the state half).** `agreement_state` agreement_state NOT NULL DEFAULT `'trial'`, `agreement_note` text (**CHK** 1 to 500 characters), `agreement_changed_at`, `agreement_changed_by` → `staff_users` (SET NULL). Set by a platform administrator on the workspace. **A record: nothing reads it to decide anything.** No query that publishes a hospital, gates a module or refuses a route looks at it; what takes a hospital out of the network is `lifecycle` (`FR-ONB-06`). No plan name and no amount has a column. **What it has used is not stored**: `fn_workspace_usage(hospital)` counts it when asked, three integers (serials taken and chambers begun in thirty days; SMS sent this calendar month, the same count `FR-NOT-06`'s cap uses). It is SECURITY DEFINER because a platform administrator's connection reaches no booking and no message (§6, `FR-ONB-08`) and the counts are not about a person; it answers the `national` and `system` scopes and gives every other connection no row, a hospital's own staff included: how busy a hospital is, is not a figure it publishes (`FR-NET-01`). EXECUTE is `app_tenant`'s, not PUBLIC's.
 
 **What it says of itself (0045, `FR-BRD-06`).** `description_bn`, `description_en` text, nullable, 1 to 400 characters each (`hospitals_description_length`). Written by the hospital's administrator on `S-B-11`, shown on its card and page.
 
@@ -781,6 +784,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- staff_users.phone (§2.1, §2.2, FR-ONB-09, FR-ONB-10)
     0050_told_eta.sql              -- plan F2c: bookings.told_eta_at, the time a patient was last
                                    -- told (§2.3, FR-QUE-15)
+    0051_agreement_state.sql       -- plan G1: agreement_state, hospitals.agreement_* and
+                                   -- fn_workspace_usage (§2.2, FR-SUP-04)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

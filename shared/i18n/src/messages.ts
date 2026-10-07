@@ -1618,6 +1618,55 @@ export const CONSOLE = {
     en: 'Your hospital does not run these modules: {modules}. To switch one on, ask the platform.',
   },
   pickerOpenSettings: { bn: 'সেটিংস খুলুন', en: 'Open settings' },
+  // Where a hospital's agreement stands, and what it has used (`FR-SUP-04`,
+  // `FRM-B12-AGREEMENT`). Four words and three counts: no plan, no amount.
+  platformAgreementTitle: { bn: 'চুক্তির অবস্থা', en: 'Agreement' },
+  platformAgreementHelper: {
+    bn: 'এটি শুধু একটি নথি। এটি বদলালে হাসপাতালের কিছুই বন্ধ হয় না; নেটওয়ার্ক থেকে সরাতে হলে নিচে হাসপাতালটি স্থগিত করুন। এখানে কোনো প্যাকেজের নাম বা টাকার অঙ্ক লেখা হয় না।',
+    en: 'This is a record. Changing it switches nothing off at the hospital; to take a hospital out of the network, suspend it below. No plan name and no amount is written here.',
+  },
+  agreementTrial: { bn: 'পরীক্ষামূলক', en: 'Trial' },
+  agreementActive: { bn: 'সক্রিয়', en: 'Active' },
+  agreementOverdue: { bn: 'বকেয়া', en: 'Overdue' },
+  agreementEnded: { bn: 'শেষ হয়েছে', en: 'Ended' },
+  platformAgreementChipOverdue: { bn: 'চুক্তি বকেয়া', en: 'Agreement overdue' },
+  platformAgreementChipEnded: { bn: 'চুক্তি শেষ', en: 'Agreement ended' },
+  platformAgreementSetAt: {
+    bn: 'এখন: {state}। {when} তারিখে ঠিক করা হয়েছে।',
+    en: 'Now: {state}. Set on {when}.',
+  },
+  platformAgreementNeverSet: {
+    bn: 'এখনো কেউ ঠিক করেননি। নতুন হাসপাতাল পরীক্ষামূলক অবস্থায় শুরু হয়।',
+    en: 'Nobody has set this yet. A new hospital starts in trial.',
+  },
+  platformAgreementNoteLabel: { bn: 'নোট (ঐচ্ছিক)', en: 'Note (optional)' },
+  platformAgreementNoteHelper: {
+    bn: 'পরে যিনি দেখবেন তাঁর জন্য এক-দুই বাক্য। টাকার অঙ্ক লিখবেন না।',
+    en: 'A sentence or two for whoever reads this next. Do not write amounts.',
+  },
+  platformAgreementNoteShort: {
+    bn: 'নোট লিখলে অন্তত তিনটি অক্ষর লিখুন',
+    en: 'A note needs at least three characters',
+  },
+  platformAgreementSave: { bn: 'চুক্তির অবস্থা সংরক্ষণ করুন', en: 'Save agreement state' },
+  platformAgreementSame: {
+    bn: 'এই অবস্থাটিই এখন সংরক্ষিত আছে',
+    en: 'This is already what is recorded',
+  },
+  platformUsageTitle: { bn: 'ব্যবহার', en: 'Usage' },
+  platformUsageSerials: {
+    bn: 'গত {days} দিনে নেওয়া সিরিয়াল',
+    en: 'Serials taken in the last {days} days',
+  },
+  platformUsageChambers: {
+    bn: 'গত {days} দিনে বসা চেম্বার',
+    en: 'Chambers held in the last {days} days',
+  },
+  platformUsageMessages: { bn: 'এই মাসে পাঠানো এসএমএস', en: 'SMS sent this month' },
+  platformUsageHelper: {
+    bn: 'শুধু সংখ্যা। কোনো রোগী বা কারও সিরিয়াল এখানে দেখানো হয় না।',
+    en: 'Counts only. No patient and nobody’s serial is shown here.',
+  },
   // Where a hospital's portal is (`FR-BRD-07`, `FRM-B12-DOMAIN`).
   platformPortalTitle: { bn: 'পোর্টালের ঠিকানা', en: 'Portal address' },
   platformPortalAt: { bn: 'প্ল্যাটফর্মের ডোমেইনে', en: 'Under the platform’s domain' },

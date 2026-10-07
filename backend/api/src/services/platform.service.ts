@@ -31,6 +31,7 @@ import {
   nextLifecycle,
   platformActions,
   setupChecklist,
+  type AgreementState,
   type ChecklistItem,
   type HospitalModule,
   type OrgAction,
@@ -100,16 +101,22 @@ export interface WorkspaceDetail extends WorkspaceSummary {
   }[];
   /** What stops an approval right now; empty when nothing does. */
   readonly missingForApproval: readonly string[];
+  /**
+   * What the hospital has used (`FR-SUP-04`): three counts and when they were
+   * counted. Counts of activity, never a row of it (`FR-ONB-08`).
+   */
+  readonly usage: repo.WorkspaceUsage & { readonly asOf: string };
 }
 
 export async function workspace(hospitalId: string): Promise<WorkspaceDetail> {
   const row = await repo.findWorkspace(hospitalId);
   if (row === null) throw notFound('hospital');
 
-  const [doctors, administrators, phone] = await Promise.all([
+  const [doctors, administrators, phone, usage] = await Promise.all([
     repo.doctorsOf(hospitalId),
     repo.administratorsOf(hospitalId),
     repo.facilityPhoneOf(hospitalId),
+    repo.usageOf(hospitalId),
   ]);
 
   return {
@@ -119,7 +126,53 @@ export async function workspace(hospitalId: string): Promise<WorkspaceDetail> {
     doctors,
     administrators,
     missingForApproval: missingForApproval(row.counts),
+    usage: { ...usage, asOf: new Date().toISOString() },
   };
+}
+
+/**
+ * Records where a hospital's agreement stands (`FR-SUP-04`, the state half):
+ * trial, active, overdue or ended, with a note for whoever reads it next.
+ *
+ * **A record, and it switches nothing.** What the agreement says, and what
+ * follows from its state, are settled outside this product; taking a hospital
+ * out of the network is suspending its workspace (`FR-ONB-06`), which stays a
+ * separate act with a reason the hospital reads. An overdue invoice that
+ * silently unlisted a hospital's doctors would be the product deciding
+ * something nobody here decided.
+ *
+ * The note belongs to the state it was written with: setting a state without
+ * one clears the last.
+ */
+export async function setAgreement(
+  actor: PlatformActor,
+  hospitalId: string,
+  state: AgreementState,
+  note: string | null,
+): Promise<WorkspaceDetail> {
+  const changed = await withTransaction(async (trx) => {
+    const found = await repo.setAgreement(trx, {
+      hospitalId,
+      state,
+      note,
+      changedBy: actor.staffId,
+    });
+    if (!found) return false;
+    await settingsRepo.recordChange(trx, {
+      actorStaffId: actor.staffId,
+      hospitalId,
+      subjectTable: 'hospitals',
+      subjectId: hospitalId,
+      // Which state, so the trail can be read without the row it changed.
+      change: `agreement_${state}`,
+      ip: actor.ip,
+      userAgent: actor.userAgent,
+    });
+    return true;
+  });
+  if (!changed) throw notFound('hospital');
+
+  return await workspace(hospitalId);
 }
 
 /**

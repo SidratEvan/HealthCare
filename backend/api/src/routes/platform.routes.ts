@@ -19,6 +19,7 @@
 import { Router } from 'express';
 
 import {
+  agreementBody,
   applicationBody,
   emptyBody,
   lifecycleNoteBody,
@@ -137,4 +138,15 @@ platformRoutes.put(
   write,
   validate({ ...byId, body: modulesBody }),
   platform.putModules,
+);
+
+// Where a hospital's agreement stands (`FR-SUP-04`, the state half): trial,
+// active, overdue or ended, and a note. A record: no plan, no amount, and
+// nothing is switched by it.
+platformRoutes.put(
+  '/platform/hospitals/:id/agreement',
+  ...admin,
+  write,
+  validate({ ...byId, body: agreementBody }),
+  platform.putAgreement,
 );

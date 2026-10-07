@@ -15,7 +15,7 @@
 
 import { sql } from 'kysely';
 
-import type { OrgLifecycle, SetupCounts } from '@platform/domain';
+import type { AgreementState, OrgLifecycle, SetupCounts } from '@platform/domain';
 
 import { db } from '../config/db.js';
 
@@ -106,6 +106,15 @@ export interface WorkspaceRow {
   readonly reviewNote: string | null;
   readonly createdAt: string;
   readonly counts: SetupCounts;
+  /**
+   * Where its agreement stands, as the platform last recorded it
+   * (`FR-SUP-04`, 0051). No plan and no amount: those are not in the product.
+   */
+  readonly agreement: {
+    readonly state: AgreementState;
+    readonly note: string | null;
+    readonly changedAt: string | null;
+  };
 }
 
 interface WorkspaceColumns extends CountColumns {
@@ -126,6 +135,9 @@ interface WorkspaceColumns extends CountColumns {
   reviewed_at: Date | null;
   review_note: string | null;
   created_at: Date;
+  agreement_state: AgreementState;
+  agreement_note: string | null;
+  agreement_changed_at: Date | null;
 }
 
 function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
@@ -148,6 +160,11 @@ function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
     reviewNote: row.review_note,
     createdAt: row.created_at.toISOString(),
     counts: countsOf(row),
+    agreement: {
+      state: row.agreement_state,
+      note: row.agreement_note,
+      changedAt: row.agreement_changed_at?.toISOString() ?? null,
+    },
   };
 }
 
@@ -157,8 +174,63 @@ const WORKSPACE_COLUMNS = sql`
   coalesce((SELECT s.modules_off FROM hospital_settings s WHERE s.hospital_id = h.id),
            '{}'::text[]) AS modules_off,
   h.lifecycle::text AS lifecycle, h.is_live,
-  h.review_requested_at, h.reviewed_at, h.review_note, h.created_at
+  h.review_requested_at, h.reviewed_at, h.review_note, h.created_at,
+  h.agreement_state::text AS agreement_state, h.agreement_note, h.agreement_changed_at
 `;
+
+/** Records where a hospital's agreement stands (`FR-SUP-04`). False when it is not there. */
+export async function setAgreement(
+  trx: Tx,
+  input: {
+    readonly hospitalId: string;
+    readonly state: AgreementState;
+    readonly note: string | null;
+    readonly changedBy: string;
+  },
+): Promise<boolean> {
+  const result = await sql<{ id: string }>`
+    UPDATE hospitals
+       SET agreement_state = ${input.state}::agreement_state,
+           agreement_note = ${input.note},
+           agreement_changed_at = now(),
+           agreement_changed_by = ${input.changedBy}::uuid,
+           updated_at = now()
+     WHERE id = ${input.hospitalId} AND deleted_at IS NULL
+    RETURNING id
+  `.execute(trx);
+  return result.rows.length === 1;
+}
+
+/** What a hospital has used: three counts, from a function that returns no row of anybody's. */
+export interface WorkspaceUsage {
+  /** Serials taken at its chambers in the last thirty days. */
+  readonly serialsTaken30d: number;
+  /** Chambers that actually began in the last thirty days. */
+  readonly chambersHeld30d: number;
+  /** SMS sent for its chambers this calendar month. */
+  readonly messagesSentThisMonth: number;
+}
+
+/**
+ * `fn_workspace_usage` (0051). A platform administrator's connection cannot
+ * read a booking or a message, and must not; the function counts with its
+ * owner's rights and answers the platform and the server only.
+ */
+export async function usageOf(hospitalId: string): Promise<WorkspaceUsage> {
+  const result = await sql<{
+    serials_30d: number | null;
+    chambers_30d: number | null;
+    messages_month: number | null;
+  }>`
+    SELECT serials_30d, chambers_30d, messages_month FROM fn_workspace_usage(${hospitalId}::uuid)
+  `.execute(db);
+  const row = result.rows[0];
+  return {
+    serialsTaken30d: row?.serials_30d ?? 0,
+    chambersHeld30d: row?.chambers_30d ?? 0,
+    messagesSentThisMonth: row?.messages_month ?? 0,
+  };
+}
 
 /**
  * Every workspace, the ones waiting for review first and oldest first among

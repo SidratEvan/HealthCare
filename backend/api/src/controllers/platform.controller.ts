@@ -5,6 +5,7 @@
  */
 
 import {
+  agreementBody,
   applicationBody,
   lifecycleNoteBody,
   modulesBody,
@@ -77,6 +78,13 @@ export async function putModules(req: Request, res: Response): Promise<void> {
   const { id } = settingsIdParams.parse(req.params);
   const { off } = modulesBody.parse(req.body);
   res.json({ ok: true, data: await platform.setModules(actorOf(req), id, off) });
+}
+
+/** `PUT /platform/hospitals/:id/agreement` — where the hospital's agreement stands. */
+export async function putAgreement(req: Request, res: Response): Promise<void> {
+  const { id } = settingsIdParams.parse(req.params);
+  const { state, note } = agreementBody.parse(req.body);
+  res.json({ ok: true, data: await platform.setAgreement(actorOf(req), id, state, note ?? null) });
 }
 
 /** `POST /platform/hospitals/:id/domain` — the hospital's own domain, or null to remove it. */

@@ -394,6 +394,60 @@ describe('a platform administrator sees organisations, never a patient (FR-ONB-0
       }
     });
   });
+
+  it('is told how much a hospital has used as three counts, never a row (FR-SUP-04, 0051)', async () => {
+    await withRollback(async (client) => {
+      const { a } = await twoHospitals(client);
+      // What is true, counted by the owner.
+      const truth = await client.query<{ serials: number; chambers: number }>(
+        `SELECT
+           (SELECT count(*)::int FROM bookings b JOIN sessions s ON s.id = b.session_id
+             WHERE s.hospital_id = $1 AND b.deleted_at IS NULL
+               AND b.created_at >= now() - interval '30 days') AS serials,
+           (SELECT count(*)::int FROM sessions s
+             WHERE s.hospital_id = $1 AND s.actual_start >= now() - interval '30 days') AS chambers`,
+        [a],
+      );
+      // The seed gives every hospital with chambers serials in the last month.
+      expect(truth.rows[0]?.serials).toBeGreaterThan(0);
+
+      await asTenant(client);
+      await scope(client, 'national');
+      const told = await client.query<{
+        serials_30d: number;
+        chambers_30d: number;
+        messages_month: number;
+      }>('SELECT * FROM fn_workspace_usage($1)', [a]);
+      expect(told.rows).toHaveLength(1);
+      expect(told.rows[0]?.serials_30d).toBe(truth.rows[0]?.serials);
+      expect(told.rows[0]?.chambers_30d).toBe(truth.rows[0]?.chambers);
+      expect(told.rows[0]?.messages_month).toBeGreaterThanOrEqual(0);
+      // Counted for it, and still not readable by it.
+      expect(await count(client, 'SELECT 1 FROM bookings')).toBe(0);
+    });
+  });
+
+  it('and how busy a hospital is, is told to nobody else: not its own staff, not another’s, not a patient', async () => {
+    await withRollback(async (client) => {
+      const { a, b } = await twoHospitals(client);
+      await asTenant(client);
+
+      for (const [kind, hospitalId] of [
+        ['hospital', a],
+        ['hospital', b],
+        ['open', ''],
+        [null, ''],
+      ] as const) {
+        await scope(client, kind, hospitalId);
+        expect(
+          await count(client, 'SELECT 1 FROM fn_workspace_usage($1)', [a]),
+          `${String(kind)} ${hospitalId}`,
+        ).toBe(0);
+      }
+      await person(client, 'patient', '11111111-1111-7111-8111-111111111111');
+      expect(await count(client, 'SELECT 1 FROM fn_workspace_usage($1)', [a])).toBe(0);
+    });
+  });
 });
 
 /**
