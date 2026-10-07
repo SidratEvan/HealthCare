@@ -204,8 +204,11 @@ export interface BookingDetail {
 /** `GET /guest/link/:token` and `GET /bookings/:id`. */
 export interface BookingView {
   readonly booking: BookingDetail;
+  /** The patients' copy of the queue: it names nobody, and each row carries a ticket (plan I2c). */
   readonly state: QueueState;
   readonly etas: readonly Eta[];
+  /** What stands for this booking in `state` and `etas`: the row to look for. */
+  readonly ticket: string;
   /** The age of the figures, for `<FreshnessLine>` (`FR-PAT-35`). */
   readonly freshAt: string;
   readonly serverTs: string;

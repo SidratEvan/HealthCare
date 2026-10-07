@@ -440,3 +440,139 @@ describe('a statement of the queue names the actions it took in (SY-08)', () => 
     expect((await once<Named>(socket, 'queue.updated')).applied).toEqual([]);
   });
 });
+
+describe('a patient’s phone is sent a queue that names nobody (plan I2c, handover 30)', () => {
+  const actor = {
+    kind: 'staff' as const,
+    staffUserId: '' as never,
+    role: 'receptionist' as const,
+  };
+
+  /** A guest booking in the fixture's chamber, and the link a phone follows it with. */
+  async function guestOnPhone(): Promise<{ bookingId: string; link: string }> {
+    const phone = `+88019${String(Math.floor(Math.random() * 90_000_000) + 10_000_000)}`;
+    const response = await request(httpServer)
+      .post('/api/v1/bookings')
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        sessionId: fixture.sessionId,
+        method: 'at_hospital',
+        guest: { name: 'সালমা বেগম (ডেমো)', phone, ageYears: 41, sex: 'female' },
+      });
+    expect(response.status).toBe(201);
+    const bookingId = response.body.data.bookingId as string;
+    const row = await sql<{ booked_by_guest_id: string }>`
+      SELECT booked_by_guest_id FROM bookings WHERE id = ${bookingId}::uuid
+    `.execute(db);
+    const link = await signToken({
+      kind: 'access',
+      claims: { sub: row.rows[0]?.booked_by_guest_id ?? '', kind: 'guest', bookingId },
+    });
+    return { bookingId, link };
+  }
+
+  /** Every booking and patient id in the chamber, as the database holds them. */
+  async function everyoneHere(): Promise<string[]> {
+    const rows = await sql<{ id: string; patient_id: string }>`
+      SELECT id, patient_id FROM bookings WHERE session_id = ${fixture.sessionId}::uuid
+    `.execute(db);
+    return rows.rows.flatMap((row) => [row.id, row.patient_id]);
+  }
+
+  interface Statement {
+    applied: unknown[];
+    data: {
+      state: { entries: { bookingId: string; serial: number }[] };
+      etas: { bookingId: string }[];
+    };
+  }
+
+  it('hears every tap, finds its own row by its ticket, and holds no other person’s id', async () => {
+    const mine = await guestOnPhone();
+    const view = await request(httpServer)
+      .get(`/api/v1/bookings/${mine.bookingId}`)
+      .set('Authorization', `Bearer ${mine.link}`);
+    expect(view.status).toBe(200);
+    const ticket = view.body.data.ticket as string;
+    expect(ticket).not.toBe(mine.bookingId);
+
+    const phone = open(mine.link);
+    const desk = open(await staffToken());
+    await Promise.all([once(phone, 'connect'), once(desk, 'connect')]);
+    phone.emit('session:subscribe', { sessionId: fixture.sessionId });
+    desk.emit('session:subscribe', { sessionId: fixture.sessionId });
+    const [caughtUp] = await Promise.all([
+      once<Statement>(phone, 'queue.updated'),
+      once(desk, 'queue.updated'),
+    ]);
+
+    const phoneHears = once<Statement>(phone, 'queue.updated');
+    const deskHears = once<Statement>(desk, 'queue.updated');
+    await queueService.appendEvent({
+      sessionId: fixture.sessionId,
+      type: 'DOCTOR_ARRIVED',
+      payload: { arrivedAt: new Date().toISOString(), minutesLate: 0 },
+      actor: { ...actor, staffUserId: fixture.receptionistId as never },
+    });
+    const [heard, deskHeard] = await Promise.all([phoneHears, deskHears]);
+
+    // The broadcasts name nobody at all, the phone's own booking included.
+    const ids = await everyoneHere();
+    for (const said of [caughtUp, heard]) {
+      const sent = JSON.stringify(said);
+      for (const id of ids) expect(sent).not.toContain(id);
+    }
+    // The first paint carries the phone's own booking, and nobody else's.
+    const ownPatient = view.body.data.booking.patientId as string;
+    const others = ids.filter((id) => id !== mine.bookingId && id !== ownPatient);
+    const painted = JSON.stringify(view.body.data);
+    for (const id of others) expect(painted).not.toContain(id);
+
+    // Its own row and estimate, by the ticket it was given.
+    const row = heard.data.state.entries.find((entry) => entry.bookingId === ticket);
+    expect(row?.serial).toBe(view.body.data.booking.serial);
+    expect(heard.data.etas.some((eta) => eta.bookingId === ticket)).toBe(true);
+    expect(heard.applied).toEqual([]);
+
+    // Reception still holds the queue as it is.
+    expect(deskHeard.data.state.entries.map((entry) => entry.bookingId)).toContain(mine.bookingId);
+  });
+
+  it('is caught up with the queue as it stands, never with the log’s events', async () => {
+    const mine = await guestOnPhone();
+    const first = await queueService.appendEvent({
+      sessionId: fixture.sessionId,
+      type: 'DOCTOR_ARRIVED',
+      payload: { arrivedAt: new Date().toISOString(), minutesLate: 0 },
+      actor: { ...actor, staffUserId: fixture.receptionistId as never },
+    });
+    await queueService.callNext({
+      sessionId: fixture.sessionId,
+      actor: { ...actor, staffUserId: fixture.receptionistId as never },
+    });
+
+    const phone = open(mine.link);
+    await once(phone, 'connect');
+    const replayed: unknown[] = [];
+    phone.on('queue.event', (payload: unknown) => {
+      replayed.push(payload);
+    });
+    phone.emit('session:subscribe', { sessionId: fixture.sessionId, lastSeq: first.seq });
+    const state = await once<Statement>(phone, 'queue.updated');
+
+    expect(replayed).toEqual([]);
+    const sent = JSON.stringify(state);
+    for (const id of await everyoneHere()) expect(sent).not.toContain(id);
+  });
+
+  it('staff are shown a booking with its own id, and the queue as reception holds it', async () => {
+    const mine = await guestOnPhone();
+    const response = await request(httpServer)
+      .get(`/api/v1/bookings/${mine.bookingId}`)
+      .set('Authorization', `Bearer ${await staffToken()}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data.ticket).toBe(mine.bookingId);
+    const entries = response.body.data.state.entries as { bookingId: string }[];
+    expect(entries.map((entry) => entry.bookingId)).toContain(mine.bookingId);
+  });
+});

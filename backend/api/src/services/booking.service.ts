@@ -30,6 +30,7 @@ import { randomUUID } from 'node:crypto';
 import {
   bookingStanding,
   id,
+  patientViewOf,
   time,
   type BookingId,
   type BookingStanding,
@@ -41,6 +42,7 @@ import {
 
 import { patientLink } from '../config/links.js';
 import { logger } from '../config/logger.js';
+import { ticketFor, ticketsIn } from '../config/serialTicket.js';
 import { env } from '../env.js';
 import { AppError, notFound, validationFailed } from '../errors/AppError.js';
 import * as bookingRepo from '../repositories/booking.repo.js';
@@ -582,8 +584,18 @@ export async function linkForMyBooking(
  */
 export interface BookingView {
   readonly booking: bookingRepo.BookingDetail;
+  /**
+   * The patients' copy of the queue for anybody but staff (plan I2c,
+   * `shared/domain` `queue/patientView`): no booking or patient is named
+   * in it, and each row carries a ticket in place of its booking.
+   */
   readonly state: QueueState;
   readonly etas: readonly Eta[];
+  /**
+   * What stands for this booking in `state`: its ticket in the patients'
+   * copy, its own id in the staff's. The screen finds its row by this.
+   */
+  readonly ticket: string;
   /**
    * What was paid for this booking, if anything (`FR-PAY-03`).
    *
@@ -607,8 +619,11 @@ export interface BookingView {
   readonly serverTs: string;
 }
 
+/** Who a booking's view is for: a member of staff is shown the queue as reception holds it. */
+export type ViewAudience = 'staff' | 'patient';
+
 /** `GET /bookings/:id` (BACKEND.md §7.3). */
-export async function bookingView(bookingId: string): Promise<BookingView> {
+export async function bookingView(bookingId: string, audience: ViewAudience): Promise<BookingView> {
   const booking = await bookingRepo.findDetail(bookingId);
   if (booking === null) throw notFound('booking');
 
@@ -626,10 +641,17 @@ export async function bookingView(bookingId: string): Promise<BookingView> {
     paid.find((entry) => entry.paidAt !== null && entry.refundedPoisha < entry.amountPoisha) ??
     null;
 
+  const seen =
+    audience === 'staff'
+      ? { state, etas, ticket: booking.id }
+      : {
+          ...patientViewOf(state, etas, ticketsIn(booking.sessionId)),
+          ticket: ticketFor(booking.sessionId, booking.id),
+        };
+
   return {
     booking,
-    state,
-    etas,
+    ...seen,
     payment:
       settled === null
         ? null

@@ -149,7 +149,7 @@ export async function openTrackingLink(token: string): Promise<TrackingLinkView>
   if (link === null) throw new AppError('GUEST_LINK_EXPIRED');
 
   return await asLink(link, async () => {
-    const view = await bookingService.bookingView(link.bookingId);
+    const view = await bookingService.bookingView(link.bookingId, 'patient');
 
     return {
       ...view,
