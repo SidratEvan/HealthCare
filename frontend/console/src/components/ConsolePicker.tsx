@@ -747,6 +747,9 @@ function Shell({
             <a href="/?login=1" className="underline" data-testid="picker-login-link">
               {t('loginDemoLink', locale)}
             </a>
+            <a href="/?apply=1" className="underline" data-testid="picker-apply-link">
+              {t('applyLink', locale)}
+            </a>
           </p>
         )}
 

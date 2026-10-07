@@ -26,6 +26,8 @@ export interface Workspace {
   readonly division: string;
   readonly district: string;
   readonly registrationNo: string | null;
+  /** True when the hospital applied for this workspace itself (`FR-ONB-10`). */
+  readonly selfRegistered?: boolean;
   /** A domain the hospital owns, recorded for its portal (`FR-BRD-07`). */
   readonly portalDomain: string | null;
   /** The modules it does not run (`FR-BRD-11`); empty when everything is on. */
@@ -54,8 +56,15 @@ export interface WorkspaceDoctor {
 export interface WorkspaceDetail extends Workspace {
   /** Where its portal is: under the platform's domain, and at its own. */
   readonly portal: { readonly platform: string | null; readonly own: string | null };
+  /** The facility's own phone, as it gave it; on the opened workspace only (`FR-ONB-08`). */
+  readonly phone?: string | null;
   readonly doctors: readonly WorkspaceDoctor[];
-  readonly administrators: readonly { readonly fullName: string; readonly email: string }[];
+  readonly administrators: readonly {
+    readonly fullName: string;
+    readonly email: string;
+    /** The mobile an applying administrator gave (`FR-ONB-09`). */
+    readonly phone?: string | null;
+  }[];
   /** What stops an approval now; empty when nothing does. */
   readonly missingForApproval: readonly string[];
 }

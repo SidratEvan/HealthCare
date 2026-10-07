@@ -19,6 +19,7 @@
 import { Router } from 'express';
 
 import {
+  applicationBody,
   emptyBody,
   lifecycleNoteBody,
   modulesBody,
@@ -31,6 +32,7 @@ import {
 import * as platform from '../controllers/platform.controller.js';
 import { requireAuth } from '../middleware/auth.js';
 import { idempotency } from '../middleware/idempotency.js';
+import { byIp, rateLimit } from '../middleware/rateLimit.js';
 import { requireNationalRole } from '../middleware/requireRole.js';
 import { validate } from '../middleware/validate.js';
 
@@ -38,6 +40,23 @@ export const platformRoutes: Router = Router();
 
 const admin = [requireAuth, requireNationalRole('platform_admin')];
 const write = idempotency({ required: true });
+
+/**
+ * `POST /hospital-applications` — a hospital applies by itself (`FR-ONB-09`).
+ *
+ * The one route here that is nobody's: no account exists yet. It makes a
+ * workspace that is setting up and its first administrator, and nothing
+ * public. Limited by address, a handful an hour: a hospital applies once.
+ */
+const applicationLimit = rateLimit({ limit: 5, windowSeconds: 3_600, keyFor: byIp });
+
+platformRoutes.post(
+  '/hospital-applications',
+  applicationLimit,
+  write,
+  validate({ body: applicationBody }),
+  platform.postApplication,
+);
 const byId = { params: settingsIdParams };
 
 platformRoutes.get('/platform/hospitals', ...admin, platform.listWorkspaces);

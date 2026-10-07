@@ -120,6 +120,7 @@ const NOBODYS: readonly string[] = [
   'POST /hospital/staff/:id/reset-password',
   'POST /hospital/staff/:id/reset-2fa',
   'POST /hospital/request-review',
+  'POST /hospital-applications',
   'GET /platform/hospitals',
   'GET /platform/hospitals/:id',
   'POST /platform/hospitals',

@@ -71,6 +71,12 @@ describe('suspending and closing (FR-ONB-06)', () => {
   it('closes from active or suspended, and nothing leaves closed', () => {
     expect(nextLifecycle('active', 'close')).toBe('closed');
     expect(nextLifecycle('suspended', 'close')).toBe('closed');
+    // One that never went live as well: an application is declined this way
+    // (`FR-ONB-10`).
+    expect(nextLifecycle('setup', 'close')).toBe('closed');
+    expect(nextLifecycle('ready_for_review', 'close')).toBe('closed');
+    expect(ORG_ACTIONS.close).toBe('platform');
+    expect(actionNeedsNote('close')).toBe(true);
     for (const action of Object.keys(ORG_ACTIONS) as OrgAction[]) {
       expect(nextLifecycle('closed', action), action).toBeNull();
     }
@@ -89,8 +95,8 @@ describe('every state and action is accounted for', () => {
 
   it('offers the platform exactly what is allowed from each state', () => {
     const offered: Record<OrgLifecycle, readonly OrgAction[]> = {
-      setup: [],
-      ready_for_review: ['approve', 'send_back'],
+      setup: ['close'],
+      ready_for_review: ['approve', 'send_back', 'close'],
       active: ['suspend', 'close'],
       suspended: ['reinstate', 'close'],
       closed: [],

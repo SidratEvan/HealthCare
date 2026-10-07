@@ -79,6 +79,8 @@ export interface WorkspaceRow {
   readonly division: string;
   readonly district: string;
   readonly registrationNo: string | null;
+  /** True when the hospital applied for this workspace itself (`FR-ONB-10`). */
+  readonly selfRegistered: boolean;
   /** A domain the hospital owns, recorded for its portal (`FR-BRD-07`); null for none. */
   readonly portalDomain: string | null;
   /** The modules it does not run (`FR-BRD-11`); empty when everything is on. */
@@ -101,6 +103,7 @@ interface WorkspaceColumns extends CountColumns {
   division: string;
   district: string;
   registration_no: string | null;
+  self_registered: boolean;
   portal_domain: string | null;
   modules_off: string[];
   lifecycle: OrgLifecycle;
@@ -121,6 +124,7 @@ function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
     division: row.division,
     district: row.district,
     registrationNo: row.registration_no,
+    selfRegistered: row.self_registered,
     portalDomain: row.portal_domain,
     modulesOff: row.modules_off,
     lifecycle: row.lifecycle,
@@ -135,7 +139,7 @@ function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
 
 const WORKSPACE_COLUMNS = sql`
   h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
-  h.registration_no, h.portal_domain,
+  h.registration_no, h.self_registered, h.portal_domain,
   coalesce((SELECT s.modules_off FROM hospital_settings s WHERE s.hospital_id = h.id),
            '{}'::text[]) AS modules_off,
   h.lifecycle::text AS lifecycle, h.is_live,
@@ -226,19 +230,37 @@ export async function doctorsOf(hospitalId: string): Promise<WorkspaceDoctor[]> 
   }));
 }
 
+/**
+ * The facility's own phone, as it gave it; null when it gave none.
+ *
+ * Read for one workspace when it is opened and not with the list: the list
+ * is organisations and counts (`FR-ONB-08`), and somebody rings a hospital
+ * only once they are looking at it (`FR-ONB-10`).
+ */
+export async function facilityPhoneOf(hospitalId: string): Promise<string | null> {
+  const result = await sql<{ phone: string | null }>`
+    SELECT phone FROM hospitals WHERE id = ${hospitalId} AND deleted_at IS NULL
+  `.execute(db);
+  return result.rows[0]?.phone ?? null;
+}
+
 /** The administrators a workspace has: who the platform would write to. */
 export async function administratorsOf(
   hospitalId: string,
-): Promise<{ readonly fullName: string; readonly email: string }[]> {
-  const result = await sql<{ full_name: string; email: string }>`
-    SELECT su.full_name, su.email
+): Promise<{ readonly fullName: string; readonly email: string; readonly phone: string | null }[]> {
+  const result = await sql<{ full_name: string; email: string; phone: string | null }>`
+    SELECT su.full_name, su.email, su.phone
       FROM staff_users su
       JOIN staff_roles sr ON sr.staff_user_id = su.id AND sr.hospital_id = su.hospital_id
      WHERE su.hospital_id = ${hospitalId} AND su.deleted_at IS NULL AND su.is_active
        AND sr.role = 'hospital_admin' AND sr.deleted_at IS NULL
      ORDER BY su.created_at
   `.execute(db);
-  return result.rows.map((row) => ({ fullName: row.full_name, email: row.email }));
+  return result.rows.map((row) => ({
+    fullName: row.full_name,
+    email: row.email,
+    phone: row.phone,
+  }));
 }
 
 /**

@@ -316,6 +316,15 @@ const schema = z.object({
   GUEST_BOOKINGS_PER_PHONE_PER_DAY: positiveInt.max(1_000).default(10),
 
   /**
+   * How many hospitals' own applications may wait unanswered at once
+   * (`FR-ONB-09`). The form is public, and a workspace is cheap to ask for:
+   * at this many still setting up, the form is refused until the platform
+   * has looked at what is waiting. It limits nothing a platform
+   * administrator creates.
+   */
+  ORG_APPLICATIONS_OPEN_MAX: positiveInt.max(10_000).default(200),
+
+  /**
    * How many reverse proxies sit in front of this process.
    *
    * Render terminates TLS and forwards the caller's address in

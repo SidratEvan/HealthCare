@@ -17,6 +17,11 @@
  * administrator asks, a platform administrator approves. Nothing in this file
  * lets one person do both, because the actions carry who may take them.
  *
+ * A workspace that never went live can be closed too, from `setup` or
+ * `ready_for_review` (not drawn above). That is how the platform declines an
+ * application (`FR-ONB-10`): a hospital may now make a workspace by itself,
+ * and one nobody can dismiss would wait in the list for ever.
+ *
  * ## Readiness is counted, never stored
  *
  * `FR-ONB-03`: the checklist is what exists — departments, doctors, schedules,
@@ -43,7 +48,12 @@ const TRANSITIONS: Readonly<Record<OrgAction, Partial<Record<OrgLifecycle, OrgLi
   send_back: { ready_for_review: 'setup' },
   suspend: { active: 'suspended' },
   reinstate: { suspended: 'active' },
-  close: { active: 'closed', suspended: 'closed' },
+  close: {
+    setup: 'closed',
+    ready_for_review: 'closed',
+    active: 'closed',
+    suspended: 'closed',
+  },
 };
 
 /** The state an action leads to from this one, or null when it is not allowed. */

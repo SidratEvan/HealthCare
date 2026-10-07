@@ -53,6 +53,7 @@ import {
   formatAge,
   formatDateTime,
   formatNumber,
+  formatPhone,
   localName,
   numeralsFor,
   t,
@@ -457,7 +458,16 @@ function WorkspaceList({
                   <span className="text-body-md font-semibold">
                     {localName(locale, item.nameBn, item.nameEn)}
                   </span>
-                  <StateChip lifecycle={item.lifecycle} />
+                  <span className="flex flex-wrap items-center gap-2">
+                    {/* `FR-ONB-10`: an application is a workspace like any
+                        other, and the list says that it was one. */}
+                    {item.selfRegistered === true ? (
+                      <span data-testid="platform-self-registered">
+                        <Chip tone="neutral">{t('platformSelfRegistered', locale)}</Chip>
+                      </span>
+                    ) : null}
+                    <StateChip lifecycle={item.lifecycle} />
+                  </span>
                 </span>
                 <span className="text-body-sm text-ink-secondary">
                   {[
@@ -746,10 +756,26 @@ function WorkspacePanel({
           <ul className="text-body-sm text-ink-secondary">
             {detail.administrators.map((admin) => (
               <li key={admin.email}>
-                {admin.fullName} · {admin.email}
+                {[
+                  admin.fullName,
+                  admin.email,
+                  admin.phone == null ? null : formatPhone(admin.phone),
+                ]
+                  .filter((part) => part !== null)
+                  .join(' · ')}
               </li>
             ))}
           </ul>
+          {/* What an applying hospital said of itself, for the person who
+              rings it before approving (`FR-ONB-09`, `FR-ONB-10`). */}
+          {detail.selfRegistered === true ? (
+            <p className="text-body-sm text-ink-secondary" data-testid="platform-applied">
+              {format('platformAppliedLine', locale, {
+                phone: detail.phone == null ? '—' : formatPhone(detail.phone),
+                registration: detail.registrationNo ?? '—',
+              })}
+            </p>
+          ) : null}
         </section>
 
         <Modules
@@ -773,14 +799,24 @@ function WorkspacePanel({
         <section className="flex flex-col gap-3 border-t border-line pt-4">
           <h3 className="text-body-md font-semibold">{t('platformActionsTitle', locale)}</h3>
 
-          {offered.length === 0 ? (
+          {/* While it is setting up the next move is the hospital's; the one
+              thing the platform can do is close a workspace that should not
+              go on, which is how an application is declined (`FR-ONB-10`). */}
+          {offered.length === 0 || detail.lifecycle === 'setup' ? (
             <p className="text-body-sm text-ink-secondary" data-testid="platform-no-actions">
               {t(
                 detail.lifecycle === 'closed' ? 'platformClosedLine' : 'platformNoActions',
                 locale,
               )}
             </p>
-          ) : (
+          ) : null}
+          {detail.lifecycle === 'setup' && offered.length > 0 ? (
+            <p className="text-body-sm text-ink-secondary" data-testid="platform-decline-line">
+              {t('platformDeclineLine', locale)}
+            </p>
+          ) : null}
+
+          {offered.length === 0 ? null : (
             <>
               {/* Why an approval would be refused, before it is asked for. */}
               {detail.actions.includes('approve') && detail.missingForApproval.length > 0 ? (
