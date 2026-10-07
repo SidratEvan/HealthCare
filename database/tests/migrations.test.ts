@@ -155,6 +155,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0052',
       // Plan H1: a message's tries and when it is next due (FR-NOT-06, FR-NOT-07).
       '0053',
+      // Plan H2: a message found by its aggregator's reference (FR-NOT-06).
+      '0054',
     ]);
   });
 

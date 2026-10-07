@@ -70,7 +70,7 @@ import {
   type TemplateKey,
 } from '@platform/i18n';
 
-import { segmentsFor } from '../adapters/sms.js';
+import { segmentsFor, sms } from '../adapters/sms.js';
 import * as notificationRepo from '../repositories/notification.repo.js';
 
 import { LINK_PARAMS, originOf, type LinkKind } from './messageLink.service.js';
@@ -973,6 +973,69 @@ export async function dispatch(batch: QueuedBatch): Promise<void> {
  */
 export async function settled(): Promise<void> {
   await sender.idle();
+}
+
+/** Whether a delivery receipt is the aggregator's. An adapter that cannot check one believes none. */
+export function verifyReceiptSignature(rawBody: string, signature: string | undefined): boolean {
+  return sms().verifyReceipt?.(rawBody, signature) ?? false;
+}
+
+/** The longest reason kept from a receipt. An aggregator's free text is not ours to trust for length. */
+const RECEIPT_REASON_MAX = 80;
+
+/**
+ * A delivery receipt (`POST /webhooks/sms-dlr`; `FR-NOT-06`, plan H2).
+ *
+ * The signature is checked before this is called; by here the receipt is
+ * known to be the aggregator's. What remains is to read it in the adapter's
+ * own vocabulary and record it, once: an aggregator sends the same receipt
+ * again when it is not answered, and a second one changes nothing.
+ *
+ * A message reported undelivered is `failed`, with the aggregator's reason
+ * after `undelivered:`. It is not tried again: the aggregator took it, was
+ * paid for it, and has said it will not arrive; a second SMS is a second
+ * charge for the same answer.
+ *
+ * @returns `recognised` false for a body the adapter cannot read; `applied`
+ *   true when a row changed.
+ */
+export async function applyDeliveryReceipt(
+  body: unknown,
+): Promise<{ readonly recognised: boolean; readonly applied: boolean }> {
+  const receipt = sms().readReceipt?.(body) ?? null;
+  if (receipt === null) return { recognised: false, applied: false };
+  if (receipt.outcome === 'pending') return { recognised: true, applied: false };
+
+  const reason = (receipt.reason ?? 'no_reason_given')
+    .replace(/[^\x20-\x7E]/g, '')
+    .slice(0, RECEIPT_REASON_MAX);
+  const applied = await notificationRepo.applyReceipt(
+    receipt.providerRef,
+    receipt.outcome,
+    `undelivered:${reason === '' ? 'no_reason_given' : reason}`,
+  );
+  return { recognised: true, applied };
+}
+
+/**
+ * A hospital's SMS this month, for its own administrator (`FR-NOT-06`: "budget
+ * caps and delivery reporting").
+ *
+ * `reportsDelivery` says whether "delivered" means anything here: with a
+ * provider that sends no receipts it is unknown, not nought, and the screen
+ * says that and shows no count (`PRD.md` §3.2).
+ */
+export async function monthOfMessages(hospitalId: string): Promise<
+  notificationRepo.MonthOfMessages & {
+    readonly reportsDelivery: boolean;
+    readonly asOf: string;
+  }
+> {
+  return {
+    ...(await notificationRepo.monthOfMessages(hospitalId)),
+    reportsDelivery: sms().reportsDelivery === true,
+    asOf: new Date().toISOString(),
+  };
 }
 
 /** How long a message's words are kept (DATABASE.md §8). */

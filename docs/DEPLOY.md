@@ -408,6 +408,59 @@ On a deployment that holds a single hospital it is still two accounts, by design
 
 **A hospital can also apply by itself (plan D1, `FR-ONB-09`).** The console has a public form at `/?apply=1`, linked from the sign-in screen. It makes a workspace that is setting up and its first administrator, with a password of their own, and nothing public: the hospital still goes live only by the review above. On `S-B-12` such a workspace carries **নিজে আবেদন করেছে**, with the phone and registration number it gave, so that somebody can ring it; one that should not go on is closed there with a reason. The form is limited to five an hour per address, and `ORG_APPLICATIONS_OPEN_MAX` (200) is how many applications may wait unanswered on the whole deployment before the form says it is paused. **Nothing switches the form off.** The shared deployment is what V1 is built for (`FR-SEC-07`); a server that holds one hospital only still offers the form on its sign-in screen, and what it would make is a workspace nobody approves.
 
+### An SMS aggregator (when there is an account; plan H2)
+
+Until an aggregator is arranged, `SMS_PROVIDER=log` stays: messages are
+recorded and marked sent, and nothing leaves the server. **None of what
+follows can be done before a hospital agreement and an aggregator account
+exist** (`CLAUDE.md` §1.1). It is written down so that the day there is one,
+switching it on is these settings and a restart.
+
+What the aggregator has to give you, and where each goes in `.env`:
+
+| Setting | What it is |
+| --- | --- |
+| `SMS_PROVIDER=http` | Send through an aggregator reached over HTTPS |
+| `SMS_API_URL` | The address the aggregator takes a message at |
+| `SMS_API_KEY` | The key it issued. Sent as `Authorization: Bearer <key>` |
+| `SMS_SENDER_ID` | The sender name or number it registered for you. Masking and the regulator's approval of it are arranged with the aggregator |
+| `SMS_DLR_SECRET` | The secret it signs delivery receipts with. Long and random. Without it every receipt is refused |
+
+The server refuses to start with `SMS_PROVIDER=http` and any of the other four
+missing.
+
+**What this server sends** for each message, as JSON:
+`{ "to": "+8801…", "text": "…", "senderId": "…", "reference": "<our id>" }`,
+and it expects back, with a 2xx, `{ "id": "<the aggregator's id>" }`.
+
+**Where the aggregator sends delivery receipts:**
+`POST https://<your API address>/api/v1/webhooks/sms-dlr`, as JSON
+`{ "id": "<the aggregator's id>", "status": "…", "reason": "…" }`, with the
+header `x-signature` holding the HMAC-SHA256 of the request's body, in hex,
+under `SMS_DLR_SECRET`. A status of `delivered`, `delivrd` or `success` marks
+the message delivered; `failed`, `undelivered`, `undeliv`, `rejected` or
+`expired` marks it failed, with the reason; anything else is taken as not
+final and changes nothing.
+
+**An aggregator will not speak exactly this.** Each names its fields its own
+way, and the one above is what the adapter was built and tested against, not
+any company's API. When the aggregator is chosen, compare its documents with
+the two shapes above. If they differ, the difference is one file beside
+`backend/api/src/adapters/smsHttp.ts` with the same four members (`send`,
+`reportsDelivery`, `verifyReceipt`, `readReceipt`); nothing that calls it
+changes. Ask for that change before going live, not after.
+
+**After switching it on:** book one serial with a number you hold, and check
+that the SMS arrives, that its row in the hospital's settings (*এই মাসের
+এসএমএস*) counts it as sent, and that within a minute or two it counts it as
+having reached the phone. If the second never happens, the receipts are not
+arriving or are failing their signature: the API's log says
+`delivery receipt signature rejected` for the second.
+
+A message that fails is tried again five times over about twenty minutes and
+then marked failed; the platform's screen shows which hospital has failed
+messages (`S-B-12`, *অবস্থা*).
+
 ### Import suggestions from a model (optional, off by default)
 
 The import maps a hospital's own export with rules and the administrator's choices, and needs nothing else. A model can additionally suggest columns for the headings the rules do not know (`FR-IMP-16`). It is switched on in `deploy/.env`:

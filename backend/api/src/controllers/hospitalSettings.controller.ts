@@ -30,6 +30,7 @@ import {
 
 import { authRequired, forbiddenScope, notFound } from '../errors/AppError.js';
 import * as settings from '../services/hospitalSettings.service.js';
+import * as notifications from '../services/notification.service.js';
 
 import type { Request, Response } from 'express';
 
@@ -55,6 +56,11 @@ function done(res: Response, data: unknown = { saved: true }): void {
 
 export async function getSetup(req: Request, res: Response): Promise<void> {
   done(res, await settings.setup(actorOf(req).hospitalId));
+}
+
+/** `GET /hospital/messages` — this month's SMS by what became of them (`FR-NOT-06`). */
+export async function getMessages(req: Request, res: Response): Promise<void> {
+  done(res, await notifications.monthOfMessages(actorOf(req).hospitalId));
 }
 
 export async function patchProfile(req: Request, res: Response): Promise<void> {

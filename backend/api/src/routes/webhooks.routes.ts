@@ -11,11 +11,12 @@
  * mounted here — `express.json()` runs first and consumes the stream, so a
  * route-level `text()` would find nothing left to read.
  *
- * ## `/webhooks/sms-dlr` is not here
+ * ## `/webhooks/sms-dlr`
  *
- * BACKEND.md §7.7 lists it beside these two. It belongs to notifications — a
- * delivery receipt updates `notifications.state` — and `SMS_PROVIDER=log` has
- * no receipts to send. It arrives with a real aggregator.
+ * An SMS aggregator's delivery receipts (`FR-NOT-06`, plan H2). The same
+ * arrangement: no token, a signature over the bytes as sent, checked by the
+ * SMS adapter. With `SMS_PROVIDER=log`, which sends no receipts and can check
+ * none, every caller is refused.
  */
 
 import { Router } from 'express';
@@ -26,3 +27,4 @@ export const webhookRoutes: Router = Router();
 
 webhookRoutes.post('/webhooks/bkash', webhooks.callback('bkash'));
 webhookRoutes.post('/webhooks/nagad', webhooks.callback('nagad'));
+webhookRoutes.post('/webhooks/sms-dlr', webhooks.smsDelivery);

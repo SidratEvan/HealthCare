@@ -257,6 +257,7 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'POST /demo/token': { by: 'demo' },
   'POST /webhooks/bkash': { by: 'provider' },
   'POST /webhooks/nagad': { by: 'provider' },
+  'POST /webhooks/sms-dlr': { by: 'provider' },
 
   // --- a patient's own ----------------------------------------------------------
   'GET /me/profiles': { by: 'patient' },
@@ -588,6 +589,7 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'GET /admin/dashboard': { by: 'principal', own: () => ({ path: '/admin/dashboard' }) },
   'GET /admin/export': { by: 'principal' },
   'GET /hospital/setup': { by: 'principal', own: () => ({ path: '/hospital/setup' }) },
+  'GET /hospital/messages': { by: 'principal', own: () => ({ path: '/hospital/messages' }) },
   'PATCH /hospital/profile': { by: 'principal' },
   'PATCH /hospital/rules': { by: 'principal' },
   // Its public face (`FR-BRD-06`): its own, from the principal.

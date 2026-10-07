@@ -271,6 +271,26 @@ export async function loadOwnLogo(): Promise<string | null> {
   }
 }
 
+/** A hospital's SMS this month, by what became of them (`FR-NOT-06`). */
+export interface MonthOfMessages {
+  readonly sent: number;
+  readonly delivered: number;
+  readonly failed: number;
+  readonly held: number;
+  readonly waiting: number;
+  /** False where the provider reports no delivery: "delivered" is then unknown, not nought. */
+  readonly reportsDelivery: boolean;
+  readonly asOf: string;
+}
+
+export async function loadMonthOfMessages(): Promise<MonthOfMessages | 'offline' | 'error'> {
+  try {
+    return await client().get<MonthOfMessages>('/hospital/messages');
+  } catch (error: unknown) {
+    return error instanceof NetworkError ? 'offline' : 'error';
+  }
+}
+
 /** Loading: `'offline'` when the request never reached the server. */
 export async function loadSetup(): Promise<SetupSnapshot | 'offline' | 'error'> {
   try {

@@ -249,9 +249,14 @@ const schema = z.object({
   OTP_MAX_PER_HOUR: positiveInt.max(100).default(5),
 
   // --- SMS ----------------------------------------------------------------
-  SMS_PROVIDER: z.enum(['local', 'log']).default('log'),
+  // `http` is an aggregator reached over HTTPS (`adapters/smsHttp.ts`, plan
+  // H2): the three below it are then required, and so is the secret its
+  // delivery receipts are signed with. `local` still refuses everything.
+  SMS_PROVIDER: z.enum(['http', 'local', 'log']).default('log'),
+  SMS_API_URL: z.string().default(''),
   SMS_API_KEY: z.string().default(''),
   SMS_SENDER_ID: z.string().default(''),
+  SMS_DLR_SECRET: z.string().default(''),
   SMS_MONTHLY_CAP: positiveInt.default(20_000),
 
   // --- Web Push (VAPID) ---------------------------------------------------
@@ -435,6 +440,17 @@ const PRODUCTION_REQUIREMENTS: readonly {
     key: 'SMS_SENDER_ID',
     because: 'the aggregator rejects messages without a registered sender',
     unless: (env) => env.SMS_PROVIDER === 'log',
+  },
+  {
+    key: 'SMS_API_URL',
+    because: 'SMS_PROVIDER=http sends to this address, and without it no message leaves',
+    unless: (env) => env.SMS_PROVIDER !== 'http',
+  },
+  {
+    key: 'SMS_DLR_SECRET',
+    because:
+      'delivery receipts are believed only when signed with it, and without it every one is refused (FR-NOT-06)',
+    unless: (env) => env.SMS_PROVIDER !== 'http',
   },
   {
     key: 'TOTP_ENCRYPTION_KEY',

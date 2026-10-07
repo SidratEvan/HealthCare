@@ -2337,6 +2337,30 @@ export const CONSOLE = {
     en: 'A no-show is marked once whichever of the two takes longer has passed.',
   },
   settingsSmsBudget: { bn: 'মাসে সর্বোচ্চ এসএমএস', en: 'SMS a month, at most' },
+  // This month's SMS by what became of them (`FR-NOT-06`, `TXT-B11-SMS`).
+  settingsSmsMonthHeading: { bn: 'এই মাসের এসএমএস', en: 'This month’s SMS' },
+  settingsSmsSent: { bn: 'পাঠানো হয়েছে', en: 'Sent' },
+  settingsSmsOfCap: { bn: '{cap}-এর মধ্যে {sent}', en: '{sent} of {cap}' },
+  settingsSmsDelivered: { bn: 'রোগীর ফোনে পৌঁছেছে', en: 'Reached the phone' },
+  settingsSmsDeliveryUnknown: {
+    bn: 'এই এসএমএস সেবা পৌঁছানোর খবর দেয় না',
+    en: 'This SMS service does not report delivery',
+  },
+  settingsSmsFailed: { bn: 'পাঠানো যায়নি', en: 'Failed' },
+  settingsSmsHeld: { bn: 'আটকে রাখা হয়েছে', en: 'Held back' },
+  settingsSmsWaiting: { bn: 'এখনো অপেক্ষায়', en: 'Still waiting' },
+  settingsSmsMonthHelper: {
+    bn: 'আটকে রাখা মানে ইচ্ছা করে পাঠানো হয়নি: রোগীর নম্বর নেই, বা মাসিক সীমা পেরিয়েছে। অপেক্ষায় মানে আবার চেষ্টা চলছে, বা সকালে পাঠানোর জন্য রাখা আছে।',
+    en: 'Held back means not sent on purpose: the patient has no number, or the monthly cap was reached. Still waiting means it is being tried again, or is kept for the morning.',
+  },
+  settingsSmsMonthFailed: {
+    bn: 'এই মাসের এসএমএসের হিসাব আনা যায়নি।',
+    en: 'This month’s SMS figures could not be loaded.',
+  },
+  settingsSmsMonthOffline: {
+    bn: 'সংযোগ নেই, তাই এই মাসের এসএমএসের হিসাব আনা যায়নি।',
+    en: 'You are offline, so this month’s SMS figures could not be loaded.',
+  },
   settingsSaveRules: { bn: 'নিয়ম সংরক্ষণ করুন', en: 'Save rules' },
   settingsDepartmentsEmpty: {
     bn: 'এখনো কোনো বিভাগ নেই। প্রথম বিভাগটি যোগ করুন।',

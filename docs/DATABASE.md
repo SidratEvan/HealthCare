@@ -513,7 +513,7 @@ A hospital's confirmed column mapping for one export format, so the same export 
 
 #### `notifications`
 `id`, `recipient_patient_id`/`guest_id`/`user_id`, `phone`, `channel` notif_channel, `template_key`, `params` jsonb, `state` notif_state, `provider_ref`, `cost_poisha`, `queued_at`, `sent_at`, `delivered_at`, `error`, and from 0053 `attempts` smallint NOT NULL DEFAULT 0 (how many times sending was tried; raised by the claim, so a try that died is counted) and `next_attempt_at` timestamptz NOT NULL DEFAULT now() (when a `queued` row is due: now, the next retry, the end of a claim, or seven in the morning for one held for quiet hours; on any other row, when it was last due).
-**IX:** `(next_attempt_at) WHERE state = 'queued'` (`notifications_due_idx`, 0053: what is due, oldest first; it replaced `(queued_at)` on the same rows), `(recipient_patient_id)`, `(queued_at) WHERE params ? 'body'` (the 90-day purge, §8)
+**IX:** `(next_attempt_at) WHERE state = 'queued'` (`notifications_due_idx`, 0053: what is due, oldest first; it replaced `(queued_at)` on the same rows), `(provider_ref) WHERE provider_ref IS NOT NULL` (`notifications_provider_ref_idx`, 0054: a delivery receipt names a message by the aggregator's reference and by nothing else), `(recipient_patient_id)`, `(queued_at) WHERE params ? 'body'` (the 90-day purge, §8)
 
 `params` holds what filled the template, the id of what the message was about (`bookingId`, `bedRequestId`, `emergencyCaseId`, `testOrderId`) and, under `body`, the text as it is kept. **A link is never stored** (`notifications_no_stored_link`, 0035): a tracking or status link is a credential (`FR-GST-05`) whose hash alone is kept, in `guest_links`. The kept text has `{link}` where the link went; the message that was sent had the link. **What the link was for is kept** (plan H1): `linkKind` (`booking`, `standby`, `bed_request`, `emergency_case`, `records`), `linkBase` (the origin the link was in: a hospital's portal or the network's app), and for a stateless token whose capability it is (`linkSubject`) and which standby place (`standbyId`). Ids and an origin, none of which opens anything; from them a fresh link is issued for a message sent from its row (`BACKEND.md` §8). **A row in `queued`** is one the sender has still to send: `error` then says why it has not gone yet (`quiet_hours`, or what a gateway last said), and `failed` is kept for one given up on.
 
@@ -793,6 +793,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0053_notification_sending.sql  -- plan H1: notifications.attempts and next_attempt_at, the due
                                    -- index, and fn_workspace_health's "still waiting" (§2.7,
                                    -- FR-NOT-06, FR-NOT-07)
+    0054_notification_receipts.sql -- plan H2: notifications found by provider_ref, for a
+                                   -- delivery receipt (§2.7, FR-NOT-06)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

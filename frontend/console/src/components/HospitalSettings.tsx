@@ -80,10 +80,12 @@ import {
 } from '@/components/SettingsCorrections';
 import {
   expandBedLabels,
+  loadMonthOfMessages,
   loadSetup,
   settingsApi,
   signedInStaffId,
   takaToPoisha,
+  type MonthOfMessages,
   type SaveFailure,
   type Saved,
   type SettingsDoctor,
@@ -800,7 +802,153 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
           {t('settingsSaveRules', locale)}
         </SaveButton>
       </form>
+
+      {/* What became of this month's SMS, beside the cap that limits them (`FR-NOT-06`). */}
+      <MonthOfSms cap={rules.smsBudgetMonthly} offline={offline} />
     </>
+  );
+}
+
+type MonthState =
+  | { readonly state: 'loading' }
+  | { readonly state: 'failed' }
+  | { readonly state: 'ready'; readonly month: MonthOfMessages };
+
+/**
+ * This month's SMS by what became of them (`FR-NOT-06`: "budget caps and
+ * delivery reporting"; `TXT-B11-SMS`).
+ *
+ * Under the cap, because the first line is what the cap is held against.
+ * Plain lines, not tiles. Where the provider reports no delivery the line
+ * says so and shows no number: nought would read as "none arrived", and
+ * nobody knows that (`PRD.md` §3.2).
+ *
+ * The four states (`GR-03`): the shape of the lines while it loads; a
+ * sentence and a retry when it could not be read; offline, what was last
+ * read stays with its age, and a first read that never arrived says so.
+ */
+function MonthOfSms({
+  cap,
+  offline,
+}: {
+  readonly cap: number | null;
+  readonly offline: boolean;
+}): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const [view, setView] = useState<MonthState>({ state: 'loading' });
+  const [now, setNow] = useState(() => new Date());
+
+  const read = useCallback(async (): Promise<void> => {
+    const loaded = await loadMonthOfMessages();
+    setNow(new Date());
+    // Offline with something already on screen: it stays, and its age says so.
+    setView((held) =>
+      typeof loaded === 'string'
+        ? held.state === 'ready'
+          ? held
+          : { state: 'failed' }
+        : { state: 'ready', month: loaded },
+    );
+  }, []);
+
+  useEffect(() => {
+    void read();
+  }, [read]);
+
+  useEffect(() => {
+    const timer = globalThis.setInterval(() => {
+      setNow(new Date());
+    }, 30_000);
+    return () => {
+      globalThis.clearInterval(timer);
+    };
+  }, []);
+
+  const num = (value: number): string => formatNumber(value, numerals);
+
+  return (
+    <section className="flex flex-col gap-3" data-testid="settings-sms-month">
+      <h2 className="text-title-md">{t('settingsSmsMonthHeading', locale)}</h2>
+
+      {view.state === 'loading' ? (
+        <div className="flex flex-col gap-2" aria-busy="true">
+          <div className="h-5 w-64 rounded-sm bg-sunken" />
+          <div className="h-5 w-56 rounded-sm bg-sunken" />
+          <div className="h-5 w-48 rounded-sm bg-sunken" />
+        </div>
+      ) : null}
+
+      {view.state === 'failed' ? (
+        <div role="alert" className="flex flex-col gap-2">
+          <p className="text-body-sm">
+            {t(offline ? 'settingsSmsMonthOffline' : 'settingsSmsMonthFailed', locale)}
+          </p>
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setView({ state: 'loading' });
+                void read();
+              }}
+            >
+              {t('retry', locale)}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {view.state === 'ready' ? (
+        <>
+          <dl className="grid w-fit grid-cols-2 gap-x-6 gap-y-1 text-body-sm">
+            <dt className="text-ink-secondary">{t('settingsSmsSent', locale)}</dt>
+            <dd className="text-right tabular-nums" data-testid="settings-sms-sent">
+              {cap === null
+                ? num(view.month.sent)
+                : format('settingsSmsOfCap', locale, {
+                    sent: num(view.month.sent),
+                    cap: num(cap),
+                  })}
+            </dd>
+            <dt className="text-ink-secondary">{t('settingsSmsDelivered', locale)}</dt>
+            <dd
+              className="text-right tabular-nums"
+              data-testid="settings-sms-delivered"
+              data-known={view.month.reportsDelivery ? 'true' : 'false'}
+            >
+              {view.month.reportsDelivery
+                ? num(view.month.delivered)
+                : t('settingsSmsDeliveryUnknown', locale)}
+            </dd>
+            <dt className="text-ink-secondary">{t('settingsSmsFailed', locale)}</dt>
+            <dd className="text-right tabular-nums" data-testid="settings-sms-failed">
+              {num(view.month.failed)}
+            </dd>
+            <dt className="text-ink-secondary">{t('settingsSmsHeld', locale)}</dt>
+            <dd className="text-right tabular-nums" data-testid="settings-sms-held">
+              {num(view.month.held)}
+            </dd>
+            <dt className="text-ink-secondary">{t('settingsSmsWaiting', locale)}</dt>
+            <dd className="text-right tabular-nums" data-testid="settings-sms-waiting">
+              {num(view.month.waiting)}
+            </dd>
+          </dl>
+          <p className="text-caption text-ink-muted">{t('settingsSmsMonthHelper', locale)}</p>
+          <FreshnessLine
+            asOf={new Date(view.month.asOf)}
+            now={now}
+            labels={{
+              justNow: t('updatedJustNow', locale),
+              ago: t('updatedAgo', locale),
+              never: t('adminNeverRecorded', locale),
+              stale: t('staleWarning', locale),
+            }}
+            formatMinutes={(value) => formatAge(value, locale, numerals)}
+          />
+        </>
+      ) : null}
+    </section>
   );
 }
 
