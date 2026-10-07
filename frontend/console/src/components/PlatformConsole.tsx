@@ -34,11 +34,13 @@
  * off with the reason.
  */
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
 import {
+  AGREEMENT_STATES,
   FACILITY_KINDS,
   actionNeedsNote,
+  type AgreementState,
   type FacilityKind,
   type OrgLifecycle,
   HOSPITAL_MODULES,
@@ -92,6 +94,14 @@ const STATE_NAME: Readonly<Record<OrgLifecycle, ConsoleKey>> = {
   active: 'platformStateActive',
   suspended: 'platformStateSuspended',
   closed: 'platformStateClosed',
+};
+
+/** The agreement's state as a word (`FR-SUP-04`). */
+const AGREEMENT_NAME: Readonly<Record<AgreementState, ConsoleKey>> = {
+  trial: 'agreementTrial',
+  active: 'agreementActive',
+  overdue: 'agreementOverdue',
+  ended: 'agreementEnded',
 };
 
 const STATE_TONE: Readonly<Record<OrgLifecycle, 'neutral' | 'positive' | 'caution'>> = {
@@ -469,6 +479,21 @@ function WorkspaceList({
                         <Chip tone="neutral">{t('platformSelfRegistered', locale)}</Chip>
                       </span>
                     ) : null}
+                    {/* An agreement somebody has to act on is said in the
+                        list; trial and active are the ordinary states and
+                        are read on the workspace (`FR-SUP-04`). */}
+                    {item.agreement.state === 'overdue' || item.agreement.state === 'ended' ? (
+                      <span data-testid="platform-row-agreement">
+                        <Chip tone="caution">
+                          {t(
+                            item.agreement.state === 'overdue'
+                              ? 'platformAgreementChipOverdue'
+                              : 'platformAgreementChipEnded',
+                            locale,
+                          )}
+                        </Chip>
+                      </span>
+                    ) : null}
                     <StateChip lifecycle={item.lifecycle} />
                   </span>
                 </span>
@@ -783,6 +808,15 @@ function WorkspacePanel({
           ) : null}
         </section>
 
+        <Agreement
+          detail={detail}
+          online={online}
+          busy={busy === 'agreement'}
+          onSet={(state, note) => {
+            settle('agreement', platformApi.setAgreement(token, hospitalId, state, note));
+          }}
+        />
+
         <Modules
           detail={detail}
           online={online}
@@ -906,6 +940,166 @@ function WorkspacePanel({
         </section>
       </div>
     </Card>
+  );
+}
+
+/**
+ * Where a hospital's agreement stands, and what it has used (`FR-SUP-04`, the
+ * state half; `FRM-B12-AGREEMENT`, `TXT-B12-USAGE`).
+ *
+ * One of four words and a note for whoever reads it next. It is a record:
+ * saving it switches nothing at the hospital, and the line under the title
+ * says so, because the person here should not think "ended" unlisted anybody.
+ * Taking a hospital out of the network is suspending it, below. No plan and
+ * no amount has a field, here or on the server.
+ *
+ * The usage is three counts with when they were counted, set as plain lines
+ * and not as tiles: they are for reading beside the agreement, not a
+ * dashboard. Counts of activity, never a row of it (`FR-ONB-08`).
+ */
+function Agreement({
+  detail,
+  online,
+  busy,
+  onSet,
+}: {
+  readonly detail: WorkspaceDetail;
+  readonly online: boolean;
+  readonly busy: boolean;
+  readonly onSet: (state: AgreementState, note: string | null) => void;
+}): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const now = useNow();
+  const [state, setState] = useState<AgreementState>(detail.agreement.state);
+  const [note, setNote] = useState(detail.agreement.note ?? '');
+
+  // What is recorded changed under the form: show what is true now.
+  useEffect(() => {
+    setState(detail.agreement.state);
+    setNote(detail.agreement.note ?? '');
+  }, [detail.agreement.state, detail.agreement.note]);
+
+  const typed = note.trim();
+  const same = state === detail.agreement.state && typed === (detail.agreement.note ?? '');
+  const reason = !online
+    ? t('platformOffline', locale)
+    : typed !== '' && typed.length < 3
+      ? t('platformAgreementNoteShort', locale)
+      : same
+        ? t('platformAgreementSame', locale)
+        : null;
+
+  const days = formatNumber(30, numerals);
+  const usage: readonly { readonly key: string; readonly label: string; readonly count: number }[] =
+    [
+      {
+        key: 'serials',
+        label: format('platformUsageSerials', locale, { days }),
+        count: detail.usage.serialsTaken30d,
+      },
+      {
+        key: 'chambers',
+        label: format('platformUsageChambers', locale, { days }),
+        count: detail.usage.chambersHeld30d,
+      },
+      {
+        key: 'messages',
+        label: t('platformUsageMessages', locale),
+        count: detail.usage.messagesSentThisMonth,
+      },
+    ];
+
+  return (
+    <section
+      className="flex flex-col gap-3 border-t border-line pt-4"
+      data-testid="platform-agreement"
+      data-agreement={detail.agreement.state}
+    >
+      <h3 className="text-body-md font-semibold">{t('platformAgreementTitle', locale)}</h3>
+      <p className="text-body-sm text-ink-secondary">{t('platformAgreementHelper', locale)}</p>
+      <p className="text-body-sm text-ink-secondary" data-testid="platform-agreement-recorded">
+        {detail.agreement.changedAt === null
+          ? t('platformAgreementNeverSet', locale)
+          : format('platformAgreementSetAt', locale, {
+              state: t(AGREEMENT_NAME[detail.agreement.state], locale),
+              when: formatDateTime(detail.agreement.changedAt, numerals),
+            })}
+      </p>
+
+      <form
+        className="flex flex-col gap-3"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (reason === null && !busy) onSet(state, typed === '' ? null : typed);
+        }}
+      >
+        <div className="flex flex-wrap gap-2">
+          {AGREEMENT_STATES.map((option) => (
+            <FilterChip
+              key={option}
+              selected={state === option}
+              data-testid={`platform-agreement-${option}`}
+              onToggle={() => {
+                setState(option);
+              }}
+            >
+              {t(AGREEMENT_NAME[option], locale)}
+            </FilterChip>
+          ))}
+        </div>
+        <Input
+          label={t('platformAgreementNoteLabel', locale)}
+          helper={t('platformAgreementNoteHelper', locale)}
+          density="console"
+          value={note}
+          maxLength={500}
+          data-testid="platform-agreement-note"
+          onChange={(event) => {
+            setNote(event.target.value);
+          }}
+        />
+        <div>
+          <GuardedButton
+            type="submit"
+            size="sm"
+            loading={busy}
+            reason={reason}
+            data-testid="platform-agreement-save"
+          >
+            {t('platformAgreementSave', locale)}
+          </GuardedButton>
+        </div>
+      </form>
+
+      <div className="flex flex-col gap-2" data-testid="platform-usage">
+        <h4 className="text-body-sm font-semibold">{t('platformUsageTitle', locale)}</h4>
+        {/* A count beside its label, not across the panel from it. */}
+        <dl className="grid w-fit grid-cols-2 gap-x-6 gap-y-1 text-body-sm">
+          {usage.map((line) => (
+            <Fragment key={line.key}>
+              <dt className="text-ink-secondary">{line.label}</dt>
+              <dd className="text-right tabular-nums" data-testid={`platform-usage-${line.key}`}>
+                {formatNumber(line.count, numerals)}
+              </dd>
+            </Fragment>
+          ))}
+        </dl>
+        <p className="text-caption text-ink-muted">{t('platformUsageHelper', locale)}</p>
+        <FreshnessLine
+          asOf={new Date(detail.usage.asOf)}
+          now={now}
+          labels={{
+            justNow: t('updatedJustNow', locale),
+            ago: t('updatedAgo', locale),
+            never: t('platformListAge', locale),
+            stale: t('staleWarning', locale),
+          }}
+          formatMinutes={(value) => formatAge(value, locale, numerals)}
+        />
+      </div>
+    </section>
   );
 }
 

@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 
-import { BED_KINDS, CAPABILITY_KINDS, FACILITY_KINDS } from '../types/enums.js';
+import { AGREEMENT_STATES, BED_KINDS, CAPABILITY_KINDS, FACILITY_KINDS } from '../types/enums.js';
 
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(120);
@@ -292,6 +292,17 @@ export type WorkspaceBody = z.infer<typeof workspaceBody>;
 export const lifecycleNoteBody = z.strictObject({
   note: z.string().trim().min(3).max(500).optional(),
 });
+
+/**
+ * `PUT /platform/hospitals/:id/agreement` (`FR-SUP-04`, plan G1): where the
+ * hospital's agreement stands, and a note for whoever reads it next. No
+ * amount and no plan name has a field here, on purpose.
+ */
+export const agreementBody = z.strictObject({
+  state: z.enum(AGREEMENT_STATES),
+  note: z.string().trim().min(3).max(500).nullable().optional(),
+});
+export type AgreementBody = z.infer<typeof agreementBody>;
 
 export const platformDoctorParams = z.object({ id: uuid, doctorId: uuid });
 

@@ -139,6 +139,29 @@ const UNPUBLISHED: Readonly<Record<string, readonly string[]>> = {
   'buriganga-clinic': ['serials'],
 };
 
+/**
+ * Where each facility's agreement stands (`FR-SUP-04`, migration 0051).
+ *
+ * A record on the platform's screen and nothing else: it switches no module
+ * and unlists nobody. Most are active, which is the ordinary state; the
+ * centre is still in its trial, and the clinic is overdue with a note, so the
+ * demonstration shows the two states somebody at `S-B-12` has to act on. No
+ * plan and no amount, here or anywhere (`CLAUDE.md` §1.2).
+ */
+const AGREEMENTS: Readonly<
+  Record<string, { readonly state: string; readonly note: string | null; readonly daysAgo: number }>
+> = {
+  'shapla-general': { state: 'active', note: null, daysAgo: 12 },
+  'padma-specialised': { state: 'active', note: null, daysAgo: 12 },
+  'karnaphuli-general': { state: 'active', note: null, daysAgo: 12 },
+  'jamuna-medical-college': { state: 'active', note: null, daysAgo: 12 },
+  'buriganga-clinic': {
+    state: 'overdue',
+    note: 'নবায়নের কাগজ এখনো আসেনি, প্রশাসককে ফোন করা হয়েছে (ডেমো)',
+    daysAgo: 3,
+  },
+};
+
 const REFUND_POLICIES: Readonly<
   Record<
     string,
@@ -239,6 +262,14 @@ export const seed01Hospitals: SeedModule = {
       facility.lng,
       facility.phone,
       facility.emergencyPhone,
+      // Not named above: still in its trial, set by nobody yet.
+      AGREEMENTS[facility.slug]?.state ?? 'trial',
+      AGREEMENTS[facility.slug]?.note ?? null,
+      AGREEMENTS[facility.slug] === undefined
+        ? null
+        : new Date(
+            Date.parse(now) - (AGREEMENTS[facility.slug]?.daysAgo ?? 0) * 86_400_000,
+          ).toISOString(),
     ]);
 
     await insertRows(
@@ -261,6 +292,9 @@ export const seed01Hospitals: SeedModule = {
           'lng',
           'phone',
           'emergency_phone',
+          'agreement_state',
+          'agreement_note',
+          'agreement_changed_at',
           'is_live',
           'lifecycle',
           'onboarded_at',

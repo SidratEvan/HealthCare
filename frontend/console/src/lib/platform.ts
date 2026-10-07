@@ -8,6 +8,7 @@
 
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import type {
+  AgreementState,
   ChecklistItem,
   FacilityKind,
   OrgAction,
@@ -42,6 +43,15 @@ export interface Workspace {
   readonly checklist: readonly ChecklistItem[];
   /** What the platform may do from this state. */
   readonly actions: readonly OrgAction[];
+  /**
+   * Where its agreement stands, as the platform last recorded it
+   * (`FR-SUP-04`). A word, a note and when: no plan, no amount.
+   */
+  readonly agreement: {
+    readonly state: AgreementState;
+    readonly note: string | null;
+    readonly changedAt: string | null;
+  };
 }
 
 export interface WorkspaceDoctor {
@@ -67,6 +77,13 @@ export interface WorkspaceDetail extends Workspace {
   }[];
   /** What stops an approval now; empty when nothing does. */
   readonly missingForApproval: readonly string[];
+  /** What the hospital has used: three counts, and when they were counted (`FR-SUP-04`). */
+  readonly usage: {
+    readonly serialsTaken30d: number;
+    readonly chambersHeld30d: number;
+    readonly messagesSentThisMonth: number;
+    readonly asOf: string;
+  };
 }
 
 export interface NewWorkspace {
@@ -190,6 +207,22 @@ export const platformApi = {
         await client(token).put<WorkspaceDetail>(
           `/platform/hospitals/${hospitalId}/modules`,
           { off },
+          crypto.randomUUID(),
+        ),
+    );
+  },
+  /** Records where the hospital's agreement stands, with a note or none (`FR-SUP-04`). */
+  async setAgreement(
+    token: string,
+    hospitalId: string,
+    state: AgreementState,
+    note: string | null,
+  ): Promise<PlatformResult<WorkspaceDetail>> {
+    return await attempt(
+      async () =>
+        await client(token).put<WorkspaceDetail>(
+          `/platform/hospitals/${hospitalId}/agreement`,
+          { state, note },
           crypto.randomUUID(),
         ),
     );

@@ -308,6 +308,15 @@ export const ORG_LIFECYCLES = [
 ] as const;
 export type OrgLifecycle = (typeof ORG_LIFECYCLES)[number];
 
+/**
+ * Where a hospital's agreement stands (0051, `FR-SUP-04`, plan G1). Set by a
+ * platform administrator and a record only: it has no plan name, no amount,
+ * and gates nothing by itself. Taking a hospital out of the network is
+ * suspending its workspace (`FR-ONB-06`).
+ */
+export const AGREEMENT_STATES = ['trial', 'active', 'overdue', 'ended'] as const;
+export type AgreementState = (typeof AGREEMENT_STATES)[number];
+
 export const DATABASE_ENUMS = {
   user_kind: USER_KINDS,
   sex: SEXES,
@@ -338,6 +347,7 @@ export const DATABASE_ENUMS = {
   import_state: IMPORT_STATES,
   external_kind: EXTERNAL_KINDS,
   org_lifecycle: ORG_LIFECYCLES,
+  agreement_state: AGREEMENT_STATES,
 } as const satisfies Record<string, readonly string[]>;
 
 /** Booking statuses that still occupy a place in the queue. */

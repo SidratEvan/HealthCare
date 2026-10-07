@@ -149,6 +149,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0049',
       // Plan F2c: what a patient was last told (FR-QUE-15).
       '0050',
+      // Plan G1: a hospital's agreement state and what it has used (FR-SUP-04).
+      '0051',
     ]);
   });
 

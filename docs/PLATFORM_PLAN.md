@@ -617,7 +617,7 @@ In addition to `CLAUDE.md`:
 | F2b | `fix/queue-timing` | **merged 6 October** — `sync.service` bounds an offline `DOCTOR_ARRIVED`'s `arrivedAt` (`plausibleArrival`) and works out `minutesLate`; the console draws the same sum. `sync.routes.test.ts` (+3). **Raised:** Q11 |
 | F2c | `feat/eta-earlier-notice` | **merged 6 October** — migration 0050 (`bookings.told_eta_at`); `earlierThanTold` (shared, pure); the `queue.earlier` template; `planEarlier` and `timesTold` in `notification.service`, planned in `settle` on every queue write and written in its transaction. `eta.test.ts` (+5), `notifications.test.ts` (+4). **Decided here:** "told" is one time and the window is the estimate's band; a checked-in patient is not messaged. **Supabase needs 0039–0050 before the next release** |
 | F3 | `feat/noshow-prepay` | after H3 |
-| G1 | `feat/platform-entitlements` | |
+| G1 | `feat/platform-entitlements` | **merged 6 October** — migration 0051 (`agreement_state`, `hospitals.agreement_*`, `fn_workspace_usage`); `PUT /platform/hospitals/:id/agreement`; `agreement` on a workspace and `usage` on an opened one; `FRM-B12-AGREEMENT` and `TXT-B12-USAGE` on `S-B-12`, and a chip in the list for an agreement that is overdue or ended. Modules were already there (C4). `platformAgreement.routes.test.ts`, `tenancy.test.ts` (+2), `e2e/platform-agreement.spec.ts`. **Decided, and raised as Q12:** the state is a record and switches nothing |
 | G2 | `feat/platform-health` | |
 | H1 | `feat/notification-worker` | (was 2.1) |
 | H2 | `feat/sms-adapter-ready` | activation waits: X1 |
