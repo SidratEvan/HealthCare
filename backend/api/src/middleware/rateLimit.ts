@@ -41,6 +41,12 @@ export interface RateLimitOptions {
    * the client can show the countdown the OTP screen has (APP_FLOW.md S-A-03).
    */
   readonly code?: ErrorCode;
+  /**
+   * One count across every route this limiter is mounted on, named here.
+   * Without it each method and path is counted on its own, which is right
+   * for a limit on one act and wrong for a ceiling on a caller (plan I2b).
+   */
+  readonly bucket?: string;
 }
 
 interface Window {
@@ -133,7 +139,10 @@ export function rateLimit(
   const limit = options.keyFor === byIp ? options.limit * addressFactor : options.limit;
 
   return (req: Request, res: Response, next: NextFunction): void => {
-    const key = `${req.method}:${req.path}:${options.keyFor(req)}`;
+    const key =
+      options.bucket === undefined
+        ? `${req.method}:${req.path}:${options.keyFor(req)}`
+        : `${options.bucket}:${options.keyFor(req)}`;
     const result = counter.hit(key, limit, options.windowSeconds, Date.now());
 
     res.setHeader('RateLimit-Limit', String(limit));
@@ -151,6 +160,45 @@ export function rateLimit(
 
     next();
   };
+}
+
+/**
+ * Requests a minute one address may make without an account, across every
+ * route (plan I2b).
+ *
+ * The routes that need no account each had their own limit or none: the
+ * searches, a hospital's page, a doctor's, the medicine search, the token
+ * links a patient polls. Every one reads the database, and a script reading
+ * them in a loop read it as fast as it liked.
+ *
+ * Set for a hospital's waiting room, where everybody on its Wi-Fi is one
+ * address: the busiest screen a patient leaves open asks every five seconds
+ * (the standby offer, "I'm on my way"), twelve a minute, so this is about a
+ * hundred phones at once. Stretched by `ADDRESS_RATE_LIMIT_FACTOR` like every
+ * other limit on an address.
+ */
+export const ANONYMOUS_PER_MINUTE = 1_200;
+
+const anonymousLimit = rateLimit({
+  limit: ANONYMOUS_PER_MINUTE,
+  windowSeconds: 60,
+  keyFor: byIp,
+  bucket: 'anonymous',
+});
+
+/**
+ * The ceiling on everything asked without an account. A signed-in caller is
+ * counted by the limits on what they do, not here.
+ *
+ * Not the webhooks: an aggregator reports on every message it sent, from one
+ * address, and each report is believed only if signed (`/webhooks/sms-dlr`).
+ */
+export function anonymousCeiling(req: Request, res: Response, next: NextFunction): void {
+  if (req.principal !== undefined || req.path.startsWith('/webhooks/')) {
+    next();
+    return;
+  }
+  anonymousLimit(req, res, next);
 }
 
 /**

@@ -11,6 +11,8 @@
  *                       denial of service
  *   4. attachPrincipal  identifies the caller if they presented a token
  *   5. attachGuest      identifies a tracking-link holder (FR-GST-05)
+ *      ceiling          what is asked without an account, counted per address
+ *                       across every route (plan I2b)
  *   6. idempotency      validates the key on unsafe methods
  *   7. routes           each applying its own requireAuth / requireRole
  *   8. notFound         so an unmatched path still returns the error envelope
@@ -32,6 +34,7 @@ import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { attachGuestFromLink } from './middleware/guestAuth.js';
 import { idempotency } from './middleware/idempotency.js';
 import { moduleGate } from './middleware/modules.js';
+import { anonymousCeiling } from './middleware/rateLimit.js';
 import { requestLog } from './middleware/requestLog.js';
 import { securityHeaders } from './middleware/securityHeaders.js';
 import { API_BASE_PATH, buildApiRouter, rootRoutes } from './routes/index.js';
@@ -129,6 +132,7 @@ export function createApp(): Express {
 
   app.use(attachPrincipal);
   app.use(attachGuestFromLink);
+  app.use(API_BASE_PATH, anonymousCeiling);
 
   // Everything after this runs in the scope of whoever is asking, and the
   // database holds it to that (`config/dbScope.ts`, `FR-SEC-11`): a member

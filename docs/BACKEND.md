@@ -145,7 +145,9 @@ backend/api/src/
 │   ├── requireRole.ts           # role + hospital scoping (FR-ROLE-01..02)
 │   ├── audit.ts                 # writes audit_log on patient-identifying reads (FR-SEC-03)
 │   ├── idempotency.ts           # Idempotency-Key handling for writes (FR-PAY-06, FR-QUE-51)
-│   ├── rateLimit.ts             # OTP, guest booking, search limits (FR-SEC-05, FR-GST-14)
+│   ├── rateLimit.ts             # OTP, guest booking, search limits (FR-SEC-05, FR-GST-14); the ceiling on
+│   │                            # what is asked without an account: 1,200 a minute per address, across every
+│   │                            # route, webhooks excepted (plan I2b)
 │   ├── validate.ts              # zod body/query/params validator
 │   └── error.ts                 # maps AppError → HTTP + error code (§9)
 ├── routes/
@@ -472,7 +474,7 @@ Every referral step returns `{ referral, duplicate, serverTs }` and broadcasts `
 | POST | `/beds/:id/release` \| `/restore` \| `/clean-start` \| `/clean-done` | ward | the rest of the state machine: without `clean-done` a discharged bed could never be free again. `release` refuses a bed held for a request — answer the request instead |
 | POST | `/beds/:id/expected-discharge` | ward | `SEL-B06-EXPDIS` (`FR-BED-04`); not an event, idempotent by nature |
 | GET | `/hospitals/:id/bed-requests` | ward | `LIST-B06-PENDING`; audited per request shown. `handoffs` is the ER half (`FR-BED-07`): token, problem, colour, age, sex, bed kind — names nobody, so not audited |
-| POST | `/bed-requests` | none (guest details in the body, as `POST /bookings`) — the phone proved first, as a guest booking's is (`FR-GST-03`) | (`FR-PAT-52`); returns a signed status token (`bed_request` audience), idempotent on the key and on one open request per patient per hospital |
+| POST | `/bed-requests` | none (guest details in the body, as `POST /bookings`) — the phone proved first, as a guest booking's is (`FR-GST-03`); ten per address in ten minutes, as a standby join (plan I2b) | (`FR-PAT-52`); returns a signed status token (`bed_request` audience), idempotent on the key and on one open request per patient per hospital |
 | GET | `/bed-requests/track/:token` | the token | the family's status; a lapsed hold reads `expired` at once |
 | POST | `/bed-requests/:id/respond` | ward | `hold` (reserves a real bed of the kind asked for), `confirm` (admits), `decline`; hold and decline send `bed.request_held` / `bed.request_declined` |
 
