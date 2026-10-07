@@ -93,8 +93,10 @@ export default defineConfig({
 
   webServer: [
     {
-      // As the container starts it (`Dockerfile`), not `tsx watch`.
-      command: 'pnpm --filter @platform/api start',
+      // As the container starts it (`Dockerfile`, plan I1): compiled to
+      // JavaScript and run by node, with the shared packages resolved to
+      // their own compiled output. Not `tsx`, and not `tsx watch`.
+      command: 'pnpm build:api && pnpm --filter @platform/api start:compiled',
       // Liveness here, not readiness: the servers start before the global
       // setup that makes the API's role, so at this moment the API cannot
       // reach its database and is right to say it is not ready. The first

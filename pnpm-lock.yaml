@@ -226,6 +226,9 @@ importers:
 
   backend/api:
     dependencies:
+      '@platform/config':
+        specifier: workspace:*
+        version: link:../../shared/config
       '@platform/domain':
         specifier: workspace:*
         version: link:../../shared/domain
@@ -281,6 +284,9 @@ importers:
 
   database:
     dependencies:
+      '@platform/config':
+        specifier: workspace:*
+        version: link:../shared/config
       '@platform/domain':
         specifier: workspace:*
         version: link:../shared/domain
@@ -290,13 +296,13 @@ importers:
       pg:
         specifier: ^8.23.0
         version: 8.23.0
+      tsx:
+        specifier: ^4.23.13
+        version: 4.23.13
     devDependencies:
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
-      tsx:
-        specifier: ^4.23.13
-        version: 4.23.13
 
   frontend/console:
     dependencies:

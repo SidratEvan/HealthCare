@@ -237,9 +237,12 @@ model's import suggestions are off on the deployed demo unless
 ## 6. What this deployment is not
 
 - **Not production.** `NODE_ENV` says so, and the guard in `env.ts` enforces it.
-- **Not a build.** The API runs TypeScript through `tsx` rather than compiled
-  output. Fine for a pitch; a bundler decision before a pilot
-  (`docs/STATUS.md`).
+- **Not a build.** This demo's API runs TypeScript through `tsx` rather than
+  compiled output: its start command lives in Render's settings, and a cold
+  start on the free plan is dominated by waking up, not by compiling. The
+  self-hosted image (Part S) runs the compiled API (plan I1); the same two
+  commands work here (`pnpm build:api` added to the build command, `start`
+  replaced by `start:compiled`) if this demo is ever moved to them.
 - **Not private.** Anyone with the console URL can open a console: under
   `DEMO_MODE=true` the picker lets a visitor in as any role with no password,
   the platform administrator included, and says so on the screen. Staff login
