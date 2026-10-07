@@ -321,6 +321,15 @@ const schema = z.object({
   GUEST_BOOKINGS_PER_PHONE_PER_DAY: positiveInt.max(1_000).default(10),
 
   /**
+   * How old the last good backup may be before `/readyz` says so (plan I2;
+   * `shared/domain` `org/deployment`). The same figure as the backup
+   * container's own `BACKUP_MAX_AGE_HOURS`, and set by the self-hosted stack
+   * to the same value. Unset, this deployment's backups are somebody else's
+   * (Supabase's, for the demonstration) and are reported as not watched.
+   */
+  BACKUP_MAX_AGE_HOURS: positiveInt.max(24 * 14).optional(),
+
+  /**
    * How many hospitals' own applications may wait unanswered at once
    * (`FR-ONB-09`). The form is public, and a workspace is cheap to ask for:
    * at this many still setting up, the form is refused until the platform

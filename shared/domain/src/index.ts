@@ -201,6 +201,18 @@ export {
   type WorkspaceHealth,
 } from './org/health.js';
 export { AUDIT_CHANGES, isAuditChange, type AuditChange } from './org/audit.js';
+export {
+  DEPLOYMENT_ATTENTIONS,
+  DEPLOYMENT_WORKERS,
+  WORKER_LATE_INTERVALS,
+  deploymentSignals,
+  type BackupRun,
+  type DeploymentAttention,
+  type DeploymentInput,
+  type DeploymentSignals,
+  type DeploymentWorker,
+  type WorkerBeat,
+} from './org/deployment.js';
 
 // --- Onboarding ------------------------------------------------------------
 //

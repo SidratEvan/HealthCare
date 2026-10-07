@@ -106,6 +106,21 @@ write_status() {
     echo "finished=$(now)"
   } > "$STATUS.partial"
   mv "$STATUS.partial" "$STATUS"
+  record_run "$1" "$2" "$3" "$4"
+}
+
+# The same result, in the database, where the API reads it for `/readyz`
+# (plan I2, migration 0055): the API's container cannot see this volume. As
+# the owner, which is who this container connects as. Values go in as psql
+# variables, never pasted into the statement. Best effort: when the database
+# is what failed, the row cannot be written, and `/readyz` then reports the
+# age of the last good one, which is the truth.
+record_run() {
+  # result, reason, stamp, verified
+  printf '%s\n' "INSERT INTO backup_runs (result, reason, stamp, verified)
+    VALUES (:'result', NULLIF(left(:'reason', 300), ''), :'stamp', NULLIF(:'verified', ''));" \
+    | psql -q -v ON_ERROR_STOP=1 -v result="$1" -v reason="$2" -v stamp="$3" -v verified="$4" > /dev/null 2>&1 \
+    || echo "the result could not be recorded in the database; /readyz will report the last one it holds" >&2
 }
 
 # `set -e` is switched off inside a function called on the left of `||`, so a

@@ -116,7 +116,11 @@ USER node
 EXPOSE 3100
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3100/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["pnpm", "--filter", "@platform/console", "start"]
+# `next` itself, as the API's image runs `node` (plan I2): under `pnpm`,
+# `docker stop` killed the server rather than closing it. The same command as
+# the app's `start` script, from the app's own folder.
+WORKDIR /app/frontend/console
+CMD ["node", "node_modules/next/dist/bin/next", "start", "--port", "3100"]
 
 FROM web AS patient
 RUN pnpm --filter @platform/patient build \
@@ -126,4 +130,6 @@ USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["pnpm", "--filter", "@platform/patient", "start"]
+# As the console's.
+WORKDIR /app/frontend/patient
+CMD ["node", "node_modules/next/dist/bin/next", "start", "--port", "3000"]

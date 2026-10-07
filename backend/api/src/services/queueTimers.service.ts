@@ -30,6 +30,7 @@ import { runInDbScope } from '../config/dbScope.js';
 import { logger } from '../config/logger.js';
 import * as standbyRepo from '../repositories/standby.repo.js';
 
+import * as heartbeat from './heartbeat.service.js';
 import * as queueService from './queue.service.js';
 
 /** How often lapsed offers are looked for (`BACKEND.md` §8: every 30 s). */
@@ -60,12 +61,15 @@ export async function lapseDueOffers(): Promise<number> {
 
 /** Looks on an interval. Returns what stops it. */
 export function startQueueTimers(): () => void {
+  heartbeat.register('offers', OFFER_TICK_MS);
   const run = (): void => {
     runInDbScope({ kind: 'system' }, lapseDueOffers)
       .then((lapsed) => {
+        heartbeat.beat('offers', true);
         if (lapsed > 0) logger.info({ lapsed }, 'slot offers lapsed');
       })
       .catch((error: unknown) => {
+        heartbeat.beat('offers', false);
         logger.error({ err: error }, 'looking for lapsed offers failed; the next tick tries again');
       });
   };

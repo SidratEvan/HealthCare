@@ -781,6 +781,15 @@ Built in step 26 as `deploy/docker-compose.yml` from the root `Dockerfile`; one 
 
 Until merchant accounts and an SMS aggregator exist it runs `PAYMENT_PROVIDER=off` (pay at the hospital only; the patient app asks `GET /config` and offers nothing else) and `SMS_PROVIDER=log`. Production's boot checks accept both, and no longer demand Sentry or VAPID keys that nothing uses yet. `DEPLOY.md` Part S is the runbook. Every container's log rotates (five files of ten megabytes). There is still no alert: the health of each service is there to be read with `docker compose ps`, and nothing sends it anywhere.
 
+**What `/readyz` says besides the database** (plan I2; `FR-SUP-06`'s last sentence; `shared/domain` `org/deployment`). Readiness — the status code, and whether a load balancer or a healthcheck sends traffic — is the database and nothing else. Beside it, `signals` reports what a server can be quietly failing at while every request still answers:
+
+- `backup`: whether this deployment watches its backups (`BACKUP_MAX_AGE_HOURS`, the same figure the backup container checks itself against; unset, as on the Supabase demo, means "not watched", never "missing"), the last run's result and time, and the last good one's time, age in hours and how it was checked. Read from `backup_runs` (`DATABASE.md` §2.7), which `deploy/backup.sh` appends to after every run; the API's container cannot see the backup volume.
+- `messages`: how many are due and unsent across the deployment, and how many minutes the oldest has waited.
+- `workers`: the sender (every 5 s), the offer timer (every 30 s) and the hourly jobs, each with its interval and the seconds since its last pass went through. A worker reports each pass to `services/heartbeat.service.ts`; the hourly pass counts only when all three of its jobs did.
+- `attention`: what is wrong, in fixed words a monitor can match — `backup_failed`, `backup_stale` (the last good one is older than the allowance), `backup_none` (none recorded after a full allowance of the server running), `messages_overdue` (the oldest due message has waited more than five minutes, the threshold `fn_workspace_health` uses), `worker_late` (no pass has gone through for three intervals).
+
+Counts and ages only: no hospital, person or message is in it, because anybody may ask. A failure to read the signals is answered with `signals: null` and changes nothing else.
+
 ---
 
 ## 13. Build order for Claude Code

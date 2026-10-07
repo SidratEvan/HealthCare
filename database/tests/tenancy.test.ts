@@ -735,6 +735,46 @@ describe('a person’s clinical record is their own (FR-SEC-11, FR-NET-02; plan 
   });
 });
 
+describe('what the backup did is the server’s own to read (plan I2, migration 0055)', () => {
+  it('only the system scope reads a backup run; a hospital, the platform, a person and nobody do not', async () => {
+    await withRollback(async (client) => {
+      const { a } = await twoHospitals(client);
+      await client.query(
+        `INSERT INTO backup_runs (result, verified, stamp) VALUES ('ok', 'restore', 'tenancy-probe')`,
+      );
+      await asTenant(client);
+      const runs = `SELECT 1 FROM backup_runs WHERE stamp = 'tenancy-probe'`;
+
+      await scope(client, 'system');
+      expect(await count(client, runs)).toBe(1);
+      for (const [kind, hospital] of [
+        ['hospital', a],
+        ['national', ''],
+        ['open', ''],
+        [null, ''],
+      ] as const) {
+        await scope(client, kind, hospital);
+        expect(await count(client, runs), String(kind)).toBe(0);
+      }
+      await person(client, 'patient', '00000000-0000-7000-8000-000000000001');
+      expect(await count(client, runs)).toBe(0);
+    });
+  });
+
+  it('a run is either good with no reason, or failed with one', async () => {
+    await withRollback(async (client) => {
+      await expectRejection(client, () =>
+        client.query(
+          `INSERT INTO backup_runs (result, stamp, reason) VALUES ('ok', 'x', 'but it failed')`,
+        ),
+      );
+      await expectRejection(client, () =>
+        client.query(`INSERT INTO backup_runs (result, stamp) VALUES ('failed', 'x')`),
+      );
+    });
+  });
+});
+
 describe('no table is left without a policy', () => {
   it('every table in the schema has one for app_tenant', async () => {
     await withRollback(async (client) => {
