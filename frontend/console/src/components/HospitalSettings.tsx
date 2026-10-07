@@ -73,6 +73,12 @@ import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { DemoBanner } from '@/components/DemoBanner';
 import { HospitalFace } from '@/components/HospitalFace';
 import {
+  DepartmentRow,
+  IdentityForm,
+  WardBeds,
+  WardEditor,
+} from '@/components/SettingsCorrections';
+import {
   expandBedLabels,
   loadSetup,
   settingsApi,
@@ -399,6 +405,11 @@ const CHECK_LABEL: Readonly<Record<ChecklistItemKey, ConsoleKey>> = {
   doctors: 'settingsCountDoctors',
   schedules: 'settingsCountSchedules',
   staff: 'settingsCountStaff',
+  // Plan D2: what a patient needs to reach the place. A yes or a no, so the
+  // line has no number in it.
+  contact: 'settingsCountContact',
+  location: 'settingsCountLocation',
+  emergency_services: 'settingsCountEmergency',
   beds: 'settingsCountBeds',
   verified_doctors: 'settingsCountVerified',
 };
@@ -509,7 +520,9 @@ function SetupStatus({ snapshot, offline, run }: TabProps): ReactNode {
                       ? t('settingsCheckByPlatform', locale)
                       : item.required
                         ? t('settingsCheckMissing', locale)
-                        : t('settingsCheckOptional', locale)}
+                        : item.advised
+                          ? t('settingsCheckAdvised', locale)
+                          : t('settingsCheckOptional', locale)}
                 </Chip>
                 <span className="text-ink-secondary">
                   {format(CHECK_LABEL[item.key], locale, { count: num(item.count) })}
@@ -517,6 +530,14 @@ function SetupStatus({ snapshot, offline, run }: TabProps): ReactNode {
               </li>
             ))}
           </ul>
+
+          {/* Not asked for before review, and said plainly what a patient
+              loses without them (plan D2). */}
+          {items.some((item) => item.advised && !item.done) ? (
+            <p className="text-body-sm text-ink-secondary" data-testid="settings-advised">
+              {t('settingsAdvisedLine', locale)}
+            </p>
+          ) : null}
 
           {settingUp && missing.length > 0 ? (
             <p className="text-body-sm text-warn-700" data-testid="settings-missing">
@@ -722,6 +743,9 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
         </SaveButton>
       </form>
 
+      {/* What it was registered as: its own to correct until review is asked for. */}
+      <IdentityForm snapshot={snapshot} offline={offline} run={run} />
+
       {/* What patients see of it: its words, its logo, its colour (`FR-BRD-06`). */}
       <HospitalFace snapshot={snapshot} offline={offline} run={run} />
 
@@ -830,12 +854,15 @@ function DepartmentsTab({ snapshot, offline, run }: TabProps): ReactNode {
           data-testid="settings-departments"
         >
           {snapshot.departments.map((department) => (
-            <li key={department.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <span className="text-body-md">
-                {localName(locale, department.nameBn, department.nameEn)}
-              </span>
-              <Chip tone="neutral">{department.code}</Chip>
-            </li>
+            <DepartmentRow
+              key={department.id}
+              department={department}
+              doctorsListed={
+                snapshot.doctors.filter((doctor) => doctor.departmentId === department.id).length
+              }
+              offline={offline}
+              run={run}
+            />
           ))}
         </ul>
       )}
@@ -1376,15 +1403,11 @@ function WardCard({
         })}
         {` · ${kindName(ward.kind, locale)}`}
       </p>
-      {ward.beds.length === 0 ? null : (
-        <ul className="mt-3 flex flex-wrap gap-2">
-          {ward.beds.map((bed) => (
-            <li key={bed.id}>
-              <Chip tone={bed.state === 'out_of_service' ? 'caution' : 'neutral'}>{bed.label}</Chip>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* Plan D2: its names and floor, and its removal while it is empty. */}
+      <WardEditor ward={ward} offline={offline} run={run} />
+      {/* A bed is chosen to change its number or charge, or to take away one
+          the ward never brought into service. */}
+      <WardBeds ward={ward} offline={offline} run={run} />
 
       <form className="mt-4 flex flex-col gap-3 rounded-md bg-sunken p-4" noValidate onSubmit={add}>
         <div className="grid gap-3 md:grid-cols-2">
@@ -1957,6 +1980,7 @@ function failureText(failure: SaveFailure, locale: Locale): string {
         schedule: 'settingsDuplicateSchedule',
         email: 'settingsDuplicateEmail',
         staffCode: 'settingsDuplicateStaffCode',
+        nameEn: 'settingsDuplicateWardName',
       };
       if (failure.field === 'label') {
         return format('settingsDuplicateLabel', locale, {
@@ -1974,6 +1998,11 @@ function failureText(failure: SaveFailure, locale: Locale): string {
         doctor_shared: 'settingsNotAllowedShared',
         nothing_to_publish: 'settingsNotAllowedNothing',
         brand_unreadable: 'settingsBrandUnreadable',
+        // Plan D2: the server refuses these whatever the screen offered.
+        identity_after_review: 'settingsNotAllowedIdentity',
+        department_has_doctors: 'settingsNotAllowedDepartmentInUse',
+        ward_has_beds: 'settingsNotAllowedWardHasBeds',
+        bed_in_use: 'settingsNotAllowedBedInUse',
       };
       return t(byReason[failure.reason] ?? 'settingsSaveFailed', locale);
     }

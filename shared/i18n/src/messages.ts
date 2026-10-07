@@ -2286,6 +2286,81 @@ export const CONSOLE = {
     en: '{count} beds added. They stay out of service until the ward brings them into service from the board.',
   },
   settingsWardLine: { bn: '{floor} তলা · {count}টি বেড', en: 'Floor {floor} · {count} beds' },
+
+  // --- Putting right what was entered wrong (S-B-11, plan D2) ----------------
+  //
+  // The checklist names what a patient needs to reach the place; these are a
+  // yes or a no, so their lines carry no number.
+  settingsCountContact: { bn: 'ঠিকানা ও ফোন নম্বর', en: 'Address and phone number' },
+  settingsCountLocation: { bn: 'মানচিত্রে অবস্থান', en: 'Place on the map' },
+  settingsCountEmergency: {
+    bn: 'ঘোষিত জরুরি সেবা: {count}',
+    en: 'Emergency services declared: {count}',
+  },
+  settingsCheckAdvised: { bn: 'যোগ করা ভালো', en: 'Worth adding' },
+  settingsAdvisedLine: {
+    bn: 'পর্যালোচনা চাইতে এগুলো লাগে না। তবে ঠিকানা, ফোন নম্বর ও মানচিত্রে অবস্থান না থাকলে রোগী হাসপাতালে পৌঁছানোর পথ বা দূরত্ব জানতে পারবেন না।',
+    en: 'Review can be asked for without these. But with no address, phone number or place on the map a patient cannot be told how to reach the hospital or how far it is.',
+  },
+  settingsEdit: { bn: 'সম্পাদনা', en: 'Edit' },
+  settingsCancel: { bn: 'বাতিল', en: 'Cancel' },
+  settingsSaveChanges: { bn: 'পরিবর্তন সংরক্ষণ করুন', en: 'Save changes' },
+  settingsRemove: { bn: 'সরান', en: 'Remove' },
+  settingsRemoveSure: { bn: 'নিশ্চিত? এটি সরানো হবে।', en: 'Sure? This will be removed.' },
+  settingsRemoveYes: { bn: 'হ্যাঁ, সরান', en: 'Yes, remove' },
+  settingsRemoved: { bn: 'সরানো হয়েছে', en: 'Removed' },
+  settingsDepartmentInUse: {
+    bn: 'তালিকাভুক্ত ডাক্তার: {count}, তাই সরানো যায় না',
+    en: 'Doctors listed here: {count}, so it cannot be removed',
+  },
+  settingsIdentityTitle: { bn: 'নিবন্ধনের তথ্য', en: 'Registration details' },
+  settingsIdentityHelp: {
+    bn: 'অনুমোদনের আগে প্ল্যাটফর্ম এগুলো যাচাই করে, আর রোগীর খোঁজ জেলা ধরে হয়। পর্যালোচনা চাওয়ার আগে পর্যন্ত আপনি এগুলো ঠিক করতে পারেন।',
+    en: 'The platform checks these before approving, and a patient’s search goes by district. You can correct them until you ask for review.',
+  },
+  settingsIdentitySave: { bn: 'নিবন্ধনের তথ্য সংরক্ষণ করুন', en: 'Save registration details' },
+  settingsIdentityNone: { bn: 'দেওয়া হয়নি', en: 'not given' },
+  settingsIdentityLocked: {
+    bn: 'বিভাগ: {division} · জেলা: {district} · নিবন্ধন নম্বর: {registration}। পর্যালোচনা চাওয়ার পর এগুলো এখান থেকে বদলানো যায় না; কোনোটি ভুল থাকলে প্ল্যাটফর্মকে জানান।',
+    en: 'Division: {division} · district: {district} · registration number: {registration}. These cannot be changed here once review has been asked for; tell the platform if one is wrong.',
+  },
+  settingsNotAllowedIdentity: {
+    bn: 'পর্যালোচনা চাওয়ার পর বিভাগ, জেলা ও নিবন্ধন নম্বর এখান থেকে বদলানো যায় না।',
+    en: 'Once review has been asked for, the division, district and registration number cannot be changed here.',
+  },
+  settingsNotAllowedDepartmentInUse: {
+    bn: 'এই বিভাগে ডাক্তার তালিকাভুক্ত আছেন, তাই এটি সরানো যায় না।',
+    en: 'Doctors are listed under this department, so it cannot be removed.',
+  },
+  settingsNotAllowedWardHasBeds: {
+    bn: 'এই ওয়ার্ডে বেড আছে, তাই এটি সরানো যায় না।',
+    en: 'This ward has beds, so it cannot be removed.',
+  },
+  settingsNotAllowedBedInUse: {
+    bn: 'ওয়ার্ড এই বেড চালু করেছে, তাই এখান থেকে সরানো যায় না। ওয়ার্ড বোর্ড থেকে এটিকে সেবার বাইরে রাখুন।',
+    en: 'The ward has brought this bed into service, so it cannot be removed here. Take it out of service from the ward board.',
+  },
+  settingsDuplicateWardName: {
+    bn: 'এই নামে আরেকটি ওয়ার্ড আছে।',
+    en: 'Another ward has this name.',
+  },
+  settingsBedsPick: {
+    bn: 'নম্বর বা ভাড়া বদলাতে একটি বেড বেছে নিন।',
+    en: 'Choose a bed to change its number or its charge.',
+  },
+  settingsBedsUnconfirmedCount: {
+    bn: 'ওয়ার্ড এখনো চালু করেনি: {count}টি।',
+    en: 'Not yet brought into service by the ward: {count}.',
+  },
+  settingsBedLabel: { bn: 'বেডের নম্বর বা নাম', en: 'Bed number or name' },
+  settingsBedUnconfirmedNote: {
+    bn: 'ওয়ার্ড এখনো এই বেড চালু করেনি। ভুল করে যোগ হয়ে থাকলে সরাতে পারেন।',
+    en: 'The ward has not brought this bed into service yet. If it was added by mistake, it can be removed.',
+  },
+  settingsBedInServiceNote: {
+    bn: 'ওয়ার্ড এই বেড চালু করেছে, তাই এখান থেকে সরানো যায় না। বন্ধ করতে হলে ওয়ার্ড বোর্ড থেকে সেবার বাইরে রাখুন।',
+    en: 'The ward has brought this bed into service, so it cannot be removed here. To retire it, take it out of service from the ward board.',
+  },
   bedUnconfirmed: {
     bn: 'সেটিংস থেকে যোগ করা — ওয়ার্ড এখনো নিশ্চিত করেনি',
     en: 'Added in settings — not yet confirmed by the ward',

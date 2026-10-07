@@ -36,6 +36,7 @@ import {
   staffPatchBody,
   templateBody,
   wardBody,
+  wardPatchBody,
 } from '@platform/domain';
 
 import * as settings from '../controllers/hospitalSettings.controller.js';
@@ -110,6 +111,16 @@ hospitalSettingsRoutes.patch(
   validate({ ...byId, body: departmentPatchBody }),
   settings.patchDepartment,
 );
+// Plan D2: what was added by mistake can be taken away, while nothing stands
+// on it. A department nobody sits in; further down, a ward with no bed and a
+// bed the ward never brought into service.
+hospitalSettingsRoutes.delete(
+  '/hospital/departments/:id',
+  ...admin,
+  write,
+  validate(byId),
+  settings.deleteDepartment,
+);
 
 hospitalSettingsRoutes.post(
   '/hospital/doctors',
@@ -161,6 +172,27 @@ hospitalSettingsRoutes.patch(
   write,
   validate({ ...byId, body: bedPatchBody }),
   settings.patchBed,
+);
+hospitalSettingsRoutes.delete(
+  '/hospital/beds/:id',
+  ...admin,
+  write,
+  validate(byId),
+  settings.deleteBed,
+);
+hospitalSettingsRoutes.patch(
+  '/hospital/wards/:id',
+  ...admin,
+  write,
+  validate({ ...byId, body: wardPatchBody }),
+  settings.patchWard,
+);
+hospitalSettingsRoutes.delete(
+  '/hospital/wards/:id',
+  ...admin,
+  write,
+  validate(byId),
+  settings.deleteWard,
 );
 
 hospitalSettingsRoutes.post(

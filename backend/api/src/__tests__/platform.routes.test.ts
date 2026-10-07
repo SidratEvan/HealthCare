@@ -227,6 +227,11 @@ describe('a hospital, from nothing to live (FR-ONB-01 to FR-ONB-05)', () => {
       schedules: 0,
       beds: 0,
       staff: 1,
+      // Plan D2: named, and not waited for. No address or phone, no place on
+      // the map, and an emergency desk that has declared nothing yet.
+      contact: 0,
+      location: 0,
+      capabilities: 0,
     });
   });
 

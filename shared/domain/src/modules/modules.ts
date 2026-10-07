@@ -163,8 +163,11 @@ export const MODULE_ROUTES: Readonly<Record<string, readonly HospitalModule[]>> 
   'POST /beds/:id/expected-discharge': ['beds'],
   'POST /bed-requests/:id/respond': ['beds'],
   'POST /hospital/wards': ['beds'],
+  'PATCH /hospital/wards/:id': ['beds'],
+  'DELETE /hospital/wards/:id': ['beds'],
   'POST /hospital/beds': ['beds'],
   'PATCH /hospital/beds/:id': ['beds'],
+  'DELETE /hospital/beds/:id': ['beds'],
 
   // --- emergency ----------------------------------------------------------------------
   'GET /hospitals/:id/emergency': ['emergency'],

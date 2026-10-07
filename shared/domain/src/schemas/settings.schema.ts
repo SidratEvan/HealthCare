@@ -60,6 +60,14 @@ export const profileBody = z
   .strictObject({
     nameBn: name.optional(),
     nameEn: name.optional(),
+    /**
+     * What the hospital was registered as (plan D2). Its own to correct
+     * while the workspace is setting up, and refused afterwards
+     * (`identityEditable`): these are what the platform reviews.
+     */
+    division: z.string().trim().min(2).max(40).optional(),
+    district: z.string().trim().min(2).max(60).optional(),
+    registrationNo: optionalText(60),
     thana: optionalText(80),
     addressBn: optionalText(300),
     addressEn: optionalText(300),
@@ -178,6 +186,15 @@ export const wardBody = z.strictObject({
   kind: z.enum(BED_KINDS),
 });
 
+/** A ward's names and floor; what kind of ward it is does not change (plan D2). */
+export const wardPatchBody = z
+  .strictObject({
+    nameBn: name.optional(),
+    nameEn: name.optional(),
+    floor: z.number().int().min(0).max(60).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'change at least one field');
+
 const bedLabel = z.string().trim().min(1).max(20);
 
 /** Several beds at once: a ward is set up with "301" to "320", not one at a time. */
@@ -286,6 +303,7 @@ export type DoctorBody = z.infer<typeof doctorBody>;
 export type DoctorPatchBody = z.infer<typeof doctorPatchBody>;
 export type TemplateBody = z.infer<typeof templateBody>;
 export type WardBody = z.infer<typeof wardBody>;
+export type WardPatchBody = z.infer<typeof wardPatchBody>;
 export type BedsBody = z.infer<typeof bedsBody>;
 export type BedPatchBody = z.infer<typeof bedPatchBody>;
 export type StaffBody = z.infer<typeof staffBody>;

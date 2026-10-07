@@ -25,6 +25,7 @@ import {
   staffPatchBody,
   templateBody,
   wardBody,
+  wardPatchBody,
 } from '@platform/domain';
 
 import { authRequired, forbiddenScope, notFound } from '../errors/AppError.js';
@@ -111,6 +112,12 @@ export async function patchDepartment(req: Request, res: Response): Promise<void
   done(res);
 }
 
+/** `DELETE /hospital/departments/:id` — one nobody sits in (plan D2). */
+export async function deleteDepartment(req: Request, res: Response): Promise<void> {
+  await settings.removeDepartment(actorOf(req), idOf(req));
+  done(res, { removed: true });
+}
+
 export async function postDoctor(req: Request, res: Response): Promise<void> {
   done(res, await settings.addDoctor(actorOf(req), doctorBody.parse(req.body)));
 }
@@ -139,6 +146,23 @@ export async function postBeds(req: Request, res: Response): Promise<void> {
 export async function patchBed(req: Request, res: Response): Promise<void> {
   await settings.updateBed(actorOf(req), idOf(req), bedPatchBody.parse(req.body));
   done(res);
+}
+
+/** `DELETE /hospital/beds/:id` — one the ward never brought into service (plan D2). */
+export async function deleteBed(req: Request, res: Response): Promise<void> {
+  await settings.removeBed(actorOf(req), idOf(req));
+  done(res, { removed: true });
+}
+
+export async function patchWard(req: Request, res: Response): Promise<void> {
+  await settings.updateWard(actorOf(req), idOf(req), wardPatchBody.parse(req.body));
+  done(res);
+}
+
+/** `DELETE /hospital/wards/:id` — one that holds no bed (plan D2). */
+export async function deleteWard(req: Request, res: Response): Promise<void> {
+  await settings.removeWard(actorOf(req), idOf(req));
+  done(res, { removed: true });
 }
 
 export async function postStaff(req: Request, res: Response): Promise<void> {

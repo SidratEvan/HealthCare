@@ -742,3 +742,391 @@ describe('what the facility offers in an emergency (FR-EMG-05)', () => {
     expect(rows.rows).toEqual([{ kind: 'cardiac', is_available: true }]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Plan D2: the checklist names the rest, and a mistake can be put right
+// ---------------------------------------------------------------------------
+
+interface SetupData {
+  readonly hospital: {
+    readonly division: string;
+    readonly district: string;
+    readonly registrationNo: string | null;
+    readonly phone: string | null;
+  };
+  readonly counts: {
+    readonly contact: number;
+    readonly location: number;
+    readonly capabilities: number | null;
+  };
+  readonly departments: readonly { id: string; code: string; nameEn: string }[];
+  readonly wards: readonly {
+    id: string;
+    nameEn: string;
+    floor: number;
+    beds: readonly { id: string; label: string; unconfirmed: boolean; nightlyPoisha: number }[];
+  }[];
+}
+
+async function setupOf(token: string): Promise<SetupData> {
+  const response = await request(app)
+    .get(`${BASE}/hospital/setup`)
+    .set('Authorization', bearer(token));
+  expect(response.status).toBe(200);
+  return response.body.data as SetupData;
+}
+
+async function auditChanges(hospitalId: string): Promise<string[]> {
+  const rows = await sql<{ change: string }>`
+    SELECT meta ->> 'change' AS change FROM audit_log
+     WHERE hospital_id = ${hospitalId} AND action = 'SETTINGS_CHANGE' ORDER BY created_at
+  `.execute(db);
+  return rows.rows.map((row) => row.change);
+}
+
+describe('the checklist names what a patient needs to reach the place (FR-ONB-03, plan D2)', () => {
+  let facility: Facility;
+
+  beforeAll(async () => {
+    facility = await newFacility();
+  });
+
+  it('says no to each until it is there, and then yes', async () => {
+    const empty = await setupOf(facility.token);
+    // An emergency desk is on unless switched off, so there is a count: none yet.
+    expect(empty.counts).toMatchObject({ contact: 0, location: 0, capabilities: 0 });
+
+    // A phone alone is not enough to find the place.
+    await send('patch', '/hospital/profile', facility.token, { phone: '+8802912345678' });
+    expect((await setupOf(facility.token)).counts.contact).toBe(0);
+
+    await send('patch', '/hospital/profile', facility.token, {
+      addressBn: 'সড়ক ১, ধানমন্ডি (ডেমো)',
+      coordinates: { lat: 23.75, lng: 90.39 },
+    });
+    await send('put', '/hospital/capabilities', facility.token, { kinds: ['cardiac', 'dialysis'] });
+
+    expect((await setupOf(facility.token)).counts).toMatchObject({
+      contact: 1,
+      location: 1,
+      capabilities: 2,
+    });
+  });
+
+  it('names them without making review wait for them', async () => {
+    const bare = await newFacility();
+    const response = await send('post', '/hospital/request-review', bare.token);
+    expect(response.status).toBe(422);
+    // What review waits for is what `FR-ONB-03` lists, and nothing added here.
+    expect(response.body.error.details.missing).toEqual(['departments', 'doctors', 'schedules']);
+  });
+
+  it('has no line for emergency services where there is no emergency desk (FR-BRD-11)', async () => {
+    await asOwner(async (owner) => {
+      await sql`
+        UPDATE hospital_settings SET modules_off = '{emergency}'
+         WHERE hospital_id = ${facility.hospitalId}
+      `.execute(owner);
+    });
+    expect((await setupOf(facility.token)).counts.capabilities).toBeNull();
+  });
+});
+
+describe('what it was registered as is its own to correct while setting up (plan D2)', () => {
+  let facility: Facility;
+
+  beforeAll(async () => {
+    facility = await newFacility();
+  });
+
+  async function lifecycle(to: string): Promise<void> {
+    await asOwner(async (owner) => {
+      await sql`
+        UPDATE hospitals SET lifecycle = ${to}::org_lifecycle WHERE id = ${facility.hospitalId}
+      `.execute(owner);
+    });
+  }
+
+  it('division, district and registration number, each audited', async () => {
+    const saved = await send('patch', '/hospital/profile', facility.token, {
+      division: 'Chattogram',
+      district: 'Cumilla',
+      registrationNo: 'DEMO-REG-0042',
+    });
+    expect(saved.status).toBe(200);
+    expect((await setupOf(facility.token)).hospital).toMatchObject({
+      division: 'Chattogram',
+      district: 'Cumilla',
+      registrationNo: 'DEMO-REG-0042',
+    });
+
+    // Null takes the number away; a district cannot be emptied.
+    await send('patch', '/hospital/profile', facility.token, { registrationNo: null });
+    expect((await setupOf(facility.token)).hospital.registrationNo).toBeNull();
+    expect(
+      (await send('patch', '/hospital/profile', facility.token, { district: '' })).status,
+    ).toBe(400);
+    expect(await auditChanges(facility.hospitalId)).toEqual(['profile', 'profile']);
+  });
+
+  it('and not once review has been asked for; everything else still saves', async () => {
+    await lifecycle('ready_for_review');
+    for (const body of [
+      { district: 'Feni' },
+      { division: 'Dhaka' },
+      { registrationNo: 'DEMO-REG-0099' },
+      // One identity field among ordinary ones refuses the whole save.
+      { phone: '+8802912345678', district: 'Feni' },
+    ]) {
+      const refused = await send('patch', '/hospital/profile', facility.token, body);
+      expect(refused.status, JSON.stringify(body)).toBe(422);
+      expect(refused.body.error.details.reason).toBe('identity_after_review');
+    }
+    const still = await setupOf(facility.token);
+    expect(still.hospital).toMatchObject({ division: 'Chattogram', district: 'Cumilla' });
+    expect(still.hospital.phone).toBeNull();
+
+    expect(
+      (await send('patch', '/hospital/profile', facility.token, { phone: '+8802912345678' }))
+        .status,
+    ).toBe(200);
+  });
+
+  it('a workspace sent back is setting up again, and can correct them', async () => {
+    await lifecycle('setup');
+    expect(
+      (await send('patch', '/hospital/profile', facility.token, { district: 'Feni' })).status,
+    ).toBe(200);
+    expect((await setupOf(facility.token)).hospital.district).toBe('Feni');
+  });
+});
+
+describe('what was added by mistake can be taken away, while nothing stands on it (plan D2)', () => {
+  let facility: Facility;
+  let other: Facility;
+
+  beforeAll(async () => {
+    facility = await newFacility();
+    other = await newFacility();
+  });
+
+  async function department(token: string, code: string): Promise<string> {
+    const response = await send('post', '/hospital/departments', token, {
+      nameBn: 'বিভাগ (ডেমো)',
+      nameEn: `Department ${code} (Demo)`,
+      code,
+    });
+    expect(response.status).toBe(200);
+    return response.body.data.departmentId as string;
+  }
+
+  async function ward(token: string, nameEn: string): Promise<string> {
+    const response = await send('post', '/hospital/wards', token, {
+      nameBn: 'ওয়ার্ড (ডেমো)',
+      nameEn,
+      floor: 2,
+      kind: 'general',
+    });
+    expect(response.status).toBe(200);
+    return response.body.data.wardId as string;
+  }
+
+  it('only the hospital’s administrator may', async () => {
+    const id = await department(facility.token, 'GATE');
+    const others = [
+      await staffToken(
+        ['receptionist', 'doctor', 'ward', 'emergency', 'lab', 'pharmacy'],
+        facility.hospitalId,
+      ),
+      await nationalToken(),
+      await patientToken(),
+    ];
+    for (const token of others) {
+      for (const [method, path] of [
+        ['delete', `/hospital/departments/${id}`],
+        ['patch', `/hospital/wards/${randomUUID()}`],
+        ['delete', `/hospital/wards/${randomUUID()}`],
+        ['delete', `/hospital/beds/${randomUUID()}`],
+      ] as const) {
+        expect((await send(method, path, token, { floor: 1 })).status, `${method} ${path}`).toBe(
+          403,
+        );
+      }
+    }
+    expect((await request(app).delete(`${BASE}/hospital/departments/${id}`)).status).toBe(401);
+    expect((await setupOf(facility.token)).departments.map((entry) => entry.id)).toContain(id);
+  });
+
+  it('a department nobody sits in goes, and its code is free again', async () => {
+    const id = await department(facility.token, 'CRAD');
+    const removed = await send('delete', `/hospital/departments/${id}`, facility.token);
+    expect(removed.status).toBe(200);
+    expect((await setupOf(facility.token)).departments.map((entry) => entry.code)).not.toContain(
+      'CRAD',
+    );
+    // Gone is gone: a second removal finds nothing.
+    expect((await send('delete', `/hospital/departments/${id}`, facility.token)).status).toBe(404);
+    // The code that was mistyped can be given to the department that was meant.
+    await department(facility.token, 'CRAD');
+    expect(await auditChanges(facility.hospitalId)).toContain('department_removed');
+  });
+
+  it('a department a doctor is listed under stays, and says why', async () => {
+    const id = await department(facility.token, 'CARD');
+    const doctor = await send('post', '/hospital/doctors', facility.token, {
+      nameBn: 'ডা. পরীক্ষা (ডেমো)',
+      nameEn: 'Dr Listed (Demo)',
+      bmdcNumber: `A-${String(Math.floor(Math.random() * 9_000_000) + 1_000_000)}`,
+      departmentId: id,
+      feePoisha: 80_000,
+    });
+    expect(doctor.status).toBe(200);
+
+    const refused = await send('delete', `/hospital/departments/${id}`, facility.token);
+    expect(refused.status).toBe(422);
+    expect(refused.body.error.details.reason).toBe('department_has_doctors');
+    expect((await setupOf(facility.token)).departments.map((entry) => entry.id)).toContain(id);
+
+    // Deactivated, the doctor is still listed under it.
+    await send(
+      'patch',
+      `/hospital/doctors/${doctor.body.data.doctorHospitalId as string}`,
+      facility.token,
+      { isActive: false },
+    );
+    expect((await send('delete', `/hospital/departments/${id}`, facility.token)).status).toBe(422);
+  });
+
+  it('a ward is renamed and moved to another floor, and not onto another ward’s name', async () => {
+    const first = await ward(facility.token, 'Ward One (Demo)');
+    await ward(facility.token, 'Ward Two (Demo)');
+
+    const changed = await send('patch', `/hospital/wards/${first}`, facility.token, {
+      nameBn: 'পুরুষ ওয়ার্ড (ডেমো)',
+      nameEn: 'Male Ward (Demo)',
+      floor: 5,
+    });
+    expect(changed.status).toBe(200);
+    expect((await setupOf(facility.token)).wards.find((entry) => entry.id === first)).toMatchObject(
+      { nameEn: 'Male Ward (Demo)', floor: 5 },
+    );
+
+    const clash = await send('patch', `/hospital/wards/${first}`, facility.token, {
+      nameEn: 'Ward Two (Demo)',
+    });
+    expect(clash.status).toBe(409);
+    expect(clash.body.error.details).toMatchObject({ field: 'nameEn' });
+    // Its own name again is no clash.
+    expect(
+      (
+        await send('patch', `/hospital/wards/${first}`, facility.token, {
+          nameEn: 'Male Ward (Demo)',
+        })
+      ).status,
+    ).toBe(200);
+    expect((await send('patch', `/hospital/wards/${first}`, facility.token, {})).status).toBe(400);
+    expect(
+      (await send('patch', `/hospital/wards/${first}`, facility.token, { kind: 'icu' })).status,
+    ).toBe(400);
+  });
+
+  it('a bed the ward never brought into service goes; one it has does not', async () => {
+    const wardId = await ward(facility.token, 'Bed Ward (Demo)');
+    const added = await send('post', '/hospital/beds', facility.token, {
+      wardId,
+      labels: ['401', '402', '403', '404'],
+      kind: 'general',
+      nightlyPoisha: 150_000,
+    });
+    const [b401, b402, b403, b404] = added.body.data.bedIds as string[];
+
+    // 404 was typed by mistake.
+    expect((await send('delete', `/hospital/beds/${b404 ?? ''}`, facility.token)).status).toBe(200);
+    const beds = (await setupOf(facility.token)).wards.find((entry) => entry.id === wardId)?.beds;
+    expect(beds?.map((bed) => bed.label)).toEqual(['401', '402', '403']);
+    expect(beds?.every((bed) => bed.unconfirmed)).toBe(true);
+    // Its label is free for the bed that was meant.
+    expect(
+      (
+        await send('post', '/hospital/beds', facility.token, {
+          wardId,
+          labels: ['404'],
+          kind: 'general',
+          nightlyPoisha: 150_000,
+        })
+      ).status,
+    ).toBe(200);
+
+    // The ward brings 401 into service; 402 is out of service for a reason of
+    // the ward's own. Neither is a line typed by mistake any more.
+    await asOwner(async (owner) => {
+      await sql`UPDATE beds SET state = 'free', oos_reason = NULL WHERE id = ${b401 ?? ''}`.execute(
+        owner,
+      );
+      await sql`UPDATE beds SET oos_reason = 'Oxygen line under repair (Demo)' WHERE id = ${b402 ?? ''}`.execute(
+        owner,
+      );
+    });
+    for (const id of [b401, b402]) {
+      const refused = await send('delete', `/hospital/beds/${id ?? ''}`, facility.token);
+      expect(refused.status).toBe(422);
+      expect(refused.body.error.details.reason).toBe('bed_in_use');
+    }
+    const after = (await setupOf(facility.token)).wards.find((entry) => entry.id === wardId)?.beds;
+    expect(after?.find((bed) => bed.id === b401)?.unconfirmed).toBe(false);
+    expect(after?.find((bed) => bed.id === b402)?.unconfirmed).toBe(false);
+    expect(after?.find((bed) => bed.id === b403)?.unconfirmed).toBe(true);
+    expect(await auditChanges(facility.hospitalId)).toContain('bed_removed');
+  });
+
+  it('a ward goes only once it holds no bed', async () => {
+    const wardId = await ward(facility.token, 'Short Ward (Demo)');
+    const added = await send('post', '/hospital/beds', facility.token, {
+      wardId,
+      labels: ['S-1'],
+      kind: 'general',
+      nightlyPoisha: 100_000,
+    });
+    const refused = await send('delete', `/hospital/wards/${wardId}`, facility.token);
+    expect(refused.status).toBe(422);
+    expect(refused.body.error.details.reason).toBe('ward_has_beds');
+
+    const [bedId] = added.body.data.bedIds as string[];
+    expect((await send('delete', `/hospital/beds/${bedId ?? ''}`, facility.token)).status).toBe(
+      200,
+    );
+    expect((await send('delete', `/hospital/wards/${wardId}`, facility.token)).status).toBe(200);
+    expect((await setupOf(facility.token)).wards.map((entry) => entry.id)).not.toContain(wardId);
+    // Its name is free again.
+    await ward(facility.token, 'Short Ward (Demo)');
+  });
+
+  it('another hospital’s department, ward or bed is not there to be changed', async () => {
+    const theirDepartment = await department(other.token, 'THEIRS');
+    const theirWard = await ward(other.token, 'Their Ward (Demo)');
+    const theirBeds = await send('post', '/hospital/beds', other.token, {
+      wardId: theirWard,
+      labels: ['T-1'],
+      kind: 'general',
+      nightlyPoisha: 100_000,
+    });
+    const [theirBed] = theirBeds.body.data.bedIds as string[];
+
+    for (const [method, path, body] of [
+      ['delete', `/hospital/departments/${theirDepartment}`, {}],
+      ['patch', `/hospital/wards/${theirWard}`, { floor: 9 }],
+      ['delete', `/hospital/wards/${theirWard}`, {}],
+      ['delete', `/hospital/beds/${theirBed ?? ''}`, {}],
+    ] as const) {
+      expect((await send(method, path, facility.token, body)).status, `${method} ${path}`).toBe(
+        404,
+      );
+    }
+    const theirs = await setupOf(other.token);
+    expect(theirs.departments.map((entry) => entry.id)).toContain(theirDepartment);
+    expect(theirs.wards.find((entry) => entry.id === theirWard)).toMatchObject({
+      floor: 2,
+      beds: [{ id: theirBed }],
+    });
+  });
+});

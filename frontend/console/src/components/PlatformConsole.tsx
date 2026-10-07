@@ -122,6 +122,9 @@ const COUNT_LABEL: Readonly<Record<string, ConsoleKey>> = {
   doctors: 'settingsCountDoctors',
   schedules: 'settingsCountSchedules',
   staff: 'settingsCountStaff',
+  contact: 'settingsCountContact',
+  location: 'settingsCountLocation',
+  emergency_services: 'settingsCountEmergency',
   beds: 'settingsCountBeds',
   verified_doctors: 'settingsCountVerified',
 };
@@ -679,7 +682,9 @@ function WorkspacePanel({
                     ? t('settingsCheckDone', locale)
                     : item.required || item.key === 'verified_doctors'
                       ? t('settingsCheckMissing', locale)
-                      : t('settingsCheckOptional', locale)}
+                      : item.advised
+                        ? t('settingsCheckAdvised', locale)
+                        : t('settingsCheckOptional', locale)}
                 </Chip>
                 <span className="text-ink-secondary">
                   {format(COUNT_LABEL[item.key] ?? 'settingsCountStaff', locale, {

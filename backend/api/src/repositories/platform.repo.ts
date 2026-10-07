@@ -37,7 +37,15 @@ const COUNTS = sql`
   (SELECT count(*) FROM beds b
     WHERE b.hospital_id = h.id AND b.deleted_at IS NULL)::int AS beds,
   (SELECT count(*) FROM staff_users su
-    WHERE su.hospital_id = h.id AND su.deleted_at IS NULL AND su.is_active)::int AS staff
+    WHERE su.hospital_id = h.id AND su.deleted_at IS NULL AND su.is_active)::int AS staff,
+  -- Plan D2: what a patient needs to reach the place, as a yes or a no.
+  (CASE WHEN h.phone IS NOT NULL AND coalesce(h.address_bn, h.address_en) IS NOT NULL
+        THEN 1 ELSE 0 END)::int AS contact,
+  (CASE WHEN h.lat IS NOT NULL AND h.lng IS NOT NULL THEN 1 ELSE 0 END)::int AS location,
+  -- Null where there is no emergency desk to declare anything of (FR-BRD-11).
+  (CASE WHEN fn_module_on(h.id, 'emergency')
+        THEN (SELECT count(*) FROM capabilities c WHERE c.hospital_id = h.id)::int
+        ELSE NULL END) AS capabilities
 `;
 
 interface CountColumns {
@@ -47,6 +55,9 @@ interface CountColumns {
   schedules: number;
   beds: number;
   staff: number;
+  contact: number;
+  location: number;
+  capabilities: number | null;
 }
 
 function countsOf(row: CountColumns): SetupCounts {
@@ -57,6 +68,9 @@ function countsOf(row: CountColumns): SetupCounts {
     schedules: row.schedules,
     beds: row.beds,
     staff: row.staff,
+    contact: row.contact,
+    location: row.location,
+    capabilities: row.capabilities,
   };
 }
 
