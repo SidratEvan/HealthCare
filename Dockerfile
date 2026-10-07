@@ -89,7 +89,13 @@ EXPOSE 4000
 # web apps and the web server wait for before they start.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:4000/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["pnpm", "--filter", "@platform/api", "start:compiled"]
+# `node` itself, not `pnpm start:compiled`: the first process in a container
+# is the one `docker stop` signals. Under pnpm, pnpm took the SIGTERM and went,
+# and the server was killed behind it without running its shutdown, so a tap
+# in flight was cut off instead of finished (`server.ts`, FR-QUE-51). The same
+# command as `start:compiled`. The working folder stays /app, where the
+# `migrate` service's and an operator's `pnpm` commands are run from.
+CMD ["node", "--conditions=compiled", "backend/api/dist/server.js"]
 
 # --- the web apps ----------------------------------------------------------------
 FROM deps AS web
