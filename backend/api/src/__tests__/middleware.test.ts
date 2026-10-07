@@ -11,7 +11,14 @@ import { z } from 'zod';
 import { redactedPaths } from '../config/logger.js';
 import { errorHandler } from '../middleware/error.js';
 import { idempotency, isUnsafeMethod } from '../middleware/idempotency.js';
-import { byIp, byPhone, counter, rateLimit } from '../middleware/rateLimit.js';
+import {
+  ANONYMOUS_PER_MINUTE,
+  anonymousCeiling,
+  byIp,
+  byPhone,
+  counter,
+  rateLimit,
+} from '../middleware/rateLimit.js';
 import { validate } from '../middleware/validate.js';
 
 /** An app with one route, for exercising a single middleware. */
@@ -294,6 +301,73 @@ describe('a limit on an address, where many people share one (ADDRESS_RATE_LIMIT
     expect((await request(app).post('/otp').send(phone)).status).toBe(200);
     expect((await request(app).post('/otp').send(phone)).status).toBe(200);
     expect((await request(app).post('/otp').send(phone)).status).toBe(429);
+  });
+});
+
+describe('the ceiling on what is asked without an account (plan I2b)', () => {
+  beforeEach(() => {
+    counter.reset();
+  });
+
+  it('a named bucket counts one caller across every route it is on', async () => {
+    const shared = rateLimit({ limit: 2, windowSeconds: 60, keyFor: byIp, bucket: 'probe' });
+    const app = harness((a) => {
+      for (const path of ['/one', '/two', '/three']) {
+        a.get(path, shared, (_req, res) => {
+          res.json({ ok: true });
+        });
+      }
+    });
+
+    expect((await request(app).get('/one')).status).toBe(200);
+    expect((await request(app).get('/two')).status).toBe(200);
+    expect((await request(app).get('/three')).status).toBe(429);
+  });
+
+  /** The ceiling, with a header standing in for a token so a test can be somebody. */
+  const app = harness((a) => {
+    a.use((req, _res, next) => {
+      if (req.get('x-probe-signed-in') !== undefined) {
+        Object.assign(req, { principal: { kind: 'patient', id: 'probe', roles: [] } });
+      }
+      next();
+    });
+    a.use(anonymousCeiling);
+    a.get('/search', (_req, res) => {
+      res.json({ ok: true });
+    });
+    a.post('/webhooks/sms-dlr', (_req, res) => {
+      res.json({ ok: true });
+    });
+  });
+
+  /** Spends this address's whole minute, as a script in a loop would. */
+  function spendTheMinute(): void {
+    const now = Date.now();
+    for (const address of ['::ffff:127.0.0.1', '127.0.0.1', '::1']) {
+      for (let hit = 0; hit < ANONYMOUS_PER_MINUTE; hit += 1) {
+        counter.hit(`anonymous:${address}`, ANONYMOUS_PER_MINUTE, 60, now);
+      }
+    }
+  }
+
+  it('lets a waiting room’s worth of phones through, and refuses past it', async () => {
+    expect((await request(app).get('/search')).status).toBe(200);
+    expect(ANONYMOUS_PER_MINUTE).toBeGreaterThanOrEqual(100 * 12);
+    spendTheMinute();
+    const refused = await request(app).get('/search');
+    expect(refused.status).toBe(429);
+    expect(refused.body.error.code).toBe('RATE_LIMITED');
+  });
+
+  it('does not count a caller with an account, who is limited by what they do', async () => {
+    spendTheMinute();
+    expect((await request(app).get('/search').set('x-probe-signed-in', '1')).status).toBe(200);
+  });
+
+  it('does not count an aggregator’s delivery reports, which are each signed', async () => {
+    spendTheMinute();
+    expect((await request(app).post('/webhooks/sms-dlr').send({})).status).toBe(200);
   });
 });
 

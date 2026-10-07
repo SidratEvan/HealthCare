@@ -550,6 +550,28 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
           'must differ from JWT_ACCESS_SECRET — sharing them lets a 15-minute access token be replayed as a 30-day refresh token',
       });
     }
+
+    // The tracking link's key and the second factor's key are each one
+    // secret's whole job (plan I2b). A link key equal to a token key makes one
+    // stolen secret both; a second-factor key equal to either means whoever
+    // can sign a token can read every administrator's authenticator seed.
+    const tokenKeys = [env.JWT_ACCESS_SECRET, env.JWT_REFRESH_SECRET];
+    if (tokenKeys.includes(env.GUEST_LINK_SECRET)) {
+      problems.push({
+        key: 'GUEST_LINK_SECRET',
+        message: 'must differ from both JWT secrets — a tracking link is signed with its own key',
+      });
+    }
+    if (
+      env.TOTP_ENCRYPTION_KEY !== '' &&
+      [...tokenKeys, env.GUEST_LINK_SECRET].includes(env.TOTP_ENCRYPTION_KEY)
+    ) {
+      problems.push({
+        key: 'TOTP_ENCRYPTION_KEY',
+        message:
+          'must differ from the JWT and tracking-link secrets — it encrypts what a second factor is made from (FR-SEC-10)',
+      });
+    }
   }
 
   if (problems.length > 0) throw new EnvError(problems);

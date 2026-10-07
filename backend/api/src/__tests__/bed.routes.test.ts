@@ -787,6 +787,16 @@ describe('the phone is proved before a bed request (FR-GST-03)', () => {
     expect(response.body.error.details.reason).toBe('phone_unverified');
   });
 
+  it('takes ten requests from one address in ten minutes, and refuses the next (plan I2b)', async () => {
+    const patient = deskPatient('আমিনুল হক (ডেমো)');
+    for (let attempt = 1; attempt <= 10; attempt += 1) {
+      expect((await askAs(patient, null)).status, `attempt ${String(attempt)}`).toBe(401);
+    }
+    const refused = await askAs(patient, null);
+    expect(refused.status).toBe(429);
+    expect(refused.body.error.code).toBe('RATE_LIMITED');
+  });
+
   it("files a proved phone's request, and shows it to nobody else", async () => {
     const patient = deskPatient('আমিনুল হক (ডেমো)');
 
