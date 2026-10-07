@@ -235,6 +235,34 @@ export async function alreadyNotified(
   return new Set(result.rows.map((row) => row.booking_id));
 }
 
+/**
+ * The time each booking in a chamber was last told, where a message has named
+ * one (`bookings.told_eta_at`, migration 0050, `FR-QUE-15`). A booking that
+ * is not in the answer was told the planned start and nothing since.
+ */
+export async function toldEtas(trx: Tx, sessionId: string): Promise<Map<string, Date>> {
+  const result = await sql<{ id: string; told_eta_at: Date }>`
+    SELECT id, told_eta_at FROM bookings
+     WHERE session_id = ${sessionId}::uuid AND told_eta_at IS NOT NULL AND deleted_at IS NULL
+  `.execute(trx);
+  return new Map(result.rows.map((row) => [row.id, row.told_eta_at]));
+}
+
+/** Records the time a message just told each of these bookings. */
+export async function setToldEtas(
+  trx: Tx,
+  told: readonly { readonly bookingId: string; readonly etaAt: string }[],
+): Promise<void> {
+  if (told.length === 0) return;
+  await sql`
+    UPDATE bookings b
+       SET told_eta_at = t.eta_at
+      FROM unnest(${told.map((entry) => entry.bookingId)}::uuid[],
+                  ${told.map((entry) => entry.etaAt)}::timestamptz[]) AS t(id, eta_at)
+     WHERE b.id = t.id
+  `.execute(trx);
+}
+
 /** The chamber a message is about, for the text that names it. */
 export interface ChamberRow {
   readonly hospitalId: string;

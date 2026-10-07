@@ -40,6 +40,7 @@ export const TEMPLATE_KEYS = [
   'queue.doctor_arrived',
   'queue.delayed',
   'queue.two_away',
+  'queue.earlier',
   'queue.called',
   'queue.no_show',
   'queue.cancelled',
@@ -135,6 +136,25 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
   //
   // The message that makes the queue worth keeping: it is the one that lets a
   // person wait somewhere other than a corridor.
+  // `FR-QUE-15` (plan F2c). The estimate has moved earlier than the time this
+  // patient was last told, by more than its own band. Somebody told "around
+  // 6:30" who is then called at 5:50 has been failed by the app, so they are
+  // told before any screen shows the earlier time. It says "may": an estimate
+  // is still an estimate (`FR-QUE-13`).
+  {
+    key: 'queue.earlier',
+    channel: 'sms',
+    version: 1,
+    bn: 'সিরিয়াল {serial} আগে আসতে পারে, এখন আনুমানিক {eta}। সময়মতো আসুন।',
+    en: 'Serial {serial} may come sooner, now around {eta}. Please come in time.',
+  },
+  {
+    key: 'queue.earlier',
+    channel: 'push',
+    version: 1,
+    bn: 'সিরিয়াল {serial} আগে আসতে পারে — এখন আনুমানিক {eta}',
+    en: 'Serial {serial} may come sooner — now around {eta}',
+  },
   {
     key: 'queue.two_away',
     channel: 'sms',

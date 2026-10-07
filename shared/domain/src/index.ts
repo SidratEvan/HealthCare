@@ -69,6 +69,7 @@ export {
 export {
   bandMinutes,
   computeEtas,
+  earlierThanTold,
   etaFor,
   outstandingDelayMinutes,
   projectedEnd,

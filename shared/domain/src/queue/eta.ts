@@ -126,6 +126,46 @@ export function computeEtas(
   return etas;
 }
 
+/**
+ * The waiting patients whose estimate is now earlier than the time they were
+ * last told, by more than the estimate's own band (`FR-QUE-15`).
+ *
+ * "A patient's ETA never moves earlier than their booked window without an
+ * explicit notification." What a patient was told is one time: the one in
+ * the last message that named one, or the chamber's planned start, which is
+ * the time in the booking's confirmation. The window around it is the band.
+ * An estimate that has come forward inside that band is the estimate being
+ * an estimate; one that has come forward past it is a turn somebody will
+ * miss, and they are told.
+ *
+ * Not everybody:
+ *
+ * - an estimate the chamber cannot support (`unknown`: the doctor has not
+ *   arrived, or the chamber is paused) is shown as no time at all, so there
+ *   is no earlier time to warn about;
+ * - a patient reception has checked in is in the corridor, and is told by
+ *   the room.
+ *
+ * Pure. The caller keeps what was told and sends the message.
+ */
+export function earlierThanTold(
+  state: QueueState,
+  etas: readonly Eta[],
+  told: ReadonlyMap<BookingId, Timestamp>,
+  plannedStart: Timestamp,
+): readonly Eta[] {
+  const present = new Set(
+    state.entries.filter((entry) => entry.arrivedAt !== null).map((entry) => entry.bookingId),
+  );
+
+  return etas.filter((eta) => {
+    if (eta.confidence === 'unknown') return false;
+    if (present.has(eta.bookingId)) return false;
+    const toldAt = told.get(eta.bookingId) ?? plannedStart;
+    return differenceInSeconds(toldAt, eta.etaAt) > eta.bandMinutes * 60;
+  });
+}
+
 /** The estimate for one booking, or null when it is not waiting. */
 export function etaFor(
   state: QueueState,

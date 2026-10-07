@@ -630,6 +630,7 @@ backend/workers/src/
 | `DOCTOR_ARRIVED` | `queue.doctor_arrived` | push + SMS |
 | `DELAY_DECLARED` | `queue.delayed` | push + SMS |
 | Two away | `queue.two_away` | push + SMS |
+| An estimate earlier than the patient was told (`FR-QUE-15`, plan F2c) | `queue.earlier` | push + SMS. Not an event of its own: planned in step 11 of every queue write (`settle`) from `earlierThanTold` in `shared/domain`, for a waiting patient who has not been checked in and whose estimate is now earlier than `bookings.told_eta_at` (or the planned start, when nothing has told them a time since the confirmation) by more than its band. Not planned for a booking the same write already gives a time to. `queue.doctor_arrived`, `queue.delayed` and this message are the three that tell a time, and each moves `told_eta_at` in the write's transaction, whatever became of the message (a skipped row still says why). A queue event, so quiet hours do not hold it |
 | `PATIENT_CALLED` | `queue.called` | push + SMS |
 | `PATIENT_NO_SHOW` | `queue.no_show` | SMS |
 | `SLOT_OFFERED` | `queue.slot_offer` | push + SMS |

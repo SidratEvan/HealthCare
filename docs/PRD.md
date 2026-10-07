@@ -607,7 +607,7 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-QUE-12` The rate updates continuously from completed consultations in the running session, weighted toward recent ones.
 - `FR-QUE-13` ETAs are expressed as a time plus a confidence band ("around 6:05, ±15 min") rather than false precision.
 - `FR-QUE-14` Recalculation is triggered by every queue event and completes in under 500 ms for a session of 100 patients.
-- `FR-QUE-15` A patient's ETA never moves earlier than their booked window without an explicit notification, to avoid people missing a turn that arrived early.
+- `FR-QUE-15` A patient's ETA never moves earlier than their booked window without an explicit notification, to avoid people missing a turn that arrived early. **Built (plan F2c, 6 October 2026):** what a patient was told is one time, the one in the last message that named one (the doctor has arrived, a delay, or this notice), or the chamber's planned start, which is the time in the confirmation. When a queue action leaves a waiting patient's estimate earlier than that by more than the estimate's own band, they are sent "your turn may come sooner, now around …" in the same write, before any screen shows the earlier time, and what they were told becomes the new time. Not sent while the chamber cannot support a time at all (the doctor has not arrived, or it is paused), nor to a patient reception has checked in.
 
 ### 16.3 Late, no-show, and recovery
 
