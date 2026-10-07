@@ -113,6 +113,7 @@ export function LiveSerial({ linkToken }: { readonly linkToken: string | null })
   return (
     <Ready
       booking={link.booking}
+      ticket={link.initial?.ticket ?? null}
       payment={link.initial?.payment ?? null}
       state={state}
       etas={etas}
@@ -126,6 +127,7 @@ export function LiveSerial({ linkToken }: { readonly linkToken: string | null })
 
 function Ready({
   booking,
+  ticket,
   payment,
   state,
   etas,
@@ -137,6 +139,11 @@ function Ready({
   /** What was paid, for the refund `MOD-A08-CANCEL` has to state. */
   readonly payment: BookingView['payment'];
   readonly booking: BookingDetail;
+  /**
+   * What stands for this booking in the queue a phone is sent, which names no
+   * booking (plan I2c). Null only before the first answer, when nothing is drawn.
+   */
+  readonly ticket: string | null;
   readonly state: QueueState;
   readonly etas: readonly Eta[];
   readonly freshAt: string | null;
@@ -149,7 +156,7 @@ function Ready({
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const mine = state.entries.find((entry) => entry.bookingId === booking.id) ?? null;
+  const mine = state.entries.find((entry) => entry.bookingId === ticket) ?? null;
   const ahead = mine === null ? 0 : aheadOf(state, mine.bookingId);
   const serving = state.entries.find((entry) => entry.status === 'in_chamber') ?? null;
 
@@ -162,15 +169,14 @@ function Ready({
    * the same number from the same code (`FR-QUE-05`).
    */
   const eta = useMemo(() => {
-    const broadcast = etas.find((candidate) => candidate.bookingId === booking.id);
+    const broadcast = etas.find((candidate) => candidate.bookingId === ticket);
     if (broadcast !== undefined) return broadcast;
 
     return (
-      computeEtas(state, time.fromDate(now)).find(
-        (candidate) => candidate.bookingId === booking.id,
-      ) ?? null
+      computeEtas(state, time.fromDate(now)).find((candidate) => candidate.bookingId === ticket) ??
+      null
     );
-  }, [etas, state, booking.id, now]);
+  }, [etas, state, ticket, now]);
 
   const called = mine?.status === 'in_chamber';
   // What is still ahead, not everything declared today: a delay the doctor's

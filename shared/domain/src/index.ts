@@ -80,6 +80,7 @@ export {
   type Eta,
   type EtaOptions,
 } from './queue/eta.js';
+export { NO_PATIENT, patientViewOf, type PatientQueueView } from './queue/patientView.js';
 
 export {
   canAddWalkin,

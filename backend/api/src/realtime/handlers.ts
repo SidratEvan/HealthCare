@@ -16,8 +16,11 @@
  * long enough that the delta is bigger than the state.
  */
 
+import { patientViewOf } from '@platform/domain';
+
 import { runInDbScope, scopeOfPrincipal } from '../config/dbScope.js';
 import { logger } from '../config/logger.js';
+import { ticketsIn } from '../config/serialTicket.js';
 import { AppError } from '../errors/AppError.js';
 import * as queueService from '../services/queue.service.js';
 
@@ -81,9 +84,10 @@ export function registerHandlers(io: Server): void {
     socket.on('session:unsubscribe', (message: SubscribeMessage) => {
       const sessionId = readSessionId(message);
       if (sessionId === null) return;
-      const room = ROOMS.session(sessionId);
-      void socket.leave(room);
-      session.rooms.delete(room);
+      for (const room of [ROOMS.session(sessionId), ROOMS.sessionStaff(sessionId)]) {
+        void socket.leave(room);
+        session.rooms.delete(room);
+      }
     });
 
     socket.on('disconnect', (reason) => {
@@ -124,7 +128,10 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
     return;
   }
 
-  const room = ROOMS.session(sessionId);
+  // Staff hear the queue as reception holds it; anybody else the patients'
+  // copy, which names nobody (plan I2c, `queue/patientView`).
+  const staff = session.principal.kind === 'staff';
+  const room = staff ? ROOMS.sessionStaff(sessionId) : ROOMS.session(sessionId);
   await socket.join(room);
   session.rooms.add(room);
 
@@ -133,12 +140,25 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
   const etas = await queueService.getEtas(sessionId);
   const serverTs = new Date().toISOString();
 
+  // A phone is caught up with the patients' copy as it stands, never with the
+  // log's events: an event names the booking it is about.
+  if (!staff) {
+    socket.emit('queue.updated', {
+      type: 'queue.updated',
+      seq: state.lastSeq,
+      serverTs,
+      applied: [],
+      data: patientViewOf(state, etas, ticketsIn(sessionId)),
+    });
+    return;
+  }
+
   // `SY-08`: a console that subscribes with actions it has not been answered
   // for says which. Those the log already holds are named beside the state
   // that contains them, so an answer lost on the way is settled here. Staff
   // only: nobody else has actions. Read after the state and bounded by its
   // sequence, so nothing is named that this state does not yet show.
-  const unanswered = session.principal.kind === 'staff' ? readUnanswered(message) : [];
+  const unanswered = readUnanswered(message);
   const applied = await queueService.appliedAmong(sessionId, unanswered, state.lastSeq);
 
   // Far enough behind, or never subscribed: send the state rather than a

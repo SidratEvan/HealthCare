@@ -21,17 +21,19 @@
  * care what is on the other side.
  */
 
-import type {
-  BedView,
-  EmergencyCaseView,
-  Eta,
-  PublicCapacity,
-  QueueState,
-  ReferralView,
-  TestOrderView,
+import {
+  patientViewOf,
+  type BedView,
+  type EmergencyCaseView,
+  type Eta,
+  type PublicCapacity,
+  type QueueState,
+  type ReferralView,
+  type TestOrderView,
 } from '@platform/domain';
 
 import { logger } from '../config/logger.js';
+import { ticketsIn } from '../config/serialTicket.js';
 
 import { ROOMS, type AppliedAction, type RealtimeEnvelope } from './rooms.js';
 
@@ -134,12 +136,21 @@ export function queueUpdated(
   serverTs: string,
   applied: readonly AppliedAction[] = [],
 ): void {
-  emitter().emit(ROOMS.session(sessionId), 'queue.updated', {
+  emitter().emit(ROOMS.sessionStaff(sessionId), 'queue.updated', {
     type: 'queue.updated',
     seq,
     serverTs,
     applied,
     data: payload,
+  });
+  // The patients' copy (plan I2c): the same queue, naming nobody. No console
+  // actions either: a phone has none to settle.
+  emitter().emit(ROOMS.session(sessionId), 'queue.updated', {
+    type: 'queue.updated',
+    seq,
+    serverTs,
+    applied: [],
+    data: patientViewOf(payload.state, payload.etas, ticketsIn(sessionId)),
   });
 }
 
@@ -154,22 +165,16 @@ export function sessionDelayed(
   seq: number,
   serverTs: string,
 ): void {
-  emitter().emit(ROOMS.session(sessionId), 'session.delayed', {
-    type: 'session.delayed',
-    seq,
-    serverTs,
-    data,
-  });
+  for (const room of [ROOMS.sessionStaff(sessionId), ROOMS.session(sessionId)]) {
+    emitter().emit(room, 'session.delayed', { type: 'session.delayed', seq, serverTs, data });
+  }
 }
 
 /** `session.ended` — stop polling, the chamber is closed (`FR-REC-06`). */
 export function sessionEnded(sessionId: string, seq: number, serverTs: string): void {
-  emitter().emit(ROOMS.session(sessionId), 'session.ended', {
-    type: 'session.ended',
-    seq,
-    serverTs,
-    data: {},
-  });
+  for (const room of [ROOMS.sessionStaff(sessionId), ROOMS.session(sessionId)]) {
+    emitter().emit(room, 'session.ended', { type: 'session.ended', seq, serverTs, data: {} });
+  }
 }
 
 /**

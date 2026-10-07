@@ -16,8 +16,13 @@ import type { Principal } from '../types/express.js';
 
 /** Every room kind in BACKEND.md §6. */
 export const ROOMS = {
-  /** Patients with a booking, the reception console, the doctor's screen. */
+  /**
+   * Patients with a booking in the chamber. They are sent the patients' copy
+   * of the queue, which names nobody (plan I2c, `queue/patientView`).
+   */
   session: (sessionId: string): string => `session:${sessionId}`,
+  /** The chamber's reception console and doctor's screen: the queue as reception holds it. */
+  sessionStaff: (sessionId: string): string => `session:${sessionId}:staff`,
   beds: (hospitalId: string): string => `hospital:${hospitalId}:beds`,
   emergency: (hospitalId: string): string => `hospital:${hospitalId}:emergency`,
   lab: (hospitalId: string): string => `hospital:${hospitalId}:lab`,

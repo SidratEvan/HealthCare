@@ -133,7 +133,9 @@ export async function standingOf(bookings: readonly DatedBooking[]): Promise<Sto
 
       try {
         const view = await openTrackingLink(booking.token);
-        const mine = view.state.entries.find((entry) => entry.bookingId === booking.bookingId);
+        // The queue a phone is sent names no booking; this one's row carries
+        // its ticket (plan I2c).
+        const mine = view.state.entries.find((entry) => entry.bookingId === view.ticket);
         const standing = bookingStanding(view.state.status, mine?.status ?? 'cancelled');
         known[booking.bookingId] = { standing, at: view.serverTs };
 

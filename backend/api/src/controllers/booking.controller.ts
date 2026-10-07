@@ -114,7 +114,10 @@ export async function getBooking(req: Request, res: Response): Promise<void> {
   const { id } = idParams.parse(req.params);
   await assertBookingScope(req);
 
-  res.json({ ok: true, data: await booking.bookingView(id) });
+  // Staff see the queue as reception holds it; anybody else the patients'
+  // copy, which names nobody (plan I2c).
+  const audience = req.principal?.kind === 'staff' ? 'staff' : 'patient';
+  res.json({ ok: true, data: await booking.bookingView(id, audience) });
 }
 
 /**
