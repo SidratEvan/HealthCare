@@ -640,8 +640,8 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-NOT-03` Material events: booking confirmed, doctor arrived, delay declared, "leave now", called soon (2 patients away), called, marked no-show, slot offered, report ready, follow-up due.
 - `FR-NOT-04` All message templates exist in Bangla and English, with the patient's preferred language chosen at send time.
 - `FR-NOT-05` Templates are versioned and centrally managed, never hard-coded at call sites.
-- `FR-NOT-06` Per-hospital SMS budget caps and delivery reporting.
-- `FR-NOT-07` Quiet hours for non-urgent notifications; emergency and queue events override.
+- `FR-NOT-06` Per-hospital SMS budget caps and delivery reporting. **A message that fails is tried again** (plan H1): five tries over about twenty minutes (after a failure a quarter of a minute, then one minute, five, fifteen), then it is recorded as failed with what the gateway last said and how often it was asked, and the platform's health view counts it (`FR-SUP-06`). No request waits for a gateway. Delivery reports from an aggregator are plan H2.
+- `FR-NOT-07` Quiet hours for non-urgent notifications; emergency and queue events override. Quiet hours are ten at night to seven in the morning in Dhaka. **A message held for them is sent when they end** (plan H1): it waits, due at seven, and goes then. Until that branch it was recorded as not sent and never was.
 
 ---
 

@@ -153,6 +153,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0051',
       // Plan G2: a hospital's messages by outcome and its late actions (FR-SUP-06).
       '0052',
+      // Plan H1: a message's tries and when it is next due (FR-NOT-06, FR-NOT-07).
+      '0053',
     ]);
   });
 

@@ -24,6 +24,7 @@ import { logger } from './config/logger.js';
 import { env } from './env.js';
 import { attachRealtime } from './realtime/server.js';
 import { startHourlyJobs } from './services/jobs.service.js';
+import { startSender } from './services/notificationSender.service.js';
 
 import type { Server as SocketServer } from 'socket.io';
 
@@ -56,8 +57,14 @@ export function startServer(): Server {
   // Each day's chambers from the weekly schedules (pilot step 22) and the
   // 30-day clearing of imported rows (step 24): now, and hourly after.
   const stopJobs = startHourlyJobs();
+  // Messages: what a request handed over, what failed and is due again, and
+  // what was held overnight (plan H1). In this process, on a short interval.
+  const stopSender = startSender();
 
-  installShutdownHandlers(server, io, stopJobs);
+  installShutdownHandlers(server, io, () => {
+    stopJobs();
+    stopSender();
+  });
   return server;
 }
 

@@ -159,6 +159,23 @@ export {
   type PublicCapacity,
 } from './beds/capacity.js';
 
+// --- Sending a message ------------------------------------------------------
+//
+// When a message is tried again, when it is given up on, and when one held
+// for quiet hours goes (`FR-NOT-06`, `FR-NOT-07`; plan H1).
+export {
+  QUIET_FROM_HOUR,
+  QUIET_UNTIL_HOUR,
+  SEND_CLAIM_SECONDS,
+  SEND_MAX_ATTEMPTS,
+  SEND_RETRY_SECONDS,
+  afterFailedSend,
+  dhakaHour,
+  endOfQuietHours,
+  inQuietHours,
+  type AfterFailure,
+} from './messaging/sending.js';
+
 // --- A workspace's health and its trail of changes --------------------------
 //
 // What the platform's screen says about how a hospital is doing (`FR-SUP-06`)

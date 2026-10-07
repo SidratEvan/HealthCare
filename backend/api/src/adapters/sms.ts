@@ -60,7 +60,16 @@ export interface SmsMessage {
 /** What it reports back. Recorded verbatim onto the notification row. */
 export type SmsResult =
   | { readonly ok: true; readonly providerRef: string; readonly costPoisha: number }
-  | { readonly ok: false; readonly error: string };
+  | {
+      readonly ok: false;
+      readonly error: string;
+      /**
+       * False where asking again cannot help: the number does not exist, the
+       * sender is barred. Absent means it may (`shared/domain`
+       * `messaging/sending`): a gateway that is down is the ordinary failure.
+       */
+      readonly retryable?: boolean;
+    };
 
 export interface SmsAdapter {
   readonly name: string;
