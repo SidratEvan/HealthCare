@@ -108,10 +108,22 @@ export async function pushBatch(input: {
     }
   }
 
+  // A doctor's arrival queued offline carries the console's own account of
+  // when, and of how late. The first is kept within what an offline shift can
+  // be; the second is worked out here, as the online route works it out.
+  const plannedStart = replayable.some((entry) => entry.type === 'DOCTOR_ARRIVED')
+    ? time.fromDate((await queueService.requireSession(input.sessionId)).plannedStart)
+    : null;
+  const now = time.fromDate(new Date());
+
   const result: BatchResult = await queueService.appendBatch({
     sessionId: input.sessionId,
     actor: input.actor,
-    entries: replayable.map(withPlausiblePayload),
+    entries: replayable
+      .map(withPlausiblePayload)
+      .map((entry) =>
+        plannedStart === null ? entry : withServerLateness(entry, plannedStart, now),
+      ),
   });
 
   for (const outcome of result.outcomes) {
@@ -231,6 +243,50 @@ function withPlausiblePayload(entry: BatchEntry): BatchEntry {
   return {
     ...entry,
     payload: { ...entry.payload, consultSeconds: clampConsultSeconds(measured) },
+  };
+}
+
+/**
+ * The arrival a console recorded offline, as far as it can be believed
+ * (`FR-REC-02`, `SY-07`; handover 27, plan F2b).
+ *
+ * Online, the server stamps a doctor's arrival and the lateness itself, so
+ * that the punctuality an administrator reads (`FR-ADM-05`) is not something
+ * a console can round in its favour. Offline there is no server to stamp it:
+ * the console's time is the only account of when the doctor walked in, and it
+ * is the truer one, since the tap may reach the server an hour later. So it
+ * is kept, inside the only window it can honestly come from: not after now,
+ * and not before the longest a device may be offline and still be caught up
+ * (`MAX_OFFLINE_HOURS`). Outside that the console's clock is wrong, and the
+ * arrival is timed when the server heard of it.
+ *
+ * `minutesLate` is never the console's to say. It sent zero, always; it is
+ * worked out here from the arrival and the planned start, exactly as
+ * `POST /sessions/:id/arrived` does.
+ */
+export function plausibleArrival(claimed: unknown, now: Timestamp): Timestamp {
+  if (typeof claimed !== 'string') return now;
+  const at = new Date(claimed);
+  if (Number.isNaN(at.getTime())) return now;
+  const arrivedAt = time.fromDate(at);
+  if (time.isAfter(arrivedAt, now)) return now;
+  return time.differenceInHours(now, arrivedAt) >= MAX_OFFLINE_HOURS ? now : arrivedAt;
+}
+
+function withServerLateness(
+  entry: BatchEntry,
+  plannedStart: Timestamp,
+  now: Timestamp,
+): BatchEntry {
+  if (entry.type !== 'DOCTOR_ARRIVED') return entry;
+  const arrivedAt = plausibleArrival(entry.payload['arrivedAt'], now);
+  return {
+    ...entry,
+    payload: {
+      ...entry.payload,
+      arrivedAt,
+      minutesLate: time.differenceInMinutes(arrivedAt, plannedStart),
+    },
   };
 }
 

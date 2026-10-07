@@ -304,7 +304,7 @@ Consoles operate fully offline (`FR-OFF-01`). The protocol is deliberately small
 
 ### 5.2 Rules
 
-- `SY-01` Server ordering is authoritative; client timestamps only order the batch within itself (`FR-QUE-51`).
+- `SY-01` Server ordering is authoritative; client timestamps only order the batch within itself (`FR-QUE-51`). **One time in a batch is the console's own, and it is bounded (plan F2b):** a `DOCTOR_ARRIVED` entry's `arrivedAt`, because the console is the only witness to when the doctor walked in. It is kept when it is not after the server's clock and not older than `MAX_OFFLINE_HOURS`; otherwise the arrival is timed when the server heard of it. `minutesLate` is never taken from a console: the server works it out from that arrival and the planned start, as `POST /sessions/:id/arrived` does. Every other time in a replayed batch (a patient checked in, called, done) is still the server's, which for an offline shift is the moment of the sync; whether those should carry the console's time too is the owner's to decide (`STATUS.md`, question 11).
 - `SY-02` Every event is idempotent by `clientEventId`; a replayed batch is safe.
 - `SY-03` Conflicting events (two counters calling different patients) resolve by server arrival; the losing device receives a `conflict` entry in the batch response and rolls that row back.
 - `SY-04` Bookings created online while the console was offline appear in the missed-events pull and are inserted into the local queue as new arrivals, never dropped (`FR-QUE-52`).
