@@ -94,6 +94,8 @@ const NOBODYS: readonly string[] = [
   'POST /webhooks/bkash',
   'POST /webhooks/nagad',
   'GET /me/profiles',
+  'GET /me/bookings',
+  'POST /me/bookings/:id/link',
   'POST /guest/claim',
   'POST /patients/:id/consent-offer',
   'POST /consents',

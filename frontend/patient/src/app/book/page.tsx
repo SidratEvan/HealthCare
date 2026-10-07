@@ -49,6 +49,7 @@ import { useDeployment } from '@/hooks/useDeployment';
 import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
+import { bookAsProfile, profiles, readAccount, type Profile } from '@/lib/account';
 import {
   allHospitals,
   availability,
@@ -828,10 +829,39 @@ function Confirm({
   // who typed their number the way they say it.
   const phoneStored = normaliseBdMobile(phone);
   const phoneValid = phoneStored !== null;
+
+  /**
+   * Signed in: the account's own profiles, so nothing is typed again
+   * (`FR-GST-10`, `FR-PAT-03`; plan F1). Null means the guest sheet: nobody
+   * is signed in, the account holds no profile yet, or the profiles could not
+   * be read, none of which may stand between a person and a serial
+   * (`FR-GST-11`).
+   */
+  const [ownProfiles, setOwnProfiles] = useState<readonly Profile[] | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
+  // Booking for somebody who is not one of the profiles: the guest sheet, as asked for.
+  const [forSomebodyElse, setForSomebodyElse] = useState(false);
+  useEffect(() => {
+    if (readAccount() === null) return undefined;
+    let stale = false;
+    void profiles().then((answer) => {
+      if (stale || !answer.ok || answer.value.length === 0) return;
+      setOwnProfiles(answer.value);
+      const first = answer.value.find((profile) => profile.isPrimary) ?? answer.value[0];
+      setProfileId(first?.patientId ?? null);
+    });
+    return () => {
+      stale = true;
+    };
+  }, []);
+  const asAccount = ownProfiles !== null && !forSomebodyElse;
+
   // Offline is part of readiness, not a separate guard: the button then
   // carries "no connection" as its reason rather than silently doing nothing
   // when tapped (`FRONTEND.md` §5.1).
-  const ready = online && name.trim().length >= 2 && phoneValid && Number(age) >= 0 && age !== '';
+  const ready = asAccount
+    ? online && profileId !== null
+    : online && name.trim().length >= 2 && phoneValid && Number(age) >= 0 && age !== '';
 
   const fee = useMemo(() => {
     // Shown from the session's own fee before the server answers, so a person
@@ -891,11 +921,26 @@ function Confirm({
   );
 
   const confirm = useCallback(async () => {
-    if (phoneStored === null) return;
+    if (asAccount ? profileId === null : phoneStored === null) return;
     setBusy(true);
     onFailure(null);
 
     try {
+      if (asAccount && profileId !== null) {
+        // The account is a number that was proved (`FR-PAT-01`): no code is
+        // asked for, and the profile carries the name, the age and the sex.
+        onBooked(
+          await bookAsProfile({
+            sessionId: session.id,
+            method,
+            patientId: profileId,
+            reason,
+            idempotencyKey,
+          }),
+        );
+        return;
+      }
+      if (phoneStored === null) return;
       const start = await beginPhoneCheck(phoneStored, name.trim());
       if (!start.ready) return;
       await finish(start.guestToken);
@@ -915,7 +960,21 @@ function Confirm({
     } finally {
       setBusy(false);
     }
-  }, [phoneStored, name, finish, beginPhoneCheck, onFailure, locale]);
+  }, [
+    asAccount,
+    profileId,
+    session.id,
+    method,
+    reason,
+    idempotencyKey,
+    onBooked,
+    phoneStored,
+    name,
+    finish,
+    beginPhoneCheck,
+    onFailure,
+    locale,
+  ]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -955,64 +1014,121 @@ function Confirm({
         />
       </Card>
 
-      {/* MOD-A07-GUEST: name, phone, age, sex. Nothing else is asked
-          (FR-GST-02) — a guest supplies only what the task needs. */}
-      <div className="flex flex-col gap-4">
-        <Input
-          label={tp('patientName', locale)}
-          required
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-          }}
-        />
-
-        <Input
-          label={tp('mobileNumber', locale)}
-          kind="phone"
-          required
-          value={phone}
-          placeholder="01XXXXXXXXX"
-          helper={tp('mobileHelper', locale)}
-          {...(phoneTouched && !phoneValid ? { error: tp('mobileInvalid', locale) } : {})}
-          onBlur={() => {
-            setPhoneTouched(true);
-          }}
-          onChange={(event) => {
-            setPhone(event.target.value.trim());
-          }}
-        />
-
-        <Input
-          label={tp('age', locale)}
-          kind="number"
-          required
-          value={age}
-          onChange={(event) => {
-            setAge(event.target.value.replace(/\D/g, ''));
-          }}
-        />
-
-        <fieldset className="flex flex-col gap-2 border-0 p-0">
+      {/* MOD-A07-PROFILE (plan F1): signed in, the serial is for one of the
+          account's own profiles and nothing is typed again (FR-GST-10). */}
+      {asAccount && ownProfiles !== null ? (
+        <fieldset className="flex flex-col gap-2 border-0 p-0" data-testid="booking-profiles">
           <legend className="font-ui text-body-sm font-semibold text-ink">
-            {tp('sex', locale)}
+            {tp('bookingForWhom', locale)}
           </legend>
-          <div className="flex gap-2">
-            {(['female', 'male', 'other'] as const).map((value) => (
+          <div className="flex flex-col gap-2">
+            {ownProfiles.map((profile) => (
               <button
-                key={value}
+                key={profile.patientId}
                 type="button"
-                aria-pressed={sex === value}
+                aria-pressed={profileId === profile.patientId}
+                data-testid={`booking-profile-${profile.patientId}`}
                 onClick={() => {
-                  setSex(value);
+                  setProfileId(profile.patientId);
                 }}
-                className="min-h-touch flex-1 rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
+                className="min-h-touch rounded-sm border border-line-strong bg-surface px-3 py-2 text-left text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
               >
-                {tp(value, locale)}
+                <span className="block font-semibold">{profile.fullName}</span>
+                {profile.ageYears === null ? null : (
+                  <span className="block text-body-sm text-ink-muted">
+                    {`${tp('age', locale)}: ${formatNumber(profile.ageYears, numerals)}`}
+                  </span>
+                )}
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="min-h-touch self-start text-body-sm text-brand-600 underline"
+            data-testid="booking-for-someone-else"
+            onClick={() => {
+              setForSomebodyElse(true);
+            }}
+          >
+            {tp('bookingForSomeoneElse', locale)}
+          </button>
         </fieldset>
+      ) : null}
+      {ownProfiles !== null && forSomebodyElse ? (
+        <button
+          type="button"
+          className="min-h-touch self-start text-body-sm text-brand-600 underline"
+          data-testid="booking-for-own-profile"
+          onClick={() => {
+            setForSomebodyElse(false);
+          }}
+        >
+          {tp('bookingForOwnProfile', locale)}
+        </button>
+      ) : null}
+
+      {/* MOD-A07-GUEST: name, phone, age, sex. Nothing else is asked
+          (FR-GST-02) — a guest supplies only what the task needs. */}
+      <div className="flex flex-col gap-4">
+        {asAccount ? null : (
+          <>
+            <Input
+              label={tp('patientName', locale)}
+              required
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value);
+              }}
+            />
+
+            <Input
+              label={tp('mobileNumber', locale)}
+              kind="phone"
+              required
+              value={phone}
+              placeholder="01XXXXXXXXX"
+              helper={tp('mobileHelper', locale)}
+              {...(phoneTouched && !phoneValid ? { error: tp('mobileInvalid', locale) } : {})}
+              onBlur={() => {
+                setPhoneTouched(true);
+              }}
+              onChange={(event) => {
+                setPhone(event.target.value.trim());
+              }}
+            />
+
+            <Input
+              label={tp('age', locale)}
+              kind="number"
+              required
+              value={age}
+              onChange={(event) => {
+                setAge(event.target.value.replace(/\D/g, ''));
+              }}
+            />
+
+            <fieldset className="flex flex-col gap-2 border-0 p-0">
+              <legend className="font-ui text-body-sm font-semibold text-ink">
+                {tp('sex', locale)}
+              </legend>
+              <div className="flex gap-2">
+                {(['female', 'male', 'other'] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={sex === value}
+                    onClick={() => {
+                      setSex(value);
+                    }}
+                    className="min-h-touch flex-1 rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
+                  >
+                    {tp(value, locale)}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </>
+        )}
 
         <Input
           label={tp('reason', locale)}

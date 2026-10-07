@@ -28,9 +28,11 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 import {
+  bookingStanding,
   id,
   time,
   type BookingId,
+  type BookingStanding,
   type Eta,
   type QueueActor,
   type QueueState,
@@ -43,6 +45,7 @@ import { env } from '../env.js';
 import { AppError, notFound, validationFailed } from '../errors/AppError.js';
 import * as bookingRepo from '../repositories/booking.repo.js';
 import * as guestRepo from '../repositories/guest.repo.js';
+import * as patientAuthRepo from '../repositories/patientAuth.repo.js';
 import * as sessionRepo from '../repositories/session.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
@@ -121,10 +124,12 @@ export interface BookingResult {
   readonly sessionId: string;
   readonly fee: FeeBreakdown;
   /**
-   * The guest's tracking link (`FR-GST-05`), or null for an account holder.
+   * The link to this booking's live screen (`FR-GST-05`): a guest's, and
+   * since plan F1 an account holder's too.
    *
-   * Returned once, here, and never again: only the hash is stored, so this is
-   * the sole moment the token exists outside the SMS it goes into.
+   * Only its hash is stored, so this answer and the SMS are the two places
+   * the token exists. An account holder who needs it again, on another
+   * phone, asks for a new one (`POST /me/bookings/:id/link`).
    */
   readonly trackingUrl: string | null;
   readonly paid: boolean;
@@ -266,10 +271,15 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
 
   // Outside the transaction: the link is derived from the row, and minting it
   // is not something to hold a session lock for.
+  //
+  // An account holder is given one too (plan F1). The live serial screen is
+  // opened by a link, on this phone and on any other, and the confirmation
+  // message carries it for the person without the app in their hand
+  // (`FR-PAT-22`, `FR-PAT-37`).
   const trackingUrl =
     input.booker.kind === 'guest'
       ? await issueTrackingLink(created.bookingId, input.sessionId, input.booker.phone)
-      : null;
+      : await issueAccountLink(input.booker.userId, created.bookingId, input.sessionId);
 
   // Answered again, not made again. The link is minted afresh because only
   // its hash is ever stored (`FR-GST-05`): the one the first answer carried
@@ -478,6 +488,94 @@ export async function issueTrackingLink(
     { b: bookingId, t: token },
     { hospitalOrigin: await portals.hospitalLinkOrigin(session.hospitalId) },
   );
+}
+
+/**
+ * A link for an account holder's own booking (plan F1).
+ *
+ * A link is issued to the identity behind a phone number (`guest_links`), and
+ * an account is a phone number that has been proved (`FR-PAT-01`), so the
+ * link goes to that number's identity, made here if the number never booked
+ * as a guest. It opens the one booking and nothing else of the account, like
+ * any link (`FR-GST-05`).
+ */
+async function issueAccountLink(
+  userId: string,
+  bookingId: string,
+  sessionId: string,
+): Promise<string> {
+  const user = await patientAuthRepo.userById(userId);
+  if (user === null) throw notFound('account');
+  const booking = await bookingRepo.findDetail(bookingId);
+  if (booking === null) throw notFound('booking');
+
+  await withTransaction(async (trx) => {
+    await guestRepo.findOrCreateIdentity(trx, {
+      phone: user.phone,
+      displayName: booking.patientName,
+    });
+  });
+  return await issueTrackingLink(bookingId, sessionId, user.phone);
+}
+
+// ---------------------------------------------------------------------------
+// An account's own serials (`S-A-09`, plan F1)
+// ---------------------------------------------------------------------------
+
+/** One of an account's bookings, with where it stands. */
+export interface MyBooking extends bookingRepo.AccountBooking {
+  /**
+   * Current or past, by the session's state and the booking's own and never
+   * by the date (`FR-PAT-39`): the same function the phone used to work out
+   * for itself, one tracking link at a time.
+   */
+  readonly standing: BookingStanding;
+}
+
+/**
+ * `GET /me/bookings`: the serials of every profile the account owns, on
+ * whichever phone it is signed in.
+ *
+ * Read from the rows, which hold what the reducer last produced
+ * (`saveProjections`), so nothing is replayed to draw a list. `serverTs` is
+ * what the screen's freshness line is measured from (`FR-PAT-35`).
+ */
+export async function myBookings(
+  userId: string,
+): Promise<{ readonly bookings: readonly MyBooking[]; readonly serverTs: string }> {
+  const rows = await bookingRepo.listForAccount(userId);
+  return {
+    bookings: rows.map((row) => ({
+      ...row,
+      standing: bookingStanding(row.sessionStatus, row.status),
+    })),
+    serverTs: new Date().toISOString(),
+  };
+}
+
+/** How long after its chamber's planned end a link still opens (`issueTrackingLink`). */
+const LINK_GRACE_MS = 24 * 3_600_000;
+
+/**
+ * `POST /me/bookings/:id/link`: a link to the live screen of one of the
+ * account's own bookings, for a phone that does not hold one.
+ *
+ * A booking that is not for one of the account's profiles does not exist for
+ * it. One whose chamber closed more than a day ago has no live screen to
+ * open, and is answered as a link that has run out is. Only a few links per
+ * booking stay live (`MAX_LIVE_LINKS_PER_BOOKING`); the phone keeps the one
+ * it is given and does not ask again.
+ */
+export async function linkForMyBooking(
+  userId: string,
+  bookingId: string,
+): Promise<{ readonly url: string }> {
+  const owned = await bookingRepo.ownedByAccount(bookingId, userId);
+  if (owned === null) throw notFound('booking');
+  if (owned.plannedEnd.getTime() + LINK_GRACE_MS <= Date.now()) {
+    throw new AppError('GUEST_LINK_EXPIRED');
+  }
+  return { url: await issueAccountLink(userId, bookingId, owned.sessionId) };
 }
 
 // ---------------------------------------------------------------------------

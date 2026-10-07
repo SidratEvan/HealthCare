@@ -20,6 +20,9 @@
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import { toLatinDigits } from '@platform/i18n';
 
+import { forgetLinks, rememberLink } from '@/lib/bookings';
+
+import type { BookingResponse } from '@/lib/api';
 import type { VisitRecord } from '@/lib/types';
 
 const BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
@@ -225,9 +228,88 @@ export async function recordsOf(patientId: string): Promise<AccountResult<readon
   );
 }
 
+// ---------------------------------------------------------------------------
+// The account's own serials (plan F1, `S-A-09`, `FR-PAT-03`, `FR-GST-10`)
+// ---------------------------------------------------------------------------
+
+/** One of the account's bookings, as `GET /me/bookings` lists it. */
+export interface AccountBooking {
+  readonly bookingId: string;
+  readonly sessionId: string;
+  readonly serial: number;
+  /** Current or past, by the chamber's state and the booking's, never by the date (`FR-PAT-39`). */
+  readonly standing: 'current' | 'past';
+  readonly patientId: string;
+  readonly patientName: string;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
+  readonly plannedStart: string;
+  /** The serial in the chamber now, when somebody is. */
+  readonly nowServing: number | null;
+}
+
+/** My serials, from the server: the same on every phone the account is signed in on. */
+export async function myBookings(): Promise<
+  AccountResult<{ readonly bookings: readonly AccountBooking[]; readonly serverTs: string }>
+> {
+  return await attempt(
+    async () =>
+      await (
+        await signedIn()
+      ).get<{ bookings: AccountBooking[]; serverTs: string }>('/me/bookings'),
+  );
+}
+
+/**
+ * A link to the live screen of one of the account's own bookings, for a phone
+ * that holds none. Kept once given (`rememberLink`), so it is asked for once.
+ */
+export async function linkForBooking(bookingId: string): Promise<AccountResult<string>> {
+  return await attempt(async () => {
+    const { url } = await (
+      await signedIn()
+    ).post<{ url: string }>(`/me/bookings/${bookingId}/link`, {}, crypto.randomUUID());
+    const token = new URL(url, globalThis.location.origin).searchParams.get('t') ?? '';
+    if (token !== '') rememberLink(bookingId, token);
+    return token;
+  });
+}
+
+/**
+ * Books for one of the account's own profiles (`FR-GST-10`): nothing is
+ * retyped, and no phone is proved again, because the account is a phone that
+ * was. Throws what the API threw, so the screen names the cause as it does
+ * for a guest.
+ */
+export async function bookAsProfile(input: {
+  readonly sessionId: string;
+  readonly method: string;
+  readonly patientId: string;
+  readonly reason?: string;
+  readonly idempotencyKey: string;
+}): Promise<BookingResponse> {
+  return await (
+    await signedIn()
+  ).post<BookingResponse>(
+    '/bookings',
+    {
+      sessionId: input.sessionId,
+      method: input.method,
+      patientId: input.patientId,
+      ...(input.reason === undefined || input.reason === '' ? {} : { reason: input.reason }),
+    },
+    input.idempotencyKey,
+  );
+}
+
 export async function signOut(): Promise<void> {
   const session = readAccount();
   writeAccount(null);
+  // The links kept for this account's serials were this account's.
+  forgetLinks();
   if (session === null) return;
   try {
     await publicApi.post('/auth/logout', { refresh: session.refresh });

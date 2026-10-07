@@ -29,9 +29,16 @@
 import { ApiError } from '@platform/client';
 import { bookingStanding } from '@platform/domain';
 
+import { myBookings, readAccount, type AccountBooking } from '@/lib/account';
 import { openTrackingLink } from '@/lib/api';
-
-import type { DatedBooking } from '@/lib/bookings';
+import {
+  bookingsInScope,
+  dayOf,
+  linkHeldFor,
+  liveUrlFor,
+  recentBookings,
+  type DatedBooking,
+} from '@/lib/bookings';
 
 const KEY = 'patient.bookings.standing';
 
@@ -163,4 +170,84 @@ export async function standingOf(bookings: readonly DatedBooking[]): Promise<Sto
 
   writeKnown(known, new Set(bookings.map((booking) => booking.bookingId)));
   return stood;
+}
+
+// ---------------------------------------------------------------------------
+// A signed-in patient's serials, from the server (plan F1)
+// ---------------------------------------------------------------------------
+
+export interface Serials {
+  readonly bookings: readonly StoodBooking[];
+  /**
+   * True when the list is the account's, from the server: the same on every
+   * phone. False when it is what this phone booked, which is all a guest has
+   * and what a signed-in patient falls back to when the server cannot be
+   * asked.
+   */
+  readonly fromAccount: boolean;
+}
+
+/** One of the account's bookings as the screens draw one. */
+function stoodFromAccount(booking: AccountBooking, serverTs: string): StoodBooking {
+  const day = dayOf(booking.plannedStart);
+  return {
+    bookingId: booking.bookingId,
+    serial: booking.serial,
+    sessionId: booking.sessionId,
+    doctorNameBn: booking.doctorNameBn,
+    doctorNameEn: booking.doctorNameEn,
+    hospitalNameBn: booking.hospitalNameBn,
+    hospitalNameEn: booking.hospitalNameEn,
+    hospitalId: booking.hospitalId,
+    plannedStart: booking.plannedStart,
+    // With the link this phone holds, or to the screen that asks for one.
+    url: liveUrlFor(booking.bookingId),
+    token: linkHeldFor(booking.bookingId) ?? '',
+    savedAt: serverTs,
+    ...day,
+    // The server's answer, by the chamber's state and never by the date
+    // (`FR-PAT-39`); a current one on a later day is coming, not happening.
+    standing:
+      booking.standing === 'past' ? 'past' : day.isToday || day.isPast ? 'current' : 'upcoming',
+    knownAt: serverTs,
+    nowServing: booking.nowServing,
+  };
+}
+
+/**
+ * The serials Home's strip and My serials show (`S-A-09`, `BTN-A02-ACTIVE`).
+ *
+ * Signed in, they are the account's: every profile it owns, booked on any
+ * phone or at a counter, as the server lists them. Anything this phone booked
+ * that the account does not hold (a booking made before signing in, under
+ * another number) is still shown beside them, asked about one link at a time
+ * as before. Not signed in, or the server out of reach: this phone's own
+ * list, which is what it always was.
+ *
+ * `scopedHospitalId` as `bookingsInScope` takes it: null for the network's
+ * app, a hospital's id inside its portal, undefined while that is not known.
+ */
+export async function serialsFor(scopedHospitalId: string | null | undefined): Promise<Serials> {
+  const device = bookingsInScope(recentBookings(), scopedHospitalId);
+  if (readAccount() === null) return { bookings: await standingOf(device), fromAccount: false };
+
+  const answer = await myBookings();
+  if (!answer.ok) return { bookings: await standingOf(device), fromAccount: false };
+
+  const { bookings, serverTs } = answer.value;
+  const inScope =
+    scopedHospitalId === null
+      ? bookings
+      : scopedHospitalId === undefined
+        ? []
+        : bookings.filter((booking) => booking.hospitalId === scopedHospitalId);
+  const listed = new Set(inScope.map((booking) => booking.bookingId));
+  const onlyHere = await standingOf(device.filter((booking) => !listed.has(booking.bookingId)));
+
+  return {
+    bookings: [...inScope.map((booking) => stoodFromAccount(booking, serverTs)), ...onlyHere].sort(
+      (a, b) => b.plannedStart.localeCompare(a.plannedStart),
+    ),
+    fromAccount: true,
+  };
 }
