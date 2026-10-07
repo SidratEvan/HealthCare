@@ -63,6 +63,15 @@ const byId = { params: settingsIdParams };
 platformRoutes.get('/platform/hospitals', ...admin, platform.listWorkspaces);
 platformRoutes.get('/platform/hospitals/:id', ...admin, validate(byId), platform.getWorkspace);
 
+// `FR-ONB-07`, `FR-SUP-06`: what was done to the organisation. Its settings,
+// its workspace's state, its imports and exports; nothing done for a patient.
+platformRoutes.get(
+  '/platform/hospitals/:id/audit',
+  ...admin,
+  validate(byId),
+  platform.getAuditTrail,
+);
+
 platformRoutes.post(
   '/platform/hospitals',
   ...admin,

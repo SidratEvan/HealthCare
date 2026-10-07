@@ -14,6 +14,9 @@ import type {
   OrgAction,
   OrgLifecycle,
   SetupCounts,
+  StalestFigure,
+  WorkspaceAttention,
+  WorkspaceHealth,
 } from '@platform/domain';
 
 import { API_BASE } from '@/lib/admin';
@@ -52,6 +55,10 @@ export interface Workspace {
     readonly note: string | null;
     readonly changedAt: string | null;
   };
+  /** What asks for attention there now (`FR-SUP-06`); empty when nothing does. */
+  readonly attention: readonly WorkspaceAttention[];
+  /** Its oldest figure a patient is shown as stale; null where none is. */
+  readonly stalest: StalestFigure | null;
 }
 
 export interface WorkspaceDoctor {
@@ -84,6 +91,26 @@ export interface WorkspaceDetail extends Workspace {
     readonly messagesSentThisMonth: number;
     readonly asOf: string;
   };
+  /** How it is doing: its figures' ages, a week's messages, late work (`FR-SUP-06`). */
+  readonly health: WorkspaceHealth & {
+    readonly staleAfterMinutes: number;
+    readonly asOf: string;
+  };
+}
+
+/** One line of an organisation's trail of changes (`FR-ONB-07`). */
+export interface TrailEntry {
+  readonly id: string;
+  readonly at: string;
+  /** A code `auditChangeName` turns into a sentence. */
+  readonly change: string;
+  readonly actorName: string | null;
+  readonly byPlatform: boolean;
+}
+
+export interface Trail {
+  readonly entries: readonly TrailEntry[];
+  readonly asOf: string;
 }
 
 export interface NewWorkspace {
@@ -167,6 +194,11 @@ export const platformApi = {
 
   async detail(token: string, hospitalId: string): Promise<WorkspaceDetail> {
     return await client(token).get<WorkspaceDetail>(`/platform/hospitals/${hospitalId}`);
+  },
+
+  /** What was done to the organisation, newest first. Nothing done for a patient. */
+  async trail(token: string, hospitalId: string): Promise<Trail> {
+    return await client(token).get<Trail>(`/platform/hospitals/${hospitalId}/audit`);
   },
 
   async create(token: string, body: NewWorkspace): Promise<PlatformResult<CreatedWorkspace>> {

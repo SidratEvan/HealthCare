@@ -81,6 +81,8 @@ export {
   type SymptomSignalName,
 } from './gov.js';
 
+export { AUDIT_CHANGE_NAMES, AUDIT_CHANGE_UNNAMED, auditChangeName } from './audit.js';
+
 export { DAY_PERIODS, DHAKA, dayPeriod, formatClock, formatDateTime } from './datetime.js';
 
 export {

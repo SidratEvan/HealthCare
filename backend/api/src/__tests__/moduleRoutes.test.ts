@@ -126,6 +126,7 @@ const NOBODYS: readonly string[] = [
   'POST /hospital-applications',
   'GET /platform/hospitals',
   'GET /platform/hospitals/:id',
+  'GET /platform/hospitals/:id/audit',
   'POST /platform/hospitals',
   'POST /platform/hospitals/:id/approve',
   'POST /platform/hospitals/:id/send-back',

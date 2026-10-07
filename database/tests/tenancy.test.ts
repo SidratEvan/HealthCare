@@ -448,6 +448,73 @@ describe('a platform administrator sees organisations, never a patient (FR-ONB-0
       expect(await count(client, 'SELECT 1 FROM fn_workspace_usage($1)', [a])).toBe(0);
     });
   });
+
+  it('is told what became of a hospital’s messages and how late its work arrived, as counts (FR-SUP-06, 0052)', async () => {
+    await withRollback(async (client) => {
+      // The hospital with the most of the last week's messages: not every
+      // seeded hospital held a chamber in it.
+      const busiest = await client.query<{ id: string }>(
+        `SELECT s.hospital_id AS id
+           FROM notifications n
+           JOIN bookings b ON b.id = (n.params ->> 'bookingId')::uuid
+           JOIN sessions s ON s.id = b.session_id
+          GROUP BY 1 ORDER BY count(*) DESC, 1 LIMIT 1`,
+      );
+      const a = busiest.rows[0]?.id ?? '';
+      const truth = await client.query<{ sent: number; late: number }>(
+        `SELECT
+           (SELECT count(*)::int FROM notifications n
+              JOIN bookings b ON b.id = (n.params ->> 'bookingId')::uuid
+              JOIN sessions s ON s.id = b.session_id
+             WHERE s.hospital_id = $1 AND n.state IN ('sent', 'delivered')
+               AND n.queued_at >= now() - interval '7 days') AS sent,
+           (SELECT count(*)::int FROM queue_events e JOIN sessions s ON s.id = e.session_id
+             WHERE s.hospital_id = $1 AND e.server_ts >= now() - interval '7 days'
+               AND e.server_ts - e.client_ts > interval '60 seconds') AS late`,
+        [a],
+      );
+      // The seed sends a confirmation for each of the last week's serials.
+      expect(truth.rows[0]?.sent).toBeGreaterThan(0);
+
+      await asTenant(client);
+      await scope(client, 'national');
+      const told = await client.query<{
+        messages_sent: number;
+        messages_failed: number;
+        late_actions: number;
+        slowest_seconds: number;
+      }>('SELECT * FROM fn_workspace_health($1)', [a]);
+      expect(told.rows).toHaveLength(1);
+      expect(told.rows[0]?.messages_sent).toBe(truth.rows[0]?.sent);
+      expect(told.rows[0]?.late_actions).toBe(truth.rows[0]?.late);
+      expect(told.rows[0]?.slowest_seconds).toBeGreaterThanOrEqual(0);
+      // Counted for it, and still not readable by it.
+      expect(await count(client, 'SELECT 1 FROM notifications')).toBe(0);
+      expect(await count(client, 'SELECT 1 FROM queue_events')).toBe(0);
+    });
+  });
+
+  it('and nobody else is told: not a hospital’s own staff, not another’s, not a patient', async () => {
+    await withRollback(async (client) => {
+      const { a, b } = await twoHospitals(client);
+      await asTenant(client);
+
+      for (const [kind, hospitalId] of [
+        ['hospital', a],
+        ['hospital', b],
+        ['open', ''],
+        [null, ''],
+      ] as const) {
+        await scope(client, kind, hospitalId);
+        expect(
+          await count(client, 'SELECT 1 FROM fn_workspace_health($1)', [a]),
+          `${String(kind)} ${hospitalId}`,
+        ).toBe(0);
+      }
+      await person(client, 'patient', '11111111-1111-7111-8111-111111111111');
+      expect(await count(client, 'SELECT 1 FROM fn_workspace_health($1)', [a])).toBe(0);
+    });
+  });
 });
 
 /**

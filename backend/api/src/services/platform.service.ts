@@ -31,11 +31,16 @@ import {
   nextLifecycle,
   platformActions,
   setupChecklist,
+  workspaceHealth,
   type AgreementState,
   type ChecklistItem,
   type HospitalModule,
   type OrgAction,
+  type StalestFigure,
+  type Timestamp,
+  type WorkspaceAttention,
   type WorkspaceBody,
+  type WorkspaceHealth,
 } from '@platform/domain';
 
 import { AppError, notFound, validationFailed } from '../errors/AppError.js';
@@ -66,18 +71,46 @@ export interface WorkspaceSummary extends repo.WorkspaceRow {
   readonly checklist: readonly ChecklistItem[];
   /** What the platform may do from this state. Empty while it is the hospital's move. */
   readonly actions: readonly OrgAction[];
+  /**
+   * What asks for somebody's attention there now (`FR-SUP-06`): a message
+   * that did not go, a published figure nobody ever confirmed. Empty for a
+   * hospital that is doing fine, which is the ordinary state.
+   */
+  readonly attention: readonly WorkspaceAttention[];
+  /**
+   * Its oldest figure that a patient is being shown as stale, for reading one
+   * hospital against another; null where none is.
+   */
+  readonly stalest: StalestFigure | null;
 }
 
-function summarise(row: repo.WorkspaceRow): WorkspaceSummary {
+function healthFrom(counts: repo.HealthCounts | null | undefined, now: Timestamp): WorkspaceHealth {
+  return workspaceHealth({
+    live: counts?.live ?? false,
+    stamps: counts?.stamps ?? [],
+    messages: counts?.messages ?? { sent: 0, failed: 0, held: 0, waiting: 0 },
+    sync: counts?.sync ?? { lateActions: 0, slowestSeconds: 0, lastLateAt: null },
+    now,
+    thresholdMinutes: counts?.staleAfterMinutes ?? 10,
+  });
+}
+
+function summarise(row: repo.WorkspaceRow, health: WorkspaceHealth): WorkspaceSummary {
   return {
     ...row,
     checklist: setupChecklist(row.counts),
     actions: platformActions(row.lifecycle),
+    attention: health.attention,
+    stalest: health.stalest,
   };
 }
 
+const nowStamp = (): Timestamp => new Date().toISOString() as Timestamp;
+
 export async function listWorkspaces(): Promise<readonly WorkspaceSummary[]> {
-  return (await repo.listWorkspaces()).map(summarise);
+  const [rows, health] = await Promise.all([repo.listWorkspaces(), repo.healthOfAll()]);
+  const now = nowStamp();
+  return rows.map((row) => summarise(row, healthFrom(health.get(row.id), now)));
 }
 
 export interface WorkspaceDetail extends WorkspaceSummary {
@@ -106,27 +139,61 @@ export interface WorkspaceDetail extends WorkspaceSummary {
    * counted. Counts of activity, never a row of it (`FR-ONB-08`).
    */
   readonly usage: repo.WorkspaceUsage & { readonly asOf: string };
+  /**
+   * How it is doing (`FR-SUP-06`): the age of each figure it publishes, what
+   * became of a week's messages, and how late its consoles' work arrived.
+   * `staleAfterMinutes` is the hospital's own threshold, so the screen can
+   * say what "stale" was measured against.
+   */
+  readonly health: WorkspaceHealth & {
+    readonly staleAfterMinutes: number;
+    readonly asOf: string;
+  };
 }
 
 export async function workspace(hospitalId: string): Promise<WorkspaceDetail> {
   const row = await repo.findWorkspace(hospitalId);
   if (row === null) throw notFound('hospital');
 
-  const [doctors, administrators, phone, usage] = await Promise.all([
+  const [doctors, administrators, phone, usage, counts] = await Promise.all([
     repo.doctorsOf(hospitalId),
     repo.administratorsOf(hospitalId),
     repo.facilityPhoneOf(hospitalId),
     repo.usageOf(hospitalId),
+    repo.healthOf(hospitalId),
   ]);
+  const now = nowStamp();
+  const health = healthFrom(counts, now);
 
   return {
-    ...summarise(row),
+    ...summarise(row, health),
     portal: portals.portalAddresses(row.code, row.portalDomain),
     phone,
     doctors,
     administrators,
     missingForApproval: missingForApproval(row.counts),
-    usage: { ...usage, asOf: new Date().toISOString() },
+    usage: { ...usage, asOf: now },
+    health: { ...health, staleAfterMinutes: counts?.staleAfterMinutes ?? 10, asOf: now },
+  };
+}
+
+/** How many of a workspace's latest changes its trail shows. */
+const TRAIL_LENGTH = 50;
+
+/**
+ * What was done to an organisation, newest first (`FR-ONB-07`, plan G2): its
+ * settings, its workspace's state, its imports and exports, each with who did
+ * it and whether they were the hospital's or the platform's. Nothing done for
+ * a patient is in it (`FR-ONB-08`).
+ */
+export async function auditTrail(hospitalId: string): Promise<{
+  readonly entries: readonly repo.TrailRow[];
+  readonly asOf: string;
+}> {
+  if ((await repo.findWorkspace(hospitalId)) === null) throw notFound('hospital');
+  return {
+    entries: await repo.auditTrailOf(hospitalId, TRAIL_LENGTH),
+    asOf: new Date().toISOString(),
   };
 }
 

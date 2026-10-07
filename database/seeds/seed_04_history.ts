@@ -59,6 +59,7 @@ import {
   type InsertedBooking,
   type PatientRow,
 } from './lib/bookings.js';
+import { demoHospitalCode } from './lib/demo.js';
 import { appendEvents, writeProjections, type EventDraft } from './lib/events.js';
 import { insertRows } from './lib/insert.js';
 import { chambers, facilityIds, staffByRole, type ChamberRow } from './lib/lookup.js';
@@ -242,7 +243,12 @@ export const seed04History: SeedModule = {
       // the history — the offers, the recoveries, the counts in STATUS — was
       // built from.
       const checkIns = history.stream(`check-ins-${String(index)}`);
-      const built = buildSessionLog(history, plan, inserted, outcomes, staffId, checkIns);
+      const sessionLog = buildSessionLog(history, plan, inserted, outcomes, staffId, checkIns);
+      // `FR-SUP-06`: one facility's counter worked offline for a stretch.
+      const built = {
+        ...sessionLog,
+        drafts: withOfflineStretch(sessionLog.drafts, plan, now),
+      };
 
       // `FR-QUE-30` against a chair that a no-show left empty. Planned from
       // the log that has just been built, because who could have accepted
@@ -323,6 +329,7 @@ export const seed04History: SeedModule = {
     }
 
     const lab = await insertLabWork(client, now, rng.stream('lab'));
+    const confirmations = await insertConfirmations(client, now);
 
     log(
       `      ${String(visits)} completed visits, ${String(noShows)} no-shows, ${String(cancellations)} cancellations across ${String(sessions)} past sessions`,
@@ -336,6 +343,7 @@ export const seed04History: SeedModule = {
         `${String(offersAccepted)} taken (FR-QUE-30, FR-ADM-03)`,
     );
     log(`      ${String(feedback)} post-visit responses (FR-ADM-08, seeded only)`);
+    log(`      ${String(confirmations)} confirmation messages for the last week (FR-SUP-06)`);
     log(
       `      ${String(lab.orders)} test orders (${String(lab.open)} still on a bench), ` +
         `${String(lab.reports)} delivered reports`,
@@ -655,6 +663,120 @@ function buildSessionLog(
   });
 
   return { drafts, actor, freed, seen };
+}
+
+/**
+ * The facility whose counter loses its connection on recent evenings, and
+ * some of whose messages do not go (`FR-SUP-06`, plan G2).
+ *
+ * Karnaphuli is two hundred kilometres from the other five, and it is the one
+ * whose line drops: the platform's health view then has one workspace that
+ * shows what the other five do not, late work and failed messages, and five
+ * that show the ordinary state. Nothing a patient sees is changed by it.
+ */
+const POOR_LINE_FACILITY = 'karnaphuli-general';
+
+/** How far back a chamber may be and still get an offline stretch. Inside the health view's week. */
+const OFFLINE_STRETCH_DAYS = 2;
+
+/** How many actions the counter took while its line was down. */
+const OFFLINE_STRETCH_ACTIONS = 8;
+
+/**
+ * Gives a chamber a stretch its counter worked offline (`FR-OFF-01`).
+ *
+ * The counter went on working and sent what it had done when the line came
+ * back. In the log that is an action whose console time is earlier than the
+ * time the server recorded it: the first one tapped waited longest, the last
+ * a minute and a half. `server_ts` is not moved: every figure worked out from
+ * this history (waits, punctuality, the dashboard) stays what it was, and
+ * only the console's own time, which nothing but a sync batch's order and the
+ * health view reads (`SY-01`), says that these arrived late.
+ */
+function withOfflineStretch(
+  drafts: readonly EventDraft[],
+  plan: PastSession,
+  now: Timestamp,
+): EventDraft[] {
+  const ageMinutes = time.differenceInSeconds(now, plan.plannedStart) / 60;
+  if (
+    plan.chamber.hospitalSlug !== POOR_LINE_FACILITY ||
+    !plan.live ||
+    ageMinutes > OFFLINE_STRETCH_DAYS * 24 * 60
+  ) {
+    return [...drafts];
+  }
+
+  const atTheCounter = drafts
+    .map((draft, index) => ({ draft, index }))
+    .filter(({ draft }) =>
+      ['PATIENT_ARRIVED', 'PATIENT_CALLED', 'PATIENT_DONE'].includes(draft.type),
+    );
+  const from = Math.floor(atTheCounter.length / 3);
+  const stretch = atTheCounter.slice(from, from + OFFLINE_STRETCH_ACTIONS);
+  const last = stretch.at(-1);
+  if (last === undefined) return [...drafts];
+
+  // When the line came back: a minute and a half after the last tap.
+  const reconnectedAt = time.addSeconds(last.draft.serverTs, 90);
+  const offline = new Map(
+    stretch.map(({ draft, index }) => [
+      index,
+      time.addSeconds(draft.serverTs, -time.differenceInSeconds(reconnectedAt, draft.serverTs)),
+    ]),
+  );
+  return drafts.map((draft, index) => {
+    const tappedAt = offline.get(index);
+    return tappedAt === undefined ? draft : { ...draft, clientTs: tappedAt };
+  });
+}
+
+/**
+ * The confirmation each of the last week's serials was sent (`FR-PAT-22`,
+ * `FR-SUP-06`).
+ *
+ * One SMS row a booking, as the booking flow writes one, so that what the
+ * platform's health view counts is there to count. Most went. A few everywhere
+ * were held because the booking had no number, which is a decision and not a
+ * failure; at the facility with the poor line one in four failed at the
+ * provider (the week's history there is one evening's chamber, so a rarer
+ * failure would be none).
+ * No words are kept: a seeded message carries the booking it was about and
+ * nothing a patient could be recognised by.
+ */
+async function insertConfirmations(client: Client, now: Timestamp): Promise<number> {
+  const result = await client.query(
+    `INSERT INTO notifications
+       (recipient_patient_id, phone, channel, template_key, params, state, error, cost_poisha,
+        queued_at, sent_at, created_at, updated_at)
+     SELECT b.patient_id,
+            CASE WHEN m.state = 'skipped' THEN NULL ELSE b.phone END,
+            'sms', 'booking.confirmed', jsonb_build_object('bookingId', b.id),
+            m.state::notif_state, m.error,
+            CASE WHEN m.state = 'sent' THEN 35 END,
+            b.created_at,
+            CASE WHEN m.state = 'sent' THEN b.created_at + interval '2 seconds' END,
+            b.created_at, b.created_at
+       FROM (
+         SELECT bk.id, bk.patient_id, bk.created_at, h.code, p.phone,
+                row_number() OVER (PARTITION BY s.hospital_id ORDER BY bk.created_at, bk.id) AS n
+           FROM bookings bk
+           JOIN sessions s ON s.id = bk.session_id
+           JOIN hospitals h ON h.id = s.hospital_id
+           JOIN patients p ON p.id = bk.patient_id
+          WHERE bk.created_at >= $1::timestamptz - interval '7 days'
+            AND bk.created_at < $1::timestamptz
+       ) b
+       CROSS JOIN LATERAL (
+         SELECT CASE WHEN b.phone IS NULL OR b.n % 17 = 0 THEN 'skipped'
+                     WHEN b.code = $2 AND b.n % 4 = 0 THEN 'failed'
+                     ELSE 'sent' END AS state,
+                CASE WHEN b.phone IS NULL OR b.n % 17 = 0 THEN 'no_phone_number'
+                     WHEN b.code = $2 AND b.n % 4 = 0 THEN 'provider_unreachable' END AS error
+       ) m`,
+    [now, demoHospitalCode(POOR_LINE_FACILITY)],
+  );
+  return result.rowCount ?? 0;
 }
 
 /**

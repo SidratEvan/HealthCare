@@ -593,6 +593,95 @@ export const seed01Hospitals: SeedModule = {
       '',
     );
 
+    // --- audit_log: each workspace's trail of changes -----------------------
+    //
+    // What a platform administrator reads on a workspace (`FR-ONB-07`,
+    // `LIST-B12-TRAIL`): how the hospital was brought on. The platform made
+    // the workspace; the hospital's administrator set it up and asked for
+    // review; the platform verified a doctor and approved it, twelve days ago,
+    // which is `onboarded_at` above. Then whatever the tables above say was
+    // set afterwards: a module switched off, a figure kept back, an agreement
+    // recorded. Organisational changes only, as every row of this trail is:
+    // nothing here names a patient.
+    const minute = 60_000;
+    const day = 24 * 60 * minute;
+    const at = (daysAgo: number, minutesLater = 0): string =>
+      new Date(Date.parse(now) - daysAgo * day + minutesLater * minute).toISOString();
+
+    const trailRows: unknown[][] = [];
+    for (const facility of DEMO_FACILITIES) {
+      const hospitalId = facilities.get(facility.slug);
+      const adminId = admins.get(facility.slug) ?? null;
+      if (hospitalId === undefined) throw new Error(`No id for ${facility.slug}.`);
+
+      const steps: [string, string | null, string, string][] = [
+        ['workspace_created', platformId, 'hospitals', at(14)],
+        ['profile', adminId, 'hospitals', at(13, 20)],
+        ['department_added', adminId, 'departments', at(13, 32)],
+        ['doctor_added', adminId, 'doctor_hospitals', at(13, 47)],
+        ['schedule_added', adminId, 'session_templates', at(13, 58)],
+        ['staff_added', adminId, 'staff_users', at(13, 75)],
+        ...(facility.capabilities.length > 0
+          ? [
+              ['capabilities_declared', adminId, 'capabilities', at(13, 90)] as [
+                string,
+                string | null,
+                string,
+                string,
+              ],
+            ]
+          : []),
+        ['review_requested', adminId, 'hospitals', at(12, -180)],
+        ['doctor_verified', platformId, 'doctors', at(12, -45)],
+        ['workspace_approve', platformId, 'hospitals', at(12)],
+      ];
+      if ((MODULES_OFF[facility.slug] ?? []).length > 0) {
+        steps.push(['modules', platformId, 'hospital_settings', at(12, 10)]);
+      }
+      if ((UNPUBLISHED[facility.slug] ?? []).length > 0) {
+        steps.push(['publishing', adminId, 'hospital_settings', at(9, 30)]);
+      }
+      const agreement = AGREEMENTS[facility.slug];
+      if (agreement !== undefined) {
+        steps.push([
+          `agreement_${agreement.state}`,
+          platformId,
+          'hospitals',
+          at(agreement.daysAgo),
+        ]);
+      }
+
+      for (const [change, actor, table, when] of steps) {
+        trailRows.push([
+          actor,
+          hospitalId,
+          'SETTINGS_CHANGE',
+          table,
+          hospitalId,
+          JSON.stringify({ change, ...DEMO_MARKER }),
+          when,
+        ]);
+      }
+    }
+
+    await insertRows(
+      client,
+      'audit_log',
+      {
+        columns: [
+          'actor_staff_id',
+          'hospital_id',
+          'action',
+          'subject_table',
+          'subject_id',
+          'meta',
+          'created_at',
+        ],
+      },
+      trailRows,
+      '',
+    );
+
     log(
       `      burn units: ${DEMO_FACILITIES.filter((f) => f.capabilities.includes('burn_unit'))
         .map((f) => f.nameEn)
