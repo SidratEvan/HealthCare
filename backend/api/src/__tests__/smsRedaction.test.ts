@@ -205,6 +205,8 @@ describe('a booking’s confirmation (FR-PAT-22, FR-GST-05)', () => {
 
     const booked = await bookAsGuest(phone);
 
+    // Sent by the sender once the booking has answered (plan H1).
+    await notifications.settled();
     const sent = outbox.all().filter((message) => message.templateKey === 'booking.confirmed');
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe(phone);

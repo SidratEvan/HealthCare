@@ -30,6 +30,7 @@ import type { StaffRole } from '@platform/domain';
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
+import * as notifications from '../services/notification.service.js';
 
 import { databaseNow } from './support/databaseClock.js';
 import {
@@ -542,6 +543,8 @@ describe('the standby patient is told', () => {
     // database's clock, which is the one that stamps the row (`databaseClock.ts`).
     const since = await databaseNow();
     await offer(freed);
+    // Sent by the sender once the offer has answered (plan H1).
+    await notifications.settled();
 
     const messages = await sql<{ phone: string | null; state: string; template_key: string }>`
       SELECT phone, state::text, template_key FROM notifications

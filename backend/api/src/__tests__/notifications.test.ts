@@ -138,8 +138,11 @@ describe('called (FR-NOT-03)', () => {
 
     await queueService.callNext({ sessionId: fixture.sessionId, actor: staff() });
 
+    // Written with the event, and sent by the sender once the event has
+    // answered (plan H1): the row is there at once, `sent` when it has gone.
+    expect((await keysFor('queue.called')).length).toBeGreaterThan(0);
+    await notifications.settled();
     const called = await keysFor('queue.called');
-    expect(called.length).toBeGreaterThan(0);
     expect(called[0]?.state).toBe('sent');
   });
 
@@ -169,6 +172,7 @@ describe('called (FR-NOT-03)', () => {
     });
     await queueService.callNext({ sessionId: fixture.sessionId, actor: staff() });
 
+    await notifications.settled();
     const sent = outbox.all();
     expect(sent.length).toBeGreaterThan(0);
     expect(sent.some((message) => message.templateKey === 'queue.called')).toBe(true);
@@ -338,7 +342,9 @@ describe('nothing is silently not sent', () => {
     expect(delayed[0]?.error).toBe('sms_budget_exhausted');
 
     // And nothing reached the adapter: a cap that recorded a skip and sent
-    // anyway would be worse than no cap at all.
+    // anyway would be worse than no cap at all. Asked once the sender has
+    // had its turn, or "nothing yet" would pass for "nothing".
+    await notifications.settled();
     expect(outbox.all()).toHaveLength(0);
   });
 
@@ -355,8 +361,12 @@ describe('nothing is silently not sent', () => {
       actor: staff(),
     });
 
+    // Not lost, and not given up on after one refusal either: still queued,
+    // saying what the gateway said, to be asked again
+    // (`notificationSender.test.ts` follows it to the fifth refusal).
+    await notifications.settled();
     const delayed = await keysFor('queue.delayed');
-    expect(delayed[0]?.state).toBe('failed');
+    expect(delayed[0]?.state).toBe('queued');
     expect(delayed[0]?.error).toBe('gateway_timeout');
   });
 
@@ -381,8 +391,9 @@ describe('nothing is silently not sent', () => {
       }),
     ).resolves.toBeDefined();
 
+    await notifications.settled();
     const delayed = await keysFor('queue.delayed');
-    expect(delayed[0]?.state).toBe('failed');
+    expect(delayed[0]?.state).toBe('queued');
     expect(delayed[0]?.error).toBe('dispatch_threw');
   });
 });
@@ -429,6 +440,14 @@ describe('quiet hours (FR-NOT-07)', () => {
     ).toBe(false);
   });
 
+  it('says when a held message goes: seven in the morning, in Dhaka (plan H1)', async () => {
+    // Held is queued and due, not skipped: `lab.routes.test.ts` follows a
+    // report through the night to the morning's send.
+    const { endOfQuietHours } = await import('@platform/domain');
+    // Three in the morning in Dhaka on the 19th: seven the same morning.
+    expect(endOfQuietHours('2026-09-18T21:00:00.000Z' as never)).toBe('2026-09-19T01:00:00.000Z');
+  });
+
   it('holds a report-ready message through the night, and sends it by day (plan F2)', () => {
     // A report is not a summons. Three in the morning in Dhaka, then three in
     // the afternoon.
@@ -472,6 +491,8 @@ describe('the log provider is the implementation, not a stand-in', () => {
       payload: { minutes: 30, reason: null, declaredBy: 'reception' },
       actor: staff(),
     });
+
+    await notifications.settled();
 
     // This chamber's rows only. Every test in this file sends a
     // `queue.delayed` somewhere, through whichever adapter it set, and "any
@@ -572,6 +593,7 @@ describe('a turn that is coming sooner than the patient was told (FR-QUE-15)', (
     await cancel(1);
     await cancel(2);
 
+    await notifications.settled();
     const sooner = await soonerFor(4);
     // Told, by SMS, and sent.
     expect(sooner.length).toBeGreaterThanOrEqual(1);

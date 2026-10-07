@@ -70,6 +70,11 @@ export interface QueuedNotification {
    * was sent, when that carried one.
    */
   readonly body: string;
+  /**
+   * Held for quiet hours until this moment (`FR-NOT-07`): queued, and due
+   * then. Null for a message that goes now, and for one that is skipped.
+   */
+  readonly heldUntil: Date | null;
   /** Set when the message was decided against rather than queued. */
   readonly skipped: string | null;
 }
@@ -97,14 +102,15 @@ export async function queueAll(
       ${notification.templateKey}::text,
       ${JSON.stringify({ ...notification.params, body: notification.body })}::jsonb,
       ${notification.skipped === null ? 'queued' : 'skipped'}::notif_state,
-      ${notification.skipped}::text
+      ${notification.skipped ?? (notification.heldUntil === null ? null : 'quiet_hours')}::text,
+      coalesce(${notification.heldUntil}::timestamptz, now())
     )`,
   );
 
   const result = await sql<{ id: string }>`
     INSERT INTO notifications
       (recipient_patient_id, recipient_guest_id, recipient_user_id, phone,
-       channel, template_key, params, state, error)
+       channel, template_key, params, state, error, next_attempt_at)
     VALUES ${sql.join(values, sql`, `)}
     RETURNING id
   `.execute(trx);
@@ -138,8 +144,92 @@ export async function markSent(
 ): Promise<void> {
   await sql`
     UPDATE notifications
-       SET state = 'sent', sent_at = now(),
+       SET state = 'sent', sent_at = now(), error = NULL,
            provider_ref = ${outcome.providerRef}, cost_poisha = ${outcome.costPoisha}
+     WHERE id = ${id}::uuid AND state = 'queued'
+  `.execute(db);
+}
+
+/** A row the sender has taken to send: everything it can be sent from. */
+export interface ClaimedRow {
+  readonly id: string;
+  readonly channel: 'sms' | 'push';
+  readonly templateKey: string;
+  /** What is kept of the message: its words under `body`, and no link (0035). */
+  readonly params: Readonly<Record<string, unknown>>;
+  readonly phone: string | null;
+  /** How many tries there have been, this one included. */
+  readonly attempts: number;
+  /**
+   * Who it is for, as far as the row says. A row is addressed by one id
+   * (`addressee`), so a guest's device is not found from here: a push sent
+   * from the row alone goes to an account's devices or to none.
+   */
+  readonly recipient: Recipient;
+}
+
+/**
+ * Takes the messages that are due, to send them (`FR-NOT-06`, plan H1).
+ *
+ * The claim is the statement itself: `attempts` is raised and
+ * `next_attempt_at` moved `claimSeconds` on for exactly the rows this
+ * statement locked, and `SKIP LOCKED` means a second sender asking at the
+ * same instant is given the next rows and not these. Nothing else marks a
+ * row as taken, so a sender that dies simply stops, and the row is due again
+ * when the claim runs out.
+ *
+ * Oldest due first (`notifications_due_idx`, 0053).
+ */
+export async function claimDue(limit: number, claimSeconds: number): Promise<ClaimedRow[]> {
+  const result = await sql<{
+    id: string;
+    channel: 'sms' | 'push';
+    template_key: string;
+    params: Record<string, unknown>;
+    phone: string | null;
+    attempts: number;
+    recipient_patient_id: string | null;
+    recipient_guest_id: string | null;
+    recipient_user_id: string | null;
+  }>`
+    UPDATE notifications n
+       SET attempts = n.attempts + 1,
+           next_attempt_at = now() + make_interval(secs => ${claimSeconds})
+     WHERE n.id IN (
+             SELECT id FROM notifications
+              WHERE state = 'queued' AND next_attempt_at <= now()
+              ORDER BY next_attempt_at
+              LIMIT ${limit}
+                FOR UPDATE SKIP LOCKED)
+    RETURNING n.id, n.channel::text AS channel, n.template_key, n.params, n.phone, n.attempts,
+              n.recipient_patient_id, n.recipient_guest_id, n.recipient_user_id
+  `.execute(db);
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    channel: row.channel,
+    templateKey: row.template_key,
+    params: row.params,
+    phone: row.phone,
+    attempts: row.attempts,
+    recipient: {
+      patientId: row.recipient_patient_id,
+      guestId: row.recipient_guest_id,
+      userId: row.recipient_user_id,
+      phone: row.phone,
+      locale: 'bn',
+    },
+  }));
+}
+
+/**
+ * Puts a message that failed back to be tried at `at`, saying what the
+ * gateway said. It stays `queued`: failed is for one given up on.
+ */
+export async function retryAt(id: string, at: Date, error: string): Promise<void> {
+  await sql`
+    UPDATE notifications
+       SET next_attempt_at = ${at}, error = ${error}
      WHERE id = ${id}::uuid AND state = 'queued'
   `.execute(db);
 }

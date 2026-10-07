@@ -396,6 +396,7 @@ export async function offerFreedSlot(input: {
         phone: standby.contactPhone,
         serial: seat.serial,
         link: await standbyLinkFor(standby.id, standby.guestId ?? standby.patientId),
+        standby: { id: standby.id, subject: standby.guestId ?? standby.patientId },
       });
 
       return { result: both.result, batch: notifications.merge(both.batch, seatedMessage) };
@@ -414,6 +415,9 @@ export async function offerFreedSlot(input: {
       phone: standby.contactPhone,
       expiresAt: expiresAt.toISOString(),
       link: standby.guestId === null ? null : await standbyLinkFor(standby.id, standby.guestId),
+      ...(standby.guestId === null
+        ? {}
+        : { standby: { id: standby.id, subject: standby.guestId } }),
     });
 
     return {

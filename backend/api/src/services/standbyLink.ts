@@ -23,8 +23,11 @@ export async function standbyToken(standbyId: string, subject: string): Promise<
 }
 
 /** The page in the patient app that answers it. */
-export function standbyUrl(token: string): string {
-  return patientLink('/standby', { t: token });
+export function standbyUrl(
+  token: string,
+  at: { readonly hospitalOrigin?: string | null } = {},
+): string {
+  return patientLink('/standby', { t: token }, at);
 }
 
 /** Both at once, for a message that carries the link. */

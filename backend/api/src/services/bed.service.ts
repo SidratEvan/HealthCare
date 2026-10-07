@@ -632,9 +632,8 @@ export async function respond(
 
   const result = await run(bedIds, input, actor, async (trx, locked) => {
     const current = await pendingRequest(trx, requestId, actor);
-    const link = bedRequestUrl(
-      await bedRequestToken(current.id, current.requestedByGuestId ?? current.patientId),
-    );
+    const subject = current.requestedByGuestId ?? current.patientId;
+    const link = bedRequestUrl(await bedRequestToken(current.id, subject));
 
     switch (input.action) {
       case 'hold': {
@@ -672,6 +671,7 @@ export async function respond(
             outcome: 'held',
             holdExpiresAt: until.toISOString(),
             link,
+            subject,
           }),
         };
       }
@@ -716,6 +716,7 @@ export async function respond(
             outcome: 'declined',
             holdExpiresAt: null,
             link,
+            subject,
           }),
         };
       }
