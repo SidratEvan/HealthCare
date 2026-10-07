@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "build:api": "pnpm --filter @platform/domain --filter @platform/i18n --filter @platform/api build",
     "dev": "pnpm -r --parallel --if-present dev",
     "dev:api": "pnpm --filter @platform/api dev",
     "dev:console": "pnpm --filter @platform/console dev",

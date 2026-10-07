@@ -161,6 +161,26 @@ export async function staffIdFor(hospitalId: string, role: string): Promise<stri
   return id;
 }
 
+/**
+ * The seed's platform administrator, by its staff code.
+ *
+ * Not `demoRepo.nationalStaffFor('platform_admin')`, which takes the first
+ * such account by name: `platform.routes.test.ts` makes a second one with
+ * `staff:create --platform` and deletes it again, and a file that started in
+ * between signed as that account, then found the seed's trail written by the
+ * other one, and its token refused once the account was gone.
+ */
+export async function seededPlatformAdminId(): Promise<string> {
+  const result = await sql<{ id: string }>`
+    SELECT id FROM staff_users
+     WHERE staff_code = 'NAT-PLT-01' AND hospital_id IS NULL AND deleted_at IS NULL
+  `.execute(db);
+
+  const id = result.rows[0]?.id;
+  if (id === undefined) throw new Error('The seed has no platform administrator (NAT-PLT-01).');
+  return id;
+}
+
 /** A hospital other than the fixture's, for the cross-hospital scope tests. */
 export async function otherHospitalId(notThisOne: string): Promise<string> {
   const result = await sql<{ id: string }>`

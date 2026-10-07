@@ -27,9 +27,9 @@ import { AUDIT_CHANGE_NAMES, AUDIT_CHANGE_UNNAMED, auditChangeName } from '@plat
 
 import { createApp } from '../app.js';
 import { signToken } from '../config/jwt.js';
-import * as demoRepo from '../repositories/demo.repo.js';
 
 import { asOwner } from './support/ownerDb.js';
+import { seededPlatformAdminId } from './support/queueFixture.js';
 import { bearer, nationalToken, patientToken, staffToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -124,8 +124,7 @@ async function healthOf(id: string): Promise<Health> {
 beforeAll(async () => {
   app = createApp();
 
-  const account = await demoRepo.nationalStaffFor('platform_admin');
-  if (account === null) throw new Error('The seed has no platform administrator.');
+  const account = { id: await seededPlatformAdminId() };
   platformStaffId = account.id;
   platform = await signToken({
     kind: 'access',

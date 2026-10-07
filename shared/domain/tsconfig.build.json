@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "_comment": "Emits JavaScript and declarations to dist/ for the compiled API (plan I1, BACKEND.md §12b). Development, the tests and the web apps read src/ directly and never this.",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "exclude": ["src/**/__tests__/**", "node_modules", "dist"]
+}

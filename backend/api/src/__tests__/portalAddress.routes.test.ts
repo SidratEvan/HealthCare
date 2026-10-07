@@ -24,11 +24,10 @@ import { signToken } from '../config/jwt.js';
 import { patientLink } from '../config/links.js';
 import { runWithPatientOrigin } from '../config/requestOrigin.js';
 import { env } from '../env.js';
-import * as demoRepo from '../repositories/demo.repo.js';
 import * as portals from '../services/portal.service.js';
 
 import { asOwner } from './support/ownerDb.js';
-import { createQueueFixture } from './support/queueFixture.js';
+import { createQueueFixture, seededPlatformAdminId } from './support/queueFixture.js';
 import { bearer, nationalToken, staffToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -87,8 +86,7 @@ beforeAll(async () => {
   padma = await seeded('PADMA');
   shapla = await seeded('SHAPLA');
 
-  const account = await demoRepo.nationalStaffFor('platform_admin');
-  if (account === null) throw new Error('The seed has no platform administrator.');
+  const account = { id: await seededPlatformAdminId() };
   platform = await signToken({
     kind: 'access',
     claims: { sub: account.id, kind: 'staff', roles: ['platform_admin'] },
