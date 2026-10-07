@@ -42,3 +42,57 @@ export async function probeDatabase(): Promise<DatabaseProbe> {
     schemaVersion: result.rows[0]?.version ?? null,
   };
 }
+
+/** The newest backup run and the newest good one, and the messages due and unsent. */
+export interface DeploymentFigures {
+  readonly lastBackup: BackupRunRow | null;
+  readonly lastGoodBackup: BackupRunRow | null;
+  readonly messagesDue: number;
+  readonly oldestDueAt: Date | null;
+}
+
+export interface BackupRunRow {
+  readonly result: 'ok' | 'failed';
+  readonly finishedAt: Date;
+  readonly verified: 'restore' | 'list' | null;
+}
+
+/**
+ * What `/readyz` says about the deployment besides its database (plan I2,
+ * migration 0055). Run in the server's own `system` scope: `backup_runs` is
+ * read by nobody else, and `notifications` is counted across every hospital.
+ *
+ * Counts and times only. No message, number or hospital is read.
+ */
+export async function deploymentFigures(): Promise<DeploymentFigures> {
+  const runs = await sql<{
+    result: 'ok' | 'failed';
+    finished_at: Date;
+    verified: 'restore' | 'list' | null;
+    newest: boolean;
+  }>`
+    (SELECT result, finished_at, verified, true AS newest
+       FROM backup_runs ORDER BY finished_at DESC, id DESC LIMIT 1)
+    UNION ALL
+    (SELECT result, finished_at, verified, false AS newest
+       FROM backup_runs WHERE result = 'ok' ORDER BY finished_at DESC, id DESC LIMIT 1)
+  `.execute(db);
+
+  const due = await sql<{ due: number; oldest: Date | null }>`
+    SELECT count(*)::int AS due, min(next_attempt_at) AS oldest
+      FROM notifications
+     WHERE state = 'queued' AND next_attempt_at <= now()
+  `.execute(db);
+
+  const asRun = (row: (typeof runs.rows)[number] | undefined): BackupRunRow | null =>
+    row === undefined
+      ? null
+      : { result: row.result, finishedAt: row.finished_at, verified: row.verified };
+
+  return {
+    lastBackup: asRun(runs.rows.find((row) => row.newest)),
+    lastGoodBackup: asRun(runs.rows.find((row) => !row.newest)),
+    messagesDue: due.rows[0]?.due ?? 0,
+    oldestDueAt: due.rows[0]?.oldest ?? null,
+  };
+}

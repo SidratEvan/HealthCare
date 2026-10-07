@@ -15,11 +15,12 @@
  *                 roles, no superuser, and nothing but SELECT on the migration
  *                 ledger.
  *
- * Three tables are narrower still, because their history is the point of them:
+ * Four tables are narrower still, because their history is the point of them:
  *
  *   audit_log     INSERT and SELECT only. There is no trigger guarding it, so
  *                 this grant is what stops a written audit row being changed.
  *   bed_events    INSERT and SELECT only, as its trigger already insists.
+ *   backup_runs   SELECT only, like the migration ledger: the backup writes it.
  *   queue_events  no DELETE. UPDATE stays, for the one change its trigger
  *                 allows — `undone_by_event_id` being set (`GR-02`).
  *
@@ -45,6 +46,9 @@ export interface ApiRole {
 
 /** Tables whose rows are never changed or removed once written. */
 const INSERT_ONLY = ['audit_log', 'bed_events'] as const;
+
+/** Tables the owner writes and the API only reads. */
+const READ_ONLY = ['schema_migrations', 'backup_runs'] as const;
 
 /** A plain, lower-case identifier: it is quoted everywhere, but a name that needs quoting is a mistake. */
 const ROLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -100,9 +104,13 @@ export async function ensureApiRole(client: Client, role: ApiRole): Promise<void
     await run(client, 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', [role.name]);
     await run(client, 'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO %I', [role.name]);
 
-    // Which migrations a database is on is read by `/readyz` and written by
-    // nobody but the migration runner.
-    await run(client, 'REVOKE INSERT, UPDATE, DELETE ON schema_migrations FROM %I', [role.name]);
+    // Two ledgers are read by `/readyz` and written by the owner alone: which
+    // migrations a database is on (the migration runner), and what the nightly
+    // backup did (`deploy/backup.sh`, plan I2). An API that could write the
+    // second could say a backup was made that never was.
+    for (const table of READ_ONLY) {
+      await run(client, 'REVOKE INSERT, UPDATE, DELETE ON %I FROM %I', [table, role.name]);
+    }
 
     for (const table of INSERT_ONLY) {
       await run(client, 'REVOKE UPDATE, DELETE ON %I FROM %I', [table, role.name]);

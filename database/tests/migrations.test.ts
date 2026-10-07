@@ -157,6 +157,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0053',
       // Plan H2: a message found by its aggregator's reference (FR-NOT-06).
       '0054',
+      // Plan I2: what the nightly backup did, where /readyz can read it (FR-SUP-06).
+      '0055',
     ]);
   });
 

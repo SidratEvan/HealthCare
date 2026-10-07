@@ -49,6 +49,7 @@ import { runInDbScope } from '../config/dbScope.js';
 import { logger } from '../config/logger.js';
 import * as notificationRepo from '../repositories/notification.repo.js';
 
+import * as heartbeat from './heartbeat.service.js';
 import { reissueLink } from './messageLink.service.js';
 
 /** One message as it leaves: the words in full, link and all. */
@@ -97,7 +98,11 @@ export function wake(): void {
     return;
   }
   running = runInDbScope({ kind: 'system' }, drain)
+    .then(() => {
+      heartbeat.beat('sender', true);
+    })
     .catch((error: unknown) => {
+      heartbeat.beat('sender', false);
       logger.error({ err: error }, 'notification sender failed; the next tick tries again');
     })
     .finally(() => {
@@ -122,6 +127,7 @@ export async function idle(): Promise<void> {
 
 /** Looks for work on an interval. Returns what stops it. */
 export function startSender(): () => void {
+  heartbeat.register('sender', SENDER_TICK_MS);
   wake();
   const timer = setInterval(wake, SENDER_TICK_MS);
   timer.unref();

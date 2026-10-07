@@ -534,9 +534,26 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env exec backup s
 The second prints one line — `backup ok: 20261002-200003, checked by restore,
 copied to the second location, 9 hours ago`, or `backup FAILING:` and the
 reason. It fails when the last run failed, when no second location is
-configured, and when the last good backup is more than 26 hours old. Nothing
-sends this anywhere yet: **somebody has to look at it each morning** until an
-alert exists.
+configured, and when the last good backup is more than 26 hours old
+(`BACKUP_MAX_AGE_HOURS`).
+
+**The API says the same, and more, at its readiness address** (plan I2), so
+one address tells whoever watches the server how all of it is doing:
+
+```bash
+curl -s https://api.<your-domain>/readyz
+```
+
+`data.signals.attention` is empty when nothing is wrong. Otherwise it holds
+fixed words: `backup_failed`, `backup_stale`, `backup_none` (the backup has
+recorded nothing in a day of the server running), `messages_overdue` (the
+sender is not sending), `worker_late` (something the server does on a clock
+has stopped). The rest of `signals` gives the ages and counts behind them.
+None of it makes the API unready: a failed backup is not a reason to stop a
+reception desk. A free uptime checker pointed at that address and set to
+look for an empty `attention` is an alert; this repository sets none up,
+because it needs an account somebody owns. Until one exists, **somebody has
+to look each morning**.
 
 A backup on demand:
 

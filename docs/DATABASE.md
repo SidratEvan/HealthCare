@@ -530,6 +530,10 @@ A hospital's confirmed column mapping for one export format, so the same export 
 #### `sync_cursors`
 Offline consoles: `id`, `device_id`, `staff_user_id`, `hospital_id`, `last_ack_seq` per session jsonb, `last_sync_at`.
 
+#### `backup_runs` (migration 0055, plan I2)
+What the nightly backup did, one row per run, for `/readyz` (`FR-SUP-06`: the age of the last backup is the deployment's). `id` (uuid v7), `finished_at`, `result` (`ok` | `failed`), `verified` (`restore`: restored into a scratch database and counted; `list`: only its contents read), `stamp` (the run's file name, ≤ 32), `reason` (the script's sentence for a failure, ≤ 300; present exactly when it failed), `created_at`, `updated_at`. Written by `deploy/backup.sh` as the owner, after the file its own health check reads; the API's role reads it and nothing more (§5.1), in the `system` scope only (§5.2). Nothing in it identifies anybody.
+**IX:** `(finished_at DESC)`
+
 ---
 
 ### 2.8 Ancillary services
@@ -616,7 +620,7 @@ Added by plan 1.7 (`docs/PLATFORM_PLAN.md`). A self-hosted deployment has two ro
 | The owner (`POSTGRES_USER`) | The `migrate` service and the `backup` service | Everything: it owns the schema. Serves no request |
 | The API's role (`API_DB_USER`) | The API, its workers, and the `pnpm staff:*` commands | `SELECT, INSERT, UPDATE, DELETE` on rows, `USAGE` on sequences, `EXECUTE` on functions, membership of `gov_reader` and of `app_tenant`. **Not** `TRUNCATE`, not any schema change, not `SUPERUSER`/`CREATEROLE`/`CREATEDB`/`REPLICATION`, and **not `BYPASSRLS`** (§5.2): what it reaches on a connection is what that connection has said it is working for |
 
-Three tables are narrower still: `audit_log` and `bed_events` are `INSERT` and `SELECT` only for the API's role, and `queue_events` has no `DELETE` (its `UPDATE` stays, for the one change its trigger allows — `undone_by_event_id`). `schema_migrations` is `SELECT` only. For `audit_log`, which has no trigger, that grant is what keeps a written row written.
+Three tables are narrower still: `audit_log` and `bed_events` are `INSERT` and `SELECT` only for the API's role, and `queue_events` has no `DELETE` (its `UPDATE` stays, for the one change its trigger allows — `undone_by_event_id`). `schema_migrations` and `backup_runs` are `SELECT` only: the migration runner writes the first and the nightly backup the second (plan I2), so an API made to misbehave cannot record a backup that never happened. For `audit_log`, which has no trigger, that grant is what keeps a written row written.
 
 The role is created and brought back to exactly these privileges by `pnpm db:role` (`database/scripts/lib/role.ts`), which the `migrate` service runs after every migration. The API test suite connects as an identical role, so every endpoint is tested without ownership (`backend/api/src/__tests__/apiRole.test.ts` is the list of what is refused).
 
@@ -648,6 +652,7 @@ The role is created and brought back to exactly these privileges by `pnpm db:rol
 | The same, through a parent | `bookings`, `queue_events`, `queue_state`, `standby_list`, `slot_offers` (the session); `guest_links`, `payments` (the booking, or what else was paid for); `reports` (the order); `prescriptions`, `prescription_items` (the visit); `import_rows` (the batch) | The parent is the caller's hospital's |
 | People | `patients`, `users`, `guest_identities`, `device_tokens`, `otp_challenges`, `patient_documents`, `notifications` | Reachable; they belong to no hospital. A patient a hospital imported (`owner_hospital_id`) is that hospital's alone (`FR-IMP-10`) |
 | The platform's and everybody's | `hospitals` (read by anybody, changed by itself or the platform), `doctors`, `medicines`, `notification_templates`, `blood_donors`, `analytics_refresh`, `sessions_auth`, `schema_migrations` (read) | Reachable |
+| The server's own | `backup_runs` (read, in the `system` scope only; migration 0055, plan I2) | Not reachable: only the server's own work reads it |
 | `audit_log` | | Anybody appends; a hospital reads its own |
 
 **What crosses between hospitals** is named in 0043 and nowhere else: what a hospital publishes; a **referral**, to its two ends, and through it the two emergency cases it links; a **visit**, and the booking behind it, to a hospital the patient has given a live consent; and `fn_runs_emergency_desk(hospital)`, which answers yes or no from `staff_roles` with its owner's rights, because who works at a hospital is its own and that it has an emergency desk is what it publishes.
@@ -795,6 +800,9 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- FR-NOT-06, FR-NOT-07)
     0054_notification_receipts.sql -- plan H2: notifications found by provider_ref, for a
                                    -- delivery receipt (§2.7, FR-NOT-06)
+    0055_backup_runs.sql           -- plan I2: backup_runs, what the nightly backup did, written by
+                                   -- the owner and read by /readyz in the system scope (§2.7,
+                                   -- §5.1, FR-SUP-06)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

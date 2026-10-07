@@ -9,9 +9,30 @@
  *
  *   liveness   is this process able to answer at all
  *   readiness  should traffic be sent to it right now
+ *
+ * Readiness also says how the deployment is doing besides (plan I2,
+ * `shared/domain` `org/deployment`): the last backup, the messages due and
+ * unsent, and the work on a clock. None of it changes the answer to "should
+ * traffic be sent here". What is wrong is in `signals.attention`, for a
+ * monitor to read.
  */
 
-import { probeDatabase } from '../repositories/health.repo.js';
+import {
+  deploymentSignals,
+  timestamp,
+  type BackupRun,
+  type DeploymentSignals,
+} from '@platform/domain';
+
+import { runInDbScope } from '../config/dbScope.js';
+import { env } from '../env.js';
+import {
+  deploymentFigures,
+  probeDatabase,
+  type BackupRunRow,
+} from '../repositories/health.repo.js';
+
+import * as heartbeat from './heartbeat.service.js';
 
 export interface Liveness {
   readonly status: 'ok';
@@ -27,6 +48,11 @@ export interface Readiness {
       readonly schemaVersion: string | null;
     };
   };
+  /**
+   * How the deployment is doing besides; `null` when it could not be read
+   * (the database is down, or behind on migrations).
+   */
+  readonly signals: DeploymentSignals | null;
 }
 
 const startedAt = Date.now();
@@ -54,6 +80,7 @@ export async function readiness(): Promise<Readiness> {
           schemaVersion: probe.schemaVersion,
         },
       },
+      signals: await signals(),
     };
   } catch {
     // The reason is logged by the query logger in config/db.ts. It is not
@@ -62,6 +89,45 @@ export async function readiness(): Promise<Readiness> {
     return {
       status: 'degraded',
       checks: { database: { ok: false, latencyMs: null, schemaVersion: null } },
+      signals: null,
     };
+  }
+}
+
+function asRun(row: BackupRunRow | null): BackupRun | null {
+  return row === null
+    ? null
+    : {
+        result: row.result,
+        finishedAt: timestamp(row.finishedAt.toISOString()),
+        verified: row.verified,
+      };
+}
+
+/**
+ * The deployment's signals. A failure to read them is logged by the query
+ * logger and answered with `null`: it says nothing about whether traffic may
+ * be sent here, which the database probe has already answered.
+ */
+async function signals(): Promise<DeploymentSignals | null> {
+  try {
+    const figures = await runInDbScope({ kind: 'system' }, deploymentFigures);
+    return deploymentSignals({
+      now: timestamp(new Date().toISOString()),
+      startedAt: timestamp(new Date(startedAt).toISOString()),
+      backup: {
+        maxAgeHours: env.BACKUP_MAX_AGE_HOURS ?? null,
+        last: asRun(figures.lastBackup),
+        lastOk: asRun(figures.lastGoodBackup),
+      },
+      messages: {
+        due: figures.messagesDue,
+        oldestDueAt:
+          figures.oldestDueAt === null ? null : timestamp(figures.oldestDueAt.toISOString()),
+      },
+      workers: heartbeat.snapshot(),
+    });
+  } catch {
+    return null;
   }
 }
