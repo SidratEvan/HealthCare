@@ -53,6 +53,11 @@ const byId = { params: settingsIdParams };
 
 hospitalSettingsRoutes.get('/hospital/setup', ...admin, settings.getSetup);
 
+// `FR-NOT-06`: this month's SMS by what became of them, beside the cap the
+// same screen sets. Counts of the hospital's own messages; no message's words
+// and nobody's number.
+hospitalSettingsRoutes.get('/hospital/messages', ...admin, settings.getMessages);
+
 hospitalSettingsRoutes.patch(
   '/hospital/profile',
   ...admin,

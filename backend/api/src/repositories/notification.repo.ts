@@ -150,6 +150,90 @@ export async function markSent(
   `.execute(db);
 }
 
+/**
+ * Records what an aggregator's receipt says became of a message it took
+ * (`FR-NOT-06`, plan H2). True when a row changed.
+ *
+ * Only from `sent`: a receipt for a message this system never handed over, or
+ * one already delivered or failed, changes nothing, which is what makes a
+ * receipt sent three times one fact. Found by `provider_ref`
+ * (`notifications_provider_ref_idx`, 0054).
+ *
+ * `delivered_at` is never before `sent_at`, whatever the two clocks say
+ * (`notifications_delivered_after_sent`).
+ */
+export async function applyReceipt(
+  providerRef: string,
+  outcome: 'delivered' | 'failed',
+  error: string,
+): Promise<boolean> {
+  const result =
+    outcome === 'delivered'
+      ? await sql<{ id: string }>`
+          UPDATE notifications
+             SET state = 'delivered', delivered_at = greatest(now(), sent_at)
+           WHERE provider_ref = ${providerRef} AND channel = 'sms' AND state = 'sent'
+          RETURNING id
+        `.execute(db)
+      : await sql<{ id: string }>`
+          UPDATE notifications
+             SET state = 'failed', error = ${error}
+           WHERE provider_ref = ${providerRef} AND channel = 'sms' AND state = 'sent'
+          RETURNING id
+        `.execute(db);
+  return result.rows.length > 0;
+}
+
+/** A hospital's SMS this calendar month, by what became of them (`FR-NOT-06`). */
+export interface MonthOfMessages {
+  /** Handed to the provider: sent, whether or not a receipt has come. */
+  readonly sent: number;
+  /** Of those, the ones a receipt says reached the handset. */
+  readonly delivered: number;
+  /** Refused by the provider, given up on, or reported undelivered. */
+  readonly failed: number;
+  /** Not sent on purpose: no number, or the cap. */
+  readonly held: number;
+  /** Still to go: being retried, or held for the morning. */
+  readonly waiting: number;
+}
+
+/**
+ * Counted from the messages of that hospital's chambers, as `smsSentThisMonth`
+ * is, and by the same month: the first figure here is the one the cap is held
+ * against.
+ */
+export async function monthOfMessages(hospitalId: string): Promise<MonthOfMessages> {
+  const result = await sql<{
+    sent: number;
+    delivered: number;
+    failed: number;
+    held: number;
+    waiting: number;
+  }>`
+    SELECT count(*) FILTER (WHERE n.state IN ('sent', 'delivered'))::int AS sent,
+           count(*) FILTER (WHERE n.state = 'delivered')::int AS delivered,
+           count(*) FILTER (WHERE n.state = 'failed')::int AS failed,
+           count(*) FILTER (WHERE n.state = 'skipped')::int AS held,
+           count(*) FILTER (WHERE n.state = 'queued')::int AS waiting
+      FROM notifications n
+      JOIN bookings b ON b.id = (n.params ->> 'bookingId')::uuid
+      JOIN sessions s ON s.id = b.session_id
+     WHERE s.hospital_id = ${hospitalId}::uuid
+       AND n.channel = 'sms'
+       AND n.queued_at >= date_trunc('month', now())
+  `.execute(db);
+
+  const row = result.rows[0];
+  return {
+    sent: row?.sent ?? 0,
+    delivered: row?.delivered ?? 0,
+    failed: row?.failed ?? 0,
+    held: row?.held ?? 0,
+    waiting: row?.waiting ?? 0,
+  };
+}
+
 /** A row the sender has taken to send: everything it can be sent from. */
 export interface ClaimedRow {
   readonly id: string;
