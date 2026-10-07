@@ -44,7 +44,16 @@
  * (`clearExpiredBodies`).
  */
 
-import { twoAwayBookings, waitingQueue, type QueueEvent, type QueueState } from '@platform/domain';
+import {
+  earlierThanTold,
+  twoAwayBookings,
+  waitingQueue,
+  type BookingId,
+  type Eta,
+  type QueueEvent,
+  type QueueState,
+  type Timestamp,
+} from '@platform/domain';
 import {
   BED_KIND_NAMES,
   bedKindName,
@@ -241,6 +250,65 @@ export function planTwoAway(state: QueueState): readonly PlannedNotification[] {
     templateKey: 'queue.two_away' as const,
     params: {},
   }));
+}
+
+/** The messages whose words give a patient a time to expect their turn. */
+const TELLS_A_TIME = new Set<TemplateKey>([
+  'queue.doctor_arrived',
+  'queue.delayed',
+  'queue.earlier',
+]);
+
+/**
+ * What a plan tells each booking about when (`FR-QUE-15`): the time in the
+ * last message of it that names one. The caller records these as told.
+ */
+export function timesTold(
+  plan: readonly PlannedNotification[],
+): readonly { readonly bookingId: string; readonly etaAt: string }[] {
+  const told = new Map<string, string>();
+  for (const planned of plan) {
+    const eta = planned.params['eta'];
+    if (TELLS_A_TIME.has(planned.templateKey) && eta !== undefined && eta !== '') {
+      told.set(planned.bookingId, eta);
+    }
+  }
+  return [...told].map(([bookingId, etaAt]) => ({ bookingId, etaAt }));
+}
+
+/**
+ * "Your turn may come sooner" (`FR-QUE-15`, plan F2c).
+ *
+ * For each waiting patient whose estimate is now earlier than the time they
+ * were last told by more than its band (`earlierThanTold`, the domain's own
+ * answer). Raised from the queue write that moved the estimate and written
+ * in its transaction, so no screen is shown the earlier time before the
+ * message exists: the broadcast goes out after the commit.
+ *
+ * Nobody is told twice by one write: a booking this plan already gives a
+ * time to (the doctor arrived, a delay was declared) has just been told.
+ * And nobody is told again for the same move, because what they were told
+ * becomes the new time.
+ */
+export function planEarlier(
+  state: QueueState,
+  etas: readonly Eta[],
+  told: ReadonlyMap<string, Date>,
+  plannedStart: Timestamp,
+  alreadyInPlan: readonly PlannedNotification[],
+): readonly PlannedNotification[] {
+  const justTold = new Set(timesTold(alreadyInPlan).map((entry) => entry.bookingId));
+  const toldAt = new Map<BookingId, Timestamp>(
+    [...told].map(([bookingId, at]) => [bookingId as BookingId, at.toISOString() as Timestamp]),
+  );
+
+  return earlierThanTold(state, etas, toldAt, plannedStart)
+    .filter((eta) => !justTold.has(eta.bookingId))
+    .map((eta) => ({
+      bookingId: eta.bookingId,
+      templateKey: 'queue.earlier' as const,
+      params: { eta: eta.etaAt },
+    }));
 }
 
 /**

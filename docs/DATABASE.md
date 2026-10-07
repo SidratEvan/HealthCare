@@ -291,6 +291,7 @@ Recurring chamber schedules: `id`, `doctor_hospital_id` **FK**, `weekday` int, `
 | `id` | uuid | **PK** |
 | `session_id` | uuid | **FK** |
 | `patient_id` | uuid | **FK** |
+| `told_eta_at` | timestamptz | nullable. The time in the last message that told this patient when to expect their turn (`FR-QUE-15`, 0050); null means only the chamber's planned start, from the confirmation. Not queue state: the reducer never reads it. Written by the notification step of a queue write, in that write's transaction |
 | `booked_by_user_id` | uuid | **FK** nullable |
 | `booked_by_guest_id` | uuid | **FK** nullable |
 | `serial_number` | int | per-session |
@@ -778,6 +779,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- (§2.2, FR-BRD-11, FR-SUP-03)
     0049_org_application.sql       -- plan D1: hospitals.self_registered and application_key,
                                    -- staff_users.phone (§2.1, §2.2, FR-ONB-09, FR-ONB-10)
+    0050_told_eta.sql              -- plan F2c: bookings.told_eta_at, the time a patient was last
+                                   -- told (§2.3, FR-QUE-15)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

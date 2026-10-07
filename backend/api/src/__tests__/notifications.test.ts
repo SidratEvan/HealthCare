@@ -488,3 +488,132 @@ describe('the log provider is the implementation, not a stand-in', () => {
     for (const row of rows.rows) expect(row.cost_poisha).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// An estimate that moves earlier than a patient was told (`FR-QUE-15`, plan F2c)
+// ---------------------------------------------------------------------------
+
+describe('a turn that is coming sooner than the patient was told (FR-QUE-15)', () => {
+  async function arrive(): Promise<void> {
+    await queueService.appendEvent({
+      sessionId: fixture.sessionId,
+      type: 'DOCTOR_ARRIVED',
+      payload: { arrivedAt: new Date().toISOString(), minutesLate: 30 },
+      actor: staff(),
+    });
+  }
+
+  async function cancel(index: number): Promise<void> {
+    await queueService.appendEvent({
+      sessionId: fixture.sessionId,
+      type: 'BOOKING_CANCELLED',
+      payload: {
+        bookingId: fixture.bookingIds[index],
+        reason: 'রোগী বাতিল করেছেন (ডেমো)',
+      },
+      actor: staff(),
+    });
+  }
+
+  async function checkIn(index: number): Promise<void> {
+    await queueService.appendEvent({
+      sessionId: fixture.sessionId,
+      type: 'PATIENT_ARRIVED',
+      payload: { bookingId: fixture.bookingIds[index], quotedWaitMinutes: 20 },
+      actor: staff(),
+    });
+  }
+
+  /** The "may come sooner" messages written for one booking, by SMS. */
+  async function soonerFor(index: number): Promise<{ state: string; body: string }[]> {
+    const rows = await notificationRepo.listForSession(fixture.sessionId);
+    return rows
+      .filter(
+        (row) =>
+          row.templateKey === 'queue.earlier' &&
+          row.channel === 'sms' &&
+          row.params['bookingId'] === fixture.bookingIds[index],
+      )
+      .map((row) => ({
+        state: row.state,
+        body: typeof row.params['body'] === 'string' ? row.params['body'] : '',
+      }));
+  }
+
+  async function toldAt(index: number): Promise<Date | null> {
+    const row = await sql<{ told_eta_at: Date | null }>`
+      SELECT told_eta_at FROM bookings WHERE id = ${fixture.bookingIds[index] ?? ''}::uuid
+    `.execute(db);
+    return row.rows[0]?.told_eta_at ?? null;
+  }
+
+  it('keeps the time each patient is told when the doctor arrives', async () => {
+    // Told nothing but the planned start, so far.
+    expect(await toldAt(4)).toBeNull();
+
+    await arrive();
+
+    // "The doctor has arrived, expected around …": that time is now what the
+    // last patient was told, and it is ahead of now.
+    const told = await toldAt(4);
+    expect(told).not.toBeNull();
+    expect(told?.getTime() ?? 0).toBeGreaterThan(Date.now());
+    // The arrival's own message told them: nobody is told twice by one write.
+    expect(await soonerFor(4)).toEqual([]);
+  });
+
+  it('tells a patient whose turn has come forward, once for each move, and moves what they were told', async () => {
+    await arrive();
+    const first = await toldAt(4);
+
+    // Three patients ahead give up their serials, one after another. The last
+    // patient's turn comes forward by three consultations.
+    await cancel(0);
+    await cancel(1);
+    await cancel(2);
+
+    const sooner = await soonerFor(4);
+    // Told, by SMS, and sent.
+    expect(sooner.length).toBeGreaterThanOrEqual(1);
+    expect(sooner.every((row) => row.state === 'sent')).toBe(true);
+    expect(sooner[0]?.body).toContain('আগে আসতে পারে');
+    // Never more often than the turn moved.
+    expect(sooner.length).toBeLessThanOrEqual(3);
+
+    // What they were told is the earlier time now.
+    const second = await toldAt(4);
+    expect(second?.getTime() ?? 0).toBeLessThan(first?.getTime() ?? 0);
+
+    // Something that moves nobody's turn tells nobody anything more.
+    await checkIn(3);
+    expect(await soonerFor(4)).toHaveLength(sooner.length);
+
+    // The patients who cancelled were told that, and not that they are sooner.
+    expect(await soonerFor(0)).toEqual([]);
+    expect((await keysFor('queue.cancelled')).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('does not message a patient reception has checked in: they are in the corridor', async () => {
+    await arrive();
+    await checkIn(4);
+
+    await cancel(0);
+    await cancel(1);
+    await cancel(2);
+
+    expect(await soonerFor(4)).toEqual([]);
+    // The one before them, still on their way, is told.
+    expect((await soonerFor(3)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('says nothing while the chamber cannot support a time at all', async () => {
+    // The doctor has not arrived: the estimate is shown as "not known", so
+    // there is no earlier time on any screen to warn about.
+    await cancel(0);
+    await cancel(1);
+    await cancel(2);
+
+    expect(await soonerFor(4)).toEqual([]);
+    expect(await toldAt(4)).toBeNull();
+  });
+});

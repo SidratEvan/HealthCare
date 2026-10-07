@@ -147,6 +147,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0047',
       '0048',
       '0049',
+      // Plan F2c: what a patient was last told (FR-QUE-15).
+      '0050',
     ]);
   });
 

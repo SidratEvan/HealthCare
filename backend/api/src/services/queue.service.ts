@@ -85,6 +85,7 @@ import { logger } from '../config/logger.js';
 import { AppError, guardFailed, notFound } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
 import * as bookingRepo from '../repositories/booking.repo.js';
+import * as notificationRepo from '../repositories/notification.repo.js';
 import * as paymentRepo from '../repositories/payment.repo.js';
 import * as eventRepo from '../repositories/queueEvent.repo.js';
 import * as stateRepo from '../repositories/queueState.repo.js';
@@ -913,7 +914,7 @@ async function settle(
   // event to a message lives in `notification.service` rather than here — this
   // file's job is the queue, not the copy.
   const material = events.filter((event) => isMaterialEvent(event.type));
-  const plan = [
+  const fromEvents = [
     ...material.flatMap((event) =>
       notifications.planFor(state, event, { etaFor: (id) => etaTextFor(etas, id) }),
     ),
@@ -922,7 +923,24 @@ async function settle(
     ...notifications.planTwoAway(state),
   ];
 
+  // `FR-QUE-15`: an estimate that is now earlier than the time a patient was
+  // last told, by more than its band, is told to them in this transaction.
+  // The screens hear of this write after the commit, so none shows the
+  // earlier time before the message is written. What each was told is on the
+  // booking, and moves here, under the session's lock.
+  const plan = [
+    ...fromEvents,
+    ...notifications.planEarlier(
+      state,
+      etas,
+      await notificationRepo.toldEtas(trx, session.id),
+      time.fromDate(session.plannedStart),
+      fromEvents,
+    ),
+  ];
+
   const batch = await notifications.queueFor(trx, session.id, plan);
+  await notificationRepo.setToldEtas(trx, notifications.timesTold(plan));
 
   // --- 13. Return ----------------------------------------------------------
   return {
