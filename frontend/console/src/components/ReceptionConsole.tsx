@@ -37,6 +37,7 @@ import {
   unseenAtEnd,
   waitingQueue,
   type QueueEntry,
+  type Timestamp,
 } from '@platform/domain';
 import {
   format,
@@ -328,7 +329,7 @@ function ConsoleBody(): ReactNode {
       setWalkingIn(true);
     }
     if ((event.key === 'a' || event.key === 'A') && sessionStatus !== 'ended') {
-      void queue.act('DOCTOR_ARRIVED', { arrivedAt: new Date().toISOString(), minutesLate: 0 });
+      void queue.act('DOCTOR_ARRIVED', arrivalNow(state?.plan.plannedStart ?? null));
     }
   });
 
@@ -420,10 +421,7 @@ function ConsoleBody(): ReactNode {
             variant="secondary"
             onClick={() => {
               if (afterEnd()) return;
-              void queue.act('DOCTOR_ARRIVED', {
-                arrivedAt: new Date().toISOString(),
-                minutesLate: 0,
-              });
+              void queue.act('DOCTOR_ARRIVED', arrivalNow(state.plan.plannedStart));
             }}
           >
             {t('doctorArrived', locale)}
@@ -846,6 +844,26 @@ function Notice({ children }: { readonly children: ReactNode }): ReactNode {
  * `clampConsultSeconds` is the domain's own bound, so the console and the
  * server agree on what a plausible consultation is.
  */
+/**
+ * The doctor's arrival as this console draws it before the server answers:
+ * now, and how late that is against the planned start (`FR-REC-02`).
+ *
+ * It used to say zero minutes late, always. Online the server stamps both
+ * itself and this is only what the screen shows for a moment; queued offline,
+ * the time is what the server keeps and the lateness is worked out there from
+ * it (`sync.service`), so the two sums are the same one.
+ */
+function arrivalNow(plannedStart: Timestamp | null): {
+  readonly arrivedAt: Timestamp;
+  readonly minutesLate: number;
+} {
+  const arrivedAt = time.fromDate(new Date());
+  return {
+    arrivedAt,
+    minutesLate: plannedStart === null ? 0 : time.differenceInMinutes(arrivedAt, plannedStart),
+  };
+}
+
 function elapsedSeconds(entry: QueueEntry, now: Date): number {
   if (entry.calledAt === null) return 0;
   const elapsed = Math.round((now.getTime() - new Date(entry.calledAt).getTime()) / 1000);
