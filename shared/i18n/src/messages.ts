@@ -2832,6 +2832,21 @@ export const PATIENT = {
     bn: 'এই ফোনে নেওয়া সিরিয়াল। অ্যাকাউন্ট খুললে সব ফোনে দেখা যাবে।',
     en: 'Serials booked on this phone. An account shows them on every device.',
   },
+  // Plan F1: signed in, the list is the account's, from the server.
+  serialsFromAccount: {
+    bn: 'আপনার অ্যাকাউন্টের সিরিয়াল। যে ফোনেই লগ ইন করুন, একই তালিকা দেখবেন।',
+    en: 'Your account’s serials. The list is the same on any phone you sign in on.',
+  },
+  // `MOD-A07-PROFILE`: a signed-in patient books for a profile, with nothing retyped (FR-GST-10).
+  bookingForWhom: { bn: 'কার জন্য সিরিয়াল?', en: 'Who is the serial for?' },
+  bookingForSomeoneElse: {
+    bn: 'অন্য কারও জন্য বুক করুন',
+    en: 'Book for somebody else',
+  },
+  bookingForOwnProfile: {
+    bn: 'আমার প্রোফাইল থেকে বেছে নিন',
+    en: 'Choose from my profiles',
+  },
 
   // --- S-A-12 health wallet (FR-PAT-60..65) --------------------------------
   noRecordsYet: {

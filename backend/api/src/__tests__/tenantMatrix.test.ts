@@ -260,6 +260,11 @@ const KEPT: Readonly<Record<string, Kept>> = {
 
   // --- a patient's own ----------------------------------------------------------
   'GET /me/profiles': { by: 'patient' },
+  // Plan F1: an account's own serials, and a link to one of them. Whose they
+  // are comes off the principal; another person's is asked for in
+  // `myBookings.routes.test.ts`.
+  'GET /me/bookings': { by: 'patient' },
+  'POST /me/bookings/:id/link': { by: 'patient' },
   'POST /guest/claim': { by: 'patient' },
   'POST /patients/:id/consent-offer': { by: 'patient' },
   'POST /consents': { by: 'patient' },

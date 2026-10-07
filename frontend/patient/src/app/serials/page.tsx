@@ -8,17 +8,19 @@
  *
  * ## Whose serials these are
  *
- * This device's. `GET /me/bookings` is the endpoint that would answer the
- * question properly, and it answers it for an *account* — of which there are
- * none, because authentication is deferred to Supabase Auth (`CLAUDE.md`
- * §4.1). A guest's identity, as far as the server is concerned, is one
- * tracking link per booking.
+ * **Signed in: the account's** (plan F1). `GET /me/bookings` lists the
+ * serials of every profile the account owns, wherever they were booked, so
+ * the list is the same on every phone. Opening one takes a tracking link;
+ * this phone uses the one it holds, and `S-A-08` asks for one when it holds
+ * none.
  *
- * `APP_FLOW.md` A1.5 already states the consequence and accepts it: for a
- * guest, multi-device access is "only via the SMS link". So the screen shows
- * what this phone booked and **says so on the screen**, rather than implying
- * it holds somebody's history and quietly losing half of it when they pick up
- * a different phone.
+ * **Not signed in: this device's.** A guest's identity, as far as the server
+ * is concerned, is one tracking link per booking, and `APP_FLOW.md` A1.5
+ * accepts the consequence: for a guest, multi-device access is "only via the
+ * SMS link". So the screen shows what this phone booked and **says so on the
+ * screen**, rather than implying it holds somebody's history and quietly
+ * losing half of it when they pick up a different phone. A signed-in patient
+ * whose server cannot be reached is shown the same, with the same sentence.
  */
 
 import { useEffect, useState } from 'react';
@@ -36,15 +38,16 @@ import { Card, useLocale } from '@platform/ui';
 import { ChevronIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
 import { useDeployment } from '@/hooks/useDeployment';
-import { bookingsInScope, recentBookings } from '@/lib/bookings';
 import { scopedHospitalId } from '@/lib/scope';
-import { standingOf, type StoodBooking } from '@/lib/standing';
+import { serialsFor, type StoodBooking } from '@/lib/standing';
 
 import type { ReactNode } from 'react';
 
 export default function SerialsPage(): ReactNode {
   const locale = useLocale();
   const [bookings, setBookings] = useState<readonly StoodBooking[] | null>(null);
+  // Whether the list is the account's, from the server, or this phone's own.
+  const [fromAccount, setFromAccount] = useState(false);
 
   // Read after mount: `localStorage` does not exist on the server, and reading
   // it during render makes the first client render disagree with it.
@@ -52,17 +55,15 @@ export default function SerialsPage(): ReactNode {
   const inHospital = scopedHospitalId(useDeployment());
   useEffect(() => {
     let stale = false;
-    const mine = bookingsInScope(recentBookings(), inHospital);
-    if (mine.length === 0) {
-      setBookings([]);
-      return undefined;
-    }
 
     // Where each one stands is the server's to say, not the calendar's
-    // (`FR-PAT-39`): the shape of the answer is shown until it has.
+    // (`FR-PAT-39`): the shape of the answer is shown until it has. A
+    // signed-in patient's list is the server's too (plan F1).
     setBookings(null);
-    void standingOf(mine).then((stood) => {
-      if (!stale) setBookings(stood);
+    void serialsFor(inHospital).then((serials) => {
+      if (stale) return;
+      setBookings(serials.bookings);
+      setFromAccount(serials.fromAccount);
     });
     return () => {
       stale = true;
@@ -103,8 +104,16 @@ export default function SerialsPage(): ReactNode {
           <Section title={tp('serialsUpcoming', locale)} bookings={upcoming} name="upcoming" />
           <Section title={tp('serialsPast', locale)} bookings={past} name="past" />
 
-          {/* The honest caveat, on the screen rather than in a comment. */}
-          <p className="text-caption text-ink-muted">{tp('serialsOnThisDevice', locale)}</p>
+          {/* Whose list this is, on the screen rather than in a comment: the
+              account's, the same on every phone, or only what this phone
+              booked. */}
+          <p
+            className="text-caption text-ink-muted"
+            data-testid="serials-source"
+            data-source={fromAccount ? 'account' : 'device'}
+          >
+            {tp(fromAccount ? 'serialsFromAccount' : 'serialsOnThisDevice', locale)}
+          </p>
         </>
       )}
     </TabScreen>

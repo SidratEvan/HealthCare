@@ -78,3 +78,25 @@ bookingRoutes.post(
   validate({ params: idParams, body: cancelBookingBody }),
   booking.cancelBooking,
 );
+
+/**
+ * `GET /me/bookings` and `POST /me/bookings/:id/link` (plan F1, `S-A-09`).
+ *
+ * A signed-in patient's serials, on whichever phone they are signed in: the
+ * list comes from the server and not from what one phone remembers. Opening
+ * a serial's live screen takes a link, so a phone that holds none for that
+ * booking asks for one. Both are the account's own, decided from the
+ * principal; a link costs a row, so asking for one is limited by address like
+ * a booking is, and takes a key like every write.
+ */
+const linkLimit = rateLimit({ limit: 120, windowSeconds: 3_600, keyFor: byIp });
+
+bookingRoutes.get('/me/bookings', requireAuth, booking.myBookings);
+bookingRoutes.post(
+  '/me/bookings/:id/link',
+  requireAuth,
+  linkLimit,
+  idempotency({ required: true }),
+  validate({ params: idParams }),
+  booking.myBookingLink,
+);

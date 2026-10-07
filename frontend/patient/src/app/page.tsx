@@ -59,7 +59,7 @@ import {
 import { useDeployment } from '@/hooks/useDeployment';
 import { bookingsInScope, recentBookings } from '@/lib/bookings';
 import { scopedHospitalId } from '@/lib/scope';
-import { standingFromMemory, standingOf, type StoodBooking } from '@/lib/standing';
+import { serialsFor, standingFromMemory, type StoodBooking } from '@/lib/standing';
 
 import type { ReactNode } from 'react';
 
@@ -381,7 +381,9 @@ function ActiveSerial(): ReactNode {
     // One read, not a socket. Home is a screen somebody passes through; the
     // live channel belongs to `S-A-08`, which is where they go to watch.
     setBooking(standingFromMemory(mine).find((entry) => entry.standing === 'current') ?? null);
-    void standingOf(mine).then((stood) => {
+    // Signed in, the account's serials, booked on any phone (plan F1); else
+    // this phone's own.
+    void serialsFor(inHospital).then(({ bookings: stood }) => {
       if (stale) return;
       // A status that could not be checked is not a reason to hide the
       // booking they have: the strip stays, and says so.
