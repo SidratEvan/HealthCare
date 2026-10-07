@@ -53,6 +53,8 @@ import {
   type StaffPatchBody,
   type TemplateBody,
   type WardBody,
+  type WardPatchBody,
+  identityEditable,
   missingForReview,
   nextLifecycle,
   type SetupCounts,
@@ -132,8 +134,29 @@ export async function setup(hospitalId: string): Promise<SetupView> {
 
 // --- profile and rules ---------------------------------------------------------
 
+/**
+ * The facility's own details.
+ *
+ * Its division, district and registration number are what it was registered
+ * as, and what the platform checks before approving it. They are the
+ * hospital's to correct while the workspace is setting up, which is where a
+ * typo in an application is found, and refused once review has been asked
+ * for (`identityEditable`, plan D2). A workspace sent back is setting up
+ * again.
+ */
 export async function updateProfile(actor: Actor, body: ProfileBody): Promise<void> {
   const { coordinates, ...fields } = body;
+  if (
+    fields.division !== undefined ||
+    fields.district !== undefined ||
+    fields.registrationNo !== undefined
+  ) {
+    const workspace = await platformRepo.findWorkspace(actor.hospitalId);
+    if (workspace === null) throw notFound('hospital');
+    if (!identityEditable(workspace.lifecycle)) {
+      throw notAllowed('identity_after_review', { lifecycle: workspace.lifecycle });
+    }
+  }
   await change(actor, { table: 'hospitals', change: 'profile' }, async (trx) => {
     await repo.updateProfile(trx, actor.hospitalId, {
       ...fields,
@@ -259,6 +282,22 @@ export async function updateDepartment(
   await change(actor, { table: 'departments', change: 'department_changed' }, async (trx) => {
     if (!(await repo.updateDepartment(trx, actor.hospitalId, departmentId, body))) {
       throw notFound('department');
+    }
+    return { result: undefined, subjectId: departmentId };
+  });
+}
+
+/**
+ * Takes away a department nobody sits in (plan D2): one added by mistake, or
+ * under the wrong code, which cannot be changed. One a doctor is listed
+ * under is refused, and the refusal says so; the doctor is moved or
+ * deactivated first.
+ */
+export async function removeDepartment(actor: Actor, departmentId: string): Promise<void> {
+  await change(actor, { table: 'departments', change: 'department_removed' }, async (trx) => {
+    const outcome = await repo.removeDepartment(trx, actor.hospitalId, departmentId);
+    if (!outcome.removed) {
+      throw outcome.inUse ? notAllowed('department_has_doctors') : notFound('department');
     }
     return { result: undefined, subjectId: departmentId };
   });
@@ -448,6 +487,43 @@ export async function updateBed(actor: Actor, bedId: string, body: BedPatchBody)
   }
   await change(actor, { table: 'beds', change: 'bed_changed' }, async (trx) => {
     if (!(await repo.updateBed(trx, actor.hospitalId, bedId, body))) throw notFound('bed');
+    return { result: undefined, subjectId: bedId };
+  });
+}
+
+/** A ward's names and floor (plan D2). What kind of ward it is does not change. */
+export async function updateWard(actor: Actor, wardId: string, body: WardPatchBody): Promise<void> {
+  if (
+    body.nameEn !== undefined &&
+    (await repo.wardNameTaken(actor.hospitalId, body.nameEn, wardId))
+  ) {
+    throw duplicate('nameEn');
+  }
+  await change(actor, { table: 'wards', change: 'ward_changed' }, async (trx) => {
+    if (!(await repo.updateWard(trx, actor.hospitalId, wardId, body))) throw notFound('ward');
+    return { result: undefined, subjectId: wardId };
+  });
+}
+
+/** Takes away a ward that holds no bed (plan D2). */
+export async function removeWard(actor: Actor, wardId: string): Promise<void> {
+  await change(actor, { table: 'wards', change: 'ward_removed' }, async (trx) => {
+    const outcome = await repo.removeWard(trx, actor.hospitalId, wardId);
+    if (!outcome.removed) throw outcome.inUse ? notAllowed('ward_has_beds') : notFound('ward');
+    return { result: undefined, subjectId: wardId };
+  });
+}
+
+/**
+ * Takes away a bed the ward never brought into service (plan D2): a line
+ * typed by mistake. A bed that has been in service has a history and is not
+ * removed here; the ward takes it out of service from its board, with the
+ * reason (`BTN-B06-OOS`).
+ */
+export async function removeBed(actor: Actor, bedId: string): Promise<void> {
+  await change(actor, { table: 'beds', change: 'bed_removed' }, async (trx) => {
+    const outcome = await repo.removeUnconfirmedBed(trx, actor.hospitalId, bedId);
+    if (!outcome.removed) throw outcome.inUse ? notAllowed('bed_in_use') : notFound('bed');
     return { result: undefined, subjectId: bedId };
   });
 }

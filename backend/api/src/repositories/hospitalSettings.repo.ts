@@ -11,7 +11,12 @@
 
 import { sql } from 'kysely';
 
-import { readBrandTheme, type BrandTheme, type OrgLifecycle } from '@platform/domain';
+import {
+  BED_UNCONFIRMED_REASON,
+  readBrandTheme,
+  type BrandTheme,
+  type OrgLifecycle,
+} from '@platform/domain';
 
 import { db } from '../config/db.js';
 
@@ -28,6 +33,8 @@ export interface SetupSnapshot {
     readonly kind: string;
     readonly division: string;
     readonly district: string;
+    /** The licence or registration number, as the hospital gave it; null for none. */
+    readonly registrationNo: string | null;
     readonly thana: string | null;
     readonly addressBn: string | null;
     readonly addressEn: string | null;
@@ -111,6 +118,11 @@ export interface SetupSnapshot {
       readonly kind: string;
       readonly state: string;
       readonly nightlyPoisha: number;
+      /**
+       * Added in settings and never brought into service by the ward. Only
+       * such a bed can be removed here (plan D2): nobody has lain in it.
+       */
+      readonly unconfirmed: boolean;
     }[];
   }[];
   readonly staff: readonly {
@@ -144,6 +156,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     kind: string;
     division: string;
     district: string;
+    registration_no: string | null;
     thana: string | null;
     address_bn: string | null;
     address_en: string | null;
@@ -172,6 +185,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     sms_budget_monthly: number | null;
   }>`
     SELECT h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
+           h.registration_no,
            h.thana, h.address_bn, h.address_en, h.phone, h.emergency_phone,
            h.description_bn, h.description_en, h.portal_domain, s.modules_off, s.unpublished,
            s.brand,
@@ -262,8 +276,10 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     kind: string;
     state: string;
     nightly_poisha: number;
+    unconfirmed: boolean;
   }>`
-    SELECT id, ward_id, label, kind::text AS kind, state::text AS state, nightly_poisha
+    SELECT id, ward_id, label, kind::text AS kind, state::text AS state, nightly_poisha,
+           (state = 'out_of_service' AND oos_reason = ${BED_UNCONFIRMED_REASON}) AS unconfirmed
       FROM beds
      WHERE hospital_id = ${hospitalId} AND deleted_at IS NULL
      ORDER BY label
@@ -300,6 +316,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       kind: row.kind,
       division: row.division,
       district: row.district,
+      registrationNo: row.registration_no,
       thana: row.thana,
       addressBn: row.address_bn,
       addressEn: row.address_en,
@@ -380,6 +397,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
           kind: b.kind,
           state: b.state,
           nightlyPoisha: b.nightly_poisha,
+          unconfirmed: b.unconfirmed,
         })),
     })),
     staff: staff.rows.map((s) => ({
@@ -403,6 +421,10 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
 export interface ProfileFields {
   readonly nameBn?: string | undefined;
   readonly nameEn?: string | undefined;
+  /** What it was registered as; the service allows these only while setting up. */
+  readonly division?: string | undefined;
+  readonly district?: string | undefined;
+  readonly registrationNo?: string | null | undefined;
   readonly thana?: string | null | undefined;
   readonly addressBn?: string | null | undefined;
   readonly addressEn?: string | null | undefined;
@@ -425,6 +447,9 @@ export async function updateProfile(
     UPDATE hospitals SET
       name_bn = CASE WHEN ${has('nameBn')} THEN ${fields.nameBn ?? null} ELSE name_bn END,
       name_en = CASE WHEN ${has('nameEn')} THEN ${fields.nameEn ?? null} ELSE name_en END,
+      division = CASE WHEN ${has('division')} THEN ${fields.division ?? null} ELSE division END,
+      district = CASE WHEN ${has('district')} THEN ${fields.district ?? null} ELSE district END,
+      registration_no = CASE WHEN ${has('registrationNo')} THEN ${fields.registrationNo ?? null} ELSE registration_no END,
       thana = CASE WHEN ${has('thana')} THEN ${fields.thana ?? null} ELSE thana END,
       address_bn = CASE WHEN ${has('addressBn')} THEN ${fields.addressBn ?? null} ELSE address_bn END,
       address_en = CASE WHEN ${has('addressEn')} THEN ${fields.addressEn ?? null} ELSE address_en END,
@@ -619,6 +644,34 @@ export async function updateDepartment(
     WHERE id = ${departmentId} AND hospital_id = ${hospitalId} AND deleted_at IS NULL
   `.execute(trx);
   return Number(result.numAffectedRows ?? 0) === 1;
+}
+
+/**
+ * Takes a department away, if nobody sits in it (plan D2).
+ *
+ * `removed` is false, with `inUse` saying which it was: not this facility's,
+ * or one a doctor is still listed under. Checked and done in one statement,
+ * so a doctor added between the look and the removal keeps the department.
+ * The row stays, marked: its code is free for the department that was meant.
+ */
+export async function removeDepartment(
+  trx: Tx,
+  hospitalId: string,
+  departmentId: string,
+): Promise<{ removed: boolean; inUse: boolean }> {
+  const result = await sql<{ id: string }>`
+    UPDATE departments dep SET deleted_at = now(), updated_at = now()
+     WHERE dep.id = ${departmentId} AND dep.hospital_id = ${hospitalId} AND dep.deleted_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM doctor_hospitals dh
+                        WHERE dh.department_id = dep.id AND dh.deleted_at IS NULL)
+    RETURNING dep.id
+  `.execute(trx);
+  if (result.rows.length === 1) return { removed: true, inUse: false };
+  const there = await sql<{ one: number }>`
+    SELECT 1 AS one FROM departments
+     WHERE id = ${departmentId} AND hospital_id = ${hospitalId} AND deleted_at IS NULL
+  `.execute(trx);
+  return { removed: false, inUse: there.rows.length > 0 };
 }
 
 export async function departmentBelongs(
@@ -912,6 +965,92 @@ export async function wardOf(hospitalId: string, wardId: string): Promise<{ kind
     SELECT kind::text AS kind FROM wards WHERE id = ${wardId} AND hospital_id = ${hospitalId} AND deleted_at IS NULL
   `.execute(db);
   return result.rows[0] ?? null;
+}
+
+/** Whether another of this facility's wards already has this English name (`wards` is unique on it). */
+export async function wardNameTaken(
+  hospitalId: string,
+  nameEn: string,
+  exceptWardId: string,
+): Promise<boolean> {
+  const result = await sql<{ one: number }>`
+    SELECT 1 AS one FROM wards
+     WHERE hospital_id = ${hospitalId} AND name_en = ${nameEn} AND deleted_at IS NULL
+       AND id <> ${exceptWardId}
+  `.execute(db);
+  return result.rows.length > 0;
+}
+
+/** A ward's names and floor. Returns false when the ward is not this facility's. */
+export async function updateWard(
+  trx: Tx,
+  hospitalId: string,
+  wardId: string,
+  fields: { nameBn?: string | undefined; nameEn?: string | undefined; floor?: number | undefined },
+): Promise<boolean> {
+  const result = await sql`
+    UPDATE wards SET
+      name_bn = coalesce(${fields.nameBn ?? null}, name_bn),
+      name_en = coalesce(${fields.nameEn ?? null}, name_en),
+      floor = coalesce(${fields.floor ?? null}::int, floor),
+      updated_at = now()
+    WHERE id = ${wardId} AND hospital_id = ${hospitalId} AND deleted_at IS NULL
+  `.execute(trx);
+  return Number(result.numAffectedRows ?? 0) === 1;
+}
+
+/**
+ * Takes a ward away, if it holds no bed (plan D2). As `removeDepartment`:
+ * one statement, and `inUse` tells a ward with beds from one that is not here.
+ */
+export async function removeWard(
+  trx: Tx,
+  hospitalId: string,
+  wardId: string,
+): Promise<{ removed: boolean; inUse: boolean }> {
+  const result = await sql<{ id: string }>`
+    UPDATE wards w SET deleted_at = now(), updated_at = now()
+     WHERE w.id = ${wardId} AND w.hospital_id = ${hospitalId} AND w.deleted_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM beds b WHERE b.ward_id = w.id AND b.deleted_at IS NULL)
+    RETURNING w.id
+  `.execute(trx);
+  if (result.rows.length === 1) return { removed: true, inUse: false };
+  const there = await sql<{ one: number }>`
+    SELECT 1 AS one FROM wards
+     WHERE id = ${wardId} AND hospital_id = ${hospitalId} AND deleted_at IS NULL
+  `.execute(trx);
+  return { removed: false, inUse: there.rows.length > 0 };
+}
+
+/**
+ * Takes a bed away, if the ward never brought it into service (plan D2).
+ *
+ * A bed added in settings starts out of service with the reason that says
+ * nobody has confirmed it (`createBed`). While that is still so, nobody has
+ * been admitted to it, it has been in no public count, and it has no history
+ * on the board: it was a line typed by mistake, and removing it loses
+ * nothing. Any other bed has a history, and is taken out of service from the
+ * ward board instead, where the reason is recorded.
+ */
+export async function removeUnconfirmedBed(
+  trx: Tx,
+  hospitalId: string,
+  bedId: string,
+): Promise<{ removed: boolean; inUse: boolean }> {
+  const result = await sql<{ id: string }>`
+    UPDATE beds b SET deleted_at = now(), updated_at = now()
+     WHERE b.id = ${bedId} AND b.hospital_id = ${hospitalId} AND b.deleted_at IS NULL
+       AND b.state = 'out_of_service' AND b.oos_reason = ${BED_UNCONFIRMED_REASON}
+       AND NOT EXISTS (SELECT 1 FROM admissions a WHERE a.bed_id = b.id)
+       AND NOT EXISTS (SELECT 1 FROM bed_events e WHERE e.bed_id = b.id)
+    RETURNING b.id
+  `.execute(trx);
+  if (result.rows.length === 1) return { removed: true, inUse: false };
+  const there = await sql<{ one: number }>`
+    SELECT 1 AS one FROM beds
+     WHERE id = ${bedId} AND hospital_id = ${hospitalId} AND deleted_at IS NULL
+  `.execute(trx);
+  return { removed: false, inUse: there.rows.length > 0 };
 }
 
 export async function bedLabelTaken(

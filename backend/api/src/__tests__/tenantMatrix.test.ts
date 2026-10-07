@@ -599,6 +599,12 @@ const KEPT: Readonly<Record<string, Kept>> = {
       body: { nameEn: 'Matrix (Demo)' },
     }),
   },
+  // Plan D2: taking away what was added by mistake. Another hospital's is
+  // not there to be taken.
+  'DELETE /hospital/departments/:id': {
+    by: 'row',
+    other: (_mine, theirs) => ({ path: `/hospital/departments/${theirs.departmentId}` }),
+  },
   'POST /hospital/doctors': {
     by: 'body',
     smuggled: [
@@ -656,6 +662,21 @@ const KEPT: Readonly<Record<string, Kept>> = {
       path: `/hospital/beds/${theirs.bedIds[0]}`,
       body: { label: 'MX-9' },
     }),
+  },
+  'DELETE /hospital/beds/:id': {
+    by: 'row',
+    other: (_mine, theirs) => ({ path: `/hospital/beds/${theirs.bedIds[0]}` }),
+  },
+  'PATCH /hospital/wards/:id': {
+    by: 'row',
+    other: (_mine, theirs) => ({
+      path: `/hospital/wards/${theirs.wardId}`,
+      body: { floor: 9 },
+    }),
+  },
+  'DELETE /hospital/wards/:id': {
+    by: 'row',
+    other: (_mine, theirs) => ({ path: `/hospital/wards/${theirs.wardId}` }),
   },
   'POST /hospital/staff': { by: 'principal' },
   'PATCH /hospital/staff/:id': {

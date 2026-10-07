@@ -23,8 +23,10 @@ import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import type {
   OrgLifecycle,
   SetupCounts,
+  BedPatchBody,
   BedsBody,
   DepartmentBody,
+  DepartmentPatchBody,
   BrandTheme,
   DoctorBody,
   DoctorPatchBody,
@@ -35,6 +37,7 @@ import type {
   StaffPatchBody,
   TemplateBody,
   WardBody,
+  WardPatchBody,
 } from '@platform/domain';
 
 import { readDemoSession } from '@/lib/demo';
@@ -50,6 +53,8 @@ export interface SetupSnapshot {
     readonly kind: string;
     readonly division: string;
     readonly district: string;
+    /** Its licence or registration number; its own to correct while setting up (plan D2). */
+    readonly registrationNo: string | null;
     readonly thana: string | null;
     readonly addressBn: string | null;
     readonly addressEn: string | null;
@@ -155,6 +160,8 @@ export interface SettingsWard {
     readonly kind: string;
     readonly state: string;
     readonly nightlyPoisha: number;
+    /** Added here and never brought into service by the ward: the one kind that can be removed. */
+    readonly unconfirmed: boolean;
   }[];
 }
 
@@ -287,6 +294,11 @@ export const settingsApi = {
   rules: (body: RulesBody) => save((api, key) => api.patch('/hospital/rules', body, key)),
   addDepartment: (body: DepartmentBody) =>
     save((api, key) => api.post<{ departmentId: string }>('/hospital/departments', body, key)),
+  updateDepartment: (departmentId: string, body: DepartmentPatchBody) =>
+    save((api, key) => api.patch(`/hospital/departments/${departmentId}`, body, key)),
+  /** One nobody sits in (plan D2); refused, with why, while a doctor is listed under it. */
+  removeDepartment: (departmentId: string) =>
+    save((api, key) => api.delete(`/hospital/departments/${departmentId}`, key)),
   addDoctor: (body: DoctorBody) =>
     save((api, key) =>
       api.post<{ doctorHospitalId: string; linkedExisting: boolean }>(
@@ -307,8 +319,16 @@ export const settingsApi = {
     ),
   addWard: (body: WardBody) =>
     save((api, key) => api.post<{ wardId: string }>('/hospital/wards', body, key)),
+  updateWard: (wardId: string, body: WardPatchBody) =>
+    save((api, key) => api.patch(`/hospital/wards/${wardId}`, body, key)),
+  /** One that holds no bed (plan D2). */
+  removeWard: (wardId: string) => save((api, key) => api.delete(`/hospital/wards/${wardId}`, key)),
   addBeds: (body: BedsBody) =>
     save((api, key) => api.post<{ bedIds: string[] }>('/hospital/beds', body, key)),
+  updateBed: (bedId: string, body: BedPatchBody) =>
+    save((api, key) => api.patch(`/hospital/beds/${bedId}`, body, key)),
+  /** One the ward never brought into service (plan D2). */
+  removeBed: (bedId: string) => save((api, key) => api.delete(`/hospital/beds/${bedId}`, key)),
   addStaff: (body: StaffBody) =>
     save((api, key) =>
       api.post<{ staffId: string; temporaryPassword: string }>('/hospital/staff', body, key),

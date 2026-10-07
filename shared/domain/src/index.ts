@@ -167,6 +167,7 @@ export {
   CHECKLIST_ITEMS,
   ORG_ACTIONS,
   actionNeedsNote,
+  identityEditable,
   isPublicLifecycle,
   missingForApproval,
   missingForReview,
