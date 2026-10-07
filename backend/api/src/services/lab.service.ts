@@ -61,6 +61,7 @@ import {
 import { LAB_TEST_NAMES, isLabTestCode, type LabTestCode } from '@platform/i18n';
 
 import { storage, verifyFileSignature } from '../adapters/storage.js';
+import { patientLink } from '../config/links.js';
 import { logger } from '../config/logger.js';
 import { AppError, forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
@@ -68,6 +69,7 @@ import * as labRepo from '../repositories/lab.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import * as notifications from './notification.service.js';
+import * as portals from './portal.service.js';
 
 /** Who is acting, and where they are scoped. */
 export interface LabActor {
@@ -307,6 +309,15 @@ export async function uploadReport(
     throw new AppError('REPORT_STORAGE_FAILED', { cause });
   }
 
+  // Where the patient will read it: the Records page of this hospital's own
+  // portal when it has one, else the network's (`config/links.ts`). Worked
+  // out here, not inside the lock.
+  const recordsLink = patientLink(
+    '/records',
+    {},
+    { hospitalOrigin: await portals.hospitalLinkOrigin(before.hospitalId) },
+  );
+
   const {
     order: updated,
     duplicate,
@@ -350,7 +361,13 @@ export async function uploadReport(
     await labRepo.markReportDelivered(trx, { reportId, recipients, at });
     await labRepo.setTestOrderState(trx, { orderId: current.id, state: 'delivered', at });
 
-    const queued = await notifications.queueReportReady(trx, { testOrderId: current.id }, at);
+    // Told by SMS where to read it (`FR-NOT-03`, plan F2): the Records page
+    // of this hospital's portal when it has one, else the network's.
+    const queued = await notifications.queueReportReady(
+      trx,
+      { testOrderId: current.id, link: recordsLink },
+      at,
+    );
 
     const after = await labRepo.findTestOrder(current.id, trx);
     if (after === null) throw notFound('test order');

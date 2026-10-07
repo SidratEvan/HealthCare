@@ -428,6 +428,17 @@ describe('quiet hours (FR-NOT-07)', () => {
       notifications.withinQuietHours('care.followup', new Date('2026-09-18T09:00:00.000Z')),
     ).toBe(false);
   });
+
+  it('holds a report-ready message through the night, and sends it by day (plan F2)', () => {
+    // A report is not a summons. Three in the morning in Dhaka, then three in
+    // the afternoon.
+    expect(
+      notifications.withinQuietHours('lab.report_ready', new Date('2026-09-18T21:00:00.000Z')),
+    ).toBe(true);
+    expect(
+      notifications.withinQuietHours('lab.report_ready', new Date('2026-09-18T09:00:00.000Z')),
+    ).toBe(false);
+  });
 });
 
 describe('the booking confirmation (FR-PAT-22, FR-GST-05)', () => {

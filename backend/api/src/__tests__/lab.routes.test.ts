@@ -470,6 +470,45 @@ describe('uploading a report delivers it', () => {
     expect(report?.deliveredTo.sort()).toEqual(['doctor', 'patient']);
   });
 
+  it('tells the patient by SMS that it is ready, once (FR-NOT-03, FR-GST-06)', async () => {
+    const id = await orderIn(shapla, 'processing');
+    const key = randomUUID();
+    const body = { fileType: 'application/pdf', content: TINY_PDF_BASE64, idempotencyKey: key };
+    const upload = (): request.Test =>
+      request(app)
+        .post(`${BASE}/test-orders/${id}/report`)
+        .set('Authorization', bearer(shapla.labToken))
+        .set('Idempotency-Key', key)
+        .send(body);
+    await upload().expect(201);
+
+    const told = async (): Promise<{ channel: string; state: string; error: string | null }[]> =>
+      (
+        await sql<{ channel: string; state: string; error: string | null }>`
+          SELECT channel::text AS channel, state::text AS state, error
+            FROM notifications
+           WHERE template_key = 'lab.report_ready' AND params ->> 'testOrderId' = ${id}
+        `.execute(db)
+      ).rows;
+
+    // By SMS, and by nothing else: no phone in this suite holds the app's
+    // token. It used to be a push that was skipped, which told nobody.
+    const rows = await told();
+    expect(rows.map((row) => row.channel)).toEqual(['sms']);
+    // Sent. Or, when this suite runs in the Dhaka night, held back and said
+    // to be: a report is not urgent (`FR-NOT-07`, held to in
+    // `notifications.test.ts`). Never anything else, and never silently.
+    const [row] = rows;
+    expect(
+      row?.state === 'sent' || (row?.state === 'skipped' && row.error === 'quiet_hours'),
+      JSON.stringify(row),
+    ).toBe(true);
+
+    // The same upload again tells nobody a second time.
+    await upload().expect(200);
+    expect(await told()).toHaveLength(1);
+  });
+
   it('refuses an upload before a sample was taken, and stores nothing', async () => {
     const created = await orderTest(shapla);
     const id = created.body.data?.orders?.[0]?.id ?? '';

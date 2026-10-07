@@ -770,23 +770,30 @@ export async function queueEmergencyAnswer(
 }
 
 /**
- * Writes the report-ready notice into the outbox (`FR-LAB-03`, BACKEND.md §8:
- * "Report ready → `lab.report_ready` → push").
+ * Writes the report-ready notice into the outbox (`FR-LAB-03`, `FR-NOT-02`,
+ * `FR-NOT-03`, `FR-GST-06`; BACKEND.md §8; plan F2).
  *
- * **Push only, by the document.** §8's mapping gives this one channel and no
- * SMS, which is a product judgement this code follows rather than second-
- * guesses: a report is not a summons, and by the time this runs it is already
- * in the wallet. In this version every push is skipped with `no_device_token`
- * (no screen asks for notification permission yet), so the honest outcome is
- * a recorded row saying nobody was reached — while the delivery `FR-LAB-03`
- * actually promises has already happened, in the caller's transaction.
+ * **By SMS, and by push to a phone that has the app's token**, like every
+ * other material event. It was push only, and since no screen asks for
+ * notification permission every one was skipped with `no_device_token`: the
+ * report reached the wallet and nobody was told it had.
+ *
+ * It is not urgent, so it waits out quiet hours (`FR-NOT-07`): a report
+ * uploaded at night is recorded as `quiet_hours` and is not sent. Nothing
+ * sends it in the morning yet; that is the notification worker's (plan H1).
+ * It counts against the hospital's monthly SMS cap like any other
+ * (`FR-NOT-06`).
  *
  * The notice names the test and the hospital and nothing else. A result on a
  * lock screen is read by whoever is holding the phone (`DB-P7`).
  */
 export async function queueReportReady(
   trx: Tx,
-  input: { readonly testOrderId: string },
+  input: {
+    readonly testOrderId: string;
+    /** Where the report is read: the patient app's Records page. No token in it. */
+    readonly link: string;
+  },
   at: Date = new Date(),
 ): Promise<QueuedBatch> {
   const target = await notificationRepo.reportRecipient(trx, input.testOrderId);
@@ -802,32 +809,33 @@ export async function queueReportReady(
     testOrderId: input.testOrderId,
     test: target.testName,
     hospital: locale === 'bn' ? target.hospitalNameBn : target.hospitalNameEn,
+    link: input.link,
   };
-
-  const template = templates.get(`${templateKey}|push|${locale}`);
-  if (template === undefined) return NOTHING;
 
   const budgetLeft =
     target.smsBudgetMonthly === null
       ? Number.POSITIVE_INFINITY
       : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId, trx));
 
-  return await writeOutbox(trx, [
-    {
+  // `FR-NOT-02`: push and SMS to a phone with the app, SMS alone to one without.
+  const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
+  const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
+
+  const drafts: Draft[] = [];
+  for (const channel of channels) {
+    const template = templates.get(`${templateKey}|${channel}|${locale}`);
+    if (template === undefined) continue;
+    drafts.push({
       recipient,
-      channel: 'push',
+      channel,
       templateKey,
       template,
       params,
-      skipped: suppression({
-        channel: 'push',
-        phone: recipient.phone,
-        templateKey,
-        at,
-        budgetLeft,
-      }),
-    },
-  ]);
+      skipped: suppression({ channel, phone: recipient.phone, templateKey, at, budgetLeft }),
+    });
+  }
+
+  return await writeOutbox(trx, drafts);
 }
 
 function isBedKindName(kind: string): kind is BedKindName {

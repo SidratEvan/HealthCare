@@ -633,7 +633,7 @@ backend/workers/src/
 | `PATIENT_CALLED` | `queue.called` | push + SMS |
 | `PATIENT_NO_SHOW` | `queue.no_show` | SMS |
 | `SLOT_OFFERED` | `queue.slot_offer` | push + SMS |
-| Report ready | `lab.report_ready` | push |
+| Report ready | `lab.report_ready` | push + SMS (plan F2; it was push only, which reached nobody: `FR-NOT-02`, `FR-NOT-03`, `FR-GST-06`). Names the test and the hospital, never the result, and links the Records page with no token in the link. Not urgent: held back in quiet hours and recorded as `quiet_hours`; nothing sends it in the morning until the notification worker (plan H1). Counts against the SMS budget |
 | Bed request held | `bed.request_held` | push + SMS — names the hospital, the kind of bed and when the hold runs out; exempt from quiet hours, because a hold is measured in minutes |
 | Bed request declined | `bed.request_declined` | push + SMS — says what to do next, and never claims the hospital is full |
 | ER acknowledged an alert | `emergency.acknowledged` | push + SMS, only when a number was left — names the hospital, never the problem; exempt from quiet hours and from the SMS budget |
