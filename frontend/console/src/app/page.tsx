@@ -35,6 +35,7 @@ import { ConsoleStarting } from '@/components/ConsoleStarting';
 import { DoctorConsole } from '@/components/DoctorConsole';
 import { EmergencyConsole } from '@/components/EmergencyConsole';
 import { GovDashboard } from '@/components/GovDashboard';
+import { HospitalApplication } from '@/components/HospitalApplication';
 import { HospitalImport } from '@/components/HospitalImport';
 import { HospitalSettings } from '@/components/HospitalSettings';
 import { LabConsole } from '@/components/LabConsole';
@@ -105,6 +106,8 @@ export default function Page(): ReactNode {
     });
   }, []);
   const [loginAsked, setLoginAsked] = useState(false);
+  /** `?apply=1`: a hospital applying by itself (`FR-ONB-09`). Nobody is signed in for it. */
+  const [applyAsked, setApplyAsked] = useState(false);
   /** A signed-in session the server stopped accepting. */
   const [ended, setEnded] = useState(false);
   /**
@@ -127,6 +130,7 @@ export default function Page(): ReactNode {
     setSessionId(params.get('session'));
     setView(params.get('view'));
     setLoginAsked(params.get('login') === '1');
+    setApplyAsked(params.get('apply') === '1');
     setReady(true);
     askStatus();
   }, [askStatus]);
@@ -224,6 +228,13 @@ export default function Page(): ReactNode {
         onSignedOut={signedOut}
       />
     );
+  }
+
+  // `S-B-00a`: the application form. Public on every deployment, so it needs
+  // no answer about the demonstration first, and it is never shown to
+  // somebody already signed in.
+  if (!staff && session === null && applyAsked) {
+    return <HospitalApplication />;
   }
 
   // `S-B-00`: always off the demo, and on it when asked for.

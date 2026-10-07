@@ -223,6 +223,122 @@ export const CONSOLE = {
     en: 'Forgotten your password? Ask the hospital administrator for a new one.',
   },
   loginDemoLink: { bn: 'স্টাফ অ্যাকাউন্টে লগ ইন', en: 'Sign in with a staff account' },
+
+  // --- A hospital applies by itself (S-B-00a, FR-ONB-09, FR-ONB-10) ----------
+  //
+  // Read by somebody who has never seen the product. Every line that could
+  // be taken as "you are now listed" says the opposite, because that is the
+  // misunderstanding this form would otherwise produce.
+  applyLink: { bn: 'হাসপাতাল যুক্ত করতে আবেদন করুন', en: 'Apply to add your hospital' },
+  applyFromLogin: {
+    bn: 'আপনার হাসপাতাল এখনো যুক্ত হয়নি?',
+    en: 'Is your hospital not on the platform yet?',
+  },
+  applyTitle: { bn: 'হাসপাতাল যুক্ত করার আবেদন', en: 'Apply to add your hospital' },
+  applyIntro: {
+    bn: 'হাসপাতাল, ক্লিনিক বা ডায়াগনস্টিক সেন্টারের তথ্য এবং যিনি এর প্রথম প্রশাসক হবেন তাঁর তথ্য দিন।',
+    en: 'Give the details of the hospital, clinic or diagnostic centre, and of the person who will be its first administrator.',
+  },
+  applyNothingPublic: {
+    bn: 'আবেদন করলেই হাসপাতাল রোগীদের অ্যাপে দেখা যায় না। আপনি তথ্য পূরণ করে পর্যালোচনা চাইবেন, এবং প্ল্যাটফর্মের একজন যাচাই করে অনুমোদন দিলে তবেই এটি চালু হবে।',
+    en: 'Applying does not show the hospital to patients. You fill in its details and ask for review, and it goes live only after a person at the platform has checked and approved it.',
+  },
+  applyDemoNote: {
+    bn: 'এটি একটি ডেমো সার্ভার। ফর্মটি কাজ করে, কিন্তু এখানে আসল প্রতিষ্ঠানের বা নিজের আসল তথ্য ও পাসওয়ার্ড দেবেন না।',
+    en: 'This is a demonstration server. The form works, but do not give a real facility’s details, or your own real details or password, here.',
+  },
+  applyFacility: { bn: 'প্রতিষ্ঠানের তথ্য', en: 'The facility' },
+  applyAdmin: { bn: 'প্রথম প্রশাসক', en: 'Its first administrator' },
+  applyAdminHelp: {
+    bn: 'এই ইমেইল ও পাসওয়ার্ড দিয়ে আপনি লগ ইন করবেন। পাসওয়ার্ড আপনি নিজেই ঠিক করছেন; আমরা এটি দেখি না।',
+    en: 'You will sign in with this email and password. You choose the password; we never see it.',
+  },
+  applyPhone: { bn: 'প্রতিষ্ঠানের ফোন নম্বর', en: 'The facility’s phone number' },
+  applyPhoneHelp: {
+    bn: 'ল্যান্ডফোন বা মোবাইল, যেমন ০২ ৯১২৩৪৫৬৭৮',
+    en: 'A landline or a mobile, for example 02 912345678',
+  },
+  applyPhoneWrong: {
+    bn: 'নম্বরটি ঠিক নয়। ০ দিয়ে শুরু করে পুরো নম্বর লিখুন।',
+    en: 'That is not a full number. Start with 0 and give all of it.',
+  },
+  applyRegistrationHelp: {
+    bn: 'লাইসেন্স বা নিবন্ধনের নম্বর, কাগজে যেমন লেখা আছে',
+    en: 'The licence or registration number, as written on the certificate',
+  },
+  applyMobile: { bn: 'প্রশাসকের মোবাইল নম্বর', en: 'The administrator’s mobile number' },
+  applyMobileHelp: {
+    bn: 'যাচাইয়ের জন্য এই নম্বরে ফোন করা হতে পারে',
+    en: 'We may ring this number to check the application',
+  },
+  applyMobileWrong: {
+    bn: 'মোবাইল নম্বরটি ঠিক নয়। ০১ দিয়ে শুরু করে ১১ সংখ্যা লিখুন।',
+    en: 'That is not a mobile number. Give eleven digits starting 01.',
+  },
+  applyEmailWrong: { bn: 'ইমেইল ঠিকানাটি ঠিক নয়।', en: 'That is not an email address.' },
+  applyPassword: { bn: 'পাসওয়ার্ড', en: 'Password' },
+  applyPasswordHelp: { bn: 'অন্তত {count} অক্ষর', en: 'At least {count} characters' },
+  applyPasswordShort: {
+    bn: 'পাসওয়ার্ডটি ছোট। আরও লম্বা একটি দিন।',
+    en: 'That password is too short. Choose a longer one.',
+  },
+  applyPasswordAgain: { bn: 'পাসওয়ার্ড আবার লিখুন', en: 'The password again' },
+  applyPasswordsDiffer: {
+    bn: 'দুটি পাসওয়ার্ড মিলছে না।',
+    en: 'The two passwords are not the same.',
+  },
+  applySubmit: { bn: 'আবেদন পাঠান', en: 'Send the application' },
+  applySubmitting: { bn: 'পাঠানো হচ্ছে…', en: 'Sending…' },
+  applyNeedsFields: {
+    bn: 'সব ঘর ঠিকভাবে পূরণ করুন',
+    en: 'Fill in every field correctly',
+  },
+  applyHaveAccount: { bn: 'অ্যাকাউন্ট আছে? লগ ইন করুন', en: 'Have an account? Sign in' },
+  applyOffline: {
+    bn: 'সংযোগ নেই। সংযোগ ফিরলে আবেদন পাঠানো যাবে; যা লিখেছেন তা থাকবে।',
+    en: 'No connection. The application can be sent when it is back; what you typed stays.',
+  },
+  applyPaused: {
+    bn: 'এই মুহূর্তে অনেক আবেদন যাচাইয়ের অপেক্ষায় আছে, তাই নতুন আবেদন নেওয়া বন্ধ আছে। পরে আবার চেষ্টা করুন।',
+    en: 'Many applications are waiting to be checked just now, so new ones are paused. Try again later.',
+  },
+  applyTooMany: {
+    bn: 'এই সংযোগ থেকে অল্প সময়ে কয়েকটি আবেদন এসেছে। এক ঘণ্টা পরে আবার চেষ্টা করুন।',
+    en: 'Several applications have come from this connection in a short time. Try again in an hour.',
+  },
+  applyInvalid: {
+    bn: 'কোনো একটি ঘরের তথ্য গ্রহণ করা যায়নি। ঘরগুলো দেখে আবার পাঠান।',
+    en: 'One of the fields was not accepted. Check them and send again.',
+  },
+  applyFailed: {
+    bn: 'আবেদন পাঠানো যায়নি। আবার পাঠালে একই আবেদন হিসেবেই ধরা হবে।',
+    en: 'The application could not be sent. Sending again counts as the same application.',
+  },
+  applyDoneTitle: { bn: 'আবেদন পাওয়া গেছে', en: 'The application has been received' },
+  applyDoneLine: {
+    bn: 'আপনার প্রতিষ্ঠানের জন্য একটি ওয়ার্কস্পেস তৈরি হয়েছে। এটি এখনো রোগীদের কাছে দৃশ্যমান নয়।',
+    en: 'A workspace has been made for your facility. It is not visible to patients yet.',
+  },
+  applyDoneCode: { bn: 'হাসপাতালের কোড', en: 'Hospital code' },
+  applyDoneEmail: { bn: 'লগ ইনের ইমেইল', en: 'Email to sign in with' },
+  applyNextTitle: { bn: 'এরপর যা করতে হবে', en: 'What happens next' },
+  applyNextSignIn: {
+    bn: 'আপনার ইমেইল ও পাসওয়ার্ড দিয়ে লগ ইন করুন। কোড চাইলে উপরের কোডটি দিন।',
+    en: 'Sign in with your email and password. If a code is asked for, give the one above.',
+  },
+  applyNextTwoStep: {
+    bn: 'প্রথমবার লগ ইনের সময় ফোনের অথেনটিকেটর অ্যাপ দিয়ে দুই ধাপের যাচাই চালু করুন।',
+    en: 'At the first sign-in, set up two-step verification with an authenticator app on your phone.',
+  },
+  applyNextSetUp: {
+    bn: 'বিভাগ, ডাক্তার, সময়সূচি, বেড ও স্টাফ যোগ করুন। কী বাকি আছে তা সেটিংসের তালিকায় দেখা যাবে।',
+    en: 'Add departments, doctors, schedules, beds and staff. The checklist in settings shows what is still missing.',
+  },
+  applyNextReview: {
+    bn: 'তালিকা পূর্ণ হলে পর্যালোচনা চান। প্ল্যাটফর্মের একজন যাচাই করে অনুমোদন দিলে হাসপাতাল চালু হবে।',
+    en: 'When the checklist is complete, ask for review. The hospital goes live once a person at the platform has checked and approved it.',
+  },
+  applyDoneSignIn: { bn: 'লগ ইন করুন', en: 'Sign in' },
   loginDemoNote: {
     bn: 'ডেমোর সব অ্যাকাউন্টের পাসওয়ার্ড: demo-password-2026',
     en: 'Every demo account’s password: demo-password-2026',
@@ -1476,6 +1592,11 @@ export const CONSOLE = {
   platformUnverified: { bn: 'যাচাই বাকি', en: 'Not verified' },
   platformVerify: { bn: 'যাচাই হয়েছে বলে চিহ্নিত করুন', en: 'Mark as verified' },
   platformAdmins: { bn: 'হাসপাতালের প্রশাসক', en: 'The hospital’s administrators' },
+  platformSelfRegistered: { bn: 'নিজে আবেদন করেছে', en: 'Applied by itself' },
+  platformAppliedLine: {
+    bn: 'নিজে আবেদন করেছে। প্রতিষ্ঠানের ফোন: {phone} · নিবন্ধন নম্বর: {registration}',
+    en: 'Applied by itself. Facility phone: {phone} · registration number: {registration}',
+  },
   // The modules a hospital runs (`FR-BRD-11`, `FRM-B12-MODULES`).
   moduleQueue: { bn: 'সিরিয়াল ও রিসেপশন', en: 'Serials and reception' },
   moduleDoctor: { bn: 'ডাক্তারের কনসোল', en: 'Doctor’s console' },
@@ -1541,6 +1662,11 @@ export const CONSOLE = {
   platformClosedLine: {
     bn: 'এই ওয়ার্কস্পেস বন্ধ। আর কোনো পরিবর্তন করা যাবে না।',
     en: 'This workspace is closed. Nothing more can be changed.',
+  },
+  // `FR-ONB-10`: declining an application is closing its workspace.
+  platformDeclineLine: {
+    bn: 'যে ওয়ার্কস্পেস আর এগোবে না, যেমন কোনো আসল প্রতিষ্ঠানের নয় এমন আবেদন, তা কারণ লিখে নিচে বন্ধ করা যায়।',
+    en: 'A workspace that should not go on, such as an application that is not from a real facility, can be closed below, with the reason.',
   },
   platformApprove: { bn: 'অনুমোদন দিয়ে লাইভ করুন', en: 'Approve and go live' },
   platformSendBack: { bn: 'ফেরত পাঠান', en: 'Send back' },

@@ -221,6 +221,9 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'POST /bed-requests': { by: 'public' },
   'POST /sessions/:id/standby': { by: 'public' },
   'POST /emergency/inbound': { by: 'public' },
+  // A hospital's own application: it makes a workspace nobody can see, and
+  // names no hospital that exists (`FR-ONB-09`).
+  'POST /hospital-applications': { by: 'public' },
 
   // --- a token in the path ------------------------------------------------------
   'GET /guest/link/:token': { by: 'token' },

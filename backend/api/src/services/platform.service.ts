@@ -85,8 +85,19 @@ export interface WorkspaceDetail extends WorkspaceSummary {
    * domain, when the deployment has one, and at its own, when one is recorded.
    */
   readonly portal: { readonly platform: string | null; readonly own: string | null };
+  /**
+   * The facility's own phone. Here and not in the list, which stays
+   * organisations and counts (`FR-ONB-08`): it is for the person who rings a
+   * hospital before approving it (`FR-ONB-10`).
+   */
+  readonly phone: string | null;
   readonly doctors: readonly repo.WorkspaceDoctor[];
-  readonly administrators: readonly { readonly fullName: string; readonly email: string }[];
+  /** Who the platform would write to or ring; `phone` where one was given (`FR-ONB-09`). */
+  readonly administrators: readonly {
+    readonly fullName: string;
+    readonly email: string;
+    readonly phone: string | null;
+  }[];
   /** What stops an approval right now; empty when nothing does. */
   readonly missingForApproval: readonly string[];
 }
@@ -95,14 +106,16 @@ export async function workspace(hospitalId: string): Promise<WorkspaceDetail> {
   const row = await repo.findWorkspace(hospitalId);
   if (row === null) throw notFound('hospital');
 
-  const [doctors, administrators] = await Promise.all([
+  const [doctors, administrators, phone] = await Promise.all([
     repo.doctorsOf(hospitalId),
     repo.administratorsOf(hospitalId),
+    repo.facilityPhoneOf(hospitalId),
   ]);
 
   return {
     ...summarise(row),
     portal: portals.portalAddresses(row.code, row.portalDomain),
+    phone,
     doctors,
     administrators,
     missingForApproval: missingForApproval(row.counts),

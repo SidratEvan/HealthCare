@@ -178,6 +178,15 @@ export {
   type OrgAction,
   type SetupCounts,
 } from './org/lifecycle.js';
+export {
+  APPLICATION_PASSWORD_MIN,
+  applicationBody,
+  codeFor,
+  codeStem,
+  facilityPhoneFrom,
+  mobileFrom,
+  type ApplicationBody,
+} from './org/application.js';
 
 // --- Brand -----------------------------------------------------------------
 //

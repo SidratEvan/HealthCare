@@ -309,7 +309,8 @@ describe('a hospital, from nothing to live (FR-ONB-01 to FR-ONB-05)', () => {
       lifecycle: 'ready_for_review',
       counts: { departments: 1, doctors: 1, verifiedDoctors: 0, schedules: 1 },
     });
-    expect([...(mine?.actions ?? [])].sort()).toEqual(['approve', 'send_back']);
+    // Approve it, send it back, or decline it altogether (`FR-ONB-10`).
+    expect([...(mine?.actions ?? [])].sort()).toEqual(['approve', 'close', 'send_back']);
 
     // What is absent is the boundary: organisations and counts, never people
     // who came for care.

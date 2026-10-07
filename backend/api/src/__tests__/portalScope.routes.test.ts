@@ -184,8 +184,21 @@ describe('a shared screen shares no record (FR-BRD-10, FR-NET-02, FR-SEC-04)', (
     readonly hospitalNameEn: string;
   }
 
-  /** A seeded patient with signed visits at two hospitals, and no consent to the first. */
-  async function seenInTwoPlaces(needsAccount: boolean): Promise<{
+  /**
+   * A seeded patient with signed visits at two hospitals, and no consent to
+   * the first.
+   *
+   * `needsStranger`: one who has, besides, a hospital that never saw them.
+   * The seeded history is laid out from the clock, so which patient sorts
+   * first changes through the day, and about a third of those seen at two
+   * hospitals have a visit or a booking at all six. A test that needs a
+   * hospital the patient was never at has to ask for a patient who has one,
+   * not take the first and hope.
+   */
+  async function seenInTwoPlaces(
+    needsAccount: boolean,
+    needsStranger = false,
+  ): Promise<{
     patientId: string;
     userId: string | null;
     here: string;
@@ -215,7 +228,18 @@ describe('a shared screen shares no record (FR-BRD-10, FR-NET-02, FR-SEC-04)', (
            SELECT 1 FROM consents c
             WHERE c.patient_id = a.patient_id AND c.revoked_at IS NULL AND c.deleted_at IS NULL
          )
-       ORDER BY a.created_at
+         AND (NOT ${needsStranger}::boolean OR EXISTS (
+           SELECT 1 FROM hospitals h
+            WHERE h.deleted_at IS NULL AND h.is_live
+              AND NOT EXISTS (SELECT 1 FROM visits v
+                               WHERE v.hospital_id = h.id AND v.patient_id = a.patient_id)
+              AND NOT EXISTS (SELECT 1 FROM bookings bk JOIN sessions s ON s.id = bk.session_id
+                               WHERE s.hospital_id = h.id AND bk.patient_id = a.patient_id)
+              AND EXISTS (SELECT 1 FROM staff_roles r
+                           WHERE r.hospital_id = h.id AND r.role = 'doctor'
+                             AND r.deleted_at IS NULL)
+         ))
+       ORDER BY a.created_at, a.patient_id
        LIMIT 1
     `.execute(db);
     const row = found.rows[0];
@@ -291,7 +315,7 @@ describe('a shared screen shares no record (FR-BRD-10, FR-NET-02, FR-SEC-04)', (
   });
 
   it('a hospital the patient was never seen at reads nothing, portal or not', async () => {
-    const seen = await seenInTwoPlaces(false);
+    const seen = await seenInTwoPlaces(false, true);
     const stranger = await sql<{ id: string; code: string }>`
       SELECT h.id, h.code FROM hospitals h
        WHERE h.deleted_at IS NULL AND h.is_live

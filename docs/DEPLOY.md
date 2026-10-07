@@ -406,6 +406,8 @@ It prints a temporary password once; the first sign-in changes it and sets up tw
 
 On a deployment that holds a single hospital it is still two accounts, by design: the hospital's administrator and the platform's. A hospital that was already live before 0037 stays live.
 
+**A hospital can also apply by itself (plan D1, `FR-ONB-09`).** The console has a public form at `/?apply=1`, linked from the sign-in screen. It makes a workspace that is setting up and its first administrator, with a password of their own, and nothing public: the hospital still goes live only by the review above. On `S-B-12` such a workspace carries **নিজে আবেদন করেছে**, with the phone and registration number it gave, so that somebody can ring it; one that should not go on is closed there with a reason. The form is limited to five an hour per address, and `ORG_APPLICATIONS_OPEN_MAX` (200) is how many applications may wait unanswered on the whole deployment before the form says it is paused. **Nothing switches the form off.** The shared deployment is what V1 is built for (`FR-SEC-07`); a server that holds one hospital only still offers the form on its sign-in screen, and what it would make is a workspace nobody approves.
+
 ### Import suggestions from a model (optional, off by default)
 
 The import maps a hospital's own export with rules and the administrator's choices, and needs nothing else. A model can additionally suggest columns for the headings the rules do not know (`FR-IMP-16`). It is switched on in `deploy/.env`:

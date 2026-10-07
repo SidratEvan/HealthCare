@@ -5,6 +5,7 @@
  */
 
 import {
+  applicationBody,
   lifecycleNoteBody,
   modulesBody,
   platformDoctorParams,
@@ -13,7 +14,8 @@ import {
   workspaceBody,
 } from '@platform/domain';
 
-import { authRequired, forbiddenScope } from '../errors/AppError.js';
+import { AppError, authRequired, forbiddenScope } from '../errors/AppError.js';
+import * as applications from '../services/orgApplication.service.js';
 import * as platform from '../services/platform.service.js';
 
 import type { Request, RequestHandler, Response } from 'express';
@@ -27,6 +29,24 @@ function actorOf(req: Request): platform.PlatformActor {
     ip: req.ip ?? null,
     userAgent: req.get('user-agent') ?? null,
   };
+}
+
+/**
+ * `POST /hospital-applications` — public (`FR-ONB-09`). Answers with the
+ * code the workspace was given and the email to sign in with, and nothing
+ * else: no token, because signing in is its own step with its own second
+ * factor.
+ */
+export async function postApplication(req: Request, res: Response): Promise<void> {
+  const key = req.idempotencyKey;
+  if (key === undefined) throw new AppError('IDEMPOTENCY_KEY_REQUIRED');
+  const answer = await applications.apply({
+    body: applicationBody.parse(req.body),
+    key,
+    ip: req.ip ?? null,
+    userAgent: req.get('user-agent') ?? null,
+  });
+  res.status(201).json({ ok: true, data: answer });
 }
 
 export async function listWorkspaces(_req: Request, res: Response): Promise<void> {

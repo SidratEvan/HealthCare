@@ -131,6 +131,7 @@ A hospital-held patient is visible only to that hospital's staff under the usual
 | `email` | text | **U** with `hospital_id` |
 | `staff_code` | text | printed on the ID card |
 | `full_name` | text | |
+| `phone` | text | nullable; a mobile to reach this member of staff on, `+8801…` (**CHK** `staff_users_phone_shape`). Given by an administrator who applied for a workspace (`FR-ONB-09`); null for every other account. 0049 |
 | `password_hash` | text | scrypt via `node:crypto`, stored as `scrypt$<N>$<r>$<p>$<salt>$<hash>` (base64); null until a password is set. Changed from argon2id on 2026-09-28 (`CLAUDE.md` §4.1) |
 | `totp_secret` | text | nullable; AES-256-GCM sealed by the API (`v1.<iv>.<tag>.<body>`), written when setup starts and shown to its holder only until it is confirmed. Never logged, never returned otherwise |
 | `totp_enabled_at` | timestamptz | when the second factor was confirmed with a code; null means sign-in asks for none. CHECK: set only with a secret. 0033 |
@@ -197,7 +198,9 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 `id`, `name_bn`, `name_en`, `kind` (facility_kind), `division`, `district`, `thana`, `address_bn`, `address_en`, `lat`, `lng`, `phone`, `emergency_phone`, `is_live` (boolean), `onboarded_at`, `settings_id`.
 **IX:** `(district)`, GiST on `(lat,lng)` via `earthdistance` or PostGIS `geography`.
 
-**The workspace's state (0037, `FR-ONB-02`).** `lifecycle` org_lifecycle NOT NULL DEFAULT `'setup'`, `registration_no` text (free text: licences do not share a shape), `review_requested_at`, `reviewed_at`, `reviewed_by` → `staff_users`, `review_note` (why the platform sent it back or suspended it; the hospital's administrator reads it). **CHK** `hospitals_live_requires_workspace_active`: `NOT is_live OR lifecycle = 'active'`. `is_live` stays the one switch every public query reads; the CHECK means nothing unapproved, suspended or closed can be live whatever a route forgets, and the two are always written in one statement (`platform.repo` `moveLifecycle`). **IX** `(lifecycle, review_requested_at)`. Hospitals live when 0037 ran were backfilled to `active`. The transitions and who may take each are `shared/domain/src/org/lifecycle.ts`; readiness is counted from what exists and never stored (`FR-ONB-03`).
+**The workspace's state (0037, `FR-ONB-02`).** `lifecycle` org_lifecycle NOT NULL DEFAULT `'setup'`, `registration_no` text (free text: licences do not share a shape), `review_requested_at`, `reviewed_at`, `reviewed_by` → `staff_users`, `review_note` (why the platform sent it back or suspended it; the hospital's administrator reads it). **CHK** `hospitals_live_requires_workspace_active`: `NOT is_live OR lifecycle = 'active'`. `is_live` stays the one switch every public query reads; the CHECK means nothing unapproved, suspended or closed can be live whatever a route forgets, and the two are always written in one statement (`platform.repo` `moveLifecycle`). **IX** `(lifecycle, review_requested_at)`. Hospitals live when 0037 ran were backfilled to `active`. The transitions and who may take each are `shared/domain/src/org/lifecycle.ts` (since plan D1 `closed` is reached from `setup` and `ready_for_review` too: an application declined); readiness is counted from what exists and never stored (`FR-ONB-03`).
+
+**Applied for by the hospital (0049, `FR-ONB-09`, `FR-ONB-10`).** `self_registered` boolean NOT NULL DEFAULT false: true for a workspace the hospital applied for through the public form; it is the same row in the same state, `setup`, and goes live only by review. `application_key` text, nullable: the Idempotency-Key the form was sent with, so a form sent twice makes one workspace; **UQ** where not null (`hospitals_application_key_key`), **CHK** `hospitals_application_key_is_an_application` (only a self-registered row has one). The form's facility phone is `phone`, its registration number `registration_no`.
 
 **Its own domain (0046, `FR-BRD-07`).** `portal_domain` text, nullable: a domain the hospital owns, recorded by a platform administrator, at which the patient app is this hospital's portal. Lower-case, a host name and nothing else (`hospitals_portal_domain_shape`); **UQ** where not null (`hospitals_portal_domain_key`): an address is one hospital's or nobody's. The address under the platform's domain needs no column: it is `code`.
 
@@ -773,6 +776,8 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0047_hospital_modules.sql      -- plan C4: hospital_settings.modules_off and fn_module_on
     0048_publishing.sql            -- plan C5: hospital_settings.unpublished and fn_publishes
                                    -- (§2.2, FR-BRD-11, FR-SUP-03)
+    0049_org_application.sql       -- plan D1: hospitals.self_registered and application_key,
+                                   -- staff_users.phone (§2.1, §2.2, FR-ONB-09, FR-ONB-10)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)
