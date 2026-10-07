@@ -446,8 +446,9 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
 /**
  * `GET /sessions/:id/standby` — who is waiting, and what has been offered.
  *
- * Expires anything whose window has closed before answering. Nothing runs on a
- * timer in this version, so this read *is* the sweep (`expireLapsedOffers`):
+ * Expires anything whose window has closed before answering
+ * (`expireLapsedOffers`). A timer does the same every thirty seconds
+ * (`queueTimers.service`, plan H1b); this covers the seconds between, because
  * the console asking "what is outstanding" is exactly the moment the answer
  * needs to be current, and an offer already unacceptable by the clock should
  * not be shown as live.

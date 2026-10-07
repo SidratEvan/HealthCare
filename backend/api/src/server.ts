@@ -25,6 +25,7 @@ import { env } from './env.js';
 import { attachRealtime } from './realtime/server.js';
 import { startHourlyJobs } from './services/jobs.service.js';
 import { startSender } from './services/notificationSender.service.js';
+import { startQueueTimers } from './services/queueTimers.service.js';
 
 import type { Server as SocketServer } from 'socket.io';
 
@@ -60,10 +61,14 @@ export function startServer(): Server {
   // Messages: what a request handed over, what failed and is due again, and
   // what was held overnight (plan H1). In this process, on a short interval.
   const stopSender = startSender();
+  // Offers whose window has closed are recorded as lapsed on the clock, not
+  // only when somebody next looks at the chamber (plan H1b).
+  const stopTimers = startQueueTimers();
 
   installShutdownHandlers(server, io, () => {
     stopJobs();
     stopSender();
+    stopTimers();
   });
   return server;
 }

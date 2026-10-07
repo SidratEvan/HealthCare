@@ -273,7 +273,7 @@ Many people will never create an account. Guest mode is a first-class path, not 
 
 - `FR-PAT-30` The live serial screen shows: doctor arrival status, current serving number, the patient's number, estimated call time, and a countdown.
 - `FR-PAT-31` The screen updates within 2 seconds of a reception action, without a manual refresh.
-- `FR-PAT-32` A **leave-home alert** fires when estimated travel time + buffer equals remaining wait. Travel time may be a static per-hospital estimate in v0.
+- `FR-PAT-32` A **leave-home alert** fires when estimated travel time + buffer equals remaining wait. Travel time may be a static per-hospital estimate in v0. **Built as the banner on the live serial screen** (`BANNER-A08-LEAVE`). It is not sent as a message: which channel a message would go by is not written anywhere, and the two answers differ in what they cost a hospital and in whom they reach (`docs/STATUS.md`, question 13).
 - `FR-PAT-33` **I'm running late**: the patient declares lateness with an expected arrival; the system offers to move them later in the same session and states the new position.
 - `FR-PAT-34` **Doctor delay**: when a delay is declared, every waiting patient receives a notification with the new expected time and one-tap options: keep serial, reschedule, cancel.
 - `FR-PAT-35` Every live figure carries a freshness line ("হালনাগাদ ২ মিনিট আগে").
@@ -614,7 +614,7 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-QUE-20` Grace period before no-show is configurable per hospital (default: 2 patients or 15 minutes, whichever is longer).
 - `FR-QUE-21` A late-declared patient is re-inserted after *k* patients (default 3), never dropped.
 - `FR-QUE-22` A no-show may be reinstated by reception; the event is logged with actor.
-- `FR-QUE-30` Freed slots are offered to standby patients in order, with a short acceptance window; unaccepted offers pass to the next patient.
+- `FR-QUE-30` Freed slots are offered to standby patients in order, with a short acceptance window; unaccepted offers pass to the next patient. **An offer lapses on the clock** (plan H1b): a timer records it within thirty seconds of its window closing, whoever is or is not looking at the chamber. A *declined* offer passes to the next person by itself; a *lapsed* one returns the chair to reception, who offer it again, and the next offer goes to the next person and not back to the one who did not answer. Whether a lapse should pass on by itself as a decline does is the owner's to say (`docs/STATUS.md`, question 14).
 - `FR-QUE-31` Recovered slot value is attributed to the hospital's recovery metric.
 
 ### 16.4 Broadcast
