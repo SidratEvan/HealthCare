@@ -681,16 +681,15 @@ export async function declineSlot(input: {
 /**
  * Records the offers whose window has closed, so the chair can be offered on.
  *
- * `FR-QUE-30`: "unaccepted offers pass to the next patient". Nothing in this
- * version runs on a timer — `pg-boss` is not installed — so an offer lapses in
- * fact the moment its deadline passes and lapses *in the log* the next time
- * anybody looks at the session. `canAcceptSlot` already refuses on the clock,
- * so the gap between the two is never a chair given away twice; it is only a
- * console that has not yet been told the chair is free again.
+ * `FR-QUE-30`: "unaccepted offers pass to the next patient". An offer lapses
+ * in fact the moment its deadline passes: `canAcceptSlot` refuses on the
+ * clock, so a chair is never given away twice. It lapses *in the log* here.
  *
- * Called by the reception console's read path. When a worker process exists it
- * takes this over on a 30-second tick (`BACKEND.md` §8) and nothing else
- * changes.
+ * Called from two places and the same from both: the timer, every thirty
+ * seconds, for every chamber with an offer past its window
+ * (`queueTimers.service`, plan H1b), and the read of a chamber's standby
+ * list, so that what a console is shown is never an offer already dead. Two
+ * callers recording one lapse write one event (`expiryKey`).
  */
 export async function expireLapsedOffers(sessionId: string, actor: QueueActor): Promise<number> {
   const state = await getState(sessionId);

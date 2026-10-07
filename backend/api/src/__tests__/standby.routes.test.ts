@@ -30,7 +30,9 @@ import type { StaffRole } from '@platform/domain';
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
+import * as standbyRepo from '../repositories/standby.repo.js';
 import * as notifications from '../services/notification.service.js';
+import * as queueTimers from '../services/queueTimers.service.js';
 
 import { databaseNow } from './support/databaseClock.js';
 import {
@@ -477,6 +479,68 @@ describe('the standby panel (GET /sessions/:id/standby)', () => {
     await addStandby(fixture.patientIds[0] ?? '', 2);
     const again = await offer(freed);
     expect(again.status).toBe(200);
+  });
+
+  it('lapses on the clock, with nobody looking at the chamber (plan H1b)', async () => {
+    const freed = await freeAChair();
+    await addStandby(fixture.sparePatientId, 1);
+    await offer(freed);
+
+    const lapsesRecorded = async (): Promise<number> => {
+      const events = await sql<{ count: string }>`
+        SELECT count(*)::text FROM queue_events
+         WHERE session_id = ${fixture.sessionId} AND type = 'SLOT_EXPIRED'
+      `.execute(db);
+      return Number(events.rows[0]?.count);
+    };
+    const overdueHere = async (): Promise<boolean> =>
+      (await standbyRepo.sessionsWithOverdueOffers(new Date())).includes(fixture.sessionId);
+
+    // Inside its window the timer leaves it alone.
+    expect(await overdueHere()).toBe(false);
+    await queueTimers.lapseDueOffers();
+    expect(await lapsesRecorded()).toBe(0);
+
+    passTime(11);
+
+    // Nobody reads the standby list. The timer finds the chamber and records it.
+    expect(await overdueHere()).toBe(true);
+    expect(await queueTimers.lapseDueOffers()).toBeGreaterThanOrEqual(1);
+    expect(await lapsesRecorded()).toBe(1);
+
+    // Recorded once: the next tick has nothing to do here, and a read after
+    // it writes nothing more.
+    expect(await overdueHere()).toBe(false);
+    await queueTimers.lapseDueOffers();
+    await request(app)
+      .get(`${BASE}/sessions/${fixture.sessionId}/standby`)
+      .set('Authorization', bearer(reception))
+      .expect(200);
+    expect(await lapsesRecorded()).toBe(1);
+
+    // The chair is reception's to offer again, as after a lapse a read found.
+    await addStandby(fixture.patientIds[0] ?? '', 2);
+    expect((await offer(freed)).status).toBe(200);
+  });
+
+  it('a lapse the timer and a console notice in the same moment is one fact', async () => {
+    const freed = await freeAChair();
+    await addStandby(fixture.sparePatientId, 1);
+    await offer(freed);
+    passTime(11);
+
+    await Promise.all([
+      queueTimers.lapseDueOffers(),
+      request(app)
+        .get(`${BASE}/sessions/${fixture.sessionId}/standby`)
+        .set('Authorization', bearer(reception)),
+    ]);
+
+    const events = await sql<{ count: string }>`
+      SELECT count(*)::text FROM queue_events
+       WHERE session_id = ${fixture.sessionId} AND type = 'SLOT_EXPIRED'
+    `.execute(db);
+    expect(events.rows[0]?.count).toBe('1');
   });
 
   it('passes a lapsed chair to the next person, not back to the one who did not answer', async () => {
