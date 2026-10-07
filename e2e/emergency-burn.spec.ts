@@ -69,6 +69,10 @@ test.afterEach(async ({ browser, context }) => {
 });
 
 test.describe('the burn scenario (PRD.md §24 step 7)', () => {
+  // The first test to open the results page and the ER console in a run: both
+  // dev servers compile a screen they have not served yet, at the same moment.
+  test.setTimeout(120_000);
+
   test('a burn case sees the fresh Padma above the nearer, stale Jamuna, and the ER is told', async ({
     page,
     browser,
@@ -84,7 +88,11 @@ test.describe('the burn scenario (PRD.md §24 step 7)', () => {
 
     // S-A-10b: Padma first and fresh; Jamuna second, nearer, and saying it is stale.
     const results = phone.locator('[data-testid^="result-"][data-stale]');
-    await expect(results.first()).toBeVisible({ timeout: 20_000 });
+    // A cold start, like every spec's first screen: `next dev` compiles the
+    // results page on its first request, and that took 26 s once (measured in
+    // the trace of the whole run of 6 October) against the 20 s this allowed.
+    // The product's own budgets are held where they are measured, below.
+    await expect(results.first()).toBeVisible({ timeout: 45_000 });
     const lead = phone.getByTestId(`result-${padma.hospitalId}`);
     const second = phone.getByTestId(`result-${jamuna.hospitalId}`);
 
