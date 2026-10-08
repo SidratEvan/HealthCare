@@ -28,6 +28,7 @@ import { useState } from 'react';
 
 import { localName, t, type ConsoleKey, type Locale } from '@platform/i18n';
 
+import { useWorkspaceBrand } from '@/hooks/useWorkspaceBrand';
 import { mintDemoToken, readDemoSession, writeDemoSession, type DemoSession } from '@/lib/demo';
 import { signOut } from '@/lib/staffAuth';
 
@@ -100,6 +101,11 @@ export function ConsoleRail({
   const [opening, setOpening] = useState<ConsoleNavKey | null>(null);
   const [failed, setFailed] = useState<ConsoleNavKey | null>(null);
 
+  // The hospital's own face (FR-BRD-12, plan K4): what this tab keeps at once,
+  // then the server's answer. Until then, the session's name on the
+  // platform's colour; the brand never stands between staff and their work.
+  const { brand, logo } = useWorkspaceBrand();
+
   async function open(key: ConsoleNavKey): Promise<void> {
     const target = TARGET[key];
     const hospitalId = session?.hospitalId ?? null;
@@ -147,13 +153,31 @@ export function ConsoleRail({
   return (
     <nav
       aria-label={t(current, locale)}
+      data-brand={brand?.theme === null || brand === null ? 'platform' : 'hospital'}
       className="flex w-56 shrink-0 flex-col gap-6 bg-brand-700 p-4 text-ink-inverse"
       data-testid="console-rail"
     >
       <div className="px-2 pt-2">
+        {/* FR-BRD-12 (plan K4): the hospital's own logo and name, and
+            beneath them the platform that runs it. */}
+        {logo === null ? null : (
+          <img
+            src={logo}
+            alt=""
+            className="mb-2 max-h-12 max-w-full rounded-sm bg-white p-1"
+            data-testid="rail-logo"
+          />
+        )}
         {session?.hospitalNameBn === undefined ? null : (
           <p className="text-title-sm font-bold" data-testid="rail-hospital">
-            {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
+            {brand === null
+              ? localName(locale, session.hospitalNameBn, session.hospitalNameEn)
+              : localName(locale, brand.nameBn, brand.nameEn)}
+          </p>
+        )}
+        {session?.hospitalId == null ? null : (
+          <p className="text-caption text-brand-100 opacity-80" data-testid="rail-powered-by">
+            {t('consolePoweredBy', locale)}
           </p>
         )}
         {session === null ? null : (

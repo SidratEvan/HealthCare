@@ -36,6 +36,8 @@ export interface Message {
 export const CONSOLE = {
   // --- Navigation rail (B1.1) ---------------------------------------------
   navQueue: { bn: 'সিরিয়াল', en: 'Queue' },
+  // Beneath the hospital's own name on every console (FR-BRD-12, plan K4).
+  consolePoweredBy: { bn: 'Powered by MedLiveBD', en: 'Powered by MedLiveBD' },
   navRegistration: { bn: 'রেজিস্ট্রেশন', en: 'Registration' },
   navBeds: { bn: 'বেড', en: 'Beds' },
   navEmergency: { bn: 'জরুরি', en: 'Emergency' },

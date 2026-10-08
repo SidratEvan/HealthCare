@@ -81,6 +81,7 @@ import { ConsentScan } from '@/components/ConsentScan';
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { PatientPanel } from '@/components/PatientPanel';
+import { WorkspaceBrandMark } from '@/components/WorkspaceBrandMark';
 import { useSessionQueue } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 import {
@@ -415,6 +416,8 @@ function SessionHeader({
   return (
     <header className="border-b border-line bg-surface">
       <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-3 p-5">
+        {/* FR-BRD-12 (plan K4): the hospital's own, powered by MedLiveBD. */}
+        <WorkspaceBrandMark locale={locale} />
         <div className="min-w-0">
           <h1 className="font-reading text-title-md">{t('doctorConsole', locale)}</h1>
           <p className="text-body-sm tabular-nums text-ink-muted">

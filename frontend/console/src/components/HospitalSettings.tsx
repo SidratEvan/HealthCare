@@ -78,6 +78,7 @@ import {
   WardBeds,
   WardEditor,
 } from '@/components/SettingsCorrections';
+import { WorkspaceBrandMark } from '@/components/WorkspaceBrandMark';
 import {
   expandBedLabels,
   loadMonthOfMessages,
@@ -361,7 +362,9 @@ function Shell({
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 p-6" data-testid="hospital-settings">
         <header className="flex flex-wrap items-baseline justify-between gap-3">
-          <div>
+          <div className="flex flex-col gap-2">
+            {/* FR-BRD-12 (plan K4): the hospital's own, powered by MedLiveBD. */}
+            <WorkspaceBrandMark locale={locale} />
             <h1 className="text-title-lg">{t('settingsTitle', locale)}</h1>
             {hospital === null ? null : (
               <p className="text-body-sm text-ink-muted">

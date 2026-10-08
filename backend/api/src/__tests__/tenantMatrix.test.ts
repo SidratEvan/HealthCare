@@ -604,6 +604,7 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'GET /admin/dashboard': { by: 'principal', own: () => ({ path: '/admin/dashboard' }) },
   'GET /admin/export': { by: 'principal' },
   'GET /hospital/setup': { by: 'principal', own: () => ({ path: '/hospital/setup' }) },
+  'GET /hospital/brand': { by: 'principal', own: () => ({ path: '/hospital/brand' }) },
   'GET /hospital/messages': { by: 'principal', own: () => ({ path: '/hospital/messages' }) },
   'PATCH /hospital/profile': { by: 'principal' },
   'PATCH /hospital/rules': { by: 'principal' },

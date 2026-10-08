@@ -90,6 +90,7 @@ import { Button, Card, FilterChip, FreshnessLine, useLocale } from '@platform/ui
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { DemoBanner } from '@/components/DemoBanner';
+import { WorkspaceBrandMark } from '@/components/WorkspaceBrandMark';
 import {
   adminApi,
   downloadExport,
@@ -1251,7 +1252,9 @@ function Shell({ children }: { readonly children: ReactNode }): ReactNode {
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 p-6" data-testid="admin-dashboard">
         <header className="flex flex-wrap items-baseline justify-between gap-3">
-          <div>
+          <div className="flex flex-col gap-2">
+            {/* FR-BRD-12 (plan K4): the hospital's own, powered by MedLiveBD. */}
+            <WorkspaceBrandMark locale={locale} />
             <h1 className="text-title-lg">{t('adminTitle', locale)}</h1>
             {staffName === null ? null : <p className="text-body-sm text-ink-muted">{staffName}</p>}
           </div>
