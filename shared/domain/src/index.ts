@@ -151,10 +151,12 @@ export {
 } from './beds/board.js';
 
 export {
+  bedFigure,
   forecastTomorrow,
   mirrorMismatches,
   nextDay,
   tallyByKind,
+  type BedFigure,
   type KindForecast,
   type KindTally,
   type PublicCapacity,

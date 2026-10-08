@@ -17,6 +17,8 @@
  * bed will be free tomorrow has been told something nobody can promise.
  */
 
+import { toEpochMs } from '../util/time.js';
+
 import { effectiveState, type BedView } from './board.js';
 
 import type { BedKind } from '../types/enums.js';
@@ -156,4 +158,35 @@ export function mirrorMismatches(
     if (mine?.free !== theirs?.free || mine?.total !== theirs?.total) mismatched.push(kind);
   }
   return mismatched;
+}
+
+/**
+ * What a patient may be told about free beds (`FR-PAT-14`, `FR-PAT-51`;
+ * owner, 8 October).
+ *
+ * An exact count is a claim about now, so it is shown only while the figure
+ * is within the hospital's freshness threshold. Past it, the count is no
+ * longer said: only whether beds were free when somebody last confirmed
+ * them, which the screen puts beside that age. A figure never confirmed, or
+ * absent, is not known, and is never drawn as zero (`PRD.md` §3.2).
+ *
+ * Stale once the age reaches the threshold, as `freshnessOf` and
+ * `<FreshnessLine>` count it, so the words and the line agree.
+ */
+export type BedFigure =
+  | { readonly kind: 'count'; readonly free: number }
+  | { readonly kind: 'was_free' }
+  | { readonly kind: 'was_none' }
+  | { readonly kind: 'unknown' };
+
+export function bedFigure(
+  free: number | null,
+  asOf: Timestamp | null,
+  now: Timestamp,
+  staleAfterMinutes: number,
+): BedFigure {
+  if (free === null || asOf === null) return { kind: 'unknown' };
+  const ageMs = toEpochMs(now) - toEpochMs(asOf);
+  if (ageMs < staleAfterMinutes * 60_000) return { kind: 'count', free };
+  return free > 0 ? { kind: 'was_free' } : { kind: 'was_none' };
 }

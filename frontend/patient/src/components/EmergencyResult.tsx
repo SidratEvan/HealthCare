@@ -26,7 +26,7 @@
 
 import { useState, type ReactNode } from 'react';
 
-import { normaliseBdMobile, type EmergencyProblem } from '@platform/domain';
+import { bedFigure, normaliseBdMobile, timestamp, type EmergencyProblem } from '@platform/domain';
 import { bedKindName, formatNumber, tp, formatAge, numeralsFor, localName } from '@platform/i18n';
 import { Button, Chip, FreshnessLine, Input, Sheet, useLocale } from '@platform/ui';
 
@@ -62,6 +62,15 @@ export function EmergencyResultCard({
   const [failed, setFailed] = useState(false);
 
   const n = (value: number): string => formatNumber(value, numerals);
+  // A count only while it is fresh (owner, 8 October; `FR-PAT-14`). The beds
+  // are as old as the card's oldest figure, as the card's line says.
+  const at = timestamp(now.toISOString());
+  const beds =
+    result.freeBeds === null
+      ? null
+      : bedFigure(result.freeBeds, stamp(result.freshness.asOf), at, result.staleAfterMinutes);
+  const icu = bedFigure(result.icuFree, stamp(result.icuAsOf), at, result.staleAfterMinutes);
+  const kind = result.bedKind === null ? null : bedKindName(result.bedKind, locale);
   const freshness = result.freshness;
 
   return (
@@ -117,19 +126,25 @@ export function EmergencyResultCard({
                     '{kind}',
                     bedKindName(result.bedKind, locale),
                   )
-              : result.bedKind === null
-                ? tp('emergencyFreeBeds', locale).replace('{free}', n(result.freeBeds))
-                : tp('emergencyFreeKind', locale)
-                    .replace('{kind}', bedKindName(result.bedKind, locale))
-                    .replace('{free}', n(result.freeBeds))}
+              : beds?.kind !== 'count'
+                ? kind === null
+                  ? tp(ALL_WORDS[beds?.kind ?? 'unknown'], locale)
+                  : tp(KIND_WORDS[beds?.kind ?? 'unknown'], locale).replace('{kind}', kind)
+                : kind === null
+                  ? tp('emergencyFreeBeds', locale).replace('{free}', n(beds.free))
+                  : tp('emergencyFreeKind', locale)
+                      .replace('{kind}', kind)
+                      .replace('{free}', n(beds.free))}
         </li>
         {result.bedsShared === false ? null : (
           <li data-testid="result-icu">
             {result.icuTotal === null || result.icuFree === null
               ? tp('cardNoIcu', locale)
-              : tp('cardIcu', locale)
-                  .replace('{free}', n(result.icuFree))
-                  .replace('{total}', n(result.icuTotal))}
+              : icu.kind === 'count'
+                ? tp('cardIcu', locale)
+                    .replace('{free}', n(icu.free))
+                    .replace('{total}', n(result.icuTotal))
+                : tp(ICU_WORDS[icu.kind], locale)}
           </li>
         )}
         {/* FR-EMG-04: counted from cases, never typed. */}
@@ -395,3 +410,26 @@ function OnWaySheet({
     </Sheet>
   );
 }
+
+function stamp(value: string | null): ReturnType<typeof timestamp> | null {
+  return value === null ? null : timestamp(value);
+}
+
+/** A bed figure that is no longer said as a number (`bedFigure`). */
+const ALL_WORDS = {
+  was_free: 'bedsWasFree',
+  was_none: 'bedsWasNone',
+  unknown: 'bedsUnknown',
+} as const;
+
+const KIND_WORDS = {
+  was_free: 'kindWasFree',
+  was_none: 'kindWasNone',
+  unknown: 'kindUnknown',
+} as const;
+
+const ICU_WORDS = {
+  was_free: 'icuWasFree',
+  was_none: 'icuWasNone',
+  unknown: 'icuUnknown',
+} as const;
