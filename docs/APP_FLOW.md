@@ -218,25 +218,31 @@ Triggered automatically after an account is created with a phone that has guest 
 
 ### `S-A-02` Home
 
-Layout order is fixed and deliberate, and was rebuilt on 2026-10-05 around the owner's direction of that day (`PRD.md` §4.2b): **what you came for, then emergency, then browsing, then convenience.** A live serial if this phone holds one; then search, because the product is a network and the first thing it does is ask what you need; then the emergency card, which is still on the first screenful and above everything that is browsing (`FRONTEND.md` §6.3); then specialties; then beds, reports and medicines. The table below lists the elements, not their order.
+Rebuilt on 2026-10-07 to **Visual Direction 2** (`FRONTEND.md` §0.5; the approved board is `docs/design/patient-direction-2.png`). The order is fixed: **the header; what you came for; one way to ask; the three main actions; three services.** Before that day the order was the 5 October one (search, then the emergency card, then specialties, then tiles); what moved and where is listed under the table.
+
+1. The header: the official logo (a hospital's mark and name in its own app), the বাংলা | EN switch and the profile.
+2. If this phone holds a current serial, the live serial card. Otherwise the welcome card: a two-line headline, one line, and the family illustration.
+3. The search field.
+4. Three main actions in one row: ডাক্তার খুঁজুন, আমার লাইভ সিরিয়াল, জরুরি সহায়তা.
+5. অন্যান্য সেবা: hospital beds, medicines, health records.
 
 | Element | ID | Type | Wiring |
 |---|---|---|---|
-| Language switch | `SEG-A00-LANG` | two buttons, বাংলা / English, top-right above every screen of the app | Sets the locale for every screen at once, no reload → stored on the device (`FRONTEND.md` `I18N-08`) |
-| App header: name + area | — | — | Tap area → `MOD-A02-AREA` area picker |
-| Avatar | `BTN-A02-PROFILE` | icon button | → `S-A-06` profile switcher |
-| **আপনার কী দরকার?** search | `BTN-A02-SEARCH` | a link drawn as a field, under the header | → `S-A-07s` Search, ready to type. A link and not an input: the typing happens where the results are, and a link works before the page has hydrated |
-| Quick need ×5 | `CHIP-A02-NEED-<key>` | chips under the search field: ICU, NICU, burn unit, dialysis, cabin | → `S-A-07s` with that need already chosen (`/search?need=<key>`). One of each kind of need the network answers; the full list is on the search screen |
-| **জরুরি অবস্থা** card | `BTN-A02-EMERGENCY` | Full-width red card, on the first screenful | → `S-A-10` Emergency triage. **No auth check.** Preloads nearby hospital capacity on press-down for speed |
-| Section: ডাক্তার দেখান | — | — | Heading + subtitle |
-| Specialty card ×N | `BTN-A02-SPEC-<code>` | grid card | → `S-A-07` Specialty results, filtered by that specialty and current area |
-| সব বিভাগ দেখুন | `BTN-A02-SPEC-ALL` | text link | → `S-A-07b` full specialty list |
-| Quick tile: বেড | `BTN-A02-BED` | tile | → `S-A-11` Bed search |
-| ~~Quick tile: অ্যাম্বুলেন্স~~ | ~~`BTN-A02-AMB`~~ | — | **Not in V1** (owner, 2026-10-05; `PRD.md` §7.8). `S-A-16` is not built, and nothing unfinished is offered on the first screen |
-| ~~Quick tile: রক্ত~~ | ~~`BTN-A02-BLOOD`~~ | — | **Not in V1**, as above (`S-A-17`) |
-| Quick tile: রিপোর্ট | `BTN-A02-REPORT` | tile | → `S-A-12` Wallet (Reports tab) |
-| **Active serial strip** | `BTN-A02-ACTIVE` | appears while this device holds a *current* booking (`FR-PAT-39`): unresolved, in a session that has not ended, whatever its date. A chamber that runs or is paused past midnight keeps its strip; the strip goes when the patient has been seen or has cancelled, or the session has ended. When that cannot be checked the strip stays and says the status is unknown, with its age | → `S-A-08` Live serial. Shows live position, updates via the session channel while Home is open |
-| Bottom nav | `NAV-A` | হোম / সিরিয়াল / রেকর্ড / প্রোফাইল | Tabs → `S-A-02`, `S-A-09`, `S-A-12`, `S-A-19` |
+| Language switch | `SEG-A00-LANG` | two buttons, বাংলা / EN, in the header of every screen | Sets the locale for every screen at once, no reload → stored on the device (`FRONTEND.md` `I18N-08`) |
+| Logo | `app-name` | the official logo (`FRONTEND.md` §0.5); the hospital's mark and name inside its own app | — |
+| Avatar | `BTN-A02-PROFILE` | icon button | → `S-A-19` |
+| Welcome card | — | headline, one line, the family illustration (decorative) | Shown only when there is no current serial |
+| **Active serial card** | `BTN-A02-ACTIVE` | in the welcome card's place while this device holds a *current* booking (`FR-PAT-39`): unresolved, in a session that has not ended, whatever its date. When that cannot be checked it stays and says the status is unknown, with its age | → `S-A-08` Live serial. Shows the live position |
+| Search field | `BTN-A02-SEARCH` | a link drawn as a field | → `S-A-07s`, ready to type |
+| ডাক্তার খুঁজুন | `BTN-A02-DOCTOR` | main tile | → `S-A-07s` |
+| আমার লাইভ সিরিয়াল | `BTN-A02-SERIAL` | main tile | → the current serial's `S-A-08` when there is one, otherwise `S-A-09` |
+| **জরুরি সহায়তা** | `BTN-A02-EMERGENCY` | main tile, the red one (`FRONTEND.md` §6.3) | → `S-A-10` Emergency triage. **No auth check** |
+| হাসপাতালের বেড | `BTN-A02-BED` | service tile | → `S-A-11`. Not offered in a hospital's app where it runs no ward |
+| ওষুধ খুঁজুন | `BTN-A02-MED` | service tile | → `S-A-14`'s medicine search. Not offered where the hospital runs no pharmacy or keeps its shelf |
+| স্বাস্থ্য রেকর্ড | `BTN-A02-REPORT` | service tile | → `S-A-12` |
+| Bottom nav | `NAV-A` | হোম / খুঁজুন / সিরিয়াল / রেকর্ড / আরও | Tabs → `S-A-02`, `S-A-07s`, `S-A-09`, `S-A-12`, `S-A-19`. One component, identical on every screen |
+
+**Moved on 2026-10-07, not removed.** The quick-need chips (`CHIP-A02-NEED-<key>`) and the specialty grid (`BTN-A02-SPEC-<code>`) are on `S-A-07s`, which shows every need on arrival; home keeps one way to ask. Ambulance and blood stay outside V1 (`PRD.md` §7.8).
 
 **States**
 - Guest: everything visible; tapping anything that needs auth opens `S-A-03` with a return-to intent.
@@ -263,6 +269,8 @@ A **need** is one of the three things hospitals publish live: a specialty, a bed
 | Its action | `BTN-A07S-OPEN-<hospitalId>` | Specialty → `S-A-05h` at that hospital in that specialty (`/book?specialty=&hospital=`). Bed kind → `S-A-11` opened on that kind. Capability or a name → every doctor at that hospital (`/book?hospital=`) |
 | Call | `BTN-A07S-CALL-<hospitalId>` | On a capability result only: `tel:` the hospital's emergency number, or its switchboard. A capability is an emergency's question |
 | Doctor result | `CARD-A07S-DOC-<doctorId>` | Name and degrees, then each chamber: hospital, specialty, fee → `S-A-07b` for that doctor at that hospital (`/book?specialty=&hospital=&doctor=`). Listed for typed text and for a specialty; not for a bed or a capability |
+
+**Presentation (Visual Direction 2, 2026-10-07).** The screen is titled ডাক্তার খুঁজুন and is the খুঁজুন tab. On arrival the eight specialties are one row of chips first, then beds and special care. When an answer holds both doctors and hospitals, a two-way switch (`TAB-A07S-DOCTORS` ডাক্তার · n / `TAB-A07S-HOSPITALS` হাসপাতাল · n) shows one list at a time: doctors first for a specialty or a name, hospitals first for a bed or a capability. A doctor is a card with a letter avatar, degrees, each chamber's hospital and fee, and সিরিয়াল নিন; never a photo, never a rating.
 
 **Order.** A specialty or a capability: nearest first when a position is known, then who is sitting now. A bed kind: most free first; a hospital that has never confirmed that kind last.
 
@@ -315,6 +323,9 @@ A **need** is one of the three things hospitals publish live: a specialty, a bed
 ## A4. Booking
 
 ### `S-A-07b` Session picker
+
+**Presentation (2026-10-07).** The doctor's card heads the screen: letter avatar, name, degrees, specialty and hospital, the live status pill (`FR-PAT-13`) with its age, and the fee. Then চেম্বার বেছে নিন: each session a row with its day, its hours and room, and the serials left. Tapping a row goes straight to confirm (`S-A-07c`); a full one offers standby beneath it.
+
 
 | Element | ID | Wiring |
 |---|---|---|
@@ -603,6 +614,9 @@ Request: group, units, hospital, urgency, patient name → broadcast to eligible
 All notifications grouped by day; tapping routes to the relevant screen; per-category preferences link to settings.
 
 ### `S-A-19` Profile & settings
+
+The আরও tab since 2026-10-07 (`NAV-A`). It lists only what works: the account or sign-in, family profiles, language, record permissions, help, the hospital link and sign-out. The official logo sits at its foot.
+
 
 | Element | ID | Wiring |
 |---|---|---|
