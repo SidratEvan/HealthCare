@@ -33,6 +33,13 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+/**
+ * Every page is rendered per request, so it can carry the script nonce its
+ * Content-Security-Policy names (`src/proxy.ts`, plan I2d). A page built
+ * ahead of time has no nonce, and the policy would refuse its own scripts.
+ */
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({ children }: { readonly children: ReactNode }): ReactNode {
   return (
     <html lang="bn" className={fontVariables}>

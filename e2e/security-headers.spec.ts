@@ -36,6 +36,53 @@ test.describe('security headers (NFR-08)', () => {
     });
   }
 
+  for (const [name, origin] of [
+    ['the patient app', PATIENT],
+    ['the console', CONSOLE],
+  ] as const) {
+    test(`${name} lets a page run only the scripts it was given a nonce for (plan I2d)`, async ({
+      request,
+      page,
+    }) => {
+      const nonceOf = (header: string | undefined): string | null =>
+        /'nonce-([^']+)'/.exec(header ?? '')?.[1] ?? null;
+
+      const first = nonceOf((await request.get(origin)).headers()['content-security-policy']);
+      const second = nonceOf((await request.get(origin)).headers()['content-security-policy']);
+      expect(first).not.toBeNull();
+      // A new one for every page: a nonce that repeats is one an attacker can copy.
+      expect(second).not.toBe(first);
+
+      const response = await page.goto(origin);
+      const nonce = nonceOf(response?.headers()['content-security-policy']);
+      expect(response?.headers()['content-security-policy']).toContain("'strict-dynamic'");
+      // Every script Next wrote into the page's text carries it. A chunk one of
+      // those loads later is trusted through it ('strict-dynamic') and has none.
+      // (An empty one, which runs nothing, is left out.)
+      const inline = await page
+        .locator('script:not([src])')
+        .evaluateAll((elements) =>
+          elements
+            .filter((element) => (element.textContent ?? '').trim() !== '')
+            .map((element) => (element as HTMLScriptElement).nonce),
+        );
+      expect(inline.length).toBeGreaterThan(0);
+      for (const given of inline) expect(given).toBe(nonce);
+
+      // And what an injection looks like — markup with a handler in it, the
+      // way text that was never escaped gets in — does not run.
+      const ran = await page.evaluate(async () => {
+        const marker = `__injected_${String(Date.now())}`;
+        const holder = document.createElement('div');
+        holder.innerHTML = `<img src="/no-such-image-${marker}" onerror="window['${marker}'] = true">`;
+        document.body.appendChild(holder);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return (window as unknown as Record<string, unknown>)[marker] === true;
+      });
+      expect(ran).toBe(false);
+    });
+  }
+
   test('the API sends them on an answer, and leaves nothing to be cached by default', async ({
     request,
   }) => {
