@@ -27,6 +27,7 @@ export {
 export {
   DEFAULT_LOCALE,
   LANGUAGE_NAMES,
+  LANGUAGE_SHORT_NAMES,
   LOCALES,
   isLocale,
   localName,

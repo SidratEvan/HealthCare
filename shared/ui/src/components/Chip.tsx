@@ -26,7 +26,7 @@ export type ChipTone = 'neutral' | 'positive' | 'caution' | 'alert';
 
 const TONE: Record<ChipTone, string> = {
   neutral: 'bg-sunken text-ink',
-  positive: 'bg-brand-100 text-brand-700',
+  positive: 'bg-positive-100 text-positive-700',
   caution: 'bg-warn-100 text-warn-700',
   alert: 'bg-alert-100 text-alert-700',
 };

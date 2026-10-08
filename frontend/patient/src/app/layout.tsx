@@ -4,8 +4,8 @@
  * `lang="bn"` is load-bearing: `tokens.css` keys the Bangla typesetting rules
  * off it — the 1.65 line-height floor, no letter-spacing, no conjunct breaking
  * (`TYP-01`, `TYP-02`, `TYP-06`). This product is written in Bangla, not
- * translated into it (CLAUDE.md §11.5). English is the switch at the top of
- * every screen (`SEG-A00-LANG`); `<LocaleDocument>` moves `lang` with it.
+ * translated into it (CLAUDE.md §11.5). English is the switch in the header of
+ * every screen (`SEG-A00-LANG`, `<AppHeader>`); `<LocaleDocument>` moves `lang` with it.
  *
  * ## What makes this an app rather than a page
  *
@@ -26,12 +26,14 @@
  * gesture area.
  */
 
-import { COLOUR } from '@platform/ui';
+import { PATIENT_COLOUR } from '@platform/ui';
 
 import '@platform/ui/styles.css';
+// Visual Direction 2 (FRONTEND.md §0.5): the patient palette, over the shared
+// layer. Only this app loads it; the consoles keep §1.1.
+import '@platform/ui/patient.css';
 
 import { fontVariables } from '@/app/fonts';
-import { LanguageBar } from '@/components/LanguageBar';
 import { PortalDocument } from '@/components/PortalDocument';
 import { PortalGate } from '@/components/PortalGate';
 import { ScopeTheme } from '@/components/ScopeTheme';
@@ -68,8 +70,8 @@ export const viewport: Viewport = {
   // anything other than zero on a notched phone — without it the bottom
   // navigation sits under the home indicator.
   viewportFit: 'cover',
-  // Read from the token module so it cannot drift from `--color-bg-canvas`.
-  themeColor: COLOUR['bg-canvas'],
+  // Read from the token module so it cannot drift from `--bg-canvas`.
+  themeColor: PATIENT_COLOUR['bg-canvas'],
 };
 
 /**
@@ -89,7 +91,6 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
       */}
       <body className="min-h-screen overscroll-none bg-canvas text-ink">
         <ScopeTheme />
-        <LanguageBar />
         {/* At a name only the server can place, nothing is shown until it has
             said whose it is (`FR-BRD-07`). Everywhere else this is nothing. */}
         <PortalGate>{children}</PortalGate>

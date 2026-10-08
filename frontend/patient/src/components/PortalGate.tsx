@@ -27,6 +27,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode 
 import { tp } from '@platform/i18n';
 import { Button, useLocale } from '@platform/ui';
 
+import { LanguageToggle } from '@/components/LanguageToggle';
 import { askWhoseAddress } from '@/hooks/useDeployment';
 import { hostNeedsAsking, onHostAnswer } from '@/lib/scope';
 
@@ -55,10 +56,15 @@ export function PortalGate({ children }: { readonly children: ReactNode }): Reac
 
   return (
     <main
-      className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center"
+      className="relative flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center"
       data-testid="portal-gate"
       data-state={waiting.kind}
     >
+      {/* SEG-A00-LANG: even a screen that is waiting can be read in English. */}
+      <div className="absolute top-[calc(12px+env(safe-area-inset-top))] right-5">
+        <LanguageToggle />
+      </div>
+
       {waiting.kind === 'asking' ? (
         <p role="status" className="text-body-md text-ink-muted">
           {tp('loading', locale)}

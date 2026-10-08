@@ -101,6 +101,12 @@ export interface LiveSerialCardProps extends LiveSerialFacts {
   readonly serial: string;
   /** The number in the chamber now, or null if nobody has been called. */
   readonly nowServing: string | null;
+  /**
+   * How many are ahead, said by the caller ("১১ জন"), with its label; beside
+   * the number being served, as on the approved card (FRONTEND.md §6.1).
+   * Null leaves the figure out rather than guessing it.
+   */
+  readonly ahead?: { readonly label: string; readonly value: string } | null;
   /** Seen so far and the session's total, for the progress track. */
   readonly seen: number;
   readonly total: number;
@@ -122,24 +128,30 @@ export interface LiveSerialCardProps extends LiveSerialFacts {
   readonly actions?: ReactNode;
 }
 
+/**
+ * The card's surface, by state. The ordinary case sits on the brand tint, as
+ * on the approved card; the others step away from it so the change reads at a
+ * glance.
+ */
 const TONE_SURFACE: Record<LiveSerialTone, string> = {
-  waiting: 'bg-surface border-line',
+  waiting: 'bg-brand-100 border-brand-border',
   // The chamber has not opened. Quieter than waiting, because there is less to
   // report, not more.
-  'not-arrived': 'bg-sunken border-line',
+  'not-arrived': 'bg-surface border-line',
   // §6.1: the surface shifts to the `--warn-*` family. Warn means exactly
   // three things in this product and a declared delay is one of them.
   delayed: 'bg-warn-100 border-warn-border',
   // "Brand surface intensifies" — the one moment before being called.
-  next: 'bg-brand-100 border-brand-600',
+  next: 'bg-brand-100 border-brand-600 border-2',
   called: 'bg-brand-600 border-brand-700',
 };
 
-const TONE_INK: Record<LiveSerialTone, string> = {
-  waiting: 'text-ink',
+/** The number's colour, by state. */
+const TONE_NUMBER: Record<LiveSerialTone, string> = {
+  waiting: 'text-brand-600',
   'not-arrived': 'text-ink',
   delayed: 'text-warn-700',
-  next: 'text-brand-900',
+  next: 'text-brand-600',
   called: 'text-white',
 };
 
@@ -148,9 +160,10 @@ const TONE_INK: Record<LiveSerialTone, string> = {
  *
  * It pulses while the figures are arriving and stops when they are not, which
  * makes "is this still live" answerable without reading anything — and makes
- * the stopped state visible rather than merely unstated. `motion-safe` gates
- * the animation: under `prefers-reduced-motion` the dot stays, the movement
- * goes, and the words beside it still say which it is (`A11Y-03`, §3.4).
+ * the stopped state visible rather than merely unstated. It wears the accent,
+ * the logo's teal, in the patient app (§0.5). `motion-safe` gates the
+ * animation: under `prefers-reduced-motion` the dot stays, the movement goes,
+ * and the words beside it still say which it is (`A11Y-03`, §3.4).
  */
 function LiveDot({ live, tone }: { readonly live: boolean; readonly tone: LiveSerialTone }) {
   return (
@@ -159,8 +172,8 @@ function LiveDot({ live, tone }: { readonly live: boolean; readonly tone: LiveSe
       data-testid="live-dot"
       data-live={live ? 'true' : 'false'}
       className={cx(
-        'inline-block size-2 rounded-pill',
-        tone === 'called' ? 'bg-white' : live ? 'bg-brand-600' : 'bg-ink-muted',
+        'inline-block size-2 shrink-0 rounded-pill',
+        tone === 'called' ? 'bg-white' : live ? 'bg-accent-500' : 'bg-ink-muted',
         live && 'motion-safe:animate-[live-pulse_2s_ease-in-out_infinite]',
       )}
     />
@@ -170,6 +183,7 @@ function LiveDot({ live, tone }: { readonly live: boolean; readonly tone: LiveSe
 export function LiveSerialCard({
   serial,
   nowServing,
+  ahead = null,
   seen,
   total,
   etaText,
@@ -181,24 +195,24 @@ export function LiveSerialCard({
   ...facts
 }: LiveSerialCardProps): ReactNode {
   const tone = liveSerialTone(facts);
+  const called = tone === 'called';
   const percent = total === 0 ? 0 : Math.min(100, Math.round((seen / total) * 100));
+  const soft = called ? 'text-white/85' : 'text-ink-secondary';
+  const statBox = called ? 'bg-white/15' : 'bg-surface';
 
   return (
     <section
       data-testid="live-serial"
       data-tone={tone}
       data-stale={stale ? 'true' : 'false'}
-      // A11Y-04: the serial changes on its own. Being called is announced
-      // assertively because it is an instruction to move; every other change
-      // is announced politely because it is information.
-      aria-live={tone === 'called' ? 'assertive' : 'polite'}
+      aria-live={called ? 'assertive' : 'polite'}
       className={cx(
-        'flex flex-col gap-4 rounded-lg border p-6',
+        'flex flex-col items-center gap-3 rounded-lg border px-5 pt-5 pb-4 text-center',
         TONE_SURFACE[tone],
-        TONE_INK[tone],
+        called ? 'text-white' : 'text-ink',
       )}
     >
-      <p className="flex items-center gap-2 font-ui text-body-md">
+      <p className="flex items-center justify-center gap-2 font-ui text-body-sm font-semibold">
         <LiveDot live={!stale} tone={tone} />
         <span data-testid="live-serial-status">{labels.status}</span>
       </p>
@@ -206,8 +220,8 @@ export function LiveSerialCard({
       <div>
         <p
           className={cx(
-            'font-ui text-body-sm',
-            tone === 'called' ? 'text-white/80' : 'text-ink-secondary',
+            'font-ui text-body-md font-semibold',
+            called ? 'text-white' : 'text-brand-700',
           )}
         >
           {labels.yourSerial}
@@ -221,67 +235,61 @@ export function LiveSerialCard({
         <p
           key={serial}
           data-testid="live-serial-number"
-          className="font-reading text-display-xl tabular-nums motion-safe:animate-[serial-roll_var(--motion-count)_var(--ease-count)]"
+          className={cx(
+            'font-ui text-display-xl font-extrabold tabular-nums motion-safe:animate-[serial-roll_var(--motion-count)_var(--ease-count)]',
+            TONE_NUMBER[tone],
+          )}
         >
           {serial}
         </p>
       </div>
 
-      <dl className="flex items-baseline justify-between gap-3 font-ui text-body-md">
-        <dt className={tone === 'called' ? 'text-white/80' : 'text-ink-secondary'}>
-          {labels.nowServing}
-        </dt>
-        <dd className="text-title-md font-semibold tabular-nums" data-testid="now-serving">
-          {nowServing ?? labels.nobodyCalledYet}
-        </dd>
-      </dl>
-
-      {/*
-        Position within the session. `role="progressbar"` rather than a styled
-        div, because a person using a screen reader needs the same fact
-        (`A11Y-01`, `A11Y-03`) and the label carries it in words.
-      */}
-      <div
-        role="progressbar"
-        aria-valuenow={percent}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={labels.progress}
-        data-testid="live-serial-progress"
+      <dl
         className={cx(
-          'h-1.5 w-full overflow-hidden rounded-pill',
-          tone === 'called' ? 'bg-white/30' : 'bg-sunken',
+          'grid w-full gap-2.5 font-ui',
+          ahead === null ? 'grid-cols-1' : 'grid-cols-2',
         )}
       >
-        <div
-          style={{ width: `${String(percent)}%` }}
-          className={cx(
-            'h-full rounded-pill transition-[width] duration-[var(--motion-quick)] ease-[var(--ease-standard)]',
-            tone === 'called' ? 'bg-white' : 'bg-brand-600',
-          )}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <dl className="flex items-baseline justify-between gap-3 font-ui text-body-md">
-          <dt className={tone === 'called' ? 'text-white/80' : 'text-ink-secondary'}>
-            {labels.eta}
-          </dt>
-          {/*
-            `FR-QUE-13`: a time plus a confidence band, never false precision —
-            and when the rate is unknown, no time at all. An estimate the chamber
-            cannot support is worse than admitting there isn't one.
-          */}
-          <dd className="tabular-nums" data-testid="live-serial-eta">
-            {confidence === 'unknown' || etaText === null ? labels.etaUnknown : etaText}
+        <div className={cx('rounded-sm px-3 py-2', statBox)}>
+          <dt className={cx('text-body-sm', soft)}>{labels.nowServing}</dt>
+          <dd
+            className={cx(
+              'font-bold tabular-nums',
+              nowServing === null ? 'pt-1 text-body-md leading-[1.45]' : 'text-title-md',
+            )}
+            data-testid="now-serving"
+          >
+            {nowServing ?? labels.nobodyCalledYet}
           </dd>
-        </dl>
+        </div>
+        {ahead === null ? null : (
+          <div className={cx('rounded-sm px-3 py-2', statBox)}>
+            <dt className={cx('text-body-sm', soft)}>{ahead.label}</dt>
+            <dd className="text-title-md font-bold tabular-nums" data-testid="live-serial-ahead">
+              {ahead.value}
+            </dd>
+          </div>
+        )}
+      </dl>
+
+      <div className="flex w-full flex-col items-center gap-0.5">
+        {/*
+          `FR-QUE-13`: a time plus a confidence band, never false precision —
+          and when the rate is unknown, no time at all. An estimate the chamber
+          cannot support is worse than admitting there isn't one.
+        */}
+        <p className="font-ui text-body-md">
+          <span className={soft}>{labels.eta} </span>
+          <span className="font-bold tabular-nums" data-testid="live-serial-eta">
+            {confidence === 'unknown' || etaText === null ? labels.etaUnknown : etaText}
+          </span>
+        </p>
 
         {labels.countdown === null ? null : (
           <p
             className={cx(
               'font-ui text-body-sm tabular-nums',
-              tone === 'called' ? 'text-white/80' : 'text-ink-muted',
+              called ? 'text-white/85' : 'text-ink-muted',
             )}
             data-testid="live-serial-countdown"
           >
@@ -301,6 +309,33 @@ export function LiveSerialCard({
         ) : null}
 
         {freshness}
+      </div>
+
+      {/*
+        Position within the session: a thin track at the card's foot.
+        `role="progressbar"` rather than a styled div, because a person using
+        a screen reader needs the same fact (`A11Y-01`, `A11Y-03`) and the
+        label carries it in words.
+      */}
+      <div
+        role="progressbar"
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={labels.progress}
+        data-testid="live-serial-progress"
+        className={cx(
+          'h-1 w-full overflow-hidden rounded-pill',
+          called ? 'bg-white/30' : 'bg-surface',
+        )}
+      >
+        <div
+          style={{ width: `${String(percent)}%` }}
+          className={cx(
+            'h-full rounded-pill transition-[width] duration-[var(--motion-quick)] ease-[var(--ease-standard)]',
+            called ? 'bg-white' : 'bg-brand-600',
+          )}
+        />
       </div>
 
       {actions}
