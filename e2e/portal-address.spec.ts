@@ -94,7 +94,8 @@ test.describe('under the platform’s domain, a hospital’s code is its portal'
     // Never a wait to find out whose it is: the address says.
     await expect(page.getByTestId('portal-gate')).toHaveCount(0);
 
-    await page.getByTestId('home-need-bed:icu').click();
+    await page.getByTestId('home-search').click();
+    await page.getByTestId('need-bed:icu').click();
     const hospitals = page
       .getByTestId('search-results')
       .locator('[data-testid^="result-hospital-"]');

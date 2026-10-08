@@ -1,392 +1,251 @@
 'use client';
 
 /**
- * `S-A-02` Home (`APP_FLOW.md` A2).
+ * `S-A-02` Home (`APP_FLOW.md` A2), Visual Direction 2 (FRONTEND.md §0.5).
  *
- * Rebuilt on 2026-10-05 around the product's direction of that day
- * (`CLAUDE.md` §1.2): this is a network of hospitals, and the first thing the
- * app does is ask what a person needs. Top to bottom:
+ * Rebuilt on 2026-10-07 to the board the owner approved. Top to bottom:
  *
- *   1. the header: the app's name, the area, the profile;
- *   2. the live strip, only while this phone holds a serial today — if you are
- *      waiting to be called, that is what you opened the app for;
- *   3. **search**: one field for a doctor, a hospital, a specialty, an ICU, a
- *      burn unit, with the needs asked for most as one-tap chips beneath it
- *      (`FR-PAT-16`);
- *   4. the emergency card. It moved down one place and is still on the first
- *      screenful, above everything that is browsing (`FRONTEND.md` §6.3:
- *      "never moved below the fold");
- *   5. specialties, for somebody who would rather browse than type;
- *   6. beds, reports and medicines.
+ *   1. the header: the official logo (a hospital's mark and name in its own
+ *      app), the language switch, the profile;
+ *   2. what the person came for: the live serial card while this phone holds
+ *      a current serial, otherwise the welcome card with the family;
+ *   3. one way to ask: the search field;
+ *   4. three main actions: a doctor, my live serial, emergency help, the last
+ *      the only red on the screen (§6.3 as amended);
+ *   5. three services: beds, medicines, records.
+ *
+ * The quick-need chips and the specialty grid that were here moved to the
+ * search screen, which shows every need on arrival; home keeps one way to ask.
  *
  * ## Why this is a client component
  *
- * The active serial strip is live: `BTN-A02-ACTIVE` "shows live position". A
- * home screen that shows a stale serial is worse than one that shows none, so
- * the strip reads the booking this device made and refreshes it.
+ * The live serial card is live: `BTN-A02-ACTIVE` "shows live position". A home
+ * screen that shows a stale serial is worse than one that shows none, so the
+ * card reads the booking this device made and asks the server where it stands.
  */
 
 import { useEffect, useState } from 'react';
 
-import { SPECIALTIES, needKey, type SearchNeed } from '@platform/domain';
 import {
-  bedKindName,
-  capabilityName,
   formatAge,
   formatNumber,
   formatSerial,
-  tp,
-  numeralsFor,
-  districtName,
   localName,
+  numeralsFor,
+  tp,
   type Locale,
 } from '@platform/i18n';
 import { useLocale } from '@platform/ui';
 
-import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
-import { DemoBanner } from '@/components/DemoBanner';
-import { HospitalMark } from '@/components/HospitalMark';
 import {
   BedIcon,
   ChevronIcon,
   EmergencyIcon,
-  ProfileIcon,
-  ReportIcon,
+  LiveIcon,
+  PillIcon,
+  RecordsIcon,
   SearchIcon,
-  SPECIALTY_ICON,
   StethoscopeIcon,
 } from '@/components/icons';
+import { TabScreen } from '@/components/TabScreen';
+import { MainTile, ServiceTile } from '@/components/Tiles';
 import { useDeployment } from '@/hooks/useDeployment';
 import { bookingsInScope, recentBookings } from '@/lib/bookings';
+import { doctorName } from '@/lib/doctor';
 import { scopedHospitalId } from '@/lib/scope';
 import { serialsFor, standingFromMemory, type StoodBooking } from '@/lib/standing';
 
 import type { ReactNode } from 'react';
 
-/**
- * The area this app is showing.
- *
- * Hard-coded for the demo: `MOD-A02-AREA` is the area picker and there is no
- * location permission flow yet (`S-A-01`). The canvas shows a real area under
- * the app name, and a blank there makes the header look unfinished — so it
- * says the area the demo's facilities are in, which is true. A district key,
- * so it reads ঢাকা or Dhaka with the language switch.
- */
-const AREA = 'Dhaka';
-
-/**
- * The needs offered under the search field: one of each kind the network
- * answers, chosen because they are the ones a family rings round hospitals
- * for. Every one is a real search; the full list is on `S-A-07s`.
- */
-const QUICK_NEEDS: readonly SearchNeed[] = [
-  { kind: 'bed', bedKind: 'icu' },
-  { kind: 'bed', bedKind: 'nicu' },
-  { kind: 'capability', capability: 'burn_unit' },
-  { kind: 'capability', capability: 'dialysis' },
-  { kind: 'bed', bedKind: 'cabin' },
-];
-
 export default function Home(): ReactNode {
+  const locale = useLocale();
+  const serial = useCurrentSerial();
+
+  // The English name under the Bangla one, as on the approved board; not in
+  // English, where it would only say the label twice.
+  const helper = (key: Parameters<typeof tp>[0]): string | null =>
+    locale === 'bn' ? tp(key, 'en') : null;
+
   return (
-    <>
-      <main className="mx-auto flex max-w-[480px] flex-col gap-5 px-5 pt-4">
-        <DemoBanner />
+    <TabScreen title={null}>
+      {serial === null ? <WelcomeCard /> : <LiveSerialCard booking={serial} />}
 
-        <Header />
-        <ActiveSerial />
-        <SearchEntry />
-        <EmergencyCard />
-        <Specialties />
-        <QuickTiles />
+      <SearchField />
 
-        <BottomNavSpacer />
-      </main>
+      <section aria-label={tp('homeFindDoctor', locale)} className="grid grid-cols-3 gap-2.5">
+        <MainTile
+          href="/search"
+          testId="home-find-doctor"
+          icon={<StethoscopeIcon size={26} />}
+          label={tp('homeFindDoctor', locale)}
+          helper={helper('homeFindDoctor')}
+        />
+        <MainTile
+          href={serial?.url ?? '/serials'}
+          testId="home-my-serial"
+          icon={<LiveIcon size={26} />}
+          label={tp('homeMySerial', locale)}
+          helper={helper('homeMySerial')}
+        />
+        {/* BTN-A02-EMERGENCY: no sign-in in front of it, and always on the
+            first screen (`FRONTEND.md` §6.3). */}
+        <MainTile
+          href="/emergency"
+          testId="emergency-card"
+          tone="alert"
+          icon={<EmergencyIcon size={26} />}
+          label={tp('homeEmergency', locale)}
+          helper={helper('homeEmergency')}
+        />
+      </section>
 
-      <BottomNav />
-    </>
+      <Services />
+    </TabScreen>
   );
 }
 
 /**
- * App name, area, and the profile control (`BTN-A02-PROFILE`).
- *
- * The name is the hospital's when the app is open for one (`FR-PAT-19`: it
- * "says whose app it is"), and the platform's otherwise. It is the platform's
- * until the answer arrives: a name that changes once is better than a blank.
+ * The welcome card: a two-line headline, one line, and the family
+ * (FRONTEND.md §0.5). The illustration is decorative, so it says nothing to a
+ * screen reader; it multiplies onto the tint because its ground is white, and
+ * fades in from the text's side so the two never collide on a narrow phone.
  */
-function Header(): ReactNode {
-  const locale = useLocale();
-  const scope = useDeployment()?.scope ?? null;
-  return (
-    <header className="flex items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-3">
-        {/* A hospital's own app carries its logo, when it has one (`FR-BRD-06`). */}
-        {scope?.logoVersion == null ? null : (
-          <HospitalMark
-            hospitalId={scope.hospitalId}
-            logoVersion={scope.logoVersion}
-            size="header"
-          />
-        )}
-        <div className="min-w-0">
-          <h1 className="font-reading text-title-lg text-brand-700" data-testid="app-name">
-            {scope === null ? tp('appName', locale) : localName(locale, scope.nameBn, scope.nameEn)}
-          </h1>
-          <p className="text-body-sm text-ink-secondary">{districtName(AREA, locale)}</p>
-        </div>
-      </div>
-
-      <a
-        href="/profile"
-        aria-label={tp('navProfile', locale)}
-        className="flex size-11 shrink-0 items-center justify-center rounded-pill border border-line bg-surface text-ink"
-      >
-        <ProfileIcon size={20} />
-      </a>
-    </header>
-  );
-}
-
-/**
- * `BTN-A02-SEARCH` and `CHIP-A02-NEED-<key>` — the way into `S-A-07s`.
- *
- * A link drawn as a field, not a field: the typing happens on the search
- * screen, where the results are. A real input here would be a second place to
- * type that shows nothing, and a link works before the page has hydrated,
- * which on a slow phone is when the first tap lands.
- */
-function SearchEntry(): ReactNode {
+function WelcomeCard(): ReactNode {
   const locale = useLocale();
   const scope = useDeployment()?.scope ?? null;
 
-  const nameOf = (need: SearchNeed): string =>
-    need.kind === 'bed'
-      ? bedKindName(need.bedKind, locale)
-      : need.kind === 'capability'
-        ? capabilityName(need.capability, locale)
-        : need.code;
-
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="home-search-title">
-      <div>
-        <h2 id="home-search-title" className="font-reading text-title-md">
-          {tp('searchPrompt', locale)}
+    <section
+      data-testid="home-welcome"
+      className="relative h-[180px] overflow-hidden rounded-lg bg-brand-100"
+    >
+      <div className="relative z-10 flex h-full w-[46%] min-w-[156px] flex-col justify-center gap-1.5 py-4 pl-[18px]">
+        <h2 className="text-title-md leading-[1.36] font-bold text-brand-900">
+          <span className="block">{tp('homeHeroLine1', locale)}</span>
+          <span className="block">{tp('homeHeroLine2', locale)}</span>
         </h2>
         <p className="text-body-sm text-ink-secondary">
           {scope === null
-            ? tp('homeSearchLine', locale)
+            ? tp('homeHeroBody', locale)
             : tp('scopedIntro', locale).replace(
                 '{hospital}',
                 localName(locale, scope.nameBn, scope.nameEn),
               )}
         </p>
       </div>
-
-      <a
-        href="/search"
-        data-testid="home-search"
-        className="flex min-h-[56px] items-center gap-3 rounded-md border border-line-strong bg-surface px-4 text-body-lg text-ink-secondary"
-      >
-        <span className="text-brand-600">
-          <SearchIcon size={22} />
-        </span>
-        {tp(scope === null ? 'homeSearch' : 'scopedSearch', locale)}
-      </a>
-
-      <div className="flex flex-col gap-2">
-        <p className="text-caption text-ink-muted">{tp('homeNeeds', locale)}</p>
-        <ul className="flex flex-wrap gap-2">
-          {QUICK_NEEDS.map((need) => (
-            <li key={needKey(need)}>
-              <a
-                href={`/search?need=${encodeURIComponent(needKey(need))}`}
-                data-testid={`home-need-${needKey(need)}`}
-                className="flex min-h-touch items-center rounded-pill border border-line-strong bg-surface px-4 text-body-md text-ink"
-              >
-                {nameOf(need)}
-              </a>
-            </li>
-          ))}
-        </ul>
+      {/* The approved crop: the box shows the family from the father's
+          shoulder to the mother's, 186 px wide, cut by the card's edge below. */}
+      <div className="absolute right-0 bottom-0 h-[176px] w-[54%] max-w-[190px] overflow-hidden mix-blend-multiply [-webkit-mask-image:linear-gradient(90deg,transparent_0,black_16%)] [mask-image:linear-gradient(90deg,transparent_0,black_16%)]">
+        <img
+          src="/illustrations/family.webp"
+          alt=""
+          width={720}
+          height={598}
+          decoding="async"
+          fetchPriority="high"
+          className="absolute right-[-6px] bottom-0 h-[176px] w-auto max-w-none"
+        />
       </div>
     </section>
   );
 }
 
 /**
- * `BTN-A02-EMERGENCY` — `<EmergencyEntry>` (FRONTEND.md §6.3).
+ * `BTN-A02-SEARCH`: the way into `S-A-07s`.
  *
- * "Full-width, `radius-lg`, alert fill, 92 px minimum height, one line of
- * Bangla explaining what it does. Never A/B tested for conversions; never
- * moved below the fold."
+ * A link drawn as a field, not a field: the typing happens on the search
+ * screen, where the results are, and a link works before the page has
+ * hydrated, which on a slow phone is when the first tap lands.
  */
-function EmergencyCard(): ReactNode {
+function SearchField(): ReactNode {
   const locale = useLocale();
+  const scope = useDeployment()?.scope ?? null;
   return (
     <a
-      href="/emergency"
-      data-testid="emergency-card"
-      className="flex min-h-[92px] items-center gap-4 rounded-lg bg-alert-600 p-5 text-white"
+      href="/search"
+      data-testid="home-search"
+      className="flex min-h-[56px] items-center gap-3 rounded-md border border-line bg-surface px-4 text-body-md text-ink-muted shadow-1"
     >
-      <span className="flex size-12 shrink-0 items-center justify-center rounded-pill bg-white/20">
-        <EmergencyIcon size={26} />
+      <span className="text-brand-600">
+        <SearchIcon size={22} />
       </span>
-      <span className="min-w-0">
-        <span className="block font-reading text-title-md font-bold">
-          {tp('emergency', locale)}
-        </span>
-        <span className="block text-body-sm opacity-90">{tp('emergencyLine', locale)}</span>
-      </span>
+      {tp(scope === null ? 'homeSearchField' : 'scopedSearch', locale)}
     </a>
   );
 }
 
 /**
- * The specialty grid (`BTN-A02-SPEC-<code>`).
- *
- * Two columns, an icon and a name per card. Each opens `S-A-07` — **hospitals**
- * offering that specialty, not doctors. That order is what the document
- * specifies and what a person actually decides in: a patient picks somewhere
- * they can reach before they pick who they see.
+ * The three services. Inside a hospital's own app a service it does not run
+ * is not offered: no ward, no beds tile; no pharmacy, or a shelf it keeps to
+ * itself, no medicines tile (`FR-BRD-09`). The records tile is always there:
+ * the wallet is the patient's own, wherever a visit was made (`FR-BRD-10`).
  */
-function Specialties(): ReactNode {
+function Services(): ReactNode {
   const locale = useLocale();
+  const scope = useDeployment()?.scope ?? null;
+  const off = scope?.modulesOff ?? [];
+  const beds = !off.includes('beds');
+  const medicines = !off.includes('pharmacy') && scope?.notShared?.includes('stock') !== true;
+
   return (
-    <section className="flex flex-col gap-3">
-      <div>
-        <h2 className="font-reading text-title-sm">{tp('browseBySpecialty', locale)}</h2>
-        <p className="text-body-sm text-ink-secondary">{tp('seeADoctorSub', locale)}</p>
+    <section className="flex flex-col gap-2.5" aria-labelledby="home-services">
+      <h2 id="home-services" className="text-title-sm font-bold">
+        {tp('homeOtherServices', locale)}
+      </h2>
+      <div className="grid auto-cols-fr grid-flow-col gap-2.5">
+        {beds ? (
+          <ServiceTile
+            href="/beds"
+            testId="quick-beds"
+            icon={<BedIcon size={24} />}
+            label={tp('homeBeds', locale)}
+          />
+        ) : null}
+        {medicines ? (
+          <ServiceTile
+            href="/medicines"
+            testId="quick-medicines"
+            icon={<PillIcon size={24} />}
+            label={tp('homeMedicines', locale)}
+          />
+        ) : null}
+        <ServiceTile
+          href="/records"
+          testId="quick-records"
+          icon={<RecordsIcon size={24} />}
+          label={tp('homeRecords', locale)}
+        />
       </div>
-
-      <ul className="grid grid-cols-2 gap-3">
-        {SPECIALTIES.map((specialty) => {
-          const Icon = SPECIALTY_ICON[specialty.code] ?? StethoscopeIcon;
-
-          return (
-            <li key={specialty.code}>
-              <a
-                href={`/book?specialty=${specialty.code}`}
-                data-testid={`specialty-${specialty.code}`}
-                className="flex min-h-[96px] flex-col justify-between rounded-md border border-line bg-surface p-4"
-              >
-                <span className="text-brand-600">
-                  <Icon size={24} />
-                </span>
-                {/* ICO-03: the name carries the meaning; the icon makes it
-                    findable. Never the icon alone on a patient surface. */}
-                <span className="text-body-lg font-semibold">
-                  {localName(locale, specialty.nameBn, specialty.nameEn)}
-                </span>
-              </a>
-            </li>
-          );
-        })}
-      </ul>
     </section>
   );
 }
 
 /**
- * The convenience tiles.
+ * The serial this phone, or this account, holds right now (`FR-PAT-39`).
  *
- * Beds and reports, and medicines beneath them. Ambulance and blood were here
- * as tiles that led to a sentence saying they were not built; they are
- * outside V1 (`PRD.md` §7.8, owner's direction of 2026-10-05), and a first
- * screen on which everything shown works is the requirement.
+ * At once from what this phone already knows; then from the server, which is
+ * the only thing that can say a serial is still current: not the date, which a
+ * chamber running past midnight outlives. One read, not a socket. Home is a
+ * screen somebody passes through; the live channel belongs to `S-A-08`.
+ *
+ * An app open for one hospital shows that hospital's serial only, and nothing
+ * until it knows which hospital that is (`FR-BRD-02`).
  */
-function QuickTiles(): ReactNode {
-  const locale = useLocale();
-  // In a hospital's own portal the bed search and the medicine search are
-  // about that hospital only (`FR-BRD-09`), so one that runs no ward or no
-  // pharmacy, or keeps its shelf to itself (`FR-NET-04`), has nothing there
-  // to answer with and the tile is not offered. Records are the patient's
-  // own, wherever made (`FR-BRD-10`), and are always here.
-  const scope = useDeployment()?.scope ?? null;
-  const off = scope?.modulesOff ?? [];
-  const beds = !off.includes('beds');
-  const medicines = !off.includes('pharmacy') && scope?.notShared?.includes('stock') !== true;
-  const tiles = [
-    ...(beds ? [{ href: '/beds', label: 'quickBed', Icon: BedIcon } as const] : []),
-    { href: '/records', label: 'quickReport', Icon: ReportIcon } as const,
-  ];
-
-  return (
-    <div className="flex flex-col gap-2.5">
-      <ul className={tiles.length === 1 ? 'grid grid-cols-1 gap-2.5' : 'grid grid-cols-2 gap-2.5'}>
-        {tiles.map((tile) => (
-          <li key={tile.href}>
-            <a
-              href={tile.href}
-              data-testid={`quick-${tile.label === 'quickBed' ? 'beds' : 'records'}`}
-              className="flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-sm border border-line bg-surface px-1.5 py-3 text-center"
-            >
-              <span className="text-brand-600">
-                <tile.Icon size={22} />
-              </span>
-              <span className="text-caption">{tp(tile.label, locale)}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-
-      {/*
-        Medicine availability (`FR-PHR-02`, step 17).
-
-        A wide row rather than a third tile: it carries a line saying what
-        it answers, which a tile has no room for.
-      */}
-      {medicines ? (
-        <a
-          href="/medicines"
-          data-testid="quick-medicines"
-          className="flex min-h-touch items-center justify-between rounded-sm border border-line bg-surface px-4 py-3"
-        >
-          <span className="text-body-md">{tp('medicinesTitle', locale)}</span>
-          <span className="text-body-sm text-ink-muted">
-            {tp(scope === null ? 'medicinesIntro' : 'scopedMedicinesShort', locale)}
-          </span>
-        </a>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * `BTN-A02-ACTIVE` — the live strip.
- *
- * "Appears only if an active booking exists today. Shows live position."
- *
- * The serial comes from this device's own record of what it booked, and the
- * *now-serving* number is fetched from the tracking link — so the number on
- * the home screen is the same number the live screen would show, rather than
- * a remembered one. Absent when there is nothing today, exactly as specified:
- * a strip saying "no serial" is a row of furniture.
- */
-function ActiveSerial(): ReactNode {
-  const locale = useLocale();
-  const numerals = numeralsFor(locale);
+function useCurrentSerial(): StoodBooking | null {
   const [booking, setBooking] = useState<StoodBooking | null>(null);
-  // An app open for one hospital shows that hospital's serial only, and
-  // nothing until it knows which hospital that is (`FR-BRD-02`).
   const inHospital = scopedHospitalId(useDeployment());
 
   useEffect(() => {
     let stale = false;
     const mine = bookingsInScope(recentBookings(), inHospital);
 
-    // At once, from what this phone already knows; then from the server,
-    // which is the only thing that can say a serial is still current: not the
-    // date, which a chamber running past midnight outlives (`FR-PAT-39`).
-    // One read, not a socket. Home is a screen somebody passes through; the
-    // live channel belongs to `S-A-08`, which is where they go to watch.
     setBooking(standingFromMemory(mine).find((entry) => entry.standing === 'current') ?? null);
     // Signed in, the account's serials, booked on any phone (plan F1); else
     // this phone's own.
     void serialsFor(inHospital).then(({ bookings: stood }) => {
       if (stale) return;
       // A status that could not be checked is not a reason to hide the
-      // booking they have: the strip stays, and says so.
+      // booking they have: the card stays, and says so.
       setBooking(
         stood.find((entry) => entry.standing === 'current') ??
           stood.find((entry) => entry.standing === 'unknown') ??
@@ -399,25 +258,42 @@ function ActiveSerial(): ReactNode {
     };
   }, [inHospital]);
 
-  if (booking === null) return null;
+  return booking;
+}
 
+/**
+ * `BTN-A02-ACTIVE`: the live serial card, in the welcome card's place.
+ *
+ * The serial comes from this device's own record of what it booked, and the
+ * *now-serving* number from the tracking link, so the number on the home
+ * screen is the number the live screen would show, not a remembered one.
+ */
+function LiveSerialCard({ booking }: { readonly booking: StoodBooking }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
   const nowServing = booking.nowServing;
-  const doctor = localName(locale, booking.doctorNameBn, booking.doctorNameEn);
+  const doctor = doctorName(locale, booking.doctorNameBn, booking.doctorNameEn);
 
   return (
     <a
       href={booking.url}
       data-testid="active-serial"
       data-standing={booking.standing}
-      className="flex items-center gap-3 rounded-md border border-brand-border bg-brand-100 p-4"
+      className="flex items-center gap-4 rounded-lg border border-brand-border bg-brand-100 p-5"
     >
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-pill bg-brand-600 text-title-sm font-bold text-white tabular-nums">
+      <span className="flex size-16 shrink-0 items-center justify-center rounded-pill bg-brand-600 text-title-lg font-extrabold text-white tabular-nums">
         {formatSerial(booking.serial, numerals)}
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="block text-body-md font-semibold">{tp('activeSerialTitle', locale)}</span>
-        <span className="block truncate text-body-sm text-ink-secondary">
+        <span className="flex items-center gap-2 text-body-md font-bold text-brand-900">
+          <span
+            aria-hidden="true"
+            className="size-2 shrink-0 rounded-pill bg-accent-500 motion-safe:animate-[live-pulse_2s_ease-in-out_infinite]"
+          />
+          {tp('activeSerialTitle', locale)}
+        </span>
+        <span className="block text-body-sm text-ink-secondary">
           {nowServing === null
             ? doctor
             : tp('activeSerialMeta', locale)
@@ -432,7 +308,7 @@ function ActiveSerial(): ReactNode {
       </span>
 
       <span className="text-brand-600">
-        <ChevronIcon size={18} />
+        <ChevronIcon size={20} />
       </span>
     </a>
   );

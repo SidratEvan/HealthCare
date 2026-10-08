@@ -29,13 +29,19 @@
 
 import { useEffect, useState } from 'react';
 
+import { tp } from '@platform/i18n';
+import { useLocale } from '@platform/ui';
+
 import { LiveSerial } from '@/components/LiveSerial';
+import { SkeletonCards } from '@/components/States';
+import { TabScreen } from '@/components/TabScreen';
 import { linkForBooking, readAccount } from '@/lib/account';
 import { linkHeldFor } from '@/lib/bookings';
 
 import type { ReactNode } from 'react';
 
 export default function LiveSerialPage(): ReactNode {
+  const locale = useLocale();
   const [token, setToken] = useState<string | null>(null);
   const [read, setRead] = useState(false);
   // The server is being asked for a link: the one wait this page has of its own.
@@ -88,14 +94,11 @@ export default function LiveSerialPage(): ReactNode {
   // shape of the screen, never a blank one (`GR-03`).
   if (!read) {
     return asking ? (
-      <main
-        className="mx-auto flex max-w-md flex-col gap-3 p-4"
-        aria-busy="true"
-        data-testid="live-serial-asking"
-      >
-        <div className="h-40 rounded-md bg-sunken" />
-        <div className="h-24 rounded-md bg-sunken" />
-      </main>
+      <TabScreen title={tp('homeMySerial', locale)} back={{ fallback: '/serials' }}>
+        <div aria-busy="true" data-testid="live-serial-asking">
+          <SkeletonCards count={2} height={140} />
+        </div>
+      </TabScreen>
     ) : null;
   }
 

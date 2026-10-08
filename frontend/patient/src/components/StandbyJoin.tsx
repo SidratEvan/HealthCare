@@ -22,6 +22,7 @@ import { GuestCodeCard } from '@/components/GuestCodeCard';
 import { useDeployment } from '@/hooks/useDeployment';
 import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
 import { joinStandby } from '@/lib/api';
+import { doctorName } from '@/lib/doctor';
 
 import type { SessionCard, StandbyJoined } from '@/lib/types';
 import type { ReactNode } from 'react';
@@ -139,14 +140,12 @@ export function StandbyJoin({
 
   return (
     <section className="flex flex-col gap-4" data-testid="standby-join">
-      <h1 className="font-reading text-title-lg">{tp('standbyJoinTitle', locale)}</h1>
-
-      <Card>
+      <Card elevated>
         <p className="text-title-sm tabular-nums">
           {formatDateTime(session.plannedStart, numerals)}
         </p>
         <p className="text-body-sm text-ink-muted">
-          {localName(locale, session.doctorNameBn, session.doctorNameEn)}
+          {doctorName(locale, session.doctorNameBn, session.doctorNameEn)}
         </p>
         <p className="text-body-sm text-ink-muted">
           {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}

@@ -44,7 +44,8 @@ test('opened for Padma, it is Padma’s: its name, its colours, its hospital onl
   await expect.poll(async () => await brand600(page)).toBe(PADMA_BRAND);
 
   // The scope outlives the link: the next screen is still Padma's.
-  await page.getByTestId('home-need-bed:icu').click();
+  await page.getByTestId('home-search').click();
+  await page.getByTestId('need-bed:icu').click();
   const results = page.getByTestId('search-results');
   await expect(results).toBeVisible();
   await expect(page.getByTestId('search-intro')).toContainText('পদ্মা');

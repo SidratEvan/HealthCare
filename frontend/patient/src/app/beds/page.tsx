@@ -35,6 +35,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { BED_KINDS, normaliseBdMobile, type BedKind } from '@platform/domain';
 import {
   bedKindName,
+  districtName,
   formatNumber,
   formatTaka,
   tp,
@@ -111,11 +112,11 @@ export default function Page(): ReactNode {
   }, [kind, load]);
 
   return (
-    <TabScreen title={tp('bedsTitle', locale)}>
+    <TabScreen title={tp('bedsScreenTitle', locale)} back={{ fallback: '/' }}>
       <div className="flex flex-col gap-4" data-testid="bed-search">
         {mine.length === 0 ? null : (
           <section className="flex flex-col gap-2" aria-labelledby="my-requests">
-            <h2 id="my-requests" className="text-title-sm">
+            <h2 id="my-requests" className="text-title-sm font-bold">
               {tp('yourRequests', locale)}
             </h2>
             {mine.map((request) => (
@@ -140,17 +141,19 @@ export default function Page(): ReactNode {
           <legend className="text-body-md text-ink-secondary">
             {tp('bedsChooseKind', locale)}
           </legend>
-          <div className="flex flex-wrap gap-2">
+          {/* One row that scrolls sideways, as on the approved board. */}
+          <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [-webkit-mask-image:linear-gradient(90deg,black_85%,transparent)] [mask-image:linear-gradient(90deg,black_85%,transparent)]">
             {BED_KINDS.map((candidate) => (
-              <FilterChip
-                key={candidate}
-                selected={candidate === kind}
-                onToggle={() => {
-                  setKind(candidate);
-                }}
-              >
-                {bedKindName(candidate, locale)}
-              </FilterChip>
+              <span key={candidate} className="shrink-0 whitespace-nowrap">
+                <FilterChip
+                  selected={candidate === kind}
+                  onToggle={() => {
+                    setKind(candidate);
+                  }}
+                >
+                  {bedKindName(candidate, locale)}
+                </FilterChip>
+              </span>
             ))}
           </div>
         </fieldset>
@@ -286,7 +289,7 @@ function HospitalBedCard({
     // so and still takes a request, which is how a family finds out.
     if (!withholds(hospital, 'beds')) return null;
     return (
-      <Card>
+      <Card elevated>
         <div
           className="flex flex-col gap-2"
           data-testid={`bed-card-${hospital.id}`}
@@ -297,7 +300,9 @@ function HospitalBedCard({
               <HospitalIcon size={22} />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-title-sm">{localName(locale, hospital.nameBn, hospital.nameEn)}</p>
+              <p className="text-title-sm font-bold">
+                {localName(locale, hospital.nameBn, hospital.nameEn)}
+              </p>
               <p className="text-body-sm text-ink-muted">
                 {hospital.thana === null
                   ? hospital.district
@@ -337,7 +342,7 @@ function HospitalBedCard({
             );
 
   return (
-    <Card tone={entry.free > 0 && !stale ? 'brand' : 'default'}>
+    <Card elevated tone={entry.free > 0 && !stale ? 'brand' : 'default'}>
       <div
         className="flex flex-col gap-2"
         data-testid={`bed-card-${hospital.id}`}
@@ -348,19 +353,29 @@ function HospitalBedCard({
             <HospitalIcon size={22} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-title-sm">{localName(locale, hospital.nameBn, hospital.nameEn)}</p>
+            <p className="text-title-sm font-bold">
+              {localName(locale, hospital.nameBn, hospital.nameEn)}
+            </p>
             <p className="text-body-sm text-ink-muted">
-              {hospital.thana === null
-                ? hospital.district
-                : `${hospital.thana}, ${hospital.district}`}
+              {/* The thana is held in English only; in Bangla the district is
+                  said in Bangla rather than mixing scripts in one line. */}
+              {locale === 'en' && hospital.thana !== null
+                ? `${hospital.thana}, ${hospital.district}`
+                : districtName(hospital.district, locale)}
             </p>
           </div>
         </div>
 
-        <p className="text-title-md tabular-nums" data-testid="bed-card-free">
-          {entry.free > 0
-            ? tp('bedsFree', locale).replace('{free}', formatNumber(entry.free, numerals))
-            : tp('bedsNoneFree', locale)}{' '}
+        <p className="flex flex-wrap items-baseline gap-x-2" data-testid="bed-card-free">
+          <span
+            className={`text-title-lg font-extrabold tabular-nums ${
+              entry.free > 0 ? 'text-brand-600' : 'text-ink-muted'
+            }`}
+          >
+            {entry.free > 0
+              ? tp('bedsFree', locale).replace('{free}', formatNumber(entry.free, numerals))
+              : tp('bedsNoneFree', locale)}
+          </span>
           <span className="text-body-sm text-ink-muted">
             {tp('bedsOfTotal', locale).replace('{total}', formatNumber(entry.total, numerals))}
           </span>
