@@ -522,6 +522,8 @@ const KEPT: Readonly<Record<string, Kept>> = {
 
   // --- the lab and the pharmacy -------------------------------------------------
   'GET /lab/catalogue': { by: 'principal', own: () => ({ path: '/lab/catalogue' }) },
+  // The formulary is the deployment's reference list, nobody's hospital's (FR-DOC-05).
+  'GET /formulary': { by: 'principal', own: () => ({ path: '/formulary?q=pa' }) },
   'POST /test-orders': {
     by: 'body',
     smuggled: [

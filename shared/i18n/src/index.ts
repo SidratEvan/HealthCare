@@ -36,6 +36,12 @@ export {
 
 export { BED_KIND_NAMES, bedKindName, type BedKindName } from './beds.js';
 export {
+  bnCalendarDate,
+  prescriptionSheet,
+  type SheetPatient,
+  type SheetVisit,
+} from './prescription.js';
+export {
   COLUMN_KIND_NAMES,
   IMPORT_FIELD_NAMES,
   STRUCTURE_TYPE_NAMES,

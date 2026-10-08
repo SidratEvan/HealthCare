@@ -82,6 +82,14 @@ export { cx, type ClassValue } from './components/cx.js';
 // every live figure, so no screen can ship without it.
 export { FreshnessLine, type FreshnessLineProps } from './components/FreshnessLine.js';
 
+// The printed prescription (FR-DOC-07, plan R2).
+export {
+  PrescriptionSheet,
+  usePrintSheet,
+  type PrescriptionSheetData,
+  type PrescriptionSheetMedicine,
+} from './components/PrescriptionSheet.js';
+
 // The ward board's pair (§6.5, build step 14).
 export { BedTile, type BedTileProps, type BedTileState } from './components/BedTile.js';
 export {

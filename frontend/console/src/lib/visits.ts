@@ -6,7 +6,7 @@
  * silently renders nothing.
  */
 
-import type { QueueState, SymptomSignal } from '@platform/domain';
+import type { MedicineBody, MedicineRow, QueueState, SymptomSignal } from '@platform/domain';
 
 /** What the doctor has typed but not necessarily filed. */
 export interface VisitDraft {
@@ -21,6 +21,27 @@ export interface VisitDraft {
    * warning (`FR-GOV-03`). Null — the common case — means none of the three.
    */
   readonly symptomSignal: SymptomSignal | null;
+  /** `TBL-B05-RX` (`FR-DOC-04`, plan R2): the rows as typed, in order. */
+  readonly medicines: readonly MedicineRow[];
+}
+
+/** A formulary entry, as `GET /formulary` answers. */
+export interface FormularyEntry {
+  readonly id: string;
+  readonly genericName: string;
+  readonly brandName: string | null;
+  readonly form: string | null;
+  readonly strengths: readonly string[];
+}
+
+/** One medicine on a signed visit (`prescription_items`). */
+export interface PrescribedMedicine {
+  readonly medicineId: string | null;
+  readonly name: string;
+  readonly strength: string | null;
+  readonly schedule: string | null;
+  readonly durationDays: number | null;
+  readonly instructionBn: string | null;
 }
 
 /** One chip on `BTN-B05-TEST`, from the hospital's catalogue. */
@@ -47,6 +68,10 @@ export interface VisitRecord {
   readonly hospitalNameEn: string;
   readonly serial: number;
   readonly visitedAt: string;
+  /** What a printed prescription is signed under (plan R2). */
+  readonly doctorBmdc: string;
+  /** Empty when the visit has none (`FR-DOC-04`). */
+  readonly medicines: readonly PrescribedMedicine[];
 }
 
 /** The pre-visit answers (`MOD-A07-INTAKE`). */
@@ -192,6 +217,8 @@ export async function saveVisit(input: {
   readonly token: string | null;
   readonly bookingId: string;
   readonly draft: VisitDraft;
+  /** The rows `medicineRows` read from the draft; the screen holds the save while any is wrong. */
+  readonly medicines: readonly MedicineBody[];
   readonly sign: boolean;
 }): Promise<SaveVisitResult> {
   const key = crypto.randomUUID();
@@ -213,6 +240,8 @@ export async function saveVisit(input: {
         ? {}
         : { followUpDate: dhakaDateIn(input.draft.followUpDays) }),
       ...(input.draft.symptomSignal === null ? {} : { symptomSignal: input.draft.symptomSignal }),
+      // Always sent, so a row the doctor removed is removed from the draft too.
+      medicines: input.medicines,
       sign: input.sign,
       idempotencyKey: key,
     }),
@@ -311,4 +340,23 @@ function dhakaDateIn(days: number): string {
     month: '2-digit',
     day: '2-digit',
   }).format(at);
+}
+
+/**
+ * `GET /formulary?q=` — suggestions for a medicine's name (`FR-DOC-05`).
+ * Two letters or more; fewer is answered here with nothing, without asking.
+ */
+export async function fetchFormulary(input: {
+  readonly apiBaseUrl: string;
+  readonly token: string | null;
+  readonly query: string;
+}): Promise<readonly FormularyEntry[]> {
+  const query = input.query.trim();
+  if (query.length < 2) return [];
+  const result = await call<{ medicines: readonly FormularyEntry[] }>(
+    `${input.apiBaseUrl}/formulary?q=${encodeURIComponent(query)}`,
+    input.token,
+    { method: 'GET' },
+  );
+  return result.medicines;
 }

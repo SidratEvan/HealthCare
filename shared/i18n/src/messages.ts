@@ -644,10 +644,6 @@ export const CONSOLE = {
   },
   noPastVisits: { bn: 'এই রোগীর আগের কোনো রেকর্ড নেই', en: 'No earlier records for this patient' },
   // `PRD.md` §3.2: absent is stated, never implied by a blank.
-  prescriptionsAbsent: {
-    bn: 'এই সংস্করণে ব্যবস্থাপত্র নেই',
-    en: 'Prescriptions are not part of this version',
-  },
   reportsAbsent: {
     bn: 'টেস্টের রিপোর্ট এখনো যুক্ত হয়নি',
     en: 'Test reports are not connected yet',
@@ -655,6 +651,36 @@ export const CONSOLE = {
 
   // The note (INP-B05-DX, INP-B05-ADVICE, SEL-B05-FOLLOWUP).
   visitNote: { bn: 'ভিজিটের রেকর্ড', en: 'Visit record' },
+  // TBL-B05-RX, BTN-B05-ADDRX, BTN-B05-PRINT (FR-DOC-04, FR-DOC-05, FR-DOC-07; plan R2).
+  rxTitle: { bn: 'ওষুধ', en: 'Medicines' },
+  rxAdd: { bn: '+ ওষুধ', en: '+ Medicine' },
+  rxName: { bn: 'ওষুধের নাম', en: 'Medicine' },
+  rxStrength: { bn: 'মাত্রা', en: 'Strength' },
+  rxSchedule: { bn: 'সেবনবিধি (সকাল+দুপুর+রাত)', en: 'Schedule (morning+midday+night)' },
+  rxScheduleInvalid: {
+    bn: 'সকাল+দুপুর+রাত লিখুন, যেমন ১+০+১।',
+    en: 'Write morning+midday+night, such as 1+0+1.',
+  },
+  rxDays: { bn: 'কত দিন', en: 'Days' },
+  rxDaysInvalid: { bn: '১ থেকে ৩৬৫ দিন।', en: '1 to 365 days.' },
+  rxInstruction: { bn: 'নির্দেশনা (বাংলায়)', en: 'Instruction (in Bangla)' },
+  rxRemove: { bn: 'সরান', en: 'Remove' },
+  rxHint: {
+    bn: 'নাম লিখতে শুরু করলে তালিকা থেকে বেছে নিতে পারেন, বা তালিকায় না থাকলে নিজে লিখুন।',
+    en: 'Start typing a name to pick from the formulary, or write one it does not carry.',
+  },
+  rxNone: { bn: 'কোনো ওষুধ লেখা হয়নি।', en: 'No medicines written.' },
+  rxFixFirst: {
+    bn: 'ওষুধের ঘরে যা ঠিক নেই, তা আগে ঠিক করুন।',
+    en: 'Correct the medicine rows first.',
+  },
+  rxPrintLast: { bn: 'শেষ প্রেসক্রিপশন প্রিন্ট', en: 'Print last prescription' },
+  rxPrint: { bn: 'প্রিন্ট', en: 'Print' },
+  rxPrintFailed: {
+    bn: 'প্রেসক্রিপশনটি আনা যায়নি। আবার চেষ্টা করুন।',
+    en: 'The prescription could not be fetched. Please try again.',
+  },
+  rxDaysCount: { bn: '{days} দিন', en: '{days} days' },
   diagnosis: { bn: 'রোগ নির্ণয়', en: 'Diagnosis' },
   diagnosisHint: { bn: 'যা বুঝলেন, সংক্ষেপে', en: 'What you concluded, briefly' },
   adviceBn: { bn: 'রোগীর জন্য পরামর্শ (বাংলায়)', en: 'Advice for the patient (in Bangla)' },
@@ -3097,8 +3123,8 @@ export const PATIENT = {
   // `PRD.md` §3.2: an empty Reports tab would be a claim about the patient's
   // health. This is a claim about the build, which is the true one.
   walletAbsent: {
-    bn: 'ব্যবস্থাপত্র, পুরোনো কাগজ যোগ করা আর পিডিএফ ডাউনলোড — এগুলো এখনো তৈরি হয়নি।',
-    en: 'Prescriptions, adding old paper records and PDF download are not built yet.',
+    bn: 'পুরোনো কাগজ যোগ করা আর সব রেকর্ড এক পিডিএফে — এগুলো এখনো তৈরি হয়নি।',
+    en: 'Adding old paper records and all records as one PDF are not built yet.',
   },
 
   // --- TAB-A12-REP: test reports (FR-LAB-03, FR-PAT-61) --------------------
@@ -3808,6 +3834,10 @@ export const PATIENT = {
   homeRecords: { bn: 'স্বাস্থ্য রেকর্ড', en: 'Health records' },
   moreTitle: { bn: 'আরও', en: 'More' },
   recordsTitle: { bn: 'আমার স্বাস্থ্য রেকর্ড', en: 'My health records' },
+  // A visit's medicines and BTN-A12-PRINT (FR-DOC-04, FR-DOC-07; plan R2).
+  recordsMedicines: { bn: 'ওষুধ', en: 'Medicines' },
+  recordsPrint: { bn: 'প্রিন্ট বা PDF', en: 'Print or PDF' },
+  recordsDaysCount: { bn: '{days} দিন', en: '{days} days' },
   emergencyHelpTitle: { bn: 'জরুরি সহায়তা', en: 'Emergency help' },
   bedsScreenTitle: { bn: 'হাসপাতালের বেড', en: 'Hospital beds' },
   searchTabDoctors: { bn: 'ডাক্তার · {count}', en: 'Doctors · {count}' },

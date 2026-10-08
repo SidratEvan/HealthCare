@@ -56,6 +56,29 @@ export interface VisitRecord {
   /** The serial the patient held, so a record can be matched to a day. */
   readonly serial: number;
   readonly visitedAt: string;
+  /** What a printed prescription is signed under (`FR-DOC-07`, plan R2). */
+  readonly doctorBmdc: string;
+  /** The medicines, in the doctor's order; empty when none were written (`FR-DOC-04`). */
+  readonly medicines: readonly PrescribedMedicine[];
+}
+
+/** One medicine row on a visit (`prescription_items`, plan R2). */
+export interface PrescribedMedicine {
+  readonly medicineId: string | null;
+  readonly name: string;
+  readonly strength: string | null;
+  readonly schedule: string | null;
+  readonly durationDays: number | null;
+  readonly instructionBn: string | null;
+}
+
+/** A formulary entry, for `FR-DOC-05`'s suggestions. */
+export interface FormularyEntry {
+  readonly id: string;
+  readonly genericName: string;
+  readonly brandName: string | null;
+  readonly form: string | null;
+  readonly strengths: readonly string[];
 }
 
 /**
@@ -217,11 +240,13 @@ export async function findVisits(
     hospital_name_en: string;
     serial_number: number;
     visited_at: Date;
+    doctor_bmdc: string;
   }>`
     SELECT v.id, v.booking_id, v.diagnosis_text, v.advice_text_bn,
            v.follow_up_date, v.signed_at,
            d.full_name_bn  AS doctor_name_bn,
            d.full_name_en  AS doctor_name_en,
+           d.bmdc_number   AS doctor_bmdc,
            dep.name_bn     AS department_name_bn,
            dep.name_en     AS department_name_en,
            h.name_bn       AS hospital_name_bn,
@@ -242,6 +267,7 @@ export async function findVisits(
      LIMIT ${limit}
   `.execute(db);
 
+  const medicines = await medicinesFor(result.rows.map((row) => row.id));
   return result.rows.map((row) => ({
     id: row.id,
     bookingId: row.booking_id,
@@ -260,6 +286,8 @@ export async function findVisits(
     hospitalNameEn: row.hospital_name_en,
     serial: row.serial_number,
     visitedAt: row.visited_at.toISOString(),
+    doctorBmdc: row.doctor_bmdc,
+    medicines: medicines.get(row.id) ?? [],
   }));
 }
 
@@ -700,11 +728,13 @@ export async function findVisitForBooking(bookingId: string): Promise<VisitRecor
     hospital_name_en: string;
     serial_number: number;
     visited_at: Date;
+    doctor_bmdc: string;
   }>`
     SELECT v.id, v.booking_id, v.diagnosis_text, v.advice_text_bn,
            v.follow_up_date, v.signed_at,
            d.full_name_bn AS doctor_name_bn,
            d.full_name_en AS doctor_name_en,
+           d.bmdc_number  AS doctor_bmdc,
            dep.name_bn    AS department_name_bn,
            dep.name_en    AS department_name_en,
            h.name_bn      AS hospital_name_bn,
@@ -740,7 +770,140 @@ export async function findVisitForBooking(bookingId: string): Promise<VisitRecor
     hospitalNameEn: row.hospital_name_en,
     serial: row.serial_number,
     visitedAt: row.visited_at.toISOString(),
+    doctorBmdc: row.doctor_bmdc,
+    medicines: (await medicinesFor([row.id])).get(row.id) ?? [],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Prescriptions (`FR-DOC-04`, `FR-DOC-05`; plan R2)
+// ---------------------------------------------------------------------------
+
+/**
+ * The medicines on each of some visits, in the doctor's order.
+ *
+ * One statement for the whole list, so a wallet of twenty visits is two reads
+ * and not twenty-one.
+ */
+export async function medicinesFor(
+  visitIds: readonly string[],
+): Promise<Map<string, PrescribedMedicine[]>> {
+  const found = new Map<string, PrescribedMedicine[]>();
+  if (visitIds.length === 0) return found;
+
+  const result = await sql<{
+    visit_id: string;
+    medicine_id: string | null;
+    name_text: string;
+    strength: string | null;
+    schedule: string | null;
+    duration_days: number | null;
+    instruction_bn: string | null;
+  }>`
+    SELECT p.visit_id, i.medicine_id, i.name_text, i.strength, i.schedule,
+           i.duration_days, i.instruction_bn
+      FROM prescriptions p
+      JOIN prescription_items i ON i.prescription_id = p.id
+     WHERE p.visit_id = ANY(${visitIds as string[]}::uuid[])
+       AND p.deleted_at IS NULL
+       AND i.deleted_at IS NULL
+     ORDER BY i.created_at, i.id
+  `.execute(db);
+
+  for (const row of result.rows) {
+    const list = found.get(row.visit_id) ?? [];
+    list.push({
+      medicineId: row.medicine_id,
+      name: row.name_text,
+      strength: row.strength,
+      schedule: row.schedule,
+      durationDays: row.duration_days,
+      instructionBn: row.instruction_bn,
+    });
+    found.set(row.visit_id, list);
+  }
+  return found;
+}
+
+/**
+ * Replaces a draft visit's medicines (`FR-DOC-04`).
+ *
+ * Called only for a visit that is not signed, in the transaction that wrote
+ * it: once signed, the service never reaches here, so a signed prescription is
+ * as final as its visit. A list with nothing in it leaves no prescription.
+ * Each row is stamped a microsecond after the last, so the order the doctor
+ * wrote them in is the order every reader gets, whatever the ids sort as.
+ */
+export async function replaceMedicines(
+  trx: Tx,
+  input: {
+    readonly visitId: string;
+    readonly staffUserId: string | null;
+    readonly medicines: readonly PrescribedMedicine[];
+  },
+): Promise<void> {
+  await sql`
+    DELETE FROM prescription_items
+     WHERE prescription_id IN (SELECT id FROM prescriptions WHERE visit_id = ${input.visitId}::uuid)
+  `.execute(trx);
+
+  if (input.medicines.length === 0) {
+    await sql`DELETE FROM prescriptions WHERE visit_id = ${input.visitId}::uuid`.execute(trx);
+    return;
+  }
+
+  const written = await sql<{ id: string }>`
+    INSERT INTO prescriptions (visit_id, created_by)
+    VALUES (${input.visitId}::uuid, ${input.staffUserId}::uuid)
+    ON CONFLICT (visit_id) DO UPDATE SET updated_at = now()
+    RETURNING id
+  `.execute(trx);
+  const prescriptionId = written.rows[0]?.id;
+  if (prescriptionId === undefined) throw new Error('prescription upsert returned no row.');
+
+  for (const [index, medicine] of input.medicines.entries()) {
+    await sql`
+      INSERT INTO prescription_items
+        (prescription_id, medicine_id, name_text, strength, schedule, duration_days,
+         instruction_bn, created_at)
+      VALUES (${prescriptionId}::uuid, ${medicine.medicineId}::uuid, ${medicine.name},
+              ${medicine.strength}, ${medicine.schedule}, ${medicine.durationDays},
+              ${medicine.instructionBn}, now() + ${index}::int * interval '1 microsecond')
+    `.execute(trx);
+  }
+}
+
+/**
+ * The formulary, by the start of a generic or brand name (`FR-DOC-05`).
+ *
+ * A prefix match, which is what the two indexes in 0007 are for. The pattern's
+ * own wildcards are escaped, so a doctor typing `%` searches for a percent
+ * sign and not for everything.
+ */
+export async function searchFormulary(query: string, limit = 10): Promise<FormularyEntry[]> {
+  const prefix = `${query.toLowerCase().replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+  const result = await sql<{
+    id: string;
+    generic_name: string;
+    brand_name: string | null;
+    form: string | null;
+    strengths: string[];
+  }>`
+    SELECT id, generic_name, brand_name, form, strengths
+      FROM medicines
+     WHERE deleted_at IS NULL
+       AND (lower(generic_name) LIKE ${prefix} OR lower(brand_name) LIKE ${prefix})
+     ORDER BY generic_name, brand_name NULLS LAST
+     LIMIT ${limit}
+  `.execute(db);
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    genericName: row.generic_name,
+    brandName: row.brand_name,
+    form: row.form,
+    strengths: row.strengths,
+  }));
 }
 
 // ---------------------------------------------------------------------------

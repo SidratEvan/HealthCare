@@ -188,3 +188,29 @@
     outline-offset: 2px;
   }
 }
+
+/*
+ * The printed prescription (FR-DOC-07, plan R2; `PrescriptionSheet`).
+ *
+ * Never on screen. While a sheet is being printed the document is marked
+ * `data-printing`, and the print is the sheet and nothing else: no rail, no
+ * header, no buttons on a piece of paper a patient keeps.
+ */
+[data-print-sheet] {
+  display: none;
+}
+
+@media print {
+  html[data-printing] body > :not([data-print-sheet]) {
+    display: none !important;
+  }
+
+  html[data-printing],
+  html[data-printing] body {
+    background: var(--bg-surface);
+  }
+
+  html[data-printing] [data-print-sheet] {
+    display: flex;
+  }
+}

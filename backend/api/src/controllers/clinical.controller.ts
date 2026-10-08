@@ -8,7 +8,7 @@
  * business asking the database anything.
  */
 
-import { createVisitBody, idParams, recordsQuery } from '@platform/domain';
+import { createVisitBody, formularyQuery, idParams, recordsQuery } from '@platform/domain';
 
 import { authRequired } from '../errors/AppError.js';
 import * as clinical from '../services/clinical.service.js';
@@ -67,4 +67,10 @@ export async function createVisit(req: Request, res: Response): Promise<void> {
   // 201 for a record that now exists, whether it was signed or left as a draft:
   // both created something the doctor can come back to.
   res.status(201).json({ ok: true, data: result });
+}
+
+/** `GET /formulary?q=` — `TBL-B05-RX`'s suggestions as a doctor types (`FR-DOC-05`). */
+export async function searchFormulary(req: Request, res: Response): Promise<void> {
+  const { q } = formularyQuery.parse(req.query);
+  res.json({ ok: true, data: { medicines: await clinical.formulary(q) } });
 }
