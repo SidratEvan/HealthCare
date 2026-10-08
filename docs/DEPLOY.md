@@ -464,6 +464,50 @@ A message that fails is tried again five times over about twenty minutes and
 then marked failed; the platform's screen shows which hospital has failed
 messages (`S-B-12`, *অবস্থা*).
 
+### bKash and Nagad (when there are merchant accounts; plan H3)
+
+**Nothing here moves real money until every box below is ticked on the
+provider's own sandbox, and then once with a real taka.** The code was built
+and tested against stand-in servers that speak what bKash and Nagad publish;
+it has never talked to either provider (`docs/PLATFORM_PLAN.md` X2).
+
+**As built, one merchant account per provider for the deployment**, with
+collections settled to each hospital (`FR-PAY-05`). Whether instead each
+hospital is paid into its own merchant account is the founders' decision
+(`docs/STATUS.md`, question 17); it changes how an adapter is chosen, not
+anything that decides whether to charge.
+
+Settings (in `.env`, never in the repository):
+
+| Setting | What |
+|---|---|
+| `PAYMENT_PROVIDER` | `live`. `off` offers paying at the hospital only; `mock` is refused in production |
+| `PAYMENT_CALLBACK_BASE` | The API's public HTTPS address; bKash and Nagad send the patient's browser back to the patient app through it |
+| `BKASH_BASE_URL` | The sandbox address bKash gives you (`https://tokenized.sandbox.bka.sh/v1.2.0-beta` at the time of writing); the live address only after the checklist. **There is no default**: bKash is not offered until it is set |
+| `BKASH_APP_KEY`, `BKASH_APP_SECRET`, `BKASH_USERNAME`, `BKASH_PASSWORD` | From bKash, per merchant |
+| `NAGAD_BASE_URL` | The sandbox address Nagad gives you; no default |
+| `NAGAD_MERCHANT_ID`, `NAGAD_MERCHANT_NUMBER` | From Nagad |
+| `NAGAD_PUBLIC_KEY` | Nagad's payment-gateway public key (PEM body or whole PEM) |
+| `NAGAD_PRIVATE_KEY` | The merchant's private key; the public half is registered with Nagad. Keep it as you keep `JWT_*` |
+
+A method appears in the patient app only when its settings are complete
+(`GET /config` `paymentMethods`). Card has no adapter and is not offered.
+
+**The sandbox checklist**, for each provider, on a staging server with
+`PAYMENT_PROVIDER=live` and the sandbox address:
+
+1. A booking with that method shows the held screen, the countdown and the pay button.
+2. Paying on the provider's page returns to `/pay/return` and shows **পরিশোধ হয়েছে**; the payment's history (`GET /payments/:id/history`) reads created, redirected, asked, paid; `provider_ref` holds the provider's transaction id.
+3. Cancelling on the provider's page returns and shows **বাতিল করেছেন**; the retry starts a new attempt with the same deadline; paying it succeeds.
+4. Closing the provider's page without paying: after the hold, the serial is pay-at-the-counter (or released, on a booking that had to be paid first), and the SMS says so.
+5. Paying, then closing the tab before the return: the timer finds the payment paid within a minute of the deadline at the latest.
+6. Opening `/pay/return?payment=…&booking=…&status=success` by hand for an unpaid attempt: it does **not** say paid.
+7. bKash only: a refund from the administrator's screen reaches the sandbox wallet; the payment reads refunded. Nagad: the refund is made in Nagad's merchant panel and recorded by hand with its reference.
+8. The API's log, after all of the above, holds no transaction id, no wallet number and no token (`grep` it).
+9. Whatever the provider itself requires before going live (its own test cases, an IP allow-list, a certificate): done and recorded (`docs/PLATFORM_PLAN.md` X9).
+
+Then one real payment of the smallest fee, refunded, before the first patient.
+
 ### Import suggestions from a model (optional, off by default)
 
 The import maps a hospital's own export with rules and the administrator's choices, and needs nothing else. A model can additionally suggest columns for the headings the rules do not know (`FR-IMP-16`). It is switched on in `deploy/.env`:

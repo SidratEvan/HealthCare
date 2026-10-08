@@ -677,6 +677,11 @@ This is the heart of the system. Specified tightly because everything else depen
 - `FR-PAY-05` Hospital settlement reports: bookings, collections, fees, payouts, disputes.
 - `FR-PAY-06` Every payment has an idempotency key; retries never double-charge.
 - `FR-PAY-07` Doctor absence triggers automatic refund eligibility without the patient asking.
+- `FR-PAY-08` **A serial held while it is paid for** (owner, 7 October, question 15). When a patient chooses an online method the serial is theirs at once and held for the hospital's payment hold, fifteen minutes unless the hospital sets another. A second attempt within the hold keeps the first attempt's deadline. Not paid by the end of the hold: where the hospital takes payment at the counter, the serial becomes pay-at-the-counter; where this booking had to be paid first (`FR-PAY-02`, `FR-GST-14`), the serial is released. Either way the patient's screen and an SMS say which.
+- `FR-PAY-09` **Only the provider says a payment was made.** The patient's browser returning with "success" proves nothing: the server asks the provider, server to server, and records what the provider answers, including the amount, which must be the amount asked for. A provider that cannot be reached leaves the payment pending, and it is asked again until the hold ends and once more after it.
+- `FR-PAY-10` **A second payment for one serial is owed back.** Money a provider reports for a booking already paid, or for a serial already released, is recorded as received and marked owed back to the patient, never silently kept and never lost.
+- `FR-PAY-11` **Every payment keeps its history**: created, sent to the provider, asked, paid, failed or cancelled, expired, turned to the counter, released, owed back, refunded; each with its time and nothing that identifies the patient's wallet. Readable by the hospital's administrator.
+- `FR-PAY-12` **A refund a provider cannot make by API is recorded by hand** with the reference the administrator was given (a counter receipt, the provider's merchant panel); the amount is still the rule's, never typed (`FR-PAY-03`).
 
 ---
 

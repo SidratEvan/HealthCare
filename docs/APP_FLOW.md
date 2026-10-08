@@ -341,7 +341,7 @@ A **need** is one of the three things hospitals publish live: a specialty, a bed
 | Reason field (optional) | `INP-A07C-REASON` | Free text, feeds the doctor's pre-visit summary (`FR-DOC-03`) |
 | Pre-visit questions | `BTN-A07C-INTAKE` | Opens `MOD-A07-INTAKE`: 4–6 progressive questions (duration, main symptom, chronic conditions, current medicines, allergies) |
 | Fee breakdown | — | Consultation + platform fee + total + due at hospital (`FR-PAT-21`) |
-| Payment method | `SEG-A07C-PAY` | bKash / Nagad / card / হাসপাতালে দেব |
+| Payment method | `SEG-A07C-PAY` | bKash / Nagad / card / হাসপাতালে দেব. **Only the methods this deployment can take** (`GET /config` `paymentMethods`; plan H3): card is offered only where a card provider is configured, which no live deployment is yet. হাসপাতালে দেব is not offered for a booking that must be paid first (`FR-PAY-02`, `FR-GST-14`), and the step says why |
 | নিশ্চিত করুন | `BTN-A07C-CONFIRM` | → `POST /bookings` (idempotency key) → payment sheet if prepaid → on success `S-A-07d` |
 
 **Wiring detail for `BTN-A07C-CONFIRM`**
@@ -361,6 +361,40 @@ A **need** is one of the three things hospitals publish live: a specialty, a bed
 | ক্যালেন্ডারে যোগ | `BTN-A07D-CAL` | Device calendar event |
 | শেয়ার করুন | `BTN-A07D-SHARE` | Share sheet with a text summary (families coordinate over WhatsApp/Messenger) |
 | হোমে ফিরুন | `BTN-A07D-HOME` | → `S-A-02` |
+
+**Held, waiting for payment (`FR-PAY-08`; plan H3).** When `POST /bookings`
+answers with a payment that is `pending` and a `redirectUrl` (a provider that
+does not settle on the spot), the success screen shows the serial as **held**,
+not confirmed:
+
+| Element | ID | Wiring |
+|---|---|---|
+| Hold card | `CARD-A07D-HOLD` | সিরিয়াল N রাখা হয়েছে · ১৪ মিনিটের মধ্যে পরিশোধ করুন, counting down to `payment.holdUntil` by the server's clock. What happens if it runs out is said here, before it does (`GR-01`): pay at the counter, or the serial is released, as this booking's rule is |
+| bKash / Nagad-এ পরিশোধ করুন | `BTN-A07D-PAY` | The booking and its tracking link are kept on the phone first (`lib/bookings`), then the page goes to `redirectUrl`. The provider sends the patient back to `S-A-07p` |
+| লাইভ সিরিয়াল দেখুন | `BTN-A07D-LIVE` | Still offered: the serial is the patient's while it is held |
+
+Offline: the pay button is disabled with "no connection" as its reason. Under
+`PAYMENT_PROVIDER=mock` a charge settles on the spot, so the demonstration
+shows the confirmed screen; the held screen appears with a provider that
+redirects, including the simulated one (`MOCK_PAYMENT_FLOW=redirect`).
+
+### `S-A-07p` Payment return (`/pay/return?payment=&booking=`; `FR-PAY-08`, `FR-PAY-09`)
+
+Where bKash or Nagad sends the patient back. **The query string's status is
+never believed** (`FR-PAY-09`): on load the page asks `POST
+/bookings/:booking/payments/:payment/confirm` with the booking's own
+credential from this phone, and the server asks the provider.
+
+| State | Content / wiring |
+|---|---|
+| Loading | যাচাই হচ্ছে… with a spinner; the request is the server asking the provider |
+| Paid | পরিশোধ হয়েছে · সিরিয়াল N নিশ্চিত, the amount, and লাইভ সিরিয়াল দেখুন → `S-A-08` |
+| Pending | পেমেন্ট এখনো নিশ্চিত হয়নি, asked again every ten seconds until the hold ends; the countdown stays |
+| Failed or cancelled | পেমেন্ট হয়নি (or বাতিল করেছেন), the time left on the hold, and `BTN-A07P-RETRY` আবার চেষ্টা করুন (`POST /payments/intent`, a new key, the same booking; the deadline does not move) and, where the hospital takes payment at the counter, `BTN-A07P-COUNTER` হাসপাতালে পরিশোধ করব (`POST /payments/intent` with `at_hospital`) |
+| Expired | The hold ran out: the serial is now pay-at-the-counter, or it was released, as the server says, with the same sentence the SMS carries |
+| Error | যাচাই করা যায়নি, আবার চেষ্টা করুন; nothing is concluded |
+| Offline | ইন্টারনেট নেই — সংযোগ ফিরলে যাচাই হবে, and it asks when the connection returns |
+| No credential on this phone | The return was opened on another browser: আমরা যাচাই করছি, ফলাফল SMS-এ জানানো হবে. The server's timer confirms it regardless |
 
 ---
 
@@ -1023,7 +1057,7 @@ Built in pilot step 22 (`FR-SUP-01`), opened by `LNK-B10-SETTINGS` in the dashbo
 | Element | ID | Wiring |
 |---|---|---|
 | Status card and checklist | `BTN-B11-REVIEW` (was `BTN-B11-GOLIVE`) | **A hospital does not publish itself (V3.1, `FR-ONB-02`–`04`).** The card says the workspace's state in a sentence (setting up; review requested; live; suspended; closed), shows the platform's note when it was sent back or suspended, and lists the checklist — departments, doctors, weekly chambers, staff (required), beds (optional), verified doctors (the platform's part) — each with its count and the word আছে / বাকি / ঐচ্ছিক / প্ল্যাটফর্ম যাচাই করবে. While something required is missing the button is off and a line names what to add. **পর্যালোচনার অনুরোধ করুন** → `POST /hospital/request-review` → the card reads "review requested" and the button is gone; nothing is public until a platform administrator approves on `S-B-12`. Only verified doctors are then shown to patients |
-| Facility | `FRM-B11-PROFILE`, `FRM-B11-RULES` | `PATCH /hospital/profile` (names, address, phones, coordinates both-or-neither); `PATCH /hospital/rules` (no-show grace in patients and minutes, late re-insert, stale threshold, SMS a month). **This month's SMS** (`TXT-B11-SMS`, `FR-NOT-06`, plan H2), under the rules form: `GET /hospital/messages` → five plain lines, **পাঠানো হয়েছে** (as **<cap>-এর মধ্যে <sent>** where a cap is set), **রোগীর ফোনে পৌঁছেছে**, **পাঠানো যায়নি**, **আটকে রাখা হয়েছে**, **এখনো অপেক্ষায়**, with what held back and waiting mean and when it was read (`<FreshnessLine>`). Where the SMS service reports no delivery the second line reads **এই এসএমএস সেবা পৌঁছানোর খবর দেয় না** and shows no number. States: the shape of the lines while loading; a sentence and a retry when it could not be read, saying so when the cause is no connection; offline with figures already on screen, they stay with their age |
+| Facility | `FRM-B11-PROFILE`, `FRM-B11-RULES` | `PATCH /hospital/profile` (names, address, phones, coordinates both-or-neither); `PATCH /hospital/rules` (no-show grace in patients and minutes, late re-insert, stale threshold, SMS a month, and since plan H3 the **payment hold** in minutes, 5 to 60, fifteen by default, shown only where online payment is offered: how long a serial waits for its online payment, `FR-PAY-08`). **This month's SMS** (`TXT-B11-SMS`, `FR-NOT-06`, plan H2), under the rules form: `GET /hospital/messages` → five plain lines, **পাঠানো হয়েছে** (as **<cap>-এর মধ্যে <sent>** where a cap is set), **রোগীর ফোনে পৌঁছেছে**, **পাঠানো যায়নি**, **আটকে রাখা হয়েছে**, **এখনো অপেক্ষায়**, with what held back and waiting mean and when it was read (`<FreshnessLine>`). Where the SMS service reports no delivery the second line reads **এই এসএমএস সেবা পৌঁছানোর খবর দেয় না** and shows no number. States: the shape of the lines while loading; a sentence and a retry when it could not be read, saying so when the cause is no connection; offline with figures already on screen, they stay with their age |
 | Facility: what the network is told (`FR-NET-04`, plan C5) | `FRM-B11-PUBLISHING` (`CHIP-B11-PUBLISH-serials`, `CHIP-B11-PUBLISH-beds`, `CHIP-B11-PUBLISH-stock`, `BTN-B11-PUBLISHING-SAVE`) | Under the colours. One switch for each live figure the hospital has: open serials and who is sitting, free beds and ICU, which medicines the pharmacy has. A figure whose module the hospital does not run has no switch (`FR-BRD-11`). On is shared, and each switch says its state in words beside it. Save → `PUT /hospital/publishing` with the figures switched off; off with the reason while nothing has changed or the console is offline. A line under the switches says what cannot be switched: what the emergency department can treat is always shown. Result, in the patient app (`S-A-07`, `S-A-07s`, `S-A-05h`, `S-A-07b`, `S-A-11`, `S-A-10b`): where the figure would have been, a neutral chip says it is not shared (সিরিয়ালের সংখ্যা জানানো হয়নি, বেডের সংখ্যা জানানো হয়নি), with no number and no freshness line, never a zero or "none". The hospital stays in every list it was in: its doctors and when they sit, its chambers to book (a full one still says full), and a bed search for a kind it has, where its card says the count is not shared and still takes a request. A pharmacy that keeps its shelf is not named by the medicine search. Failure: a refusal leaves the switches as saved |
 | Facility: what patients see (`FR-BRD-06`, plan C1) | `FRM-B11-DESCRIPTION`, `FRM-B11-LOGO` (`BTN-B11-LOGO-SAVE`, `BTN-B11-LOGO-REMOVE`), `FRM-B11-BRAND` (`INP-B11-COLOUR`, `BTN-B11-BRAND-SAVE`, `BTN-B11-BRAND-RESET`) | Between the profile and the queue rules, each saved on its own. **Description**: two short texts, Bangla and English, counted as typed against 400 characters; too long is said before it is sent → `PATCH /hospital/profile`. **Logo**: a PNG, JPEG or WebP up to 256 KB (and, the helper says, a square PNG of at least 192 pixels if it is to be the icon of the installed portal, `FR-BRD-08`), refused on the screen with why if it is another kind or larger, previewed before it is saved → `PUT /hospital/logo`; remove → `DELETE /hospital/logo`. The screen shows the hospital's logo through its own route, because the public address answers for a live hospital only. **Colour**: one colour is chosen, not six; the screen makes the six brand tokens from it (`themeFromColour`), darkens a colour that cannot carry white text only as far as it must and says that it did, and shows a preview drawn with the app's own tokens → `PUT /hospital/brand`; **back to the platform's colours** → the same with `theme: null`. A set the server finds unreadable is refused and nothing changes. **Portal address** (`FR-BRD-07`): above them, read-only, where patients reach this hospital's own portal: under the platform's domain and, if the platform has recorded one, at the hospital's own domain; nothing on a deployment with no domain. Result: the hospital's card and page in the patient app carry its logo and its words, and its own portal is in its colour with its logo in the header (`S-A-02`, `S-A-07`, `S-A-05h`). Failure: offline, every save is off with the reason, as elsewhere on this screen |
 | Facility: what it was registered as (plan D2) | `FRM-B11-IDENTITY` (`CHIP-B11-DIVISION-<division>`, `INP-B11-DISTRICT`, `INP-B11-REGISTRATION`, `BTN-B11-IDENTITY-SAVE`) | Under the facility's details, its own form. Division, district and the licence or registration number: what the platform checks before approving and what a patient's search is filed under. **While the workspace is setting up** they are the hospital's to correct (a typo on an application is found here) → `PATCH /hospital/profile`. **Once review has been asked for** the form is gone and one line shows the three, saying they cannot be changed here and to tell the platform; the server refuses them whatever is sent (`identity_after_review`). A workspace sent back is setting up again |
@@ -1038,7 +1072,7 @@ Built in pilot step 22 (`FR-SUP-01`), opened by `LNK-B10-SETTINGS` in the dashbo
 
 **The checklist also names what a patient needs to reach the place (plan D2):** an address and a phone number, a place on the map, and, where the hospital runs an emergency desk, the emergency services it has declared. Each reads **আছে** or **যোগ করা ভালো**, never **বাকি**: review can be asked for without them (`FR-ONB-03` lists what it waits for), and one line under the list says what a patient loses while they are absent. The platform's panel on `S-B-12` shows the same lines.
 
-**What this screen does not set, and why (audited in plan D2).** *Counters:* nothing in the product reads a list of counters (there is no table of them, and shift reconciliation per counter, `FR-REC-23`, is not built), so a list here would configure nothing; it is a question for the owner in `STATUS.md`. *The refund policy and prepayment:* the agreed default stands until online payment is live (plan H3, F3). *A hospital's kind:* fixed when the workspace is made. *A doctor's department and specialties, and a weekly chamber's hours:* not changed in place; a chamber is removed and added again. *Removing a doctor:* a doctor is deactivated, not removed.
+**What this screen does not set, and why (audited in plan D2).** *Counters:* nothing in the product reads a list of counters (there is no table of them, and shift reconciliation per counter, `FR-REC-23`, is not built), so a list here would configure nothing; it is a question for the owner in `STATUS.md`. *The refund policy:* the agreed default stands until online payment is live. *Prepayment* (whether a hospital takes payment at the counter, and the no-show rule of `FR-GST-14`) is plan F3. *A hospital's kind:* fixed when the workspace is made. *A doctor's department and specialties, and a weekly chamber's hours:* not changed in place; a chamber is removed and added again. *Removing a doctor:* a doctor is deactivated, not removed.
 
 ---
 
