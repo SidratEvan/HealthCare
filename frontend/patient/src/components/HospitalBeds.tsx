@@ -15,8 +15,8 @@
  * other three.
  *
  * And a count is said only while it is fresh (owner, 8 October; `bedFigure`):
- * past the threshold the chip says whether beds were free when last
- * confirmed, beside that age, and never a number.
+ * past the threshold the chip says it is not known, beside the age of the
+ * last confirmation, and never a number.
  */
 
 import {
@@ -73,7 +73,7 @@ export function HospitalBeds({
         <Chip tone={toneOf(all)}>
           {all.kind === 'count'
             ? tp('cardBedsFree', locale).replace('{free}', formatNumber(all.free, numerals))
-            : tp(STALE_WORDS[all.kind], locale)}
+            : tp('bedsUnknown', locale)}
         </Chip>
         <Chip tone={beds.icuTotal === null ? 'neutral' : toneOf(icu)}>
           {beds.icuTotal === null
@@ -82,7 +82,7 @@ export function HospitalBeds({
               ? tp('cardIcu', locale)
                   .replace('{free}', formatNumber(icu.free, numerals))
                   .replace('{total}', formatNumber(beds.icuTotal, numerals))
-              : tp(ICU_STALE_WORDS[icu.kind], locale)}
+              : tp('icuUnknown', locale)}
         </Chip>
       </div>
       <FreshnessLine
@@ -100,20 +100,7 @@ export function HospitalBeds({
   );
 }
 
-/** The words for a figure that is no longer said as a number. */
-const STALE_WORDS = {
-  was_free: 'bedsWasFree',
-  was_none: 'bedsWasNone',
-  unknown: 'bedsUnknown',
-} as const;
-
-const ICU_STALE_WORDS = {
-  was_free: 'icuWasFree',
-  was_none: 'icuWasNone',
-  unknown: 'icuUnknown',
-} as const;
-
-/** Green only for beds free now; what was true earlier is not a promise. */
+/** Green only for beds free now. */
 function toneOf(figure: BedFigure): 'positive' | 'neutral' {
   return figure.kind === 'count' && figure.free > 0 ? 'positive' : 'neutral';
 }

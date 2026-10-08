@@ -128,8 +128,8 @@ export function EmergencyResultCard({
                   )
               : beds?.kind !== 'count'
                 ? kind === null
-                  ? tp(ALL_WORDS[beds?.kind ?? 'unknown'], locale)
-                  : tp(KIND_WORDS[beds?.kind ?? 'unknown'], locale).replace('{kind}', kind)
+                  ? tp('bedsUnknown', locale)
+                  : tp('kindUnknown', locale).replace('{kind}', kind)
                 : kind === null
                   ? tp('emergencyFreeBeds', locale).replace('{free}', n(beds.free))
                   : tp('emergencyFreeKind', locale)
@@ -144,7 +144,7 @@ export function EmergencyResultCard({
                 ? tp('cardIcu', locale)
                     .replace('{free}', n(icu.free))
                     .replace('{total}', n(result.icuTotal))
-                : tp(ICU_WORDS[icu.kind], locale)}
+                : tp('icuUnknown', locale)}
           </li>
         )}
         {/* FR-EMG-04: counted from cases, never typed. */}
@@ -414,22 +414,3 @@ function OnWaySheet({
 function stamp(value: string | null): ReturnType<typeof timestamp> | null {
   return value === null ? null : timestamp(value);
 }
-
-/** A bed figure that is no longer said as a number (`bedFigure`). */
-const ALL_WORDS = {
-  was_free: 'bedsWasFree',
-  was_none: 'bedsWasNone',
-  unknown: 'bedsUnknown',
-} as const;
-
-const KIND_WORDS = {
-  was_free: 'kindWasFree',
-  was_none: 'kindWasNone',
-  unknown: 'kindUnknown',
-} as const;
-
-const ICU_WORDS = {
-  was_free: 'icuWasFree',
-  was_none: 'icuWasNone',
-  unknown: 'icuUnknown',
-} as const;

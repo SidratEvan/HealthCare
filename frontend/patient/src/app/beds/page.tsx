@@ -393,14 +393,7 @@ function HospitalBedCard({
             </>
           ) : (
             <span className="text-title-sm font-bold text-ink-secondary">
-              {tp(
-                figure.kind === 'was_free'
-                  ? 'bedsWasFree'
-                  : figure.kind === 'was_none'
-                    ? 'bedsWasNone'
-                    : 'bedsUnknown',
-                locale,
-              )}
+              {tp('bedsUnknown', locale)}
             </span>
           )}
         </p>

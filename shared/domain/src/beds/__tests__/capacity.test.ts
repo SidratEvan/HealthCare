@@ -167,14 +167,14 @@ describe('bedFigure: what a patient may be told (FR-PAT-14, owner 8 October)', (
     expect(bedFigure(0, at(9), NOW, 10)).toEqual({ kind: 'count', free: 0 });
   });
 
-  it('says only whether beds were free once the threshold is reached', () => {
-    expect(bedFigure(4, at(10), NOW, 10)).toEqual({ kind: 'was_free' });
-    expect(bedFigure(0, at(240), NOW, 10)).toEqual({ kind: 'was_none' });
+  it('is not known once the threshold is reached, free beds or none (decision 10)', () => {
+    expect(bedFigure(4, at(10), NOW, 10)).toEqual({ kind: 'unknown' });
+    expect(bedFigure(0, at(240), NOW, 10)).toEqual({ kind: 'unknown' });
   });
 
   it("follows the hospital's own threshold", () => {
     expect(bedFigure(2, at(25), NOW, 30)).toEqual({ kind: 'count', free: 2 });
-    expect(bedFigure(2, at(25), NOW, 20)).toEqual({ kind: 'was_free' });
+    expect(bedFigure(2, at(25), NOW, 20)).toEqual({ kind: 'unknown' });
   });
 
   it('never turns an unknown into a zero', () => {
