@@ -121,9 +121,12 @@ test.describe('a hospital chooses what the network is told (FR-NET-04)', () => {
     // No count, no "none free", and no age under a figure that is not there.
     await expect(result.getByTestId('card-beds')).not.toContainText(/[০-৯]/);
     await expect(result.getByTestId('card-beds').getByTestId('freshness')).toHaveCount(0);
-    // Its chambers are another decision: still counted.
+    // Its chambers are another decision: still shown, and not marked as
+    // kept. Not a number: after the day's chambers end the honest line is
+    // that nobody is sitting and no serial is open, which has none.
     await expect(result.getByTestId('serials-not-shared')).toHaveCount(0);
-    await expect(result.getByTestId('result-chamber-line')).toContainText(/[০-৯]/);
+    await expect(result.getByTestId('result-chamber-line')).toBeVisible();
+    await expect(result.getByTestId('result-chamber-line')).not.toContainText('জানানো হয়নি');
 
     // Asked for a ward bed: it is still among the hospitals that have one,
     // and its line says the count is kept.
