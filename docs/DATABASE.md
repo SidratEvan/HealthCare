@@ -836,6 +836,9 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0055_backup_runs.sql           -- plan I2: backup_runs, what the nightly backup did, written by
                                    -- the owner and read by /readyz in the system scope (§2.7,
                                    -- §5.1, FR-SUP-06)
+    0056_person_policies.sql       -- plan I3: a person's bookings, profiles, payments, links,
+                                   -- standby places and messages are their own; the queue's
+                                   -- tables nobody's; fn_chamber_counts (§5.4, FR-SEC-11)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)
