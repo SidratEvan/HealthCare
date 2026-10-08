@@ -219,6 +219,8 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 
 **`modules_off` text[] NOT NULL DEFAULT `{}` (0047, `FR-BRD-11`).** The modules this hospital does not run; empty, the ordinary state, is everything on, so a hospital made before or after has everything with nothing written and a module added later is on for everybody. **CHK** `hospital_settings_modules_known` (a subset of the eight) and `hospital_settings_doctor_needs_queue` (the doctor's console is never on where serials are off). `fn_module_on(hospital, module)` is the one definition of "on" that every published read asks.
 
+**`payment_hold_minutes` int NOT NULL DEFAULT 15 (0057, `FR-PAY-08`).** How long a serial waits for its online payment. **CHK** 5 to 60. Read when an attempt starts; the deadline is written on the payment, so changing it never moves a hold already running.
+
 **`unpublished` text[] NOT NULL DEFAULT `{}` (0048, `FR-NET-04`).** The live figures this hospital does not share with the network, from `serials`, `beds`, `stock`; empty, the ordinary state, is everything shared. **CHK** `hospital_settings_unpublished_known` (a subset of the three). `fn_publishes(hospital, figure)` is the one definition of "shares" that every public read of a figure asks, beside `fn_module_on`: a module that is off has no figure, a figure that is kept is said to be kept.
 
 **`brand` jsonb, nullable (0036, `FR-BRD-03`).** A hospital's own values for the six brand tokens of `FRONTEND.md` §1.1 — `brand-900`, `-700`, `-600`, `-300`, `-100`, `brand-border` — as `{ "colors": { "<token>": "#rrggbb", … } }`. NULL, the ordinary state, is the platform's own colours. The shape and the contrast a theme must pass (white on `brand-600`, `brand-700` on the canvas, `brand-600` on `brand-100`, each at 4.5:1) are in `shared/domain/src/brand/theme.ts`; a stored theme that fails is read as none, so the app keeps colours that pass rather than half of somebody else's. The database checks only that it is an object. Not a logo, a font or a domain (`FR-BRD-05`).
@@ -311,6 +313,8 @@ Recurring chamber schedules: `id`, `doctor_hospital_id` **FK**, `weekday` int, `
 | `quoted_wait_minutes` | int | the wait quoted at check-in, 0–480; null without an arrival (`bookings_quote_needs_arrival`). Migration 0022 |
 | `consult_seconds` | int | measured, feeds the rate |
 | `cancelled_reason` | text | |
+
+**`prepayment_required` boolean NOT NULL DEFAULT false (0057, `FR-PAY-02`, `FR-PAY-08`).** Decided when the booking is made and never after: the hospital takes no payment at the counter (`hospital_settings.prepay_required`), or, from plan F3, the number's no-shows ask for payment first (`FR-GST-14`). What it changes is what happens when an online payment's hold runs out: released, not turned to the counter.
 
 **U:** `(session_id, serial_number)` where `status <> 'cancelled'`
 **IX:** `(patient_id)`, `(session_id, status)`, `(booked_by_guest_id)`
@@ -448,6 +452,31 @@ report computed from rows that could disagree with themselves is fiction.
 
 `ambulance_request_id` carries no foreign key until 0019: 0011 creates
 `ambulance_requests` and runs *after* 0009 on a fresh database.
+
+**Paying by being sent away (0057, plan H3; `FR-PAY-08`–`11`).**
+`provider_checkout_id` text: what the provider calls the attempt while it is
+under way (bKash's `paymentID`, Nagad's `paymentReferenceId`), written when the
+attempt begins, so the patient's return and the timer can find it; unique
+where set. `provider_ref` stays what it was: the provider's reference for money
+that moved (bKash's `trxID`). Neither is ever logged. `hold_until`
+timestamptz: the deadline of an online attempt (`FR-PAY-08`); **CHK** set only
+on an online method. `failure_reason` text, **CHK** one of `declined`,
+`cancelled`, `expired`, `superseded`, `provider_error`, `amount_mismatch`,
+and set exactly when `state = 'failed'`. `checked_at` timestamptz: when the
+provider was last asked, which paces the timer's second look. **A failed
+payment may still become paid**, and only that way round: money the provider
+reports is never refused by our row (`FR-PAY-10`). Index
+`payments_hold_due_idx` on `hold_until` where pending.
+
+#### `payment_events` (0057, `FR-PAY-11`)
+`id`, `payment_id` **FK**, `hospital_id` **FK** (copied from what was paid
+for, for the tenant policy), `kind` text **CHK** (`created`, `redirected`,
+`asked`, `paid`, `failed`, `expired`, `superseded`, `counter`, `released`,
+`owed_back`, `refunded`, `amount_mismatch`), `detail` jsonb (a reason, a
+provider's status word; never a reference, a number or a name), `at`,
+`created_at`, `updated_at`. **Append-only**: the API's role holds INSERT and
+SELECT, as on `audit_log`. Policy: the hospital's staff and `system`; a
+patient, a link and nobody, none.
 
 #### `invoices` / `subscriptions`
 `subscriptions`: `id`, `hospital_id`, `plan`, `modules` text[], `monthly_poisha`, `started_at`, `ended_at`, `state`.
@@ -839,6 +868,10 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0056_person_policies.sql       -- plan I3: a person's bookings, profiles, payments, links,
                                    -- standby places and messages are their own; the queue's
                                    -- tables nobody's; fn_chamber_counts (§5.4, FR-SEC-11)
+    0057_payment_holds.sql         -- plan H3: payments.provider_checkout_id, hold_until,
+                                   -- failure_reason, checked_at; payment_events (append-only);
+                                   -- hospital_settings.payment_hold_minutes;
+                                   -- bookings.prepayment_required (§2.6, FR-PAY-08..11)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)
