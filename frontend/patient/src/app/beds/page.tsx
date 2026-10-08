@@ -32,7 +32,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { BED_KINDS, normaliseBdMobile, type BedKind } from '@platform/domain';
+import { BED_KINDS, bedFigure, normaliseBdMobile, timestamp, type BedKind } from '@platform/domain';
 import {
   bedKindName,
   districtName,
@@ -329,6 +329,14 @@ function HospitalBedCard({
   }
 
   const stale = isStale(entry.asOf, now);
+  // A count only while it is fresh (owner, 8 October; `FR-PAT-14`, `FR-PAT-51`).
+  const figure = bedFigure(
+    entry.free,
+    entry.asOf === null ? null : timestamp(entry.asOf),
+    timestamp(now.toISOString()),
+    STALE_AFTER_MINUTES,
+  );
+  const freeNow = figure.kind === 'count' && figure.free > 0;
   const price =
     entry.nightlyMinPoisha === null
       ? null
@@ -342,11 +350,12 @@ function HospitalBedCard({
             );
 
   return (
-    <Card elevated tone={entry.free > 0 && !stale ? 'brand' : 'default'}>
+    <Card elevated tone={freeNow ? 'brand' : 'default'}>
       <div
         className="flex flex-col gap-2"
         data-testid={`bed-card-${hospital.id}`}
-        data-free={entry.free}
+        data-figure={figure.kind}
+        data-free={figure.kind === 'count' ? figure.free : undefined}
       >
         <div className="flex items-start gap-3">
           <span className="mt-0.5 text-brand-600">
@@ -367,18 +376,33 @@ function HospitalBedCard({
         </div>
 
         <p className="flex flex-wrap items-baseline gap-x-2" data-testid="bed-card-free">
-          <span
-            className={`text-title-lg font-extrabold tabular-nums ${
-              entry.free > 0 ? 'text-brand-600' : 'text-ink-muted'
-            }`}
-          >
-            {entry.free > 0
-              ? tp('bedsFree', locale).replace('{free}', formatNumber(entry.free, numerals))
-              : tp('bedsNoneFree', locale)}
-          </span>
-          <span className="text-body-sm text-ink-muted">
-            {tp('bedsOfTotal', locale).replace('{total}', formatNumber(entry.total, numerals))}
-          </span>
+          {figure.kind === 'count' ? (
+            <>
+              <span
+                className={`text-title-lg font-extrabold tabular-nums ${
+                  freeNow ? 'text-brand-600' : 'text-ink-muted'
+                }`}
+              >
+                {figure.free > 0
+                  ? tp('bedsFree', locale).replace('{free}', formatNumber(figure.free, numerals))
+                  : tp('bedsNoneFree', locale)}
+              </span>
+              <span className="text-body-sm text-ink-muted">
+                {tp('bedsOfTotal', locale).replace('{total}', formatNumber(entry.total, numerals))}
+              </span>
+            </>
+          ) : (
+            <span className="text-title-sm font-bold text-ink-secondary">
+              {tp(
+                figure.kind === 'was_free'
+                  ? 'bedsWasFree'
+                  : figure.kind === 'was_none'
+                    ? 'bedsWasNone'
+                    : 'bedsUnknown',
+                locale,
+              )}
+            </span>
+          )}
         </p>
 
         {price === null ? null : <p className="text-body-sm text-ink-secondary">{price}</p>}
@@ -403,7 +427,7 @@ function HospitalBedCard({
         ) : null}
 
         <Button
-          variant={entry.free > 0 ? 'primary' : 'secondary'}
+          variant={freeNow ? 'primary' : 'secondary'}
           data-testid={`request-bed-${hospital.id}`}
           onClick={() => {
             onRequest(hospital);

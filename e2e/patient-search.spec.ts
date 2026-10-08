@@ -75,8 +75,17 @@ test.describe('a need answers with hospitals and a live figure (FR-PAT-17)', () 
     expect(await lines.count()).toBeGreaterThanOrEqual(3);
     // FR-PAT-14: the figure and, under it, its age. Bangla digits, no Latin.
     await expect(lines.first()).toContainText('আইসিইউ');
-    await expect(lines.first()).toContainText(/খালি [০-৯]+, মোট [০-৯]+/);
-    await expect(lines.first().getByTestId('freshness')).toBeVisible();
+    const age = lines.first().getByTestId('freshness');
+    await expect(age).toBeVisible();
+    // A count only while it is fresh (owner, 8 October; FR-PAT-14). The seed
+    // stamps each ward minutes before the suite reaches here, so the line may
+    // be either side of the threshold: each side is held to its own rule.
+    if ((await age.getAttribute('data-stale')) === 'true') {
+      await expect(lines.first()).toContainText(/শেষ খবরে আইসিইউ বেড খালি ছিল/);
+      await expect(lines.first()).not.toContainText(/খালি [০-৯]+, মোট/);
+    } else {
+      await expect(lines.first()).toContainText(/খালি [০-৯]+, মোট [০-৯]+/);
+    }
 
     // A bed search does not list doctors, and its step is the bed request.
     await expect(results.getByText('ডাক্তার', { exact: true })).toHaveCount(0);

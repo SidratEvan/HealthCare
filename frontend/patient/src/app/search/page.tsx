@@ -51,6 +51,9 @@ import {
   parseNeed,
   suggestNeeds,
   confirmedTallyOfKind,
+  bedFigure,
+  DEFAULT_STALE_THRESHOLD_MINUTES,
+  timestamp,
   type SearchNeed,
 } from '@platform/domain';
 import {
@@ -551,6 +554,16 @@ function HospitalResult({
   const numerals = numeralsFor(locale);
 
   const tally = need?.kind === 'bed' ? confirmedTallyOfKind(hospital.beds, need.bedKind) : null;
+  // A count only while it is fresh (owner, 8 October; `FR-PAT-14`).
+  const figure =
+    tally === null
+      ? null
+      : bedFigure(
+          tally.free,
+          tally.asOf === null ? null : timestamp(tally.asOf),
+          timestamp(now.toISOString()),
+          DEFAULT_STALE_THRESHOLD_MINUTES,
+        );
   // It has beds and keeps the figure: said as that, not as "unconfirmed"
   // and never as none (FR-NET-04).
   const bedsWithheld = withholds(hospital, 'beds');
@@ -595,19 +608,30 @@ function HospitalResult({
                   bedKindName(need.bedKind, locale),
                 )}
               </Chip>
+            ) : figure?.kind !== 'count' ? (
+              <p className="text-body-md font-semibold text-ink-secondary">
+                {tp(
+                  figure?.kind === 'was_free'
+                    ? 'kindWasFree'
+                    : figure?.kind === 'was_none'
+                      ? 'kindWasNone'
+                      : 'kindUnknown',
+                  locale,
+                ).replace('{kind}', bedKindName(need.bedKind, locale))}
+              </p>
             ) : (
               <p className="flex items-baseline gap-1.5">
                 <span
                   className={`text-title-lg font-extrabold tabular-nums ${
-                    tally.free > 0 ? 'text-brand-600' : 'text-ink-muted'
+                    figure.free > 0 ? 'text-brand-600' : 'text-ink-muted'
                   }`}
                 >
-                  {formatNumber(tally.free, numerals)}
+                  {formatNumber(figure.free, numerals)}
                 </span>
                 <span className="text-body-sm text-ink-secondary">
                   {tp('searchBedFree', locale)
                     .replace('{kind}', bedKindName(need.bedKind, locale))
-                    .replace('{free}', formatNumber(tally.free, numerals))
+                    .replace('{free}', formatNumber(figure.free, numerals))
                     .replace('{total}', formatNumber(tally.total, numerals))}
                 </span>
               </p>
