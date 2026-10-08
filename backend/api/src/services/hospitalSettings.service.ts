@@ -32,6 +32,7 @@
 import { createHash } from 'node:crypto';
 
 import {
+  type BrandTheme,
   BED_UNCONFIRMED_REASON,
   type FacilityRole,
   type BedPatchBody,
@@ -249,6 +250,29 @@ export async function ownLogo(
   hospitalId: string,
 ): Promise<{ contentType: string; bytes: Buffer } | null> {
   return await repo.ownLogo(hospitalId);
+}
+
+/**
+ * The hospital's own face in its staff workspace (plan K4, `FR-BRD-12`): its
+ * names, its colours as patients see them, and its logo as a `data:` URL, so
+ * the console's rail needs no second, authenticated request for an image.
+ * Any member of its staff may read it; it is the caller's own hospital only.
+ */
+export async function workspaceBrand(hospitalId: string): Promise<{
+  readonly nameBn: string;
+  readonly nameEn: string;
+  readonly theme: BrandTheme | null;
+  readonly logo: string | null;
+}> {
+  const [snapshot, logo] = await Promise.all([repo.snapshot(hospitalId), repo.ownLogo(hospitalId)]);
+  if (snapshot === null) throw notFound('hospital');
+  return {
+    nameBn: snapshot.hospital.nameBn,
+    nameEn: snapshot.hospital.nameEn,
+    theme: snapshot.face.theme,
+    logo:
+      logo === null ? null : `data:${logo.contentType};base64,${logo.bytes.toString('base64')}`,
+  };
 }
 
 export async function updateRules(actor: Actor, body: RulesBody): Promise<void> {

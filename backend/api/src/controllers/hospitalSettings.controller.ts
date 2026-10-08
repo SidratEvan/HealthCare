@@ -104,6 +104,11 @@ export async function getOwnLogo(req: Request, res: Response): Promise<void> {
   res.send(file.bytes);
 }
 
+/** `GET /hospital/brand` (plan K4, `FR-BRD-12`): any member of the hospital's staff. */
+export async function getBrand(req: Request, res: Response): Promise<void> {
+  res.json({ ok: true, data: await settings.workspaceBrand(actorOf(req).hospitalId) });
+}
+
 export async function patchRules(req: Request, res: Response): Promise<void> {
   await settings.updateRules(actorOf(req), rulesBody.parse(req.body));
   done(res);

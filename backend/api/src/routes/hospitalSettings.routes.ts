@@ -52,6 +52,9 @@ const write = idempotency({ required: true });
 const byId = { params: settingsIdParams };
 
 hospitalSettingsRoutes.get('/hospital/setup', ...admin, settings.getSetup);
+// The hospital's own face on every console (plan K4, `FR-BRD-12`): any member
+// of its staff, its own hospital only, from the principal.
+hospitalSettingsRoutes.get('/hospital/brand', requireAuth, settings.getBrand);
 
 // `FR-NOT-06`: this month's SMS by what became of them, beside the cap the
 // same screen sets. Counts of the hospital's own messages; no message's words
