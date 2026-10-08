@@ -119,6 +119,13 @@ async function enterConsole(page: Page, token: string, role: string, url: string
 
 test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
   test('doctor ticks a test, bench reports it, wallet opens it', async ({ page, context }) => {
+    // One journey across three apps: the patient books, the doctor's screen
+    // and the lab bench each open in a console, the patient reads the wallet.
+    // Each console's first visit compiles its page on a dev server, and on a
+    // machine short of memory the whole walk took from fifty seconds to two
+    // minutes on the same commit (7 October). Like the other walks across
+    // apps in this suite, it is given two minutes.
+    test.setTimeout(120_000);
     if (ASSESSMENT === undefined) throw new Error('the seed declares no assessments');
 
     // --- the patient books, and this device keeps the link -----------------
