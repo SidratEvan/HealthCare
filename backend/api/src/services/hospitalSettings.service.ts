@@ -270,8 +270,7 @@ export async function workspaceBrand(hospitalId: string): Promise<{
     nameBn: snapshot.hospital.nameBn,
     nameEn: snapshot.hospital.nameEn,
     theme: snapshot.face.theme,
-    logo:
-      logo === null ? null : `data:${logo.contentType};base64,${logo.bytes.toString('base64')}`,
+    logo: logo === null ? null : `data:${logo.contentType};base64,${logo.bytes.toString('base64')}`,
   };
 }
 
