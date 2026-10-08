@@ -176,8 +176,7 @@ export function mirrorMismatches(
  * `<FreshnessLine>` count it, so the words and the line agree.
  */
 export type BedFigure =
-  | { readonly kind: 'count'; readonly free: number }
-  | { readonly kind: 'unknown' };
+  { readonly kind: 'count'; readonly free: number } | { readonly kind: 'unknown' };
 
 export function bedFigure(
   free: number | null,
