@@ -81,7 +81,7 @@ test.describe('a need answers with hospitals and a live figure (FR-PAT-17)', () 
     // stamps each ward minutes before the suite reaches here, so the line may
     // be either side of the threshold: each side is held to its own rule.
     if ((await age.getAttribute('data-stale')) === 'true') {
-      await expect(lines.first()).toContainText(/শেষ খবরে আইসিইউ বেড খালি ছিল/);
+      await expect(lines.first()).toContainText('আইসিইউ বেডের খবর জানা নেই');
       await expect(lines.first()).not.toContainText(/খালি [০-৯]+, মোট/);
     } else {
       await expect(lines.first()).toContainText(/খালি [০-৯]+, মোট [০-৯]+/);

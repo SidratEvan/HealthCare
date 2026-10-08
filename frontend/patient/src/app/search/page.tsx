@@ -610,14 +610,7 @@ function HospitalResult({
               </Chip>
             ) : figure?.kind !== 'count' ? (
               <p className="text-body-md font-semibold text-ink-secondary">
-                {tp(
-                  figure?.kind === 'was_free'
-                    ? 'kindWasFree'
-                    : figure?.kind === 'was_none'
-                      ? 'kindWasNone'
-                      : 'kindUnknown',
-                  locale,
-                ).replace('{kind}', bedKindName(need.bedKind, locale))}
+                {tp('kindUnknown', locale).replace('{kind}', bedKindName(need.bedKind, locale))}
               </p>
             ) : (
               <p className="flex items-baseline gap-1.5">

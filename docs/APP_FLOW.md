@@ -554,10 +554,11 @@ Ranking: capability match → travel time → ER load → free beds. Stale facil
 >   range when wards differ), and that kind's own freshness; past the stale
 >   threshold it adds "call the hospital before you go". Fresh-and-free ranks
 >   above stale-and-free, and a hospital with none free stays listed, last.
-> - **Owner, 8 October (`FR-PAT-14`; plan K2):** the count is shown only while
->   it is fresh. Past the threshold the result reads **খালি ছিল** (beds were
->   free when last confirmed) or **খালি ছিল না** (none were), with the age and
->   the advice to call; never confirmed, **জানা নেই**. No number appears for a
+> - **Owner, 8 October (`FR-PAT-14`; plans K2, K3):** the count is shown only
+>   while it is fresh, and a fresh zero reads **এখন খালি নেই**. Past the
+>   threshold, or never confirmed, the result reads **খালি বেডের খবর জানা নেই**
+>   with the age of the last confirmation and the advice to call (decision 10
+>   replaced K2's "were free when last confirmed"). No number appears for a
 >   figure that is stale, and nothing unknown is ever drawn as ০. The same rule
 >   holds on a hospital's card and on an emergency result.
 > - The list re-reads every thirty seconds while visible. There is no public

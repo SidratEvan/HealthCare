@@ -165,19 +165,18 @@ export function mirrorMismatches(
  * owner, 8 October).
  *
  * An exact count is a claim about now, so it is shown only while the figure
- * is within the hospital's freshness threshold. Past it, the count is no
- * longer said: only whether beds were free when somebody last confirmed
- * them, which the screen puts beside that age. A figure never confirmed, or
- * absent, is not known, and is never drawn as zero (`PRD.md` §3.2).
+ * is within the hospital's freshness threshold; a fresh zero is "none free",
+ * which is unavailable, reliably confirmed. Past the threshold, or never
+ * confirmed, it is **not known** (owner's decision 10 of 8 October, which
+ * replaced "were free when last confirmed"), and the screen keeps the age of
+ * the last confirmation beside it. An unknown is never drawn as zero
+ * (`PRD.md` §3.2).
  *
  * Stale once the age reaches the threshold, as `freshnessOf` and
  * `<FreshnessLine>` count it, so the words and the line agree.
  */
 export type BedFigure =
-  | { readonly kind: 'count'; readonly free: number }
-  | { readonly kind: 'was_free' }
-  | { readonly kind: 'was_none' }
-  | { readonly kind: 'unknown' };
+  { readonly kind: 'count'; readonly free: number } | { readonly kind: 'unknown' };
 
 export function bedFigure(
   free: number | null,
@@ -188,5 +187,5 @@ export function bedFigure(
   if (free === null || asOf === null) return { kind: 'unknown' };
   const ageMs = toEpochMs(now) - toEpochMs(asOf);
   if (ageMs < staleAfterMinutes * 60_000) return { kind: 'count', free };
-  return free > 0 ? { kind: 'was_free' } : { kind: 'was_none' };
+  return { kind: 'unknown' };
 }

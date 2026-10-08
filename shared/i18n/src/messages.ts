@@ -3266,21 +3266,10 @@ export const PATIENT = {
   cardNoIcu: { bn: 'আইসিইউ নেই', en: 'No ICU' },
   cardNoBeds: { bn: 'ভর্তির ব্যবস্থা নেই', en: 'No inpatient beds' },
   // A bed figure past its freshness threshold is not said as a number
-  // (owner, 8 October; `FR-PAT-14`, `bedFigure`). Shown beside its age.
-  bedsWasFree: { bn: 'শেষ খবরে বেড খালি ছিল', en: 'Beds were free when last confirmed' },
-  bedsWasNone: { bn: 'শেষ খবরে বেড খালি ছিল না', en: 'No bed was free when last confirmed' },
+  // (owner, 8 October; `FR-PAT-14`, `bedFigure`): not known. Shown beside
+  // the age of the last confirmation.
   bedsUnknown: { bn: 'খালি বেডের খবর জানা নেই', en: 'Free beds not known' },
-  icuWasFree: { bn: 'শেষ খবরে আইসিইউ খালি ছিল', en: 'ICU was free when last confirmed' },
-  icuWasNone: { bn: 'শেষ খবরে আইসিইউ খালি ছিল না', en: 'ICU was full when last confirmed' },
   icuUnknown: { bn: 'আইসিইউর খবর জানা নেই', en: 'ICU not known' },
-  kindWasFree: {
-    bn: 'শেষ খবরে {kind} বেড খালি ছিল',
-    en: '{kind} beds were free when last confirmed',
-  },
-  kindWasNone: {
-    bn: 'শেষ খবরে {kind} বেড খালি ছিল না',
-    en: 'No {kind} bed was free when last confirmed',
-  },
   kindUnknown: { bn: '{kind} বেডের খবর জানা নেই', en: '{kind} beds not known' },
 
   // --- A figure a hospital keeps to itself (FR-NET-04) ----------------------
