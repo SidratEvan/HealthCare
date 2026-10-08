@@ -215,7 +215,7 @@ Emergency network across hospitals, ambulance dispatch, referral network, blood,
 ### 7.1 Identity and profiles
 
 - `FR-PAT-01` Sign up and log in with phone number + OTP. No password.
-- `FR-PAT-02` A user can create multiple patient profiles (self, mother, child…) with name, age or DOB, gender, blood group, and optional NID.
+- `FR-PAT-02` A user can create multiple patient profiles (self, mother, child…) with name, age or DOB, gender, blood group, and optional NID. **Not in V1 (owner, 8 October): family accounts wait for after the pilot (`PLATFORM_PLAN.md` R10).** The people already booked under a proved phone are listed as they are (`FR-GST-12`), and are not presented as a family.
 - `FR-PAT-03` Every booking, record, and notification is attached to a profile, not just an account.
 - `FR-PAT-04` A profile can later be claimed by its own phone number, transferring ownership of records.
 - `FR-PAT-05` Language preference (bn default, en optional) is stored per account and applies to app and SMS.
@@ -250,7 +250,7 @@ Many people will never create an account. Guest mode is a first-class path, not 
 - `FR-PAT-11` Browse doctors by specialty, symptom category, fee range, availability today, and hospital.
 - `FR-PAT-12` A doctor card shows: name, degrees, specialty, hospital, chamber times, fee, BMDC-verified badge, average consultation minutes, current live status.
 - `FR-PAT-13` Live status values: *in chamber now*, *expected at HH:MM*, *not sitting today*, *unknown*.
-- `FR-PAT-14` Hospital cards show live wait estimate, free beds, ICU count, and a freshness stamp.
+- `FR-PAT-14` Hospital cards show live wait estimate, free beds, ICU count, and a freshness stamp. **Beds (owner, 8 October), wherever a patient is shown a bed figure (cards, the bed search, emergency results):** an exact count is shown only while the figure is within the hospital's freshness threshold (`FR-OFF-04`). Past it, the card says whether beds were available or none when last confirmed, with that age, and never a number; a figure never confirmed is "not known". An unknown is never shown as zero (§3.2).
 - `FR-PAT-15` Search must work with Bangla and English text and tolerate common misspellings of doctor names.
 
 - `FR-PAT-16` **One search for what a patient needs** (`S-A-07s`), reachable from the app's first screen. It takes free text over doctor names, hospital names and specialties, in Bangla and English, and offers the needs hospitals publish live as choices: a specialty, a bed kind (`FR-PAT-50`), an emergency capability (§11). Owner's direction, 2026-10-05.
@@ -296,9 +296,9 @@ Many people will never create an account. Guest mode is a first-class path, not 
 ### 7.6 Beds and admission
 
 - `FR-PAT-50` Search beds by type: general, cabin, HDU, ICU, CCU, NICU, isolation, burn.
-- `FR-PAT-51` Each bed type shows count free, nightly price, and freshness.
+- `FR-PAT-51` Each bed type shows count free, nightly price, and freshness. The count follows `FR-PAT-14`'s rule: exact only while fresh.
 - `FR-PAT-52` A patient may request a bed; the hospital confirms, holds, or declines, with a hold expiry.
-- `FR-PAT-53` Admission status is visible to linked family profiles.
+- `FR-PAT-53` Admission status is visible to linked family profiles. **Not in V1 (owner, 8 October; R10).**
 
 ### 7.7 Health wallet
 
