@@ -302,16 +302,22 @@ function NeedRow({
     >
       {needs.map((need) => (
         <li key={needKey(need)} className="shrink-0">
-          <button
-            type="button"
-            onClick={() => {
+          {/*
+            A link first, so a tap that lands before the page has hydrated, on
+            a slow phone, still asks; once the script is here the choice is
+            made in place, without a reload. A button would do nothing at all.
+          */}
+          <a
+            href={`/search?need=${encodeURIComponent(needKey(need))}`}
+            onClick={(event) => {
+              event.preventDefault();
               onChoose(need);
             }}
             data-testid={`need-${needKey(need)}`}
-            className="min-h-[40px] rounded-pill border border-line-strong bg-surface px-4 text-body-sm font-semibold whitespace-nowrap text-ink-secondary hover:border-brand-600 hover:text-brand-700"
+            className="inline-flex min-h-[40px] items-center rounded-pill border border-line-strong bg-surface px-4 text-body-sm font-semibold whitespace-nowrap text-ink-secondary hover:border-brand-600 hover:text-brand-700"
           >
             {needName(need, locale)}
-          </button>
+          </a>
         </li>
       ))}
     </ul>

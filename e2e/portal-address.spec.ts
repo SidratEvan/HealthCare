@@ -26,7 +26,8 @@ const API = 'http://localhost:4000/api/v1';
 const NETWORK = 'http://localhost:3000';
 const PADMA_PORTAL = 'http://padma.localhost:3000';
 const PADMA_BRAND = '#17507f';
-const PLATFORM_BRAND = '#0c5c46';
+/** The network's own primary in the patient app: Visual Direction 2's logo blue (FRONTEND.md §0.5, `PATIENT_COLOUR`). */
+const PLATFORM_BRAND = '#0066dd';
 
 /** A domain Karnaphuli "owns", for this spec. */
 const OWN_DOMAIN = 'portal.hospital-own.test';

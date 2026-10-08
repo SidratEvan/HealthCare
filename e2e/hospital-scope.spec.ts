@@ -15,7 +15,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 const PATIENT = 'http://localhost:3000';
 
-const PLATFORM_BRAND = '#0c5c46';
+/** The network's own primary in the patient app: Visual Direction 2's logo blue (FRONTEND.md §0.5, `PATIENT_COLOUR`). */
+const PLATFORM_BRAND = '#0066dd';
 const PADMA_BRAND = '#17507f';
 
 async function brand600(page: Page): Promise<string> {

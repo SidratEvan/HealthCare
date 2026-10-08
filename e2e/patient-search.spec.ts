@@ -37,9 +37,10 @@ test.describe('the first screen asks what you need (S-A-02, FR-PAT-16)', () => {
     await search.click();
     await expect(page).toHaveURL(/\/search$/);
     await expect(page.getByTestId('search-input')).toBeFocused();
-    // Search belongs to Home. `/search` begins with `/s`, the live serial's
-    // route, and once lit the serials tab instead.
-    await expect(page.getByTestId('nav-home')).toHaveAttribute('aria-current', 'page');
+    // Search is its own tab since Visual Direction 2 (`NAV-A`, 2026-10-07).
+    // `/search` begins with `/s`, the live serial's route, and once lit the
+    // serials tab instead.
+    await expect(page.getByTestId('nav-search')).toHaveAttribute('aria-current', 'page');
     await expect(page.getByTestId('nav-serials')).not.toHaveAttribute('aria-current', 'page');
     // Every need the network answers is offered before a letter is typed.
     await expect(page.getByTestId('search-needs')).toBeVisible();

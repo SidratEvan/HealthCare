@@ -253,7 +253,7 @@ function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability })
                     <p className="min-w-0 text-body-md font-semibold">
                       {localName(locale, pharmacy.hospitalNameBn, pharmacy.hospitalNameEn)}
                     </p>
-                    <span className="shrink-0" data-testid="pharmacy-answer">
+                    <span className="shrink-0" data-testid="medicine-answer">
                       <Chip tone={answer?.tone ?? 'caution'}>
                         {tp(answer?.key ?? 'medicineUnknown', locale)}
                       </Chip>

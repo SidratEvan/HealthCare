@@ -26,7 +26,8 @@ const PATIENT = 'http://localhost:3000';
 const API = 'http://localhost:4000/api/v1';
 
 const CODE = 'KARNAPHULI';
-const PLATFORM_BRAND = '#0c5c46';
+/** The network's own primary in the patient app: Visual Direction 2's logo blue (FRONTEND.md §0.5, `PATIENT_COLOUR`). */
+const PLATFORM_BRAND = '#0066dd';
 /** A logo's yellow: it cannot carry white text as it is, so it is darkened. */
 const CHOSEN = '#ffd400';
 
