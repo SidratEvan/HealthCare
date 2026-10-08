@@ -87,6 +87,9 @@ export interface SetupSnapshot {
     readonly smsBudgetMonthly: number | null;
     /** How long a serial waits for its online payment (plan H3, `FR-PAY-08`). */
     readonly paymentHoldMinutes?: number;
+    readonly prepayRequired?: boolean;
+    readonly noShowPrepay?: boolean;
+    readonly noShowWindowDays?: number;
   };
   /** Whether this deployment takes payment online (plan H3). */
   readonly onlinePayments?: boolean;

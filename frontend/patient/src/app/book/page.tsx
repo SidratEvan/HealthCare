@@ -827,6 +827,36 @@ function SessionCards({
 }
 
 /** `S-A-07c` — the guest sheet, the fee breakdown, and the one blocking wait. */
+/**
+ * Why a booking was refused, stated in Bangla, by cause. "Something went
+ * wrong" tells a person nothing they can act on (BACKEND.md §9 maps codes to
+ * copy). One answer whether the booking followed a code check or not: a
+ * number proving itself for the first time is refused for the same reasons.
+ */
+function bookingFailure(error: unknown, locale: Locale): string {
+  const code = (error as { code?: string }).code ?? '';
+  // FR-GST-14 (plan F3): the reason a serial must be paid first, said.
+  const why = (error as { details?: { reason?: unknown } }).details?.reason;
+  switch (code) {
+    case 'AUTH_OTP_INVALID':
+      return tp('accountCodeWrong', locale);
+    case 'AUTH_LOCKED':
+      return tp('accountLocked', locale);
+    case 'BOOKING_DUPLICATE':
+      return tp('alreadyBooked', locale);
+    case 'SESSION_FULL':
+      return tp('chamberFull', locale);
+    case 'BOOKING_LIMIT_REACHED':
+      return tp('bookingLimitReached', locale);
+    case 'PREPAYMENT_REQUIRED':
+      return tp(why === 'no_shows' ? 'prepaymentAfterNoShows' : 'prepaymentRequired', locale);
+    case 'PAYMENT_UNAVAILABLE':
+      return tp('paymentUnavailable', locale);
+    default:
+      return tp('bookingFailed', locale);
+  }
+}
+
 function Confirm({
   session,
   slots,
@@ -969,14 +999,7 @@ function Confirm({
       try {
         await finish(await provePhone(phoneStored, name.trim(), code));
       } catch (error) {
-        const code = (error as { code?: string }).code;
-        onFailure(
-          code === 'AUTH_OTP_INVALID'
-            ? tp('accountCodeWrong', locale)
-            : code === 'AUTH_LOCKED'
-              ? tp('accountLocked', locale)
-              : tp('bookingFailed', locale),
-        );
+        onFailure(bookingFailure(error, locale));
       } finally {
         setBusy(false);
       }
@@ -1009,22 +1032,7 @@ function Confirm({
       if (!start.ready) return;
       await finish(start.guestToken);
     } catch (error) {
-      // Stated in Bangla, by cause. "Something went wrong" tells a person
-      // nothing they can act on (BACKEND.md §9 maps codes to copy).
-      const code = (error as { code?: string }).code;
-      onFailure(
-        code === 'BOOKING_DUPLICATE'
-          ? tp('alreadyBooked', locale)
-          : code === 'SESSION_FULL'
-            ? tp('chamberFull', locale)
-            : code === 'BOOKING_LIMIT_REACHED'
-              ? tp('bookingLimitReached', locale)
-              : code === 'PREPAYMENT_REQUIRED'
-                ? tp('prepaymentRequired', locale)
-                : code === 'PAYMENT_UNAVAILABLE'
-                  ? tp('paymentUnavailable', locale)
-                  : tp('bookingFailed', locale),
-      );
+      onFailure(bookingFailure(error, locale));
     } finally {
       setBusy(false);
     }

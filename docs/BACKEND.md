@@ -705,7 +705,7 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `PAYMENT_UNAVAILABLE` | 422 | an online method on a deployment with `PAYMENT_PROVIDER=off`; refused before the booking is written (step 26). Since plan H3 also a method no provider here takes (card under `live`) |
 | `PAYMENT_ALREADY_MADE` | 409 | a new payment for a booking that already holds a paid one (plan H3, `FR-PAY-10`) |
 | `PAYMENT_HOLD_ENDED` | 409 | a new online attempt after the booking's payment hold ran out (`FR-PAY-08`) |
-| `PREPAYMENT_REQUIRED` | 422 | paying at the counter for a booking that must be paid first (`FR-PAY-02`, `FR-GST-14`); the booking, or the payment, is not written |
+| `PREPAYMENT_REQUIRED` | 422 | paying at the counter for a booking that must be paid first (`FR-PAY-02`, `FR-GST-14`); the booking, or the payment, is not written. `details.reason` is `hospital` (the hospital takes no payment at the counter) or `no_shows` (plan F3: three no-shows on this number at this hospital in its window), and the patient app says which |
 | `REFUND_NOTE_REQUIRED` | 422 | a refund recorded by hand without the reference it was made under (`FR-PAY-12`) |
 | `CONSENT_REQUIRED` | 403 | doctor lacks record consent |
 | `CAPACITY_STALE` | 200 + flag | data returned but marked stale |

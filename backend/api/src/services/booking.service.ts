@@ -31,6 +31,7 @@ import {
   bookingStanding,
   id,
   patientViewOf,
+  prepaymentReason,
   time,
   type BookingId,
   type BookingStanding,
@@ -271,11 +272,27 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
       // `FR-PAY-02`, `FR-PAY-08`: whether this serial must be paid for first,
       // decided now and kept on the row. Only where an online method exists: a
       // deployment that can take no payment never turns anybody away for it.
-      const prepaymentRequired =
-        availableMethods().length > 0 &&
-        (await paymentRepo.hospitalPaysFirst(trx, locked.hospitalId));
-      if (prepaymentRequired && input.method === 'at_hospital') {
-        throw new AppError('PREPAYMENT_REQUIRED');
+      // Since plan F3 also `FR-GST-14`: a number with three no-shows here in
+      // the hospital's window, where the hospital has turned that on.
+      const rules = await paymentRepo.prepaymentRules(trx, locked.hospitalId);
+      const noShows =
+        bookedByGuestId !== null && rules.noShowRuleOn
+          ? await bookingRepo.countNoShowsAt(trx, {
+              guestId: bookedByGuestId,
+              hospitalId: locked.hospitalId,
+              since: dhakaDaysAgo(rules.windowDays),
+            })
+          : 0;
+      const prepayment = prepaymentReason({
+        onlinePaymentTaken: availableMethods().length > 0,
+        hospitalPaysFirst: rules.paysFirst,
+        guest: bookedByGuestId !== null,
+        noShowRuleOn: rules.noShowRuleOn,
+        noShows,
+      });
+      const prepaymentRequired = prepayment !== null;
+      if (prepayment !== null && input.method === 'at_hospital') {
+        throw new AppError('PREPAYMENT_REQUIRED', { details: { reason: prepayment } });
       }
 
       const bookingId = await bookingRepo.insertBooking(trx, {
@@ -379,6 +396,11 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
       duplicate: false,
     };
   });
+}
+
+/** The Dhaka calendar date a number of days ago: where a rolling window starts (`FR-GST-14`). */
+function dhakaDaysAgo(days: number): string {
+  return time.toDhakaDate(time.addMinutes(time.fromDate(new Date()), -days * 24 * 60));
 }
 
 /** Who pays for a booking: the account, or the guest identity behind the number. */

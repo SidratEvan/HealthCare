@@ -644,6 +644,10 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
     rules.smsBudgetMonthly === null ? '' : String(rules.smsBudgetMonthly),
   );
   const [holdMinutes, setHoldMinutes] = useState(String(rules.paymentHoldMinutes ?? 15));
+  // FR-PAY-02, FR-GST-14 (plan F3): both off until the hospital turns them on.
+  const [paysFirst, setPaysFirst] = useState(rules.prepayRequired === true);
+  const [noShowPrepay, setNoShowPrepay] = useState(rules.noShowPrepay === true);
+  const [windowDays, setWindowDays] = useState(String(rules.noShowWindowDays ?? 90));
   // The payment hold means something only where payment is taken online.
   const paysOnline = snapshot.onlinePayments === true;
   const [rulesBusy, setRulesBusy] = useState(false);
@@ -677,10 +681,13 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
   const budget = smsBudget.trim() === '' ? null : wholeNumber(smsBudget);
   const hold = wholeNumber(holdMinutes);
   const holdValid = !paysOnline || (hold !== null && hold >= 5 && hold <= 60);
+  const days = wholeNumber(windowDays);
+  const windowValid = !paysOnline || !noShowPrepay || (days !== null && days >= 7 && days <= 365);
   const rulesReady =
     ruleValues.every((value) => value !== null) &&
     (smsBudget.trim() === '' || budget !== null) &&
-    holdValid;
+    holdValid &&
+    windowValid;
 
   function saveRules(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -697,6 +704,13 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
           staleThresholdMinutes: stale,
           smsBudgetMonthly: budget,
           ...(paysOnline && hold !== null ? { paymentHoldMinutes: hold } : {}),
+          ...(paysOnline
+            ? {
+                prepayRequired: paysFirst,
+                noShowPrepay,
+                ...(days !== null && days >= 7 && days <= 365 ? { noShowWindowDays: days } : {}),
+              }
+            : {}),
         }),
       () => t('settingsSaved', locale),
     ).finally(() => {
@@ -803,6 +817,41 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
               onValue={setHoldMinutes}
               {...(holdValid ? {} : { error: t('settingsPaymentHoldHelper', locale) })}
             />
+          ) : null}
+          {paysOnline ? (
+            <div className="flex flex-col gap-2 md:col-span-2" data-testid="settings-prepay">
+              <label className="flex items-center gap-2 text-body-md">
+                <input
+                  type="checkbox"
+                  checked={paysFirst}
+                  onChange={(event) => {
+                    setPaysFirst(event.target.checked);
+                  }}
+                  data-testid="settings-prepay-required"
+                />
+                {t('settingsPrepayRequired', locale)}
+              </label>
+              <label className="flex items-center gap-2 text-body-md">
+                <input
+                  type="checkbox"
+                  checked={noShowPrepay}
+                  onChange={(event) => {
+                    setNoShowPrepay(event.target.checked);
+                  }}
+                  data-testid="settings-noshow-prepay"
+                />
+                {t('settingsNoShowPrepay', locale)}
+              </label>
+              {noShowPrepay ? (
+                <Field
+                  label={t('settingsNoShowWindow', locale)}
+                  kind="number"
+                  value={windowDays}
+                  onValue={setWindowDays}
+                  {...(windowValid ? {} : { error: t('settingsNoShowWindowHelper', locale) })}
+                />
+              ) : null}
+            </div>
           ) : null}
           <Field
             label={t('settingsSmsBudget', locale)}
