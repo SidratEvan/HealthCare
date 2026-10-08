@@ -252,7 +252,7 @@ reception console's offline queue, the self-hosted stack, CI with the browser
 suites. Branches of this plan as they merge are listed under **Merged in V1
 completion** below.
 
-**Currently building** (owner, 8 October; `CLAUDE.md` §4.6): K1 `fix/patient-profiles-label`, K2 `fix/beds-honest-status`, then H3 `feat/payment-adapters-ready` starting with its documents branch (question 15 decided 7 October), then F3, then E1 (question 2 decided 7 October), then J prepared up to release. **Not without the owner's word:** moving `main` or `demo`, deploying, applying migrations to Supabase or resetting its data, real payments. The leave-home message still waits on question 13.
+**Currently building** (owner, 8 October; `CLAUDE.md` §4.6): K1, K2 and H3 are merged; next K3 `fix/beds-unknown-when-stale` and K4 `feat/console-cobrand` (priority 2 of his second note), then F3, then E1, then J prepared up to release, then priority 3 (`docs/PLATFORM_PLAN.md`, *The owner's approved product decisions*, which marks each decision built, partly built or missing). **Not without the owner's word:** moving `main` or `demo`, deploying, applying migrations to Supabase or resetting its data, real payments. The leave-home message still waits on question 13.
 
 **H3 as it was found, for whoever builds it** (7 October; nothing is written yet). The plan's row reads as two adapters. What is actually missing is the whole of paying by being sent away and coming back, of which the adapters are the smaller part:
 
