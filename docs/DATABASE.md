@@ -634,9 +634,9 @@ The role is created and brought back to exactly these privileges by `pnpm db:rol
 |---|---|---|
 | `hospital` (+ `app.hospital_id`) | A member of that hospital's staff | That hospital's rows. Another hospital's do not exist for it: not to read, not to write, not to move a row of its own into |
 | `national` | A platform administrator | Organisations: hospitals, their staff, wards, beds, schedules. **Nothing about a person** — no patient, booking, visit, case, order, consent, message (`FR-ONB-08`) |
-| `patient` (+ `app.person_id`) | A signed-in account | §5.3: of the clinical record, its own profiles' and nobody else's. Otherwise as `open` |
-| `guest` (+ `app.person_id`, `app.booking_id`) | A tracking link, or the short token it is exchanged for | §5.3: of the clinical record, what was written at the one booking it names. Otherwise as `open` |
-| `open` | Nobody | §5.3: of the clinical record, nothing. Everything else, as before: what may be seen of a booking or a queue is still decided by the application |
+| `patient` (+ `app.person_id`) | A signed-in account | §5.3 and §5.4: of the clinical record, of bookings, payments, messages, links, standby places and profiles, its own and nobody else's. Of the queue's own tables, nothing. Everything else, as `open` |
+| `guest` (+ `app.person_id`, `app.booking_id`) | A tracking link, or the short token it is exchanged for | §5.3 and §5.4: of the clinical record, what was written at the one booking it names; of bookings, payments, links and profiles, that booking's. Everything else, as `open` |
+| `open` | Nobody | §5.3 and §5.4: of the clinical record, nothing; of bookings, payments, messages, links, standby places, profiles and the queue, nothing. What is published, as anybody |
 | `system` | The server's own work: the schedule job, the purge, an operator's command, anything outside a request | Everything |
 | unset, or anything else | A connection that has said nothing | **Nothing** |
 
@@ -657,7 +657,7 @@ The role is created and brought back to exactly these privileges by `pnpm db:rol
 
 **What crosses between hospitals** is named in 0043 and nowhere else: what a hospital publishes; a **referral**, to its two ends, and through it the two emergency cases it links; a **visit**, and the booking behind it, to a hospital the patient has given a live consent; and `fn_runs_emergency_desk(hospital)`, which answers yes or no from `staff_roles` with its owner's rights, because who works at a hospital is its own and that it has an emergency desk is what it publishes.
 
-**What it does not do.** It does not bind the owner: row-level security never applies to a table's owner, so migrations, seeds and backups are unaffected, **and so is a deployment whose API still connects as the owner — the public demonstration on Supabase.** The policies protect a deployment that runs the API as its own role, which is what one holding real patients does (`DEPLOY.md` Part S). One patient is kept from another by the database for the clinical record only (§5.3); for bookings, payments and messages the application still decides. And a hospital's staff asking for another hospital's row by id are now answered **404**, not 403: the row is not found, because for them it is not there.
+**What it does not do.** It does not bind the owner: row-level security never applies to a table's owner, so migrations, seeds and backups are unaffected, **and so is a deployment whose API still connects as the owner — the public demonstration on Supabase.** The policies protect a deployment that runs the API as its own role, which is what one holding real patients does (`DEPLOY.md` Part S). One patient is kept from another by the database for the clinical record (§5.3) and for bookings, payments, messages, links, standby places and profiles (§5.4). And a hospital's staff asking for another hospital's row by id are now answered **404**, not 403: the row is not found, because for them it is not there.
 
 **The schedule job** (`sessionMaterialise.service`) runs in the `system` scope whoever prompted it: a hospital approving an import asks for it to run now, and what runs writes the chambers every hospital's schedules call for.
 
@@ -680,9 +680,42 @@ The role is created and brought back to exactly these privileges by `pnpm db:rol
 
 **Three places say a scope themselves, and why.** A request with a token in its path arrives as nobody. `guest.service` resolves the tracking link and then runs the rest as that link (`asLink`), for the page and for a report's address alike. `patientAuth.service` reads what a verified number may take over (`FR-GST-09`) as the server's own work, because those profiles are not the account's yet and saying how many visits they hold is the point of the preview; the number is the account's own, from its row. The third is 5.2's schedule job.
 
-**What it does not do, said plainly.** Outside the clinical record a patient and a link reach what `open` reached before: a booking, a queue event, a payment, a message, a profile. The live serial is worked out from every booking in a chamber and a serial is allocated against all of them, so those rows cannot be one person's at the database without the queue's reads changing first. Between patients, those tables are still kept apart by the application, and `tenantMatrix.test.ts` is what holds it to that (plan I3 is the rest). `patient_documents` is a person's own to a patient and a link, and still reachable by a hospital's connection, as 5.2 left it; nothing in the application reads it yet.
+**What it did not do, and §5.4 does.** Outside the clinical record a patient and a link reached what `open` reached before: a booking, a queue event, a payment, a message, a profile. The live serial is worked out from every booking in a chamber and a serial is allocated against all of them, so those rows could not be one person's at the database until the queue acted for a person as the server (plan I3, migration 0056). `patient_documents` is a person's own to a patient and a link, and still reachable by a hospital's connection, as 5.2 left it; nothing in the application reads it yet.
 
 **How it is tested.** `database/tests/tenancy.test.ts` asks the policies as a person: an account reads its own profiles' visits, tests and reports and no others with no `WHERE` at all, reads and does not write, and gives a consent for its own profile only; a link reads the one visit of its booking when the same person has another; nobody reads none of the eight tables. `tenantScope.test.ts` asks that the API states a person's scope on reused connections and with two people's work interleaved. The whole API suite and every browser suite run under it.
+
+### 5.4 A person's bookings, payments and messages are their own (plan I3, migration 0056, `FR-SEC-11`, `FR-GST-05`)
+
+**What was left by 5.3.** Outside the clinical record a patient, a link and nobody reached every booking, payment, message, link, standby place and profile, because the queue is worked out from every booking in a chamber and a serial is allocated against all of them. The application alone kept one person's from another's.
+
+**What a person reaches now**, whatever a query leaves out:
+
+| Table | `patient` (an account) | `guest` (a link) | `open` (nobody) |
+|---|---|---|---|
+| `bookings` | A booking for a profile it owns, or one it made | The one booking the link names | None |
+| `patients` | The profiles it owns; it adds and keeps its own (`FR-PAT-02`) | The profile of that booking | None |
+| `payments` | What it paid, and what was paid for its own bookings; it pays for its own booking and nobody else's | What was paid for that booking | None |
+| `guest_links` | The links to its own bookings, which it may be given afresh (plan F1) | Itself | None |
+| `standby_list` | Its own profiles' places, to read | None | None |
+| `notifications` | What was addressed to it or to a profile it owns, to read | None | None |
+| `queue_events`, `queue_state`, `slot_offers` | None | None | None |
+
+A guest token that names no booking (the one a number is given to book with) reaches none of them. A person writes, of these, only a payment for their own booking, a link to their own booking and their own profiles; everything else is written by a hospital or by the queue. A hospital, the platform and the server's own work reach exactly what §5.2 gave them: these rules change only `app_care_session`, `app_care_booking`, `app_care_payment` and `app_patient`, which no longer admit a person, and add a person's own rows beside them.
+
+**The queue acts for a person as the server.** A serial is still allocated against every booking in a chamber, a log is still reduced over all of them, and every phone in the room is still told where it now stands. So when a person asks the queue to act (to book, cancel, say they are late, join a standby list, take or refuse a freed chair) or to say where they stand, the queue does it in the `system` scope, and only after the application has decided the request is theirs to make. One function does that, `asQueue` (`backend/api` `config/dbScope.ts`), used by the queue service's entry points, `booking.service` `createBooking` and the standby service; for a member of staff it changes nothing, so a hospital's request is held to its hospital inside the queue as outside it. What leaves the queue for a person is the patients' copy, which names nobody (plan I2c).
+
+**What the public reads of a chamber is numbers**, through `fn_chamber_counts(session)`, which runs with its owner's rights and gives back how many places are taken, how many are still waiting and how many bookings were ever made, and nothing about who. The discovery searches' open serials and the demonstration's picker read it.
+
+**The other places that say a scope themselves, and why.** Each is the server acting on a credential it has just checked, for a request that arrived as nobody or asks about rows that are not yet the caller's:
+
+- `guest.service` reads which link a token is as the server: until it resolves the request is nobody's, and finding the link is the act of telling who is asking. The rest runs as that link (`asLink`, §5.3).
+- `patientAuth.service` takes over what a verified number holds (`FR-GST-09`) as the server, as its preview already was: those profiles are not the account's until the claim has run.
+- `bed.service` files a bed request as the server: it finds which profile the number already has.
+- A payment provider's callback and an SMS aggregator's delivery report are applied as the server once their signature has checked out.
+
+**Changed for a caller:** another person's booking, profile or payment asked for by id is answered **404**, not 403, as another hospital's already was (§5.2).
+
+**How it is tested.** `database/tests/tenancy.test.ts` asks the policies as a person: an account reads its own bookings, profiles, payments, messages and places with no `WHERE` at all and nobody else's; a link reads its one booking, that booking's profile and payments and no other booking of the same person; nobody reads any of them; a person reads no queue log, state or offer; a person moves no booking, renames nobody else's profile and writes no message; an account pays for its own booking and is refused another's; `fn_chamber_counts` answers nobody with the count and no row; a hospital reaches all of its own. `tenantScope.test.ts` asks that `asQueue` reads the whole chamber for a person and nobody and only inside it, and holds a member of staff to their hospital inside it. The whole API suite, `tenantMatrix.test.ts` among it, and every browser suite run under it.
 
 ---
 
@@ -803,6 +836,9 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0055_backup_runs.sql           -- plan I2: backup_runs, what the nightly backup did, written by
                                    -- the owner and read by /readyz in the system scope (§2.7,
                                    -- §5.1, FR-SUP-06)
+    0056_person_policies.sql       -- plan I3: a person's bookings, profiles, payments, links,
+                                   -- standby places and messages are their own; the queue's
+                                   -- tables nobody's; fn_chamber_counts (§5.4, FR-SEC-11)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

@@ -701,9 +701,6 @@ describe('a person’s clinical record is their own (FR-SEC-11, FR-NET-02; plan 
       for (const table of CLINICAL) {
         expect(await count(client, `SELECT 1 FROM ${table}`), table).toBe(0);
       }
-      // What is not the clinical record is as it was for a connection that is
-      // nobody's: the queue is worked out from every booking in a chamber.
-      expect(await count(client, 'SELECT 1 FROM bookings')).toBeGreaterThan(0);
     });
   });
 
@@ -731,6 +728,260 @@ describe('a person’s clinical record is their own (FR-SEC-11, FR-NET-02; plan 
         [a, b],
       );
       expect(await count(client, 'SELECT 1 FROM visits')).toBe(ofA + consented);
+    });
+  });
+});
+
+/**
+ * A tracking link to the booking of somebody seen more than once, made here:
+ * the seed issues none, since a link is a token only its SMS holds
+ * (`FR-GST-05`).
+ */
+async function aLink(
+  client: Client,
+): Promise<{ id: string; patient_id: string; guest_id: string }> {
+  const { rows } = await client.query<{ id: string; patient_id: string; guest_id: string }>(
+    `SELECT b.id, b.patient_id,
+            coalesce(p.owner_guest_id,
+                     (SELECT g.id FROM guest_identities g WHERE g.deleted_at IS NULL
+                       ORDER BY g.created_at, g.id LIMIT 1)) AS guest_id
+       FROM bookings b JOIN patients p ON p.id = b.patient_id
+      WHERE b.deleted_at IS NULL
+        AND EXISTS (SELECT 1 FROM bookings o WHERE o.patient_id = b.patient_id AND o.id <> b.id)
+      ORDER BY b.created_at, b.id LIMIT 1`,
+  );
+  const link = rows[0];
+  if (link?.guest_id === undefined || link.guest_id === null) {
+    throw new Error('The seed should hold somebody booked twice, and a guest identity.');
+  }
+  await client.query(
+    `INSERT INTO guest_links (token_hash, booking_id, guest_id, expires_at)
+     VALUES (md5(random()::text), $1, $2, now() + interval '1 day')`,
+    [link.id, link.guest_id],
+  );
+  return link;
+}
+
+/** The tables, besides the clinical record, that are one person's (migration 0056). */
+const PERSONAL = [
+  'bookings',
+  'patients',
+  'payments',
+  'guest_links',
+  'standby_list',
+  'notifications',
+] as const;
+
+/** The queue's own: a person is given the patients' copy by the API, never these. */
+const QUEUE = ['queue_events', 'queue_state', 'slot_offers'] as const;
+
+describe('a person’s bookings, payments and messages are their own (FR-SEC-11, FR-GST-05; plan I3)', () => {
+  it('an account reads its own bookings, profiles, payments, messages and places, and nobody else’s', async () => {
+    await withRollback(async (client) => {
+      const { accountId, theirs } = await twoPeople(client);
+      const own = {
+        bookings: await count(
+          client,
+          `SELECT 1 FROM bookings b JOIN patients p ON p.id = b.patient_id
+            WHERE p.owner_user_id = $1 OR b.booked_by_user_id = $1`,
+          [accountId],
+        ),
+        patients: await count(client, 'SELECT 1 FROM patients WHERE owner_user_id = $1', [
+          accountId,
+        ]),
+        payments: await count(
+          client,
+          `SELECT 1 FROM payments y
+            WHERE y.payer_user_id = $1
+               OR EXISTS (SELECT 1 FROM bookings b JOIN patients p ON p.id = b.patient_id
+                           WHERE b.id = y.booking_id
+                             AND (p.owner_user_id = $1 OR b.booked_by_user_id = $1))`,
+          [accountId],
+        ),
+        notifications: await count(
+          client,
+          `SELECT 1 FROM notifications n
+            WHERE n.recipient_user_id = $1
+               OR EXISTS (SELECT 1 FROM patients p
+                           WHERE p.id = n.recipient_patient_id AND p.owner_user_id = $1)`,
+          [accountId],
+        ),
+        standby_list: await count(
+          client,
+          `SELECT 1 FROM standby_list w JOIN patients p ON p.id = w.patient_id
+            WHERE p.owner_user_id = $1`,
+          [accountId],
+        ),
+      };
+      const everybodys = await count(client, 'SELECT 1 FROM bookings');
+
+      await asTenant(client);
+      await person(client, 'patient', accountId);
+      // No WHERE at all: every row the connection can reach.
+      for (const [table, n] of Object.entries(own)) {
+        expect(await count(client, `SELECT 1 FROM ${table}`), table).toBe(n);
+      }
+      expect(own.bookings).toBeGreaterThan(0);
+      expect(own.bookings).toBeLessThan(everybodys);
+      expect(await count(client, 'SELECT 1 FROM bookings WHERE id = $1', [theirs.bookingId])).toBe(
+        0,
+      );
+      expect(await count(client, 'SELECT 1 FROM patients WHERE id = $1', [theirs.patientId])).toBe(
+        0,
+      );
+    });
+  });
+
+  it('a tracking link reads its one booking, its profile and what was paid for it, and no other of that person’s', async () => {
+    await withRollback(async (client) => {
+      const link = await aLink(client);
+      const paid = await count(client, 'SELECT 1 FROM payments WHERE booking_id = $1', [link.id]);
+      const links = await count(client, 'SELECT 1 FROM guest_links WHERE booking_id = $1', [
+        link.id,
+      ]);
+
+      await asTenant(client);
+      await person(client, 'guest', link.guest_id, link.id);
+      expect((await client.query<{ id: string }>('SELECT id FROM bookings')).rows).toEqual([
+        { id: link.id },
+      ]);
+      expect((await client.query<{ id: string }>('SELECT id FROM patients')).rows).toEqual([
+        { id: link.patient_id },
+      ]);
+      expect(await count(client, 'SELECT 1 FROM payments')).toBe(paid);
+      expect(await count(client, 'SELECT 1 FROM guest_links')).toBe(links);
+      expect(await count(client, 'SELECT 1 FROM notifications')).toBe(0);
+
+      // The token a number is given to book with names no booking, and opens none.
+      await person(client, 'guest', link.guest_id);
+      for (const table of PERSONAL) {
+        expect(await count(client, `SELECT 1 FROM ${table}`), table).toBe(0);
+      }
+    });
+  });
+
+  it('nobody reads any of it', async () => {
+    await withRollback(async (client) => {
+      await asTenant(client);
+      await scope(client, 'open');
+      for (const table of [...PERSONAL, ...QUEUE]) {
+        expect(await count(client, `SELECT 1 FROM ${table}`), table).toBe(0);
+      }
+    });
+  });
+
+  it('a person reads no queue log, no queue state and no offer, not even their own chamber’s', async () => {
+    await withRollback(async (client) => {
+      const { accountId } = await twoPeople(client);
+      const link = await aLink(client);
+
+      await asTenant(client);
+      for (const become of [
+        async () => await person(client, 'patient', accountId),
+        async () => await person(client, 'guest', link.guest_id, link.id),
+      ]) {
+        await become();
+        for (const table of QUEUE) {
+          expect(await count(client, `SELECT 1 FROM ${table}`), table).toBe(0);
+        }
+      }
+    });
+  });
+
+  it('a person writes no booking, no profile of somebody else’s, and no message; the queue does', async () => {
+    await withRollback(async (client) => {
+      const { accountId, mine, theirs } = await twoPeople(client);
+      await asTenant(client);
+      await person(client, 'patient', accountId);
+
+      const moved = await client.query(
+        `UPDATE bookings SET status = 'cancelled', cancelled_reason = 'x' WHERE id = $1`,
+        [mine.bookingId],
+      );
+      expect(moved.rowCount).toBe(0);
+      const renamed = await client.query(`UPDATE patients SET full_name = 'x' WHERE id = $1`, [
+        theirs.patientId,
+      ]);
+      expect(renamed.rowCount).toBe(0);
+      const error = await expectRejection(client, () =>
+        client.query(
+          `INSERT INTO notifications (recipient_patient_id, channel, template_key)
+           VALUES ($1, 'sms', 'booking_confirmed')`,
+          [mine.patientId],
+        ),
+      );
+      expect(error.message).toContain('row-level security');
+    });
+  });
+
+  it('an account pays for its own booking and for nobody else’s', async () => {
+    await withRollback(async (client) => {
+      const { accountId, mine, theirs } = await twoPeople(client);
+      await asTenant(client);
+      await person(client, 'patient', accountId);
+      const pay = async (bookingId: string): Promise<unknown> =>
+        await client.query(
+          `INSERT INTO payments (booking_id, payer_user_id, amount_poisha, method, idempotency_key)
+           VALUES ($1, $2, 50000, 'at_hospital', gen_random_uuid()::text)`,
+          [bookingId, accountId],
+        );
+
+      await pay(mine.bookingId);
+      expect(
+        await count(client, 'SELECT 1 FROM payments WHERE booking_id = $1', [mine.bookingId]),
+      ).toBeGreaterThan(0);
+      const error = await expectRejection(client, () => pay(theirs.bookingId));
+      expect(error.message).toContain('row-level security');
+    });
+  });
+
+  it('how full a chamber is, is three numbers to anybody, never a row (fn_chamber_counts)', async () => {
+    await withRollback(async (client) => {
+      const { rows } = await client.query<{ session_id: string; n: string }>(
+        `SELECT session_id, count(*)::text AS n FROM bookings
+          WHERE status <> 'cancelled' AND deleted_at IS NULL
+          GROUP BY session_id ORDER BY count(*) DESC, session_id LIMIT 1`,
+      );
+      const busiest = rows[0];
+      if (busiest === undefined) throw new Error('The seed should hold a booked chamber.');
+
+      await asTenant(client);
+      await scope(client, 'open');
+      const taken = await client.query<{ n: number }>(
+        'SELECT taken AS n FROM fn_chamber_counts($1)',
+        [busiest.session_id],
+      );
+      expect(taken.rows[0]?.n).toBe(Number(busiest.n));
+      expect(
+        await count(client, 'SELECT 1 FROM bookings WHERE session_id = $1', [busiest.session_id]),
+      ).toBe(0);
+    });
+  });
+
+  it('a hospital still reaches every booking and queue event of its own chambers', async () => {
+    await withRollback(async (client) => {
+      const { a } = await twoHospitals(client);
+      const ofA = await count(
+        client,
+        'SELECT 1 FROM bookings b JOIN sessions s ON s.id = b.session_id WHERE s.hospital_id = $1',
+        [a],
+      );
+      const logged = await count(
+        client,
+        'SELECT 1 FROM queue_events e JOIN sessions s ON s.id = e.session_id WHERE s.hospital_id = $1',
+        [a],
+      );
+
+      await asTenant(client);
+      await scope(client, 'hospital', a);
+      expect(
+        await count(
+          client,
+          'SELECT 1 FROM bookings b JOIN sessions s ON s.id = b.session_id WHERE s.hospital_id = $1',
+          [a],
+        ),
+      ).toBe(ofA);
+      expect(await count(client, 'SELECT 1 FROM queue_events')).toBe(logged);
     });
   });
 });

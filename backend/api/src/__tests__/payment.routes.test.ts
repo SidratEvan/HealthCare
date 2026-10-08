@@ -373,7 +373,9 @@ describe('the auth matrix', () => {
     });
 
     it('refuses an account holder who does not own it', async () => {
-      expect(await read(booking(0), await patientToken())).toBe(403);
+      // Not 403: another person's booking does not exist for this caller, so it
+      // is not found (`FR-SEC-11`, migration 0056). The refusal is the database's.
+      expect(await read(booking(0), await patientToken())).toBe(404);
     });
 
     it('refuses staff at another hospital', async () => {
@@ -420,7 +422,9 @@ describe('the auth matrix', () => {
       .set('Idempotency-Key', key)
       .send({ bookingId, method: 'at_hospital', idempotencyKey: key });
 
-    expect(response.status).toBe(403);
+    // Not 403: another person's booking does not exist for this caller, so it
+    // is not found (`FR-SEC-11`, migration 0056). The refusal is the database's.
+    expect(response.status).toBe(404);
     expect(JSON.stringify(response.body)).not.toContain('amountPoisha');
     expect(await paymentCount(bookingId)).toBe(before);
   });

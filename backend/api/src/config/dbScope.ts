@@ -33,9 +33,10 @@
  * - `guest`: a tracking link, or the short token it is exchanged for. Of the
  *   clinical record it reaches what was written at the one booking it names
  *   (`FR-GST-05`). A guest token that names no booking reaches none.
- * - `open`: nobody. Of the clinical record, nothing. Everything else is as
- *   it was for these three: what each may see of a booking or a queue is
- *   still decided by the application.
+ * - `open`: nobody. Of the clinical record, nothing; of bookings, payments,
+ *   messages, links, standby places and profiles (migration 0056), likewise
+ *   nothing, where an account and a link reach their own. What a person is
+ *   told of a whole chamber comes through the queue (`asQueue`).
  * - `system`: the server's own work with nobody behind it — the schedule job,
  *   the purge, a command an operator runs — and any code that runs outside a
  *   request, which is what makes this the value when nothing was said.
@@ -74,6 +75,31 @@ export function runInDbScope<T>(scope: DbScope, body: () => T): T {
 /** The scope in force here; `system` where nothing set one. */
 export function currentDbScope(): DbScope {
   return storage.getStore() ?? SYSTEM;
+}
+
+/**
+ * Runs the queue's own work for a person as the server's (migration 0056,
+ * DATABASE.md §5.4, plan I3).
+ *
+ * A patient, a link and nobody reach their own bookings, payments, messages
+ * and profiles and nobody else's. The queue cannot work that way: a serial is
+ * allocated against every booking in a chamber, a log is reduced over all of
+ * them, and every phone in the room is told where it now stands. So when a
+ * person asks the queue to act (to book, cancel, say they are late, take a
+ * freed chair) or to say where they stand, the queue does it as the server,
+ * and only after the application has decided the request is theirs to make.
+ * What leaves it for a person is the patients' copy, which names nobody
+ * (plan I2c).
+ *
+ * A member of staff, the platform and the server's own work are left in
+ * their own scope: a hospital's request is still held to its hospital by the
+ * database, inside the queue as outside it.
+ */
+export function asQueue<T>(body: () => T): T {
+  const scope = currentDbScope();
+  return scope.kind === 'patient' || scope.kind === 'guest' || scope.kind === 'open'
+    ? storage.run(SYSTEM, body)
+    : body();
 }
 
 /**

@@ -71,6 +71,7 @@ import {
 } from '@platform/i18n';
 
 import { segmentsFor, sms } from '../adapters/sms.js';
+import { runInDbScope } from '../config/dbScope.js';
 import * as notificationRepo from '../repositories/notification.repo.js';
 
 import { LINK_PARAMS, originOf, type LinkKind } from './messageLink.service.js';
@@ -1009,10 +1010,18 @@ export async function applyDeliveryReceipt(
   const reason = (receipt.reason ?? 'no_reason_given')
     .replace(/[^\x20-\x7E]/g, '')
     .slice(0, RECEIPT_REASON_MAX);
-  const applied = await notificationRepo.applyReceipt(
-    receipt.providerRef,
-    receipt.outcome,
-    `undelivered:${reason === '' ? 'no_reason_given' : reason}`,
+  const { providerRef, outcome } = receipt;
+  // The aggregator's word, once its signature has checked out: the server's
+  // own work, since the request is nobody's and nobody reads a message
+  // (migration 0056).
+  const applied = await runInDbScope(
+    { kind: 'system' },
+    async () =>
+      await notificationRepo.applyReceipt(
+        providerRef,
+        outcome,
+        `undelivered:${reason === '' ? 'no_reason_given' : reason}`,
+      ),
   );
   return { recognised: true, applied };
 }

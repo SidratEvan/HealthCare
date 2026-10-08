@@ -180,10 +180,7 @@ export async function listHospitals(query: HospitalQuery): Promise<HospitalCard[
                AND fn_module_on(h.id, 'queue')) END AS sitting_now,
 
            CASE WHEN fn_publishes(h.id, 'serials') THEN
-           (SELECT coalesce(sum(GREATEST(coalesce(s.capacity, 0) - (
-                     SELECT count(*) FROM bookings b
-                      WHERE b.session_id = s.id AND b.status <> 'cancelled'
-                        AND b.deleted_at IS NULL), 0)), 0)::text
+           (SELECT coalesce(sum(GREATEST(coalesce(s.capacity, 0) - (SELECT c.taken FROM fn_chamber_counts(s.id) c), 0)), 0)::text
               FROM sessions s
              WHERE s.hospital_id = h.id
                AND s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
@@ -336,10 +333,7 @@ export async function doctorsAtHospital(
                AND fn_module_on(${hospitalId}::uuid, 'queue')) AS next_session_at,
            fn_publishes(${hospitalId}::uuid, 'serials') AS serials_shared,
            CASE WHEN fn_publishes(${hospitalId}::uuid, 'serials') THEN
-           (SELECT GREATEST(coalesce(s.capacity, 0) - (
-                     SELECT count(*) FROM bookings b
-                      WHERE b.session_id = s.id AND b.status <> 'cancelled'
-                        AND b.deleted_at IS NULL), 0)::text
+           (SELECT GREATEST(coalesce(s.capacity, 0) - (SELECT c.taken FROM fn_chamber_counts(s.id) c), 0)::text
               FROM sessions s
              WHERE s.doctor_id = d.id AND s.hospital_id = ${hospitalId}::uuid
                AND s.status IN ('scheduled', 'running')
@@ -530,6 +524,9 @@ export interface SessionCard {
  * Cancelled bookings do not count against capacity: the serial is freed for
  * reissue (`FR-QUE-30`), so counting them would show a session as full while
  * it had room.
+ *
+ * Counted by `fn_chamber_counts` (migration 0056), as every public count of a
+ * chamber is: the caller cannot read the bookings it counts (`FR-SEC-11`).
  */
 export async function listBookableSessions(input: {
   readonly doctorId?: string | undefined;
@@ -564,8 +561,7 @@ export async function listBookableSessions(input: {
            s.session_date::text AS session_date,
            s.planned_start, s.planned_end, s.status::text AS status,
            s.room, s.fee_poisha, s.capacity,
-           (SELECT count(*)::text FROM bookings b
-             WHERE b.session_id = s.id AND b.status <> 'cancelled') AS taken,
+           (SELECT c.taken FROM fn_chamber_counts(s.id) c)::text AS taken,
            fn_publishes(s.hospital_id, 'serials') AS serials_shared
       FROM sessions s
       JOIN hospitals h ON h.id = s.hospital_id

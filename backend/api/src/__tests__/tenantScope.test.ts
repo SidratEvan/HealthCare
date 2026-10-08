@@ -19,7 +19,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
-import { currentDbScope, runInDbScope, scopeOfPrincipal } from '../config/dbScope.js';
+import { asQueue, currentDbScope, runInDbScope, scopeOfPrincipal } from '../config/dbScope.js';
 import { signToken } from '../config/jwt.js';
 import { withTransaction } from '../repositories/transaction.js';
 
@@ -221,6 +221,45 @@ describe('a person’s scope reaches the database and holds (plan B3, migration 
       expect(await visitCount()).toBe(0);
     });
     expect(await visitCount()).toBeGreaterThan(0);
+  });
+});
+
+describe('the queue acts for a person as the server, and for staff as their hospital (plan I3, migration 0056)', () => {
+  const bookingCount = async (): Promise<number> => {
+    const result = await sql<{ n: string }>`SELECT count(*)::text AS n FROM bookings`.execute(db);
+    return Number(result.rows[0]?.n ?? '-1');
+  };
+
+  const bookingsOf = async (hospitalId: string): Promise<number> => {
+    const result = await sql<{ n: string }>`
+      SELECT count(*)::text AS n FROM bookings b JOIN sessions s ON s.id = b.session_id
+       WHERE s.hospital_id = ${hospitalId}::uuid
+    `.execute(db);
+    return Number(result.rows[0]?.n ?? '-1');
+  };
+
+  it('a person and nobody read no booking but their own; inside the queue, every one', async () => {
+    const all = await bookingCount();
+    for (const scope of [
+      { kind: 'open' },
+      { kind: 'guest', guestId: '00000000-0000-7000-8000-000000000000', bookingId: null },
+    ] as const) {
+      await runInDbScope(scope, async () => {
+        expect(await bookingCount()).toBe(0);
+        expect(await asQueue(async () => await bookingCount())).toBe(all);
+        // And only inside: the scope is the person's again after it.
+        expect(await bookingCount()).toBe(0);
+        expect(currentDbScope().kind).toBe(scope.kind);
+      });
+    }
+  });
+
+  it('a member of staff is still held to their own hospital inside the queue', async () => {
+    const ofA = await bookingsOf(a);
+    expect(await bookingCount()).toBeGreaterThan(ofA);
+    await runInDbScope({ kind: 'hospital', hospitalId: a }, async () => {
+      expect(await asQueue(async () => await bookingCount())).toBe(ofA);
+    });
   });
 });
 

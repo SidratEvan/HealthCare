@@ -47,6 +47,7 @@ import {
   type WardView,
 } from '@platform/domain';
 
+import { runInDbScope } from '../config/dbScope.js';
 import { verifyToken } from '../config/jwt.js';
 import { AppError, forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
@@ -470,38 +471,46 @@ export async function createRequest(input: {
     throw validationFailed({ field: 'bedKind', reason: 'not_offered_here' });
   }
 
-  const filed = await withTransaction(async (trx) => {
-    const guestId = await guestRepo.findOrCreateIdentity(trx, {
-      phone: input.patient.phone,
-      displayName: input.patient.name,
-    });
-    const patientId = await guestRepo.findOrCreatePatient(trx, {
-      guestId,
-      fullName: input.patient.name,
-      ageYears: input.patient.ageYears,
-      sex: input.patient.sex,
-      phone: input.patient.phone,
-    });
+  // Filed as the server's own work (migration 0056): the request is nobody's,
+  // and finding which profile a number already has reads profiles nobody may
+  // read. The number is the one the form gave, proved where a deployment asks
+  // for that (`FR-GST-03`).
+  const filed = await runInDbScope(
+    { kind: 'system' },
+    async () =>
+      await withTransaction(async (trx) => {
+        const guestId = await guestRepo.findOrCreateIdentity(trx, {
+          phone: input.patient.phone,
+          displayName: input.patient.name,
+        });
+        const patientId = await guestRepo.findOrCreatePatient(trx, {
+          guestId,
+          fullName: input.patient.name,
+          ageYears: input.patient.ageYears,
+          sex: input.patient.sex,
+          phone: input.patient.phone,
+        });
 
-    // A second tap on the same button is the same request (`bed_requests_one_open_key`).
-    const existing = await bedRepo.findExistingRequest(trx, {
-      idempotencyKey: input.idempotencyKey,
-      patientId,
-      hospitalId: input.hospitalId,
-    });
-    if (existing !== null) return { request: existing, guestId, duplicate: true };
+        // A second tap on the same button is the same request (`bed_requests_one_open_key`).
+        const existing = await bedRepo.findExistingRequest(trx, {
+          idempotencyKey: input.idempotencyKey,
+          patientId,
+          hospitalId: input.hospitalId,
+        });
+        if (existing !== null) return { request: existing, guestId, duplicate: true };
 
-    const request = await bedRepo.insertRequest(trx, {
-      hospitalId: input.hospitalId,
-      patientId,
-      bedKind: input.bedKind,
-      guestId,
-      note: input.note,
-      expectedArrivalAt: input.expectedArrivalAt,
-      idempotencyKey: input.idempotencyKey,
-    });
-    return { request, guestId, duplicate: false };
-  });
+        const request = await bedRepo.insertRequest(trx, {
+          hospitalId: input.hospitalId,
+          patientId,
+          bedKind: input.bedKind,
+          guestId,
+          note: input.note,
+          expectedArrivalAt: input.expectedArrivalAt,
+          idempotencyKey: input.idempotencyKey,
+        });
+        return { request, guestId, duplicate: false };
+      }),
+  );
 
   const token = await bedRequestToken(filed.request.id, filed.guestId);
   const serverTs = new Date().toISOString();

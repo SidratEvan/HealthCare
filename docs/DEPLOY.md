@@ -271,8 +271,8 @@ model's import suggestions are off on the deployed demo unless
 > patient app is built; a hospital's own domain is pointed here by the hospital
 > and then recorded on `S-B-12`). One patient is
 > kept from another by the database for the clinical record (plan B3,
-> migration 0044); for bookings, payments and messages the application still
-> decides (plan I3).
+> migration 0044) and for bookings, payments and messages (plan I3,
+> migration 0056).
 
 The pilot build (`CLAUDE.md` §4.2, pilot step 26). Everything above deploys
 the **demonstration**; this part deploys the **real** thing for one

@@ -40,6 +40,7 @@ import {
   type SessionId,
 } from '@platform/domain';
 
+import { asQueue } from '../config/dbScope.js';
 import { patientLink } from '../config/links.js';
 import { logger } from '../config/logger.js';
 import { ticketFor, ticketsIn } from '../config/serialTicket.js';
@@ -148,192 +149,194 @@ export interface BookingResult {
  * and the tracking link is minted only once the row exists.
  */
 export async function createBooking(input: CreateBookingInput): Promise<BookingResult> {
-  const session = await queueService.requireSession(input.sessionId);
-  // A hospital that does not run serials takes none (`FR-BRD-11`).
-  await modules.requireOn(session.hospitalId, 'queue');
+  return await asQueue(async () => {
+    const session = await queueService.requireSession(input.sessionId);
+    // A hospital that does not run serials takes none (`FR-BRD-11`).
+    await modules.requireOn(session.hospitalId, 'queue');
 
-  if (session.status === 'ended' || session.status === 'cancelled') {
-    throw new AppError('QUEUE_GUARD_FAILED', {
-      message: 'This chamber is no longer taking bookings.',
-      details: { guard: 'SESSION_CLOSED' },
-    });
-  }
+    if (session.status === 'ended' || session.status === 'cancelled') {
+      throw new AppError('QUEUE_GUARD_FAILED', {
+        message: 'This chamber is no longer taking bookings.',
+        details: { guard: 'SESSION_CLOSED' },
+      });
+    }
 
-  // `FR-ONB-06`, `FR-NET-03`: a hospital that is not live — never approved,
-  // or suspended — takes no booking from the public, even at a chamber whose
-  // id somebody still holds. Its own counter is a different route and is not
-  // refused: the staff of a suspended hospital can still work.
-  if (!(await sessionRepo.hospitalIsLive(input.sessionId))) {
-    throw new AppError('QUEUE_GUARD_FAILED', {
-      message: 'This hospital is not taking bookings here at the moment.',
-      details: { guard: 'HOSPITAL_NOT_LIVE' },
-    });
-  }
+    // `FR-ONB-06`, `FR-NET-03`: a hospital that is not live — never approved,
+    // or suspended — takes no booking from the public, even at a chamber whose
+    // id somebody still holds. Its own counter is a different route and is not
+    // refused: the staff of a suspended hospital can still work.
+    if (!(await sessionRepo.hospitalIsLive(input.sessionId))) {
+      throw new AppError('QUEUE_GUARD_FAILED', {
+        message: 'This hospital is not taking bookings here at the moment.',
+        details: { guard: 'HOSPITAL_NOT_LIVE' },
+      });
+    }
 
-  const fee = feeFor(session.feePoisha, input.method);
+    const fee = feeFor(session.feePoisha, input.method);
 
-  const created = await withTransaction(async (trx) => {
-    // The lock the serial is allocated under. Everything below reads a queue
-    // that cannot move while this transaction holds it.
-    const locked = await sessionRepo.lockForUpdate(trx, input.sessionId);
-    if (locked === null) throw notFound('session');
+    const created = await withTransaction(async (trx) => {
+      // The lock the serial is allocated under. Everything below reads a queue
+      // that cannot move while this transaction holds it.
+      const locked = await sessionRepo.lockForUpdate(trx, input.sessionId);
+      if (locked === null) throw notFound('session');
 
-    const patientId = await resolvePatient(trx, input.booker);
+      const patientId = await resolvePatient(trx, input.booker);
 
-    // `FR-QUE-51`: the same request, sent again. Looked for under the lock,
-    // so a retry that overlaps the first attempt waits for it and then finds
-    // what it made. Its booking is the answer, whatever has happened since.
-    const key = input.clientEventId ?? null;
-    if (key !== null) {
-      const made = await bookingRepo.findByIdempotencyKey(trx, key);
-      if (made !== null) {
-        // A key names one request. Under it, a different chamber or a
-        // different patient is not a retry.
-        if (made.sessionId !== input.sessionId || made.patientId !== patientId) {
-          throw new AppError('IDEMPOTENCY_KEY_REUSED');
+      // `FR-QUE-51`: the same request, sent again. Looked for under the lock,
+      // so a retry that overlaps the first attempt waits for it and then finds
+      // what it made. Its booking is the answer, whatever has happened since.
+      const key = input.clientEventId ?? null;
+      if (key !== null) {
+        const made = await bookingRepo.findByIdempotencyKey(trx, key);
+        if (made !== null) {
+          // A key names one request. Under it, a different chamber or a
+          // different patient is not a retry.
+          if (made.sessionId !== input.sessionId || made.patientId !== patientId) {
+            throw new AppError('IDEMPOTENCY_KEY_REUSED');
+          }
+          return {
+            bookingId: made.id,
+            serial: made.serial,
+            patientId,
+            payer: await payerOf(trx, input.booker),
+            replayed: true,
+          };
         }
-        return {
-          bookingId: made.id,
-          serial: made.serial,
-          patientId,
-          payer: await payerOf(trx, input.booker),
-          replayed: true,
-        };
       }
-    }
 
-    // `FR-PAT-24`: never the same profile with the same doctor on the same
-    // day. The database enforces the same-session half as a unique index; the
-    // other half spans two chambers — a morning and an evening — and can only
-    // be checked here, against the doctor and the date.
-    const duplicate = await bookingRepo.findSameDoctorSameDay(trx, {
-      patientId,
-      doctorId: locked.doctorId,
-      sessionDate: locked.sessionDate,
-    });
-
-    if (duplicate !== null) {
-      throw new AppError('BOOKING_DUPLICATE', {
-        details: { bookingId: duplicate.id, serial: duplicate.serial },
+      // `FR-PAT-24`: never the same profile with the same doctor on the same
+      // day. The database enforces the same-session half as a unique index; the
+      // other half spans two chambers — a morning and an evening — and can only
+      // be checked here, against the doctor and the date.
+      const duplicate = await bookingRepo.findSameDoctorSameDay(trx, {
+        patientId,
+        doctorId: locked.doctorId,
+        sessionDate: locked.sessionDate,
       });
-    }
 
-    const roster = await bookingRepo.rosterFor(input.sessionId, trx);
-    const live = roster.length;
-
-    if (locked.capacity !== null && live >= locked.capacity) {
-      throw new AppError('SESSION_FULL', {
-        details: { capacity: locked.capacity, taken: live },
-      });
-    }
-
-    const serial = roster.reduce((max, booking) => Math.max(max, booking.serial), 0) + 1;
-
-    // Resolved once and carried out, because the payment needs the same
-    // identity the booking was made with — a `guest_identities` row, which is
-    // what `payments_one_payer` references and is not the `patients` row.
-    const bookedByGuestId =
-      input.booker.kind === 'guest' ? await guestIdFor(trx, input.booker) : null;
-
-    // `FR-GST-14`: a number with no account behind it may ask for only so
-    // many serials in a day. Counted here, under the lock, against the guest
-    // identity the number resolves to; cancelling does not give one back.
-    if (bookedByGuestId !== null) {
-      const since = new Date(Date.now() - 24 * 3_600_000);
-      const made = await bookingRepo.countGuestBookingsSince(trx, bookedByGuestId, since);
-      if (made >= env.GUEST_BOOKINGS_PER_PHONE_PER_DAY) {
-        throw new AppError('BOOKING_LIMIT_REACHED', {
-          details: { limit: env.GUEST_BOOKINGS_PER_PHONE_PER_DAY, windowHours: 24 },
+      if (duplicate !== null) {
+        throw new AppError('BOOKING_DUPLICATE', {
+          details: { bookingId: duplicate.id, serial: duplicate.serial },
         });
       }
-    }
 
-    const bookingId = await bookingRepo.insertBooking(trx, {
-      sessionId: input.sessionId,
-      patientId,
-      serial,
-      source: input.booker.kind === 'guest' ? 'guest_link' : 'app',
-      feePoisha: session.feePoisha,
-      bookedByUserId: input.booker.kind === 'user' ? input.booker.userId : null,
-      bookedByGuestId,
-      reasonText: input.reason ?? null,
-      // Stamped as demonstration data only where the server is one
-      // (`FR-DEM-07`). It used to be stamped on every booking, a real
-      // hospital's included (handover finding 26).
-      intake: { ...(input.intake ?? {}), ...(env.DEMO_MODE ? { demo: true } : {}) },
-      idempotencyKey: key,
+      const roster = await bookingRepo.rosterFor(input.sessionId, trx);
+      const live = roster.length;
+
+      if (locked.capacity !== null && live >= locked.capacity) {
+        throw new AppError('SESSION_FULL', {
+          details: { capacity: locked.capacity, taken: live },
+        });
+      }
+
+      const serial = roster.reduce((max, booking) => Math.max(max, booking.serial), 0) + 1;
+
+      // Resolved once and carried out, because the payment needs the same
+      // identity the booking was made with — a `guest_identities` row, which is
+      // what `payments_one_payer` references and is not the `patients` row.
+      const bookedByGuestId =
+        input.booker.kind === 'guest' ? await guestIdFor(trx, input.booker) : null;
+
+      // `FR-GST-14`: a number with no account behind it may ask for only so
+      // many serials in a day. Counted here, under the lock, against the guest
+      // identity the number resolves to; cancelling does not give one back.
+      if (bookedByGuestId !== null) {
+        const since = new Date(Date.now() - 24 * 3_600_000);
+        const made = await bookingRepo.countGuestBookingsSince(trx, bookedByGuestId, since);
+        if (made >= env.GUEST_BOOKINGS_PER_PHONE_PER_DAY) {
+          throw new AppError('BOOKING_LIMIT_REACHED', {
+            details: { limit: env.GUEST_BOOKINGS_PER_PHONE_PER_DAY, windowHours: 24 },
+          });
+        }
+      }
+
+      const bookingId = await bookingRepo.insertBooking(trx, {
+        sessionId: input.sessionId,
+        patientId,
+        serial,
+        source: input.booker.kind === 'guest' ? 'guest_link' : 'app',
+        feePoisha: session.feePoisha,
+        bookedByUserId: input.booker.kind === 'user' ? input.booker.userId : null,
+        bookedByGuestId,
+        reasonText: input.reason ?? null,
+        // Stamped as demonstration data only where the server is one
+        // (`FR-DEM-07`). It used to be stamped on every booking, a real
+        // hospital's included (handover finding 26).
+        intake: { ...(input.intake ?? {}), ...(env.DEMO_MODE ? { demo: true } : {}) },
+        idempotencyKey: key,
+      });
+
+      const payer: payments.Payer =
+        input.booker.kind === 'user'
+          ? { kind: 'user', userId: input.booker.userId }
+          : { kind: 'guest', guestId: bookedByGuestId ?? '' };
+
+      return { bookingId, serial, patientId, payer, replayed: false };
     });
 
-    const payer: payments.Payer =
-      input.booker.kind === 'user'
-        ? { kind: 'user', userId: input.booker.userId }
-        : { kind: 'guest', guestId: bookedByGuestId ?? '' };
+    // Outside the transaction: the link is derived from the row, and minting it
+    // is not something to hold a session lock for.
+    //
+    // An account holder is given one too (plan F1). The live serial screen is
+    // opened by a link, on this phone and on any other, and the confirmation
+    // message carries it for the person without the app in their hand
+    // (`FR-PAT-22`, `FR-PAT-37`).
+    const trackingUrl =
+      input.booker.kind === 'guest'
+        ? await issueTrackingLink(created.bookingId, input.sessionId, input.booker.phone)
+        : await issueAccountLink(input.booker.userId, created.bookingId, input.sessionId);
 
-    return { bookingId, serial, patientId, payer, replayed: false };
-  });
+    // Answered again, not made again. The link is minted afresh because only
+    // its hash is ever stored (`FR-GST-05`): the one the first answer carried
+    // cannot be read back, and the patient who never received that answer needs
+    // one that works. Nobody is told twice and nothing is charged twice: the
+    // payment below is keyed by the same request and finds its own row.
+    if (created.replayed) {
+      return {
+        bookingId: created.bookingId,
+        serial: created.serial,
+        sessionId: input.sessionId,
+        fee,
+        trackingUrl,
+        paid: await recordBookingPayment(created, input),
+        duplicate: true,
+      };
+    }
 
-  // Outside the transaction: the link is derived from the row, and minting it
-  // is not something to hold a session lock for.
-  //
-  // An account holder is given one too (plan F1). The live serial screen is
-  // opened by a link, on this phone and on any other, and the confirmation
-  // message carries it for the person without the app in their hand
-  // (`FR-PAT-22`, `FR-PAT-37`).
-  const trackingUrl =
-    input.booker.kind === 'guest'
-      ? await issueTrackingLink(created.bookingId, input.sessionId, input.booker.phone)
-      : await issueAccountLink(input.booker.userId, created.bookingId, input.sessionId);
+    // The console's queue gains a row. `FR-QUE-52`: a booking made while a
+    // console was offline arrives in its next seed rather than being dropped, so
+    // this broadcast is what makes it arrive *now* for the ones that are online.
+    await queueService.broadcastRoster(input.sessionId);
 
-  // Answered again, not made again. The link is minted afresh because only
-  // its hash is ever stored (`FR-GST-05`): the one the first answer carried
-  // cannot be read back, and the patient who never received that answer needs
-  // one that works. Nobody is told twice and nothing is charged twice: the
-  // payment below is keyed by the same request and finds its own row.
-  if (created.replayed) {
+    // `FR-PAT-22`: confirmation in the app *and* by SMS, carrying hospital,
+    // doctor, date, serial and the expected window.
+    //
+    // Queued after the booking transaction rather than inside it, unlike every
+    // queue event. The reason is the tracking link: it is derived from a row
+    // that has to exist first, and only its hash is stored (`FR-GST-05`), so
+    // this is the one moment the message can be composed at all. There is
+    // nothing to roll back by then — the booking is committed and the patient
+    // has their serial.
+    await queueBookingConfirmation(created.bookingId, input.sessionId, trackingUrl);
+
+    // The money, recorded (step 18). Outside the booking transaction and after
+    // the confirmation, deliberately: a patient who has a serial must not lose
+    // it because a payment gateway was slow, and a booking that rolled back
+    // over a charge would send them round to take a second one. So the booking
+    // is the commitment and the payment is recorded against it — which is also
+    // the order a settlement reads them in (`FR-PAY-05`).
+    const paid = await recordBookingPayment(created, input);
+
     return {
       bookingId: created.bookingId,
       serial: created.serial,
       sessionId: input.sessionId,
       fee,
       trackingUrl,
-      paid: await recordBookingPayment(created, input),
-      duplicate: true,
+      paid,
+      duplicate: false,
     };
-  }
-
-  // The console's queue gains a row. `FR-QUE-52`: a booking made while a
-  // console was offline arrives in its next seed rather than being dropped, so
-  // this broadcast is what makes it arrive *now* for the ones that are online.
-  await queueService.broadcastRoster(input.sessionId);
-
-  // `FR-PAT-22`: confirmation in the app *and* by SMS, carrying hospital,
-  // doctor, date, serial and the expected window.
-  //
-  // Queued after the booking transaction rather than inside it, unlike every
-  // queue event. The reason is the tracking link: it is derived from a row
-  // that has to exist first, and only its hash is stored (`FR-GST-05`), so
-  // this is the one moment the message can be composed at all. There is
-  // nothing to roll back by then — the booking is committed and the patient
-  // has their serial.
-  await queueBookingConfirmation(created.bookingId, input.sessionId, trackingUrl);
-
-  // The money, recorded (step 18). Outside the booking transaction and after
-  // the confirmation, deliberately: a patient who has a serial must not lose
-  // it because a payment gateway was slow, and a booking that rolled back
-  // over a charge would send them round to take a second one. So the booking
-  // is the commitment and the payment is recorded against it — which is also
-  // the order a settlement reads them in (`FR-PAY-05`).
-  const paid = await recordBookingPayment(created, input);
-
-  return {
-    bookingId: created.bookingId,
-    serial: created.serial,
-    sessionId: input.sessionId,
-    fee,
-    trackingUrl,
-    paid,
-    duplicate: false,
-  };
+  });
 }
 
 /** Who pays for a booking: the account, or the guest identity behind the number. */

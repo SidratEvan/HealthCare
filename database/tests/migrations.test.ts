@@ -159,6 +159,8 @@ describe('migration files (DATABASE.md §7)', () => {
       '0054',
       // Plan I2: what the nightly backup did, where /readyz can read it (FR-SUP-06).
       '0055',
+      // Plan I3: a person's bookings, payments and messages are their own (FR-SEC-11).
+      '0056',
     ]);
   });
 
