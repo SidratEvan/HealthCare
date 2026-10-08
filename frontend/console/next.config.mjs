@@ -33,7 +33,10 @@ export default {
    *
    * The Content-Security-Policy is the part that can be stated without
    * breaking the page: where it may be framed, what a form may post to, no
-   * plugins. It does not yet restrict scripts. Next writes inline scripts,
+   * plugins. It is sent with everything, the files included. A page also
+   * carries a second policy, from `src/proxy.ts`, that restricts its scripts to
+   * the nonce minted for it (plan I2d); what follows is why that is not here.
+   * Until I2d it did not restrict scripts. Next writes inline scripts,
    * and a policy that allowed them all would be a policy in name only; one
    * built on a nonce per request is a change to how every page is served.
    */
