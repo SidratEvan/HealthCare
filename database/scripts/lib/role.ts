@@ -45,7 +45,7 @@ export interface ApiRole {
 }
 
 /** Tables whose rows are never changed or removed once written. */
-const INSERT_ONLY = ['audit_log', 'bed_events'] as const;
+const INSERT_ONLY = ['audit_log', 'bed_events', 'payment_events'] as const;
 
 /** Tables the owner writes and the API only reads. */
 const READ_ONLY = ['schema_migrations', 'backup_runs'] as const;

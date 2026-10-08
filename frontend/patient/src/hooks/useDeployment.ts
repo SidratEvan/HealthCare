@@ -53,6 +53,8 @@ export interface ScopeConfig {
 export interface DeploymentConfig {
   readonly demo: boolean;
   readonly onlinePayments: boolean;
+  /** The online methods this deployment can take (plan H3). Absent from an older server. */
+  readonly paymentMethods?: readonly string[];
   readonly guestPhoneCheck: boolean;
   /** Null for the network's own app. */
   readonly scope: ScopeConfig | null;

@@ -38,7 +38,7 @@ import { MESSAGE_WAITING_MINUTES } from './health.js';
 import type { Timestamp } from '../types/ids.js';
 
 /** The work the API does on a clock, in its own process. */
-export const DEPLOYMENT_WORKERS = ['sender', 'offers', 'hourly'] as const;
+export const DEPLOYMENT_WORKERS = ['sender', 'offers', 'hourly', 'payments'] as const;
 export type DeploymentWorker = (typeof DEPLOYMENT_WORKERS)[number];
 
 /** A worker is late when nothing has gone right for this many of its intervals. */

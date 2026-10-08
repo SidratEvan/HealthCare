@@ -739,7 +739,6 @@ SMS_PROVIDER=local|log, SMS_API_KEY, SMS_SENDER_ID, SMS_MONTHLY_CAP
 VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
 PAYMENT_PROVIDER=mock|live|off, BKASH_*, NAGAD_*   # off: pay at the hospital only (step 26)
 MOCK_PAYMENT_FLOW=inline|redirect                 # mock only: settle on the spot, or send the patient to a simulated provider page (plan H3)
-PAYMENT_CALLBACK_BASE                             # live only: the API's public address the providers return to; required with live
 TRAVEL_TIME_MODE=static|api, MAPS_API_KEY
 STALE_THRESHOLD_MINUTES=10
 SENTRY_DSN, LOG_LEVEL

@@ -37,6 +37,10 @@
 /** Every message the platform sends. One key per material event. */
 export const TEMPLATE_KEYS = [
   'booking.confirmed',
+  'booking.held',
+  'payment.counter',
+  'payment.released',
+  'payment.owed_back',
   'queue.doctor_arrived',
   'queue.delayed',
   'queue.two_away',
@@ -94,6 +98,68 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
     version: 1,
     bn: 'সিরিয়াল {serial} নিশ্চিত — {doctor}, {time}',
     en: 'Serial {serial} confirmed — {doctor}, {time}',
+  },
+
+  // --- A serial held while it is paid for (plan H3, FR-PAY-08, FR-PAY-10) ---
+  //
+  // Held: the serial is the patient's, the payment is not finished, and the
+  // link is how they get back to finish it. Then one of three: paid (the
+  // ordinary confirmation, above), turned to the counter, or released.
+  {
+    key: 'booking.held',
+    channel: 'sms',
+    version: 1,
+    bn: 'সিরিয়াল {serial} রাখা হয়েছে, {minutes} মিনিটের মধ্যে পরিশোধ করুন: {link}',
+    en: 'Serial {serial} is held. Pay within {minutes} min: {link}',
+  },
+  {
+    key: 'booking.held',
+    channel: 'push',
+    version: 1,
+    bn: 'সিরিয়াল {serial} রাখা হয়েছে — {minutes} মিনিটের মধ্যে পরিশোধ করুন',
+    en: 'Serial {serial} held — pay within {minutes} min',
+  },
+  {
+    key: 'payment.counter',
+    channel: 'sms',
+    version: 1,
+    bn: 'পেমেন্ট হয়নি। সিরিয়াল {serial} আছে, ফি কাউন্টারে দিন: {link}',
+    en: 'Payment not completed. Serial {serial} stands; pay at the counter: {link}',
+  },
+  {
+    key: 'payment.counter',
+    channel: 'push',
+    version: 1,
+    bn: 'সিরিয়াল {serial} আছে — ফি কাউন্টারে দিন',
+    en: 'Serial {serial} stands — pay at the counter',
+  },
+  {
+    key: 'payment.released',
+    channel: 'sms',
+    version: 1,
+    bn: 'পেমেন্ট হয়নি, সিরিয়াল {serial} ছেড়ে দেওয়া হয়েছে। কোনো টাকা কাটা হয়নি।',
+    en: 'Payment not completed; serial {serial} was released. Nothing was charged.',
+  },
+  {
+    key: 'payment.released',
+    channel: 'push',
+    version: 1,
+    bn: 'সিরিয়াল {serial} ছেড়ে দেওয়া হয়েছে — পেমেন্ট হয়নি',
+    en: 'Serial {serial} released — payment not completed',
+  },
+  {
+    key: 'payment.owed_back',
+    channel: 'sms',
+    version: 1,
+    bn: 'সিরিয়াল {serial}-এর বাড়তি পেমেন্ট ফেরত দেওয়া হবে।',
+    en: 'The extra payment for serial {serial} will be returned.',
+  },
+  {
+    key: 'payment.owed_back',
+    channel: 'push',
+    version: 1,
+    bn: 'বাড়তি পেমেন্ট ফেরত দেওয়া হবে',
+    en: 'The extra payment will be returned',
   },
 
   // --- The chamber opens ----------------------------------------------------

@@ -8,23 +8,38 @@
  * only offer what is true here. Nothing in the answer is a secret.
  */
 
+import type { PaymentMethod } from '@platform/domain';
+
+import { availableMethods } from '../adapters/payments/index.js';
 import { env } from '../env.js';
 
 import { guestPhoneCheckRequired } from './patientAuth.service.js';
 
-/** False under `PAYMENT_PROVIDER=off`: only paying at the hospital is offered. */
+/**
+ * False where no online method can be taken: `PAYMENT_PROVIDER=off`, or `live`
+ * with neither bKash's nor Nagad's settings complete. Only paying at the
+ * hospital is offered then.
+ */
 export function onlinePaymentsAvailable(): boolean {
-  return env.PAYMENT_PROVIDER !== 'off';
+  return availableMethods().length > 0;
+}
+
+/** Whether this deployment can take a payment by this method (plan H3). */
+export function methodAvailable(method: PaymentMethod): boolean {
+  return method === 'at_hospital' || method === 'cash' || availableMethods().includes(method);
 }
 
 export function publicConfig(): {
   readonly demo: boolean;
   readonly onlinePayments: boolean;
+  /** The online methods offered here (plan H3): card only with a provider for it. */
+  readonly paymentMethods: readonly PaymentMethod[];
   readonly guestPhoneCheck: boolean;
 } {
   return {
     demo: env.DEMO_MODE,
     onlinePayments: onlinePaymentsAvailable(),
+    paymentMethods: availableMethods(),
     guestPhoneCheck: guestPhoneCheckRequired(),
   };
 }

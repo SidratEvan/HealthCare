@@ -256,6 +256,10 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'GET /demo/consoles': { by: 'demo' },
   'POST /demo/token': { by: 'demo' },
   'POST /webhooks/bkash': { by: 'provider' },
+  // The simulated provider's own page (plan H3): the checkout id in the path
+  // is what it opens, and it is mounted only under the mock.
+  'GET /mock-pay/:checkoutId': { by: 'token' },
+  'GET /mock-pay/:checkoutId/:outcome': { by: 'token' },
   'POST /webhooks/nagad': { by: 'provider' },
   'POST /webhooks/sms-dlr': { by: 'provider' },
 
@@ -329,6 +333,13 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'GET /bookings/:id/payments': {
     by: 'row',
     other: (_mine, theirs) => ({ path: `/bookings/${theirs.bookingIds[0]}/payments` }),
+  },
+  'POST /bookings/:id/payments/:paymentId/confirm': {
+    by: 'row',
+    other: (_mine, theirs) => ({
+      path: `/bookings/${theirs.bookingIds[0]}/payments/${theirs.paymentId}/confirm`,
+      body: {},
+    }),
   },
   'POST /offers/:id/accept': {
     by: 'row',
@@ -565,6 +576,10 @@ const KEPT: Readonly<Record<string, Kept>> = {
         body: { ...keyed(), bookingId: theirs.bookingIds[0], method: 'at_hospital' },
       }),
     ],
+  },
+  'GET /payments/:id/history': {
+    by: 'row',
+    other: (_mine, theirs) => ({ path: `/payments/${theirs.paymentId}/history` }),
   },
   'POST /payments/:id/refund': {
     by: 'row',

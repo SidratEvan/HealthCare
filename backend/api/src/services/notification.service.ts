@@ -105,6 +105,14 @@ const TEMPLATE_FOR: Partial<Record<QueueEvent['type'], TemplateKey>> = {
 };
 
 /**
+ * The reason a serial released by an unfinished payment is cancelled with
+ * (plan H3, `FR-PAY-08`): read by reception on its console, and the sign that
+ * the patient is sent `payment.released` rather than `queue.cancelled`.
+ */
+export const PAYMENT_RELEASED_REASON =
+  'অনলাইন পেমেন্ট সময়মতো হয়নি — সিরিয়াল ছেড়ে দেওয়া হয়েছে';
+
+/**
  * Message namespaces that override quiet hours (`FR-NOT-07`).
  *
  * "Quiet hours for non-urgent notifications; emergency and queue events
@@ -120,7 +128,15 @@ const TEMPLATE_FOR: Partial<Record<QueueEvent['type'], TemplateKey>> = {
  * minutes: a "your bed is held until 11:30 PM" text deferred to seven in the
  * morning is a bed they lost while being told nothing.
  */
-const ALWAYS_OVERRIDES_QUIET_HOURS = new Set(['queue', 'booking', 'session', 'emergency', 'bed']);
+// `payment` (plan H3): a hold is measured in minutes, as a bed's is.
+const ALWAYS_OVERRIDES_QUIET_HOURS = new Set([
+  'queue',
+  'booking',
+  'session',
+  'emergency',
+  'bed',
+  'payment',
+]);
 
 /**
  * Whether a message written at `at` waits for the end of quiet hours
@@ -155,7 +171,11 @@ export function planFor(
     case 'PATIENT_NO_SHOW':
     case 'BOOKING_CANCELLED': {
       const bookingId = String(event.payload.bookingId);
-      return [{ bookingId, templateKey: key, params: {} }];
+      // A serial released because its payment never finished says why, in
+      // place of the plain cancellation (plan H3, `FR-PAY-08`).
+      const released =
+        event.type === 'BOOKING_CANCELLED' && event.payload.reason === PAYMENT_RELEASED_REASON;
+      return [{ bookingId, templateKey: released ? 'payment.released' : key, params: {} }];
     }
 
     // --- Addressed to everybody still waiting ------------------------------
@@ -316,15 +336,25 @@ export function planEarlier(
 export function planBookingConfirmed(
   bookingId: string,
   link: string | null,
+  /** Held for an online payment: `booking.held`, with the minutes (plan H3). */
+  heldMinutes: number | null = null,
 ): readonly PlannedNotification[] {
+  const linkParams: Record<string, string> =
+    link === null ? {} : { link, [LINK_PARAMS.kind]: 'booking' satisfies LinkKind };
   return [
-    {
-      bookingId,
-      templateKey: 'booking.confirmed',
-      // What the link is for, so that one can be issued again for a
-      // confirmation sent from the stored row (`messageLink.service`).
-      params: link === null ? {} : { link, [LINK_PARAMS.kind]: 'booking' satisfies LinkKind },
-    },
+    heldMinutes === null
+      ? {
+          bookingId,
+          templateKey: 'booking.confirmed',
+          // What the link is for, so that one can be issued again for a
+          // confirmation sent from the stored row (`messageLink.service`).
+          params: linkParams,
+        }
+      : {
+          bookingId,
+          templateKey: 'booking.held',
+          params: { ...linkParams, minutes: String(heldMinutes) },
+        },
   ];
 }
 

@@ -27,6 +27,8 @@ import { z } from 'zod';
 
 import {
   idParams,
+  paymentConfirmBody,
+  paymentConfirmParams,
   paymentIntentBody,
   paymentParams,
   refundBody,
@@ -69,6 +71,25 @@ paymentRoutes.get(
   requireBookingScope('id'),
   validate({ params: idParams }),
   payment.forBooking,
+);
+
+// The patient's return from bKash or Nagad (`S-A-07p`; plan H3, `FR-PAY-09`):
+// the booking's owner, the fence above. The server asks the provider; nothing
+// the caller sends is believed. Asking twice changes nothing, so no key.
+paymentRoutes.post(
+  '/bookings/:id/payments/:paymentId/confirm',
+  requireAuth,
+  requireBookingScope('id'),
+  validate({ params: paymentConfirmParams, body: paymentConfirmBody }),
+  payment.confirm,
+);
+
+// A payment's history (`FR-PAY-11`): its hospital's administrator.
+paymentRoutes.get(
+  '/payments/:id/history',
+  ...admin,
+  validate({ params: paymentParams }),
+  payment.history,
 );
 
 // --- Refunds (`FR-PAY-03`, `FR-PAY-07`) -------------------------------------
