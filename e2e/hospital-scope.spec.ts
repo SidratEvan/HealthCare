@@ -15,7 +15,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 const PATIENT = 'http://localhost:3000';
 
-const PLATFORM_BRAND = '#0c5c46';
+/** The network's own primary in the patient app: Visual Direction 2's logo blue (FRONTEND.md §0.5, `PATIENT_COLOUR`). */
+const PLATFORM_BRAND = '#0066dd';
 const PADMA_BRAND = '#17507f';
 
 async function brand600(page: Page): Promise<string> {
@@ -44,7 +45,8 @@ test('opened for Padma, it is Padma’s: its name, its colours, its hospital onl
   await expect.poll(async () => await brand600(page)).toBe(PADMA_BRAND);
 
   // The scope outlives the link: the next screen is still Padma's.
-  await page.getByTestId('home-need-bed:icu').click();
+  await page.getByTestId('home-search').click();
+  await page.getByTestId('need-bed:icu').click();
   const results = page.getByTestId('search-results');
   await expect(results).toBeVisible();
   await expect(page.getByTestId('search-intro')).toContainText('পদ্মা');

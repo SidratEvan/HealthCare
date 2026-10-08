@@ -110,7 +110,7 @@ export default function Page(): ReactNode {
   }, [token, settled, load]);
 
   return (
-    <TabScreen title={tp('standbyStatusTitle', locale)}>
+    <TabScreen title={tp('standbyStatusTitle', locale)} back={{ fallback: '/serials' }}>
       {online ? null : (
         <p
           role="status"
@@ -187,7 +187,7 @@ function Body({
 
   return (
     <div className="flex flex-col gap-4" data-testid="standby-status" data-state={view.state}>
-      <Card>
+      <Card elevated>
         <p className="text-body-md">
           {localName(locale, view.doctorNameBn ?? '', view.doctorNameEn)}
         </p>
@@ -217,7 +217,7 @@ function Body({
         <Seated serial={view.seated.serial} liveUrl={liveUrl} />
       ) : null}
       {view.state === 'left' ? (
-        <Card data-testid="standby-left">
+        <Card elevated data-testid="standby-left">
           <p className="text-body-md">{tp('standbyLeft', locale)}</p>
         </Card>
       ) : null}
@@ -405,7 +405,7 @@ function Seated({
       className="flex flex-col gap-3 rounded-lg border border-brand-600 bg-brand-100 p-5"
       data-testid="standby-seated"
     >
-      <p className="font-reading text-display-lg text-brand-900">
+      <p className="text-display-lg font-bold text-brand-900">
         {tp('standbySeatedTitle', locale).replace('{serial}', formatSerial(serial, numerals))}
       </p>
       {liveUrl === null ? (
@@ -455,7 +455,7 @@ function Leave({
 
   // `GR-01`: leaving is confirmed, and a prepayment's fate is said first.
   return (
-    <Card>
+    <Card elevated>
       {prepaid ? (
         <p className="text-body-md" data-testid="standby-leave-refund">
           {tp('standbyLeaveRefund', locale)}

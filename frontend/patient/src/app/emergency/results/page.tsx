@@ -130,7 +130,7 @@ export default function Page(): ReactNode {
       : tp('emergencyResultsFor', locale).replace('{problem}', problemName(problem, locale));
 
   return (
-    <TabScreen title={title}>
+    <TabScreen title={title} back={{ fallback: '/emergency' }}>
       {/* FR-PAT-47: the national number, on every emergency screen. */}
       <Call999 />
 
@@ -180,7 +180,7 @@ export default function Page(): ReactNode {
       {/* FR-PAT-41: a critical answer narrows by problem without browsing. */}
       {critical ? (
         <section aria-labelledby="narrow-title" className="flex flex-col gap-3">
-          <h2 id="narrow-title" className="text-title-sm text-ink">
+          <h2 id="narrow-title" className="text-title-sm font-bold text-ink">
             {tp('emergencyWhatHappened', locale)}
           </h2>
           <ul className="grid grid-cols-2 gap-2">
@@ -291,7 +291,7 @@ function Results({
 
       {lead === undefined ? null : (
         <section aria-labelledby="lead-title" className="flex flex-col gap-2">
-          <h2 id="lead-title" className="text-title-sm text-ink">
+          <h2 id="lead-title" className="text-title-sm font-bold text-ink">
             {problem === null
               ? tp('emergencyBestNow', locale)
               : tp('emergencyNearestCapable', locale).replace(
@@ -313,7 +313,7 @@ function Results({
 
       {rest.length === 0 ? null : (
         <section aria-labelledby="others-title" className="flex flex-col gap-3">
-          <h2 id="others-title" className="text-title-sm text-ink">
+          <h2 id="others-title" className="text-title-sm font-bold text-ink">
             {tp('emergencyOtherHospitals', locale)}
           </h2>
           {rest.map((result) => (
@@ -346,7 +346,7 @@ function Call999(): ReactNode {
     <a
       href="tel:999"
       data-testid="results-call-999"
-      className="flex min-h-[60px] items-center justify-center rounded-lg bg-alert-600 px-5 font-reading text-title-md font-bold text-white"
+      className="flex min-h-[60px] items-center justify-center rounded-lg bg-alert-600 px-5 text-title-md font-bold text-white"
     >
       {tp('call999', locale)}
     </a>

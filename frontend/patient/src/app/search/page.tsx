@@ -1,12 +1,20 @@
 'use client';
 
 /**
- * `S-A-07s` Search (`APP_FLOW.md` A3, `FR-PAT-16`–`18`).
+ * `S-A-07s` Search (`APP_FLOW.md` A3, `FR-PAT-16`–`18`), the খুঁজুন tab.
  *
  * The screen the product's whole case rests on: a person says what they need
  * and sees which participating hospitals can provide it now. A need is one of
  * the three things hospitals publish live — a specialty, a kind of bed, an
  * emergency capability — or a name, of a doctor or a hospital.
+ *
+ * ## Visual Direction 2 (FRONTEND.md §0.5, 2026-10-07)
+ *
+ * Titled ডাক্তার খুঁজুন. On arrival the eight specialties are one row of chips
+ * first, then beds and special care. When an answer holds both doctors and
+ * hospitals, a two-way switch shows one list at a time: doctors first for a
+ * specialty or a name, hospitals first for a bed or a capability. A doctor is
+ * a letter avatar, never a photo, and carries no rating.
  *
  * ## One card, and the line on it depends on what was asked
  *
@@ -57,17 +65,21 @@ import {
   tp,
 } from '@platform/i18n';
 import type { Locale } from '@platform/i18n';
-import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/ui';
+import { Button, Chip, FreshnessLine, useLocale } from '@platform/ui';
 
 import { HospitalBeds } from '@/components/HospitalBeds';
 import { HospitalMark } from '@/components/HospitalMark';
-import { ChevronIcon, StethoscopeIcon } from '@/components/icons';
+import { ChevronIcon, CloseIcon, HospitalIcon, PhoneIcon, SearchIcon } from '@/components/icons';
+import { Monogram } from '@/components/Monogram';
 import { NotShared, withholds } from '@/components/NotShared';
+import { Segmented } from '@/components/Segmented';
+import { EmptyState, FailedState, OfflineNotice, Panel, SkeletonCards } from '@/components/States';
 import { TabScreen } from '@/components/TabScreen';
 import { useDeployment } from '@/hooks/useDeployment';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
 import { searchNetwork, type SearchAnswer } from '@/lib/api';
+import { doctorName } from '@/lib/doctor';
 
 import type { DoctorCard, HospitalCard } from '@/lib/types';
 import type { ReactNode } from 'react';
@@ -159,58 +171,72 @@ export default function SearchPage(): ReactNode {
   const offered = need === null ? suggestNeeds(text) : [];
   const asking = need !== null || text.trim() !== '';
 
-  return (
-    <TabScreen title={tp('searchPrompt', locale)}>
-      <p className="-mt-3 text-body-md text-ink-secondary" data-testid="search-intro">
-        {scope === null
-          ? tp('searchIntro', locale)
-          : tp('scopedIntro', locale).replace(
-              '{hospital}',
-              localName(locale, scope.nameBn, scope.nameEn),
-            )}
-      </p>
+  // The title says what this screen is for; a bed is not a doctor.
+  const title =
+    need?.kind === 'bed'
+      ? tp('bedsTitle', locale)
+      : need?.kind === 'capability'
+        ? tp('searchPrompt', locale)
+        : tp('homeFindDoctor', locale);
 
-      <Input
-        label={tp('searchLabel', locale)}
-        helper={tp('searchHelper', locale)}
-        value={text}
-        onChange={(event) => {
-          setText(event.target.value);
-        }}
-        // The screen exists to be typed into; a person who came from the
-        // field on Home should not have to tap a second time.
-        autoFocus
-        autoComplete="off"
-        enterKeyHint="search"
-        data-testid="search-input"
-      />
+  return (
+    <TabScreen title={title}>
+      {/* Inside a hospital's own app the screen says whose it is (FR-PAT-19). */}
+      {scope === null ? null : (
+        <p className="-mt-2 text-body-md text-ink-secondary" data-testid="search-intro">
+          {tp('scopedIntro', locale).replace(
+            '{hospital}',
+            localName(locale, scope.nameBn, scope.nameEn),
+          )}
+        </p>
+      )}
+
+      <label className="flex min-h-[56px] items-center gap-3 rounded-md border border-line bg-surface px-4 shadow-1 focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-100">
+        <span className="text-brand-600">
+          <SearchIcon size={22} />
+        </span>
+        <span className="sr-only">{tp('searchFieldLabel', locale)}</span>
+        <input
+          type="search"
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+          }}
+          placeholder={tp(scope === null ? 'homeSearchField' : 'scopedSearch', locale)}
+          // The screen exists to be typed into; a person who came from the
+          // field on Home should not have to tap a second time.
+          autoFocus
+          autoComplete="off"
+          enterKeyHint="search"
+          data-testid="search-input"
+          className="h-[54px] min-w-0 flex-1 bg-transparent text-body-md text-ink outline-none placeholder:text-ink-muted"
+        />
+      </label>
 
       {/* GR-03: offline. The chips stay; the search itself needs the network. */}
       {online ? null : (
-        <p
-          role="status"
-          data-testid="search-offline"
-          className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
-        >
-          {tp('searchOffline', locale)}
-        </p>
+        <OfflineNotice testId="search-offline">{tp('searchOffline', locale)}</OfflineNotice>
       )}
 
       {need === null ? null : (
         <div className="flex flex-wrap items-center gap-2" data-testid="search-need">
-          <span className="rounded-pill bg-brand-600 px-4 py-2 text-body-md font-semibold text-white">
+          <span className="inline-flex min-h-[40px] items-center gap-1 rounded-pill bg-brand-600 pr-1 pl-4 text-body-sm font-semibold text-white">
             {needName(need, locale)}
+            <button
+              type="button"
+              onClick={() => {
+                setNeed(null);
+              }}
+              data-testid="search-need-clear"
+              aria-label={tp('searchClearNeedLabel', locale).replace(
+                '{need}',
+                needName(need, locale),
+              )}
+              className="flex size-8 items-center justify-center rounded-pill hover:bg-brand-700"
+            >
+              <CloseIcon size={16} />
+            </button>
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              setNeed(null);
-            }}
-            data-testid="search-need-clear"
-            className="min-h-touch rounded-pill border border-line-strong px-4 text-body-md text-ink"
-          >
-            {tp('searchClearNeed', locale)}
-          </button>
         </div>
       )}
 
@@ -223,6 +249,7 @@ export default function SearchPage(): ReactNode {
             setText('');
           }}
           testId="search-suggestions"
+          wrap
         />
       )}
 
@@ -247,31 +274,50 @@ export default function SearchPage(): ReactNode {
   );
 }
 
-/** A row of need buttons. */
+/**
+ * A row of need chips. One line that scrolls sideways, as on the approved
+ * board, so a group never pushes the results down the screen; `wrap` for the
+ * suggestions, which are few.
+ */
 function NeedRow({
   needs,
   onChoose,
   testId,
+  wrap = false,
 }: {
   readonly needs: readonly SearchNeed[];
   readonly onChoose: (need: SearchNeed) => void;
   readonly testId?: string;
+  readonly wrap?: boolean;
 }): ReactNode {
   const locale = useLocale();
   return (
-    <ul className="flex flex-wrap gap-2" data-testid={testId}>
+    <ul
+      className={
+        wrap
+          ? 'flex flex-wrap gap-2'
+          : '-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [-webkit-mask-image:linear-gradient(90deg,black_85%,transparent)] [mask-image:linear-gradient(90deg,black_85%,transparent)]'
+      }
+      data-testid={testId}
+    >
       {needs.map((need) => (
-        <li key={needKey(need)}>
-          <button
-            type="button"
-            onClick={() => {
+        <li key={needKey(need)} className="shrink-0">
+          {/*
+            A link first, so a tap that lands before the page has hydrated, on
+            a slow phone, still asks; once the script is here the choice is
+            made in place, without a reload. A button would do nothing at all.
+          */}
+          <a
+            href={`/search?need=${encodeURIComponent(needKey(need))}`}
+            onClick={(event) => {
+              event.preventDefault();
               onChoose(need);
             }}
             data-testid={`need-${needKey(need)}`}
-            className="min-h-touch rounded-pill border border-line-strong bg-surface px-4 text-body-md text-ink"
+            className="inline-flex min-h-[40px] items-center rounded-pill border border-line-strong bg-surface px-4 text-body-sm font-semibold whitespace-nowrap text-ink-secondary hover:border-brand-600 hover:text-brand-700"
           >
             {needName(need, locale)}
-          </button>
+          </a>
         </li>
       ))}
     </ul>
@@ -281,7 +327,7 @@ function NeedRow({
 /**
  * Every need the network can be asked for, in the three groups a person thinks
  * in: somebody to see, somewhere to be admitted, something only some hospitals
- * can treat.
+ * can treat. Specialties first: this is the doctor screen.
  */
 function NeedGroups({ onChoose }: { readonly onChoose: (need: SearchNeed) => void }): ReactNode {
   const locale = useLocale();
@@ -304,13 +350,15 @@ function NeedGroups({ onChoose }: { readonly onChoose: (need: SearchNeed) => voi
     <div className="flex flex-col gap-4" data-testid="search-needs">
       {groups.map((group) => (
         <section key={group.title} className="flex flex-col gap-2">
-          <h2 className="text-title-sm">{group.title}</h2>
+          <h2 className="text-body-sm font-semibold text-ink-muted">{group.title}</h2>
           <NeedRow needs={group.needs} onChoose={onChoose} />
         </section>
       ))}
     </div>
   );
 }
+
+type View = 'doctors' | 'hospitals';
 
 function ResultList({
   results,
@@ -326,31 +374,36 @@ function ResultList({
   readonly onRetry: () => void;
 }): ReactNode {
   const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const [chosen, setChosen] = useState<View | null>(null);
+
+  // A new question starts on its own default view.
+  const asked = `${need === null ? '' : needKey(need)}|${text}`;
+  const [lastAsked, setLastAsked] = useState(asked);
+  if (asked !== lastAsked) {
+    setLastAsked(asked);
+    setChosen(null);
+  }
 
   if (results.state === 'idle') return null;
 
   if (results.state === 'loading') {
     // GR-03 loading: the shape of the answer, never a spinner.
-    return (
-      <div className="flex flex-col gap-3" aria-busy="true" data-testid="search-loading">
-        <div className="h-28 rounded-md bg-sunken" />
-        <div className="h-28 rounded-md bg-sunken" />
-      </div>
-    );
+    return <SkeletonCards count={2} testId="search-loading" />;
   }
 
   if (results.state === 'failed') {
     return (
-      <div
-        role="alert"
-        data-testid="search-failed"
-        className="flex flex-col gap-3 rounded-md border border-line bg-surface p-5"
+      <FailedState
+        testId="search-failed"
+        action={
+          <Button variant="secondary" onClick={onRetry}>
+            {tp('searchRetry', locale)}
+          </Button>
+        }
       >
-        <p className="text-body-md text-ink">{tp('searchFailed', locale)}</p>
-        <Button variant="secondary" onClick={onRetry}>
-          {tp('searchRetry', locale)}
-        </Button>
-      </div>
+        {tp('searchFailed', locale)}
+      </FailedState>
     );
   }
 
@@ -361,32 +414,79 @@ function ResultList({
 
   if (answer.hospitals.length === 0 && answer.doctors.length === 0) {
     return (
-      <p
-        data-testid="search-empty"
-        className="rounded-md border border-line bg-surface p-5 text-body-md text-ink-secondary"
-      >
+      <EmptyState testId="search-empty" icon={<SearchIcon size={24} />}>
         {shown !== null && text === ''
           ? tp('searchNoneForNeed', locale).replace('{need}', needName(shown, locale))
           : tp('searchNoneForText', locale).replace('{text}', text)}
-      </p>
+      </EmptyState>
     );
   }
 
-  return (
-    <div className="flex flex-col gap-5" data-testid="search-results">
-      {answer.hospitals.length === 0 ? null : (
-        <section className="flex flex-col gap-3">
-          <h2 className="font-reading text-title-md">
-            {shown === null
-              ? need === null && text === ''
-                ? tp('searchAllHospitals', locale)
-                : tp('searchHospitals', locale)
-              : tp('searchHospitalsWith', locale).replace('{need}', needName(shown, locale))}
-          </h2>
+  const both = answer.hospitals.length > 0 && answer.doctors.length > 0;
+  // Doctors first for a specialty or a name; hospitals for a bed or a
+  // capability, where the hospital is the answer.
+  const preferred: View =
+    shown === null
+      ? text === ''
+        ? 'hospitals'
+        : 'doctors'
+      : shown.kind === 'specialty'
+        ? 'doctors'
+        : 'hospitals';
+  const view: View = both
+    ? (chosen ?? preferred)
+    : answer.doctors.length > 0
+      ? 'doctors'
+      : 'hospitals';
 
-          {/* FR-PAT-14: who is sitting and what is open are live, so the list
-              says when it was read. Beds and capabilities carry their own. */}
-          <Age asOf={answer.asOf} now={now} />
+  return (
+    <div className="flex flex-col gap-4" data-testid="search-results">
+      {both ? (
+        <Segmented<View>
+          label={tp('searchResultKinds', locale)}
+          value={view}
+          onChange={setChosen}
+          options={[
+            {
+              value: 'doctors',
+              label: tp('searchTabDoctors', locale).replace(
+                '{count}',
+                formatNumber(answer.doctors.length, numerals),
+              ),
+              testId: 'search-tab-doctors',
+              controls: 'search-panel-doctors',
+            },
+            {
+              value: 'hospitals',
+              label: tp('searchTabHospitals', locale).replace(
+                '{count}',
+                formatNumber(answer.hospitals.length, numerals),
+              ),
+              testId: 'search-tab-hospitals',
+              controls: 'search-panel-hospitals',
+            },
+          ]}
+        />
+      ) : null}
+
+      {view === 'hospitals' ? (
+        <section
+          id="search-panel-hospitals"
+          role={both ? 'tabpanel' : undefined}
+          className="flex flex-col gap-3"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <h2 className="text-title-sm font-bold">
+              {shown === null
+                ? need === null && text === ''
+                  ? tp('searchAllHospitals', locale)
+                  : tp('searchHospitals', locale)
+                : tp('searchHospitalsWith', locale).replace('{need}', needName(shown, locale))}
+            </h2>
+            {/* FR-PAT-14: who is sitting and what is open are live, so the list
+                says when it was read. Beds and capabilities carry their own. */}
+            <Age asOf={answer.asOf} now={now} />
+          </div>
 
           <ul className="flex flex-col gap-3">
             {answer.hospitals.map((hospital) => (
@@ -396,11 +496,13 @@ function ResultList({
             ))}
           </ul>
         </section>
-      )}
-
-      {answer.doctors.length === 0 ? null : (
-        <section className="flex flex-col gap-3">
-          <h2 className="font-reading text-title-md">{tp('searchDoctors', locale)}</h2>
+      ) : (
+        <section
+          id="search-panel-doctors"
+          role={both ? 'tabpanel' : undefined}
+          className="flex flex-col gap-3"
+        >
+          <h2 className="sr-only">{tp('searchDoctors', locale)}</h2>
           <ul className="flex flex-col gap-3">
             {answer.doctors.map((doctor) => (
               <li key={doctor.id}>
@@ -466,12 +568,14 @@ function HospitalResult({
   const callNumber = hospital.emergencyPhone ?? hospital.phone ?? null;
 
   return (
-    <Card tone={(hospital.sittingNow ?? 0) > 0 && need?.kind !== 'bed' ? 'brand' : 'default'}>
+    <Panel className="p-4">
       <div className="flex flex-col gap-3" data-testid={`result-hospital-${hospital.id}`}>
         <div className="flex items-start gap-3">
           <HospitalMark hospitalId={hospital.id} logoVersion={hospital.logoVersion} />
           <div className="min-w-0 flex-1">
-            <p className="text-title-sm">{localName(locale, hospital.nameBn, hospital.nameEn)}</p>
+            <p className="text-title-sm font-bold">
+              {localName(locale, hospital.nameBn, hospital.nameEn)}
+            </p>
             <p className="text-body-sm text-ink-muted">
               {(locale === 'en' ? hospital.addressEn : hospital.addressBn) ??
                 districtName(hospital.district, locale)}
@@ -485,19 +589,28 @@ function HospitalResult({
             {bedsWithheld ? (
               <NotShared figure="beds" />
             ) : tally === null ? (
-              <Chip tone="neutral">
+              <Chip tone="caution">
                 {tp('searchBedUnconfirmed', locale).replace(
                   '{kind}',
                   bedKindName(need.bedKind, locale),
                 )}
               </Chip>
             ) : (
-              <Chip tone={tally.free > 0 ? 'positive' : 'neutral'}>
-                {tp('searchBedFree', locale)
-                  .replace('{kind}', bedKindName(need.bedKind, locale))
-                  .replace('{free}', formatNumber(tally.free, numerals))
-                  .replace('{total}', formatNumber(tally.total, numerals))}
-              </Chip>
+              <p className="flex items-baseline gap-1.5">
+                <span
+                  className={`text-title-lg font-extrabold tabular-nums ${
+                    tally.free > 0 ? 'text-brand-600' : 'text-ink-muted'
+                  }`}
+                >
+                  {formatNumber(tally.free, numerals)}
+                </span>
+                <span className="text-body-sm text-ink-secondary">
+                  {tp('searchBedFree', locale)
+                    .replace('{kind}', bedKindName(need.bedKind, locale))
+                    .replace('{free}', formatNumber(tally.free, numerals))
+                    .replace('{total}', formatNumber(tally.total, numerals))}
+                </span>
+              </p>
             )}
             {/* No age under a figure that is not there. */}
             {bedsWithheld ? null : <Age asOf={tally?.asOf ?? null} now={now} />}
@@ -506,12 +619,14 @@ function HospitalResult({
 
         {need?.kind === 'capability' ? (
           <div className="flex flex-col gap-1" data-testid="result-need-line">
-            <Chip tone="positive">
-              {tp('searchHasCapability', locale).replace(
-                '{capability}',
-                capabilityName(need.capability, locale),
-              )}
-            </Chip>
+            <span className="self-start">
+              <Chip tone="positive">
+                {tp('searchHasCapability', locale).replace(
+                  '{capability}',
+                  capabilityName(need.capability, locale),
+                )}
+              </Chip>
+            </span>
             <Age asOf={hospital.capabilityAsOf} now={now} />
           </div>
         ) : null}
@@ -543,7 +658,7 @@ function HospitalResult({
                       )
                     : tp('nobodySittingNow', locale)}
                 </Chip>
-                <Chip tone={hospital.openSerialsToday > 0 ? 'positive' : 'neutral'}>
+                <Chip tone="neutral">
                   {hospital.openSerialsToday > 0
                     ? tp('serialsOpenToday', locale).replace(
                         '{count}',
@@ -562,11 +677,11 @@ function HospitalResult({
           <HospitalBeds beds={hospital.beds} notShared={bedsWithheld} now={now} />
         )}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 border-t border-line pt-3">
           <a
             href={href}
             data-testid={`result-open-${hospital.id}`}
-            className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-md bg-brand-600 px-4 text-body-lg font-semibold text-white"
+            className="flex min-h-touch flex-1 items-center justify-center gap-1 rounded-sm bg-brand-600 px-4 text-body-md font-bold text-white"
           >
             {action}
             <ChevronIcon size={18} />
@@ -578,31 +693,36 @@ function HospitalResult({
             <a
               href={`tel:${callNumber}`}
               data-testid={`result-call-${hospital.id}`}
-              className="flex min-h-touch flex-1 items-center justify-center rounded-md border border-alert-600 px-4 text-body-lg font-semibold text-alert-700"
+              className="flex min-h-touch flex-1 items-center justify-center gap-2 rounded-sm border border-alert-600 bg-surface px-4 text-body-md font-bold text-alert-700"
             >
+              <PhoneIcon size={18} />
               {tp('searchCall', locale)}
             </a>
           ) : null}
         </div>
       </div>
-    </Card>
+    </Panel>
   );
 }
 
-/** A doctor, and each place they can be booked at. */
+/**
+ * A doctor: a letter avatar, the name and degrees, and each place they can be
+ * booked at with its fee and a way to book there. No photograph and no rating
+ * (FRONTEND.md §0.5): the network holds neither, and neither is invented.
+ */
 function DoctorResult({ doctor }: { readonly doctor: DoctorCard }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
 
   return (
-    <Card>
+    <Panel className="p-4">
       <div className="flex flex-col gap-3" data-testid={`result-doctor-${doctor.id}`}>
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 text-brand-600">
-            <StethoscopeIcon size={22} />
-          </span>
+          <Monogram name={localName(locale, doctor.nameBn, doctor.nameEn)} />
           <div className="min-w-0 flex-1">
-            <p className="text-title-sm">{localName(locale, doctor.nameBn, doctor.nameEn)}</p>
+            <p className="text-title-sm font-bold">
+              {doctorName(locale, doctor.nameBn, doctor.nameEn)}
+            </p>
             {doctor.degrees === null ? null : (
               <p className="text-body-sm text-ink-muted">{doctor.degrees}</p>
             )}
@@ -617,27 +737,32 @@ function DoctorResult({ doctor }: { readonly doctor: DoctorCard }): ReactNode {
                 <a
                   href={`/book?specialty=${chamber.departmentCode}&hospital=${chamber.hospitalId}&doctor=${doctor.id}`}
                   data-testid={`result-chamber-${doctor.id}-${chamber.hospitalId}`}
-                  className="flex min-h-touch items-center justify-between gap-3 rounded-sm border border-line bg-surface px-4 py-3"
+                  className="flex min-h-touch items-center justify-between gap-3 border-t border-line pt-3"
                 >
-                  <span className="min-w-0">
-                    <span className="block text-body-md font-semibold">
-                      {localName(locale, chamber.hospitalNameBn, chamber.hospitalNameEn)}
+                  <span className="flex min-w-0 items-start gap-2">
+                    <span className="mt-0.5 text-ink-muted">
+                      <HospitalIcon size={16} />
                     </span>
-                    <span className="block text-body-sm text-ink-secondary">
-                      {[
-                        specialty === undefined
-                          ? null
-                          : localName(locale, specialty.nameBn, specialty.nameEn),
-                        tp('searchFee', locale).replace(
-                          '{fee}',
-                          formatTaka(chamber.feePoisha, numerals),
-                        ),
-                      ]
-                        .filter((part) => part !== null)
-                        .join(' · ')}
+                    <span className="min-w-0">
+                      <span className="block text-body-sm font-semibold text-ink">
+                        {localName(locale, chamber.hospitalNameBn, chamber.hospitalNameEn)}
+                      </span>
+                      <span className="block text-body-sm text-ink-secondary">
+                        {[
+                          specialty === undefined
+                            ? null
+                            : localName(locale, specialty.nameBn, specialty.nameEn),
+                          tp('searchFee', locale).replace(
+                            '{fee}',
+                            formatTaka(chamber.feePoisha, numerals),
+                          ),
+                        ]
+                          .filter((part) => part !== null)
+                          .join(' · ')}
+                      </span>
                     </span>
                   </span>
-                  <span className="shrink-0 text-body-md font-semibold text-brand-700">
+                  <span className="flex min-h-[40px] shrink-0 items-center rounded-sm bg-brand-600 px-4 text-body-sm font-bold text-white">
                     {tp('bookHere', locale)}
                   </span>
                 </a>
@@ -646,6 +771,6 @@ function DoctorResult({ doctor }: { readonly doctor: DoctorCard }): ReactNode {
           })}
         </ul>
       </div>
-    </Card>
+    </Panel>
   );
 }

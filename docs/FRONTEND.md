@@ -137,11 +137,15 @@ proportions and colours are never redrawn, simplified or recoloured. The
 light version (white ground) is the one inside the app; the dark version is
 for dark presentation surfaces only. It is the stacked lockup as approved: the
 home header carries it at 68 px tall, and the foot of the More screen at a
-smaller size. Inner screens carry a page title instead. The file is
-`frontend/patient/public/brand/medlivebd-logo-light.png`, cut from the supplied
-artwork without altering it, shown through `<BrandLogo>` so that a later asset
-replaces one file. It blends onto the ground with `mix-blend-mode: multiply`
-because the supplied file is not transparent. Inside a hospital's own app the
+smaller size. Inner screens carry a page title instead. The master is
+`docs/design/brand/medlivebd-logo-light.png`, the light half of the supplied
+artwork (`medlivebd-logo-supplied.png`) cut at its native pixels without
+altering it; the app shows `frontend/patient/public/brand/medlivebd-logo-light.webp`,
+the same artwork at three times its display size (12 KB, inside §11.4's
+first-paint budget), through `<BrandLogo>`, so that a later asset replaces one
+file. It blends onto the ground with `mix-blend-mode: multiply` because the
+supplied file is not transparent; a transparent master from the designer would
+remove the need. Inside a hospital's own app the
 hospital's mark and name stand where the logo stands (`FR-BRD-06`).
 
 **The illustration.** One illustration is approved: the Bangladeshi family on
@@ -443,7 +447,7 @@ These are custom, not library components, and they carry the brand.
 
 ### 6.1 `<LiveSerialCard>` — `S-A-08`
 
-Anatomy: status line with a pulsing live dot → your number in `display-xl` → now-serving and patients-ahead side by side → ETA with confidence band and countdown → freshness line. In the patient app (§0.5) it sits centred on the tint, the dot is the logo teal, and beneath it the screen shows the four steps of a visit (serial taken → waiting → your turn → seen), which replace the progress track.
+Anatomy: status line with a pulsing live dot → your number in `display-xl` → now-serving and patients-ahead side by side → ETA with confidence band and countdown → freshness line. In the patient app (§0.5) it sits centred on the tint, the dot is the logo teal, and beneath it the screen shows the four steps of a visit (serial taken → waiting → your turn → seen), which carry the visit; the session progress track stays, thin, at the card's foot, because a screen reader needs it as a `progressbar` (`A11Y-03`).
 On `EVT-PATIENT_CALLED`: number rolls (`motion-count`), progress advances, light haptic.
 States: waiting, doctor-not-arrived, delayed (surface shifts to `--warn-*` family), you're-next (brand surface intensifies), called (full-screen takeover), stale (amber freshness, "সংযোগ নেই" line).
 

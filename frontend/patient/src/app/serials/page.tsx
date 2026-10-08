@@ -38,6 +38,7 @@ import { Card, useLocale } from '@platform/ui';
 import { ChevronIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
 import { useDeployment } from '@/hooks/useDeployment';
+import { doctorName } from '@/lib/doctor';
 import { scopedHospitalId } from '@/lib/scope';
 import { serialsFor, type StoodBooking } from '@/lib/standing';
 
@@ -137,13 +138,13 @@ function Section({
 
   return (
     <section className="flex flex-col gap-3" data-testid={`serials-${name}`}>
-      <h2 className="text-title-sm">{title}</h2>
+      <h2 className="text-title-sm font-bold">{title}</h2>
 
       <ul className="flex flex-col gap-3">
         {bookings.map((booking) => (
           <li key={booking.bookingId}>
             <a href={booking.url} data-testid={`serial-${booking.bookingId}`}>
-              <Card tone={live ? 'brand' : 'default'}>
+              <Card elevated tone={live ? 'brand' : 'default'}>
                 <div className="flex items-center gap-3">
                   <span
                     className={`flex size-11 shrink-0 items-center justify-center rounded-pill text-title-sm font-bold tabular-nums ${
@@ -155,7 +156,7 @@ function Section({
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-body-lg font-semibold">
-                      {localName(locale, booking.doctorNameBn, booking.doctorNameEn)}
+                      {doctorName(locale, booking.doctorNameBn, booking.doctorNameEn)}
                     </p>
                     <p className="truncate text-body-sm text-ink-muted">
                       {localName(locale, booking.hospitalNameBn, booking.hospitalNameEn)}

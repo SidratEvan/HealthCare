@@ -70,11 +70,11 @@ test.describe('the patient app (SEG-A00-LANG)', () => {
     await chooseEnglish(page);
 
     const nav = page.getByTestId('bottom-nav');
-    for (const label of ['Home', 'Serials', 'Records', 'Profile']) {
+    for (const label of ['Home', 'Search', 'Serials', 'Records', 'More']) {
       await expect(nav.getByText(label, { exact: true })).toBeVisible();
     }
     await expect(page.getByTestId('emergency-card')).toContainText('Emergency');
-    await expect(page.getByTestId(`specialty-${demo.departmentCode}`)).not.toHaveText(BENGALI);
+    await expect(page.getByTestId('home-find-doctor')).not.toHaveText(BENGALI);
 
     // Everything on the home screen is the product's own copy, so none of it
     // may be left in Bangla — except the switch's own "বাংলা", which names

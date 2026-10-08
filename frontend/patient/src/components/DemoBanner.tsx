@@ -28,9 +28,10 @@ export function DemoBanner(): ReactNode {
   return (
     <p
       data-testid="demo-banner"
-      className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700"
+      className="flex items-start gap-2 self-start rounded-xs bg-warn-100 px-3 py-1 text-caption text-warn-700"
     >
-      {tp('demoBanner', locale)}
+      <span aria-hidden="true" className="mt-[7px] size-1.5 shrink-0 rounded-pill bg-warn-600" />
+      <span>{tp('demoBanner', locale)}</span>
     </p>
   );
 }

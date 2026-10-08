@@ -1,14 +1,16 @@
 'use client';
 
 /**
- * The shell every tab shares: the demonstration line where the server says it
- * is one, a title, the screen, and the bottom navigation (`NAV-A`).
+ * The frame every patient screen shares (FRONTEND.md §0.5): the header, the
+ * demonstration line where the server says it is one, the screen, and the
+ * bottom navigation (`NAV-A`).
  *
- * It used to carry a second export, a screen that said "not built yet", for
- * the tabs and tiles that led nowhere. Nothing leads nowhere now: what is not
- * in V1 is not offered (`PRD.md` §7.8, owner's direction of 2026-10-05).
+ * Every screen is drawn inside this, the home screen included (its header is
+ * the brand form), so the header, the gutters, the space above the bar and the
+ * bar itself cannot differ from one screen to the next.
  */
 
+import { AppHeader, type BackTarget } from '@/components/AppHeader';
 import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
 import { DemoBanner } from '@/components/DemoBanner';
 
@@ -16,17 +18,22 @@ import type { ReactNode } from 'react';
 
 export function TabScreen({
   title,
+  back,
   children,
+  testId,
 }: {
-  readonly title: string;
+  /** The screen's title, or null for the home screen's brand header. */
+  readonly title: string | null;
+  readonly back?: BackTarget;
   readonly children: ReactNode;
+  readonly testId?: string;
 }): ReactNode {
   return (
     <>
-      <main className="mx-auto flex max-w-[480px] flex-col gap-5 px-5 pt-4">
-        <DemoBanner />
+      <AppHeader title={title} {...(back === undefined ? {} : { back })} />
 
-        <h1 className="font-reading text-title-lg">{title}</h1>
+      <main data-testid={testId} className="mx-auto flex max-w-[480px] flex-col gap-5 px-5 pt-1">
+        <DemoBanner />
 
         {children}
 

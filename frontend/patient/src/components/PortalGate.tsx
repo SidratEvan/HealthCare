@@ -27,6 +27,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode 
 import { tp } from '@platform/i18n';
 import { Button, useLocale } from '@platform/ui';
 
+import { LanguageToggle } from '@/components/LanguageToggle';
 import { askWhoseAddress } from '@/hooks/useDeployment';
 import { hostNeedsAsking, onHostAnswer } from '@/lib/scope';
 
@@ -54,34 +55,43 @@ export function PortalGate({ children }: { readonly children: ReactNode }): Reac
   if (!needsAsking) return children;
 
   return (
-    <main
-      className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center"
-      data-testid="portal-gate"
-      data-state={waiting.kind}
-    >
-      {waiting.kind === 'asking' ? (
-        <p role="status" className="text-body-md text-ink-muted">
-          {tp('loading', locale)}
-        </p>
-      ) : waiting.kind === 'unreachable' ? (
-        <div role="alert" className="flex max-w-sm flex-col items-center gap-3">
-          <p className="text-body-md text-ink-secondary">{tp('portalUnreachable', locale)}</p>
-          <Button onClick={ask}>{tp('tryAgain', locale)}</Button>
-        </div>
-      ) : (
-        <div role="status" className="flex max-w-sm flex-col items-center gap-3">
-          <p className="text-body-md text-ink-secondary">{tp('portalNobodys', locale)}</p>
-          {waiting.networkUrl === null ? null : (
-            <a
-              href={waiting.networkUrl}
-              className="flex min-h-touch items-center rounded-md bg-brand-600 px-4 font-ui text-body-md font-semibold text-ink-inverse"
-              data-testid="portal-go-network"
-            >
-              {tp('portalGoNetwork', locale)}
-            </a>
-          )}
-        </div>
-      )}
-    </main>
+    <>
+      {/* SEG-A00-LANG: even a screen that is waiting can be read in English.
+          Beside the gate, not in it, as every screen's switch is in its
+          header and not in its <main>. */}
+      <header className="fixed top-[calc(12px+env(safe-area-inset-top))] right-5 z-10">
+        <LanguageToggle />
+      </header>
+
+      <main
+        className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center"
+        data-testid="portal-gate"
+        data-state={waiting.kind}
+      >
+        {waiting.kind === 'asking' ? (
+          <p role="status" className="text-body-md text-ink-muted">
+            {tp('loading', locale)}
+          </p>
+        ) : waiting.kind === 'unreachable' ? (
+          <div role="alert" className="flex max-w-sm flex-col items-center gap-3">
+            <p className="text-body-md text-ink-secondary">{tp('portalUnreachable', locale)}</p>
+            <Button onClick={ask}>{tp('tryAgain', locale)}</Button>
+          </div>
+        ) : (
+          <div role="status" className="flex max-w-sm flex-col items-center gap-3">
+            <p className="text-body-md text-ink-secondary">{tp('portalNobodys', locale)}</p>
+            {waiting.networkUrl === null ? null : (
+              <a
+                href={waiting.networkUrl}
+                className="flex min-h-touch items-center rounded-md bg-brand-600 px-4 font-ui text-body-md font-semibold text-ink-inverse"
+                data-testid="portal-go-network"
+              >
+                {tp('portalGoNetwork', locale)}
+              </a>
+            )}
+          </div>
+        )}
+      </main>
+    </>
   );
 }

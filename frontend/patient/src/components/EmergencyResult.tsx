@@ -75,7 +75,7 @@ export function EmergencyResultCard({
       }
     >
       <div className="flex items-start justify-between gap-3">
-        <h3 className="min-w-0 font-reading text-title-md text-ink">
+        <h3 className="min-w-0 text-title-md font-bold text-ink">
           {localName(locale, result.nameBn, result.nameEn)}
         </h3>
         {result.hasCapability === null ? null : (

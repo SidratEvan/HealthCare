@@ -43,6 +43,7 @@ import {
 import {
   formatClock,
   formatMinutes,
+  formatNumber,
   formatSerial,
   formatTaka,
   tp,
@@ -60,12 +61,15 @@ import {
   useLocale,
 } from '@platform/ui';
 
-import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
-import { DemoBanner } from '@/components/DemoBanner';
+import { CheckIcon, ClockIcon, CloseIcon, SmsIcon } from '@/components/icons';
+import { Monogram } from '@/components/Monogram';
+import { FailedState, Panel } from '@/components/States';
+import { TabScreen } from '@/components/TabScreen';
 import { useNow } from '@/hooks/useNow';
 import { useSessionChannel } from '@/hooks/useSessionChannel';
 import { useTrackingLink } from '@/hooks/useTrackingLink';
 import { SOCKET_URL, cancelBooking, declareLate } from '@/lib/api';
+import { doctorName } from '@/lib/doctor';
 
 import type { BookingDetail, BookingView } from '@/lib/types';
 import type { ReactNode } from 'react';
@@ -212,170 +216,259 @@ function Ready({
   );
 
   return (
-    <>
-      <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5">
-        <DemoBanner />
-
-        <header className="flex flex-col gap-1">
-          <h1 className="font-reading text-title-lg">
-            {localName(locale, booking.doctorNameBn, booking.doctorNameEn)}
-          </h1>
-          <p className="text-body-sm text-ink-muted">
+    <TabScreen title={tp('homeMySerial', locale)} back={{ fallback: '/serials' }}>
+      {/* Whose chamber this is: the doctor, the hospital and the room. */}
+      <Panel className="flex items-center gap-3 px-4 py-3">
+        <Monogram name={localName(locale, booking.doctorNameBn, booking.doctorNameEn)} />
+        <div className="min-w-0">
+          <p className="text-body-lg font-bold" data-testid="live-serial-doctor">
+            {doctorName(locale, booking.doctorNameBn, booking.doctorNameEn)}
+          </p>
+          <p className="text-body-sm text-ink-secondary">
             {localName(locale, booking.hospitalNameBn, booking.hospitalNameEn)}
           </p>
-        </header>
+          {booking.room === null ? null : (
+            <p className="text-body-sm text-ink-muted">
+              {tp('roomLabel', locale).replace('{room}', booking.room)}
+            </p>
+          )}
+        </div>
+      </Panel>
 
-        <LiveSerialCard
-          serial={formatSerial(booking.serial, numerals)}
-          nowServing={serving === null ? null : formatSerial(serving.serial, numerals)}
-          seen={state.entries.filter((entry) => entry.status === 'done').length}
-          total={state.entries.length}
-          etaText={etaText(eta, locale)}
-          confidence={eta?.confidence ?? 'unknown'}
-          stale={stale}
-          doctorArrived={state.doctorArrivedAt !== null}
-          delayMinutes={delayAhead}
-          patientsAhead={ahead}
-          called={called}
-          labels={{
-            status: statusLine(state, called, delayAhead, locale),
-            yourSerial: tp('liveSerialTitle', locale),
-            nowServing: tp('nowServing', locale),
-            nobodyCalledYet: tp('nobodyCalledYet', locale),
-            progress: tp('sessionProgress', locale),
-            eta: tp('estimatedTime', locale),
-            etaUnknown: tp('etaUnknown', locale),
-            countdown:
-              minutesUntil === null
-                ? null
-                : tp('countdown', locale).replace(
-                    '{minutes}',
-                    formatMinutes(minutesUntil, numerals),
-                  ),
-            disconnected: tp('disconnected', locale),
+      <LiveSerialCard
+        serial={formatSerial(booking.serial, numerals)}
+        nowServing={serving === null ? null : formatSerial(serving.serial, numerals)}
+        ahead={
+          mine === null || called
+            ? null
+            : {
+                label: tp('liveAhead', locale),
+                value: tp('liveAheadCount', locale).replace(
+                  '{count}',
+                  formatNumber(ahead, numerals),
+                ),
+              }
+        }
+        seen={state.entries.filter((entry) => entry.status === 'done').length}
+        total={state.entries.length}
+        etaText={etaText(eta, locale)}
+        confidence={eta?.confidence ?? 'unknown'}
+        stale={stale}
+        doctorArrived={state.doctorArrivedAt !== null}
+        delayMinutes={delayAhead}
+        patientsAhead={ahead}
+        called={called}
+        labels={{
+          status: statusLine(state, called, delayAhead, locale),
+          yourSerial: tp('liveSerialTitle', locale),
+          nowServing: tp('nowServing', locale),
+          nobodyCalledYet: tp('nobodyCalledYet', locale),
+          progress: tp('sessionProgress', locale),
+          eta: tp('estimatedTime', locale),
+          etaUnknown: tp('etaUnknown', locale),
+          countdown:
+            minutesUntil === null
+              ? null
+              : tp('countdown', locale).replace('{minutes}', formatMinutes(minutesUntil, numerals)),
+          disconnected: tp('disconnected', locale),
+        }}
+        freshness={
+          <FreshnessLine
+            asOf={freshAt === null ? null : new Date(freshAt)}
+            now={now}
+            staleAfterMinutes={booking.staleThresholdMinutes}
+            labels={{
+              justNow: tp('updatedJustNow', locale),
+              ago: tp('updatedAgo', locale),
+              never: tp('updatedNever', locale),
+              stale: tp('staleWarning', locale),
+            }}
+            formatMinutes={(value) => formatAge(value, locale, numerals)}
+          />
+        }
+      />
+
+      {mine === null || mine.status === 'cancelled' || mine.status === 'no_show' ? null : (
+        <VisitSteps status={mine.status} />
+      )}
+
+      {/* `FR-PAT-38`: the wait the counter quoted at check-in. Beside the
+          live estimate, never instead of it, and never counting below zero:
+          a promise that has run out says so. */}
+      {mine !== null && !called && mine.arrivedAt !== null && mine.quotedWaitMinutes !== null ? (
+        <CounterQuote
+          arrivedAt={mine.arrivedAt}
+          quotedWaitMinutes={mine.quotedWaitMinutes}
+          now={now}
+        />
+      ) : null}
+
+      {/* `BANNER-A08-LEAVE` (`FR-PAT-32`): travel + buffer has caught up with
+        the remaining wait. Only while there is still a wait to beat — a
+        person already being called does not need to be told to set off, and
+        nor does one reception has already checked in (`FR-PAT-38`). */}
+      {!called &&
+      mine?.arrivedAt === null &&
+      minutesUntil !== null &&
+      minutesUntil <= TRAVEL_MINUTES + 10 ? (
+        <p
+          role="status"
+          data-testid="leave-now"
+          className="rounded-md border border-brand-border bg-brand-100 px-4 py-3 text-body-md font-semibold text-brand-900"
+        >
+          {tp('leaveNow', locale).replace('{minutes}', formatMinutes(TRAVEL_MINUTES, numerals))}
+        </p>
+      ) : null}
+
+      {called ? (
+        <p
+          role="status"
+          data-testid="called-takeover"
+          className="rounded-md bg-brand-600 px-4 py-4 text-center text-title-sm font-bold text-white"
+        >
+          {booking.room === null
+            ? tp('goToChamber', locale)
+            : tp('goToRoom', locale).replace('{room}', booking.room)}
+        </p>
+      ) : null}
+
+      {notice === null ? null : (
+        <p
+          role="status"
+          data-testid="live-serial-notice"
+          className="rounded-sm bg-sunken px-4 py-3 text-body-md text-ink-secondary"
+        >
+          {notice}
+        </p>
+      )}
+
+      {failure === null ? null : (
+        <p
+          data-testid="live-serial-failure"
+          className="rounded-sm bg-alert-100 px-4 py-3 text-body-md text-alert-700"
+        >
+          {failure}
+        </p>
+      )}
+
+      {/* FR-NOT: the two-away message goes to the number the serial was
+          booked under. Said here so nobody keeps the screen open for it. */}
+      {called || mine === null ? null : (
+        <p className="flex items-center gap-3 rounded-md border border-line bg-surface px-4 py-3 text-body-sm text-ink-secondary">
+          <span className="text-brand-600">
+            <SmsIcon size={22} />
+          </span>
+          {tp('smsWhenNear', locale)}
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <LateSheet
+          // Somebody checked in at the counter is not running late.
+          disabled={mine === null || called || mine.arrivedAt !== null}
+          onChoose={(minutes) => {
+            void act(
+              async ({ bookingId, token: bearer }) => {
+                await declareLate({
+                  bookingId,
+                  token: bearer,
+                  expectedMinutes: minutes,
+                  idempotencyKey: crypto.randomUUID(),
+                  clientEventId: crypto.randomUUID(),
+                });
+              },
+              tp('lateDone', locale).replace('{count}', formatMinutes(3, numerals)),
+            );
           }}
-          freshness={
-            <FreshnessLine
-              asOf={freshAt === null ? null : new Date(freshAt)}
-              now={now}
-              staleAfterMinutes={booking.staleThresholdMinutes}
-              labels={{
-                justNow: tp('updatedJustNow', locale),
-                ago: tp('updatedAgo', locale),
-                never: tp('updatedNever', locale),
-                stale: tp('staleWarning', locale),
-              }}
-              formatMinutes={(value) => formatAge(value, locale, numerals)}
-            />
-          }
         />
 
-        {/* `FR-PAT-38`: the wait the counter quoted at check-in. Beside the
-            live estimate, never instead of it, and never counting below zero:
-            a promise that has run out says so. */}
-        {mine !== null && !called && mine.arrivedAt !== null && mine.quotedWaitMinutes !== null ? (
-          <CounterQuote
-            arrivedAt={mine.arrivedAt}
-            quotedWaitMinutes={mine.quotedWaitMinutes}
-            now={now}
-          />
-        ) : null}
+        <CancelSheet
+          serial={formatSerial(booking.serial, numerals)}
+          refund={cancellationRefund(booking, payment)}
+          disabled={mine === null || mine.status === 'cancelled'}
+          onConfirm={() => {
+            void act(
+              async ({ bookingId, token: bearer }) => {
+                await cancelBooking({
+                  bookingId,
+                  token: bearer,
+                  idempotencyKey: crypto.randomUUID(),
+                  clientEventId: crypto.randomUUID(),
+                });
+              },
+              tp('cancelled', locale),
+            );
+          }}
+        />
+      </div>
 
-        {/* `BANNER-A08-LEAVE` (`FR-PAT-32`): travel + buffer has caught up with
-          the remaining wait. Only while there is still a wait to beat — a
-          person already being called does not need to be told to set off, and
-          nor does one reception has already checked in (`FR-PAT-38`). */}
-        {!called &&
-        mine?.arrivedAt === null &&
-        minutesUntil !== null &&
-        minutesUntil <= TRAVEL_MINUTES + 10 ? (
-          <p
-            role="status"
-            data-testid="leave-now"
-            className="rounded-md bg-brand-100 px-4 py-3 text-body-md text-brand-900"
+      <QueuePreview state={state} mine={mine} />
+    </TabScreen>
+  );
+}
+
+/**
+ * The four steps of a visit (FRONTEND.md §6.1): serial taken, waiting, your
+ * turn, seen. Where this patient stands is marked in the accessibility tree
+ * as well as in colour (`A11Y-03`).
+ */
+function VisitSteps({ status }: { readonly status: QueueEntry['status'] }): ReactNode {
+  const locale = useLocale();
+  const current = status === 'done' ? 3 : status === 'in_chamber' ? 2 : 1;
+  const steps = [
+    tp('stepBooked', locale),
+    tp('stepWaiting', locale),
+    tp('stepYourTurn', locale),
+    tp('stepSeen', locale),
+  ] as const;
+
+  return (
+    <ol
+      aria-label={tp('visitSteps', locale)}
+      data-testid="visit-steps"
+      className="relative grid grid-cols-4 px-1"
+    >
+      {/* The track behind the dots, and how far along it this visit is. */}
+      <span
+        aria-hidden="true"
+        className="absolute top-3 right-[12.5%] left-[12.5%] h-0.5 bg-line-strong"
+      />
+      <span
+        aria-hidden="true"
+        className="absolute top-3 left-[12.5%] h-0.5 bg-brand-600 transition-[width] duration-quick ease-standard"
+        style={{ width: `${String((Math.min(current, 3) / 3) * 75)}%` }}
+      />
+      {steps.map((label, index) => {
+        const done = index < current || status === 'done';
+        const now = index === current && status !== 'done';
+        return (
+          <li
+            key={label}
+            aria-current={now ? 'step' : undefined}
+            className={`relative z-10 flex flex-col items-center gap-1 text-center text-caption ${
+              now ? 'font-bold text-brand-700' : 'text-ink-muted'
+            }`}
           >
-            {tp('leaveNow', locale).replace('{minutes}', formatMinutes(TRAVEL_MINUTES, numerals))}
-          </p>
-        ) : null}
-
-        {called ? (
-          <p
-            role="status"
-            data-testid="called-takeover"
-            className="rounded-md bg-brand-600 px-4 py-3 text-body-lg font-semibold text-white"
-          >
-            {booking.room === null
-              ? tp('goToChamber', locale)
-              : tp('goToRoom', locale).replace('{room}', booking.room)}
-          </p>
-        ) : null}
-
-        {notice === null ? null : (
-          <p
-            role="status"
-            data-testid="live-serial-notice"
-            className="rounded-sm bg-sunken px-3 py-2 text-body-md text-ink-secondary"
-          >
-            {notice}
-          </p>
-        )}
-
-        {failure === null ? null : (
-          <p
-            data-testid="live-serial-failure"
-            className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
-          >
-            {failure}
-          </p>
-        )}
-
-        <QueuePreview state={state} mine={mine} />
-
-        <div className="flex flex-col gap-3">
-          <LateSheet
-            // Somebody checked in at the counter is not running late.
-            disabled={mine === null || called || mine.arrivedAt !== null}
-            onChoose={(minutes) => {
-              void act(
-                async ({ bookingId, token: bearer }) => {
-                  await declareLate({
-                    bookingId,
-                    token: bearer,
-                    expectedMinutes: minutes,
-                    idempotencyKey: crypto.randomUUID(),
-                    clientEventId: crypto.randomUUID(),
-                  });
-                },
-                tp('lateDone', locale).replace('{count}', formatMinutes(3, numerals)),
-              );
-            }}
-          />
-
-          <CancelSheet
-            serial={formatSerial(booking.serial, numerals)}
-            refund={cancellationRefund(booking, payment)}
-            disabled={mine === null || mine.status === 'cancelled'}
-            onConfirm={() => {
-              void act(
-                async ({ bookingId, token: bearer }) => {
-                  await cancelBooking({
-                    bookingId,
-                    token: bearer,
-                    idempotencyKey: crypto.randomUUID(),
-                    clientEventId: crypto.randomUUID(),
-                  });
-                },
-                tp('cancelled', locale),
-              );
-            }}
-          />
-        </div>
-
-        <BottomNavSpacer />
-      </main>
-
-      <BottomNav />
-    </>
+            <span
+              className={`flex size-6 items-center justify-center rounded-pill border-2 ${
+                done
+                  ? 'border-brand-600 bg-brand-600 text-white'
+                  : now
+                    ? 'border-brand-600 bg-surface ring-4 ring-brand-100'
+                    : 'border-line-strong bg-surface'
+              }`}
+            >
+              {done ? (
+                <CheckIcon size={14} />
+              ) : now ? (
+                <span className="size-2 rounded-pill bg-brand-600" />
+              ) : null}
+            </span>
+            {label}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -548,9 +641,14 @@ function LateSheet({
             {tp('declareLate', locale)}
           </Button>
         ) : (
-          <Button variant="secondary" fullWidth data-testid="declare-late">
+          <button
+            type="button"
+            data-testid="declare-late"
+            className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-md border-[1.5px] border-brand-600 bg-surface px-3 text-body-md font-bold text-brand-600"
+          >
+            <ClockIcon size={20} />
             {tp('declareLate', locale)}
-          </Button>
+          </button>
         )
       }
     >
@@ -657,13 +755,23 @@ function CancelSheet({
       dismissible={false}
       trigger={
         disabled ? (
-          <Button variant="quiet" fullWidth disabled disabledReason={tp('cancelFailed', locale)}>
+          <Button
+            variant="secondary"
+            fullWidth
+            disabled
+            disabledReason={tp('cancelFailed', locale)}
+          >
             {tp('cancelBooking', locale)}
           </Button>
         ) : (
-          <Button variant="quiet" fullWidth data-testid="cancel-booking">
+          <button
+            type="button"
+            data-testid="cancel-booking"
+            className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-md border border-line-strong bg-surface px-3 text-body-md font-bold text-ink-secondary"
+          >
+            <CloseIcon size={20} />
             {tp('cancelBooking', locale)}
-          </Button>
+          </button>
         )
       }
     >
@@ -707,20 +815,20 @@ function CancelSheet({
 function LiveSerialSkeleton(): ReactNode {
   const locale = useLocale();
   return (
-    <main
-      className="mx-auto flex max-w-[480px] flex-col gap-5 p-5"
-      aria-busy="true"
-      data-testid="live-serial-loading"
-    >
-      <div className="h-8 w-1/2 rounded-sm bg-sunken" />
-      <div className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-6">
-        <div className="h-5 w-2/3 rounded-sm bg-sunken" />
-        <div className="h-14 w-24 rounded-sm bg-sunken" />
-        <div className="h-1.5 w-full rounded-pill bg-sunken" />
-        <div className="h-5 w-1/2 rounded-sm bg-sunken" />
+    <TabScreen title={tp('homeMySerial', locale)} back={{ fallback: '/serials' }}>
+      <div className="flex flex-col gap-4" aria-busy="true" data-testid="live-serial-loading">
+        <div className="h-[76px] rounded-md border border-line bg-surface" />
+        <div className="flex flex-col items-center gap-4 rounded-lg bg-brand-100 p-6">
+          <div className="h-4 w-1/3 rounded-xs bg-surface motion-safe:animate-pulse" />
+          <div className="h-14 w-24 rounded-sm bg-surface motion-safe:animate-pulse" />
+          <div className="grid w-full grid-cols-2 gap-2.5">
+            <div className="h-16 rounded-sm bg-surface" />
+            <div className="h-16 rounded-sm bg-surface" />
+          </div>
+        </div>
+        <span className="sr-only">{tp('loading', locale)}</span>
       </div>
-      <span className="sr-only">{tp('loading', locale)}</span>
-    </main>
+    </TabScreen>
   );
 }
 
@@ -747,21 +855,27 @@ function LiveSerialProblem({
         : tp('bookingFailed', locale);
 
   return (
-    <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5" data-testid="live-serial-error">
-      <p className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700">{message}</p>
-
-      {error === 'failed' ? (
-        <Button onClick={onRetry} data-testid="live-serial-retry">
-          {tp('tryAgain', locale)}
-        </Button>
-      ) : (
-        <a
-          href="/"
-          className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-semibold text-white"
-        >
-          {tp('backHome', locale)}
-        </a>
-      )}
-    </main>
+    <TabScreen title={tp('homeMySerial', locale)} back={{ fallback: '/serials' }}>
+      <FailedState
+        role="status"
+        testId="live-serial-error"
+        action={
+          error === 'failed' ? (
+            <Button onClick={onRetry} data-testid="live-serial-retry">
+              {tp('tryAgain', locale)}
+            </Button>
+          ) : (
+            <a
+              href="/"
+              className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-bold text-white"
+            >
+              {tp('backHome', locale)}
+            </a>
+          )
+        }
+      >
+        {message}
+      </FailedState>
+    </TabScreen>
   );
 }

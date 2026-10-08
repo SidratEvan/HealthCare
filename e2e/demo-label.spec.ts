@@ -101,7 +101,7 @@ test.describe('until the server has said what it is, nothing claims to be a demo
 
     await page.goto(PATIENT);
     await expect(page.getByTestId('emergency-card')).toBeVisible();
-    await expect(page.getByTestId('specialty-CARD')).toBeVisible();
+    await expect(page.getByTestId('home-search')).toBeVisible();
     await expect(page.getByTestId('demo-banner')).toHaveCount(0);
     await expect(page.getByText(LINE, { exact: false })).toHaveCount(0);
   });

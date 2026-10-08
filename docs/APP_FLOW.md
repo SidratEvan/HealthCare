@@ -472,7 +472,7 @@ Opened from the join, or from the SMS an offer or a seat sends; the signed statu
 |---|---|---|
 | ৯৯৯ এ কল করুন | `BTN-A10-999` | `tel:999` immediately; always visible at top |
 | জীবন ঝুঁকিতে | `BTN-A10-CRITICAL` | → `S-A-10b?mode=critical`: the call and one answer, no browsing (`FR-PAT-41`) |
-| জরুরি | `BTN-A10-URGENT` | Opens the problem chips (`FR-PAT-41`) |
+| জরুরি | `BTN-A10-URGENT` | Since 2026-10-07 (Visual Direction 2) the problems are shown at once, as an icon grid under **কী হয়েছে?**; this control is that heading's link to them, and never hides them (`FR-PAT-41`) |
 | Critical warning text | — | Names the conditions that mean "call first" |
 | Problem chips | `CHIP-A10-<type>` | দগ্ধ / দুর্ঘটনা / হৃদরোগ / স্ট্রোক / শ্বাসকষ্ট / শিশু / প্রসূতি / অন্যান্য. Selecting one → loads `S-A-10b` results filtered by required capability |
 | ~~অ্যাম্বুলেন্স~~ | ~~`BTN-A10-AMB`~~ | **Not in V1** (owner, 2026-10-05). The call to 999 above it is what `FR-PAT-47` keeps on this screen |

@@ -36,8 +36,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { formatAge, formatSerial, tp, numeralsFor, localName } from '@platform/i18n';
-import { Button, Card, FreshnessLine, Input, useLocale } from '@platform/ui';
+import { Button, Card, Chip, FreshnessLine, useLocale, type ChipTone } from '@platform/ui';
 
+import { SearchIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
 import { useDeployment } from '@/hooks/useDeployment';
 import { useOnline } from '@/hooks/useOnline';
@@ -101,7 +102,7 @@ export default function MedicinesPage(): ReactNode {
   }, []);
 
   return (
-    <TabScreen title={tp('medicinesTitle', locale)}>
+    <TabScreen title={tp('medicinesTitle', locale)} back={{ fallback: '/' }}>
       <p className="text-body-md text-ink-secondary" data-testid="medicines-intro">
         {scope === null
           ? tp('medicinesIntro', locale)
@@ -111,15 +112,30 @@ export default function MedicinesPage(): ReactNode {
             )}
       </p>
 
-      <Input
-        label={tp('medicinesSearch', locale)}
-        helper={tp('medicinesSearchHint', locale)}
-        value={query}
-        data-testid="medicine-search"
-        onChange={(event) => {
-          setQuery(event.target.value);
-        }}
-      />
+      <div className="flex flex-col gap-1.5">
+        <label className="flex min-h-[56px] items-center gap-3 rounded-md border border-line bg-surface px-4 shadow-1 focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-100">
+          <span className="text-brand-600">
+            <SearchIcon size={22} />
+          </span>
+          <span className="sr-only">{tp('medicinesSearch', locale)}</span>
+          <input
+            type="search"
+            value={query}
+            data-testid="medicine-search"
+            placeholder={tp('medicinesSearch', locale)}
+            aria-describedby="medicine-search-hint"
+            autoComplete="off"
+            enterKeyHint="search"
+            onChange={(event) => {
+              setQuery(event.target.value);
+            }}
+            className="h-[54px] min-w-0 flex-1 bg-transparent text-body-md text-ink outline-none placeholder:text-ink-muted"
+          />
+        </label>
+        <p id="medicine-search-hint" className="px-1 text-caption text-ink-muted">
+          {tp('medicinesSearchHint', locale)}
+        </p>
+      </div>
 
       {!online ? (
         <p
@@ -172,13 +188,18 @@ export default function MedicinesPage(): ReactNode {
   );
 }
 
-/** What each answer is called, and how it is coloured. */
+/**
+ * What each answer is called, and its pill (FRONTEND.md §0.5, §5.5): green
+ * only for good news; "not here" is neutral, because red is kept for
+ * emergencies (§1.1); "not known" is caution, because it means the shelf has
+ * not been confirmed recently, which is one of caution's three meanings.
+ */
 const ANSWER: Readonly<
-  Record<string, { key: 'medicineHere' | 'medicineNotHere' | 'medicineUnknown'; className: string }>
+  Record<string, { key: 'medicineHere' | 'medicineNotHere' | 'medicineUnknown'; tone: ChipTone }>
 > = {
-  in_stock: { key: 'medicineHere', className: 'text-ok-700' },
-  out_of_stock: { key: 'medicineNotHere', className: 'text-alert-700' },
-  unknown: { key: 'medicineUnknown', className: 'text-ink-muted' },
+  in_stock: { key: 'medicineHere', tone: 'positive' },
+  out_of_stock: { key: 'medicineNotHere', tone: 'neutral' },
+  unknown: { key: 'medicineUnknown', tone: 'caution' },
 };
 
 function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability }): ReactNode {
@@ -195,10 +216,10 @@ function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability })
   const minutes = (value: number): string => formatAge(value, locale, numerals);
 
   return (
-    <Card>
+    <Card elevated>
       <div className="flex flex-col gap-3" data-testid={`medicine-${medicine.medicineId}`}>
         <div>
-          <p className="text-title-sm">
+          <p className="text-title-sm font-bold">
             {medicine.brandName === null
               ? medicine.genericName
               : `${medicine.brandName} (${medicine.genericName})`}
@@ -228,13 +249,15 @@ function MedicineCard({ medicine }: { readonly medicine: MedicineAvailability })
                   data-testid={`pharmacy-${pharmacy.hospitalId}`}
                   className="flex flex-col gap-1 border-t border-line pt-2"
                 >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-body-md">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="min-w-0 text-body-md font-semibold">
                       {localName(locale, pharmacy.hospitalNameBn, pharmacy.hospitalNameEn)}
                     </p>
-                    <p className={`text-body-md font-semibold ${answer?.className ?? ''}`}>
-                      {tp(answer?.key ?? 'medicineUnknown', locale)}
-                    </p>
+                    <span className="shrink-0" data-testid="medicine-answer">
+                      <Chip tone={answer?.tone ?? 'caution'}>
+                        {tp(answer?.key ?? 'medicineUnknown', locale)}
+                      </Chip>
+                    </span>
                   </div>
 
                   {pharmacy.distanceKm === null ? null : (

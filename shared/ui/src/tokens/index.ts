@@ -48,6 +48,16 @@ export const COLOUR = {
   'warn-100': '#F7EEDC',
   'warn-border': '#E8D6B0',
 
+  // Positive status (§5.5): the brand green here, the status green in the
+  // patient app (`PATIENT_COLOUR`).
+  'positive-700': '#08402F',
+  'positive-600': '#0C5C46',
+  'positive-100': '#E8F0EC',
+
+  // Accent (§0.5): the live dot and decoration, never text.
+  'accent-500': '#7FD6A8',
+  'accent-100': '#E8F0EC',
+
   // Neutral lines.
   'line-strong': '#D9D4C8',
   'line-soft': '#E2DED4',
@@ -55,6 +65,43 @@ export const COLOUR = {
 } as const;
 
 export type ColourToken = keyof typeof COLOUR;
+
+/**
+ * The patient app's palette, Visual Direction 2 (FRONTEND.md §0.5, §1.3b).
+ *
+ * Only the tokens it replaces: emergency and caution mean the same in every
+ * surface and are not here. Mirrors `patient.css`, which the patient app loads
+ * after the shared layer; `patient.test.ts` keeps the two equal.
+ */
+export const PATIENT_COLOUR = {
+  'bg-canvas': '#F5F9FF',
+  'bg-surface': '#FFFFFF',
+  'bg-sunken': '#EEF3FB',
+  'bg-inverse': '#0B1A33',
+
+  'ink-primary': '#0B1A33',
+  'ink-secondary': '#34435E',
+  'ink-muted': '#56647D',
+  'ink-inverse': '#F5F9FF',
+
+  'brand-900': '#062A63',
+  'brand-700': '#0052B4',
+  'brand-600': '#0066DD',
+  'brand-300': '#7FB4FF',
+  'brand-100': '#EAF3FF',
+  'brand-border': '#CFE2FF',
+
+  'positive-700': '#17603C',
+  'positive-600': '#1F7A4D',
+  'positive-100': '#E7F5EE',
+
+  'accent-500': '#01CEB8',
+  'accent-100': '#E0F8F4',
+
+  'line-strong': '#D2DCEC',
+  'line-soft': '#E3EAF5',
+  'line-hairline': '#EEF3FB',
+} as const satisfies Partial<Record<ColourToken, string>>;
 
 /**
  * Radii (§3.2).

@@ -30,6 +30,16 @@ export const LANGUAGE_NAMES = {
   en: 'English',
 } as const satisfies Record<Locale, string>;
 
+/**
+ * The same names, short enough for a header switch (FRONTEND.md §0.5): বাংলা |
+ * EN. Still each named in itself, never translated; the full name stays the
+ * button's accessible name.
+ */
+export const LANGUAGE_SHORT_NAMES = {
+  bn: 'বাংলা',
+  en: 'EN',
+} as const satisfies Record<Locale, string>;
+
 export function isLocale(value: unknown): value is Locale {
   return value === 'bn' || value === 'en';
 }
