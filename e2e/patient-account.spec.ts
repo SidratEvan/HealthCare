@@ -96,6 +96,10 @@ test('a guest signs in later with the same number and finds the record', async (
   await expect(account).toContainText(GUEST_NAME);
   await expect(account.getByTestId('account-visit').first()).toContainText(ASSESSMENT.diagnosisBn);
   await expect(page.getByTestId('account-phone')).toHaveText(`+88${phone}`);
+  // Family accounts are not in V1 (owner, 8 October; `FR-PAT-02`): the people
+  // under the number are listed, and nothing calls them a family.
+  await expect(account).toContainText('এই নম্বরে বুক করা রোগী');
+  await expect(account).not.toContainText('পরিবার');
 
   // Signing out forgets the account on this phone.
   await page.getByTestId('account-sign-out').click();

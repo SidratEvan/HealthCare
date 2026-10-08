@@ -3810,7 +3810,9 @@ export const PATIENT = {
   dayToday: { bn: 'আজ', en: 'Today' },
   roomLabel: { bn: 'কক্ষ {room}', en: 'Room {room}' },
   moreSignInTitle: { bn: 'লগ ইন করুন', en: 'Sign in' },
-  moreProfilesTitle: { bn: 'পরিবারের প্রোফাইল', en: 'Family profiles' },
+  // The people booked under the signed-in number. Never a family: family
+  // accounts are not in V1 (owner, 8 October; `FR-PAT-02`).
+  moreProfilesTitle: { bn: 'এই নম্বরে বুক করা রোগী', en: 'People booked under this number' },
   moreSettingsTitle: { bn: 'সেটিংস', en: 'Settings' },
   moreRecordsSharing: { bn: 'রেকর্ড শেয়ার ও অনুমতি', en: 'Record sharing and permissions' },
   moreMySerials: { bn: 'আমার সিরিয়াল', en: 'My serials' },
