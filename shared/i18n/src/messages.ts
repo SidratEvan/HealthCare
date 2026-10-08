@@ -2334,6 +2334,16 @@ export const CONSOLE = {
     bn: 'অনলাইন পেমেন্টের জন্য সিরিয়াল রাখার সময় (মিনিট)',
     en: 'How long a serial waits for its online payment (minutes)',
   },
+  settingsPrepayRequired: {
+    bn: 'অনলাইনে আগে পরিশোধ বাধ্যতামূলক (কাউন্টারে পরিশোধ নয়)',
+    en: 'Online payment first for every serial (no paying at the counter)',
+  },
+  settingsNoShowPrepay: {
+    bn: 'যে নম্বর তিনবার আসেনি, তার পরের সিরিয়ালে আগে পরিশোধ',
+    en: 'A number that missed three serials pays first for its next one',
+  },
+  settingsNoShowWindow: { bn: 'কত দিনের মধ্যে গোনা হবে', en: 'Counted over how many days' },
+  settingsNoShowWindowHelper: { bn: '৭ থেকে ৩৬৫ দিন।', en: '7 to 365 days.' },
   settingsPaymentHoldHelper: {
     bn: '৫ থেকে ৬০ মিনিট। সময় শেষে সিরিয়াল কাউন্টারে পরিশোধের জন্য থাকে, বা আগে-পরিশোধের সিরিয়াল ছেড়ে দেওয়া হয়।',
     en: '5 to 60 minutes. When it runs out the serial is paid at the counter, or released where it had to be paid first.',
@@ -3861,6 +3871,10 @@ export const PATIENT = {
   payStartFailed: {
     bn: 'পেমেন্ট শুরু করা যায়নি। আবার চেষ্টা করুন।',
     en: 'The payment could not be started. Please try again.',
+  },
+  prepaymentAfterNoShows: {
+    bn: 'এই নম্বরে আগের তিনটি সিরিয়ালে আসা হয়নি, তাই এবার ফি আগে অনলাইনে দিতে হবে। bKash বা Nagad বেছে নিন।',
+    en: 'This number missed three earlier serials here, so this one is paid online first. Choose bKash or Nagad.',
   },
   prepaymentRequired: {
     bn: 'এই সিরিয়ালের ফি আগে অনলাইনে দিতে হবে। bKash বা Nagad বেছে নিন।',

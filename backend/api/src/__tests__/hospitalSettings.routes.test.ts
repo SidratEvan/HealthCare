@@ -180,6 +180,10 @@ describe('who may open S-B-11 (FR-ROLE-01)', () => {
       staleThresholdMinutes: 10,
       smsBudgetMonthly: null,
       paymentHoldMinutes: 15,
+      // FR-PAY-02, FR-GST-14 (plan F3): off until the hospital turns them on.
+      prepayRequired: false,
+      noShowPrepay: false,
+      noShowWindowDays: 90,
     });
     expect(data.staff).toHaveLength(1);
     expect(data.staff[0].roles).toEqual(['hospital_admin']);
@@ -240,6 +244,8 @@ describe('a facility with no seed data, set up from the screen (FR-SUP-01)', () 
         await send('patch', '/hospital/rules', facility.token, {
           lateReinsertAfter: 4,
           smsBudgetMonthly: 5000,
+          noShowPrepay: true,
+          noShowWindowDays: 60,
         })
       ).status,
     ).toBe(200);
@@ -251,6 +257,10 @@ describe('a facility with no seed data, set up from the screen (FR-SUP-01)', () 
     expect(setup.body.data.rules.lateReinsertAfter).toBe(4);
     // FR-NOT-06: the cap the notification worker reads.
     expect(setup.body.data.rules.smsBudgetMonthly).toBe(5000);
+    // FR-GST-14 (plan F3): the no-show rule and its window are the hospital's.
+    expect(setup.body.data.rules.noShowPrepay).toBe(true);
+    expect(setup.body.data.rules.noShowWindowDays).toBe(60);
+    expect(setup.body.data.rules.prepayRequired).toBe(false);
 
     const audit = await sql<{ n: number }>`
       SELECT count(*)::int AS n FROM audit_log

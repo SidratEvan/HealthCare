@@ -470,6 +470,11 @@ export {
   type RefundReason,
   type RefundablePayment,
 } from './payments/refund.js';
+export {
+  NOSHOW_PREPAY_THRESHOLD,
+  prepaymentReason,
+  type PrepaymentReason,
+} from './payments/prepay.js';
 
 export { settle, type Settlement, type SettlementRow } from './payments/settlement.js';
 

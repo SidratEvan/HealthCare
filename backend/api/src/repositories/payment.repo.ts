@@ -618,3 +618,32 @@ export async function payerOf(
   const row = result.rows[0];
   return { payerUserId: row?.payer_user_id ?? null, payerGuestId: row?.payer_guest_id ?? null };
 }
+
+/**
+ * A hospital's prepayment rules (`FR-PAY-02`, `FR-GST-14`; 0058): whether it
+ * takes no payment at the counter, and whether, and over how many days, it
+ * asks a number with three no-shows to pay first.
+ */
+export async function prepaymentRules(
+  trx: Tx,
+  hospitalId: string,
+): Promise<{
+  readonly paysFirst: boolean;
+  readonly noShowRuleOn: boolean;
+  readonly windowDays: number;
+}> {
+  const result = await sql<{
+    prepay_required: boolean;
+    noshow_prepay: boolean;
+    noshow_window_days: number;
+  }>`
+    SELECT prepay_required, noshow_prepay, noshow_window_days
+      FROM hospital_settings WHERE hospital_id = ${hospitalId}::uuid
+  `.execute(trx);
+  const row = result.rows[0];
+  return {
+    paysFirst: row?.prepay_required ?? false,
+    noShowRuleOn: row?.noshow_prepay ?? false,
+    windowDays: row?.noshow_window_days ?? 90,
+  };
+}

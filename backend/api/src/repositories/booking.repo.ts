@@ -702,3 +702,28 @@ function toBookingRow(row: DisplayQueryRow): BookingRow {
     createdAt: row.created_at.toISOString(),
   };
 }
+
+/**
+ * A number's no-shows at one hospital since a date (`FR-GST-14`; plan F3).
+ *
+ * The number is the guest identity behind it, which every guest booking and
+ * every counter registration by phone records (`FR-GST-12`, `FR-GST-13`).
+ * This hospital's chambers only: another hospital's attendance is that
+ * hospital's (`FR-NET-02`).
+ */
+export async function countNoShowsAt(
+  trx: Tx,
+  input: { readonly guestId: string; readonly hospitalId: string; readonly since: string },
+): Promise<number> {
+  const result = await sql<{ n: string }>`
+    SELECT count(*)::text AS n
+      FROM bookings b
+      JOIN sessions s ON s.id = b.session_id
+     WHERE b.booked_by_guest_id = ${input.guestId}::uuid
+       AND s.hospital_id = ${input.hospitalId}::uuid
+       AND b.status = 'no_show'
+       AND b.deleted_at IS NULL
+       AND s.session_date >= ${input.since}::date
+  `.execute(trx);
+  return Number(result.rows[0]?.n ?? '0');
+}

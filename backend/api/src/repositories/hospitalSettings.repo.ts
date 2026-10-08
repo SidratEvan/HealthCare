@@ -67,6 +67,11 @@ export interface SetupSnapshot {
     readonly smsBudgetMonthly: number | null;
     /** How long a serial waits for its online payment (0057, `FR-PAY-08`). */
     readonly paymentHoldMinutes: number;
+    /** No serial is paid at the counter (`FR-PAY-02`). */
+    readonly prepayRequired: boolean;
+    /** Three no-shows here in the window ask for payment first (0058, `FR-GST-14`). */
+    readonly noShowPrepay: boolean;
+    readonly noShowWindowDays: number;
   };
   /** Its public face beyond words (`FR-BRD-06`): colours and a logo. */
   readonly face: {
@@ -185,6 +190,9 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     late_reinsert_after: number | null;
     stale_threshold_minutes: number | null;
     payment_hold_minutes: number | null;
+    prepay_required: boolean | null;
+    noshow_prepay: boolean | null;
+    noshow_window_days: number | null;
     sms_budget_monthly: number | null;
   }>`
     SELECT h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
@@ -197,7 +205,8 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
            h.lat::float8 AS lat, h.lng::float8 AS lng, h.is_live, h.onboarded_at,
            h.lifecycle::text AS lifecycle, h.review_requested_at, h.review_note,
            s.no_show_grace_patients, s.no_show_grace_minutes, s.late_reinsert_after,
-           s.stale_threshold_minutes, s.sms_budget_monthly, s.payment_hold_minutes
+           s.stale_threshold_minutes, s.sms_budget_monthly, s.payment_hold_minutes,
+           s.prepay_required, s.noshow_prepay, s.noshow_window_days
       FROM hospitals h
       LEFT JOIN hospital_settings s ON s.hospital_id = h.id
       LEFT JOIN hospital_logos l ON l.hospital_id = h.id
@@ -345,6 +354,9 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       staleThresholdMinutes: row.stale_threshold_minutes ?? 10,
       smsBudgetMonthly: row.sms_budget_monthly,
       paymentHoldMinutes: row.payment_hold_minutes ?? 15,
+      prepayRequired: row.prepay_required ?? false,
+      noShowPrepay: row.noshow_prepay ?? false,
+      noShowWindowDays: row.noshow_window_days ?? 90,
     },
     face: {
       theme: readBrandTheme(row.brand),
@@ -578,6 +590,9 @@ export interface RuleFields {
   readonly staleThresholdMinutes?: number | undefined;
   readonly smsBudgetMonthly?: number | null | undefined;
   readonly paymentHoldMinutes?: number | undefined;
+  readonly prepayRequired?: boolean | undefined;
+  readonly noShowPrepay?: boolean | undefined;
+  readonly noShowWindowDays?: number | undefined;
 }
 
 export async function updateRules(trx: Tx, hospitalId: string, fields: RuleFields): Promise<void> {
@@ -592,6 +607,9 @@ export async function updateRules(trx: Tx, hospitalId: string, fields: RuleField
       late_reinsert_after = coalesce(${fields.lateReinsertAfter ?? null}::int, late_reinsert_after),
       stale_threshold_minutes = coalesce(${fields.staleThresholdMinutes ?? null}::int, stale_threshold_minutes),
       payment_hold_minutes = coalesce(${fields.paymentHoldMinutes ?? null}::int, payment_hold_minutes),
+      prepay_required = coalesce(${fields.prepayRequired ?? null}::boolean, prepay_required),
+      noshow_prepay = coalesce(${fields.noShowPrepay ?? null}::boolean, noshow_prepay),
+      noshow_window_days = coalesce(${fields.noShowWindowDays ?? null}::int, noshow_window_days),
       sms_budget_monthly = CASE WHEN ${fields.smsBudgetMonthly !== undefined}
                                 THEN ${fields.smsBudgetMonthly ?? null}::int ELSE sms_budget_monthly END,
       updated_at = now()

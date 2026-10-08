@@ -98,6 +98,11 @@ export const rulesBody = z
     smsBudgetMonthly: z.number().int().min(0).max(10_000_000).nullable().optional(),
     /** `FR-PAY-08` (plan H3): how long a serial waits for its online payment. */
     paymentHoldMinutes: z.number().int().min(5).max(60).optional(),
+    /** `FR-PAY-02` (plan F3): no serial is paid at the counter. */
+    prepayRequired: z.boolean().optional(),
+    /** `FR-GST-14` (plan F3): three no-shows here in the window ask for payment first. */
+    noShowPrepay: z.boolean().optional(),
+    noShowWindowDays: z.number().int().min(7).max(365).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'change at least one field');
 
