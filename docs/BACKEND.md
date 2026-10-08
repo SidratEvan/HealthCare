@@ -500,8 +500,9 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 
 | Method | Path | Role |
 |---|---|---|
-| POST | `/visits` | doctor — creates or updates the visit; `sign: true` signs it and advances the queue (`FR-DOC-08`). A signed visit is final: a later save is refused (`VISIT_ALREADY_SIGNED`), and a sign sent again only replays the queue step. Prescriptions are out of scope for this version (`PRD.md` §9) |
-| GET | `/patients/:id/records?booking=` | patient (own) \| doctor (own sessions or consent). `booking` returns that booking's pre-visit intake alongside the history, so `S-B-05` opens in one request (`FR-DOC-03`, `NFR-04`) |
+| POST | `/visits` | doctor — creates or updates the visit; `sign: true` signs it and advances the queue (`FR-DOC-08`). A signed visit is final: a later save is refused (`VISIT_ALREADY_SIGNED`), and a sign sent again only replays the queue step. Since plan R2 `medicines` (up to twenty rows: `name`, optional `medicineId`, `strength`, `schedule`, `durationDays`, `instructionBn`) are written with the visit in its transaction; absent leaves a draft's rows as they are, an empty list clears them (`FR-DOC-04`) |
+| GET | `/formulary?q=` | doctor — the formulary, by the start of a generic or brand name, ten at most (`FR-DOC-05`). Not `/medicines`, which is the public availability search |
+| GET | `/patients/:id/records?booking=` | patient (own) \| doctor (own sessions or consent). `booking` returns that booking's pre-visit intake alongside the history, so `S-B-05` opens in one request (`FR-DOC-03`, `NFR-04`). Each visit carries its `medicines` and the doctor's `doctorBmdc` (plan R2), as the record a tracking link carries does (`FR-GST-08`) |
 | POST | `/patients/:id/consent-offer` | patient (own) — mints the short-lived signed code `BTN-A12-QR` shows, with the grant's length (`FR-PAT-63`). Returns `{code, expiresInSeconds, grantHours}` |
 | POST | `/consents` / `/consents/:id/revoke` | patient |
 | POST | `/consents/qr` | doctor — redeems the patient's code: writes the `consents` row and its `audit_log` row together (`FR-PAT-63`, `FR-SEC-03`). The code is pasted until a QR encoder and scanner are agreed; the endpoint is the same either way |
@@ -525,7 +526,7 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 | GET | `/medicines?q=&lat=&lng=&scope=` | **public** — the availability search. A stock flag names nobody. With `scope` (a hospital's code) it answers for that hospital's pharmacy and no other, which is what its own portal asks (`FR-BRD-09`); an unknown code is 404 |
 | GET | `/files/:key?expires=&sig=` | **public by URL, private by signature** — a stored report. A bad or expired signature is a 404, never a 403 |
 | GET | `/guest/link/:token/reports/:reportId` | the link is the credential. Scoped to that link's own booking, so a live token cannot open another patient's result |
-| ~~POST~~ | ~~`/prescriptions/:id/dispense`~~ | **not built** — prescribing is out of scope this version, so there is nothing to dispense against (`PRD.md` §12) |
+| ~~POST~~ | ~~`/prescriptions/:id/dispense`~~ | **not built** — a prescription carries no QR yet (`FR-PAT-71`), so there is nothing to dispense against (`PRD.md` §12) |
 
 > **"Signed URLs only" (§0) is a rule about reads.** No public bucket, every
 > fetch signed and expiring — and that holds under `STORAGE_PROVIDER=mock`,
