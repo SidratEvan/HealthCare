@@ -196,7 +196,9 @@ describe('offering consent (BTN-A12-QR)', () => {
       .set('idempotency-key', crypto.randomUUID())
       .send({});
 
-    expect(response.status).toBe(403);
+    // Another person's row does not exist for this caller (migration 0056,
+    // DATABASE.md §5.4): it is not found before anything is decided about it.
+    expect(response.status).toBe(404);
   });
 
   it('refuses staff, who have nothing to consent to', async () => {
@@ -431,8 +433,9 @@ describe('a guest holding a booking link, in the demo (CLAUDE.md §4.1)', () => 
       .set('idempotency-key', crypto.randomUUID())
       .send({});
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.details.reason).toBe('booking_patient');
+    // Another person's row does not exist for this caller (migration 0056,
+    // DATABASE.md §5.4): it is not found before anything is decided about it.
+    expect(response.status).toBe(404);
   });
 
   it('refuses a guest token that names no booking', async () => {
@@ -442,7 +445,9 @@ describe('a guest holding a booking link, in the demo (CLAUDE.md §4.1)', () => 
       .set('idempotency-key', crypto.randomUUID())
       .send({});
 
-    expect(response.status).toBe(403);
+    // Another person's row does not exist for this caller (migration 0056,
+    // DATABASE.md §5.4): it is not found before anything is decided about it.
+    expect(response.status).toBe(404);
   });
 
   it('sees the grant and who looked, and can revoke it', async () => {

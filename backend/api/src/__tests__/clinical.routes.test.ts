@@ -217,8 +217,9 @@ describe('who may read a record (FR-DOC-10)', () => {
       .get(`${BASE}/patients/${String(fixture.patientIds[0])}/records`)
       .set('authorization', `Bearer ${await guestToken()}`);
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.details.reason).toBe('guest_link_is_not_consent');
+    // Another person's row does not exist for this caller (migration 0056,
+    // DATABASE.md §5.4): it is not found before anything is decided about it.
+    expect(response.status).toBe(404);
   });
 
   it('refuses an account holder reading somebody else', async () => {
@@ -226,8 +227,9 @@ describe('who may read a record (FR-DOC-10)', () => {
       .get(`${BASE}/patients/${String(fixture.patientIds[0])}/records`)
       .set('authorization', `Bearer ${await patientToken()}`);
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.details.reason).toBe('not_your_record');
+    // Another person's row does not exist for this caller (migration 0056,
+    // DATABASE.md §5.4): it is not found before anything is decided about it.
+    expect(response.status).toBe(404);
   });
 
   it('404s a patient who does not exist, before deciding anything else', async () => {

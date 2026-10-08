@@ -281,11 +281,18 @@ export async function claim(
   const user = await repo.userById(userId);
   if (user === null) throw new AppError('AUTH_TOKEN_INVALID', { details: { reason: 'account' } });
   if (!confirm) return { claimable: await claimableOf(user.phone), claimed: 0 };
-  const claimed = await withTransaction(async (trx) => {
-    const moved = await repo.claim(trx, { userId, phone: user.phone });
-    if (moved > 0) await repo.auditClaim(trx, { userId, moved });
-    return moved;
-  });
+  // As the server's own work, like the preview (`claimableOf`): what is
+  // taken over is not the account's until this has run (migration 0056), and
+  // the number is the account's own, from its row.
+  const claimed = await runInDbScope(
+    { kind: 'system' },
+    async () =>
+      await withTransaction(async (trx) => {
+        const moved = await repo.claim(trx, { userId, phone: user.phone });
+        if (moved > 0) await repo.auditClaim(trx, { userId, moved });
+        return moved;
+      }),
+  );
   return { claimable: [], claimed };
 }
 

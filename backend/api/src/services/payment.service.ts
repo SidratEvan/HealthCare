@@ -43,6 +43,7 @@ import {
 } from '@platform/domain';
 
 import { payments as provider } from '../adapters/payments/index.js';
+import { runInDbScope } from '../config/dbScope.js';
 import { logger } from '../config/logger.js';
 import { env } from '../env.js';
 import { AppError, forbiddenScope, notFound } from '../errors/AppError.js';
@@ -456,6 +457,16 @@ export function verifyProviderSignature(rawBody: string, signature: string | und
  * callback three times must not produce three paid stamps.
  */
 export async function applyProviderCallback(input: {
+  readonly providerRef: string;
+  readonly paid: boolean;
+}): Promise<{ readonly applied: boolean }> {
+  // The provider's word, once its signature has checked out: the server's own
+  // work, since the request is nobody's and nobody reads a payment (migration
+  // 0056).
+  return await runInDbScope({ kind: 'system' }, async () => await applyCallback(input));
+}
+
+async function applyCallback(input: {
   readonly providerRef: string;
   readonly paid: boolean;
 }): Promise<{ readonly applied: boolean }> {

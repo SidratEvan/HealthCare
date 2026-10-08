@@ -81,6 +81,7 @@ import {
   type QueueSettings,
 } from '@platform/domain';
 
+import { asQueue } from '../config/dbScope.js';
 import { logger } from '../config/logger.js';
 import { AppError, guardFailed, notFound } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
@@ -135,32 +136,34 @@ export interface AppendEventResult {
  * by side; a step that moves in one should move in the other.
  */
 export async function appendEvent(input: AppendEventInput): Promise<AppendEventResult> {
-  // --- 1. Idempotency ------------------------------------------------------
-  //
-  // Before the transaction, because the overwhelmingly common case is a first
-  // send and the overwhelmingly common answer is "no". Checking inside the
-  // lock would make every console action wait for the row.
-  const replayed = await findReplay(input.clientEventId ?? null);
-  if (replayed !== null) return replayed;
+  return await asQueue(async () => {
+    // --- 1. Idempotency ------------------------------------------------------
+    //
+    // Before the transaction, because the overwhelmingly common case is a first
+    // send and the overwhelmingly common answer is "no". Checking inside the
+    // lock would make every console action wait for the row.
+    const replayed = await findReplay(input.clientEventId ?? null);
+    if (replayed !== null) return replayed;
 
-  const settled = await committed(async (trx) => {
-    // --- 5. Serialise ------------------------------------------------------
-    const session = await lockSession(trx, input.sessionId);
+    const settled = await committed(async (trx) => {
+      // --- 5. Serialise ------------------------------------------------------
+      const session = await lockSession(trx, input.sessionId);
 
-    // --- 3. Load -----------------------------------------------------------
-    const before = await loadState(trx, session);
+      // --- 3. Load -----------------------------------------------------------
+      const before = await loadState(trx, session);
 
-    // --- 4, 6, 7. Validate, append, reduce ---------------------------------
-    const applied = await applyOne(trx, session, before, input);
+      // --- 4, 6, 7. Validate, append, reduce ---------------------------------
+      const applied = await applyOne(trx, session, before, input);
 
-    // --- 8, 9, 10, 11. Persist, recalculate, broadcast, queue messages -----
-    return await settle(trx, session, applied.state, [applied.event]);
+      // --- 8, 9, 10, 11. Persist, recalculate, broadcast, queue messages -----
+      return await settle(trx, session, applied.state, [applied.event]);
+    });
+
+    // Committed. Now, and only now, does anything leave the building.
+    await notifications.dispatch(settled.batch);
+    await afterSessionEnded(input.type, input.sessionId);
+    return settled.result;
   });
-
-  // Committed. Now, and only now, does anything leave the building.
-  await notifications.dispatch(settled.batch);
-  await afterSessionEnded(input.type, input.sessionId);
-  return settled.result;
 }
 
 /**
@@ -467,42 +470,44 @@ export async function acceptSlotDetailed(input: {
   readonly clientEventId?: string | null;
   readonly clientTs?: string | null;
 }): Promise<SeatResult> {
-  const replayed = await findReplay(input.clientEventId ?? null);
-  if (replayed !== null) return { result: replayed, newBookingId: null, serial: null };
+  return await asQueue(async () => {
+    const replayed = await findReplay(input.clientEventId ?? null);
+    if (replayed !== null) return { result: replayed, newBookingId: null, serial: null };
 
-  const offer = await standbyRepo.findOffer(input.offerId);
-  if (offer === null) throw notFound('offer');
+    const offer = await standbyRepo.findOffer(input.offerId);
+    if (offer === null) throw notFound('offer');
 
-  const settled = await committed(async (trx) => {
-    const session = await lockSession(trx, offer.sessionId);
-    const before = await loadState(trx, session);
+    const settled = await committed(async (trx) => {
+      const session = await lockSession(trx, offer.sessionId);
+      const before = await loadState(trx, session);
 
-    const guard = canAcceptSlot(before, input.offerId, nowTs());
-    if (!guard.ok) throw guardFailed(guard.code, guard.detail);
+      const guard = canAcceptSlot(before, input.offerId, nowTs());
+      if (!guard.ok) throw guardFailed(guard.code, guard.detail);
 
-    const seat = await seatOnOffer(trx, session, before, {
-      offer: {
-        id: offer.id,
-        sessionId: offer.sessionId,
-        freedBookingId: offer.freedBookingId,
-        offeredToPatientId: offer.offeredToPatientId,
-      },
-      actor: input.actor,
-      at: new Date(),
-      clientEventId: input.clientEventId ?? null,
-      clientTs: input.clientTs ?? null,
+      const seat = await seatOnOffer(trx, session, before, {
+        offer: {
+          id: offer.id,
+          sessionId: offer.sessionId,
+          freedBookingId: offer.freedBookingId,
+          offeredToPatientId: offer.offeredToPatientId,
+        },
+        actor: input.actor,
+        at: new Date(),
+        clientEventId: input.clientEventId ?? null,
+        clientTs: input.clientTs ?? null,
+      });
+
+      const done = await settle(trx, session, seat.applied.state, [seat.applied.event]);
+      return { done, seat };
     });
 
-    const done = await settle(trx, session, seat.applied.state, [seat.applied.event]);
-    return { done, seat };
+    await notifications.dispatch(settled.done.batch);
+    return {
+      result: settled.done.result,
+      newBookingId: settled.seat.newBookingId,
+      serial: settled.seat.serial,
+    };
   });
-
-  await notifications.dispatch(settled.done.batch);
-  return {
-    result: settled.done.result,
-    newBookingId: settled.seat.newBookingId,
-    serial: settled.seat.serial,
-  };
 }
 
 /**
@@ -642,40 +647,42 @@ export async function declineSlot(input: {
   readonly offerId: string;
   readonly actor: QueueActor;
 }): Promise<void> {
-  const offer = await standbyRepo.findOffer(input.offerId);
-  if (offer === null) throw notFound('offer');
+  return await asQueue(async () => {
+    const offer = await standbyRepo.findOffer(input.offerId);
+    if (offer === null) throw notFound('offer');
 
-  const declined = await committed(
-    async (trx) => await standbyRepo.markDeclined(trx, offer.id, new Date()),
-  );
-  if (!declined) {
-    throw new AppError('QUEUE_GUARD_FAILED', {
-      message: 'That offer has already been answered.',
-      details: { guard: 'OFFER_SETTLED' },
-    });
-  }
+    const declined = await committed(
+      async (trx) => await standbyRepo.markDeclined(trx, offer.id, new Date()),
+    );
+    if (!declined) {
+      throw new AppError('QUEUE_GUARD_FAILED', {
+        message: 'That offer has already been answered.',
+        details: { guard: 'OFFER_SETTLED' },
+      });
+    }
 
-  await appendEvent({
-    sessionId: offer.sessionId,
-    type: 'SLOT_EXPIRED',
-    payload: { offerId: offer.id },
-    actor: input.actor,
-    clientEventId: expiryKey(offer.id),
-  });
-
-  if (offer.freedBookingId === null) return;
-
-  try {
-    await offerFreedSlot({
+    await appendEvent({
       sessionId: offer.sessionId,
-      freedBookingId: offer.freedBookingId,
-      actor: { kind: 'system', job: 'standby_decline' },
+      type: 'SLOT_EXPIRED',
+      payload: { offerId: offer.id },
+      actor: input.actor,
+      clientEventId: expiryKey(offer.id),
     });
-  } catch (cause: unknown) {
-    // Nobody left on the list, or the chamber has moved on: the chair stays
-    // free and reception's card shows it, which is the truth.
-    logger.info({ sessionId: offer.sessionId, err: cause }, 'declined chair not passed on');
-  }
+
+    if (offer.freedBookingId === null) return;
+
+    try {
+      await offerFreedSlot({
+        sessionId: offer.sessionId,
+        freedBookingId: offer.freedBookingId,
+        actor: { kind: 'system', job: 'standby_decline' },
+      });
+    } catch (cause: unknown) {
+      // Nobody left on the list, or the chamber has moved on: the chair stays
+      // free and reception's card shows it, which is the truth.
+      logger.info({ sessionId: offer.sessionId, err: cause }, 'declined chair not passed on');
+    }
+  });
 }
 
 /**
@@ -692,31 +699,33 @@ export async function declineSlot(input: {
  * callers recording one lapse write one event (`expiryKey`).
  */
 export async function expireLapsedOffers(sessionId: string, actor: QueueActor): Promise<number> {
-  const state = await getState(sessionId);
-  const lapsed = lapsedOffers(state, nowTs());
-  if (lapsed.length === 0) return 0;
+  return await asQueue(async () => {
+    const state = await getState(sessionId);
+    const lapsed = lapsedOffers(state, nowTs());
+    if (lapsed.length === 0) return 0;
 
-  for (const offer of lapsed) {
-    try {
-      await appendEvent({
-        sessionId,
-        type: 'SLOT_EXPIRED',
-        payload: { offerId: offer.offerId },
-        actor,
-        // Derived from the offer, so two consoles noticing the same lapse in
-        // the same second record it once. `queue_events.client_event_id` is a
-        // uuid column, so it has to *be* one rather than merely be unique.
-        clientEventId: expiryKey(offer.offerId),
-      });
-    } catch (cause: unknown) {
-      // A lapse that could not be recorded is not worth failing the read it
-      // was noticed during: the offer is already unacceptable by the clock,
-      // and the next reader will try again.
-      logger.warn({ sessionId, offerId: offer.offerId, err: cause }, 'could not expire offer');
+    for (const offer of lapsed) {
+      try {
+        await appendEvent({
+          sessionId,
+          type: 'SLOT_EXPIRED',
+          payload: { offerId: offer.offerId },
+          actor,
+          // Derived from the offer, so two consoles noticing the same lapse in
+          // the same second record it once. `queue_events.client_event_id` is a
+          // uuid column, so it has to *be* one rather than merely be unique.
+          clientEventId: expiryKey(offer.offerId),
+        });
+      } catch (cause: unknown) {
+        // A lapse that could not be recorded is not worth failing the read it
+        // was noticed during: the offer is already unacceptable by the clock,
+        // and the next reader will try again.
+        logger.warn({ sessionId, offerId: offer.offerId, err: cause }, 'could not expire offer');
+      }
     }
-  }
 
-  return lapsed.length;
+    return lapsed.length;
+  });
 }
 
 /**
@@ -980,19 +989,21 @@ function etaTextFor(etas: readonly Eta[], bookingId: string): string | null {
  * to a retry of the first, and only the client event id can tell them apart.
  */
 export async function findReplay(clientEventId: string | null): Promise<AppendEventResult | null> {
-  if (clientEventId === null) return null;
+  return await asQueue(async () => {
+    if (clientEventId === null) return null;
 
-  const stored = await eventRepo.findByClientEventId(clientEventId);
-  if (stored === null) return null;
+    const stored = await eventRepo.findByClientEventId(clientEventId);
+    if (stored === null) return null;
 
-  const state = await getState(stored.sessionId);
-  return {
-    state,
-    etas: computeEtas(state, nowTs()),
-    seq: stored.seq,
-    duplicate: true,
-    serverTs: stored.serverTs,
-  };
+    const state = await getState(stored.sessionId);
+    return {
+      state,
+      etas: computeEtas(state, nowTs()),
+      seq: stored.seq,
+      duplicate: true,
+      serverTs: stored.serverTs,
+    };
+  });
 }
 
 /** Takes the session lock, or says the session is not there. */
@@ -1025,32 +1036,36 @@ function derive(clientEventId: string | null, tag: 'd' | 'c'): string | null {
  * transaction makes impossible, or a cache deleted by hand.
  */
 export async function getState(sessionId: string): Promise<QueueState> {
-  const session = await sessionRepo.findById(sessionId);
-  if (session === null) throw notFound('session');
+  return await asQueue(async () => {
+    const session = await sessionRepo.findById(sessionId);
+    if (session === null) throw notFound('session');
 
-  const seed = await seedFor(undefined, session);
-  const cached = await stateRepo.find(sessionId);
+    const seed = await seedFor(undefined, session);
+    const cached = await stateRepo.find(sessionId);
 
-  // No cache at all, or one that has fallen behind: replay from the log. The
-  // log is the only thing that was ever true, so this is always correct and
-  // only ever slower (`DB-P1`).
-  const from = cached?.rebuiltFromSeq ?? 0;
-  const events = await eventRepo.listForSession(sessionId, from);
+    // No cache at all, or one that has fallen behind: replay from the log. The
+    // log is the only thing that was ever true, so this is always correct and
+    // only ever slower (`DB-P1`).
+    const from = cached?.rebuiltFromSeq ?? 0;
+    const events = await eventRepo.listForSession(sessionId, from);
 
-  if (from === 0) return replay(seed, events);
+    if (from === 0) return replay(seed, events);
 
-  // The cache is a projection of counts, not of the full state, so a warm read
-  // still replays. What the cache buys is the *read* path for a patient's
-  // phone — `queue_state` answers "what number is showing" in one row without
-  // touching the log at all (DATABASE.md §6).
-  return replay(seed, await eventRepo.listForSession(sessionId, 0));
+    // The cache is a projection of counts, not of the full state, so a warm read
+    // still replays. What the cache buys is the *read* path for a patient's
+    // phone — `queue_state` answers "what number is showing" in one row without
+    // touching the log at all (DATABASE.md §6).
+    return replay(seed, await eventRepo.listForSession(sessionId, 0));
+  });
 }
 
 /** The cached counters, for the cheap read a patient's phone makes. */
 export async function getCachedState(
   sessionId: string,
 ): Promise<stateRepo.CachedQueueState | null> {
-  return await stateRepo.find(sessionId);
+  return await asQueue(async () => {
+    return await stateRepo.find(sessionId);
+  });
 }
 
 /**
@@ -1078,7 +1093,9 @@ export async function rebuild(sessionId: string): Promise<QueueState> {
 
 /** ETAs for a session, for the read path. */
 export async function getEtas(sessionId: string): Promise<readonly Eta[]> {
-  return computeEtas(await getState(sessionId), nowTs());
+  return await asQueue(async () => {
+    return computeEtas(await getState(sessionId), nowTs());
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1542,9 +1559,11 @@ export async function setCapacity(sessionId: string, capacity: number): Promise<
  * exists to prevent.
  */
 export async function broadcastRoster(sessionId: string): Promise<void> {
-  const state = await getState(sessionId);
-  const etas = await getEtas(sessionId);
-  emit.queueUpdated(sessionId, { state, etas }, state.lastSeq, nowTs());
+  return await asQueue(async () => {
+    const state = await getState(sessionId);
+    const etas = await getEtas(sessionId);
+    emit.queueUpdated(sessionId, { state, etas }, state.lastSeq, nowTs());
+  });
 }
 
 /**

@@ -103,8 +103,7 @@ const TOKEN_TTL_SECONDS = 15 * 60;
  * genuine link reads the same sentence either way — this link has done its job.
  */
 export async function reportUrl(token: string, reportId: string): Promise<string> {
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-  const link = await guestRepo.resolveTrackingToken(tokenHash);
+  const link = await resolve(token);
   if (link === null) throw new AppError('GUEST_LINK_EXPIRED');
 
   // **The link's own booking, and nothing else.** A live token must not open
@@ -121,6 +120,21 @@ export async function reportUrl(token: string, reportId: string): Promise<string
     if (url === null) throw notFound('report');
     return url;
   });
+}
+
+/**
+ * The link a token is, or `null` (`FR-GST-05`).
+ *
+ * Read as the server's own work (migration 0056): until the token resolves the
+ * request is nobody's, and nobody reads any link. Finding which link a token
+ * is, is the act of telling who is asking, as a sign-in is.
+ */
+async function resolve(token: string): ReturnType<typeof guestRepo.resolveTrackingToken> {
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  return await runInDbScope(
+    { kind: 'system' },
+    async () => await guestRepo.resolveTrackingToken(tokenHash),
+  );
 }
 
 /**
@@ -143,8 +157,7 @@ async function asLink<T>(
 }
 
 export async function openTrackingLink(token: string): Promise<TrackingLinkView> {
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-  const link = await guestRepo.resolveTrackingToken(tokenHash);
+  const link = await resolve(token);
 
   if (link === null) throw new AppError('GUEST_LINK_EXPIRED');
 
