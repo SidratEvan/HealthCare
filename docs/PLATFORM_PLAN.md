@@ -107,6 +107,9 @@ integration points marked ▣ and at J.
 | **K** | | **The owner's note of 8 October** (`CLAUDE.md` §4.6), before H3 | | |
 | K1 | `fix/patient-profiles-label` | The More tab heads the people booked under a signed-in phone **পরিবারের প্রোফাইল / Family profiles**; family accounts are not in V1 | The heading names them for what they are, the people booked under this number; nothing is added, removed or relinked, and the phone identity model is untouched | F |
 | K2 | `fix/beds-honest-status` | A bed figure past its freshness threshold is still shown as an exact count, with a stale warning beside it | An exact count only while it is fresh; past the threshold, available or none as last confirmed, with its age; never confirmed, not known. Never a zero for what is not known (`FR-PAT-14`, `FR-PAT-51`, §3.2) | F |
+| **K** (cont.) | | **Priority 2 from the owner's second note of 8 October** | | |
+| K3 | `fix/beds-unknown-when-stale` | K2 says "beds were free when last confirmed" past the threshold | Decision 10: past the threshold, or never confirmed, the figure is not known, with the age of the last confirmation | F |
+| K4 | `feat/console-cobrand` | The staff workspace shows the hospital's name on the platform's colour | Decision 9: the hospital's logo, name and colours in the console's rail, with Powered by MedLiveBD beneath; one read any member of staff may make | F |
 | **J** | `chore/v1-release` | | The full gate, clean, on the whole suite; the migration plan for Supabase and the deployment checklist written. **Moving `main` and `demo`, applying migrations to Supabase and resetting its data wait for the owner's word** (`CLAUDE.md` §4.6) | Full ▣ |
 
 **Blocked outside the repository** (built up to the adapter; activation only):
@@ -145,11 +148,14 @@ Decided by the owner's note and so not asked: D2 (a hospital may apply by
 itself; nothing is public until a person approves it), D3 (the fields
 `FR-ONB-09` lists), D7 (the modules are the console's own: `FR-BRD-11`).
 
-### Later: the post-pilot roadmap (owner, 8 October)
+### Later: the approved roadmap (owner, 8 October)
 
-Approved for after the first pilots, **not to be built now** (`CLAUDE.md`
-§4.6). Priorities are set again after real hospital use. Each needs its
-requirements written into `PRD.md` and `APP_FLOW.md` before any code.
+Approved by the owner's first note of 8 October for after the pilots, and by
+his second note of the same day as **approved product decisions** to be built
+at a sensible point, as priority 3 (below, *The owner's approved product
+decisions*). None is needed for the first pilot; any that would delay it is
+raised with the owner first. Each needs its requirements written into
+`PRD.md` and `APP_FLOW.md` before any code.
 
 | | What |
 |---|---|
@@ -187,6 +193,54 @@ full; emergency search by reported capability with its age, ring the
 hospital, I'm on my way and 999, and no promise of acceptance; medicines from
 participating hospitals' pharmacies only, available, out or unknown with
 their age; the records, consent and access log as they are.
+
+### The owner's approved product decisions (8 October), and where each stands
+
+The owner's second note of 8 October approved these as product decisions,
+not ideas, in three priorities: **1** finish V1 (K, H3, F3, E1, J); **2**
+low-risk corrections to what exists; **3** the further approved
+functionality, scheduled around the pilot without endangering it. It
+supersedes the "not before the pilot" of the first note for the items in
+priority 3: they are to be built, at a sensible point, each on its own branch
+with its own tests, and **any that would delay the first pilot is raised with
+the owner before that delay is taken**. Checked against the code on 8
+October. *Built* means in `mvp` and tested; *partly* says which half;
+*missing* means no code path.
+
+| # | Decision | State | Where, or what is left | Priority, branch |
+|---|---|---|---|---|
+| 1a | Hospitals set each doctor's real sessions, any hours, no fixed morning/afternoon/evening | **Built** | Weekly chambers with their own start and end on `S-B-11` (step 22, `FR-SUP-01`); sessions made from them for seven days | — |
+| 1b | Session booking with a serial, the default | **Built** | `S-A-07b` → `S-A-07c` | — |
+| 1c | Optional preferred one-hour arrival window, offered per hospital, never a guaranteed time; the live serial and ETA stay authoritative | **Missing** | Needs requirements (`PRD.md`), screens and a hospital setting; touches booking, not the queue engine | 3, `feat/arrival-windows` (R1) |
+| 1d | A full session offers standby | **Built** | `MOD-A06D-STANDBY`, `FR-PAT-25`–`27` | — |
+| 1e | One shared serial pool; online, walk-in and telephone bookings all use it | **Built** | One capacity per session; a walk-in and a counter booking are bookings of the same session; reception may seat a walk-in past it | — |
+| 1f | No walk-in management in the patient app | **Built** | The patient app has none | — |
+| 2a | One receptionist runs several doctors' queues; a common reception workspace | **Built** | The console's chamber picker: any chamber of the hospital, switched without another account; each queue independent | — |
+| 2b | Reception desks assigned to particular doctors or chambers by an administrator | **Missing** | No table of desks or assignments | 3, `feat/reception-desks` (R4) |
+| 3 | Digital prescriptions: written, saved, signed, printed in the doctor's console; the patient's to see and download; only authorised clinicians; no AI | **Partly** | Tables `prescriptions`, `prescription_items` exist (0007) and nothing writes them: e-prescriptions were dropped from step 12 on 19 September. The visit record and consent rules they would stand on are built | 3, documents first, then `feat/prescriptions` (R2) |
+| 4 | Patients upload old documents (photos, lab reports, PDFs), private, labelled patient-provided, seen by other clinicians only with consent, stored in Bangladesh | **Partly** | Table `patient_documents` exists (0007, `FR-PAT-62`) under the patient's own policy (B3); the storage adapter exists; no upload route or screen | 3, `feat/patient-documents` (R3) |
+| 5a | Guest booking; no account needed to book | **Built** | `FR-GST-*` | — |
+| 5b | No family accounts or linked family profiles | **Built** | K1: nothing calls the people under a number a family; nothing to add, link or manage them exists | — |
+| 6 | One doctor login for several authorised organisations, each its own dashboard, never mixed, no automatic access to another's records | **Missing** | A staff account belongs to one hospital (`staff_users.hospital_id`), and every tenant policy rests on that. Needs a design note before code: it is the one item here that changes how tenancy is entered | 3, design note first, then `feat/doctor-workplaces` (R5) |
+| 7 | Registered hospitals, clinics and approved private chambers as organisations; no open self-registration for unregistered chambers | **Partly** | Hospitals and clinics apply and are approved by the platform (D1, V3.1); the organisation kinds are hospital, clinic, diagnostic, government; there is no private-chamber kind | 3, `feat/chamber-organisations` (R7) |
+| 8a | Role-based first screens: reception sees reception, a doctor their own workspace | **Built** | The console opens on the role's screen | — |
+| 8b | A simple administrator overview: doctors working today, patients waiting, beds available, ED status, today's appointments; reports on their own screens | **Partly** | The dashboard exists with loss and recovery and the reports; the overview as listed does not | 3, `feat/admin-overview` (R6) |
+| 9 | Each hospital's workspace shows its own logo, name and colours, with **Powered by MedLiveBD** beneath | **Partly** | The logo and colours exist (`FR-BRD-06`, C1) and patients see them; the console's rail shows the name only, on the platform's colour | **2**, `feat/console-cobrand` (K4) |
+| 10 | Beds: exact numbers when recently confirmed; unavailable when reliably confirmed; **unknown when missing or outdated**; last-updated kept; never an unconfirmed number as live | **Partly** | K2 shows a count only while fresh, with the age; past the threshold it says "were free / none when last confirmed", which this decision replaces with unknown | **2**, `fix/beds-unknown-when-stale` (K3) |
+| 11 | Emergency discovery by reported capability; nearby; freshness; call; I'm on my way; 999; no promise of acceptance; no AI diagnosis | **Built** | `S-A-10`, `FR-PAT-40`–`47` | — |
+| 12 | Medicines: participating hospitals' pharmacies only; available, unavailable, unknown | **Built** | `S-A-medicines`, `FR-PHR-02` | — |
+| 13 | AI only for import mapping; humans approve; deterministic checks decide; no patient row to a model; Excel importer finished; the model tried when a key exists | **Partly** | Mapping and its model built (V4.1, V4.2); `.xlsx`/`.xls` is E1; the live model is X6 | 1, E1 |
+
+**Order of work from here:** H3, K3, K4 (priority 2, small), F3, E1, then
+J prepared up to release (priority 1). Priority 3 follows J's preparation, in
+the order R2, R3, R1, R6, R4, R7, R5: prescriptions and uploads extend what
+patients and doctors already use; arrival windows and the admin overview are
+self-contained; desks, chamber organisations and doctor workplaces change how
+staff and organisations are set up, and R5 begins with a design note for the
+owner. None of priority 3 is needed for the first pilot, and the pilot's
+release waits on the owner's word and on company registration in any case; if
+one of them would stand between a ready release and the owner's go, that is
+said before it is started.
 
 ### Done: the V1 pitch build (owner, 5 October, evening)
 
@@ -675,7 +729,7 @@ In addition to `CLAUDE.md`:
 | H1 | `feat/notification-worker` | **merged 7 October** (was 2.1) — `shared/domain` `messaging/sending` (five tries, the waits, seven in the morning); migration 0053 (`notifications.attempts`, `next_attempt_at`, `notifications_due_idx`, `fn_workspace_health`'s waiting); `notificationSender.service` (claims with `SKIP LOCKED`, retries, gives up, runs as `system`); `messageLink.service` and `trackingLink.ts`, `bedRequestLink.ts`, `emergencyLink.ts` (a fresh link for a message sent from its row); `dispatch` hands over and returns; a held message is queued for seven. `sending.test.ts`, `notificationSender.test.ts`, `lab.routes.test.ts` (+1). **Split:** the timers are H1b |
 | H1b | `feat/queue-timers` | **merged 7 October** — `queueTimers.service` (a thirty-second tick, as `system`), `standby.repo` `sessionsWithOverdueOffers`; `expireLapsedOffers` is now called by the timer and by the read. `standby.routes.test.ts` (+2). **Raised:** Q13 (the leave-home alert's channel), Q14 (whether a lapsed chair passes on by itself) |
 | H2 | `feat/sms-adapter-ready` | **merged 7 October**; activation waits: X1 — `adapters/smsHttp.ts` (`SMS_PROVIDER=http`: one `POST`, a time limit, `retryable`); the adapter's `reportsDelivery`, `verifyReceipt`, `readReceipt`; `POST /webhooks/sms-dlr` (signed, from `sent` only, 200 for a replay); migration 0054 (`notifications_provider_ref_idx`); `GET /hospital/messages` and `TXT-B11-SMS` on `S-B-11`; `SMS_API_URL`, `SMS_DLR_SECRET`; `DEPLOY.md` *An SMS aggregator*. `smsDelivery.test.ts` (20, against a stand-in aggregator), `e2e/sms-month.spec.ts`. The cap itself was already there (`FRM-B11-RULES`). **Not claimed:** any real aggregator's wire format |
-| H3 | `feat/payment-adapters-ready` | **Q15 decided 7 October** (a fifteen-minute hold, a hospital setting; then pay at the counter where the hospital allows it, else released); activation waits: X2. Found on 7 October to be more than two adapters: a charge that does not settle at once keeps no reference, the patient app follows no redirect, and bKash's real flow has no signed webhook (`STATUS.md`, *H3 as it was found*). `APP_FLOW.md` has no screen for it, so it starts with a documents branch |
+| H3 | `feat/payment-adapters-ready` | **merged 8 October**; activation waits: X2 — migration 0057 (`payments.provider_checkout_id`, `hold_until`, `failure_reason`, `checked_at`; `payment_events`, insert-only for the API's role; `bookings.prepayment_required`; `hospital_settings.payment_hold_minutes`); the seam's `confirm` and `refundsByApi`, `providerFor`, `availableMethods`; `adapters/payments/bkash.ts` (tokenized checkout) and `nagad.ts` (RSA-sealed checkout, `node:crypto`); `payment.service` `confirmForBooking`, `expireHolds`, `askAgainAfterExpiry`, refunds by the provider's references or by hand; `paymentHolds.service` (thirty seconds, heartbeat `payments`); `POST /bookings/:id/payments/:paymentId/confirm`, `GET /payments/:id/history`, `GET /mock-pay/:checkoutId` under the mock; four templates (`booking.held`, `payment.counter`, `payment.released`, `payment.owed_back`); `/config` `paymentMethods`; `<PaymentHold>`, `/pay/return`, the hold on `FRM-B11-RULES`. Tests: `paymentHolds.routes.test.ts` (16), `paymentProviders.test.ts` (12, stand-in bKash and Nagad servers), `payment.routes.test.ts` (one rule changed: a paid serial takes no second payment), `e2e/payment-return.spec.ts` (5). Strict gate: `pnpm verify` whole (7,048; the five that failed first were lists naming migrations, routes, settings and `/config`, and one test that read a message before the sender had sent it); in the browser payment-return, guest-booking, standby, no-show-recovery, hospital-settings, patient-account-serials (32) and the canary (5); `pnpm test:e2e:prod` (26: 25 at first, the one that failed a list of `/config`'s fields, which now names `paymentMethods: []`; that file again, 6 of 6). **Not run against bKash or Nagad** |
 | H3a | `chore/h3-payment-docs` | merged 8 October — documents only: `FR-PAY-08`–`12` in `PRD.md`; `CARD-A07D-HOLD`, `BTN-A07D-PAY`, `S-A-07p` and the payment hold on `FRM-B11-RULES` in `APP_FLOW.md`; the routes, errors, templates, the seam's four members and the timer in `BACKEND.md`; 0057 in `DATABASE.md`; *bKash and Nagad* and its sandbox checklist in `DEPLOY.md`. **Raised:** question 17 (whose merchant account) |
 | I1 | `chore/api-build` | **merged 7 October** — `tsconfig.build.json` in `backend/api`, `shared/domain`, `shared/i18n`; `pnpm build:api`; the `compiled` export condition, so the running server reads the shared packages' `dist/`; `start:compiled` (`node --conditions=compiled`); the `api` image built from `base` with `--prod` and only the API's and the database scripts' dependencies (1.48 GB → 809 MB); `pnpm test:e2e:prod` starts the API as the image does. **Found and fixed:** `pnpm` was the API container's first process, so `docker stop` killed the server without its shutdown; the image now starts `node` itself. And a test race: six files signed as "the first platform administrator by name", which `platform.routes.test.ts` briefly makes a second of (`seededPlatformAdminId`). **Decided here:** one-off commands (`db:migrate`, `db:role`, `staff:create`) stay on `tsx`, now a runtime dependency of `database` as it already was of the API; the Render demo keeps `tsx` (`DEPLOY.md` §6). **Left:** the images are still built on the hospital's server (handover 21's last clause); a registry is an X-row's business |
 | I2 | `chore/ops-signals` | **merged 7 October** — migration 0055 (`backup_runs`, written by `deploy/backup.sh` as the owner, read-only for the API's role, readable in the `system` scope only); `shared/domain` `org/deployment` (`deploymentSignals`: the rule for `backup_failed`, `backup_stale`, `backup_none`, `messages_overdue`, `worker_late`); `services/heartbeat.service.ts`, reported to by the sender, the offer timer and the hourly jobs; `signals` on `/readyz`; `BACKUP_MAX_AGE_HOURS` for the API and the backup container alike; the console and patient images start `next` itself. **Decided here:** none of it changes readiness; backups unwatched unless the setting is there, as on the Supabase demo; no alert is sent, since sending one needs an account (`DEPLOY.md` S5 says how to point a free checker at it) |

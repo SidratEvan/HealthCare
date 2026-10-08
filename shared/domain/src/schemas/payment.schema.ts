@@ -54,6 +54,18 @@ export type PaymentIntentBody = z.infer<typeof paymentIntentBody>;
 export const paymentParams = z.object({ id: uuid });
 
 /**
+ * `POST /bookings/:id/payments/:paymentId/confirm` (plan H3, `FR-PAY-09`).
+ *
+ * `hint` is the provider's own word from the return address. It chooses only
+ * how the provider is asked, never the answer.
+ */
+export const paymentConfirmParams = z.object({ id: uuid, paymentId: uuid });
+export const paymentConfirmBody = z.object({
+  hint: z.enum(['success', 'failure', 'cancel']).nullable().optional(),
+});
+export type PaymentConfirmBody = z.infer<typeof paymentConfirmBody>;
+
+/**
  * `POST /payments/:id/refund` — an administrator returns money.
  *
  * **The amount is not in the body here either.** How much comes back is

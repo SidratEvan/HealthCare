@@ -482,7 +482,6 @@ Settings (in `.env`, never in the repository):
 | Setting | What |
 |---|---|
 | `PAYMENT_PROVIDER` | `live`. `off` offers paying at the hospital only; `mock` is refused in production |
-| `PAYMENT_CALLBACK_BASE` | The API's public HTTPS address; bKash and Nagad send the patient's browser back to the patient app through it |
 | `BKASH_BASE_URL` | The sandbox address bKash gives you (`https://tokenized.sandbox.bka.sh/v1.2.0-beta` at the time of writing); the live address only after the checklist. **There is no default**: bKash is not offered until it is set |
 | `BKASH_APP_KEY`, `BKASH_APP_SECRET`, `BKASH_USERNAME`, `BKASH_PASSWORD` | From bKash, per merchant |
 | `NAGAD_BASE_URL` | The sandbox address Nagad gives you; no default |
@@ -505,6 +504,7 @@ A method appears in the patient app only when its settings are complete
 7. bKash only: a refund from the administrator's screen reaches the sandbox wallet; the payment reads refunded. Nagad: the refund is made in Nagad's merchant panel and recorded by hand with its reference.
 8. The API's log, after all of the above, holds no transaction id, no wallet number and no token (`grep` it).
 9. Whatever the provider itself requires before going live (its own test cases, an IP allow-list, a certificate): done and recorded (`docs/PLATFORM_PLAN.md` X9).
+10. **Things the code assumed that only the sandbox can confirm:** bKash's grant takes the username and password as headers and the token as `Authorization` with `X-APP-Key`; `Completed` is the only paid status and execute after a cancel is not attempted; Nagad accepts our 32-character order id, the `X-KM-IP-V4` header set to `127.0.0.1` (the patient's address is not sent), and answers `verify/payment` with `status`, `amount` and `issuerPaymentRefNo`. Any of these wrong is a change to one adapter file and its stand-in test.
 
 Then one real payment of the smallest fee, refunded, before the first patient.
 

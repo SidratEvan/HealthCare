@@ -40,6 +40,7 @@ import {
   type SessionId,
 } from '@platform/domain';
 
+import { availableMethods } from '../adapters/payments/index.js';
 import { asQueue } from '../config/dbScope.js';
 import { patientLink } from '../config/links.js';
 import { logger } from '../config/logger.js';
@@ -49,6 +50,7 @@ import { AppError, notFound, validationFailed } from '../errors/AppError.js';
 import * as bookingRepo from '../repositories/booking.repo.js';
 import * as guestRepo from '../repositories/guest.repo.js';
 import * as patientAuthRepo from '../repositories/patientAuth.repo.js';
+import * as paymentRepo from '../repositories/payment.repo.js';
 import * as sessionRepo from '../repositories/session.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
@@ -122,6 +124,17 @@ export interface CreateBookingInput {
   readonly clientEventId?: string | null;
 }
 
+/** What a booking's own payment looks like to the patient who made it. */
+export interface BookingPayment {
+  readonly id: string;
+  readonly method: string;
+  readonly state: string;
+  readonly redirectUrl: string | null;
+  readonly holdUntil: string | null;
+  /** What happens to the serial if the hold runs out (`FR-PAY-08`), said before it does. */
+  readonly afterHold: 'counter' | 'released';
+}
+
 export interface BookingResult {
   readonly bookingId: string;
   readonly serial: number;
@@ -137,6 +150,11 @@ export interface BookingResult {
    */
   readonly trackingUrl: string | null;
   readonly paid: boolean;
+  /**
+   * The payment this booking started (plan H3): where the patient goes to pay
+   * and until when the serial is held for it, or null when none was written.
+   */
+  readonly payment: BookingPayment | null;
   /** True when this request had already made the booking and is being answered again. */
   readonly duplicate: boolean;
 }
@@ -250,6 +268,16 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
         }
       }
 
+      // `FR-PAY-02`, `FR-PAY-08`: whether this serial must be paid for first,
+      // decided now and kept on the row. Only where an online method exists: a
+      // deployment that can take no payment never turns anybody away for it.
+      const prepaymentRequired =
+        availableMethods().length > 0 &&
+        (await paymentRepo.hospitalPaysFirst(trx, locked.hospitalId));
+      if (prepaymentRequired && input.method === 'at_hospital') {
+        throw new AppError('PREPAYMENT_REQUIRED');
+      }
+
       const bookingId = await bookingRepo.insertBooking(trx, {
         sessionId: input.sessionId,
         patientId,
@@ -264,6 +292,7 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
         // hospital's included (handover finding 26).
         intake: { ...(input.intake ?? {}), ...(env.DEMO_MODE ? { demo: true } : {}) },
         idempotencyKey: key,
+        prepaymentRequired,
       });
 
       const payer: payments.Payer =
@@ -292,13 +321,15 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
     // one that works. Nobody is told twice and nothing is charged twice: the
     // payment below is keyed by the same request and finds its own row.
     if (created.replayed) {
+      const payment = await recordBookingPayment(created, input);
       return {
         bookingId: created.bookingId,
         serial: created.serial,
         sessionId: input.sessionId,
         fee,
         trackingUrl,
-        paid: await recordBookingPayment(created, input),
+        paid: payment?.state === 'paid',
+        payment,
         duplicate: true,
       };
     }
@@ -317,15 +348,25 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
     // this is the one moment the message can be composed at all. There is
     // nothing to roll back by then — the booking is committed and the patient
     // has their serial.
-    await queueBookingConfirmation(created.bookingId, input.sessionId, trackingUrl);
-
-    // The money, recorded (step 18). Outside the booking transaction and after
-    // the confirmation, deliberately: a patient who has a serial must not lose
-    // it because a payment gateway was slow, and a booking that rolled back
-    // over a charge would send them round to take a second one. So the booking
-    // is the commitment and the payment is recorded against it — which is also
-    // the order a settlement reads them in (`FR-PAY-05`).
-    const paid = await recordBookingPayment(created, input);
+    //
+    // The money is recorded first (step 18; since plan H3 before the message,
+    // because the message depends on it). Outside the booking transaction,
+    // deliberately: a patient who has a serial must not lose it because a
+    // payment gateway was slow, so the booking is the commitment and the
+    // payment is recorded against it (`FR-PAY-05`). A payment still under way
+    // at the provider makes the message `booking.held`, with the minutes the
+    // serial is held for (`FR-PAY-08`); the confirmation follows when the
+    // provider says it was paid.
+    const payment = await recordBookingPayment(created, input);
+    const held = payment !== null && payment.state === 'pending' && payment.holdUntil !== null;
+    await queueBookingConfirmation(
+      created.bookingId,
+      input.sessionId,
+      trackingUrl,
+      held && payment.holdUntil !== null
+        ? Math.max(1, Math.round((Date.parse(payment.holdUntil) - Date.now()) / 60_000))
+        : null,
+    );
 
     return {
       bookingId: created.bookingId,
@@ -333,7 +374,8 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
       sessionId: input.sessionId,
       fee,
       trackingUrl,
-      paid,
+      paid: payment?.state === 'paid',
+      payment,
       duplicate: false,
     };
   });
@@ -356,12 +398,13 @@ async function payerOf(trx: Tx, booker: Booker): Promise<payments.Payer> {
  *
  * `at_hospital` records the intention and stays `pending` until somebody takes
  * the cash; everything else is charged through the provider, which under
- * `PAYMENT_PROVIDER=mock` settles inline (CLAUDE.md §1.1).
+ * `PAYMENT_PROVIDER=mock` settles inline (CLAUDE.md §1.1), and otherwise
+ * answers where the patient goes to pay (plan H3).
  */
 async function recordBookingPayment(
   created: { readonly bookingId: string; readonly payer: payments.Payer },
   input: CreateBookingInput,
-): Promise<boolean> {
+): Promise<BookingPayment | null> {
   try {
     const result = await payments.createIntent(
       {
@@ -370,15 +413,25 @@ async function recordBookingPayment(
         // The booking's own client event id where there is one, so a retried
         // confirm makes one payment and not two (`FR-PAY-06`, `FR-QUE-51`).
         idempotencyKey: input.clientEventId ?? randomUUID(),
-        returnUrl: patientLink(`/s/${created.bookingId}`),
+        // Where bKash or Nagad sends the patient back to (`S-A-07p`).
+        returnTo: (paymentId) =>
+          patientLink('/pay/return', { payment: paymentId, booking: created.bookingId }),
       },
       created.payer,
     );
-    return result.payment.state === 'paid';
+    const detail = await bookingRepo.findDetail(created.bookingId);
+    return {
+      id: result.payment.id,
+      method: result.payment.method,
+      state: result.payment.state,
+      redirectUrl: result.redirectUrl,
+      holdUntil: result.payment.holdUntil,
+      afterHold: detail?.prepaymentRequired === true ? 'released' : 'counter',
+    };
   } catch (cause: unknown) {
     // The booking id, never the payer (`DB-P7`).
     logger.error({ bookingId: created.bookingId, err: cause }, 'could not record the payment');
-    return false;
+    return null;
   }
 }
 
@@ -394,6 +447,8 @@ async function queueBookingConfirmation(
   bookingId: string,
   sessionId: string,
   trackingUrl: string | null,
+  /** Minutes the serial is held for its payment, or null when it is not held. */
+  heldMinutes: number | null = null,
 ): Promise<void> {
   try {
     const batch = await withTransaction(
@@ -401,7 +456,7 @@ async function queueBookingConfirmation(
         await notifications.queueFor(
           trx,
           sessionId,
-          notifications.planBookingConfirmed(bookingId, trackingUrl),
+          notifications.planBookingConfirmed(bookingId, trackingUrl, heldMinutes),
         ),
     );
     await notifications.dispatch(batch);

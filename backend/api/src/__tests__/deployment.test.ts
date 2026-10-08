@@ -74,6 +74,8 @@ describe('PAYMENT_PROVIDER=off, and GET /config', () => {
     expect(response.body.data).toEqual({
       demo: true,
       onlinePayments: true,
+      // Under the mock every online method is taken (plan H3).
+      paymentMethods: ['bkash', 'nagad', 'card'],
       guestPhoneCheck: false,
       // Asked with no host: the network's address (FR-BRD-07);
       // `portalAddress.routes.test.ts`.

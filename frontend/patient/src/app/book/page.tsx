@@ -43,6 +43,7 @@ import { HospitalMark } from '@/components/HospitalMark';
 import { ChevronIcon } from '@/components/icons';
 import { Monogram } from '@/components/Monogram';
 import { NotShared, withholds } from '@/components/NotShared';
+import { PaymentHold } from '@/components/PaymentHold';
 import { StandbyJoin } from '@/components/StandbyJoin';
 import { EmptyState, FailedState, OfflineNotice, Panel, SkeletonCards } from '@/components/States';
 import { TabScreen } from '@/components/TabScreen';
@@ -852,9 +853,16 @@ function Confirm({
   // A deployment with no online payment offers the counter only (pilot step 26).
   const deployment = useDeployment();
   const onlinePayments = deployment?.onlinePayments !== false;
+  // The online methods this deployment can take (plan H3): card only where a
+  // provider takes it. An older server that does not say offers all three.
+  const offered = deployment?.paymentMethods ?? ['bkash', 'nagad', 'card'];
   useEffect(() => {
     if (!onlinePayments) setMethod('at_hospital');
-  }, [onlinePayments]);
+    else if (method !== 'at_hospital' && !offered.includes(method)) {
+      const first = offered[0];
+      setMethod(first === 'bkash' || first === 'nagad' || first === 'card' ? first : 'at_hospital');
+    }
+  }, [onlinePayments, offered, method]);
   const [busy, setBusy] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
 
@@ -1011,7 +1019,11 @@ function Confirm({
             ? tp('chamberFull', locale)
             : code === 'BOOKING_LIMIT_REACHED'
               ? tp('bookingLimitReached', locale)
-              : tp('bookingFailed', locale),
+              : code === 'PREPAYMENT_REQUIRED'
+                ? tp('prepaymentRequired', locale)
+                : code === 'PAYMENT_UNAVAILABLE'
+                  ? tp('paymentUnavailable', locale)
+                  : tp('bookingFailed', locale),
       );
     } finally {
       setBusy(false);
@@ -1232,7 +1244,9 @@ function Confirm({
               ['at_hospital', 'payAtHospital'],
             ] as const
           )
-            .filter(([value]) => onlinePayments || value === 'at_hospital')
+            .filter(
+              ([value]) => value === 'at_hospital' || (onlinePayments && offered.includes(value)),
+            )
             .map(([value, key]) => (
               <button
                 key={value}
@@ -1344,6 +1358,12 @@ function Success({
           />
         </dl>
       </Panel>
+
+      {/* FR-PAY-08 (plan H3): paid online at a provider that sends the patient
+          away, the serial is held until the payment is confirmed. */}
+      {booking.payment?.state === 'pending' && booking.payment.holdUntil !== null ? (
+        <PaymentHold bookingId={booking.bookingId} payment={booking.payment} />
+      ) : null}
 
       {/* FR-GST-05: the SMS carries the tracking link. Shown here too, because
           in a demo there is no SMS to open and the link is the point. */}

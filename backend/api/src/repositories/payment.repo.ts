@@ -42,7 +42,30 @@ export interface PaymentView {
   readonly refundReason: string | null;
   readonly refundedAt: Timestamp | null;
   readonly createdAt: Timestamp;
+  /** An online attempt's deadline (0057, `FR-PAY-08`). */
+  readonly holdUntil: Timestamp | null;
+  /** Why a failed payment failed (0057). */
+  readonly failureReason: FailureReason | null;
 }
+
+/** Why a payment failed (`payments_failure_reason_known`, 0057). */
+export type FailureReason =
+  'declined' | 'cancelled' | 'expired' | 'superseded' | 'provider_error' | 'amount_mismatch';
+
+/** What a payment step is recorded as (`payment_events.kind`, 0057, `FR-PAY-11`). */
+export type PaymentEventKind =
+  | 'created'
+  | 'redirected'
+  | 'asked'
+  | 'paid'
+  | 'failed'
+  | 'expired'
+  | 'superseded'
+  | 'counter'
+  | 'released'
+  | 'owed_back'
+  | 'refunded'
+  | 'amount_mismatch';
 
 interface PaymentSqlRow {
   id: string;
@@ -59,12 +82,15 @@ interface PaymentSqlRow {
   refund_reason: string | null;
   refunded_at: Date | null;
   created_at: Date;
+  hold_until: Date | null;
+  failure_reason: FailureReason | null;
 }
 
 const PAYMENT_SELECT = sql`
   SELECT id, booking_id, bed_request_id, test_order_id, ambulance_request_id,
          amount_poisha, platform_fee_poisha, method::text AS method, state::text AS state,
-         paid_at, refunded_poisha, refund_reason, refunded_at, created_at
+         paid_at, refunded_poisha, refund_reason, refunded_at, created_at,
+         hold_until, failure_reason
     FROM payments
 `;
 
@@ -84,6 +110,8 @@ function toView(row: PaymentSqlRow): PaymentView {
     refundReason: row.refund_reason,
     refundedAt: iso(row.refunded_at),
     createdAt: row.created_at.toISOString() as Timestamp,
+    holdUntil: iso(row.hold_until),
+    failureReason: row.failure_reason,
   };
 }
 
@@ -157,20 +185,23 @@ export async function insertPayment(
     readonly method: PaymentMethod;
     readonly idempotencyKey: string;
     readonly createdBy: string | null;
+    /** An online attempt's deadline (`FR-PAY-08`). */
+    readonly holdUntil?: Date | null;
   },
 ): Promise<string> {
   const result = await sql<{ id: string }>`
     INSERT INTO payments
       (booking_id, bed_request_id, test_order_id, ambulance_request_id, standby_id,
        payer_user_id, payer_guest_id, amount_poisha, platform_fee_poisha,
-       method, idempotency_key, created_by)
+       method, idempotency_key, created_by, hold_until)
     VALUES (
       ${input.bookingId}::uuid, ${input.bedRequestId}::uuid,
       ${input.testOrderId}::uuid, ${input.ambulanceRequestId}::uuid,
       ${input.standbyId ?? null}::uuid,
       ${input.payerUserId}::uuid, ${input.payerGuestId}::uuid,
       ${input.amountPoisha}, ${input.platformFeePoisha},
-      ${input.method}::payment_method, ${input.idempotencyKey}, ${input.createdBy}::uuid
+      ${input.method}::payment_method, ${input.idempotencyKey}, ${input.createdBy}::uuid,
+      ${input.holdUntil ?? null}
     )
     RETURNING id
   `.execute(trx);
@@ -193,15 +224,23 @@ export async function markPaid(
   await sql`
     UPDATE payments
        SET state = 'paid'::payment_state,
+           failure_reason = NULL,
            provider_ref = COALESCE(provider_ref, ${input.providerRef}),
            paid_at = COALESCE(paid_at, ${input.at})
      WHERE id = ${input.paymentId}::uuid
   `.execute(trx);
 }
 
-export async function markFailed(trx: Tx, paymentId: string): Promise<void> {
+/** Marks a payment failed, with why (`payments_failed_says_why`, 0057). */
+export async function markFailed(
+  trx: Tx,
+  paymentId: string,
+  reason: FailureReason = 'declined',
+): Promise<void> {
   await sql`
-    UPDATE payments SET state = 'failed'::payment_state WHERE id = ${paymentId}::uuid
+    UPDATE payments
+       SET state = 'failed'::payment_state, failure_reason = ${reason}
+     WHERE id = ${paymentId}::uuid
   `.execute(trx);
 }
 
@@ -414,4 +453,168 @@ export async function unseatedStandbyForSession(trx: Tx, sessionId: string): Pro
        AND p.deleted_at IS NULL
   `.execute(trx);
   return result.rows.map((row) => row.id);
+}
+
+// --- Paying by being sent away (0057, plan H3) -----------------------------
+
+/** The provider's references for one payment. Read here and logged nowhere. */
+export interface PaymentRefs {
+  readonly checkoutId: string | null;
+  readonly providerRef: string | null;
+}
+
+export async function refsOf(trx: Tx, paymentId: string): Promise<PaymentRefs> {
+  const result = await sql<{ provider_checkout_id: string | null; provider_ref: string | null }>`
+    SELECT provider_checkout_id, provider_ref FROM payments WHERE id = ${paymentId}::uuid
+  `.execute(trx);
+  const row = result.rows[0];
+  return { checkoutId: row?.provider_checkout_id ?? null, providerRef: row?.provider_ref ?? null };
+}
+
+/** What the provider calls the attempt, written when it begins. */
+export async function setCheckout(trx: Tx, paymentId: string, checkoutId: string): Promise<void> {
+  await sql`
+    UPDATE payments SET provider_checkout_id = ${checkoutId} WHERE id = ${paymentId}::uuid
+  `.execute(trx);
+}
+
+/** When the provider was last asked about a payment. */
+export async function markChecked(trx: Tx, paymentId: string, at: Date): Promise<void> {
+  await sql`UPDATE payments SET checked_at = ${at} WHERE id = ${paymentId}::uuid`.execute(trx);
+}
+
+/** Every payment against one booking, locked, oldest first. */
+export async function lockForBooking(trx: Tx, bookingId: string): Promise<PaymentView[]> {
+  const result = await sql<PaymentSqlRow>`
+    ${PAYMENT_SELECT}
+     WHERE booking_id = ${bookingId}::uuid AND deleted_at IS NULL
+     ORDER BY created_at
+     FOR UPDATE
+  `.execute(trx);
+  return result.rows.map(toView);
+}
+
+/** One step of a payment (`FR-PAY-11`). The hospital is the paid thing's. */
+export async function recordEvent(
+  trx: Tx,
+  input: {
+    readonly paymentId: string;
+    readonly kind: PaymentEventKind;
+    readonly detail?: Readonly<Record<string, string>>;
+    readonly at?: Date;
+  },
+): Promise<void> {
+  await sql`
+    INSERT INTO payment_events (payment_id, hospital_id, kind, detail, at)
+    SELECT p.id,
+           COALESCE(s.hospital_id, ss.hospital_id, br.hospital_id, t.hospital_id),
+           ${input.kind}, ${JSON.stringify(input.detail ?? {})}::jsonb, ${input.at ?? new Date()}
+      FROM payments p
+      LEFT JOIN bookings b      ON b.id = p.booking_id
+      LEFT JOIN sessions s      ON s.id = b.session_id
+      LEFT JOIN standby_list w  ON w.id = p.standby_id
+      LEFT JOIN sessions ss     ON ss.id = w.session_id
+      LEFT JOIN bed_requests br ON br.id = p.bed_request_id
+      LEFT JOIN test_orders t   ON t.id = p.test_order_id
+     WHERE p.id = ${input.paymentId}::uuid
+  `.execute(trx);
+}
+
+export interface PaymentEventView {
+  readonly kind: PaymentEventKind;
+  readonly detail: Readonly<Record<string, unknown>>;
+  readonly at: Timestamp;
+}
+
+/** A payment's history, oldest first. */
+export async function historyOf(paymentId: string): Promise<PaymentEventView[]> {
+  const result = await sql<{ kind: PaymentEventKind; detail: Record<string, unknown>; at: Date }>`
+    SELECT kind, detail, at
+      FROM payment_events
+     WHERE payment_id = ${paymentId}::uuid
+     ORDER BY at, id
+  `.execute(db);
+  return result.rows.map((row) => ({
+    kind: row.kind,
+    detail: row.detail,
+    at: row.at.toISOString() as Timestamp,
+  }));
+}
+
+/** The hospital a payment belongs to, through what it paid for. */
+export async function hospitalOf(paymentId: string): Promise<string | null> {
+  const result = await sql<{ hospital_id: string | null }>`
+    SELECT COALESCE(s.hospital_id, ss.hospital_id, br.hospital_id, t.hospital_id) AS hospital_id
+      FROM payments p
+      LEFT JOIN bookings b      ON b.id = p.booking_id
+      LEFT JOIN sessions s      ON s.id = b.session_id
+      LEFT JOIN standby_list w  ON w.id = p.standby_id
+      LEFT JOIN sessions ss     ON ss.id = w.session_id
+      LEFT JOIN bed_requests br ON br.id = p.bed_request_id
+      LEFT JOIN test_orders t   ON t.id = p.test_order_id
+     WHERE p.id = ${paymentId}::uuid AND p.deleted_at IS NULL
+  `.execute(db);
+  return result.rows[0]?.hospital_id ?? null;
+}
+
+/** Whether a hospital takes no payment at the counter (`hospital_settings.prepay_required`). */
+export async function hospitalPaysFirst(trx: Tx, hospitalId: string): Promise<boolean> {
+  const result = await sql<{ prepay_required: boolean }>`
+    SELECT prepay_required FROM hospital_settings WHERE hospital_id = ${hospitalId}::uuid
+  `.execute(trx);
+  return result.rows[0]?.prepay_required ?? false;
+}
+
+/**
+ * Bookings with an online attempt whose hold has run out and that the timer
+ * has not yet dealt with (no `expired` step recorded), oldest first.
+ */
+export async function bookingsWithHoldsDue(now: Date, limit: number): Promise<string[]> {
+  const result = await sql<{ booking_id: string }>`
+    SELECT p.booking_id
+      FROM payments p
+     WHERE p.booking_id IS NOT NULL
+       AND p.hold_until IS NOT NULL
+       AND p.hold_until < ${now}
+       AND p.deleted_at IS NULL
+       AND p.state IN ('pending', 'failed')
+       AND NOT EXISTS (SELECT 1 FROM payment_events e
+                        WHERE e.payment_id = p.id AND e.kind = 'expired')
+     GROUP BY p.booking_id
+     ORDER BY min(p.hold_until)
+     LIMIT ${limit}
+  `.execute(db);
+  return result.rows.map((row) => row.booking_id);
+}
+
+/**
+ * Attempts that ran out within the last day and have not been asked for a
+ * quarter of an hour: a provider can complete after the patient has gone.
+ */
+export async function expiredToAskAgain(now: Date, limit: number): Promise<string[]> {
+  const result = await sql<{ id: string }>`
+    SELECT id
+      FROM payments
+     WHERE state = 'failed'
+       AND failure_reason IN ('expired', 'superseded')
+       AND provider_checkout_id IS NOT NULL
+       AND hold_until > ${new Date(now.getTime() - 24 * 3_600_000)}
+       AND (checked_at IS NULL OR checked_at < ${new Date(now.getTime() - 15 * 60_000)})
+       AND deleted_at IS NULL
+     ORDER BY hold_until
+     LIMIT ${limit}
+  `.execute(db);
+  return result.rows.map((row) => row.id);
+}
+
+/** Who paid an earlier attempt, for the row that takes its place. */
+export async function payerOf(
+  trx: Tx,
+  paymentId: string,
+): Promise<{ readonly payerUserId: string | null; readonly payerGuestId: string | null }> {
+  const result = await sql<{ payer_user_id: string | null; payer_guest_id: string | null }>`
+    SELECT payer_user_id, payer_guest_id FROM payments WHERE id = ${paymentId}::uuid
+  `.execute(trx);
+  const row = result.rows[0];
+  return { payerUserId: row?.payer_user_id ?? null, payerGuestId: row?.payer_guest_id ?? null };
 }

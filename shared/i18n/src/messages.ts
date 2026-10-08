@@ -2328,6 +2328,14 @@ export const CONSOLE = {
     bn: 'দেরিতে আসা রোগী কতজন পরে বসবেন',
     en: 'A late patient is seated after this many',
   },
+  settingsPaymentHold: {
+    bn: 'অনলাইন পেমেন্টের জন্য সিরিয়াল রাখার সময় (মিনিট)',
+    en: 'How long a serial waits for its online payment (minutes)',
+  },
+  settingsPaymentHoldHelper: {
+    bn: '৫ থেকে ৬০ মিনিট। সময় শেষে সিরিয়াল কাউন্টারে পরিশোধের জন্য থাকে, বা আগে-পরিশোধের সিরিয়াল ছেড়ে দেওয়া হয়।',
+    en: '5 to 60 minutes. When it runs out the serial is paid at the counter, or released where it had to be paid first.',
+  },
   settingsStaleMinutes: {
     bn: 'কত মিনিট পর তথ্য পুরোনো ধরা হবে',
     en: 'Minutes before a figure counts as stale',
@@ -3830,6 +3838,92 @@ export const PATIENT = {
     en: 'Tap a chamber to go on to confirming your serial.',
   },
   searchClearNeedLabel: { bn: '{need} বাদ দিন', en: 'Remove {need}' },
+  // --- A serial held while it is paid for (S-A-07d, S-A-07p; plan H3) -------
+  holdTitle: { bn: 'সিরিয়াল রাখা হয়েছে', en: 'Serial held' },
+  holdPayWithin: {
+    bn: '{minutes} মিনিটের মধ্যে পরিশোধ করুন',
+    en: 'Pay within {minutes} min',
+  },
+  holdThenCounter: {
+    bn: 'সময়ের মধ্যে না হলে সিরিয়াল থাকবে, ফি কাউন্টারে দিতে হবে।',
+    en: 'If not paid in time, the serial stands and the fee is paid at the counter.',
+  },
+  holdThenReleased: {
+    bn: 'সময়ের মধ্যে না হলে সিরিয়াল ছেড়ে দেওয়া হবে। কোনো টাকা কাটা হবে না।',
+    en: 'If not paid in time, the serial is released. Nothing is charged.',
+  },
+  holdOver: { bn: 'পরিশোধের সময় শেষ', en: 'The time to pay has run out' },
+  payNowBkash: { bn: 'bKash-এ পরিশোধ করুন', en: 'Pay with bKash' },
+  payNowNagad: { bn: 'Nagad-এ পরিশোধ করুন', en: 'Pay with Nagad' },
+  payNowCard: { bn: 'কার্ডে পরিশোধ করুন', en: 'Pay by card' },
+  payStartFailed: {
+    bn: 'পেমেন্ট শুরু করা যায়নি। আবার চেষ্টা করুন।',
+    en: 'The payment could not be started. Please try again.',
+  },
+  prepaymentRequired: {
+    bn: 'এই সিরিয়ালের ফি আগে অনলাইনে দিতে হবে। bKash বা Nagad বেছে নিন।',
+    en: 'This serial must be paid online first. Choose bKash or Nagad.',
+  },
+  paymentUnavailable: {
+    bn: 'এই পদ্ধতিতে এখানে পরিশোধ করা যায় না।',
+    en: 'This way of paying is not available here.',
+  },
+  payReturnTitle: { bn: 'পেমেন্ট', en: 'Payment' },
+  payChecking: { bn: 'যাচাই হচ্ছে…', en: 'Checking…' },
+  payPaidTitle: { bn: 'পরিশোধ হয়েছে', en: 'Paid' },
+  payPaidBody: { bn: 'আপনার সিরিয়াল নিশ্চিত হয়েছে।', en: 'Your serial is confirmed.' },
+  payPendingTitle: { bn: 'পেমেন্ট এখনো নিশ্চিত হয়নি', en: 'Payment not confirmed yet' },
+  payPendingBody: {
+    bn: 'আমরা কিছুক্ষণ পরপর আবার যাচাই করছি।',
+    en: 'We are checking again every few seconds.',
+  },
+  payFailedTitle: { bn: 'পেমেন্ট হয়নি', en: 'The payment did not go through' },
+  payCancelledTitle: { bn: 'পেমেন্ট বাতিল করেছেন', en: 'You cancelled the payment' },
+  payTimeLeft: {
+    bn: 'সিরিয়াল আরও {minutes} মিনিট রাখা থাকবে।',
+    en: 'The serial is held for {minutes} more min.',
+  },
+  payRetry: { bn: 'আবার চেষ্টা করুন', en: 'Try again' },
+  payAtCounterInstead: { bn: 'হাসপাতালে পরিশোধ করব', en: 'I will pay at the hospital' },
+  payCounterChosen: {
+    bn: 'ঠিক আছে — সিরিয়াল আছে, ফি কাউন্টারে দিন।',
+    en: 'Done — the serial stands; pay the fee at the counter.',
+  },
+  payExpiredCounter: {
+    bn: 'সময় শেষ — সিরিয়াল আছে, ফি কাউন্টারে দিন।',
+    en: 'Time ran out — the serial stands; pay the fee at the counter.',
+  },
+  payExpiredReleased: {
+    bn: 'সময় শেষ — সিরিয়াল ছেড়ে দেওয়া হয়েছে। কোনো টাকা কাটা হয়নি।',
+    en: 'Time ran out — the serial was released. Nothing was charged.',
+  },
+  payCheckFailed: {
+    bn: 'যাচাই করা যায়নি। আবার চেষ্টা করুন।',
+    en: 'Could not check. Please try again.',
+  },
+  payOffline: {
+    bn: 'ইন্টারনেট নেই — সংযোগ ফিরলে যাচাই হবে।',
+    en: 'No internet — it will be checked when the connection returns.',
+  },
+  payNoCredential: {
+    bn: 'আমরা যাচাই করছি; ফলাফল SMS-এ জানানো হবে।',
+    en: 'We are checking; the result will be sent by SMS.',
+  },
+
+  // --- The simulated provider's page (plan H3; demonstration and tests only) --
+  mockPayTitle: { bn: 'সিমুলেটেড পেমেন্ট (ডেমো)', en: 'Simulated payment (demo)' },
+  mockPayNote: {
+    bn: 'এটি bKash বা Nagad নয়। কোনো টাকা কাটা হবে না; ফলাফল বেছে নিন।',
+    en: 'This is not bKash or Nagad. No money moves; choose an outcome.',
+  },
+  mockPayAmount: { bn: 'পরিমাণ', en: 'Amount' },
+  mockPayPay: { bn: 'পরিশোধ সফল', en: 'Payment succeeds' },
+  mockPayFail: { bn: 'পরিশোধ ব্যর্থ', en: 'Payment fails' },
+  mockPayCancel: { bn: 'বাতিল করুন', en: 'Cancel' },
+  mockPayDone: {
+    bn: 'এই পেমেন্টের ফলাফল আগেই বেছে নেওয়া হয়েছে।',
+    en: 'This payment already has an outcome.',
+  },
   searchFieldLabel: {
     bn: 'ডাক্তার, হাসপাতাল বা প্রয়োজন খুঁজুন',
     en: 'Search for a doctor, hospital or need',

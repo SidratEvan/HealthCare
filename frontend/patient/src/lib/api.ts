@@ -145,6 +145,38 @@ export interface BookingResponse {
   };
   readonly trackingUrl: string | null;
   readonly paid: boolean;
+  /**
+   * The payment the booking started (plan H3): where to go to pay and until
+   * when the serial is held for it. Null when none was written.
+   */
+  readonly payment?: BookingPaymentView | null;
+}
+
+/** A booking's own payment, as the patient sees it (`FR-PAY-08`). */
+export interface BookingPaymentView {
+  readonly id: string;
+  readonly method: string;
+  readonly state: string;
+  readonly redirectUrl: string | null;
+  readonly holdUntil: string | null;
+  /** What happens to the serial if the hold runs out. */
+  readonly afterHold?: 'counter' | 'released';
+}
+
+/** What a payment is after the server asked the provider (`S-A-07p`, `FR-PAY-09`). */
+export interface PaymentConfirmation {
+  readonly payment: {
+    readonly id: string;
+    readonly state: string;
+    readonly method: string;
+    readonly amountPoisha: number;
+    readonly holdUntil: string | null;
+    readonly failureReason: string | null;
+  };
+  readonly serial: 'held' | 'confirmed' | 'counter' | 'released' | 'cancelled';
+  /** Whether paying at the counter may be chosen instead. */
+  readonly counterAllowed: boolean;
+  readonly serverTs: string;
 }
 
 /**
@@ -290,6 +322,53 @@ export async function declareLate(input: {
     { expectedMinutes: input.expectedMinutes, clientEventId: input.clientEventId },
     input.idempotencyKey,
   );
+}
+
+/**
+ * `POST /bookings/:id/payments/:paymentId/confirm` — `S-A-07p` (plan H3).
+ * The provider's word from the return address goes along only to choose how
+ * the server asks; the answer is the server's (`FR-PAY-09`).
+ */
+export async function confirmPayment(input: {
+  readonly bookingId: string;
+  readonly paymentId: string;
+  readonly token: string;
+  readonly hint: 'success' | 'failure' | 'cancel' | null;
+}): Promise<PaymentConfirmation> {
+  return await authed(input.token).post<PaymentConfirmation>(
+    `/bookings/${input.bookingId}/payments/${input.paymentId}/confirm`,
+    { hint: input.hint },
+  );
+}
+
+/**
+ * `POST /payments/intent` — another attempt at paying for a held serial
+ * (`BTN-A07P-RETRY`, `BTN-A07D-PAY`), or paying at the counter instead
+ * (`BTN-A07P-COUNTER`). A new key each time: each is a new attempt.
+ */
+export async function payAgain(input: {
+  readonly bookingId: string;
+  readonly token: string;
+  readonly method: string;
+}): Promise<{ readonly payment: BookingPaymentView; readonly redirectUrl: string | null }> {
+  const key = crypto.randomUUID();
+  const answer = await authed(input.token).post<{
+    readonly payment: {
+      readonly id: string;
+      readonly method: string;
+      readonly state: string;
+      readonly holdUntil: string | null;
+    };
+    readonly redirectUrl: string | null;
+  }>(
+    '/payments/intent',
+    { bookingId: input.bookingId, method: input.method, idempotencyKey: key },
+    key,
+  );
+  return {
+    payment: { ...answer.payment, redirectUrl: answer.redirectUrl },
+    redirectUrl: answer.redirectUrl,
+  };
 }
 
 /** `POST /bookings/:id/cancel` — `MOD-A08-CANCEL` (`FR-PAT-23`). */

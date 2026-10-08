@@ -329,7 +329,8 @@ export async function accept(
             bookingId: booking.id,
             method: input.method,
             idempotencyKey: input.clientEventId ?? randomUUID(),
-            returnUrl: patientLink(`/s/${booking.id}`),
+            returnTo: (paymentId) =>
+              patientLink('/pay/return', { payment: paymentId, booking: booking.id }),
           },
           { kind: 'guest', guestId: row.guestId },
         );

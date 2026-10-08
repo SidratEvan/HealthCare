@@ -154,6 +154,10 @@ export interface BookingDetail {
   readonly staleThresholdMinutes: number;
   /** The hospital's own rule, as recorded. Empty means none is on file. */
   readonly refundPolicy: Record<string, unknown>;
+  /** Whether this serial had to be paid for first (0057, `FR-PAY-02`, `FR-PAY-08`). */
+  readonly prepaymentRequired: boolean;
+  /** How long a serial waits for its online payment (0057, `FR-PAY-08`). */
+  readonly paymentHoldMinutes: number;
 }
 
 interface DetailQueryRow {
@@ -176,6 +180,8 @@ interface DetailQueryRow {
   planned_end: Date;
   stale_threshold_minutes: number | null;
   refund_policy: Record<string, unknown> | null;
+  prepayment_required: boolean;
+  payment_hold_minutes: number | null;
 }
 
 /** The booking behind a live serial screen, with its chamber. */
@@ -199,7 +205,9 @@ export async function findDetail(bookingId: string, trx?: Tx): Promise<BookingDe
            dep.code  AS department_code,
            s.room, s.session_date, s.planned_start, s.planned_end,
            hs.stale_threshold_minutes,
-           hs.refund_policy
+           hs.refund_policy,
+           b.prepayment_required,
+           hs.payment_hold_minutes
       FROM bookings b
       JOIN patients p    ON p.id = b.patient_id
       JOIN sessions s    ON s.id = b.session_id
@@ -238,6 +246,8 @@ export async function findDetail(bookingId: string, trx?: Tx): Promise<BookingDe
     // written yet (`FR-OFF-04`).
     staleThresholdMinutes: row.stale_threshold_minutes ?? 10,
     refundPolicy: row.refund_policy ?? {},
+    prepaymentRequired: row.prepayment_required,
+    paymentHoldMinutes: row.payment_hold_minutes ?? 15,
   };
 }
 
@@ -377,18 +387,22 @@ export async function insertBooking(
     readonly intake: Record<string, unknown>;
     /** The request's own key, so the same request sent again finds this row (`FR-QUE-51`). */
     readonly idempotencyKey?: string | null;
+    /** Whether it must be paid for first (0057, `FR-PAY-02`). Decided once, here. */
+    readonly prepaymentRequired?: boolean;
   },
 ): Promise<string> {
   const result = await sql<{ id: string }>`
     INSERT INTO bookings
       (session_id, patient_id, serial_number, source, fee_poisha,
-       booked_by_user_id, booked_by_guest_id, reason_text, intake, idempotency_key)
+       booked_by_user_id, booked_by_guest_id, reason_text, intake, idempotency_key,
+       prepayment_required)
     VALUES (
       ${input.sessionId}, ${input.patientId}, ${input.serial},
       ${input.source}::booking_source, ${input.feePoisha},
       ${input.bookedByUserId}, ${input.bookedByGuestId},
       ${input.reasonText}, ${JSON.stringify(input.intake)}::jsonb,
-      ${input.idempotencyKey ?? null}
+      ${input.idempotencyKey ?? null},
+      ${input.prepaymentRequired ?? false}
     )
     RETURNING id
   `.execute(trx);

@@ -108,6 +108,8 @@ test.describe('what is running is the production configuration', () => {
     expect(settings.data).toEqual({
       demo: false,
       onlinePayments: false,
+      // No payment provider is configured: no online method is offered (plan H3).
+      paymentMethods: [],
       guestPhoneCheck: true,
       address: 'network',
       scope: null,

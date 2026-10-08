@@ -93,6 +93,9 @@ const NOBODYS: readonly string[] = [
   'POST /webhooks/bkash',
   'POST /webhooks/nagad',
   'POST /webhooks/sms-dlr',
+  // The simulated provider's page (plan H3), mounted only under the mock.
+  'GET /mock-pay/:checkoutId',
+  'GET /mock-pay/:checkoutId/:outcome',
   'GET /me/profiles',
   'GET /me/bookings',
   'POST /me/bookings/:id/link',

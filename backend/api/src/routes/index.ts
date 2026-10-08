@@ -13,6 +13,8 @@
 
 import { Router } from 'express';
 
+import { env } from '../env.js';
+
 import { adminRoutes } from './admin.routes.js';
 import { bedRoutes } from './bed.routes.js';
 import { bookingRoutes } from './booking.routes.js';
@@ -27,6 +29,7 @@ import { healthRoutes } from './health.routes.js';
 import { hospitalSettingsRoutes } from './hospitalSettings.routes.js';
 import { importRoutes } from './import.routes.js';
 import { labRoutes } from './lab.routes.js';
+import { mockPayRoutes } from './mockPay.routes.js';
 import { patientAuthRoutes } from './patientAuth.routes.js';
 import { paymentRoutes } from './payment.routes.js';
 import { platformRoutes } from './platform.routes.js';
@@ -113,6 +116,9 @@ export function buildApiRouter(): Router {
   // Provider callbacks. No token, because a provider has none of ours — the
   // signature is the authentication, and it is checked before anything else.
   router.use(webhookRoutes);
+  // The simulated provider's page (plan H3): only where the mock is the
+  // provider, which production refuses.
+  if (env.PAYMENT_PROVIDER === 'mock') router.use(mockPayRoutes);
   router.use(syncRoutes);
   return router;
 }

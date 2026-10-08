@@ -640,6 +640,9 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
   const [smsBudget, setSmsBudget] = useState(
     rules.smsBudgetMonthly === null ? '' : String(rules.smsBudgetMonthly),
   );
+  const [holdMinutes, setHoldMinutes] = useState(String(rules.paymentHoldMinutes ?? 15));
+  // The payment hold means something only where payment is taken online.
+  const paysOnline = snapshot.onlinePayments === true;
   const [rulesBusy, setRulesBusy] = useState(false);
 
   const coordinates = coordinatesOf(lat, lng);
@@ -669,8 +672,12 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
 
   const ruleValues = [gracePatients, graceMinutes, reinsertAfter, staleMinutes].map(wholeNumber);
   const budget = smsBudget.trim() === '' ? null : wholeNumber(smsBudget);
+  const hold = wholeNumber(holdMinutes);
+  const holdValid = !paysOnline || (hold !== null && hold >= 5 && hold <= 60);
   const rulesReady =
-    ruleValues.every((value) => value !== null) && (smsBudget.trim() === '' || budget !== null);
+    ruleValues.every((value) => value !== null) &&
+    (smsBudget.trim() === '' || budget !== null) &&
+    holdValid;
 
   function saveRules(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -686,6 +693,7 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
           lateReinsertAfter: reinsert,
           staleThresholdMinutes: stale,
           smsBudgetMonthly: budget,
+          ...(paysOnline && hold !== null ? { paymentHoldMinutes: hold } : {}),
         }),
       () => t('settingsSaved', locale),
     ).finally(() => {
@@ -783,6 +791,16 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
             value={staleMinutes}
             onValue={setStaleMinutes}
           />
+          {paysOnline ? (
+            <Field
+              label={t('settingsPaymentHold', locale)}
+              kind="number"
+              helper={t('settingsPaymentHoldHelper', locale)}
+              value={holdMinutes}
+              onValue={setHoldMinutes}
+              {...(holdValid ? {} : { error: t('settingsPaymentHoldHelper', locale) })}
+            />
+          ) : null}
           <Field
             label={t('settingsSmsBudget', locale)}
             kind="number"

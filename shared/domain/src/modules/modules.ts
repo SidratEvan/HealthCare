@@ -133,6 +133,7 @@ export const MODULE_ROUTES: Readonly<Record<string, readonly HospitalModule[]>> 
   // asked about modules, so for a patient these are nobody's.
   'GET /bookings/:id': ['queue'],
   'GET /bookings/:id/payments': ['queue'],
+  'POST /bookings/:id/payments/:paymentId/confirm': ['queue'],
   'POST /bookings/:id/late': ['queue'],
   'POST /bookings/:id/cancel': ['queue'],
   'POST /events/:id/undo': ['queue'],
@@ -197,6 +198,7 @@ export const MODULE_ROUTES: Readonly<Record<string, readonly HospitalModule[]>> 
   'GET /admin/export': ['dashboard'],
   'GET /hospitals/:hospitalId/settlement': ['dashboard'],
   'POST /payments/:id/refund': ['dashboard'],
+  'GET /payments/:id/history': ['dashboard'],
 
   // --- import ---------------------------------------------------------------------------------
   'GET /hospital/imports/templates/:set': ['import'],

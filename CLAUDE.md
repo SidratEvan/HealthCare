@@ -384,9 +384,15 @@ E1), then prepare J. Do not add features.
   family record management. The people booked under one phone stay as they
   are (the identity model is not changed); the patient app simply does not
   present them as a family.
-- **The post-pilot roadmap** (`docs/PLATFORM_PLAN.md` §2a) is a list for later,
-  not permission to build any of it now. Hospital-console polish the owner
-  wants is collected there under *Hospital UI review*.
+- **The owner's approved product decisions** (his second note of 8 October;
+  `docs/PLATFORM_PLAN.md` §2, *The owner's approved product decisions*) are
+  recorded there with the state of each. Priority 1 is finishing V1;
+  priority 2 (K3, K4) is small corrections, built now; priority 3
+  (prescriptions, patient uploads, arrival windows, the admin overview, desk
+  assignment, chamber organisations, one doctor across workplaces) is built
+  after J is prepared, each on its own branch, documents first. **Anything that
+  would delay the first pilot is raised with the owner before it is started.**
+  Nothing beyond those decisions is invented.
 - **AI stays the import mapping** (§4.5). No diagnostic AI, no generated
   prescriptions, no treatment advice, no operations assistant.
 - **No commercial terms** (§1.2): no prices, packages, trials, setup fees,
