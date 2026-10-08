@@ -12,7 +12,7 @@ import { cancelBookingBody, createBookingBody, idParams } from '@platform/domain
 
 import { AppError, authRequired, forbiddenScope, validationFailed } from '../errors/AppError.js';
 import * as booking from '../services/booking.service.js';
-import { onlinePaymentsAvailable } from '../services/deployment.service.js';
+import { methodAvailable } from '../services/deployment.service.js';
 import * as patientAuth from '../services/patientAuth.service.js';
 
 import { actorOf, assertBookingScope } from './queue.controller.js';
@@ -22,8 +22,9 @@ import type { Request, Response } from 'express';
 
 export async function createBooking(req: Request, res: Response): Promise<void> {
   const body = createBookingBody.parse(req.body);
-  // A deployment with no online payment says so before anything is written.
-  if (!onlinePaymentsAvailable() && body.method !== 'at_hospital') {
+  // A method this deployment cannot take is refused before anything is
+  // written: no online payment at all, or card with no provider (plan H3).
+  if (!methodAvailable(body.method)) {
     throw new AppError('PAYMENT_UNAVAILABLE', { details: { method: body.method } });
   }
   // FR-GST-03: a guest booking proves its phone first, where that is required.

@@ -208,22 +208,32 @@ describe('a retry never double-charges (FR-PAY-06)', () => {
     expect(await paymentCount(bookingId)).toBe(before + 1);
   });
 
-  it('makes a separate payment for a different key', async () => {
-    // The key is what makes a retry safe; two genuinely different attempts
-    // are two payments, and conflating them would be the opposite bug.
+  it('refuses a second payment under a new key once the serial is paid (FR-PAY-10)', async () => {
+    // The key makes a retry safe; a genuinely new attempt is a new payment,
+    // until the serial is paid for. Since plan H3 a paid serial takes no
+    // more money: under the mock the first settles at once, so the second
+    // key is refused and nothing is written.
     const { bookingId, token } = await payableBooking();
     const before = await paymentCount(bookingId);
 
-    for (const key of [randomUUID(), randomUUID()]) {
-      await request(app)
-        .post(`${BASE}/payments/intent`)
-        .set('Authorization', bearer(token))
-        .set('Idempotency-Key', key)
-        .send({ bookingId, method: 'bkash', idempotencyKey: key })
-        .expect(201);
-    }
+    const first = randomUUID();
+    await request(app)
+      .post(`${BASE}/payments/intent`)
+      .set('Authorization', bearer(token))
+      .set('Idempotency-Key', first)
+      .send({ bookingId, method: 'bkash', idempotencyKey: first })
+      .expect(201);
 
-    expect(await paymentCount(bookingId)).toBe(before + 2);
+    const second = randomUUID();
+    const refused = await request(app)
+      .post(`${BASE}/payments/intent`)
+      .set('Authorization', bearer(token))
+      .set('Idempotency-Key', second)
+      .send({ bookingId, method: 'bkash', idempotencyKey: second })
+      .expect(409);
+    expect(refused.body.error.code).toBe('PAYMENT_ALREADY_MADE');
+
+    expect(await paymentCount(bookingId)).toBe(before + 1);
   });
 });
 

@@ -161,6 +161,7 @@ describe('migration files (DATABASE.md §7)', () => {
       '0055',
       // Plan I3: a person's bookings, payments and messages are their own (FR-SEC-11).
       '0056',
+      '0057',
     ]);
   });
 

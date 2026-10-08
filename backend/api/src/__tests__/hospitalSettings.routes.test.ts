@@ -179,6 +179,7 @@ describe('who may open S-B-11 (FR-ROLE-01)', () => {
       lateReinsertAfter: 3,
       staleThresholdMinutes: 10,
       smsBudgetMonthly: null,
+      paymentHoldMinutes: 15,
     });
     expect(data.staff).toHaveLength(1);
     expect(data.staff[0].roles).toEqual(['hospital_admin']);

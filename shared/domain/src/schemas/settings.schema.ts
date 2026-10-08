@@ -96,6 +96,8 @@ export const rulesBody = z
     staleThresholdMinutes: z.number().int().min(1).max(1_440).optional(),
     /** `FR-NOT-06`: SMS a month; null means no cap. */
     smsBudgetMonthly: z.number().int().min(0).max(10_000_000).nullable().optional(),
+    /** `FR-PAY-08` (plan H3): how long a serial waits for its online payment. */
+    paymentHoldMinutes: z.number().int().min(5).max(60).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'change at least one field');
 

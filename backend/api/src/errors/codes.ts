@@ -178,6 +178,20 @@ export const ERROR_CODES = {
   PAYMENT_FAILED: { status: 402, message: 'The payment provider declined the transaction.' },
   /** `PAYMENT_PROVIDER=off`: this deployment takes payment at the hospital only (pilot step 26). */
   PAYMENT_UNAVAILABLE: { status: 422, message: 'Only paying at the hospital is available here.' },
+  // Plan H3 (`FR-PAY-08`, `FR-PAY-10`, `FR-PAY-12`).
+  PAYMENT_ALREADY_MADE: { status: 409, message: 'This serial has already been paid for.' },
+  PAYMENT_HOLD_ENDED: {
+    status: 409,
+    message: 'The time to pay for this serial online has run out.',
+  },
+  PREPAYMENT_REQUIRED: {
+    status: 422,
+    message: 'This serial must be paid for online before it is confirmed.',
+  },
+  REFUND_NOTE_REQUIRED: {
+    status: 422,
+    message: 'A refund made by hand needs the reference it was made under.',
+  },
   /**
    * The hospital has set no cancellation terms, so there is no rule to
    * enforce (`FR-PAY-03`). A 409 rather than a 500: nothing is broken, and

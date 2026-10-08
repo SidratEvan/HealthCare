@@ -68,6 +68,7 @@ import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import { revokeStaffSessions } from './accessGuard.service.js';
+import { onlinePaymentsAvailable } from './deployment.service.js';
 import * as portals from './portal.service.js';
 import { materialise } from './sessionMaterialise.service.js';
 
@@ -117,6 +118,8 @@ export type SetupView = repo.SetupSnapshot & {
    * domain, when the platform has recorded one. Both null: by `?scope=` only.
    */
   readonly portal: { readonly platform: string | null; readonly own: string | null };
+  /** Whether this deployment takes payment online, so the payment hold means anything (plan H3). */
+  readonly onlinePayments: boolean;
 };
 
 export async function setup(hospitalId: string): Promise<SetupView> {
@@ -129,6 +132,7 @@ export async function setup(hospitalId: string): Promise<SetupView> {
     ...snapshot,
     counts,
     portal: portals.portalAddresses(snapshot.hospital.code, snapshot.hospital.portalDomain),
+    onlinePayments: onlinePaymentsAvailable(),
   };
 }
 

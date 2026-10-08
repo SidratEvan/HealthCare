@@ -273,6 +273,13 @@ const schema = z.object({
    * face a real patient.
    */
   PAYMENT_PROVIDER: z.enum(['mock', 'live', 'off']).default('mock'),
+  /**
+   * Under `mock` only (plan H3): `inline` settles every charge on the spot, as
+   * the demonstration always has; `redirect` sends the patient to a page of
+   * the API's own that says it is a simulation and offers pay, fail and
+   * cancel, so the held serial and the return page can be shown and tested.
+   */
+  MOCK_PAYMENT_FLOW: z.enum(['inline', 'redirect']).default('inline'),
   BKASH_BASE_URL: z.string().default(''),
   BKASH_APP_KEY: z.string().default(''),
   BKASH_APP_SECRET: z.string().default(''),

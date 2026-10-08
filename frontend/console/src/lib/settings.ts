@@ -85,7 +85,11 @@ export interface SetupSnapshot {
     readonly lateReinsertAfter: number;
     readonly staleThresholdMinutes: number;
     readonly smsBudgetMonthly: number | null;
+    /** How long a serial waits for its online payment (plan H3, `FR-PAY-08`). */
+    readonly paymentHoldMinutes?: number;
   };
+  /** Whether this deployment takes payment online (plan H3). */
+  readonly onlinePayments?: boolean;
   /**
    * Where patients reach this hospital's own portal (`FR-BRD-07`): under the
    * platform's domain, and at a domain of its own when the platform has

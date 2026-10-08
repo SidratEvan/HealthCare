@@ -65,6 +65,8 @@ export interface SetupSnapshot {
     readonly lateReinsertAfter: number;
     readonly staleThresholdMinutes: number;
     readonly smsBudgetMonthly: number | null;
+    /** How long a serial waits for its online payment (0057, `FR-PAY-08`). */
+    readonly paymentHoldMinutes: number;
   };
   /** Its public face beyond words (`FR-BRD-06`): colours and a logo. */
   readonly face: {
@@ -182,6 +184,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     no_show_grace_minutes: number | null;
     late_reinsert_after: number | null;
     stale_threshold_minutes: number | null;
+    payment_hold_minutes: number | null;
     sms_budget_monthly: number | null;
   }>`
     SELECT h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
@@ -194,7 +197,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
            h.lat::float8 AS lat, h.lng::float8 AS lng, h.is_live, h.onboarded_at,
            h.lifecycle::text AS lifecycle, h.review_requested_at, h.review_note,
            s.no_show_grace_patients, s.no_show_grace_minutes, s.late_reinsert_after,
-           s.stale_threshold_minutes, s.sms_budget_monthly
+           s.stale_threshold_minutes, s.sms_budget_monthly, s.payment_hold_minutes
       FROM hospitals h
       LEFT JOIN hospital_settings s ON s.hospital_id = h.id
       LEFT JOIN hospital_logos l ON l.hospital_id = h.id
@@ -341,6 +344,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       lateReinsertAfter: row.late_reinsert_after ?? 3,
       staleThresholdMinutes: row.stale_threshold_minutes ?? 10,
       smsBudgetMonthly: row.sms_budget_monthly,
+      paymentHoldMinutes: row.payment_hold_minutes ?? 15,
     },
     face: {
       theme: readBrandTheme(row.brand),
@@ -573,6 +577,7 @@ export interface RuleFields {
   readonly lateReinsertAfter?: number | undefined;
   readonly staleThresholdMinutes?: number | undefined;
   readonly smsBudgetMonthly?: number | null | undefined;
+  readonly paymentHoldMinutes?: number | undefined;
 }
 
 export async function updateRules(trx: Tx, hospitalId: string, fields: RuleFields): Promise<void> {
@@ -586,6 +591,7 @@ export async function updateRules(trx: Tx, hospitalId: string, fields: RuleField
       no_show_grace_minutes = coalesce(${fields.noShowGraceMinutes ?? null}::int, no_show_grace_minutes),
       late_reinsert_after = coalesce(${fields.lateReinsertAfter ?? null}::int, late_reinsert_after),
       stale_threshold_minutes = coalesce(${fields.staleThresholdMinutes ?? null}::int, stale_threshold_minutes),
+      payment_hold_minutes = coalesce(${fields.paymentHoldMinutes ?? null}::int, payment_hold_minutes),
       sms_budget_monthly = CASE WHEN ${fields.smsBudgetMonthly !== undefined}
                                 THEN ${fields.smsBudgetMonthly ?? null}::int ELSE sms_budget_monthly END,
       updated_at = now()

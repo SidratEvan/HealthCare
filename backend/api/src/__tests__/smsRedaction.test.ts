@@ -247,6 +247,9 @@ describe('a booking’s confirmation (FR-PAT-22, FR-GST-05)', () => {
 
     const booked = await bookAsGuest(phone);
     const token = new URL(booked.trackingUrl).searchParams.get('t') ?? '';
+    // The sender works after the answer (plan H1); since plan H3 the booking
+    // hands its message over last, so this waits for it as other tests do.
+    await notifications.settled();
 
     const everything = written.text();
     expect(everything).not.toContain(token);

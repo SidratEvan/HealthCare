@@ -5,6 +5,7 @@
  * `payment.service`, shape the response.
  */
 
+import { paymentConfirmBody } from '@platform/domain';
 import type { PaymentIntentBody, RefundBody, SettlementQuery } from '@platform/domain';
 
 import { patientLink } from '../config/links.js';
@@ -47,14 +48,45 @@ export async function intent(req: Request, res: Response): Promise<void> {
       bookingId: body.bookingId,
       method: body.method,
       idempotencyKey: body.idempotencyKey,
-      // Where a real provider sends the patient back to. The app's own
-      // serial screen, because that is where they were going anyway.
-      returnUrl: patientLink(`/s/${body.bookingId}`),
+      // Where bKash or Nagad sends the patient back to (`S-A-07p`, plan H3).
+      returnTo: (paymentId) =>
+        patientLink('/pay/return', { payment: paymentId, booking: body.bookingId ?? '' }),
     },
     payerOf(req),
   );
 
   res.status(result.duplicate ? 200 : 201).json({ ok: true, data: result });
+}
+
+/**
+ * `POST /bookings/:id/payments/:paymentId/confirm` — the patient's return
+ * from bKash or Nagad (`S-A-07p`, `FR-PAY-09`). The route has held the caller
+ * to the booking; the server asks the provider and answers what it recorded.
+ */
+export async function confirm(req: Request, res: Response): Promise<void> {
+  await assertBookingScope(req);
+  const body = paymentConfirmBody.parse(req.body ?? {});
+  const paymentId = req.params['paymentId'];
+  if (typeof paymentId !== 'string' || paymentId === '') throw notFound('route parameter');
+
+  res.json({
+    ok: true,
+    data: await payments.confirmForBooking({
+      bookingId: param(req),
+      paymentId,
+      hint: body.hint ?? null,
+    }),
+  });
+}
+
+/** `GET /payments/:id/history` (`FR-PAY-11`): the hospital's administrator's. */
+export async function history(req: Request, res: Response): Promise<void> {
+  const principal = req.principal;
+  if (principal?.kind !== 'staff') throw forbiddenScope({ reason: 'staff_only' });
+  res.json({
+    ok: true,
+    data: await payments.history(param(req), { hospitalId: principal.hospitalId }),
+  });
 }
 
 /** `POST /payments/:id/refund` — an administrator returns money. */

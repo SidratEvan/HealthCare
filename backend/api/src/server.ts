@@ -25,6 +25,7 @@ import { env } from './env.js';
 import { attachRealtime } from './realtime/server.js';
 import { startHourlyJobs } from './services/jobs.service.js';
 import { startSender } from './services/notificationSender.service.js';
+import { startPaymentTimers } from './services/paymentHolds.service.js';
 import { startQueueTimers } from './services/queueTimers.service.js';
 
 import type { Server as SocketServer } from 'socket.io';
@@ -64,11 +65,15 @@ export function startServer(): Server {
   // Offers whose window has closed are recorded as lapsed on the clock, not
   // only when somebody next looks at the chamber (plan H1b).
   const stopTimers = startQueueTimers();
+  // A serial held for its payment is turned to the counter or released when
+  // the hold runs out (plan H3, `FR-PAY-08`).
+  const stopPayments = startPaymentTimers();
 
   installShutdownHandlers(server, io, () => {
     stopJobs();
     stopSender();
     stopTimers();
+    stopPayments();
   });
   return server;
 }
