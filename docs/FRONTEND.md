@@ -54,7 +54,7 @@ These are the tells that mark an app as quickly generated. None of them appear i
 **Content**
 - Placeholder copy shipped as real copy.
 - Invented statistics.
-- Illustrations of abstract 3D blobs or generic flat-people vector art.
+- Illustrations of abstract 3D blobs or generic flat-people vector art. (The patient app's one approved family illustration, §0.5, is the single exception.)
 - Icon + heading + one-line-of-filler triplets used as filler.
 
 > **One exception to "the single brand colour", by configuration** (`PRD.md` `FR-BRD-03`, 2026-10-05). When the patient app is opened for one hospital it may wear that hospital's values for the six brand tokens (`brand-900` … `brand-border`), set as CSS variables on the document by `<ScopeTheme>` from `GET /config?scope=`. Nothing else is replaceable — alert, caution, neutrals, type and radii mean the same in every hospital's app — and a theme is used only if it passes the contrast this document requires (`shared/domain/src/brand/theme.ts`). The banned list above binds a hospital's theme as it binds ours. Components never know: they read tokens, as always. **A hospital chooses one colour, not six** (`FR-BRD-06`, plan C1): `themeFromColour` makes the ramp, darkening a colour that cannot carry white text only as far as it must, and the settings screen previews it with the app's own components inside a box that re-scopes the six variables. **Whose app it is comes from the address** where there is one (`FR-BRD-07`, plan C2; `lib/scope.ts`): at `<code>.<NEXT_PUBLIC_PLATFORM_DOMAIN>` the scope is read from the name; at any other name `<PortalGate>` shows nothing until the server has said whose it is (kept for the visit), says so if it is nobody's, with a way to the network, and says so if the server cannot be asked, with a retry. At a portal `?scope=` is ignored. **What a phone installs** (`FR-BRD-08`, plan C3): `/manifest.webmanifest` is a route (`app/manifest.webmanifest/route.ts`), not a file, and answers by whose portal it is asked at; the description itself is `installManifest` in `shared/domain`, one function for the network and for every hospital. `<PortalDocument>` gives the page the hospital's title, the name and icon an iPhone takes, and, for a portal opened by `?scope=`, puts the scope on the manifest's address. **A logo** is shown by `<HospitalMark>` (patient app): the hospital's own where it has set one, the plain hospital icon where it has not or where the image does not load, never an empty box; decorative, since the name is always beside it.
@@ -62,6 +62,8 @@ These are the tells that mark an app as quickly generated. None of them appear i
 ### 0.3 The positive direction
 
 The visual language is **clinical calm with Bengali warmth**: a warm off-white ground rather than clinical white, a deep botanical green as the single institutional colour, a restrained clay-red reserved exclusively for emergency, type that carries the page, and generous negative space around a small number of large, confident elements.
+
+**Since 7 October this paragraph describes the staff consoles.** The patient app wears Visual Direction 2 (§0.5): the logo's blue, its navy and a cool white ground. Everything else here (restraint, type carrying the page, red reserved for emergency) holds for both.
 
 Reference feel, not reference copying: the quiet authority of a well-made civic institution — signage, forms, and wayfinding done carefully — rather than a startup landing page.
 
@@ -103,6 +105,68 @@ the reasoning that one voice across both scripts is what makes a product look
 designed rather than assembled. Both are defensible and the canvas's serif
 display has real presence on the hero numeral. §2.1 stands until the owner
 rules; recorded in `docs/STATUS.md`.
+
+### 0.5 The patient app: Visual Direction 2 (owner, 2026-10-07)
+
+On 7 October the owner approved **Visual Direction 2** for the patient app and
+made the MedLiveBD logo official. The approved board is
+`docs/design/patient-direction-2.png`, with the home screen at full size in
+`docs/design/patient-home-closeup.png`. It is a reference for composition, as
+§0.4's canvas was; the rules below are the authority. **The staff consoles are
+not part of it** and keep §0.3 and §1.1 unchanged.
+
+**What changes for the patient app, and only there**
+
+| | Patient app (Direction 2) | Unchanged elsewhere |
+|---|---|---|
+| Primary | `#0066DD`, the logo's blue at a contrast white text can stand on (5.3:1) | Consoles: §1.1 green |
+| Ink | `#0B1A33`, the logo's navy | |
+| Ground | `#F5F9FF`, a cool near-white; cards `#FFFFFF` | |
+| Accent | Teal `#01CEB8`, from the logo, **only** as the live dot and small decoration. Never text: white on it is 2.0:1 | |
+| Status green | `#1F7A4D` on `#E7F5EE`: a positive status only ("in chamber", "in stock", "report ready") | Consoles: positive chips stay brand green |
+| Emergency, caution | §1.1's alert and warn families, unchanged | |
+
+The values live once, in `shared/ui/src/tokens/patient.css`, which the patient
+app loads after the shared token layer; `PATIENT_COLOUR` in `shared/ui` mirrors
+them and a test keeps the two equal and checks every pair in §1.3b. A
+hospital's own theme (`FR-BRD-03`) still replaces the six brand tokens on top
+of these.
+
+**The logo.** The official MedLiveBD logo is used as supplied: its artwork,
+proportions and colours are never redrawn, simplified or recoloured. The
+light version (white ground) is the one inside the app; the dark version is
+for dark presentation surfaces only. It is the stacked lockup as approved: the
+home header carries it at 68 px tall, and the foot of the More screen at a
+smaller size. Inner screens carry a page title instead. The file is
+`frontend/patient/public/brand/medlivebd-logo-light.png`, cut from the supplied
+artwork without altering it, shown through `<BrandLogo>` so that a later asset
+replaces one file. It blends onto the ground with `mix-blend-mode: multiply`
+because the supplied file is not transparent. Inside a hospital's own app the
+hospital's mark and name stand where the logo stands (`FR-BRD-06`).
+
+**The illustration.** One illustration is approved: the Bangladeshi family on
+the home screen's welcome card (`frontend/patient/public/illustrations/family.webp`).
+It is the exception to `IMG-02` and to §0.2's line on flat-people vector art,
+and it is the only one: no other screen carries a figure, and empty states keep
+`IMG-03`. It is decorative (`alt=""`) and sized so the three main actions stay
+on the first screen of a 390 × 844 phone.
+
+**Composition**
+
+- **One header**, `<AppHeader>`: the logo (home) or a back control and the
+  screen's title (every other screen), and the বাংলা | EN switch at the right.
+  The switch is no longer a bar above the page.
+- **One bottom navigation**, `<BottomNav>`, five tabs, identical on every
+  screen: হোম · খুঁজুন · সিরিয়াল · রেকর্ড · আরও. Icon over a word, the active
+  tab in the primary colour on a tinted pill and marked `aria-current`.
+- **Cards** are white, `radius-md`, a hairline and one soft neutral shadow
+  (`elev-1`); the hero and the live card use `radius-lg` on the tint.
+- **Tiles**: three main actions in one row (doctor, live serial, emergency),
+  then three smaller services. Emergency is the red tile of the three
+  (§6.3 as amended).
+- **Doctors** are shown with a letter avatar (`<Monogram>`), never a photo, and
+  with no rating (`FR-PAT-83` is not met by any volume of real feedback yet).
+- Type stays Anek Bangla; titles are Anek Bangla bold, not the reading serif.
 
 ---
 
@@ -189,6 +253,23 @@ case.
 Any new pair must be verified before use (`FR-LOC-05`) — call `meets()` rather
 than reasoning about it. No white text on `--brand-300` (1.74:1, clears
 nothing), no muted ink on tinted surfaces below 4.5:1.
+
+### 1.3b The patient app's pairs (§0.5)
+
+Asserted by `patient.test.ts` in `shared/ui`, as §1.3's are by `contrast.test.ts`.
+
+| Pair | Ratio | Status |
+|---|---|---|
+| ink `#0B1A33` on ground `#F5F9FF` | 16.43:1 | AAA |
+| ink-secondary `#34435E` on white | 9.95:1 | AAA |
+| ink-muted `#56647D` on ground | 5.66:1 | AA |
+| ink-muted on sunken `#EEF3FB` | 5.36:1 | AA |
+| white on brand-600 `#0066DD` | 5.32:1 | AA |
+| brand-700 `#0052B4` on brand-100 `#EAF3FF` | 6.55:1 | AA |
+| brand-600 on brand-100 (the live number, large) | 4.76:1 | AA |
+| positive-700 `#17603C` on positive-100 `#E7F5EE` | 6.74:1 | AA |
+| white on alert-600 `#B3261E` | 6.54:1 | AA |
+| teal `#01CEB8` on white | 2.00:1 | **never text** |
 
 ---
 
@@ -296,7 +377,7 @@ Light tap on primary action; double pulse when the user is called; nothing else.
 - `ICO-03` An icon never appears alone in the patient app without a text label. Older users do not decode pictograms reliably.
 - `ICO-04` Medical iconography stays literal and calm: a bed is a bed, a heart is anatomical-neutral, no cartoon ambulances.
 - `IMG-01` Photography, when used on the marketing site, is real Bangladeshi clinical environments, shot or licensed, colour-graded to the warm palette. No Western stock hospitals, no smiling-model-with-stethoscope.
-- `IMG-02` No abstract 3D blobs, no flat-vector-people illustration sets.
+- `IMG-02` No abstract 3D blobs, no flat-vector-people illustration sets. One exception, approved by the owner on 2026-10-07: the family on the patient home screen (§0.5). It is one picture, not a set, and no other screen carries a figure.
 - `IMG-03` Empty states use a restrained line drawing from the same stroke family, or nothing at all — often nothing is better.
 
 ---
@@ -336,7 +417,7 @@ Surface + `radius-md` + hairline border + 16 px padding. Content order: title �
 
 ### 5.5 Chip / status pill
 
-`radius-xs`, 12 px caption, 6/10 px padding. Four semantic families only: neutral (`--bg-sunken`), positive (`--brand-100`/`--brand-700`), caution (`--warn-100`/`--warn-700`), alert (`--alert-100`/`--alert-700`). A chip never carries an action — chips inform; buttons act. Filter chips are the one exception and use `radius-pill` to be visually distinct from status pills.
+`radius-xs`, 12 px caption, 6/10 px padding. Four semantic families only: neutral (`--bg-sunken`), positive (`--positive-100`/`--positive-700`: the brand green in the consoles, the status green in the patient app, §0.5), caution (`--warn-100`/`--warn-700`), alert (`--alert-100`/`--alert-700`). A chip never carries an action — chips inform; buttons act. Filter chips are the one exception and use `radius-pill` to be visually distinct from status pills.
 
 ### 5.6 Bottom sheet and modal
 
@@ -362,7 +443,7 @@ These are custom, not library components, and they carry the brand.
 
 ### 6.1 `<LiveSerialCard>` — `S-A-08`
 
-Anatomy: status line with a pulsing live dot → your number in `display-xl` → now-serving → progress track → ETA with confidence band → freshness line.
+Anatomy: status line with a pulsing live dot → your number in `display-xl` → now-serving and patients-ahead side by side → ETA with confidence band and countdown → freshness line. In the patient app (§0.5) it sits centred on the tint, the dot is the logo teal, and beneath it the screen shows the four steps of a visit (serial taken → waiting → your turn → seen), which replace the progress track.
 On `EVT-PATIENT_CALLED`: number rolls (`motion-count`), progress advances, light haptic.
 States: waiting, doctor-not-arrived, delayed (surface shifts to `--warn-*` family), you're-next (brand surface intensifies), called (full-screen takeover), stale (amber freshness, "সংযোগ নেই" line).
 
@@ -374,7 +455,7 @@ A single caption beneath any live figure: "হালনাগাদ ৩ মি�
 
 ### 6.3 `<EmergencyEntry>` — home card
 
-Full-width, `radius-lg`, alert fill, 92 px minimum height, one line of Bangla explaining what it does. Preloads emergency data on pointer-down so results feel instant. Never A/B tested for conversions; never moved below the fold.
+Since Visual Direction 2 (§0.5): the third of the three main tiles on the home screen, on the alert tint with a filled alert icon and its name in `--alert-700`, the only red on that screen. Preloads emergency data on pointer-down so results feel instant. Never A/B tested for conversions; never moved below the fold. (Until 7 October it was a full-width card of its own.)
 
 ### 6.4 `<QueueTable>` — console
 
@@ -394,7 +475,7 @@ Received by patients on `EVT-DELAY_DECLARED`. Three actions, no dismiss-by-accid
 
 ### 7.1 Patient app
 
-Baseline 390 × 844, fluid to 430; tablet renders a centred 480 px column rather than stretching. Safe-area insets respected for notches and home indicators. Bottom nav is 4 items, 64 px tall plus safe area, labels always visible. Content max-width in landscape: 560 px.
+Baseline 390 × 844, fluid to 430; tablet renders a centred 480 px column rather than stretching. Safe-area insets respected for notches and home indicators. Bottom nav is 5 items (হোম · খুঁজুন · সিরিয়াল · রেকর্ড · আরও, §0.5), 80 px tall plus safe area, labels always visible. Content max-width in landscape: 560 px.
 
 ### 7.2 Console
 
