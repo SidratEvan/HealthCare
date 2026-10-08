@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-Last updated: the patient redesign, Visual Direction 2 (`feat/patient-redesign`, 7–8 October) — **the patient app wears the design the owner approved, with the official MedLiveBD logo** (below, *Merged in V1 completion*); the next branch is still H3, documents first. Before that, I3 `feat/patient-rls-queue` (7 October) — **one patient is
+Last updated: `chore/owner-decisions-8-october` (8 October) — **the owner's note of 8 October: finish V1 (K1, K2, H3, F3, E1), prepare J, and launch; `main`, `demo`, Supabase and real payments wait for his word** (`CLAUDE.md` §4.6; the post-pilot roadmap and the hospital UI review are `docs/PLATFORM_PLAN.md` §2, *Later*). Documents only. Before that, the patient redesign, Visual Direction 2 (`feat/patient-redesign`, 7–8 October) — **the patient app wears the design the owner approved, with the official MedLiveBD logo** (below, *Merged in V1 completion*); the next branch is still H3, documents first. Before that, I3 `feat/patient-rls-queue` (7 October) — **one patient is
 kept from another by the database for bookings, payments and messages too**
 (below, *Merged in V1 completion*); the next branch is H3, documents first.
 Before that, I2d `feat/app-csp` (7 October) — **a page runs only the
@@ -252,7 +252,7 @@ reception console's offline queue, the self-hosted stack, CI with the browser
 suites. Branches of this plan as they merge are listed under **Merged in V1
 completion** below.
 
-**Currently building:** H3 `feat/payment-adapters-ready`, starting with its documents branch (the screens and question 15's answer, decided 7 October), then F3, then J (E1 waits on question 2; the leave-home message waits on question 13).
+**Currently building** (owner, 8 October; `CLAUDE.md` §4.6): K1 `fix/patient-profiles-label`, K2 `fix/beds-honest-status`, then H3 `feat/payment-adapters-ready` starting with its documents branch (question 15 decided 7 October), then F3, then E1 (question 2 decided 7 October), then J prepared up to release. **Not without the owner's word:** moving `main` or `demo`, deploying, applying migrations to Supabase or resetting its data, real payments. The leave-home message still waits on question 13.
 
 **H3 as it was found, for whoever builds it** (7 October; nothing is written yet). The plan's row reads as two adapters. What is actually missing is the whole of paying by being sent away and coming back, of which the adapters are the smaller part:
 
@@ -301,8 +301,8 @@ completion** below.
 - **A2 `fix/ward-reconcile`** — the ward board is right whichever of the server's two answers comes first, and an older statement can no longer put a bed back (`SY-09`). **What was wrong:** when the answer to an admit arrived, the board dropped its own drawing of it and read the whole board again; for as long as that read took the tile showed the bed before the tap, and with the socket silent and the read failing it stayed there. And a board took whichever statement about a bed arrived last, so a late broadcast could undo a newer one. **What changed:** every bed carries a `version` the database raises on each change (migration 0039); every read, answer and broadcast carries it and the board keeps the highest per bed; the answer's beds go on screen in the redraw that takes the drawing off; `bed.updated` names the action, so a broadcast that beats the answer settles it too. The board reads itself again only after a refusal. **Supabase needs 0039 before the next release.** Strict gate: lint, format, `pnpm test` whole, and in the browser ward-board (12, one new that fails on the code before), emergency-burn, referral, hospital-settings, data-import and the canary.
 - **A1 `fix/queue-exactly-once`** — one action is drawn once on the reception and doctor consoles, whichever of the server's two answers comes first (`SY-08`). **What was wrong:** the broadcast named nothing, so when it beat the answer to the console's own request — and the answer waits for messages to be sent, so it usually did — the action was on screen twice: a doctor who declared thirty minutes was shown sixty until the answer came; and an answer lost on the way left the console resending, or waiting for ever if it could not. **What changed:** `queue.updated` names the actions of the write behind it (`applied`), a subscribing console says which of its actions are unanswered and the catch-up names those the log holds, and the console takes an action off its own drawing at the first statement that names it, in the redraw that shows the queue containing it. A tap of two events is written to the outbox whole before anything draws or sends it. **Left, deliberately:** `applied` goes to the whole chamber room, patients' phones included; the keys are opaque, and they leave that room with plan I2. Strict gate: lint, format, `pnpm test` whole, and in the browser the canary, offline-console, console-undo, pause-resume, doctor-console, chamber-end, no-show-recovery and the three new tests.
 
-**Blocked outside the repository** (built to the adapter; only switching on
-waits): live SMS and a sender ID; live bKash, Nagad or cards; the platform's
+**Blocked outside the repository** (built to the adapter; only switching on waits; first of all the company's registration in Bangladesh, which the agreements and merchant accounts follow;
+then): live SMS and a sender ID; live bKash, Nagad or cards; the platform's
 domain, DNS and certificates, and a hospital's own domain; store accounts; a
 hospital's HMS; an API key to try the model's import suggestions against the
 real service; hosting in Bangladesh; an independent security test.

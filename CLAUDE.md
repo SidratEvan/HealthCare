@@ -137,7 +137,7 @@ included — by a fast-forward (`git branch -f demo <that commit>`), never by
 work of its own. Move it after each merge into `mvp` that is worth showing,
 and say so in the report. Pushing it follows the rule below like any branch.
 
-**Pushing: standing permission since 2026-10-03.** Until that day every push
+**Pushing: standing permission since 2026-10-03** (moving `main` and `demo` suspended by §4.6 until the owner says). Until that day every push
 needed a fresh yes, and a yes was spent by the one push it allowed. On
 2026-10-03 the owner replaced that rule, in these words: "I give you explicit
 permission to push, pull or whatever you need to do, or merge to any branch,
@@ -273,9 +273,9 @@ per row, in order, merged into `mvp` only when §5 is met.
 - The decisions that plan lists as the owner's (§7 there) are not to be chosen
   silently.
 
-### 4.4 The V1 pitch build — the active plan (owner, 2026-10-05)
+### 4.4 The V1 pitch build (owner, 2026-10-05)
 
-**This is what is being built now.** It replaces the client-readiness freeze
+**Built and released on 6 October.** It replaced the client-readiness freeze
 of the same morning ("no feature coding until a hospital agrees to pilot"),
 which the owner lifted that evening. The reception-pilot candidate `fb1d1d8`
 stays what it was: a tested commit for one hospital's own server.
@@ -314,9 +314,9 @@ Rules for it, all the owner's:
   existing checker decides what is written. No patient row goes to a model
   (`FR-IMP-17`).
 
-### 4.5 V1 completion — the active plan (owner, 2026-10-06)
+### 4.5 V1 completion (owner, 2026-10-06)
 
-**This is what is being built now.** After the pitch release of 6 October the
+**Superseded in part by §4.6 (8 October), which finishes this plan.** After the pitch release of 6 October the
 owner replaced "then stop adding scope" (§4.4): development does not stop
 because a pilot or a pitch is ready. The target is the finished V1.
 
@@ -359,6 +359,38 @@ The order, branch by branch with its state, is `docs/PLATFORM_PLAN.md` §2
 C branding; D onboarding; E import; F remaining workflows; G platform
 administration; H notification and payment adapters; I hardening; J the gate.
 The rules of §4.4 that are not replaced here still hold.
+
+### 4.6 Finish V1, then launch (owner, 2026-10-08)
+
+**This is what is being built now.** The owner's note of 8 October: V1 already
+has enough for the first hospital pilots. **Launch first, improve later.**
+Finish the rows of `docs/PLATFORM_PLAN.md` §2 that remain (K1, K2, H3, F3,
+E1), then prepare J. Do not add features.
+
+- **Release restrictions, until the owner's explicit word.** Do not move
+  `main` or `demo`, do not deploy the public demo, do not apply migrations to
+  the public Supabase database, do not run a destructive reset against it, do
+  not activate real payments, do not touch a hospital's live infrastructure.
+  This suspends, for now, the parts of §3.1 that let `main` and `demo` move
+  without asking. Working branches still merge into `mvp` when green, and
+  `mvp` is still pushed (§3.1); J is prepared up to the point of release and
+  stops there.
+- **Software is not activation.** bKash, Nagad, an SMS aggregator, hosting,
+  a domain: the code is finished against stand-ins and documented sandbox
+  interfaces; switching each on waits for company registration and the
+  provider's approval. Nothing claims an integration was verified against a
+  real provider when it was not.
+- **Family accounts are not in V1.** No linked family accounts, dependants or
+  family record management. The people booked under one phone stay as they
+  are (the identity model is not changed); the patient app simply does not
+  present them as a family.
+- **The post-pilot roadmap** (`docs/PLATFORM_PLAN.md` §2a) is a list for later,
+  not permission to build any of it now. Hospital-console polish the owner
+  wants is collected there under *Hospital UI review*.
+- **AI stays the import mapping** (§4.5). No diagnostic AI, no generated
+  prescriptions, no treatment advice, no operations assistant.
+- **No commercial terms** (§1.2): no prices, packages, trials, setup fees,
+  commissions or revenue shares, anywhere in the repository.
 
 ## 5. Definition of Done (every branch)
 

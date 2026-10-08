@@ -520,6 +520,12 @@ Ranking: capability match → travel time → ER load → free beds. Stale facil
 >   range when wards differ), and that kind's own freshness; past the stale
 >   threshold it adds "call the hospital before you go". Fresh-and-free ranks
 >   above stale-and-free, and a hospital with none free stays listed, last.
+> - **Owner, 8 October (`FR-PAT-14`; plan K2):** the count is shown only while
+>   it is fresh. Past the threshold the result reads **খালি ছিল** (beds were
+>   free when last confirmed) or **খালি ছিল না** (none were), with the age and
+>   the advice to call; never confirmed, **জানা নেই**. No number appears for a
+>   figure that is stale, and nothing unknown is ever drawn as ০. The same rule
+>   holds on a hospital's card and on an emergency result.
 > - The list re-reads every thirty seconds while visible. There is no public
 >   realtime room (BACKEND.md §6), and every number says how old it is.
 > - The request needs name, phone, age and sex, like a guest booking; the OTP
@@ -615,7 +621,7 @@ All notifications grouped by day; tapping routes to the relevant screen; per-cat
 
 ### `S-A-19` Profile & settings
 
-The আরও tab since 2026-10-07 (`NAV-A`). It lists only what works: the account or sign-in, family profiles, language, record permissions, help, the hospital link and sign-out. The official logo sits at its foot.
+The আরও tab since 2026-10-07 (`NAV-A`). It lists only what works: the account or sign-in, the people booked under the signed-in number (never called a family: family accounts are not in V1, `FR-PAT-02`), language, record permissions, help, the hospital link and sign-out. The official logo sits at its foot.
 
 
 | Element | ID | Wiring |

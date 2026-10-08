@@ -104,20 +104,26 @@ integration points marked ▣ and at J.
 | I2d | `feat/app-csp` | The apps send no script-restricting Content-Security-Policy (moved from A7). **Split from I2b on 7 October:** a nonce per request turns every statically built page into one rendered per request, and the console's offline load stands on what is cached | A `proxy.ts` per app minting a nonce; `script-src` with it; every browser suite, the built one included | F + every browser suite |
 | I2c | `fix/serial-broadcast-ids` | A patient's live serial screen is sent every booking and patient id in the chamber (handover 30) | What a patient's phone is sent names no other person's booking or record | S + canary |
 | I3 | `feat/patient-rls-queue` | After B3, one patient is kept from another by the database for the clinical record only. A booking, a payment and a message are still reachable by any patient's connection, because the live serial is worked out from every booking in a chamber and a serial is allocated against all of them | The queue's reads for a patient take the operational columns of a chamber through one function that hands back no identity; then policies for `patient` and `guest` on `bookings`, `payments`, `notifications`, `guest_links`, `standby_list` and `patients`. Strict, with the canary | S |
-| **J** | `chore/v1-release` | | The full gate, the migrations applied, `mvp` → `main`, demo data reset | Full ▣ |
+| **K** | | **The owner's note of 8 October** (`CLAUDE.md` §4.6), before H3 | | |
+| K1 | `fix/patient-profiles-label` | The More tab heads the people booked under a signed-in phone **পরিবারের প্রোফাইল / Family profiles**; family accounts are not in V1 | The heading names them for what they are, the people booked under this number; nothing is added, removed or relinked, and the phone identity model is untouched | F |
+| K2 | `fix/beds-honest-status` | A bed figure past its freshness threshold is still shown as an exact count, with a stale warning beside it | An exact count only while it is fresh; past the threshold, available or none as last confirmed, with its age; never confirmed, not known. Never a zero for what is not known (`FR-PAT-14`, `FR-PAT-51`, §3.2) | F |
+| **J** | `chore/v1-release` | | The full gate, clean, on the whole suite; the migration plan for Supabase and the deployment checklist written. **Moving `main` and `demo`, applying migrations to Supabase and resetting its data wait for the owner's word** (`CLAUDE.md` §4.6) | Full ▣ |
 
 **Blocked outside the repository** (built up to the adapter; activation only):
 
 | | What | Needs |
 |---|---|---|
+| X0 | Everything below that needs a contract | The company registered in Bangladesh (expected in about two weeks from 8 October) |
 | X1 | Live SMS, a sender ID, delivery reports from a real aggregator | An aggregator account |
-| X2 | Live bKash, Nagad or card payments | Merchant credentials |
+| X2 | Live bKash, Nagad or card payments | Merchant approval and credentials, separately for bKash and for Nagad; each provider's sandbox run through `DEPLOY.md`'s checklist, and a real transaction verified, before a real taka moves |
 | X3 | A real portal address | The platform's domain, DNS, certificates; a hospital's own domain |
-| X4 | Store builds | Apple and Google accounts |
+| X4 | Store builds | Apple and Google accounts. **Not needed for the first pilot:** the PWA is the launch format (owner, 8 October) |
 | X5 | A hospital's HMS | Access from that hospital |
 | X6 | The model's suggestions tried against the real service | An API key (`pnpm mapping:try`) |
 | X7 | Hosting in Bangladesh for real patients | A hosting account |
 | X8 | An independent security test | Procurement. Nothing here claims one |
+| X9 | Whatever certification or test transactions a payment provider or the SMS aggregator requires before going live | The provider's own process |
+| X10 | The first hospital's agreement and onboarding | The founders |
 
 **Questions for the owner** (each skipped, none waited for; `docs/STATUS.md` carries them):
 
@@ -138,6 +144,49 @@ integration points marked ▣ and at J.
 Decided by the owner's note and so not asked: D2 (a hospital may apply by
 itself; nothing is public until a person approves it), D3 (the fields
 `FR-ONB-09` lists), D7 (the modules are the console's own: `FR-BRD-11`).
+
+### Later: the post-pilot roadmap (owner, 8 October)
+
+Approved for after the first pilots, **not to be built now** (`CLAUDE.md`
+§4.6). Priorities are set again after real hospital use. Each needs its
+requirements written into `PRD.md` and `APP_FLOW.md` before any code.
+
+| | What |
+|---|---|
+| R1 | **Session booking with an optional preferred arrival hour.** A hospital sets each doctor's real working sessions (no fixed morning, afternoon or evening). The default stays: choose a session, receive a serial. A hospital may also offer a preferred one-hour arrival window. A window is never presented as a guaranteed consultation time |
+| R2 | **Digital prescriptions**: written, saved, signed and printed by an authorised clinician, and made available to that patient |
+| R3 | **Patient-uploaded old documents** (prescription photos, earlier lab reports, PDFs), always shown apart from clinician-verified records |
+| R4 | **Reception desk assignment** for larger hospitals: an administrator assigns doctors or chambers to particular desks. Today one desk can run every chamber of its hospital, which is what a small hospital needs |
+| R5 | **One doctor login across several workplaces**, each hospital and each private chamber its own dashboard; queues and patient lists never mixed; tenant isolation unchanged |
+| R6 | **Hospital UI review** (below) |
+| R7 | **Registered private chambers** onboarded more broadly. In V1 only an approved organisation uses the platform; no open self-registration for a doctor's unregistered chamber |
+| R8 | **Independent pharmacies** in the medicine search (V1: participating hospitals' pharmacies only) |
+| R9 | **Mobile apps and push notifications** (V1 launches as the PWA; SMS only) |
+| R10 | **Family accounts**: linked family profiles, dependants, admission status for family (`FR-PAT-02` by hand, `FR-PAT-53`). Not in V1 |
+
+**Hospital UI review** — what the owner wants from the consoles, checked
+against the code on 8 October and left for the review after the pilot:
+
+- *The hospital's own brand in the staff workspace.* Today the rail names the
+  hospital and the member of staff on the platform's colour. Missing: the
+  hospital's logo, its colours, and **Powered by MedLiveBD** beneath. The
+  logo and colours already exist (`FR-BRD-06`, C1) and are shown to
+  patients; the consoles do not read them yet.
+- *A simpler administrator's first screen*: doctors working today, patients
+  waiting, beds available, the emergency department's state, today's
+  appointments; the detailed reports kept on their own screens.
+- *Reception across several chambers.* Built: a receptionist picks any
+  chamber of their hospital. Desk assignment is R4.
+
+**Checked on 8 October and already as decided:** one serial pool per chamber
+(an online booking, a walk-in and a booking reception takes by telephone are
+all bookings of the same session, and what the patient app offers is the
+capacity left; reception may still seat a walk-in past the capacity, which is
+the counter's call); walk-ins only on the reception console; standby when
+full; emergency search by reported capability with its age, ring the
+hospital, I'm on my way and 999, and no promise of acceptance; medicines from
+participating hospitals' pharmacies only, available, out or unknown with
+their age; the records, consent and access log as they are.
 
 ### Done: the V1 pitch build (owner, 5 October, evening)
 
@@ -633,6 +682,9 @@ In addition to `CLAUDE.md`:
 | I2d | `feat/app-csp` | **merged 7 October** — `src/proxy.ts` in both apps (a nonce per request; `script-src 'self' 'nonce-…' 'strict-dynamic'`, `worker-src 'self'`, and the framing and form rules); `dynamic = 'force-dynamic'` on both root layouts; `e2e/security-headers.spec.ts` (a new nonce on every page, every inline script carrying it, an injected handler refused) and `e2e/production/csp.prod.spec.ts` (nine patient pages and the console's sign-in, built, with nothing refused). **Decided here:** scripts only — no `default-src`, so the API, the socket and logos on other origins are untouched; styles are left as they were; `'unsafe-eval'` in development only |
 | I2c | `fix/serial-broadcast-ids` | **merged 7 October** — `shared/domain` `queue/patientView` (`patientViewOf`, `NO_PATIENT`); `config/serialTicket.ts` (`ticketFor`, an HMAC under a key derived from `GUEST_LINK_SECRET`); `ROOMS.sessionStaff`, the server putting a socket in it or in the patients' room by principal; `queue.updated` sent as both copies, `session.delayed` and `session.ended` to both rooms; a phone caught up with the patients' copy, never with events; `ticket` on `GET /bookings/:id` (and the tracking link), the booking's own id for staff; the live serial screen and Home's strip find their row by it. **Decided here:** the patients' copy also leaves out what reception typed (a cancellation's or a priority's reason) and the log's bookkeeping; the shape is unchanged, so every reader of a queue on the phone reads it as before |
 | I3 | `feat/patient-rls-queue` | **merged 7 October** — migration 0056: `app_care_session`, `app_care_booking`, `app_care_payment`, `app_patient` no longer admit a person; `app_mine_booking`, `app_mine_profile`, `app_mine_payment`, `app_mine_message`; policies for `patient`, `guest`, `open` on `bookings`, `patients`, `payments`, `guest_links`, `standby_list`, `notifications` (own rows only; `queue_events`, `queue_state`, `slot_offers` none); `fn_chamber_counts` (definer: taken, waiting, total) for discovery and the picker. `config/dbScope.ts` `asQueue` (a person's queue work as `system`, staff unchanged) on the queue service's entry points, `createBooking` and the standby service; token resolution, the claim, a bed request's filing and signed provider callbacks as `system`. Another person's row by id is 404. Design: `DATABASE.md` §5.4 |
+| — | `chore/owner-decisions-8-october` | merged 8 October — documents only: `CLAUDE.md` §4.6, rows K1 and K2, the X-rows brought up to date, *Later: the post-pilot roadmap* and the hospital UI review; `FR-PAT-02` and `FR-PAT-53` out of V1; `FR-PAT-14`'s bed rule |
+| K1 | `fix/patient-profiles-label` | |
+| K2 | `fix/beds-honest-status` | |
 | J | `chore/v1-release` | |
 | 2.1 | `feat/notification-worker` | now H1 |
 | 2.2 | `feat/sms-live` | waits: D1 |
