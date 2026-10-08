@@ -45,7 +45,10 @@ describe('every key carries both languages', () => {
  * name, which the owner gave in one spelling (2026-10-06). Everything else in
  * the Bangla slot is Bangla.
  */
-const NAMES = new Set(['patient.appName']);
+// Written the same in both languages by the owner's word: the product's name
+// (`CLAUDE.md` §1.2), and the line beneath a hospital's mark in its console,
+// "Powered by MedLiveBD" (`FR-BRD-12`, decision 9 of 8 October).
+const NAMES = new Set(['patient.appName', 'console.consolePoweredBy']);
 
 describe('the Bangla is written, not transliterated', () => {
   it('writes the product’s name the way the owner gave it, in both languages', () => {
