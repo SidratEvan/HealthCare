@@ -81,15 +81,13 @@ export async function erHospitals(onlyIds?: readonly string[]): Promise<ErHospit
      WHERE h.deleted_at IS NULL
        AND h.is_live
        AND (${onlyIds === undefined}::boolean OR h.id = ANY(${[...(onlyIds ?? [])]}::uuid[]))
-       AND EXISTS (
-         SELECT 1
-           FROM staff_roles sr
-           JOIN staff_users su ON su.id = sr.staff_user_id
-          WHERE sr.hospital_id = h.id
-            AND sr.role = 'emergency'
-            AND sr.deleted_at IS NULL
-            AND su.deleted_at IS NULL
-       )
+       -- Who works at a hospital is its own, and another hospital's ER
+       -- cannot read it; that it has an emergency desk is what it publishes.
+       -- The function answers that and nothing else (migration 0043).
+       AND fn_runs_emergency_desk(h.id)
+       -- And runs the module at all (FR-BRD-11): off, it is in no emergency
+       -- search and is nowhere to refer to.
+       AND fn_module_on(h.id, 'emergency')
      ORDER BY h.id
   `.execute(db);
 
@@ -305,6 +303,7 @@ interface CaseSqlRow {
   admit_bed_kind: BedKind | null;
   admit_requested_at: Date | null;
   created_at: Date;
+  version: string;
 }
 
 const CASE_COLUMNS = sql`
@@ -313,7 +312,7 @@ const CASE_COLUMNS = sql`
   ec.patient_sex::text AS patient_sex, (ec.contact_phone IS NOT NULL) AS has_phone,
   ec.inbound_at, ec.inbound_eta_minutes, ec.acknowledged_at, ec.arrived_at, ec.closed_at,
   ec.decline_reason, ec.admit_bed_kind::text AS admit_bed_kind, ec.admit_requested_at,
-  ec.created_at
+  ec.created_at, ec.version::text AS version
 `;
 
 function toCase(row: CaseSqlRow): CaseRow {
@@ -337,6 +336,8 @@ function toCase(row: CaseSqlRow): CaseRow {
     admitBedKind: row.admit_bed_kind,
     admitRequestedAt: iso(row.admit_requested_at),
     createdAt: row.created_at.toISOString() as Timestamp,
+    // bigint, which the driver hands over as text.
+    version: Number(row.version),
   };
 }
 

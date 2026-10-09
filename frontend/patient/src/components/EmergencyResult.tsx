@@ -26,7 +26,7 @@
 
 import { useState, type ReactNode } from 'react';
 
-import { normaliseBdMobile, type EmergencyProblem } from '@platform/domain';
+import { bedFigure, normaliseBdMobile, timestamp, type EmergencyProblem } from '@platform/domain';
 import { bedKindName, formatNumber, tp, formatAge, numeralsFor, localName } from '@platform/i18n';
 import { Button, Chip, FreshnessLine, Input, Sheet, useLocale } from '@platform/ui';
 
@@ -62,6 +62,15 @@ export function EmergencyResultCard({
   const [failed, setFailed] = useState(false);
 
   const n = (value: number): string => formatNumber(value, numerals);
+  // A count only while it is fresh (owner, 8 October; `FR-PAT-14`). The beds
+  // are as old as the card's oldest figure, as the card's line says.
+  const at = timestamp(now.toISOString());
+  const beds =
+    result.freeBeds === null
+      ? null
+      : bedFigure(result.freeBeds, stamp(result.freshness.asOf), at, result.staleAfterMinutes);
+  const icu = bedFigure(result.icuFree, stamp(result.icuAsOf), at, result.staleAfterMinutes);
+  const kind = result.bedKind === null ? null : bedKindName(result.bedKind, locale);
   const freshness = result.freshness;
 
   return (
@@ -75,7 +84,7 @@ export function EmergencyResultCard({
       }
     >
       <div className="flex items-start justify-between gap-3">
-        <h3 className="min-w-0 font-reading text-title-md text-ink">
+        <h3 className="min-w-0 text-title-md font-bold text-ink">
           {localName(locale, result.nameBn, result.nameEn)}
         </h3>
         {result.hasCapability === null ? null : (
@@ -104,24 +113,40 @@ export function EmergencyResultCard({
       )}
 
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-body-sm text-ink-secondary">
+        {/* A hospital that keeps its bed figures is not said to have no
+            beds, and no ICU (FR-NET-04): one line says the figures are not
+            shared. What it can treat is on the card regardless. */}
         <li data-testid="result-beds">
-          {result.freeBeds === null
-            ? result.bedKind === null
-              ? tp('emergencyNoBeds', locale)
-              : tp('emergencyNoKind', locale).replace('{kind}', bedKindName(result.bedKind, locale))
-            : result.bedKind === null
-              ? tp('emergencyFreeBeds', locale).replace('{free}', n(result.freeBeds))
-              : tp('emergencyFreeKind', locale)
-                  .replace('{kind}', bedKindName(result.bedKind, locale))
-                  .replace('{free}', n(result.freeBeds))}
+          {result.bedsShared === false
+            ? tp('bedsNotShared', locale)
+            : result.freeBeds === null
+              ? result.bedKind === null
+                ? tp('emergencyNoBeds', locale)
+                : tp('emergencyNoKind', locale).replace(
+                    '{kind}',
+                    bedKindName(result.bedKind, locale),
+                  )
+              : beds?.kind !== 'count'
+                ? kind === null
+                  ? tp('bedsUnknown', locale)
+                  : tp('kindUnknown', locale).replace('{kind}', kind)
+                : kind === null
+                  ? tp('emergencyFreeBeds', locale).replace('{free}', n(beds.free))
+                  : tp('emergencyFreeKind', locale)
+                      .replace('{kind}', kind)
+                      .replace('{free}', n(beds.free))}
         </li>
-        <li data-testid="result-icu">
-          {result.icuTotal === null || result.icuFree === null
-            ? tp('cardNoIcu', locale)
-            : tp('cardIcu', locale)
-                .replace('{free}', n(result.icuFree))
-                .replace('{total}', n(result.icuTotal))}
-        </li>
+        {result.bedsShared === false ? null : (
+          <li data-testid="result-icu">
+            {result.icuTotal === null || result.icuFree === null
+              ? tp('cardNoIcu', locale)
+              : icu.kind === 'count'
+                ? tp('cardIcu', locale)
+                    .replace('{free}', n(icu.free))
+                    .replace('{total}', n(result.icuTotal))
+                : tp('icuUnknown', locale)}
+          </li>
+        )}
         {/* FR-EMG-04: counted from cases, never typed. */}
         <li data-testid="result-load">
           {tp('emergencyLoad', locale).replace('{count}', n(result.erLoad))}
@@ -384,4 +409,8 @@ function OnWaySheet({
       </form>
     </Sheet>
   );
+}
+
+function stamp(value: string | null): ReturnType<typeof timestamp> | null {
+  return value === null ? null : timestamp(value);
 }

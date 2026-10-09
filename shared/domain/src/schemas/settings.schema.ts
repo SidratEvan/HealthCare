@@ -12,7 +12,7 @@
 
 import { z } from 'zod';
 
-import { BED_KINDS, CAPABILITY_KINDS, FACILITY_KINDS } from '../types/enums.js';
+import { AGREEMENT_STATES, BED_KINDS, CAPABILITY_KINDS, FACILITY_KINDS } from '../types/enums.js';
 
 const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(120);
@@ -60,9 +60,20 @@ export const profileBody = z
   .strictObject({
     nameBn: name.optional(),
     nameEn: name.optional(),
+    /**
+     * What the hospital was registered as (plan D2). Its own to correct
+     * while the workspace is setting up, and refused afterwards
+     * (`identityEditable`): these are what the platform reviews.
+     */
+    division: z.string().trim().min(2).max(40).optional(),
+    district: z.string().trim().min(2).max(60).optional(),
+    registrationNo: optionalText(60),
     thana: optionalText(80),
     addressBn: optionalText(300),
     addressEn: optionalText(300),
+    /** What the hospital says of itself to patients (`FR-BRD-06`); null clears it. */
+    descriptionBn: optionalText(400),
+    descriptionEn: optionalText(400),
     phone: facilityPhone.nullable().optional(),
     emergencyPhone: facilityPhone.nullable().optional(),
     /** Both or neither (`hospitals_coords_paired`); null clears them. */
@@ -85,6 +96,15 @@ export const rulesBody = z
     staleThresholdMinutes: z.number().int().min(1).max(1_440).optional(),
     /** `FR-NOT-06`: SMS a month; null means no cap. */
     smsBudgetMonthly: z.number().int().min(0).max(10_000_000).nullable().optional(),
+    /** `FR-PAY-08` (plan H3): how long a serial waits for its online payment. */
+    paymentHoldMinutes: z.number().int().min(5).max(60).optional(),
+    /** `FR-PAY-02` (plan F3): no serial is paid at the counter. */
+    prepayRequired: z.boolean().optional(),
+    /** `FR-GST-14` (plan F3): three no-shows here in the window ask for payment first. */
+    noShowPrepay: z.boolean().optional(),
+    noShowWindowDays: z.number().int().min(7).max(365).optional(),
+    /** `FR-PAT-28` (plan R1): a preferred arrival hour offered at booking. */
+    arrivalWindows: z.boolean().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'change at least one field');
 
@@ -174,6 +194,15 @@ export const wardBody = z.strictObject({
   floor: z.number().int().min(0).max(60),
   kind: z.enum(BED_KINDS),
 });
+
+/** A ward's names and floor; what kind of ward it is does not change (plan D2). */
+export const wardPatchBody = z
+  .strictObject({
+    nameBn: name.optional(),
+    nameEn: name.optional(),
+    floor: z.number().int().min(0).max(60).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'change at least one field');
 
 const bedLabel = z.string().trim().min(1).max(20);
 
@@ -273,6 +302,17 @@ export const lifecycleNoteBody = z.strictObject({
   note: z.string().trim().min(3).max(500).optional(),
 });
 
+/**
+ * `PUT /platform/hospitals/:id/agreement` (`FR-SUP-04`, plan G1): where the
+ * hospital's agreement stands, and a note for whoever reads it next. No
+ * amount and no plan name has a field here, on purpose.
+ */
+export const agreementBody = z.strictObject({
+  state: z.enum(AGREEMENT_STATES),
+  note: z.string().trim().min(3).max(500).nullable().optional(),
+});
+export type AgreementBody = z.infer<typeof agreementBody>;
+
 export const platformDoctorParams = z.object({ id: uuid, doctorId: uuid });
 
 export type ProfileBody = z.infer<typeof profileBody>;
@@ -283,6 +323,7 @@ export type DoctorBody = z.infer<typeof doctorBody>;
 export type DoctorPatchBody = z.infer<typeof doctorPatchBody>;
 export type TemplateBody = z.infer<typeof templateBody>;
 export type WardBody = z.infer<typeof wardBody>;
+export type WardPatchBody = z.infer<typeof wardPatchBody>;
 export type BedsBody = z.infer<typeof bedsBody>;
 export type BedPatchBody = z.infer<typeof bedPatchBody>;
 export type StaffBody = z.infer<typeof staffBody>;
@@ -296,3 +337,30 @@ export type DeclaredCapabilitiesBody = z.infer<typeof declaredCapabilitiesBody>;
  * language until the ward brings it into service.
  */
 export const BED_UNCONFIRMED_REASON = 'setup:unconfirmed';
+
+// ---------------------------------------------------------------------------
+// Reception desks (`FR-REC-32`; plan R4)
+// ---------------------------------------------------------------------------
+
+/** `POST /hospital/desks`: a desk's names and the doctors it looks after. */
+export const deskBody = z.strictObject({
+  nameBn: name,
+  nameEn: name,
+  doctorIds: z.array(z.string().uuid()).max(200).default([]),
+  /** Its receptionists (0063): an assigned receptionist manages only these doctors. */
+  staffIds: z.array(z.string().uuid()).max(200).default([]),
+});
+
+export type DeskBody = z.infer<typeof deskBody>;
+
+/** `PATCH /hospital/desks/:id`: names, or the doctors, which replace the desk's list. */
+export const deskPatchBody = z
+  .strictObject({
+    nameBn: name.optional(),
+    nameEn: name.optional(),
+    doctorIds: z.array(z.string().uuid()).max(200).optional(),
+    staffIds: z.array(z.string().uuid()).max(200).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'change at least one field');
+
+export type DeskPatchBody = z.infer<typeof deskPatchBody>;

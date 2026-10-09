@@ -164,7 +164,9 @@ describe('who may read and change the board (FR-ROLE-01)', () => {
         .status,
     ).toBe(401);
     expect((await act(path, {}, fixture.receptionistToken)).status).toBe(403);
-    expect((await act(path, {}, await otherWardToken(fixture.hospitalId))).status).toBe(403);
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect((await act(path, {}, await otherWardToken(fixture.hospitalId))).status).toBe(404);
 
     // The bed is untouched by every refusal above.
     expect((await bedRow(bedAt(0))).state).toBe('free');
@@ -226,6 +228,67 @@ describe('an admit, and what it changes (FR-BED-02, FR-BED-05)', () => {
     const serialised = JSON.stringify(room);
     expect(serialised).not.toContain(patient.name);
     expect(serialised).not.toContain(patient.phone);
+  });
+
+  it('every statement about a bed carries its version, and each change raises it (SY-09)', async () => {
+    const start = (await boardOf()).beds.find((bed) => bed.id === bedAt(0));
+    expect(start?.version).toBeGreaterThanOrEqual(1);
+    const before = start?.version ?? 0;
+    const untouched = (await boardOf()).beds.find((bed) => bed.id === bedAt(1))?.version;
+    expect(untouched).toBeGreaterThanOrEqual(1);
+
+    // The answer to the write: the bed as it stands after the commit.
+    const clientEventId = randomUUID();
+    const admitted = await act(
+      `/beds/${bedAt(0)}/admit`,
+      { patient: deskPatient() },
+      undefined,
+      clientEventId,
+    );
+    const answered = (admitted.body.data.beds as BedView[])[0];
+    expect(answered?.version).toBeGreaterThan(before);
+
+    // The broadcast: the same bed at the same version, and the action by the
+    // console's own key, so a board can tell its own action when it hears it.
+    const said = emitted
+      .forRoom(ROOMS.beds(fixture.hospitalId))
+      .filter((entry) => entry.event === 'bed.updated')
+      .at(-1)?.envelope.data as { beds: BedView[]; clientEventId: string | null };
+    expect(said.clientEventId).toBe(clientEventId);
+    expect(said.beds.find((bed) => bed.id === bedAt(0))?.version).toBe(answered?.version);
+
+    // A board read agrees, and the next change is higher again.
+    expect((await boardOf()).beds.find((bed) => bed.id === bedAt(0))?.version).toBe(
+      answered?.version,
+    );
+    const discharged = await act(`/beds/${bedAt(0)}/discharge`);
+    expect((discharged.body.data.beds as BedView[])[0]?.version).toBeGreaterThan(
+      answered?.version ?? 0,
+    );
+
+    // A bed nothing happened to is where it was.
+    expect((await boardOf()).beds.find((bed) => bed.id === bedAt(1))?.version).toBe(untouched);
+  });
+
+  it('a replay answers with the bed as it stands now, at its present version (SY-02, SY-09)', async () => {
+    const clientEventId = randomUUID();
+    const first = await act(
+      `/beds/${bedAt(0)}/admit`,
+      { patient: deskPatient() },
+      undefined,
+      clientEventId,
+    );
+    const again = await act(
+      `/beds/${bedAt(0)}/admit`,
+      { patient: deskPatient() },
+      undefined,
+      clientEventId,
+    );
+    expect(again.body.data.duplicate).toBe(true);
+    // Nothing changed the bed in between, so the replay raised nothing.
+    expect((again.body.data.beds as BedView[])[0]?.version).toBe(
+      (first.body.data.beds as BedView[])[0]?.version,
+    );
   });
 
   it('answers a replay with what already happened, and admits once (SY-02)', async () => {
@@ -722,6 +785,16 @@ describe('the phone is proved before a bed request (FR-GST-03)', () => {
 
     expect(response.status).toBe(401);
     expect(response.body.error.details.reason).toBe('phone_unverified');
+  });
+
+  it('takes ten requests from one address in ten minutes, and refuses the next (plan I2b)', async () => {
+    const patient = deskPatient('আমিনুল হক (ডেমো)');
+    for (let attempt = 1; attempt <= 10; attempt += 1) {
+      expect((await askAs(patient, null)).status, `attempt ${String(attempt)}`).toBe(401);
+    }
+    const refused = await askAs(patient, null);
+    expect(refused.status).toBe(429);
+    expect(refused.body.error.code).toBe('RATE_LIMITED');
   });
 
   it("files a proved phone's request, and shows it to nobody else", async () => {

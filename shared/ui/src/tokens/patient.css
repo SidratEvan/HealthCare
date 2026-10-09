@@ -1,0 +1,53 @@
+/*
+ * The patient app's palette: Visual Direction 2 (FRONTEND.md §0.5, §1.3b).
+ *
+ * Approved by the owner on 2026-10-07 with the official MedLiveBD logo. The
+ * patient app loads this after `styles.css`, so it replaces the shared values
+ * of the same names and every utility follows; the consoles never load it and
+ * keep §1.1 as it is. `PATIENT_COLOUR` in `index.ts` mirrors every value here
+ * and `patient.test.ts` keeps the two equal and the pairs legible.
+ *
+ * A hospital's own theme (`FR-BRD-03`) still sets the six brand tokens on the
+ * document element, which wins over this sheet, exactly as it did over §1.1.
+ */
+
+:root {
+  /* Ground: a cool near-white, never pure white. Cards stay white. */
+  --bg-canvas: #f5f9ff;
+  --bg-surface: #ffffff;
+  --bg-sunken: #eef3fb;
+  --bg-inverse: #0b1a33;
+
+  /* Ink: the logo's navy. */
+  --ink-primary: #0b1a33;
+  --ink-secondary: #34435e;
+  --ink-muted: #56647d;
+  --ink-inverse: #f5f9ff;
+
+  /* Brand: the logo's blue, at a value white text can stand on (5.32:1). */
+  --brand-900: #062a63;
+  --brand-700: #0052b4;
+  --brand-600: #0066dd;
+  --brand-300: #7fb4ff;
+  --brand-100: #eaf3ff;
+  --brand-border: #cfe2ff;
+
+  /* Good news only: in chamber, in stock, ready. */
+  --positive-700: #17603c;
+  --positive-600: #1f7a4d;
+  --positive-100: #e7f5ee;
+
+  /* The logo's teal: the live dot and decoration. Never text (2.00:1). */
+  --accent-500: #01ceb8;
+  --accent-100: #e0f8f4;
+
+  /* Lines, cooled to match the ground. */
+  --line-strong: #d2dcec;
+  --line-soft: #e3eaf5;
+  --line-hairline: #eef3fb;
+
+  /* Shadows tinted with the ink, still neutral and never coloured (§3.3). */
+  --elev-1: 0 1px 2px rgb(11 26 51 / 5%), 0 6px 16px rgb(11 26 51 / 4%);
+  --elev-2: 0 8px 24px rgb(11 26 51 / 10%);
+  --elev-3: 0 16px 48px rgb(11 26 51 / 16%);
+}

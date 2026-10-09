@@ -176,7 +176,9 @@ describe('who may check a patient in (FR-ROLE-01)', () => {
       await staffIdFor(elsewhere, 'receptionist'),
     );
 
-    expect((await checkIn(fixture.bookingIds[1] ?? '', undefined, token)).status).toBe(403);
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect((await checkIn(fixture.bookingIds[1] ?? '', undefined, token)).status).toBe(404);
   });
 
   it('refuses an unauthenticated caller, and demands an idempotency key', async () => {

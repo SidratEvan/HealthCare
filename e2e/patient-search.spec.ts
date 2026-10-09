@@ -37,9 +37,10 @@ test.describe('the first screen asks what you need (S-A-02, FR-PAT-16)', () => {
     await search.click();
     await expect(page).toHaveURL(/\/search$/);
     await expect(page.getByTestId('search-input')).toBeFocused();
-    // Search belongs to Home. `/search` begins with `/s`, the live serial's
-    // route, and once lit the serials tab instead.
-    await expect(page.getByTestId('nav-home')).toHaveAttribute('aria-current', 'page');
+    // Search is its own tab since Visual Direction 2 (`NAV-A`, 2026-10-07).
+    // `/search` begins with `/s`, the live serial's route, and once lit the
+    // serials tab instead.
+    await expect(page.getByTestId('nav-search')).toHaveAttribute('aria-current', 'page');
     await expect(page.getByTestId('nav-serials')).not.toHaveAttribute('aria-current', 'page');
     // Every need the network answers is offered before a letter is typed.
     await expect(page.getByTestId('search-needs')).toBeVisible();
@@ -48,9 +49,12 @@ test.describe('the first screen asks what you need (S-A-02, FR-PAT-16)', () => {
     await expect(page.getByTestId('need-specialty:CARD')).toBeVisible();
   });
 
-  test('a need on Home is one tap to its answer', async ({ page }) => {
+  test('from Home, a need is one tap past the search field', async ({ page }) => {
+    // The quick needs moved from Home to the search screen on 2026-10-07
+    // (APP_FLOW.md S-A-02): Home keeps one way to ask.
     await page.goto(PATIENT);
-    await page.getByTestId('home-need-bed:icu').click();
+    await page.getByTestId('home-search').click();
+    await page.getByTestId('need-bed:icu').click();
 
     await expect(page).toHaveURL(/need=bed%3Aicu/);
     await expect(page.getByTestId('search-results')).toBeVisible();
@@ -71,8 +75,17 @@ test.describe('a need answers with hospitals and a live figure (FR-PAT-17)', () 
     expect(await lines.count()).toBeGreaterThanOrEqual(3);
     // FR-PAT-14: the figure and, under it, its age. Bangla digits, no Latin.
     await expect(lines.first()).toContainText('আইসিইউ');
-    await expect(lines.first()).toContainText(/খালি [০-৯]+, মোট [০-৯]+/);
-    await expect(lines.first().getByTestId('freshness')).toBeVisible();
+    const age = lines.first().getByTestId('freshness');
+    await expect(age).toBeVisible();
+    // A count only while it is fresh (owner, 8 October; FR-PAT-14). The seed
+    // stamps each ward minutes before the suite reaches here, so the line may
+    // be either side of the threshold: each side is held to its own rule.
+    if ((await age.getAttribute('data-stale')) === 'true') {
+      await expect(lines.first()).toContainText('আইসিইউ বেডের খবর জানা নেই');
+      await expect(lines.first()).not.toContainText(/খালি [০-৯]+, মোট/);
+    } else {
+      await expect(lines.first()).toContainText(/খালি [০-৯]+, মোট [০-৯]+/);
+    }
 
     // A bed search does not list doctors, and its step is the bed request.
     await expect(results.getByText('ডাক্তার', { exact: true })).toHaveCount(0);
@@ -122,6 +135,9 @@ test.describe('a need answers with hospitals and a live figure (FR-PAT-17)', () 
 
     const results = page.getByTestId('search-results');
     await expect(results).toBeVisible();
+    // Doctors first for a specialty (`S-A-07s`, 2026-10-07); the hospitals
+    // offering it are the other side of the switch.
+    await results.getByTestId('search-tab-hospitals').click();
     await expect(results.getByTestId('result-chamber-line').first()).toContainText('জন ডাক্তার');
 
     // The hospital is already chosen, so booking opens on its doctors.

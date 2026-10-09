@@ -37,6 +37,32 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 export const E2E_DATABASE_URL = process.env['E2E_DATABASE_URL'] ?? LOCAL;
 
 /**
+ * The role the API connects as in every browser suite.
+ *
+ * Not the owner. The owner is not bound by row-level security, so a suite
+ * whose API connected as the owner exercised none of the tenant policies
+ * (migration 0043): a query that leaked across hospitals would have passed
+ * every browser test. With the API as this role, every flow a spec drives is
+ * a flow the policies allowed, and one they refuse fails here.
+ *
+ * The suites' own fixtures still write as the owner (`E2E_DATABASE_URL`):
+ * they set a scene, and are not what is under test. The role is made, and
+ * its grants renewed after the migrations, by each suite's global setup.
+ */
+export const E2E_API_ROLE = {
+  name: 'healthcare_e2e_api',
+  password: 'e2e-only-api-role-not-a-real-credential',
+} as const;
+
+/** The same database, as the API's own role. */
+export function asApiRole(ownerUrl: string = E2E_DATABASE_URL): string {
+  const url = new URL(ownerUrl);
+  url.username = E2E_API_ROLE.name;
+  url.password = E2E_API_ROLE.password;
+  return url.toString();
+}
+
+/**
  * Refuses a remote target.
  *
  * `globalSetup` truncates and reseeds, and the specs append events that cannot

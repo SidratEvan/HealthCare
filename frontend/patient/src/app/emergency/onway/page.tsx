@@ -100,7 +100,7 @@ export default function Page(): ReactNode {
   }, [token, settled, load]);
 
   return (
-    <TabScreen title={tp('onWayScreenTitle', locale)}>
+    <TabScreen title={tp('onWayScreenTitle', locale)} back={{ fallback: '/emergency' }}>
       <Body
         loaded={loaded}
         now={now}
@@ -248,7 +248,7 @@ function Body({
           {localName(locale, hospital.nameBn, hospital.nameEn)} ·{' '}
           {problemName(status.problem, locale)}
         </p>
-        <p className="font-reading text-title-lg" data-testid="onway-headline">
+        <p className="text-title-lg font-bold" data-testid="onway-headline">
           {headline}
         </p>
         {status.state === 'acknowledged' ? (

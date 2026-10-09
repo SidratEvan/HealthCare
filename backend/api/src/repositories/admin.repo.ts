@@ -908,3 +908,81 @@ function numberOrNull(value: string | null | undefined): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
+
+// ---------------------------------------------------------------------------
+// The hospital now (`FR-ADM-12`; plan R6)
+// ---------------------------------------------------------------------------
+
+export interface OverviewCounts {
+  readonly doctorsScheduled: number;
+  readonly doctorsSitting: number;
+  readonly waiting: number;
+  readonly appointments: number;
+  readonly seen: number;
+  /** Null where the hospital runs no emergency desk (`FR-BRD-11`). */
+  readonly emergency: { readonly onTheWay: number; readonly inEr: number } | null;
+  readonly bedsOn: boolean;
+}
+
+/**
+ * Today's live counts for one hospital, as one read. Counts only: nothing
+ * here names a patient. The waiting figure is the chambers' own count
+ * (`fn_chamber_counts`), the projection the queue keeps, and not a second
+ * reading of the queue.
+ */
+export async function overviewToday(input: {
+  readonly hospitalId: string;
+  readonly date: string;
+  readonly onTheWay: readonly string[];
+  readonly inEr: readonly string[];
+}): Promise<OverviewCounts> {
+  const result = await sql<{
+    doctors_scheduled: number;
+    doctors_sitting: number;
+    waiting: number;
+    appointments: number;
+    seen: number;
+    emergency_on: boolean;
+    on_the_way: number;
+    in_er: number;
+    beds_on: boolean;
+  }>`
+    WITH today AS (
+      SELECT s.id, s.doctor_id, s.status
+        FROM sessions s
+       WHERE s.hospital_id = ${input.hospitalId}::uuid
+         AND s.session_date = ${input.date}::date
+         AND s.deleted_at IS NULL
+         AND s.status <> 'cancelled'
+    )
+    SELECT
+      (SELECT count(DISTINCT doctor_id) FROM today)::int AS doctors_scheduled,
+      (SELECT count(DISTINCT doctor_id) FROM today
+        WHERE status IN ('running', 'paused'))::int AS doctors_sitting,
+      (SELECT coalesce(sum(c.waiting), 0) FROM today t, fn_chamber_counts(t.id) c
+        WHERE t.status <> 'ended')::int AS waiting,
+      (SELECT count(*) FROM bookings b JOIN today t ON t.id = b.session_id
+        WHERE b.deleted_at IS NULL AND b.status <> 'cancelled')::int AS appointments,
+      (SELECT count(*) FROM bookings b JOIN today t ON t.id = b.session_id
+        WHERE b.deleted_at IS NULL AND b.status = 'done')::int AS seen,
+      fn_module_on(${input.hospitalId}::uuid, 'emergency') AS emergency_on,
+      (SELECT count(*) FROM emergency_cases e
+        WHERE e.hospital_id = ${input.hospitalId}::uuid AND e.deleted_at IS NULL
+          AND e.state::text = ANY(${input.onTheWay}))::int AS on_the_way,
+      (SELECT count(*) FROM emergency_cases e
+        WHERE e.hospital_id = ${input.hospitalId}::uuid AND e.deleted_at IS NULL
+          AND e.state::text = ANY(${input.inEr}))::int AS in_er,
+      fn_module_on(${input.hospitalId}::uuid, 'beds') AS beds_on
+  `.execute(db);
+  const row = result.rows[0];
+  if (row === undefined) throw new Error('overview returned no row.');
+  return {
+    doctorsScheduled: row.doctors_scheduled,
+    doctorsSitting: row.doctors_sitting,
+    waiting: row.waiting,
+    appointments: row.appointments,
+    seen: row.seen,
+    emergency: row.emergency_on ? { onTheWay: row.on_the_way, inEr: row.in_er } : null,
+    bedsOn: row.beds_on,
+  };
+}

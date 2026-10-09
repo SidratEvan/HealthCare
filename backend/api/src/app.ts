@@ -11,6 +11,8 @@
  *                       denial of service
  *   4. attachPrincipal  identifies the caller if they presented a token
  *   5. attachGuest      identifies a tracking-link holder (FR-GST-05)
+ *      ceiling          what is asked without an account, counted per address
+ *                       across every route (plan I2b)
  *   6. idempotency      validates the key on unsafe methods
  *   7. routes           each applying its own requireAuth / requireRole
  *   8. notFound         so an unmatched path still returns the error envelope
@@ -22,15 +24,21 @@
 
 import express, { json, type Express } from 'express';
 
+import { runInDbScope, scopeOfPrincipal } from './config/dbScope.js';
 import { rememberRawBody } from './config/rawBody.js';
+import { runWithPatientOrigin } from './config/requestOrigin.js';
 import { env } from './env.js';
 import { attachPrincipal } from './middleware/auth.js';
 import { cors } from './middleware/cors.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { attachGuestFromLink } from './middleware/guestAuth.js';
 import { idempotency } from './middleware/idempotency.js';
+import { moduleGate } from './middleware/modules.js';
+import { anonymousCeiling } from './middleware/rateLimit.js';
 import { requestLog } from './middleware/requestLog.js';
+import { securityHeaders } from './middleware/securityHeaders.js';
 import { API_BASE_PATH, buildApiRouter, rootRoutes } from './routes/index.js';
+import { patientOriginOf } from './services/portal.service.js';
 
 /**
  * Largest request body accepted.
@@ -61,6 +69,9 @@ const BODY_LIMIT = '256kb';
 const OWN_BODY_LIMIT: readonly RegExp[] = [
   /^\/api\/v1\/test-orders\/[^/]+\/report$/,
   /^\/api\/v1\/hospital\/imports$/,
+  /^\/api\/v1\/hospital\/logo$/,
+  // A patient's own old paper, up to 8 MB (`FR-PAT-62`, plan R3; `clinical.routes.ts`).
+  /^\/api\/v1\/me\/documents$/,
 ];
 
 export function createApp(): Express {
@@ -83,6 +94,10 @@ export function createApp(): Express {
   app.set('json spaces', 0);
 
   app.use(requestLog);
+
+  // On every answer, a refusal and a preflight included: set before anything
+  // can end the request (`middleware/securityHeaders.ts`).
+  app.use(securityHeaders);
 
   // Before the body parser and before auth: a preflight carries neither a body
   // nor a token, and answering it is not something to do after deciding who
@@ -107,8 +122,31 @@ export function createApp(): Express {
     parseJson(req, res, next);
   });
 
+  // Which of this deployment's patient-app addresses the request came from,
+  // the network's or a hospital's portal, so that a link issued while
+  // answering it opens where the patient is (`config/requestOrigin.ts`,
+  // `FR-BRD-04`).
+  app.use((req, _res, next) => {
+    patientOriginOf(req.get('origin')).then((origin) => {
+      runWithPatientOrigin(origin, next);
+    }, next);
+  });
+
   app.use(attachPrincipal);
   app.use(attachGuestFromLink);
+  app.use(API_BASE_PATH, anonymousCeiling);
+
+  // Everything after this runs in the scope of whoever is asking, and the
+  // database holds it to that (`config/dbScope.ts`, `FR-SEC-11`): a member
+  // of staff reaches their own hospital's rows and no other's, whatever a
+  // route or a query below forgets to check.
+  app.use((req, _res, next) => {
+    runInDbScope(scopeOfPrincipal(req.principal), next);
+  });
+
+  // A member of staff reaches only the modules their hospital runs
+  // (`middleware/modules.ts`, `FR-BRD-11`).
+  app.use(moduleGate);
 
   // Global pass: validates a key when one is supplied. Endpoints where a
   // duplicate costs money or a place in a queue apply `idempotency({

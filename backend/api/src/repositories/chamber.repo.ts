@@ -14,6 +14,8 @@ import { db } from '../config/db.js';
 export interface ChamberRow {
   readonly hospitalId: string;
   readonly id: string;
+  /** Which doctor sits it: what a reception desk is assigned (`FR-REC-32`). */
+  readonly doctorId: string;
   readonly doctorNameBn: string;
   readonly doctorNameEn: string;
   readonly departmentNameBn: string;
@@ -42,6 +44,7 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
   const sessions = await sql<{
     hospital_id: string;
     id: string;
+    doctor_id: string;
     doctor_name_bn: string;
     doctor_name_en: string;
     department_name_bn: string;
@@ -56,6 +59,7 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
     total: string;
   }>`
     SELECT s.hospital_id, s.id,
+           s.doctor_id,
            d.full_name_bn AS doctor_name_bn,
            d.full_name_en AS doctor_name_en,
            dep.name_bn    AS department_name_bn,
@@ -63,12 +67,14 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
            s.room, s.status::text AS status, s.planned_start, s.planned_end,
            to_char(s.session_date, 'YYYY-MM-DD') AS session_date,
            (s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date) AS today,
-           count(b.id) FILTER (WHERE b.status IN ('booked', 'waiting'))::text AS waiting,
-           count(b.id)::text AS total
+           -- Counted by the database's one function for it (migration 0056):
+           -- the demonstration's picker is nobody, and reads no booking.
+           c.waiting::text AS waiting,
+           c.total::text AS total
       FROM sessions s
       JOIN doctors d       ON d.id = s.doctor_id
       JOIN departments dep ON dep.id = s.department_id
-      LEFT JOIN bookings b ON b.session_id = s.id AND b.deleted_at IS NULL
+      CROSS JOIN LATERAL fn_chamber_counts(s.id) c
      WHERE s.deleted_at IS NULL
        AND (${hospitalId}::uuid IS NULL OR s.hospital_id = ${hospitalId}::uuid)
        AND s.room IS DISTINCT FROM 'E2E'
@@ -93,9 +99,6 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
          OR (s.status IN ('running', 'paused')
              AND s.session_date >= (now() AT TIME ZONE 'Asia/Dhaka')::date - 1)
        )
-     GROUP BY s.hospital_id, s.id, d.full_name_bn, d.full_name_en,
-              dep.name_bn, dep.name_en, s.room, s.status, s.planned_start, s.planned_end,
-              s.session_date
      ORDER BY
        -- A chamber already mid-queue first: it is the one that demonstrates
        -- the product rather than describing it (FR-DEM-06).
@@ -106,6 +109,7 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
   return sessions.rows.map((row) => ({
     hospitalId: row.hospital_id,
     id: row.id,
+    doctorId: row.doctor_id,
     doctorNameBn: row.doctor_name_bn,
     doctorNameEn: row.doctor_name_en,
     departmentNameBn: row.department_name_bn,

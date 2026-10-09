@@ -29,7 +29,7 @@ export function GuestCodeCard({
   const locale = useLocale();
 
   return (
-    <Card data-testid="guest-otp">
+    <Card elevated data-testid="guest-otp">
       <p className="text-body-md">{formatPatient('accountCodeSent', locale, { phone })}</p>
       <div className="mt-3">
         <OtpInput

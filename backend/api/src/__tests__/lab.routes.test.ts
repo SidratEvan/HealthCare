@@ -28,10 +28,14 @@ import { sql } from 'kysely';
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { resetSmsAdapter, setSmsAdapter } from '../adapters/sms.js';
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { resetEmitter, type RecordingEmitter } from '../realtime/emit.js';
 import { ROOMS } from '../realtime/rooms.js';
+import { withTransaction } from '../repositories/transaction.js';
+import * as notifications from '../services/notification.service.js';
+import * as sender from '../services/notificationSender.service.js';
 
 import {
   freshVisit,
@@ -43,6 +47,7 @@ import {
   TINY_PDF_BASE64,
   type LabFixture,
 } from './support/labFixture.js';
+import { RecordingSmsAdapter } from './support/recordingSms.js';
 import { bearer, guestToken, patientToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -162,7 +167,9 @@ describe('the auth matrix', () => {
       .set('Idempotency-Key', randomUUID())
       .send({ action: 'process', idempotencyKey: randomUUID() });
 
-    expect(response.status).toBe(403);
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect(response.status).toBe(404);
     expect(await orderRow(id)).toMatchObject({ state: 'sample_collected' });
   });
 
@@ -287,7 +294,9 @@ describe('ordering tests from a consultation', () => {
       .set('Authorization', bearer(shapla.doctorToken))
       .set('Idempotency-Key', key)
       .send({ bookingId, tests: [{ testCode: 'CBC' }], idempotencyKey: key })
-      .expect(403);
+      // Not 403: another hospital's row does not exist for this caller, so it is
+      // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+      .expect(404);
   });
 });
 
@@ -464,6 +473,116 @@ describe('uploading a report delivers it', () => {
     // `FR-LAB-03` names both. The order came out of a consultation, so it has
     // an ordering doctor to reach.
     expect(report?.deliveredTo.sort()).toEqual(['doctor', 'patient']);
+  });
+
+  it('tells the patient by SMS that it is ready, once (FR-NOT-03, FR-GST-06)', async () => {
+    const id = await orderIn(shapla, 'processing');
+    const key = randomUUID();
+    const body = { fileType: 'application/pdf', content: TINY_PDF_BASE64, idempotencyKey: key };
+    const upload = (): request.Test =>
+      request(app)
+        .post(`${BASE}/test-orders/${id}/report`)
+        .set('Authorization', bearer(shapla.labToken))
+        .set('Idempotency-Key', key)
+        .send(body);
+    await upload().expect(201);
+
+    const told = async (): Promise<{ channel: string; state: string; error: string | null }[]> =>
+      (
+        await sql<{ channel: string; state: string; error: string | null }>`
+          SELECT channel::text AS channel, state::text AS state, error
+            FROM notifications
+           WHERE template_key = 'lab.report_ready' AND params ->> 'testOrderId' = ${id}
+        `.execute(db)
+      ).rows;
+
+    // By SMS, and by nothing else: no phone in this suite holds the app's
+    // token. It used to be a push that was skipped, which told nobody.
+    await notifications.settled();
+    const rows = await told();
+    expect(rows.map((row) => row.channel)).toEqual(['sms']);
+    // Sent. Or, when this suite runs in the Dhaka night, held for the morning
+    // and said to be: a report is not urgent (`FR-NOT-07`; the next test
+    // follows one to the morning). Never anything else, and never silently.
+    const [row] = rows;
+    expect(
+      row?.state === 'sent' || (row?.state === 'queued' && row.error === 'quiet_hours'),
+      JSON.stringify(row),
+    ).toBe(true);
+
+    // The same upload again tells nobody a second time.
+    await upload().expect(200);
+    expect(await told()).toHaveLength(1);
+  });
+
+  it('a report announced at night waits for seven in the morning, and is sent then (FR-NOT-07, plan H1)', async () => {
+    const id = await orderIn(shapla, 'processing');
+    // The next three in the morning in Dhaka, so that the seven it waits for
+    // is still ahead of this test whenever it runs.
+    const night = new Date();
+    night.setUTCHours(21, 0, 0, 0);
+    if (night.getTime() <= Date.now()) night.setUTCDate(night.getUTCDate() + 1);
+    const morning = new Date(night.getTime() + 4 * 3_600_000);
+
+    const recording = new RecordingSmsAdapter();
+    setSmsAdapter(recording);
+    try {
+      const batch = await withTransaction(
+        async (trx) =>
+          await notifications.queueReportReady(
+            trx,
+            { testOrderId: id, link: 'http://localhost:3000/records' },
+            night,
+          ),
+      );
+      // Nothing to send now: its words are not even kept in memory overnight.
+      expect(batch.ids).toHaveLength(1);
+      expect(batch.messages).toHaveLength(0);
+      await notifications.dispatch(batch);
+      await notifications.settled();
+
+      const row = async (): Promise<{
+        state: string;
+        error: string | null;
+        attempts: number;
+        due: Date;
+      }> => {
+        const result = await sql<{
+          state: string;
+          error: string | null;
+          attempts: number;
+          due: Date;
+        }>`
+          SELECT state::text AS state, error, attempts, next_attempt_at AS due
+            FROM notifications WHERE id = ${batch.ids[0] ?? ''}::uuid
+        `.execute(db);
+        const found = result.rows[0];
+        if (found === undefined) throw new Error('no such message');
+        return found;
+      };
+
+      // Queued, not skipped; due at seven in Dhaka; said to be held; untried.
+      const held = await row();
+      expect(held).toMatchObject({ state: 'queued', error: 'quiet_hours', attempts: 0 });
+      expect(held.due.toISOString()).toBe(morning.toISOString());
+      expect(recording.all()).toHaveLength(0);
+
+      // Seven comes.
+      await sql`
+        UPDATE notifications SET next_attempt_at = now() - interval '1 second'
+         WHERE id = ${batch.ids[0] ?? ''}::uuid
+      `.execute(db);
+      sender.wake();
+      await notifications.settled();
+
+      expect(await row()).toMatchObject({ state: 'sent', error: null, attempts: 1 });
+      // From the row, which keeps no link: the Records page, put back.
+      const [sent] = recording.all();
+      expect(sent?.body).toContain('http://localhost:3000/records');
+      expect(sent?.body).not.toContain('{link}');
+    } finally {
+      resetSmsAdapter();
+    }
   });
 
   it('refuses an upload before a sample was taken, and stores nothing', async () => {

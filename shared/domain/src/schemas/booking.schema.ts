@@ -44,8 +44,17 @@ export const scopeCode = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9-]{1,15}$/)
   .transform((value) => value.toUpperCase());
 
-/** `GET /config`. */
-export const configQuery = z.object({ scope: scopeCode.optional() });
+/**
+ * `GET /config`.
+ *
+ * `host` is the address the app was opened at (`FR-BRD-07`): at a hospital's
+ * portal the answer is that hospital's, with no `scope` asked for, and a
+ * `scope` beside it does not turn one hospital's portal into another's.
+ */
+export const configQuery = z.object({
+  scope: scopeCode.optional(),
+  host: z.string().trim().min(1).max(260).optional(),
+});
 
 export const hospitalQuery = z.object({
   scope: scopeCode.optional(),
@@ -149,6 +158,11 @@ export const createBookingBody = z.object({
   reason: z.string().trim().max(500).optional(),
   /** Pre-visit answers, so the doctor's screen is populated (`FR-DOC-03`). */
   intake: z.record(z.string(), z.unknown()).optional(),
+  /**
+   * `CHIP-A07C-WINDOW` (`FR-PAT-28`, plan R1): the start of the preferred hour,
+   * one of the chamber's windows; a preference the queue never reads.
+   */
+  arrivalWindowStart: z.string().datetime({ offset: true }).optional(),
 });
 
 /**

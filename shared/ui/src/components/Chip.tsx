@@ -26,7 +26,7 @@ export type ChipTone = 'neutral' | 'positive' | 'caution' | 'alert';
 
 const TONE: Record<ChipTone, string> = {
   neutral: 'bg-sunken text-ink',
-  positive: 'bg-brand-100 text-brand-700',
+  positive: 'bg-positive-100 text-positive-700',
   caution: 'bg-warn-100 text-warn-700',
   alert: 'bg-alert-100 text-alert-700',
 };
@@ -60,6 +60,8 @@ export interface FilterChipProps {
   readonly children: ReactNode;
   readonly selected: boolean;
   readonly onToggle: () => void;
+  /** So a browser test can find one chip among several of the same kind. */
+  readonly 'data-testid'?: string;
 }
 
 /**
@@ -69,10 +71,16 @@ export interface FilterChipProps {
  * pill at a glance, and a real `<button>` with `aria-pressed` so it is
  * reachable by keyboard and announced as a toggle.
  */
-export function FilterChip({ children, selected, onToggle }: FilterChipProps): ReactNode {
+export function FilterChip({
+  children,
+  selected,
+  onToggle,
+  'data-testid': testId,
+}: FilterChipProps): ReactNode {
   return (
     <button
       type="button"
+      data-testid={testId}
       aria-pressed={selected}
       onClick={onToggle}
       className={cx(

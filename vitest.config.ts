@@ -64,7 +64,12 @@ export default defineConfig({
           name: 'api',
           include: ['backend/*/src/**/*.{test,spec}.ts'],
           // Must run before any import: env.ts validates at module load.
-          setupFiles: ['backend/api/src/__tests__/support/env.setup.ts'],
+          // The second waits for the notification sender after each test and
+          // leaves no message queued for another test's sender to send.
+          setupFiles: [
+            'backend/api/src/__tests__/support/env.setup.ts',
+            'backend/api/src/__tests__/support/sender.setup.ts',
+          ],
           // Its own database: this suite mutates the demo data, the schema
           // suite asserts on exact counts of it.
           globalSetup: ['database/tests/support/api-global-setup.ts'],

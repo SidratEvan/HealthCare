@@ -10,9 +10,9 @@
 
 import { cancelBookingBody, createBookingBody, idParams } from '@platform/domain';
 
-import { AppError, validationFailed } from '../errors/AppError.js';
+import { AppError, authRequired, forbiddenScope, validationFailed } from '../errors/AppError.js';
 import * as booking from '../services/booking.service.js';
-import { onlinePaymentsAvailable } from '../services/deployment.service.js';
+import { methodAvailable } from '../services/deployment.service.js';
 import * as patientAuth from '../services/patientAuth.service.js';
 
 import { actorOf, assertBookingScope } from './queue.controller.js';
@@ -22,8 +22,9 @@ import type { Request, Response } from 'express';
 
 export async function createBooking(req: Request, res: Response): Promise<void> {
   const body = createBookingBody.parse(req.body);
-  // A deployment with no online payment says so before anything is written.
-  if (!onlinePaymentsAvailable() && body.method !== 'at_hospital') {
+  // A method this deployment cannot take is refused before anything is
+  // written: no online payment at all, or card with no provider (plan H3).
+  if (!methodAvailable(body.method)) {
     throw new AppError('PAYMENT_UNAVAILABLE', { details: { method: body.method } });
   }
   // FR-GST-03: a guest booking proves its phone first, where that is required.
@@ -37,9 +38,15 @@ export async function createBooking(req: Request, res: Response): Promise<void> 
     method: body.method,
     reason: body.reason ?? null,
     intake: body.intake,
+    arrivalWindowStart: body.arrivalWindowStart,
+    // The route requires the header; this is what makes it mean something
+    // (`FR-QUE-51`). It was read, validated and dropped before.
+    clientEventId: req.idempotencyKey ?? null,
   });
 
-  res.status(201).json({ ok: true, data: result });
+  // 201 the first time and 200 for the same request answered again: made
+  // once, told twice.
+  res.status(result.duplicate ? 200 : 201).json({ ok: true, data: result });
 }
 
 /**
@@ -72,6 +79,30 @@ function bookerFrom(req: Request, body: ReturnType<typeof createBookingBody.pars
   };
 }
 
+/** The signed-in account, and nobody else: not staff, and not a tracking link. */
+function accountOf(req: Request): string {
+  const principal = req.principal;
+  if (principal === undefined) throw authRequired();
+  if (principal.kind !== 'patient') throw forbiddenScope({ reason: 'account_only' });
+  return principal.id;
+}
+
+/**
+ * `GET /me/bookings` — My serials, from the server (`S-A-09`, plan F1).
+ *
+ * Whose it is comes off the principal and from nothing in the request, so an
+ * account cannot ask for another's.
+ */
+export async function myBookings(req: Request, res: Response): Promise<void> {
+  res.json({ ok: true, data: await booking.myBookings(accountOf(req)) });
+}
+
+/** `POST /me/bookings/:id/link` — a link to one of the account's own live screens. */
+export async function myBookingLink(req: Request, res: Response): Promise<void> {
+  const { id } = idParams.parse(req.params);
+  res.status(201).json({ ok: true, data: await booking.linkForMyBooking(accountOf(req), id) });
+}
+
 /**
  * `GET /bookings/:id` — the live serial screen's first paint (`S-A-08`).
  *
@@ -85,7 +116,10 @@ export async function getBooking(req: Request, res: Response): Promise<void> {
   const { id } = idParams.parse(req.params);
   await assertBookingScope(req);
 
-  res.json({ ok: true, data: await booking.bookingView(id) });
+  // Staff see the queue as reception holds it; anybody else the patients'
+  // copy, which names nobody (plan I2c).
+  const audience = req.principal?.kind === 'staff' ? 'staff' : 'patient';
+  res.json({ ok: true, data: await booking.bookingView(id, audience) });
 }
 
 /**

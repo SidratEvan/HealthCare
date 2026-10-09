@@ -231,7 +231,9 @@ describe('GET /bookings/:id — the auth matrix', () => {
 
     // The seeded bookings belong to nobody's account, so this token owns none
     // of them. Without this check, any account could read any serial by id.
-    expect(response.status).toBe(403);
+    // Another person's row does not exist for this caller (migration 0056,
+    // DATABASE.md §5.4): it is not found before anything is decided about it.
+    expect(response.status).toBe(404);
   });
 
   it('allows staff at the hospital running the session', async () => {
@@ -248,7 +250,9 @@ describe('GET /bookings/:id — the auth matrix', () => {
       .get(`${BASE}/bookings/${fixture.bookingIds[0] ?? ''}`)
       .set('Authorization', bearer(await staff(['receptionist'], IDS.otherHospital)));
 
-    expect(response.status).toBe(403);
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect(response.status).toBe(404);
   });
 
   it('refuses a tracking-link token scoped to a different booking', async () => {

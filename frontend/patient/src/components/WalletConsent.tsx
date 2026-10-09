@@ -60,9 +60,9 @@ export function WalletConsent({
 }): ReactNode {
   const locale = useLocale();
   return (
-    <Card>
+    <Card elevated>
       <div className="flex flex-col gap-3" data-testid={`wallet-consent-${speaker.patientId}`}>
-        <h2 className="text-title-sm">{tp('walletShare', locale)}</h2>
+        <h2 className="text-title-sm font-bold">{tp('walletShare', locale)}</h2>
 
         {showName ? (
           <p className="text-body-sm text-ink-secondary">

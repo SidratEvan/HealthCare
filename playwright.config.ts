@@ -21,7 +21,7 @@
 
 import { defineConfig, devices } from '@playwright/test';
 
-import { E2E_DATABASE_URL } from './e2e/support/database.js';
+import { asApiRole } from './e2e/support/database.js';
 
 /** The three servers these specs drive. */
 const CONSOLE_URL = 'http://localhost:3100';
@@ -39,7 +39,9 @@ const API_URL = 'http://localhost:4000';
  * the fixtures the specs use cannot end up on different databases — which is
  * exactly what happened while this was a second, independent copy of the URL.
  */
-const DATABASE_URL = E2E_DATABASE_URL;
+// As the API's own role, which the tenant policies bind, and not as the
+// owner, which they do not (`e2e/support/database.ts`, migration 0043).
+const DATABASE_URL = asApiRole();
 
 export default defineConfig({
   testDir: './e2e',
@@ -105,6 +107,9 @@ export default defineConfig({
         DATABASE_URL,
         DEMO_MODE: 'true',
         NODE_ENV: 'development',
+        // This machine is the platform (`FR-BRD-07`): `padma.localhost` is
+        // Padma's portal, as `padma.<the platform's domain>` is on a server.
+        PLATFORM_DOMAIN: 'localhost',
         // Every patient in this suite books from this one machine, and the API
         // limits what one address may do: thirty phone checks in ten minutes.
         // A runner fast enough to fit the thirty-first into that window had
@@ -134,6 +139,11 @@ export default defineConfig({
       env: {
         NEXT_PUBLIC_API_URL: `${API_URL}/api/v1`,
         NEXT_PUBLIC_SOCKET_URL: API_URL,
+        // The same domain the API was given, so the app reads a portal's
+        // address the way the server does (`e2e/portal-address.spec.ts`).
+        NEXT_PUBLIC_PLATFORM_DOMAIN: 'localhost',
+        // A hospital's own domain, as that spec maps one to this machine.
+        DEV_PORTAL_HOSTS: 'portal.hospital-own.test',
       },
     },
   ],

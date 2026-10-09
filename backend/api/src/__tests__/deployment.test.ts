@@ -74,7 +74,12 @@ describe('PAYMENT_PROVIDER=off, and GET /config', () => {
     expect(response.body.data).toEqual({
       demo: true,
       onlinePayments: true,
+      // Under the mock every online method is taken (plan H3).
+      paymentMethods: ['bkash', 'nagad', 'card'],
       guestPhoneCheck: false,
+      // Asked with no host: the network's address (FR-BRD-07);
+      // `portalAddress.routes.test.ts`.
+      address: 'network',
       // The network's own app is nobody's (FR-BRD-02); `scope.routes.test.ts`.
       scope: null,
     });

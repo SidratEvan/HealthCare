@@ -21,6 +21,7 @@
  */
 
 import { allowedOrigins } from '../config/links.js';
+import { originAllowed } from '../services/portal.service.js';
 
 import type { NextFunction, Request, Response } from 'express';
 
@@ -45,6 +46,9 @@ const ALLOWED_HEADERS = ['authorization', 'content-type', 'idempotency-key'] as 
  */
 const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 
+/** The one route any origin may read (see `cors`). */
+const CONFIG_PATH = '/api/v1/config';
+
 export function cors(req: Request, res: Response, next: NextFunction): void {
   const origin = req.get('origin');
 
@@ -54,15 +58,46 @@ export function cors(req: Request, res: Response, next: NextFunction): void {
     return;
   }
 
-  if (!allowedOrigins().includes(origin)) {
+  // The fixed list answers at once. A hospital's portal is at an address of
+  // its own (`FR-BRD-07`), which `portal.service` knows; it remembers the
+  // recorded domains, so this is a read of the database at most twice a minute.
+  if (allowedOrigins().includes(origin)) {
+    allow(origin, req, res, next);
+    return;
+  }
+  originAllowed(origin).then((allowed) => {
+    if (allowed) {
+      allow(origin, req, res, next);
+      return;
+    }
+    // One question may be asked from anywhere: whose address is this
+    // (`GET /config`, `FR-BRD-07`). The patient app opened at a name nobody
+    // has recorded has to be able to learn that it is nobody's portal, and the
+    // answer is public: it holds nothing a person could not read by asking
+    // directly. Without credentials, and nothing else is opened by it.
+    if (req.path === CONFIG_PATH && (req.method === 'GET' || req.method === 'OPTIONS')) {
+      res.setHeader('access-control-allow-origin', '*');
+      if (req.method === 'GET') {
+        next();
+        return;
+      }
+      // The browser asks first, because the app's client sends a JSON
+      // content type with every request. Reading is all that is allowed.
+      res.setHeader('access-control-allow-methods', 'GET');
+      res.setHeader('access-control-allow-headers', ALLOWED_HEADERS.join(', '));
+      res.setHeader('access-control-max-age', '600');
+      res.status(204).end();
+      return;
+    }
     // No CORS headers, so the browser refuses the response. Deliberately not a
     // 403: a disallowed origin should learn nothing about whether the endpoint
     // exists, and the request itself may still be perfectly valid from a
     // non-browser caller.
     next();
-    return;
-  }
+  }, next);
+}
 
+function allow(origin: string, req: Request, res: Response, next: NextFunction): void {
   res.setHeader('access-control-allow-origin', origin);
   res.setHeader('access-control-allow-credentials', 'true');
   // The allowed origin varies by request, so a cache must key on it.

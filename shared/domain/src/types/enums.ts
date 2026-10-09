@@ -35,8 +35,26 @@ export const STAFF_ROLES = [
 ] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
-export const FACILITY_KINDS = ['hospital', 'clinic', 'diagnostic', 'government'] as const;
+export const FACILITY_KINDS = [
+  'hospital',
+  'clinic',
+  'diagnostic',
+  'government',
+  'chamber',
+] as const;
 export type FacilityKind = (typeof FACILITY_KINDS)[number];
+
+/**
+ * The kinds an organisation may apply as by itself (`FR-ONB-09`). Not
+ * `chamber`: a private chamber joins only once the platform has approved it
+ * (`FR-ONB-11`, plan R7, 0062), so only a platform administrator creates one.
+ */
+export const APPLICABLE_FACILITY_KINDS = [
+  'hospital',
+  'clinic',
+  'diagnostic',
+  'government',
+] as const satisfies readonly FacilityKind[];
 
 export const SESSION_STATUSES = ['scheduled', 'running', 'paused', 'ended', 'cancelled'] as const;
 export type SessionStatus = (typeof SESSION_STATUSES)[number];
@@ -308,6 +326,15 @@ export const ORG_LIFECYCLES = [
 ] as const;
 export type OrgLifecycle = (typeof ORG_LIFECYCLES)[number];
 
+/**
+ * Where a hospital's agreement stands (0051, `FR-SUP-04`, plan G1). Set by a
+ * platform administrator and a record only: it has no plan name, no amount,
+ * and gates nothing by itself. Taking a hospital out of the network is
+ * suspending its workspace (`FR-ONB-06`).
+ */
+export const AGREEMENT_STATES = ['trial', 'active', 'overdue', 'ended'] as const;
+export type AgreementState = (typeof AGREEMENT_STATES)[number];
+
 export const DATABASE_ENUMS = {
   user_kind: USER_KINDS,
   sex: SEXES,
@@ -338,6 +365,7 @@ export const DATABASE_ENUMS = {
   import_state: IMPORT_STATES,
   external_kind: EXTERNAL_KINDS,
   org_lifecycle: ORG_LIFECYCLES,
+  agreement_state: AGREEMENT_STATES,
 } as const satisfies Record<string, readonly string[]>;
 
 /** Booking statuses that still occupy a place in the queue. */

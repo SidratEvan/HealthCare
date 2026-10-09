@@ -70,6 +70,11 @@ export interface QueuedNotification {
    * was sent, when that carried one.
    */
   readonly body: string;
+  /**
+   * Held for quiet hours until this moment (`FR-NOT-07`): queued, and due
+   * then. Null for a message that goes now, and for one that is skipped.
+   */
+  readonly heldUntil: Date | null;
   /** Set when the message was decided against rather than queued. */
   readonly skipped: string | null;
 }
@@ -97,14 +102,15 @@ export async function queueAll(
       ${notification.templateKey}::text,
       ${JSON.stringify({ ...notification.params, body: notification.body })}::jsonb,
       ${notification.skipped === null ? 'queued' : 'skipped'}::notif_state,
-      ${notification.skipped}::text
+      ${notification.skipped ?? (notification.heldUntil === null ? null : 'quiet_hours')}::text,
+      coalesce(${notification.heldUntil}::timestamptz, now())
     )`,
   );
 
   const result = await sql<{ id: string }>`
     INSERT INTO notifications
       (recipient_patient_id, recipient_guest_id, recipient_user_id, phone,
-       channel, template_key, params, state, error)
+       channel, template_key, params, state, error, next_attempt_at)
     VALUES ${sql.join(values, sql`, `)}
     RETURNING id
   `.execute(trx);
@@ -138,8 +144,176 @@ export async function markSent(
 ): Promise<void> {
   await sql`
     UPDATE notifications
-       SET state = 'sent', sent_at = now(),
+       SET state = 'sent', sent_at = now(), error = NULL,
            provider_ref = ${outcome.providerRef}, cost_poisha = ${outcome.costPoisha}
+     WHERE id = ${id}::uuid AND state = 'queued'
+  `.execute(db);
+}
+
+/**
+ * Records what an aggregator's receipt says became of a message it took
+ * (`FR-NOT-06`, plan H2). True when a row changed.
+ *
+ * Only from `sent`: a receipt for a message this system never handed over, or
+ * one already delivered or failed, changes nothing, which is what makes a
+ * receipt sent three times one fact. Found by `provider_ref`
+ * (`notifications_provider_ref_idx`, 0054).
+ *
+ * `delivered_at` is never before `sent_at`, whatever the two clocks say
+ * (`notifications_delivered_after_sent`).
+ */
+export async function applyReceipt(
+  providerRef: string,
+  outcome: 'delivered' | 'failed',
+  error: string,
+): Promise<boolean> {
+  const result =
+    outcome === 'delivered'
+      ? await sql<{ id: string }>`
+          UPDATE notifications
+             SET state = 'delivered', delivered_at = greatest(now(), sent_at)
+           WHERE provider_ref = ${providerRef} AND channel = 'sms' AND state = 'sent'
+          RETURNING id
+        `.execute(db)
+      : await sql<{ id: string }>`
+          UPDATE notifications
+             SET state = 'failed', error = ${error}
+           WHERE provider_ref = ${providerRef} AND channel = 'sms' AND state = 'sent'
+          RETURNING id
+        `.execute(db);
+  return result.rows.length > 0;
+}
+
+/** A hospital's SMS this calendar month, by what became of them (`FR-NOT-06`). */
+export interface MonthOfMessages {
+  /** Handed to the provider: sent, whether or not a receipt has come. */
+  readonly sent: number;
+  /** Of those, the ones a receipt says reached the handset. */
+  readonly delivered: number;
+  /** Refused by the provider, given up on, or reported undelivered. */
+  readonly failed: number;
+  /** Not sent on purpose: no number, or the cap. */
+  readonly held: number;
+  /** Still to go: being retried, or held for the morning. */
+  readonly waiting: number;
+}
+
+/**
+ * Counted from the messages of that hospital's chambers, as `smsSentThisMonth`
+ * is, and by the same month: the first figure here is the one the cap is held
+ * against.
+ */
+export async function monthOfMessages(hospitalId: string): Promise<MonthOfMessages> {
+  const result = await sql<{
+    sent: number;
+    delivered: number;
+    failed: number;
+    held: number;
+    waiting: number;
+  }>`
+    SELECT count(*) FILTER (WHERE n.state IN ('sent', 'delivered'))::int AS sent,
+           count(*) FILTER (WHERE n.state = 'delivered')::int AS delivered,
+           count(*) FILTER (WHERE n.state = 'failed')::int AS failed,
+           count(*) FILTER (WHERE n.state = 'skipped')::int AS held,
+           count(*) FILTER (WHERE n.state = 'queued')::int AS waiting
+      FROM notifications n
+      JOIN bookings b ON b.id = (n.params ->> 'bookingId')::uuid
+      JOIN sessions s ON s.id = b.session_id
+     WHERE s.hospital_id = ${hospitalId}::uuid
+       AND n.channel = 'sms'
+       AND n.queued_at >= date_trunc('month', now())
+  `.execute(db);
+
+  const row = result.rows[0];
+  return {
+    sent: row?.sent ?? 0,
+    delivered: row?.delivered ?? 0,
+    failed: row?.failed ?? 0,
+    held: row?.held ?? 0,
+    waiting: row?.waiting ?? 0,
+  };
+}
+
+/** A row the sender has taken to send: everything it can be sent from. */
+export interface ClaimedRow {
+  readonly id: string;
+  readonly channel: 'sms' | 'push';
+  readonly templateKey: string;
+  /** What is kept of the message: its words under `body`, and no link (0035). */
+  readonly params: Readonly<Record<string, unknown>>;
+  readonly phone: string | null;
+  /** How many tries there have been, this one included. */
+  readonly attempts: number;
+  /**
+   * Who it is for, as far as the row says. A row is addressed by one id
+   * (`addressee`), so a guest's device is not found from here: a push sent
+   * from the row alone goes to an account's devices or to none.
+   */
+  readonly recipient: Recipient;
+}
+
+/**
+ * Takes the messages that are due, to send them (`FR-NOT-06`, plan H1).
+ *
+ * The claim is the statement itself: `attempts` is raised and
+ * `next_attempt_at` moved `claimSeconds` on for exactly the rows this
+ * statement locked, and `SKIP LOCKED` means a second sender asking at the
+ * same instant is given the next rows and not these. Nothing else marks a
+ * row as taken, so a sender that dies simply stops, and the row is due again
+ * when the claim runs out.
+ *
+ * Oldest due first (`notifications_due_idx`, 0053).
+ */
+export async function claimDue(limit: number, claimSeconds: number): Promise<ClaimedRow[]> {
+  const result = await sql<{
+    id: string;
+    channel: 'sms' | 'push';
+    template_key: string;
+    params: Record<string, unknown>;
+    phone: string | null;
+    attempts: number;
+    recipient_patient_id: string | null;
+    recipient_guest_id: string | null;
+    recipient_user_id: string | null;
+  }>`
+    UPDATE notifications n
+       SET attempts = n.attempts + 1,
+           next_attempt_at = now() + make_interval(secs => ${claimSeconds})
+     WHERE n.id IN (
+             SELECT id FROM notifications
+              WHERE state = 'queued' AND next_attempt_at <= now()
+              ORDER BY next_attempt_at
+              LIMIT ${limit}
+                FOR UPDATE SKIP LOCKED)
+    RETURNING n.id, n.channel::text AS channel, n.template_key, n.params, n.phone, n.attempts,
+              n.recipient_patient_id, n.recipient_guest_id, n.recipient_user_id
+  `.execute(db);
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    channel: row.channel,
+    templateKey: row.template_key,
+    params: row.params,
+    phone: row.phone,
+    attempts: row.attempts,
+    recipient: {
+      patientId: row.recipient_patient_id,
+      guestId: row.recipient_guest_id,
+      userId: row.recipient_user_id,
+      phone: row.phone,
+      locale: 'bn',
+    },
+  }));
+}
+
+/**
+ * Puts a message that failed back to be tried at `at`, saying what the
+ * gateway said. It stays `queued`: failed is for one given up on.
+ */
+export async function retryAt(id: string, at: Date, error: string): Promise<void> {
+  await sql`
+    UPDATE notifications
+       SET next_attempt_at = ${at}, error = ${error}
      WHERE id = ${id}::uuid AND state = 'queued'
   `.execute(db);
 }
@@ -233,6 +407,34 @@ export async function alreadyNotified(
   `.execute(trx);
 
   return new Set(result.rows.map((row) => row.booking_id));
+}
+
+/**
+ * The time each booking in a chamber was last told, where a message has named
+ * one (`bookings.told_eta_at`, migration 0050, `FR-QUE-15`). A booking that
+ * is not in the answer was told the planned start and nothing since.
+ */
+export async function toldEtas(trx: Tx, sessionId: string): Promise<Map<string, Date>> {
+  const result = await sql<{ id: string; told_eta_at: Date }>`
+    SELECT id, told_eta_at FROM bookings
+     WHERE session_id = ${sessionId}::uuid AND told_eta_at IS NOT NULL AND deleted_at IS NULL
+  `.execute(trx);
+  return new Map(result.rows.map((row) => [row.id, row.told_eta_at]));
+}
+
+/** Records the time a message just told each of these bookings. */
+export async function setToldEtas(
+  trx: Tx,
+  told: readonly { readonly bookingId: string; readonly etaAt: string }[],
+): Promise<void> {
+  if (told.length === 0) return;
+  await sql`
+    UPDATE bookings b
+       SET told_eta_at = t.eta_at
+      FROM unnest(${told.map((entry) => entry.bookingId)}::uuid[],
+                  ${told.map((entry) => entry.etaAt)}::timestamptz[]) AS t(id, eta_at)
+     WHERE b.id = t.id
+  `.execute(trx);
 }
 
 /** The chamber a message is about, for the text that names it. */

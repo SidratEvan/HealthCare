@@ -18,11 +18,21 @@ import { io, type Socket } from 'socket.io-client';
 
 import type { BedView, PublicCapacity } from '@platform/domain';
 
+import { reconnectIfDropped } from './reconnect.js';
+
 export interface HospitalChannelOptions {
   readonly url: string;
   readonly getToken: () => string | null;
   readonly onConnection: (connected: boolean) => void;
-  readonly onBeds: (beds: readonly BedView[], serverTs: string) => void;
+  /**
+   * `clientEventId` is the console action behind the change, when there was
+   * one: a board whose own action it is stops drawing it (`SY-09`).
+   */
+  readonly onBeds: (
+    beds: readonly BedView[],
+    serverTs: string,
+    clientEventId: string | null,
+  ) => void;
   readonly onCapacity: (published: PublicCapacity, serverTs: string) => void;
   readonly onRequest: (requestId: string, state: string) => void;
   /** The ER half of the pending list changed (`BTN-B07-ADMIT`). Re-read it. */
@@ -46,19 +56,30 @@ export function openHospitalChannel(options: HospitalChannelOptions): {
     reconnectionDelayMax: 10_000,
   });
 
+  /** Set by `close`: a channel its owner has closed is never reopened. */
+  let closed = false;
+
   socket.on('connect', () => {
     options.onConnection(true);
   });
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    // A close the server asked for is tried once more with the credential now
+    // held: a console given a new sign-in comes back, a revoked one is refused
+    // (`reconnect.ts`, `FR-SEC-06`).
+    reconnectIfDropped(socket, reason, () => closed);
+
     // The board stays on screen, with its freshness line going stale — a
     // board that blanks when the wifi drops is useless exactly when a ward
     // needs it (`FR-OFF-02`).
     options.onConnection(false);
   });
 
-  socket.on('bed.updated', (message: { serverTs: string; data: { beds: BedView[] } }) => {
-    options.onBeds(message.data.beds, message.serverTs);
-  });
+  socket.on(
+    'bed.updated',
+    (message: { serverTs: string; data: { beds: BedView[]; clientEventId?: string | null } }) => {
+      options.onBeds(message.data.beds, message.serverTs, message.data.clientEventId ?? null);
+    },
+  );
   socket.on('capacity.updated', (message: { serverTs: string; data: PublicCapacity }) => {
     options.onCapacity(message.data, message.serverTs);
   });
@@ -71,6 +92,7 @@ export function openHospitalChannel(options: HospitalChannelOptions): {
 
   return {
     close: () => {
+      closed = true;
       socket.disconnect();
     },
     socket,

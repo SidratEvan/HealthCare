@@ -8,11 +8,15 @@
 
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import type {
+  AgreementState,
   ChecklistItem,
   FacilityKind,
   OrgAction,
   OrgLifecycle,
   SetupCounts,
+  StalestFigure,
+  WorkspaceAttention,
+  WorkspaceHealth,
 } from '@platform/domain';
 
 import { API_BASE } from '@/lib/admin';
@@ -26,6 +30,12 @@ export interface Workspace {
   readonly division: string;
   readonly district: string;
   readonly registrationNo: string | null;
+  /** True when the hospital applied for this workspace itself (`FR-ONB-10`). */
+  readonly selfRegistered?: boolean;
+  /** A domain the hospital owns, recorded for its portal (`FR-BRD-07`). */
+  readonly portalDomain: string | null;
+  /** The modules it does not run (`FR-BRD-11`); empty when everything is on. */
+  readonly modulesOff: readonly string[];
   readonly lifecycle: OrgLifecycle;
   readonly isLive: boolean;
   readonly reviewRequestedAt: string | null;
@@ -36,6 +46,19 @@ export interface Workspace {
   readonly checklist: readonly ChecklistItem[];
   /** What the platform may do from this state. */
   readonly actions: readonly OrgAction[];
+  /**
+   * Where its agreement stands, as the platform last recorded it
+   * (`FR-SUP-04`). A word, a note and when: no plan, no amount.
+   */
+  readonly agreement: {
+    readonly state: AgreementState;
+    readonly note: string | null;
+    readonly changedAt: string | null;
+  };
+  /** What asks for attention there now (`FR-SUP-06`); empty when nothing does. */
+  readonly attention: readonly WorkspaceAttention[];
+  /** Its oldest figure a patient is shown as stale; null where none is. */
+  readonly stalest: StalestFigure | null;
 }
 
 export interface WorkspaceDoctor {
@@ -48,10 +71,46 @@ export interface WorkspaceDoctor {
 }
 
 export interface WorkspaceDetail extends Workspace {
+  /** Where its portal is: under the platform's domain, and at its own. */
+  readonly portal: { readonly platform: string | null; readonly own: string | null };
+  /** The facility's own phone, as it gave it; on the opened workspace only (`FR-ONB-08`). */
+  readonly phone?: string | null;
   readonly doctors: readonly WorkspaceDoctor[];
-  readonly administrators: readonly { readonly fullName: string; readonly email: string }[];
+  readonly administrators: readonly {
+    readonly fullName: string;
+    readonly email: string;
+    /** The mobile an applying administrator gave (`FR-ONB-09`). */
+    readonly phone?: string | null;
+  }[];
   /** What stops an approval now; empty when nothing does. */
   readonly missingForApproval: readonly string[];
+  /** What the hospital has used: three counts, and when they were counted (`FR-SUP-04`). */
+  readonly usage: {
+    readonly serialsTaken30d: number;
+    readonly chambersHeld30d: number;
+    readonly messagesSentThisMonth: number;
+    readonly asOf: string;
+  };
+  /** How it is doing: its figures' ages, a week's messages, late work (`FR-SUP-06`). */
+  readonly health: WorkspaceHealth & {
+    readonly staleAfterMinutes: number;
+    readonly asOf: string;
+  };
+}
+
+/** One line of an organisation's trail of changes (`FR-ONB-07`). */
+export interface TrailEntry {
+  readonly id: string;
+  readonly at: string;
+  /** A code `auditChangeName` turns into a sentence. */
+  readonly change: string;
+  readonly actorName: string | null;
+  readonly byPlatform: boolean;
+}
+
+export interface Trail {
+  readonly entries: readonly TrailEntry[];
+  readonly asOf: string;
 }
 
 export interface NewWorkspace {
@@ -84,6 +143,8 @@ export type PlatformFailure =
   | { readonly kind: 'not_ready'; readonly missing: readonly string[] }
   | { readonly kind: 'note_required' }
   | { readonly kind: 'changed' }
+  | { readonly kind: 'domain_taken' }
+  | { readonly kind: 'domain_is_the_platforms' }
   | { readonly kind: 'invalid' }
   | { readonly kind: 'failed' };
 
@@ -109,6 +170,8 @@ function failureOf(error: unknown): PlatformFailure {
       const missing = Array.isArray(details['missing']) ? (details['missing'] as string[]) : [];
       return { kind: 'not_ready', missing };
     }
+    if (details['reason'] === 'domain_taken') return { kind: 'domain_taken' };
+    if (details['reason'] === 'domain_is_the_platforms') return { kind: 'domain_is_the_platforms' };
     // The workspace moved while this screen was open: somebody else answered.
     return { kind: 'changed' };
   }
@@ -131,6 +194,11 @@ export const platformApi = {
 
   async detail(token: string, hospitalId: string): Promise<WorkspaceDetail> {
     return await client(token).get<WorkspaceDetail>(`/platform/hospitals/${hospitalId}`);
+  },
+
+  /** What was done to the organisation, newest first. Nothing done for a patient. */
+  async trail(token: string, hospitalId: string): Promise<Trail> {
+    return await client(token).get<Trail>(`/platform/hospitals/${hospitalId}/audit`);
   },
 
   async create(token: string, body: NewWorkspace): Promise<PlatformResult<CreatedWorkspace>> {
@@ -160,6 +228,52 @@ export const platformApi = {
     );
   },
 
+  /** Switches the hospital's modules: the whole list of what is off (`FR-BRD-11`). */
+  async setModules(
+    token: string,
+    hospitalId: string,
+    off: readonly string[],
+  ): Promise<PlatformResult<WorkspaceDetail>> {
+    return await attempt(
+      async () =>
+        await client(token).put<WorkspaceDetail>(
+          `/platform/hospitals/${hospitalId}/modules`,
+          { off },
+          crypto.randomUUID(),
+        ),
+    );
+  },
+  /** Records where the hospital's agreement stands, with a note or none (`FR-SUP-04`). */
+  async setAgreement(
+    token: string,
+    hospitalId: string,
+    state: AgreementState,
+    note: string | null,
+  ): Promise<PlatformResult<WorkspaceDetail>> {
+    return await attempt(
+      async () =>
+        await client(token).put<WorkspaceDetail>(
+          `/platform/hospitals/${hospitalId}/agreement`,
+          { state, note },
+          crypto.randomUUID(),
+        ),
+    );
+  },
+  /** Records the hospital's own domain for its portal, or removes it with null (`FR-BRD-07`). */
+  async setDomain(
+    token: string,
+    hospitalId: string,
+    domain: string | null,
+  ): Promise<PlatformResult<WorkspaceDetail>> {
+    return await attempt(
+      async () =>
+        await client(token).post<WorkspaceDetail>(
+          `/platform/hospitals/${hospitalId}/domain`,
+          { domain },
+          crypto.randomUUID(),
+        ),
+    );
+  },
   async verifyDoctor(
     token: string,
     hospitalId: string,

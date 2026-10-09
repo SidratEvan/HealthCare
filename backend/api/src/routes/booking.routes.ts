@@ -21,12 +21,25 @@ import * as booking from '../controllers/booking.controller.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireBookingScope } from '../middleware/guestAuth.js';
 import { idempotency } from '../middleware/idempotency.js';
+import { byIp, rateLimit } from '../middleware/rateLimit.js';
 import { validate } from '../middleware/validate.js';
 
 export const bookingRoutes: Router = Router();
 
+/**
+ * `FR-GST-14`, as far as an address can carry it: a flood guard on bookings
+ * from one address. An address is not a device. A hospital's waiting room on
+ * the hospital's own wifi is one address and many phones, so the limit is far
+ * above what any one person does, and is stretched again where a deployment
+ * says its callers share an address (`ADDRESS_RATE_LIMIT_FACTOR`). The limit
+ * that is a person's is the phone number's, in the service, counted against
+ * the booking rows themselves.
+ */
+const bookingLimit = rateLimit({ limit: 300, windowSeconds: 3_600, keyFor: byIp });
+
 bookingRoutes.post(
   '/bookings',
+  bookingLimit,
   idempotency({ required: true }),
   validate({ body: createBookingBody }),
   booking.createBooking,
@@ -64,4 +77,26 @@ bookingRoutes.post(
   idempotency({ required: true }),
   validate({ params: idParams, body: cancelBookingBody }),
   booking.cancelBooking,
+);
+
+/**
+ * `GET /me/bookings` and `POST /me/bookings/:id/link` (plan F1, `S-A-09`).
+ *
+ * A signed-in patient's serials, on whichever phone they are signed in: the
+ * list comes from the server and not from what one phone remembers. Opening
+ * a serial's live screen takes a link, so a phone that holds none for that
+ * booking asks for one. Both are the account's own, decided from the
+ * principal; a link costs a row, so asking for one is limited by address like
+ * a booking is, and takes a key like every write.
+ */
+const linkLimit = rateLimit({ limit: 120, windowSeconds: 3_600, keyFor: byIp });
+
+bookingRoutes.get('/me/bookings', requireAuth, booking.myBookings);
+bookingRoutes.post(
+  '/me/bookings/:id/link',
+  requireAuth,
+  linkLimit,
+  idempotency({ required: true }),
+  validate({ params: idParams }),
+  booking.myBookingLink,
 );

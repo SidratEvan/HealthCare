@@ -12,8 +12,9 @@ import { Server as SocketServer } from 'socket.io';
 
 import { allowedOrigins } from '../config/links.js';
 import { logger } from '../config/logger.js';
+import { originAllowed } from '../services/portal.service.js';
 
-import { authenticateSocket } from './auth.js';
+import { authenticateSocket, sweepRevoked } from './auth.js';
 import { setEmitter, type RealtimeEmitter } from './emit.js';
 import { registerHandlers } from './handlers.js';
 
@@ -38,13 +39,36 @@ class SocketIoEmitter implements RealtimeEmitter {
  * a queue mutation that reaches the emitter has done everything asked of it,
  * and the only thing missing is a listener.
  */
+/** How long access ended by a road this process did not see may keep a connection. */
+const REVOKED_SWEEP_MS = 60_000;
+
 export function attachRealtime(httpServer: HttpServer): SocketServer {
   const io = new SocketServer(httpServer, {
     // The consoles and the patient PWA are served from different origins than
     // the API, so the browser preflights the handshake. An allowlist rather
     // than a wildcard: `credentials: true` with `origin: '*'` would let any
     // page on the internet open a session channel with a stolen token.
-    cors: { origin: [...allowedOrigins()], credentials: true },
+    // A function and not a list, since a hospital's portal is at an address
+    // of its own (`FR-BRD-07`): the same question the CORS middleware asks,
+    // of the same service, so the two cannot answer differently.
+    cors: {
+      origin: (origin, done) => {
+        if (origin === undefined) {
+          // Not a browser: nothing to allow or refuse by origin.
+          done(null, true);
+          return;
+        }
+        originAllowed(origin).then(
+          (allowed) => {
+            done(null, allowed);
+          },
+          (error: unknown) => {
+            done(error instanceof Error ? error : new Error('origin check failed'));
+          },
+        );
+      },
+      credentials: true,
+    },
 
     // A reception console on hospital wifi and a patient on 3G both drop
     // often. Socket.IO's defaults assume a better network than this product
@@ -65,6 +89,19 @@ export function attachRealtime(httpServer: HttpServer): SocketServer {
 
   registerHandlers(io);
   setEmitter(new SocketIoEmitter(io));
+
+  // Access ended by a road this process did not see — a command run on the
+  // server, a row changed by hand — closes its connections within a minute
+  // (`realtime/auth.ts`). Ended here, it closes them at once.
+  const sweep = setInterval(() => {
+    void sweepRevoked().catch((error: unknown) => {
+      logger.error({ err: error }, 'could not sweep revoked connections');
+    });
+  }, REVOKED_SWEEP_MS);
+  sweep.unref();
+  httpServer.on('close', () => {
+    clearInterval(sweep);
+  });
 
   logger.info({ corsOrigins: allowedOrigins() }, 'realtime attached');
   return io;

@@ -379,6 +379,34 @@ export async function findOffer(offerId: string, trx?: Tx): Promise<OfferRow | n
   return row === undefined ? null : toOfferRow(row);
 }
 
+/**
+ * The chambers with an offer whose window closed before `at` and that nobody
+ * has answered or recorded as ended (`FR-QUE-30`, plan H1b).
+ *
+ * For the timer, which then asks each chamber's own log what has lapsed: this
+ * only says where to look. `at` is the caller's clock, the one the guard
+ * reads the deadline against, and not the database's.
+ *
+ * Not older than a day: an offer nobody recorded in that long belongs to a
+ * chamber that has ended, and its log is not appended to again.
+ */
+export async function sessionsWithOverdueOffers(at: Date): Promise<string[]> {
+  const result = await sql<{ session_id: string }>`
+    SELECT DISTINCT o.session_id
+      FROM slot_offers o
+     WHERE o.accepted_at IS NULL
+       AND o.declined_at IS NULL
+       AND o.expires_at <= ${at}
+       AND o.expires_at > ${at}::timestamptz - interval '1 day'
+       AND NOT EXISTS (
+             SELECT 1 FROM queue_events e
+              WHERE e.session_id = o.session_id
+                AND e.type = 'SLOT_EXPIRED'
+                AND e.payload ->> 'offerId' = o.id::text)
+  `.execute(db);
+  return result.rows.map((row) => row.session_id);
+}
+
 /** Offers against this session, newest first, for the console's panel. */
 export async function listOffers(sessionId: string): Promise<OfferRow[]> {
   const result = await sql<OfferQueryRow>`

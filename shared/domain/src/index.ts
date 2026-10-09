@@ -69,6 +69,7 @@ export {
 export {
   bandMinutes,
   computeEtas,
+  earlierThanTold,
   etaFor,
   outstandingDelayMinutes,
   projectedEnd,
@@ -79,6 +80,7 @@ export {
   type Eta,
   type EtaOptions,
 } from './queue/eta.js';
+export { NO_PATIENT, patientViewOf, type PatientQueueView } from './queue/patientView.js';
 
 export {
   canAddWalkin,
@@ -124,11 +126,13 @@ export { suggestedQuote, QUOTE_STEP_MINUTES } from './queue/quote.js';
 // it and the ward console applies it before the server answers (`FR-BED-02`).
 export {
   applyLocal,
+  boardAfterRead,
   canApply,
   canForecastDischarge,
   canReceiveTransfer,
   effectiveState,
   holdLapsed,
+  newestBeds,
   outcomeOf,
   ADMISSION_SOURCES,
   BED_ACTIONS,
@@ -147,14 +151,71 @@ export {
 } from './beds/board.js';
 
 export {
+  bedFigure,
   forecastTomorrow,
   mirrorMismatches,
   nextDay,
   tallyByKind,
+  type BedFigure,
   type KindForecast,
   type KindTally,
   type PublicCapacity,
 } from './beds/capacity.js';
+
+// --- Sending a message ------------------------------------------------------
+//
+// When a message is tried again, when it is given up on, and when one held
+// for quiet hours goes (`FR-NOT-06`, `FR-NOT-07`; plan H1).
+export {
+  QUIET_FROM_HOUR,
+  QUIET_UNTIL_HOUR,
+  SEND_CLAIM_SECONDS,
+  SEND_MAX_ATTEMPTS,
+  SEND_RETRY_SECONDS,
+  afterFailedSend,
+  dhakaHour,
+  endOfQuietHours,
+  inQuietHours,
+  type AfterFailure,
+} from './messaging/sending.js';
+
+// --- A workspace's health and its trail of changes --------------------------
+//
+// What the platform's screen says about how a hospital is doing (`FR-SUP-06`)
+// and what was done to it (`FR-ONB-07`). Organisations and counts only.
+export {
+  HEALTH_FIGURES,
+  HEALTH_WINDOW_DAYS,
+  LATE_ACTION_SECONDS,
+  MESSAGE_WAITING_MINUTES,
+  WORKSPACE_ATTENTIONS,
+  deliveryPercent,
+  figureHealth,
+  stalestFigure,
+  workspaceAttention,
+  workspaceHealth,
+  type FigureHealth,
+  type FigureStamp,
+  type HealthFigure,
+  type MessageCounts,
+  type StalestFigure,
+  type SyncCounts,
+  type WorkspaceAttention,
+  type WorkspaceHealth,
+} from './org/health.js';
+export { AUDIT_CHANGES, isAuditChange, type AuditChange } from './org/audit.js';
+export {
+  DEPLOYMENT_ATTENTIONS,
+  DEPLOYMENT_WORKERS,
+  WORKER_LATE_INTERVALS,
+  deploymentSignals,
+  type BackupRun,
+  type DeploymentAttention,
+  type DeploymentInput,
+  type DeploymentSignals,
+  type DeploymentWorker,
+  type WorkerBeat,
+} from './org/deployment.js';
 
 // --- Onboarding ------------------------------------------------------------
 //
@@ -165,6 +226,7 @@ export {
   CHECKLIST_ITEMS,
   ORG_ACTIONS,
   actionNeedsNote,
+  identityEditable,
   isPublicLifecycle,
   missingForApproval,
   missingForReview,
@@ -176,6 +238,15 @@ export {
   type OrgAction,
   type SetupCounts,
 } from './org/lifecycle.js';
+export {
+  APPLICATION_PASSWORD_MIN,
+  applicationBody,
+  codeFor,
+  codeStem,
+  facilityPhoneFrom,
+  mobileFrom,
+  type ApplicationBody,
+} from './org/application.js';
 
 // --- Brand -----------------------------------------------------------------
 //
@@ -183,15 +254,78 @@ export {
 // pass before they are used (`FR-BRD-03`).
 export {
   BRAND_TOKENS,
+  LOGO_FILE_TYPES,
+  LOGO_MAX_BYTES,
   MIN_TEXT_CONTRAST,
+  brandBody,
   brandProblems,
   brandTheme,
   contrastRatio,
+  logoBody,
+  logoBytesMatch,
   readBrandTheme,
+  themeFromColour,
+  type BrandBody,
   type BrandProblem,
   type BrandTheme,
   type BrandToken,
+  type LogoBody,
+  type LogoFileType,
 } from './brand/theme.js';
+
+// Which live figures a hospital shares with the network (`FR-NET-04`).
+export {
+  MODULE_OF_FIGURE,
+  PUBLISHABLE_FIGURES,
+  isPublishableFigure,
+  notSharedOf,
+  publishingBody,
+  type PublishableFigure,
+  type PublishingBody,
+} from './network/publishing.js';
+
+// The modules a hospital runs, and which module a staff request belongs to
+// (`FR-BRD-11`, `FR-SUP-03`).
+export {
+  HOSPITAL_MODULES,
+  MODULE_OF_ROLE,
+  MODULE_ROUTES,
+  isHospitalModule,
+  moduleOn,
+  modulesBody,
+  modulesOfRequest,
+  modulesProblems,
+  type HospitalModule,
+  type ModulesBody,
+  type ModulesProblem,
+} from './modules/modules.js';
+
+// What a phone is told when the app is added to its home screen: the
+// network's own description, or a hospital's (`FR-BRD-08`).
+export {
+  INSTALL_ICON_MIN_PIXELS,
+  PLATFORM_INSTALL,
+  installIconUsable,
+  installManifest,
+  pngSize,
+  shortInstallName,
+  type InstallIcon,
+  type InstallSubject,
+  type WebManifest,
+} from './brand/manifest.js';
+
+// Whose address a host is: the network's, a hospital's portal, or somebody
+// else's (`FR-BRD-07`).
+export {
+  RESERVED_PORTAL_LABELS,
+  normaliseHost,
+  portalDomain,
+  portalDomainBody,
+  portalHostFor,
+  portalHostOf,
+  type PortalDomainBody,
+  type PortalHost,
+} from './brand/portal.js';
 
 // --- Search ----------------------------------------------------------------
 //
@@ -220,6 +354,7 @@ export { confirmedTallyOfKind, orderForNeed, tallyOfKind } from './search/order.
 export {
   alreadyApplied,
   applyLocalCase,
+  casesAfterRead,
   canActOn,
   expectedArrival,
   inboundOrder,
@@ -227,6 +362,7 @@ export {
   isOnTheWay,
   isOpen,
   loadOf,
+  newestCases,
   nextTokenLabel,
   tokenLabel,
   triageOrder,
@@ -334,6 +470,11 @@ export {
   type RefundReason,
   type RefundablePayment,
 } from './payments/refund.js';
+export {
+  NOSHOW_PREPAY_THRESHOLD,
+  prepaymentReason,
+  type PrepaymentReason,
+} from './payments/prepay.js';
 
 export { settle, type Settlement, type SettlementRow } from './payments/settlement.js';
 
@@ -425,6 +566,8 @@ export * from './schemas/sync.schema.js';
 export * from './schemas/auth.schema.js';
 export * from './schemas/booking.schema.js';
 export * from './schemas/clinical.schema.js';
+export * from './clinical/prescription.js';
+export * from './clinical/documents.js';
 export * from './schemas/bed.schema.js';
 export * from './schemas/standby.schema.js';
 export * from './schemas/emergency.schema.js';
@@ -446,10 +589,19 @@ export {
   type PlannedSession,
   type ScheduleTemplate,
 } from './sessions/materialise.js';
+export { arrivalWindowAt, arrivalWindows, type ArrivalWindow } from './sessions/arrivalWindows.js';
 export { BD_MOBILE, normaliseBdMobile } from './util/phone.js';
 
 // --- Importing a hospital's own data (pilot step 24, FR-IMP) ---------------
+export { bookingStanding, type BookingStanding } from './queue/standing.js';
 export { csvField, csvLine, parseCsv, type CsvProblem, type CsvTable } from './imports/csv.js';
+export {
+  isLegacyXls,
+  isZip,
+  sheetHasRows,
+  sheetToCsv,
+  type SpreadsheetCell,
+} from './imports/spreadsheet.js';
 // Mapping a hospital's own export onto the template (`FR-IMP-13`–`20`).
 export {
   COLUMN_KINDS,

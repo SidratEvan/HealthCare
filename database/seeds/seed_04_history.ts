@@ -49,7 +49,12 @@ import {
   type Timestamp,
 } from '@platform/domain';
 
-import { assessmentFor, complaintsFor, DEMO_FORMULARY } from './data/reference.js';
+import {
+  assessmentFor,
+  complaintsFor,
+  DEMO_ASSESSMENTS,
+  DEMO_FORMULARY,
+} from './data/reference.js';
 import {
   bookingSource,
   buildIntake,
@@ -59,6 +64,7 @@ import {
   type InsertedBooking,
   type PatientRow,
 } from './lib/bookings.js';
+import { demoHospitalCode } from './lib/demo.js';
 import { appendEvents, writeProjections, type EventDraft } from './lib/events.js';
 import { insertRows } from './lib/insert.js';
 import { chambers, facilityIds, staffByRole, type ChamberRow } from './lib/lookup.js';
@@ -159,6 +165,8 @@ export const seed04History: SeedModule = {
     'queue_state',
     'visits',
     'medicines',
+    'prescriptions',
+    'prescription_items',
     'test_orders',
     'reports',
     'standby_list',
@@ -166,10 +174,10 @@ export const seed04History: SeedModule = {
     'feedback',
   ],
   // `visits` arrived with migration 0007, so the record half of `FR-DEM-03` is
-  // written now. Prescriptions are not deferred but **dropped**: the owner
-  // removed e-prescriptions from this version (`FR-DOC-04`), so there is no
-  // longer anything to wait for. Reports arrived with the lab at step 17 and
-  // are written below, so `FR-DEM-03` is now covered in full.
+  // written now. Prescriptions came back with plan R2 (`FR-DOC-04`): the
+  // visits whose declared diagnosis has a declared demo prescription carry it.
+  // Reports arrived with the lab at step 17 and are written below, so
+  // `FR-DEM-03` is covered in full.
 
   async run({ client, now, rng, log }: SeedContext): Promise<SeedSummary> {
     const history = rng.stream('history');
@@ -242,7 +250,12 @@ export const seed04History: SeedModule = {
       // the history — the offers, the recoveries, the counts in STATUS — was
       // built from.
       const checkIns = history.stream(`check-ins-${String(index)}`);
-      const built = buildSessionLog(history, plan, inserted, outcomes, staffId, checkIns);
+      const sessionLog = buildSessionLog(history, plan, inserted, outcomes, staffId, checkIns);
+      // `FR-SUP-06`: one facility's counter worked offline for a stretch.
+      const built = {
+        ...sessionLog,
+        drafts: withOfflineStretch(sessionLog.drafts, plan, now),
+      };
 
       // `FR-QUE-30` against a chair that a no-show left empty. Planned from
       // the log that has just been built, because who could have accepted
@@ -322,7 +335,9 @@ export const seed04History: SeedModule = {
       );
     }
 
+    const prescribed = await insertDemoPrescriptions(client);
     const lab = await insertLabWork(client, now, rng.stream('lab'));
+    const confirmations = await insertConfirmations(client, now);
 
     log(
       `      ${String(visits)} completed visits, ${String(noShows)} no-shows, ${String(cancellations)} cancellations across ${String(sessions)} past sessions`,
@@ -330,12 +345,15 @@ export const seed04History: SeedModule = {
     log(
       `      ${String(visits)} signed visit records, ${String(formulary)} medicines in the formulary`,
     );
-    log('      no prescriptions: FR-DOC-04 was dropped from this version');
+    log(
+      `      ${String(prescribed.prescriptions)} prescriptions, ${String(prescribed.items)} medicines on them (FR-DOC-04)`,
+    );
     log(
       `      ${String(offersMade)} freed chairs offered to the standby list, ` +
         `${String(offersAccepted)} taken (FR-QUE-30, FR-ADM-03)`,
     );
     log(`      ${String(feedback)} post-visit responses (FR-ADM-08, seeded only)`);
+    log(`      ${String(confirmations)} confirmation messages for the last week (FR-SUP-06)`);
     log(
       `      ${String(lab.orders)} test orders (${String(lab.open)} still on a bench), ` +
         `${String(lab.reports)} delivered reports`,
@@ -348,6 +366,8 @@ export const seed04History: SeedModule = {
       queue_state: sessions,
       visits,
       medicines: formulary,
+      prescriptions: prescribed.prescriptions,
+      prescription_items: prescribed.items,
       test_orders: lab.orders,
       reports: lab.reports,
       standby_list: standby,
@@ -658,6 +678,120 @@ function buildSessionLog(
 }
 
 /**
+ * The facility whose counter loses its connection on recent evenings, and
+ * some of whose messages do not go (`FR-SUP-06`, plan G2).
+ *
+ * Karnaphuli is two hundred kilometres from the other five, and it is the one
+ * whose line drops: the platform's health view then has one workspace that
+ * shows what the other five do not, late work and failed messages, and five
+ * that show the ordinary state. Nothing a patient sees is changed by it.
+ */
+const POOR_LINE_FACILITY = 'karnaphuli-general';
+
+/** How far back a chamber may be and still get an offline stretch. Inside the health view's week. */
+const OFFLINE_STRETCH_DAYS = 2;
+
+/** How many actions the counter took while its line was down. */
+const OFFLINE_STRETCH_ACTIONS = 8;
+
+/**
+ * Gives a chamber a stretch its counter worked offline (`FR-OFF-01`).
+ *
+ * The counter went on working and sent what it had done when the line came
+ * back. In the log that is an action whose console time is earlier than the
+ * time the server recorded it: the first one tapped waited longest, the last
+ * a minute and a half. `server_ts` is not moved: every figure worked out from
+ * this history (waits, punctuality, the dashboard) stays what it was, and
+ * only the console's own time, which nothing but a sync batch's order and the
+ * health view reads (`SY-01`), says that these arrived late.
+ */
+function withOfflineStretch(
+  drafts: readonly EventDraft[],
+  plan: PastSession,
+  now: Timestamp,
+): EventDraft[] {
+  const ageMinutes = time.differenceInSeconds(now, plan.plannedStart) / 60;
+  if (
+    plan.chamber.hospitalSlug !== POOR_LINE_FACILITY ||
+    !plan.live ||
+    ageMinutes > OFFLINE_STRETCH_DAYS * 24 * 60
+  ) {
+    return [...drafts];
+  }
+
+  const atTheCounter = drafts
+    .map((draft, index) => ({ draft, index }))
+    .filter(({ draft }) =>
+      ['PATIENT_ARRIVED', 'PATIENT_CALLED', 'PATIENT_DONE'].includes(draft.type),
+    );
+  const from = Math.floor(atTheCounter.length / 3);
+  const stretch = atTheCounter.slice(from, from + OFFLINE_STRETCH_ACTIONS);
+  const last = stretch.at(-1);
+  if (last === undefined) return [...drafts];
+
+  // When the line came back: a minute and a half after the last tap.
+  const reconnectedAt = time.addSeconds(last.draft.serverTs, 90);
+  const offline = new Map(
+    stretch.map(({ draft, index }) => [
+      index,
+      time.addSeconds(draft.serverTs, -time.differenceInSeconds(reconnectedAt, draft.serverTs)),
+    ]),
+  );
+  return drafts.map((draft, index) => {
+    const tappedAt = offline.get(index);
+    return tappedAt === undefined ? draft : { ...draft, clientTs: tappedAt };
+  });
+}
+
+/**
+ * The confirmation each of the last week's serials was sent (`FR-PAT-22`,
+ * `FR-SUP-06`).
+ *
+ * One SMS row a booking, as the booking flow writes one, so that what the
+ * platform's health view counts is there to count. Most went. A few everywhere
+ * were held because the booking had no number, which is a decision and not a
+ * failure; at the facility with the poor line one in four failed at the
+ * provider (the week's history there is one evening's chamber, so a rarer
+ * failure would be none).
+ * No words are kept: a seeded message carries the booking it was about and
+ * nothing a patient could be recognised by.
+ */
+async function insertConfirmations(client: Client, now: Timestamp): Promise<number> {
+  const result = await client.query(
+    `INSERT INTO notifications
+       (recipient_patient_id, phone, channel, template_key, params, state, error, cost_poisha,
+        queued_at, sent_at, created_at, updated_at)
+     SELECT b.patient_id,
+            CASE WHEN m.state = 'skipped' THEN NULL ELSE b.phone END,
+            'sms', 'booking.confirmed', jsonb_build_object('bookingId', b.id),
+            m.state::notif_state, m.error,
+            CASE WHEN m.state = 'sent' THEN 35 END,
+            b.created_at,
+            CASE WHEN m.state = 'sent' THEN b.created_at + interval '2 seconds' END,
+            b.created_at, b.created_at
+       FROM (
+         SELECT bk.id, bk.patient_id, bk.created_at, h.code, p.phone,
+                row_number() OVER (PARTITION BY s.hospital_id ORDER BY bk.created_at, bk.id) AS n
+           FROM bookings bk
+           JOIN sessions s ON s.id = bk.session_id
+           JOIN hospitals h ON h.id = s.hospital_id
+           JOIN patients p ON p.id = bk.patient_id
+          WHERE bk.created_at >= $1::timestamptz - interval '7 days'
+            AND bk.created_at < $1::timestamptz
+       ) b
+       CROSS JOIN LATERAL (
+         SELECT CASE WHEN b.phone IS NULL OR b.n % 17 = 0 THEN 'skipped'
+                     WHEN b.code = $2 AND b.n % 4 = 0 THEN 'failed'
+                     ELSE 'sent' END AS state,
+                CASE WHEN b.phone IS NULL OR b.n % 17 = 0 THEN 'no_phone_number'
+                     WHEN b.code = $2 AND b.n % 4 = 0 THEN 'provider_unreachable' END AS error
+       ) m`,
+    [now, demoHospitalCode(POOR_LINE_FACILITY)],
+  );
+  return result.rowCount ?? 0;
+}
+
+/**
  * Puts a session's events into the order they happened.
  *
  * `queue_events.seq` orders the log and the seed inserts in array order — but
@@ -735,10 +869,9 @@ async function insertPastSession(
  * The record each completed consultation left behind (`FR-DEM-03`, 0007).
  *
  * `FR-DEM-03` asks for "~500 historical visits with prescriptions and reports".
- * The visits and their notes land here; prescriptions do not, because the owner
- * dropped e-prescriptions from this version (`FR-DOC-04`), and reports arrive
- * with the lab at step 17. So the history holds what this product can honestly
- * produce today: a diagnosis, advice in Bangla, and sometimes a follow-up date.
+ * The visits and their notes land here: a diagnosis, advice in Bangla, and
+ * sometimes a follow-up date. Their prescriptions are `insertDemoPrescriptions`
+ * (plan R2), and reports arrive with the lab (step 17).
  *
  * ## Why the note follows the complaint
  *
@@ -834,6 +967,67 @@ async function insertVisits(
     if (detail === undefined) throw new Error('visit rows and their details drifted apart.');
     return { visitId: visit.id, ...detail };
   });
+}
+
+/**
+ * The demonstration prescriptions (`FR-DEM-03`, `FR-DOC-04`; plan R2).
+ *
+ * Every signed visit whose diagnosis is one `DEMO_ASSESSMENTS` declares a
+ * prescription for gets that prescription, signed by whoever signed the
+ * visit and dated with it. The medicines are the formulary's own rows, named
+ * as the doctor's screen names them (generic, then brand), so the records a
+ * demo shows match what a doctor would pick.
+ */
+async function insertDemoPrescriptions(
+  client: Client,
+): Promise<{ prescriptions: number; items: number }> {
+  let prescriptions = 0;
+  let items = 0;
+  for (const assessment of DEMO_ASSESSMENTS) {
+    if (assessment.prescription === undefined) continue;
+
+    const written = await client.query<{ id: string }>(
+      `INSERT INTO prescriptions (visit_id, created_by, created_at, updated_at)
+       SELECT v.id, v.created_by, v.signed_at, v.signed_at
+         FROM visits v
+        WHERE v.diagnosis_text = $1 AND v.signed_at IS NOT NULL AND v.deleted_at IS NULL
+       RETURNING id`,
+      [assessment.diagnosisBn],
+    );
+    prescriptions += written.rowCount ?? 0;
+    const ids = written.rows.map((row) => row.id);
+    if (ids.length === 0) continue;
+
+    for (const [index, medicine] of assessment.prescription.entries()) {
+      const found = DEMO_FORMULARY.find((entry) => entry.generic === medicine.generic);
+      if (found === undefined) {
+        throw new Error(
+          `A demo prescription names ${medicine.generic}, which the formulary does not carry.`,
+        );
+      }
+      const added = await client.query(
+        `INSERT INTO prescription_items
+           (prescription_id, medicine_id, name_text, strength, schedule, duration_days,
+            instruction_bn, created_at)
+         SELECT p.id, m.id, $2, $3, $4, $5, $6, p.created_at + $7::int * interval '1 microsecond'
+           FROM prescriptions p
+           JOIN medicines m ON m.generic_name = $8 AND m.deleted_at IS NULL
+          WHERE p.id = ANY($1::uuid[])`,
+        [
+          ids,
+          `${found.generic} (${found.brand})`,
+          medicine.strength,
+          medicine.schedule,
+          medicine.days,
+          medicine.instructionBn,
+          index,
+          found.generic,
+        ],
+      );
+      items += added.rowCount ?? 0;
+    }
+  }
+  return { prescriptions, items };
 }
 
 /** The Dhaka calendar date `days` after an instant, as `YYYY-MM-DD`. */

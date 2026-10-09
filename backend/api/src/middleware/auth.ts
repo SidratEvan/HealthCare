@@ -20,6 +20,7 @@ import { NATIONAL_ROLES, STAFF_ROLES, type NationalRole, type StaffRole } from '
 
 import { verifyToken, type TokenClaims } from '../config/jwt.js';
 import { AppError, authRequired, tokenInvalid } from '../errors/AppError.js';
+import { staffAccessLive } from '../services/staffAccess.service.js';
 
 import type { Principal } from '../types/express.js';
 import type { NextFunction, Request, Response } from 'express';
@@ -74,6 +75,21 @@ export async function attachPrincipal(
   // the person sets their own, the token opens the change and nothing else —
   // enforced here, not only by the console, so a script holding the token
   // cannot skip the screen (0027, pilot step 21).
+  // A staff token is a statement that lasts fifteen minutes. It is honoured
+  // only while the account and the sign-in behind it still stand: a
+  // deactivated account, a sign-out or a password reset ends it now, not when
+  // it would have expired (`FR-SEC-06`, `accessGuard.service`).
+  if (
+    result.claims.kind === 'staff' &&
+    !(await staffAccessLive(
+      result.claims.sub,
+      typeof result.claims.sid === 'string' ? result.claims.sid : null,
+    ))
+  ) {
+    next(tokenInvalid('revoked'));
+    return;
+  }
+
   if (result.claims.mcp === true && !PASSWORD_CHANGE_ALLOWED.has(pathOf(req))) {
     next(new AppError('AUTH_PASSWORD_CHANGE_REQUIRED'));
     return;

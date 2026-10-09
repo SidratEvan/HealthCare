@@ -44,7 +44,18 @@
  * (`clearExpiredBodies`).
  */
 
-import { twoAwayBookings, waitingQueue, type QueueEvent, type QueueState } from '@platform/domain';
+import {
+  earlierThanTold,
+  endOfQuietHours,
+  inQuietHours,
+  twoAwayBookings,
+  waitingQueue,
+  type BookingId,
+  type Eta,
+  type QueueEvent,
+  type QueueState,
+  type Timestamp,
+} from '@platform/domain';
 import {
   BED_KIND_NAMES,
   bedKindName,
@@ -59,10 +70,12 @@ import {
   type TemplateKey,
 } from '@platform/i18n';
 
-import { push } from '../adapters/push.js';
 import { segmentsFor, sms } from '../adapters/sms.js';
-import { logger } from '../config/logger.js';
+import { runInDbScope } from '../config/dbScope.js';
 import * as notificationRepo from '../repositories/notification.repo.js';
+
+import { LINK_PARAMS, originOf, type LinkKind } from './messageLink.service.js';
+import * as sender from './notificationSender.service.js';
 
 import type { Tx } from '../repositories/transaction.js';
 
@@ -92,6 +105,14 @@ const TEMPLATE_FOR: Partial<Record<QueueEvent['type'], TemplateKey>> = {
 };
 
 /**
+ * The reason a serial released by an unfinished payment is cancelled with
+ * (plan H3, `FR-PAY-08`): read by reception on its console, and the sign that
+ * the patient is sent `payment.released` rather than `queue.cancelled`.
+ */
+export const PAYMENT_RELEASED_REASON =
+  'অনলাইন পেমেন্ট সময়মতো হয়নি — সিরিয়াল ছেড়ে দেওয়া হয়েছে';
+
+/**
  * Message namespaces that override quiet hours (`FR-NOT-07`).
  *
  * "Quiet hours for non-urgent notifications; emergency and queue events
@@ -107,31 +128,25 @@ const TEMPLATE_FOR: Partial<Record<QueueEvent['type'], TemplateKey>> = {
  * minutes: a "your bed is held until 11:30 PM" text deferred to seven in the
  * morning is a bed they lost while being told nothing.
  */
-const ALWAYS_OVERRIDES_QUIET_HOURS = new Set(['queue', 'booking', 'session', 'emergency', 'bed']);
-
-/** Dhaka local hours during which a non-urgent message waits. */
-const QUIET_FROM_HOUR = 22;
-const QUIET_UNTIL_HOUR = 7;
+// `payment` (plan H3): a hold is measured in minutes, as a bed's is.
+const ALWAYS_OVERRIDES_QUIET_HOURS = new Set([
+  'queue',
+  'booking',
+  'session',
+  'emergency',
+  'bed',
+  'payment',
+]);
 
 /**
- * Whether this message may go out now.
- *
- * Pure, and takes the instant, so a test does not need a clock at two in the
- * morning to prove it.
+ * Whether a message written at `at` waits for the end of quiet hours
+ * (`FR-NOT-07`). The hours are the domain's (`messaging/sending`), in Dhaka;
+ * what is exempt is decided above.
  */
 export function withinQuietHours(key: string, at: Date): boolean {
   const namespace = key.split('.')[0] ?? '';
   if (ALWAYS_OVERRIDES_QUIET_HOURS.has(namespace)) return false;
-
-  const hour = Number(
-    new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Asia/Dhaka',
-      hour: '2-digit',
-      hour12: false,
-    }).format(at),
-  );
-
-  return hour >= QUIET_FROM_HOUR || hour < QUIET_UNTIL_HOUR;
+  return inQuietHours(at.toISOString() as Timestamp);
 }
 
 /**
@@ -156,7 +171,11 @@ export function planFor(
     case 'PATIENT_NO_SHOW':
     case 'BOOKING_CANCELLED': {
       const bookingId = String(event.payload.bookingId);
-      return [{ bookingId, templateKey: key, params: {} }];
+      // A serial released because its payment never finished says why, in
+      // place of the plain cancellation (plan H3, `FR-PAY-08`).
+      const released =
+        event.type === 'BOOKING_CANCELLED' && event.payload.reason === PAYMENT_RELEASED_REASON;
+      return [{ bookingId, templateKey: released ? 'payment.released' : key, params: {} }];
     }
 
     // --- Addressed to everybody still waiting ------------------------------
@@ -243,6 +262,65 @@ export function planTwoAway(state: QueueState): readonly PlannedNotification[] {
   }));
 }
 
+/** The messages whose words give a patient a time to expect their turn. */
+const TELLS_A_TIME = new Set<TemplateKey>([
+  'queue.doctor_arrived',
+  'queue.delayed',
+  'queue.earlier',
+]);
+
+/**
+ * What a plan tells each booking about when (`FR-QUE-15`): the time in the
+ * last message of it that names one. The caller records these as told.
+ */
+export function timesTold(
+  plan: readonly PlannedNotification[],
+): readonly { readonly bookingId: string; readonly etaAt: string }[] {
+  const told = new Map<string, string>();
+  for (const planned of plan) {
+    const eta = planned.params['eta'];
+    if (TELLS_A_TIME.has(planned.templateKey) && eta !== undefined && eta !== '') {
+      told.set(planned.bookingId, eta);
+    }
+  }
+  return [...told].map(([bookingId, etaAt]) => ({ bookingId, etaAt }));
+}
+
+/**
+ * "Your turn may come sooner" (`FR-QUE-15`, plan F2c).
+ *
+ * For each waiting patient whose estimate is now earlier than the time they
+ * were last told by more than its band (`earlierThanTold`, the domain's own
+ * answer). Raised from the queue write that moved the estimate and written
+ * in its transaction, so no screen is shown the earlier time before the
+ * message exists: the broadcast goes out after the commit.
+ *
+ * Nobody is told twice by one write: a booking this plan already gives a
+ * time to (the doctor arrived, a delay was declared) has just been told.
+ * And nobody is told again for the same move, because what they were told
+ * becomes the new time.
+ */
+export function planEarlier(
+  state: QueueState,
+  etas: readonly Eta[],
+  told: ReadonlyMap<string, Date>,
+  plannedStart: Timestamp,
+  alreadyInPlan: readonly PlannedNotification[],
+): readonly PlannedNotification[] {
+  const justTold = new Set(timesTold(alreadyInPlan).map((entry) => entry.bookingId));
+  const toldAt = new Map<BookingId, Timestamp>(
+    [...told].map(([bookingId, at]) => [bookingId as BookingId, at.toISOString() as Timestamp]),
+  );
+
+  return earlierThanTold(state, etas, toldAt, plannedStart)
+    .filter((eta) => !justTold.has(eta.bookingId))
+    .map((eta) => ({
+      bookingId: eta.bookingId,
+      templateKey: 'queue.earlier' as const,
+      params: { eta: eta.etaAt },
+    }));
+}
+
 /**
  * The booking confirmation (`FR-PAT-22`, `FR-GST-05`).
  *
@@ -258,13 +336,25 @@ export function planTwoAway(state: QueueState): readonly PlannedNotification[] {
 export function planBookingConfirmed(
   bookingId: string,
   link: string | null,
+  /** Held for an online payment: `booking.held`, with the minutes (plan H3). */
+  heldMinutes: number | null = null,
 ): readonly PlannedNotification[] {
+  const linkParams: Record<string, string> =
+    link === null ? {} : { link, [LINK_PARAMS.kind]: 'booking' satisfies LinkKind };
   return [
-    {
-      bookingId,
-      templateKey: 'booking.confirmed',
-      params: link === null ? {} : { link },
-    },
+    heldMinutes === null
+      ? {
+          bookingId,
+          templateKey: 'booking.confirmed',
+          // What the link is for, so that one can be issued again for a
+          // confirmation sent from the stored row (`messageLink.service`).
+          params: linkParams,
+        }
+      : {
+          bookingId,
+          templateKey: 'booking.held',
+          params: { ...linkParams, minutes: String(heldMinutes) },
+        },
   ];
 }
 
@@ -340,6 +430,20 @@ export function forTheRecord(
   return { params: kept, body: render(template, shown) };
 }
 
+/**
+ * Notes, beside a link, the origin it is in: a hospital's own portal, or the
+ * network's app (`FR-BRD-04`). The link itself is not kept; a successor
+ * issued for the stored row goes to the same place.
+ */
+function withLinkOrigin(
+  params: Readonly<Record<string, string>>,
+): Readonly<Record<string, string>> {
+  const link = params['link'];
+  if (link === undefined || link === '') return params;
+  const origin = originOf(link);
+  return origin === null ? params : { ...params, [LINK_PARAMS.base]: origin };
+}
+
 /** One message decided on — who, how, in which words — and not yet written. */
 interface Draft {
   readonly recipient: notificationRepo.Recipient;
@@ -350,6 +454,11 @@ interface Draft {
   readonly params: Readonly<Record<string, string>>;
   /** Why it is not going out, or null. */
   readonly skipped: string | null;
+  /**
+   * Held for quiet hours until this moment, or null (`FR-NOT-07`). A held
+   * message is queued, not skipped: the sender sends it when it is due.
+   */
+  readonly heldUntil?: Date | null;
 }
 
 /**
@@ -368,8 +477,9 @@ async function writeOutbox(trx: Tx, drafts: readonly Draft[]): Promise<QueuedBat
       recipient: draft.recipient,
       channel: draft.channel,
       templateKey: draft.templateKey,
-      ...forTheRecord(draft.template, draft.params),
+      ...forTheRecord(draft.template, withLinkOrigin(draft.params)),
       skipped: draft.skipped,
+      heldUntil: draft.skipped === null ? (draft.heldUntil ?? null) : null,
     })),
   );
 
@@ -378,6 +488,9 @@ async function writeOutbox(trx: Tx, drafts: readonly Draft[]): Promise<QueuedBat
     messages: ids.flatMap((id, index) => {
       const draft = drafts[index];
       if (draft?.skipped !== null) return [];
+      // One held until morning is sent from its row when it is due: its words
+      // are not kept in memory overnight.
+      if (draft.heldUntil !== undefined && draft.heldUntil !== null) return [];
 
       return [
         {
@@ -462,7 +575,7 @@ export async function queueFor(
       const template = templates.get(`${planned.templateKey}|${channel}|${locale}`);
       if (template === undefined) continue;
 
-      const skipped = suppression({
+      const decided = suppression({
         channel,
         phone: recipient.phone,
         templateKey: planned.templateKey,
@@ -470,7 +583,7 @@ export async function queueFor(
         budgetLeft: smsBudgetLeft,
       });
 
-      if (skipped === null && channel === 'sms') smsBudgetLeft -= 1;
+      if (decided.skipped === null && channel === 'sms') smsBudgetLeft -= 1;
 
       drafts.push({
         recipient,
@@ -478,7 +591,7 @@ export async function queueFor(
         templateKey: planned.templateKey,
         template,
         params,
-        skipped,
+        ...decided,
       });
     }
   }
@@ -521,6 +634,8 @@ export async function queueSlotOffer(
      * put on the list, who is told to ring the counter.
      */
     readonly link?: string | null;
+    /** The place the link opens, so that one can be issued again (`messageLink.service`). */
+    readonly standby?: { readonly id: string; readonly subject: string };
   },
   at: Date = new Date(),
 ): Promise<QueuedBatch> {
@@ -534,7 +649,7 @@ export async function queueSlotOffer(
       templateKey: link === null ? 'queue.slot_offered' : 'queue.slot_offered_link',
       params: (numerals) => ({
         time: formatClock(input.expiresAt, numerals),
-        ...(link === null ? {} : { link }),
+        ...(link === null ? {} : { link, ...standbyLinkParams(input.standby) }),
       }),
     },
     at,
@@ -555,6 +670,8 @@ export async function queueSlotSeated(
     readonly phone: string;
     readonly serial: number;
     readonly link: string;
+    /** The place the link opens, so that one can be issued again (`messageLink.service`). */
+    readonly standby: { readonly id: string; readonly subject: string };
   },
   at: Date = new Date(),
 ): Promise<QueuedBatch> {
@@ -568,10 +685,23 @@ export async function queueSlotSeated(
       params: (numerals) => ({
         serial: formatSerial(input.serial, numerals),
         link: input.link,
+        ...standbyLinkParams(input.standby),
       }),
     },
     at,
   );
+}
+
+/** What a standby link is for, as the row keeps it. Empty where the caller did not say. */
+function standbyLinkParams(
+  standby: { readonly id: string; readonly subject: string } | undefined,
+): Record<string, string> {
+  if (standby === undefined) return {};
+  return {
+    [LINK_PARAMS.kind]: 'standby' satisfies LinkKind,
+    [LINK_PARAMS.standbyId]: standby.id,
+    [LINK_PARAMS.subject]: standby.subject,
+  };
 }
 
 /**
@@ -635,7 +765,7 @@ async function queueStandbyMessage(
       templateKey,
       template,
       params,
-      skipped: suppression({ channel, phone: recipient.phone, templateKey, at, budgetLeft }),
+      ...suppression({ channel, phone: recipient.phone, templateKey, at, budgetLeft }),
     });
   }
 
@@ -658,6 +788,8 @@ export async function queueBedRequestAnswer(
     readonly outcome: 'held' | 'declined';
     readonly holdExpiresAt: string | null;
     readonly link: string;
+    /** Whose request it is: the status token is theirs (`bedRequestLink.ts`). */
+    readonly subject: string;
   },
   at: Date = new Date(),
 ): Promise<QueuedBatch> {
@@ -678,6 +810,8 @@ export async function queueBedRequestAnswer(
     kind: isBedKindName(target.bedKind) ? bedKindName(target.bedKind, locale) : target.bedKind,
     time: input.holdExpiresAt === null ? '' : formatClock(input.holdExpiresAt, numerals),
     link: input.link,
+    [LINK_PARAMS.kind]: 'bed_request' satisfies LinkKind,
+    [LINK_PARAMS.subject]: input.subject,
   };
 
   const budgetLeft =
@@ -698,7 +832,7 @@ export async function queueBedRequestAnswer(
       templateKey,
       template,
       params,
-      skipped: suppression({ channel, phone: recipient.phone, templateKey, at, budgetLeft }),
+      ...suppression({ channel, phone: recipient.phone, templateKey, at, budgetLeft }),
     });
   }
 
@@ -741,6 +875,7 @@ export async function queueEmergencyAnswer(
     emergencyCaseId: input.caseId,
     hospital: locale === 'bn' ? target.hospitalNameBn : target.hospitalNameEn,
     link: input.link,
+    [LINK_PARAMS.kind]: 'emergency_case' satisfies LinkKind,
   };
 
   const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
@@ -756,7 +891,7 @@ export async function queueEmergencyAnswer(
       templateKey,
       template,
       params,
-      skipped: suppression({
+      ...suppression({
         channel,
         phone: recipient.phone,
         templateKey,
@@ -770,23 +905,31 @@ export async function queueEmergencyAnswer(
 }
 
 /**
- * Writes the report-ready notice into the outbox (`FR-LAB-03`, BACKEND.md §8:
- * "Report ready → `lab.report_ready` → push").
+ * Writes the report-ready notice into the outbox (`FR-LAB-03`, `FR-NOT-02`,
+ * `FR-NOT-03`, `FR-GST-06`; BACKEND.md §8; plan F2).
  *
- * **Push only, by the document.** §8's mapping gives this one channel and no
- * SMS, which is a product judgement this code follows rather than second-
- * guesses: a report is not a summons, and by the time this runs it is already
- * in the wallet. In this version every push is skipped with `no_device_token`
- * (no screen asks for notification permission yet), so the honest outcome is
- * a recorded row saying nobody was reached — while the delivery `FR-LAB-03`
- * actually promises has already happened, in the caller's transaction.
+ * **By SMS, and by push to a phone that has the app's token**, like every
+ * other material event. It was push only, and since no screen asks for
+ * notification permission every one was skipped with `no_device_token`: the
+ * report reached the wallet and nobody was told it had.
+ *
+ * It is not urgent, so it waits out quiet hours (`FR-NOT-07`): a report
+ * uploaded at night is queued, due at seven in the morning, and the sender
+ * sends it then (plan H1). Until that branch it was recorded as skipped and
+ * never sent.
+ * It counts against the hospital's monthly SMS cap like any other
+ * (`FR-NOT-06`).
  *
  * The notice names the test and the hospital and nothing else. A result on a
  * lock screen is read by whoever is holding the phone (`DB-P7`).
  */
 export async function queueReportReady(
   trx: Tx,
-  input: { readonly testOrderId: string },
+  input: {
+    readonly testOrderId: string;
+    /** Where the report is read: the patient app's Records page. No token in it. */
+    readonly link: string;
+  },
   at: Date = new Date(),
 ): Promise<QueuedBatch> {
   const target = await notificationRepo.reportRecipient(trx, input.testOrderId);
@@ -802,32 +945,34 @@ export async function queueReportReady(
     testOrderId: input.testOrderId,
     test: target.testName,
     hospital: locale === 'bn' ? target.hospitalNameBn : target.hospitalNameEn,
+    link: input.link,
+    [LINK_PARAMS.kind]: 'records' satisfies LinkKind,
   };
-
-  const template = templates.get(`${templateKey}|push|${locale}`);
-  if (template === undefined) return NOTHING;
 
   const budgetLeft =
     target.smsBudgetMonthly === null
       ? Number.POSITIVE_INFINITY
       : target.smsBudgetMonthly - (await notificationRepo.smsSentThisMonth(target.hospitalId, trx));
 
-  return await writeOutbox(trx, [
-    {
+  // `FR-NOT-02`: push and SMS to a phone with the app, SMS alone to one without.
+  const tokens = await notificationRepo.deviceTokensFor(recipient, trx);
+  const channels: ('sms' | 'push')[] = tokens.length > 0 ? ['push', 'sms'] : ['sms'];
+
+  const drafts: Draft[] = [];
+  for (const channel of channels) {
+    const template = templates.get(`${templateKey}|${channel}|${locale}`);
+    if (template === undefined) continue;
+    drafts.push({
       recipient,
-      channel: 'push',
+      channel,
       templateKey,
       template,
       params,
-      skipped: suppression({
-        channel: 'push',
-        phone: recipient.phone,
-        templateKey,
-        at,
-        budgetLeft,
-      }),
-    },
-  ]);
+      ...suppression({ channel, phone: recipient.phone, templateKey, at, budgetLeft }),
+    });
+  }
+
+  return await writeOutbox(trx, drafts);
 }
 
 function isBedKindName(kind: string): kind is BedKindName {
@@ -835,73 +980,101 @@ function isBedKindName(kind: string): kind is BedKindName {
 }
 
 /**
- * Sends what was queued. **Call this after the transaction has committed.**
+ * Hands what was queued to the sender. **Call this after the transaction has
+ * committed.**
  *
- * Never throws. A gateway that is down must not turn a successful queue action
- * into a failed HTTP request — the console tapped *next*, the patient moved,
- * and that happened whether or not an SMS did. The failure is recorded on the
- * row instead, which is where a retry will look for it.
+ * Returns at once: nothing a request does waits for a gateway (plan H1). The
+ * console tapped *next*, the patient moved, and that happened whether or not
+ * an SMS did, so the request answers and the sender sends
+ * (`notificationSender.service`), tries again when a gateway fails, and
+ * records on the row what became of each message.
+ *
+ * Never throws, and is `async` only because every caller awaits it.
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- awaited by every caller; see above
 export async function dispatch(batch: QueuedBatch): Promise<void> {
-  for (const message of batch.messages) {
-    try {
-      if (message.channel === 'sms') {
-        if (message.to === null) {
-          await notificationRepo.markNotSent(message.id, 'skipped', 'no_phone_number');
-          continue;
-        }
+  sender.hand(batch.messages);
+}
 
-        const result = await sms().send({
-          to: message.to,
-          body: message.body,
-          notificationId: message.id,
-          templateKey: message.templateKey,
-        });
+/**
+ * Resolves when what has been handed over has been tried.
+ *
+ * For a test that reads what a call caused, and for a shutdown. A message due
+ * later (a retry, a morning) is not waited for.
+ */
+export async function settled(): Promise<void> {
+  await sender.idle();
+}
 
-        if (result.ok) {
-          await notificationRepo.markSent(message.id, {
-            providerRef: result.providerRef,
-            costPoisha: result.costPoisha,
-          });
-        } else {
-          await notificationRepo.markNotSent(message.id, 'failed', result.error);
-        }
-        continue;
-      }
+/** Whether a delivery receipt is the aggregator's. An adapter that cannot check one believes none. */
+export function verifyReceiptSignature(rawBody: string, signature: string | undefined): boolean {
+  return sms().verifyReceipt?.(rawBody, signature) ?? false;
+}
 
-      const tokens = await notificationRepo.deviceTokensFor(message.recipient);
-      const result = await push().send({
-        tokens,
-        body: message.body,
-        notificationId: message.id,
-        templateKey: message.templateKey,
-        url: null,
-      });
+/** The longest reason kept from a receipt. An aggregator's free text is not ours to trust for length. */
+const RECEIPT_REASON_MAX = 80;
 
-      if (result.ok) {
-        await notificationRepo.markSent(message.id, {
-          providerRef: result.providerRef,
-          costPoisha: null,
-        });
-      } else {
-        // A recipient with no registered device is not a failure to retry; it
-        // is a person who has not installed the app.
-        await notificationRepo.markNotSent(
-          message.id,
-          result.error === 'no_device_token' ? 'skipped' : 'failed',
-          result.error,
-        );
-      }
-    } catch (error: unknown) {
-      logger.error(
-        { err: error, notificationId: message.id, templateKey: message.templateKey },
-        'notification dispatch failed',
-      );
-      await notificationRepo
-        .markNotSent(message.id, 'failed', 'dispatch_threw')
-        .catch(() => undefined);
-    }
+/**
+ * A delivery receipt (`POST /webhooks/sms-dlr`; `FR-NOT-06`, plan H2).
+ *
+ * The signature is checked before this is called; by here the receipt is
+ * known to be the aggregator's. What remains is to read it in the adapter's
+ * own vocabulary and record it, once: an aggregator sends the same receipt
+ * again when it is not answered, and a second one changes nothing.
+ *
+ * A message reported undelivered is `failed`, with the aggregator's reason
+ * after `undelivered:`. It is not tried again: the aggregator took it, was
+ * paid for it, and has said it will not arrive; a second SMS is a second
+ * charge for the same answer.
+ *
+ * @returns `recognised` false for a body the adapter cannot read; `applied`
+ *   true when a row changed.
+ */
+export async function applyDeliveryReceipt(
+  body: unknown,
+): Promise<{ readonly recognised: boolean; readonly applied: boolean }> {
+  const receipt = sms().readReceipt?.(body) ?? null;
+  if (receipt === null) return { recognised: false, applied: false };
+  if (receipt.outcome === 'pending') return { recognised: true, applied: false };
+
+  const reason = (receipt.reason ?? 'no_reason_given')
+    .replace(/[^\x20-\x7E]/g, '')
+    .slice(0, RECEIPT_REASON_MAX);
+  const { providerRef, outcome } = receipt;
+  // The aggregator's word, once its signature has checked out: the server's
+  // own work, since the request is nobody's and nobody reads a message
+  // (migration 0056).
+  const applied = await runInDbScope(
+    { kind: 'system' },
+    async () =>
+      await notificationRepo.applyReceipt(
+        providerRef,
+        outcome,
+        `undelivered:${reason === '' ? 'no_reason_given' : reason}`,
+      ),
+  );
+  return { recognised: true, applied };
+}
+
+/**
+ * A hospital's SMS this month, for its own administrator (`FR-NOT-06`: "budget
+ * caps and delivery reporting").
+ *
+ * `reportsDelivery` says whether "delivered" means anything here: with a
+ * provider that sends no receipts it is unknown, not nought, and the screen
+ * says that and shows no count (`PRD.md` §3.2).
+ */
+export async function monthOfMessages(hospitalId: string): Promise<
+  notificationRepo.MonthOfMessages & {
+    readonly reportsDelivery: boolean;
+    readonly asOf: string;
   }
+> {
+  return {
+    ...(await notificationRepo.monthOfMessages(hospitalId)),
+    reportsDelivery: sms().reportsDelivery === true,
+    asOf: new Date().toISOString(),
+  };
 }
 
 /** How long a message's words are kept (DATABASE.md §8). */
@@ -945,24 +1118,42 @@ export async function clearExpiredBodies(): Promise<number> {
   }
 }
 
-/** Why this message is not going out, or null. */
+/**
+ * Whether a message goes now, waits for the morning, or is not sent, and why.
+ *
+ * Not sent is a decision this system made and will not revisit: there is no
+ * number, or the hospital is past its monthly cap (`FR-NOT-06`), and the row
+ * says which. **Held is not that.** A message that is not urgent and falls in
+ * quiet hours (`FR-NOT-07`) is queued and due when they end; the sender sends
+ * it then. It used to be written as skipped, and nothing ever sent it.
+ *
+ * The cap is asked when the message is written, held or not. One held
+ * overnight is counted against the month it is sent in, so a hospital at its
+ * cap can go past it by what it held; the cap is a cost control and that is a
+ * handful of messages, not a bill.
+ */
 function suppression(input: {
   readonly channel: 'sms' | 'push';
   readonly phone: string | null;
   readonly templateKey: string;
   readonly at: Date;
   readonly budgetLeft: number;
-}): string | null {
-  if (withinQuietHours(input.templateKey, input.at)) return 'quiet_hours';
-
+}): { readonly skipped: string | null; readonly heldUntil: Date | null } {
   if (input.channel === 'sms') {
-    if (input.phone === null) return 'no_phone_number';
+    if (input.phone === null) return { skipped: 'no_phone_number', heldUntil: null };
     // `FR-NOT-06`: a hospital past its monthly cap stops sending rather than
     // running up a bill nobody agreed to.
-    if (input.budgetLeft <= 0) return 'sms_budget_exhausted';
+    if (input.budgetLeft <= 0) return { skipped: 'sms_budget_exhausted', heldUntil: null };
   }
 
-  return null;
+  if (withinQuietHours(input.templateKey, input.at)) {
+    return {
+      skipped: null,
+      heldUntil: new Date(endOfQuietHours(input.at.toISOString() as Timestamp)),
+    };
+  }
+
+  return { skipped: null, heldUntil: null };
 }
 
 /**
@@ -1008,6 +1199,9 @@ function paramsFor(
     // words, because a patient reading both must not see them disagree.
     eta: eta === undefined || eta === '' ? tp('etaUnknown', locale) : formatClock(eta, numerals),
     link: planned.params['link'] ?? '',
+    ...(planned.params[LINK_PARAMS.kind] === undefined
+      ? {}
+      : { [LINK_PARAMS.kind]: planned.params[LINK_PARAMS.kind] ?? '' }),
   };
 }
 

@@ -16,10 +16,13 @@ import { sql } from 'kysely';
 import { db } from '../config/db.js';
 
 import { todaysChambers } from './chamber.repo.js';
+import { listDesks, type DeskRow } from './hospitalSettings.repo.js';
 
 /** A chamber a demo console can open. */
 export interface DemoSessionRow {
   readonly id: string;
+  /** What a reception desk is assigned (`FR-REC-32`). */
+  readonly doctorId: string;
   readonly doctorNameBn: string;
   readonly doctorNameEn: string;
   readonly departmentNameBn: string;
@@ -43,6 +46,8 @@ export interface DemoConsoleRow {
   readonly district: string;
   readonly roles: readonly string[];
   readonly sessions: readonly DemoSessionRow[];
+  /** Its reception desks and their doctors (`FR-REC-32`, plan R4). */
+  readonly desks: readonly DeskRow[];
 }
 
 /**
@@ -89,6 +94,10 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
   `.execute(db);
 
   const sessions = await todaysChambers(null);
+  const desks = await Promise.all(
+    hospitals.rows.map(async (row) => [row.hospital_id, await listDesks(row.hospital_id)] as const),
+  );
+  const desksOf = new Map(desks);
 
   const byHospital = new Map<string, DemoSessionRow[]>();
   for (const { hospitalId, ...session } of sessions) {
@@ -106,6 +115,7 @@ export async function listConsoles(): Promise<DemoConsoleRow[]> {
         district: row.district,
         roles: [...row.roles].sort(),
         sessions: byHospital.get(row.hospital_id) ?? [],
+        desks: desksOf.get(row.hospital_id) ?? [],
       }))
       // A facility is worth opening if a chamber sits there today, or if it
       // staffs a console that belongs to the building rather than to a

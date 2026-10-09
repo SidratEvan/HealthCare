@@ -16,6 +16,7 @@ import { measuredConsultSeconds, time, UNDO_WINDOW_SECONDS } from '@platform/dom
 import type { QueueActor } from '@platform/domain';
 
 import { AppError, forbiddenScope, notFound } from '../errors/AppError.js';
+import { assertDeskAllows } from '../services/deskAccess.service.js';
 import * as queueService from '../services/queue.service.js';
 
 import type {
@@ -446,8 +447,9 @@ export async function acceptOffer(req: Request, res: Response): Promise<void> {
 /**
  * `GET /sessions/:id/standby` — who is waiting, and what has been offered.
  *
- * Expires anything whose window has closed before answering. Nothing runs on a
- * timer in this version, so this read *is* the sweep (`expireLapsedOffers`):
+ * Expires anything whose window has closed before answering
+ * (`expireLapsedOffers`). A timer does the same every thirty seconds
+ * (`queueTimers.service`, plan H1b); this covers the seconds between, because
  * the console asking "what is outstanding" is exactly the moment the answer
  * needs to be current, and an offer already unacceptable by the clock should
  * not be shown as live.
@@ -565,6 +567,9 @@ async function assertSessionScope(req: Request, sessionId: string): Promise<Sess
     throw forbiddenScope({ reason: 'wrong_hospital' });
   }
 
+  // `FR-REC-32` (question 20): a receptionist at a desk manages its doctors only.
+  await assertDeskAllows(principal, session);
+
   return session;
 }
 
@@ -578,7 +583,19 @@ async function assertSessionScope(req: Request, sessionId: string): Promise<Sess
 export async function assertBookingScope(
   req: Request,
 ): Promise<{ booking: BookingSummary; sessionId: string }> {
-  const bookingId = param(req, 'id');
+  return await assertBookingScopeFor(req, param(req, 'id'));
+}
+
+/**
+ * The same rule for a route that names its booking in the body
+ * (`POST /payments/intent`, BACKEND.md §7.7). Until the tenant matrix of plan
+ * B2 that route asked it of a tracking link only, and an account could start
+ * a payment against anybody's booking.
+ */
+export async function assertBookingScopeFor(
+  req: Request,
+  bookingId: string,
+): Promise<{ booking: BookingSummary; sessionId: string }> {
   const booking = await queueService.requireBooking(bookingId);
 
   const session = await assertSessionScope(req, booking.sessionId);

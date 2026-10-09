@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "_comment": "Emits the API as JavaScript to dist/ (plan I1, BACKEND.md §12b). `compiled` makes @platform/domain and @platform/i18n resolve to their own dist/, here and at run time (`node --conditions=compiled`), so nothing of theirs is compiled twice or read as TypeScript by the running server.",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "customConditions": ["compiled"]
+  },
+  "exclude": ["src/**/__tests__/**", "node_modules", "dist"]
+}

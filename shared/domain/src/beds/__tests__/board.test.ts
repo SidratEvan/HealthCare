@@ -12,6 +12,8 @@ import { describe, expect, it } from 'vitest';
 import { timestamp, type DhakaDate } from '../../types/ids.js';
 import {
   applyLocal,
+  boardAfterRead,
+  newestBeds,
   canApply,
   canForecastDischarge,
   canReceiveTransfer,
@@ -41,6 +43,7 @@ function bed(overrides: Partial<BedView> = {}): BedView {
     oosReason: null,
     admissionId: null,
     heldForRequestId: null,
+    version: 1,
     ...overrides,
   };
 }
@@ -209,5 +212,58 @@ describe('applyLocal — the console before the server answers', () => {
     const board = [occupied()];
     expect(applyLocal(board, { bedId: 'bed-301', action: 'admit', at: NOW })).toBe(board);
     expect(applyLocal(board, { bedId: 'no-such-bed', action: 'discharge', at: NOW })).toBe(board);
+  });
+});
+
+describe('which statement about a bed is the newer one (SY-09)', () => {
+  const a1 = bed({ id: 'bed-a', version: 1 });
+  const a2 = bed({ id: 'bed-a', version: 2, state: 'cleaning' });
+  const a3 = bed({ id: 'bed-a', version: 3, state: 'free' });
+  const b1 = bed({ id: 'bed-b', version: 1 });
+
+  it('takes a statement with a higher version', () => {
+    expect(newestBeds([a1, b1], [a2])).toEqual([a2, b1]);
+  });
+
+  it('keeps what it holds when an older statement arrives after a newer one', () => {
+    // N+1 then N: the broadcast for the first change is delivered after the
+    // answer to the second. The bed does not step back.
+    const afterNewer = newestBeds([a1, b1], [a3]);
+    expect(newestBeds(afterNewer, [a2])).toEqual([a3, b1]);
+  });
+
+  it('keeps the very object it holds for an equal version, so nothing redraws', () => {
+    const held = [a2, b1];
+    const same = bed({ id: 'bed-a', version: 2, state: 'cleaning' });
+    expect(newestBeds(held, [same])[0]).toBe(a2);
+  });
+
+  it('adds a bed it has not seen', () => {
+    expect(newestBeds([a1], [b1])).toEqual([a1, b1]);
+  });
+
+  it('ends on the same board whatever order three statements arrive in', () => {
+    const orders = [
+      [a1, a2, a3],
+      [a1, a3, a2],
+      [a2, a1, a3],
+      [a2, a3, a1],
+      [a3, a1, a2],
+      [a3, a2, a1],
+    ];
+    for (const order of orders) {
+      const board = order.reduce<BedView[]>((held, next) => newestBeds(held, [next]), [b1]);
+      expect(board.find((entry) => entry.id === 'bed-a')).toEqual(a3);
+    }
+  });
+
+  it('a read of the whole board is every bed there is, and still not newer than a statement', () => {
+    // The read was answered from before the change the board already has.
+    expect(boardAfterRead([a3, b1], [a2, b1])).toEqual([a3, b1]);
+    // A read that is ahead is taken.
+    expect(boardAfterRead([a1, b1], [a2, b1])).toEqual([a2, b1]);
+    // A bed the read does not list is gone; one it adds is there.
+    expect(boardAfterRead([a1, b1], [a1])).toEqual([a1]);
+    expect(boardAfterRead([a1], [a1, b1])).toEqual([a1, b1]);
   });
 });

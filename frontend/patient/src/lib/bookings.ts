@@ -141,6 +141,81 @@ export function rememberBooking(booking: SavedBooking): void {
   }
 }
 
+/**
+ * Whether a chamber's planned start is today or on an earlier day, in Dhaka.
+ * The one question `DatedBooking` answers, for a booking that did not come
+ * from this phone's own list (an account's, from the server; plan F1).
+ */
+export function dayOf(plannedStart: string): {
+  readonly isToday: boolean;
+  readonly isPast: boolean;
+} {
+  const today = dhakaDate(new Date());
+  const day = dhakaDate(new Date(plannedStart));
+  return { isToday: day === today, isPast: day < today };
+}
+
+// ---------------------------------------------------------------------------
+// Links this phone holds for an account's bookings (plan F1)
+// ---------------------------------------------------------------------------
+//
+// A signed-in patient's serials are listed by the server, on any phone. Opening
+// one's live screen takes a tracking link, and a link is given once: only its
+// hash is kept (`FR-GST-05`). So a phone that asked for one keeps it, beside
+// the bookings it made itself, and does not ask again. What is kept is what an
+// SMS on the same phone already holds, for one booking, until it runs out.
+
+const LINKS_KEY = 'patient.bookings.links';
+
+/** As many as My serials lists; the oldest goes first. */
+const LINKS_KEPT = 100;
+
+function readLinks(): Record<string, string> {
+  try {
+    const raw = globalThis.localStorage?.getItem(LINKS_KEY);
+    const parsed: unknown = raw === null || raw === undefined ? {} : JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The link token this phone holds for a booking, from either list; null for none. */
+export function linkHeldFor(bookingId: string): string | null {
+  const own = recentBookings().find((entry) => entry.bookingId === bookingId);
+  if (own !== undefined && own.token !== '') return own.token;
+  const held = readLinks()[bookingId];
+  return typeof held === 'string' && held !== '' ? held : null;
+}
+
+/** Keeps a link this phone was given for one of the account's bookings. */
+export function rememberLink(bookingId: string, token: string): void {
+  try {
+    const links = Object.entries({ ...readLinks(), [bookingId]: token });
+    globalThis.localStorage?.setItem(
+      LINKS_KEY,
+      JSON.stringify(Object.fromEntries(links.slice(-LINKS_KEPT))),
+    );
+  } catch {
+    // A phone that cannot remember asks again next time.
+  }
+}
+
+/** Forgets every kept link: at sign-out, they were that account's. */
+export function forgetLinks(): void {
+  try {
+    globalThis.localStorage?.removeItem(LINKS_KEY);
+  } catch {
+    // Nothing was kept that could be forgotten.
+  }
+}
+
+/** Where a booking's live screen opens: with the link this phone holds, or asking for one. */
+export function liveUrlFor(bookingId: string): string {
+  const token = linkHeldFor(bookingId);
+  return token === null ? `/s?b=${bookingId}` : `/s?b=${bookingId}&t=${encodeURIComponent(token)}`;
+}
+
 /** The calendar day of an instant in Dhaka, `YYYY-MM-DD`. */
 function dhakaDate(at: Date): string {
   if (Number.isNaN(at.getTime())) return '';

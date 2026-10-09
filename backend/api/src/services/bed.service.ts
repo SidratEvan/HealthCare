@@ -47,8 +47,8 @@ import {
   type WardView,
 } from '@platform/domain';
 
-import { signToken, verifyToken } from '../config/jwt.js';
-import { patientLink } from '../config/links.js';
+import { runInDbScope } from '../config/dbScope.js';
+import { verifyToken } from '../config/jwt.js';
 import { AppError, forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
 import * as bedRepo from '../repositories/bed.repo.js';
@@ -58,7 +58,9 @@ import * as guestRepo from '../repositories/guest.repo.js';
 import * as referralRepo from '../repositories/referral.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
+import { bedRequestToken, bedRequestUrl } from './bedRequestLink.js';
 import * as emergency from './emergency.service.js';
+import * as modules from './modules.service.js';
 import * as notifications from './notification.service.js';
 
 import type { BedRow, BedRequestRow, BedRequestState } from '../repositories/bed.repo.js';
@@ -459,6 +461,8 @@ export async function createRequest(input: {
   readonly idempotencyKey: string | null;
 }): Promise<CreatedRequest> {
   if (!(await bedRepo.hospitalExists(input.hospitalId))) throw notFound('hospital');
+  // A hospital that does not run beds takes no request for one (`FR-BRD-11`).
+  await modules.requireOn(input.hospitalId, 'beds');
 
   // A request for a kind of bed the hospital does not have is a family told
   // "we'll let you know" by a ward that cannot say yes.
@@ -467,40 +471,48 @@ export async function createRequest(input: {
     throw validationFailed({ field: 'bedKind', reason: 'not_offered_here' });
   }
 
-  const filed = await withTransaction(async (trx) => {
-    const guestId = await guestRepo.findOrCreateIdentity(trx, {
-      phone: input.patient.phone,
-      displayName: input.patient.name,
-    });
-    const patientId = await guestRepo.findOrCreatePatient(trx, {
-      guestId,
-      fullName: input.patient.name,
-      ageYears: input.patient.ageYears,
-      sex: input.patient.sex,
-      phone: input.patient.phone,
-    });
+  // Filed as the server's own work (migration 0056): the request is nobody's,
+  // and finding which profile a number already has reads profiles nobody may
+  // read. The number is the one the form gave, proved where a deployment asks
+  // for that (`FR-GST-03`).
+  const filed = await runInDbScope(
+    { kind: 'system' },
+    async () =>
+      await withTransaction(async (trx) => {
+        const guestId = await guestRepo.findOrCreateIdentity(trx, {
+          phone: input.patient.phone,
+          displayName: input.patient.name,
+        });
+        const patientId = await guestRepo.findOrCreatePatient(trx, {
+          guestId,
+          fullName: input.patient.name,
+          ageYears: input.patient.ageYears,
+          sex: input.patient.sex,
+          phone: input.patient.phone,
+        });
 
-    // A second tap on the same button is the same request (`bed_requests_one_open_key`).
-    const existing = await bedRepo.findExistingRequest(trx, {
-      idempotencyKey: input.idempotencyKey,
-      patientId,
-      hospitalId: input.hospitalId,
-    });
-    if (existing !== null) return { request: existing, guestId, duplicate: true };
+        // A second tap on the same button is the same request (`bed_requests_one_open_key`).
+        const existing = await bedRepo.findExistingRequest(trx, {
+          idempotencyKey: input.idempotencyKey,
+          patientId,
+          hospitalId: input.hospitalId,
+        });
+        if (existing !== null) return { request: existing, guestId, duplicate: true };
 
-    const request = await bedRepo.insertRequest(trx, {
-      hospitalId: input.hospitalId,
-      patientId,
-      bedKind: input.bedKind,
-      guestId,
-      note: input.note,
-      expectedArrivalAt: input.expectedArrivalAt,
-      idempotencyKey: input.idempotencyKey,
-    });
-    return { request, guestId, duplicate: false };
-  });
+        const request = await bedRepo.insertRequest(trx, {
+          hospitalId: input.hospitalId,
+          patientId,
+          bedKind: input.bedKind,
+          guestId,
+          note: input.note,
+          expectedArrivalAt: input.expectedArrivalAt,
+          idempotencyKey: input.idempotencyKey,
+        });
+        return { request, guestId, duplicate: false };
+      }),
+  );
 
-  const token = await statusToken(filed.request.id, filed.guestId);
+  const token = await bedRequestToken(filed.request.id, filed.guestId);
   const serverTs = new Date().toISOString();
 
   if (!filed.duplicate) {
@@ -514,7 +526,7 @@ export async function createRequest(input: {
   return {
     request: await requestView(filed.request.id),
     token,
-    trackUrl: trackUrlFor(token),
+    trackUrl: bedRequestUrl(token),
     duplicate: filed.duplicate,
   };
 }
@@ -629,9 +641,8 @@ export async function respond(
 
   const result = await run(bedIds, input, actor, async (trx, locked) => {
     const current = await pendingRequest(trx, requestId, actor);
-    const link = trackUrlFor(
-      await statusToken(current.id, current.requestedByGuestId ?? current.patientId),
-    );
+    const subject = current.requestedByGuestId ?? current.patientId;
+    const link = bedRequestUrl(await bedRequestToken(current.id, subject));
 
     switch (input.action) {
       case 'hold': {
@@ -669,6 +680,7 @@ export async function respond(
             outcome: 'held',
             holdExpiresAt: until.toISOString(),
             link,
+            subject,
           }),
         };
       }
@@ -713,6 +725,7 @@ export async function respond(
             outcome: 'declined',
             holdExpiresAt: null,
             link,
+            subject,
           }),
         };
       }
@@ -789,7 +802,12 @@ async function run(
 
   // --- 5. Publish, after commit ----------------------------------------------
   if (changed.batch !== undefined) await notifications.dispatch(changed.batch);
-  const result = await publish(actor.hospitalId, changed.bedIds, changed.requests);
+  const result = await publish(
+    actor.hospitalId,
+    changed.bedIds,
+    changed.requests,
+    envelope.clientEventId,
+  );
   for (const caseId of changed.cases ?? []) await emergency.publishCase(caseId);
   return result;
 }
@@ -1024,6 +1042,8 @@ async function publish(
   hospitalId: string,
   bedIds: readonly string[],
   requestIds: readonly string[],
+  /** The console action behind this, by the console's own key, when there was one (`SY-09`). */
+  clientEventId: string | null = null,
 ): Promise<BedActionResult> {
   const [beds, published] = await Promise.all([
     currentBeds(hospitalId, bedIds),
@@ -1031,7 +1051,10 @@ async function publish(
   ]);
   const serverTs = new Date().toISOString();
 
-  if (beds.length > 0) emit.bedUpdated(hospitalId, { beds }, serverTs);
+  // Each bed carries its version, and the broadcast names the action: a board
+  // keeps the highest version it has been told, and takes its own drawing of
+  // the action off at the first statement that names it (`SY-09`).
+  if (beds.length > 0) emit.bedUpdated(hospitalId, { beds, clientEventId }, serverTs);
   if (published !== null) emit.capacityUpdated(hospitalId, published, serverTs);
 
   for (const requestId of new Set(requestIds)) {
@@ -1071,18 +1094,6 @@ async function requestView(requestId: string): Promise<RequestView> {
     state: lapsed ? 'expired' : status.state,
     serverTs: new Date().toISOString(),
   };
-}
-
-async function statusToken(requestId: string, subject: string): Promise<string> {
-  return await signToken({
-    kind: 'bed_request',
-    claims: { sub: subject, kind: 'guest', bedRequestId: requestId },
-  });
-}
-
-/** The family's status page in the patient app. */
-function trackUrlFor(token: string): string {
-  return patientLink('/beds/request', { t: token });
 }
 
 function guard(bed: BedRow, action: BedAction, context: BedActionContext = {}): void {
@@ -1134,6 +1145,7 @@ function toView(bed: BedRow): BedView {
     oosReason: bed.oosReason,
     admissionId: bed.admissionId,
     heldForRequestId: bed.heldForRequestId,
+    version: bed.version,
   };
 }
 

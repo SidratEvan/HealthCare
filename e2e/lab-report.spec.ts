@@ -119,6 +119,13 @@ async function enterConsole(page: Page, token: string, role: string, url: string
 
 test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
   test('doctor ticks a test, bench reports it, wallet opens it', async ({ page, context }) => {
+    // One journey across three apps: the patient books, the doctor's screen
+    // and the lab bench each open in a console, the patient reads the wallet.
+    // Each console's first visit compiles its page on a dev server, and on a
+    // machine short of memory the whole walk took from fifty seconds to two
+    // minutes on the same commit (7 October). Like the other walks across
+    // apps in this suite, it is given two minutes.
+    test.setTimeout(120_000);
     if (ASSESSMENT === undefined) throw new Error('the seed declares no assessments');
 
     // --- the patient books, and this device keeps the link -----------------
@@ -204,9 +211,18 @@ test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
 
     // Tapping mints a fresh signed URL and opens it. The new tab is what the
     // patient gets, and it has to be the file rather than a 404.
-    const [opened] = await Promise.all([context.waitForEvent('page'), open.click()]);
-    await opened.waitForLoadState('domcontentloaded');
-    expect(opened.url()).toContain('/files/');
+    // A headless browser takes a PDF tab as a download, so the request the tab
+    // makes is what is caught, and the file is fetched again to prove it.
+    const [requested] = await Promise.all([
+      context.waitForEvent('request', (request) => request.url().includes('/files/')),
+      open.click(),
+    ]);
+    // On the API, where the file is served: opened as it came, it was the
+    // patient app's own address and a page that does not exist (plan R3).
+    expect(requested.url()).toContain('/api/v1/files/');
+    const file = await page.request.get(requested.url());
+    expect(file.status()).toBe(200);
+    expect(file.headers()['content-type']).toContain('application/pdf');
   });
 
   test('a test still on the bench says so, rather than saying no reports', async ({

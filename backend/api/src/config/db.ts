@@ -10,10 +10,11 @@
  */
 
 import { Kysely, PostgresDialect, type LogEvent } from 'kysely';
-import { Pool, types } from 'pg';
+import { Pool, types, type PoolClient } from 'pg';
 
 import { env, isProduction } from '../env.js';
 
+import { currentDbScope, statementOf } from './dbScope.js';
 import { logger } from './logger.js';
 
 import type { Database } from './schema.js';
@@ -62,8 +63,52 @@ pool.on('error', (error) => {
   logger.error({ err: error }, 'idle database client error');
 });
 
+/** What each connection was last told it is working for. */
+const stated = new WeakMap<PoolClient, string>();
+
+/**
+ * Takes a connection and states on it who it is working for
+ * (`config/dbScope.ts`, migration 0043, `FR-SEC-11`).
+ *
+ * Before anything else runs on it, every time it leaves the pool: a
+ * connection last used for one hospital must never serve another under the
+ * first one's name. The statement is for the session, not the transaction, so
+ * that it holds for a single query and for a transaction alike; it is skipped
+ * only when the connection already says exactly this, which on a server with
+ * one hospital is nearly always.
+ *
+ * A connection the scope could not be stated on is destroyed, not returned:
+ * it must not be used saying something else.
+ */
+async function connectScoped(): Promise<PoolClient> {
+  const client = await pool.connect();
+  const saying = statementOf(currentDbScope());
+  const key = `${saying.scope}|${saying.hospitalId}|${saying.personId}|${saying.bookingId}`;
+  if (stated.get(client) === key) return client;
+
+  try {
+    // All four, every time: a connection last used for one person must not
+    // keep that person's id under the next one's scope.
+    await client.query(
+      "SELECT set_config('app.scope', $1, false), set_config('app.hospital_id', $2, false), " +
+        "set_config('app.person_id', $3, false), set_config('app.booking_id', $4, false)",
+      [saying.scope, saying.hospitalId, saying.personId, saying.bookingId],
+    );
+    stated.set(client, key);
+    return client;
+  } catch (error) {
+    client.release(error instanceof Error ? error : true);
+    throw error;
+  }
+}
+
 export const db = new Kysely<Database>({
-  dialect: new PostgresDialect({ pool }),
+  dialect: new PostgresDialect({
+    // Kysely asks for a connection through this, and only this.
+    // `options` is the pool's own: Kysely reads it to open the side
+    // connection a cancelled query is cancelled on.
+    pool: { connect: connectScoped, end: async () => await pool.end(), options: pool.options },
+  }),
   log: (event: LogEvent) => {
     if (event.level === 'error') {
       // The SQL is logged, the parameters are not: they carry phone numbers,

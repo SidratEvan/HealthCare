@@ -17,6 +17,8 @@ import { io, type Socket } from 'socket.io-client';
 
 import type { Eta, QueueState } from '@platform/domain';
 
+import { reconnectIfDropped } from './reconnect.js';
+
 /**
  * How long before a live figure is called stale.
  *
@@ -41,7 +43,19 @@ export interface SessionChannelOptions {
   readonly url: string;
   readonly sessionId: string;
   readonly getToken: () => string | null;
-  readonly onSnapshot: (snapshot: SessionSnapshot) => void;
+  /**
+   * Called with the snapshot to show and, when the statement behind it named
+   * any, the console actions it has just taken in (`SY-08`). Both are handed
+   * over in one call so that a console can stop drawing an action of its own
+   * in the same redraw that shows the queue containing it.
+   */
+  readonly onSnapshot: (snapshot: SessionSnapshot, applied?: readonly AppliedAction[]) => void;
+  /**
+   * A console's own actions the server has not yet answered, asked for at
+   * each subscribe (`SY-08`). The catch-up names those the log already holds,
+   * so an answer lost on the way is settled by the socket alone.
+   */
+  readonly unanswered?: () => readonly string[];
   /** Raised when the server refuses something, e.g. a scope failure. */
   readonly onError?: (code: string, message: string) => void;
   readonly staleAfterMs?: number;
@@ -54,11 +68,52 @@ export interface SessionChannelOptions {
   readonly initial?: Omit<SessionSnapshot, 'connected'>;
 }
 
+/**
+ * One console action a statement of the queue contains (`SY-08`): the
+ * console's own key for it, and the sequence and event the log gave it.
+ */
+export interface AppliedAction {
+  readonly clientEventId: string;
+  readonly seq: number;
+  readonly eventId: string;
+}
+
 /** A `queue.updated` as the server sends it. */
 export interface QueueUpdatedMessage {
   readonly seq: number;
   readonly serverTs: string;
+  /** The actions this statement has just taken in. Absent from an older server. */
+  readonly applied?: readonly AppliedAction[];
   readonly data: { readonly state: QueueState; readonly etas: readonly Eta[] };
+}
+
+/** The most keys a subscribe asks about; the server reads no more. */
+export const MAX_UNANSWERED = 500;
+
+/**
+ * Takes one statement of the queue: what to show, and what it named.
+ *
+ * A statement older than the queue already held is not shown (`foldUpdate`),
+ * but what it names is still reported. The queue held is newer than the
+ * statement, so it already contains every action the statement names, and a
+ * console may stop drawing them: the rule is "the first statement that names
+ * the action" (`SY-08`), not "the first that is also the newest".
+ */
+export function takeStatement(
+  snapshot: SessionSnapshot,
+  stateSeq: number,
+  message: QueueUpdatedMessage,
+): {
+  readonly snapshot: SessionSnapshot;
+  readonly stateSeq: number;
+  /** False when the statement was older than what is held and changed nothing on screen. */
+  readonly shown: boolean;
+  readonly applied: readonly AppliedAction[];
+} {
+  const applied = message.applied ?? [];
+  const folded = foldUpdate(snapshot, stateSeq, message);
+  if (folded === null) return { snapshot, stateSeq, shown: false, applied };
+  return { snapshot: folded.snapshot, stateSeq: folded.stateSeq, shown: true, applied };
 }
 
 /**
@@ -173,18 +228,28 @@ export function openSessionChannel(options: SessionChannelOptions): {
     reconnectionDelayMax: 10_000,
   });
 
+  /** Set by `close`: a channel its owner has closed is never reopened. */
+  let closed = false;
+
   socket.on('connect', () => {
     publish({ connected: true });
     // The resume handshake: tell the server how far we got and receive what
     // followed, in order, before any live event (`SY-01`). On a first connect
     // `lastSeq` is 0 and the server sends the state instead.
+    const unanswered = (options.unanswered?.() ?? []).slice(0, MAX_UNANSWERED);
     socket.emit('session:subscribe', {
       sessionId: options.sessionId,
       lastSeq: snapshot.lastSeq > 0 ? snapshot.lastSeq : undefined,
+      ...(unanswered.length === 0 ? {} : { unanswered }),
     });
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    // A close the server asked for is tried once more with the credential now
+    // held: a console given a new sign-in comes back, a revoked one is refused
+    // (`reconnect.ts`, `FR-SEC-06`).
+    reconnectIfDropped(socket, reason, () => closed);
+
     // The state stays on screen. A console that blanks when the wifi drops is
     // useless precisely when a receptionist most needs the queue in front of
     // her — the freshness line is what tells her it has stopped moving
@@ -193,11 +258,12 @@ export function openSessionChannel(options: SessionChannelOptions): {
   });
 
   const fold = (message: QueueUpdatedMessage): void => {
-    const folded = foldUpdate(snapshot, stateSeq, message);
-    if (folded === null) return;
-    stateSeq = folded.stateSeq;
-    snapshot = folded.snapshot;
-    options.onSnapshot(snapshot);
+    const taken = takeStatement(snapshot, stateSeq, message);
+    // Nothing new to show and nothing named: a duplicate, and nobody is told.
+    if (!taken.shown && taken.applied.length === 0) return;
+    stateSeq = taken.stateSeq;
+    snapshot = taken.snapshot;
+    options.onSnapshot(snapshot, taken.applied);
   };
 
   socket.on('queue.updated', fold);
@@ -215,6 +281,7 @@ export function openSessionChannel(options: SessionChannelOptions): {
 
   return {
     close: () => {
+      closed = true;
       socket.disconnect();
     },
     fold,

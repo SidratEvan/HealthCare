@@ -59,6 +59,9 @@ adminRoutes.get(
   admin.getDashboard,
 );
 
+// `CARD-B10-NOW` (`FR-ADM-12`, plan R6): the hospital now, counts only.
+adminRoutes.get('/admin/overview', requireAuth, requireRole('hospital_admin'), admin.getOverview);
+
 adminRoutes.get(
   '/admin/export',
   requireAuth,

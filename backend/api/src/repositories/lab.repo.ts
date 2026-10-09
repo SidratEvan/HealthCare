@@ -486,6 +486,8 @@ interface AvailabilitySqlRow {
  * third answer.
  */
 export async function searchMedicineAvailability(input: {
+  /** Only this hospital's pharmacy: a portal's own search (`FR-BRD-09`). Null for the network. */
+  readonly hospitalId: string | null;
   readonly query: string;
   readonly lat: number | null;
   readonly lng: number | null;
@@ -531,12 +533,19 @@ export async function searchMedicineAvailability(input: {
                ON s.hospital_id = h.id AND s.medicine_id = m.id AND s.deleted_at IS NULL
        WHERE h.deleted_at IS NULL
          AND h.is_live
+         AND (${input.hospitalId}::uuid IS NULL OR h.id = ${input.hospitalId}::uuid)
          -- Only facilities that keep a shelf at all. A hospital with no
          -- pharmacy is not "unknown" about a medicine; it is not a pharmacy.
          AND EXISTS (
            SELECT 1 FROM pharmacy_stock ps
             WHERE ps.hospital_id = h.id AND ps.deleted_at IS NULL
          )
+         -- And that runs its pharmacy here (FR-BRD-11), and shares what is on
+         -- its shelf (FR-NET-04). One that does not is not named at all: a row
+         -- per medicine saying "not shared" would be noise where the question
+         -- is who has it.
+         AND fn_module_on(h.id, 'pharmacy')
+         AND fn_publishes(h.id, 'stock')
     )
     -- **Capped per medicine, not across the whole result.** A flat row limit
     -- truncates mid-medicine, and the medicines past the cut then come back

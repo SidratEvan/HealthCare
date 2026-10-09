@@ -30,6 +30,8 @@ CREATE TYPE user_kind         AS ENUM ('patient','guest','staff','platform');
 CREATE TYPE sex               AS ENUM ('male','female','other');
 CREATE TYPE staff_role        AS ENUM ('receptionist','doctor','ward','emergency','lab','pharmacy','hospital_admin','platform_admin','gov_viewer');
 CREATE TYPE facility_kind     AS ENUM ('hospital','clinic','diagnostic','government');
+-- 0062 (plan R7, FR-ONB-11) adds 'chamber': an approved private chamber,
+-- created by the platform and never by the public application.
 CREATE TYPE session_status    AS ENUM ('scheduled','running','paused','ended','cancelled');
 CREATE TYPE booking_status    AS ENUM ('booked','waiting','in_chamber','done','late','no_show','cancelled','rescheduled');
 CREATE TYPE booking_source    AS ENUM ('app','guest_link','counter','phone','walkin','import');   -- 'import': 0029, FR-IMP-01 set C
@@ -58,6 +60,7 @@ CREATE TYPE import_set        AS ENUM ('structure','patients','appointments','re
 CREATE TYPE import_state      AS ENUM ('checked','committed','undone','discarded');        -- 0031, FR-IMP-05..07
 CREATE TYPE external_kind     AS ENUM ('patient','appointment','department','doctor','schedule','ward','bed','staff');  -- 0030, FR-IMP-04
 CREATE TYPE org_lifecycle     AS ENUM ('setup','ready_for_review','active','suspended','closed');   -- 0037, FR-ONB-02
+CREATE TYPE agreement_state   AS ENUM ('trial','active','overdue','ended');   -- 0051, FR-SUP-04
 ```
 
 ---
@@ -131,6 +134,7 @@ A hospital-held patient is visible only to that hospital's staff under the usual
 | `email` | text | **U** with `hospital_id` |
 | `staff_code` | text | printed on the ID card |
 | `full_name` | text | |
+| `phone` | text | nullable; a mobile to reach this member of staff on, `+8801…` (**CHK** `staff_users_phone_shape`). Given by an administrator who applied for a workspace (`FR-ONB-09`); null for every other account. 0049 |
 | `password_hash` | text | scrypt via `node:crypto`, stored as `scrypt$<N>$<r>$<p>$<salt>$<hash>` (base64); null until a password is set. Changed from argon2id on 2026-09-28 (`CLAUDE.md` §4.1) |
 | `totp_secret` | text | nullable; AES-256-GCM sealed by the API (`v1.<iv>.<tag>.<body>`), written when setup starts and shown to its holder only until it is confirmed. Never logged, never returned otherwise |
 | `totp_enabled_at` | timestamptz | when the second factor was confirmed with a code; null means sign-in asks for none. CHECK: set only with a secret. 0033 |
@@ -164,6 +168,8 @@ One row per code sent. A new code consumes any open one for the number, so only 
 
 One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it: the old row is revoked and a new one written, so a stolen refresh token works once at most.
 
+**`family_id` uuid (0042, `FR-SEC-06`).** One sign-in, across the rotation of its tokens: set at sign-in and carried to every row that replaces it. A staff access token names its family (`sid`) and is honoured while the family has a row that is neither revoked nor expired, so a sign-out or a deactivation ends access at once while a renewal does not. **IX** (partial). NULL for a patient's sessions, which do not use it yet; a staff row from before 0042 was given its own id.
+
 #### `external_refs` (`FR-IMP-04`) — 0030
 | Column | Type | Notes |
 |---|---|---|
@@ -181,7 +187,7 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 |---|---|---|
 | `id` | uuid | **PK** |
 | `token_hash` | text | **U**, 32-byte random, hashed |
-| `booking_id` | uuid | **FK**, scope is one booking |
+| `booking_id` | uuid | **FK**, scope is one booking. **IX**, not unique since 0041: a booking may hold a few live links (the API keeps the newest four), because a link is handed over once and only its hash is kept, so a second one is the only way to give it again, and replacing the first killed the one already in an SMS. They are revoked together, by booking |
 | `guest_id` | uuid | **FK** |
 | `expires_at` | timestamptz | session end + grace |
 | `revoked_at` | timestamptz | |
@@ -195,10 +201,33 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 `id`, `name_bn`, `name_en`, `kind` (facility_kind), `division`, `district`, `thana`, `address_bn`, `address_en`, `lat`, `lng`, `phone`, `emergency_phone`, `is_live` (boolean), `onboarded_at`, `settings_id`.
 **IX:** `(district)`, GiST on `(lat,lng)` via `earthdistance` or PostGIS `geography`.
 
-**The workspace's state (0037, `FR-ONB-02`).** `lifecycle` org_lifecycle NOT NULL DEFAULT `'setup'`, `registration_no` text (free text: licences do not share a shape), `review_requested_at`, `reviewed_at`, `reviewed_by` → `staff_users`, `review_note` (why the platform sent it back or suspended it; the hospital's administrator reads it). **CHK** `hospitals_live_requires_workspace_active`: `NOT is_live OR lifecycle = 'active'`. `is_live` stays the one switch every public query reads; the CHECK means nothing unapproved, suspended or closed can be live whatever a route forgets, and the two are always written in one statement (`platform.repo` `moveLifecycle`). **IX** `(lifecycle, review_requested_at)`. Hospitals live when 0037 ran were backfilled to `active`. The transitions and who may take each are `shared/domain/src/org/lifecycle.ts`; readiness is counted from what exists and never stored (`FR-ONB-03`).
+**The workspace's state (0037, `FR-ONB-02`).** `lifecycle` org_lifecycle NOT NULL DEFAULT `'setup'`, `registration_no` text (free text: licences do not share a shape), `review_requested_at`, `reviewed_at`, `reviewed_by` → `staff_users`, `review_note` (why the platform sent it back or suspended it; the hospital's administrator reads it). **CHK** `hospitals_live_requires_workspace_active`: `NOT is_live OR lifecycle = 'active'`. `is_live` stays the one switch every public query reads; the CHECK means nothing unapproved, suspended or closed can be live whatever a route forgets, and the two are always written in one statement (`platform.repo` `moveLifecycle`). **IX** `(lifecycle, review_requested_at)`. Hospitals live when 0037 ran were backfilled to `active`. The transitions and who may take each are `shared/domain/src/org/lifecycle.ts` (since plan D1 `closed` is reached from `setup` and `ready_for_review` too: an application declined); readiness is counted from what exists and never stored (`FR-ONB-03`).
+
+**Applied for by the hospital (0049, `FR-ONB-09`, `FR-ONB-10`).** `self_registered` boolean NOT NULL DEFAULT false: true for a workspace the hospital applied for through the public form; it is the same row in the same state, `setup`, and goes live only by review. `application_key` text, nullable: the Idempotency-Key the form was sent with, so a form sent twice makes one workspace; **UQ** where not null (`hospitals_application_key_key`), **CHK** `hospitals_application_key_is_an_application` (only a self-registered row has one). The form's facility phone is `phone`, its registration number `registration_no`.
+
+**Its own domain (0046, `FR-BRD-07`).** `portal_domain` text, nullable: a domain the hospital owns, recorded by a platform administrator, at which the patient app is this hospital's portal. Lower-case, a host name and nothing else (`hospitals_portal_domain_shape`); **UQ** where not null (`hospitals_portal_domain_key`): an address is one hospital's or nobody's. The address under the platform's domain needs no column: it is `code`.
+
+**Its agreement (0051, `FR-SUP-04`, the state half).** `agreement_state` agreement_state NOT NULL DEFAULT `'trial'`, `agreement_note` text (**CHK** 1 to 500 characters), `agreement_changed_at`, `agreement_changed_by` → `staff_users` (SET NULL). Set by a platform administrator on the workspace. **A record: nothing reads it to decide anything.** No query that publishes a hospital, gates a module or refuses a route looks at it; what takes a hospital out of the network is `lifecycle` (`FR-ONB-06`). No plan name and no amount has a column. **What it has used is not stored**: `fn_workspace_usage(hospital)` counts it when asked, three integers (serials taken and chambers begun in thirty days; SMS sent this calendar month, the same count `FR-NOT-06`'s cap uses). It is SECURITY DEFINER because a platform administrator's connection reaches no booking and no message (§6, `FR-ONB-08`) and the counts are not about a person; it answers the `national` and `system` scopes and gives every other connection no row, a hospital's own staff included: how busy a hospital is, is not a figure it publishes (`FR-NET-01`). EXECUTE is `app_tenant`'s, not PUBLIC's.
+
+**Its health (0052, `FR-SUP-06`).** Nothing is stored. The ages of what it publishes are read where a patient's screen reads them: `v_public_hospital_capacity.beds_as_of` and the oldest `capabilities.updated_at`, against `hospital_settings.stale_threshold_minutes`. The rest is `fn_workspace_health(hospital)`: over seven days, messages for its chambers that were sent or delivered, that failed, that were skipped, and that are still waiting (0053: queued and already refused once by a gateway, or more than five minutes past when they were due; one held for the morning is neither); and queue events whose `server_ts` is more than a minute after their `client_ts`, how many, how late the slowest (capped at the week), and when the last arrived. The one other use of `client_ts` beside ordering a batch (`SY-01`): it is compared with the server's clock and trusted for nothing. SECURITY DEFINER for the reason `fn_workspace_usage` is, answering `national` and `system` and nobody else; EXECUTE is `app_tenant`'s. **Its trail of changes** is `audit_log` read by `hospital_id` for `SETTINGS_CHANGE`, `IMPORT` and `EXPORT` rows with no `patient_id` (§2.9); the platform's scope reads that table's rows for an organisation (`app_org`), and the query, not the policy, is what keeps a row about a patient out.
+
+**What it says of itself (0045, `FR-BRD-06`).** `description_bn`, `description_en` text, nullable, 1 to 400 characters each (`hospitals_description_length`). Written by the hospital's administrator on `S-B-11`, shown on its card and page.
+
+#### `hospital_logos` (0045, `FR-BRD-06`)
+`hospital_id` **PK/FK** (cascade), `content_type` (**CHK** `image/png`, `image/jpeg` or `image/webp`; no SVG), `bytes` bytea (**CHK** 1 to 262,144), `sha256` (of the bytes; its first sixteen characters are the version in the public address), `created_by` → `staff_users` (SET NULL), `created_at`, `updated_at`. One row a hospital; absent means no logo. **A row and not a file**: every other file is a clinical document behind a signed, expiring address, and a logo is the opposite — public, small, the same for everybody. As a row it survives a restart whatever store the deployment uses, is in the same backup as its hospital, can be seeded, and is served by one read. Its own table so that reading settings never carries an image. **RLS**: published like a session — anybody reads, only the hospital changes (§5.2).
 
 #### `hospital_settings`
 `hospital_id` **PK/FK**, `no_show_grace_patients` (default 2), `no_show_grace_minutes` (15), `late_reinsert_after` (3), `stale_threshold_minutes` (10), `refund_policy` jsonb, `sms_budget_monthly` int, `prepay_required` boolean, `numeral_style` text, `density_default` text.
+
+**`modules_off` text[] NOT NULL DEFAULT `{}` (0047, `FR-BRD-11`).** The modules this hospital does not run; empty, the ordinary state, is everything on, so a hospital made before or after has everything with nothing written and a module added later is on for everybody. **CHK** `hospital_settings_modules_known` (a subset of the eight) and `hospital_settings_doctor_needs_queue` (the doctor's console is never on where serials are off). `fn_module_on(hospital, module)` is the one definition of "on" that every published read asks.
+
+**`noshow_prepay` boolean NOT NULL DEFAULT false, `noshow_window_days` int NOT NULL DEFAULT 90 (0058, `FR-GST-14`).** Whether this hospital asks for payment first from a number with three no-shows here in the window, and the window (**CHK** 7 to 365 days). Off until the hospital turns it on; the API never applies it where no payment can be taken online.
+
+**`arrival_windows` boolean NOT NULL DEFAULT false (0060, `FR-PAT-28`).** Whether this hospital offers a preferred arrival hour at booking. `fn_offers_arrival_windows(hospital)` is what the public session list asks. `bookings.arrival_window_start` timestamptz (0060) is the hour chosen, or null; the queue never reads it.
+
+**`payment_hold_minutes` int NOT NULL DEFAULT 15 (0057, `FR-PAY-08`).** How long a serial waits for its online payment. **CHK** 5 to 60. Read when an attempt starts; the deadline is written on the payment, so changing it never moves a hold already running.
+
+**`unpublished` text[] NOT NULL DEFAULT `{}` (0048, `FR-NET-04`).** The live figures this hospital does not share with the network, from `serials`, `beds`, `stock`; empty, the ordinary state, is everything shared. **CHK** `hospital_settings_unpublished_known` (a subset of the three). `fn_publishes(hospital, figure)` is the one definition of "shares" that every public read of a figure asks, beside `fn_module_on`: a module that is off has no figure, a figure that is kept is said to be kept.
 
 **`brand` jsonb, nullable (0036, `FR-BRD-03`).** A hospital's own values for the six brand tokens of `FRONTEND.md` §1.1 — `brand-900`, `-700`, `-600`, `-300`, `-100`, `brand-border` — as `{ "colors": { "<token>": "#rrggbb", … } }`. NULL, the ordinary state, is the platform's own colours. The shape and the contrast a theme must pass (white on `brand-600`, `brand-700` on the canvas, `brand-600` on `brand-100`, each at 4.5:1) are in `shared/domain/src/brand/theme.ts`; a stored theme that fails is read as none, so the app keeps colours that pass rather than half of somebody else's. The database checks only that it is an object. Not a logo, a font or a domain (`FR-BRD-05`).
 
@@ -275,12 +304,14 @@ Recurring chamber schedules: `id`, `doctor_hospital_id` **FK**, `weekday` int, `
 | `id` | uuid | **PK** |
 | `session_id` | uuid | **FK** |
 | `patient_id` | uuid | **FK** |
+| `told_eta_at` | timestamptz | nullable. The time in the last message that told this patient when to expect their turn (`FR-QUE-15`, 0050); null means only the chamber's planned start, from the confirmation. Not queue state: the reducer never reads it. Written by the notification step of a queue write, in that write's transaction |
 | `booked_by_user_id` | uuid | **FK** nullable |
 | `booked_by_guest_id` | uuid | **FK** nullable |
 | `serial_number` | int | per-session |
 | `status` | booking_status | |
 | `source` | booking_source | |
-| `intake` | jsonb | pre-visit answers (`FR-PAT-33` / `FR-DOC-03`) |
+| `intake` | jsonb | pre-visit answers (`FR-PAT-33` / `FR-DOC-03`). `demo: true` only on a demonstration server (`FR-DEM-07`) |
+| `idempotency_key` | text | **U** (partial), 0041. The `Idempotency-Key` of the `POST /bookings` that made the row; the same request sent again is answered with this booking (`FR-QUE-51`). NULL for a booking made before 0041 or by a route keyed another way |
 | `reason_text` | text | |
 | `fee_poisha` | int | |
 | `payment_id` | uuid | **FK** nullable |
@@ -288,6 +319,8 @@ Recurring chamber schedules: `id`, `doctor_hospital_id` **FK**, `weekday` int, `
 | `quoted_wait_minutes` | int | the wait quoted at check-in, 0–480; null without an arrival (`bookings_quote_needs_arrival`). Migration 0022 |
 | `consult_seconds` | int | measured, feeds the rate |
 | `cancelled_reason` | text | |
+
+**`prepayment_required` boolean NOT NULL DEFAULT false (0057, `FR-PAY-02`, `FR-PAY-08`).** Decided when the booking is made and never after: the hospital takes no payment at the counter (`hospital_settings.prepay_required`), or, from plan F3, the number's no-shows ask for payment first (`FR-GST-14`). What it changes is what happens when an online payment's hold runs out: released, not turned to the counter.
 
 **U:** `(session_id, serial_number)` where `status <> 'cancelled'`
 **IX:** `(patient_id)`, `(session_id, status)`, `(booked_by_guest_id)`
@@ -333,6 +366,8 @@ One completed consultation: `id`, `booking_id` **FK U**, `patient_id`, `hospital
 `prescriptions`: `id`, `visit_id` **FK**, `pdf_url`, `qr_token_hash`, `dispensed_at`.
 `prescription_items`: `id`, `prescription_id` **FK**, `medicine_id` **FK** nullable, `name_text`, `strength`, `schedule` (`1+0+1`), `duration_days`, `instruction_bn`.
 
+Written since plan R2 by `clinical.service` with the visit, in its transaction: one `prescriptions` row per visit that has medicines, its items in the doctor's order (by `created_at`, then `id`). While the visit is a draft a save replaces the items; once it is signed nothing changes them. `pdf_url`, `qr_token_hash` and `dispensed_at` stay null: the sheet is printed by the browser (`FR-DOC-07`), and the QR and dispensing are not built (`FR-PAT-71`, `FR-PHR-01`). No migration: the tables and their policies (0043, 0044) are what R2 writes.
+
 #### `medicines`
 Formulary for autocomplete (`FR-DOC-05`): `id`, `generic_name`, `brand_name`, `manufacturer`, `strengths` text[], `form`.
 
@@ -362,6 +397,8 @@ one. A mistake is corrected by cancelling and re-ordering.
 #### `patient_documents`
 Patient-uploaded paper records (`FR-PAT-62`): `id`, `patient_id`, `file_url`, `doc_type`, `doc_date`, `doctor_name_text`, `uploaded_at`.
 
+Since 0059 (plan R3): `content_type` (`image/jpeg`, `image/png`, `image/webp`, `application/pdf`), `byte_size` (**CHK** 1 to 8 MB), `uploaded_by_user` (**FK** `users`, the account that added it), and **CHK** `doc_type` in `prescription`, `report`, `discharge`, `other`. `file_url` is an object key (`documents/<patientId>/<id>.<ext>`), never a public address; it is opened by a signed link minted at the moment of opening. A removal sets `deleted_at` and the file stays, as every clinical row's does.
+
 #### `consents` (`FR-PAT-64`)
 `id`, `patient_id`, `hospital_id`, `doctor_id` nullable, `scope` consent_scope, `granted_at`, `expires_at`, `revoked_at`, `granted_via` (`qr`,`app`,`counter`).
 
@@ -369,13 +406,17 @@ Patient-uploaded paper records (`FR-PAT-62`): `id`, `patient_id`, `file_url`, `d
 
 ### 2.5 Beds, emergency, referrals
 
+#### `reception_desks`, `reception_desk_doctors` (0061, `FR-REC-32`)
+`reception_desks`: `id`, `hospital_id`, `name_bn`, `name_en`, `created_by`, `deleted_at`; a live name is unique per hospital (`lower(name_en)`). `reception_desk_doctors`: `desk_id`, `doctor_id`, `hospital_id` (**PK** desk and doctor). `reception_desk_staff` (0063): `desk_id`, `staff_user_id`, `hospital_id` (**PK** desk and member of staff): the receptionists at a desk, who then manage only its doctors (question 20). An organisation's own rows (`app_org`).
+
 #### `wards`
 `id`, `hospital_id`, `name_bn`, `name_en`, `floor` (smallint, 0 = ground), `kind` bed_kind.
 **U:** `(id, hospital_id)` — the target of `beds`' composite foreign key.
 
 #### `beds`
-`id`, `hospital_id`, `ward_id`, `label` (`301`), `kind` bed_kind, `state` bed_state, `nightly_poisha`, `last_cleaned_at`, `expected_discharge_date`, `current_admission_id`, `reserved_until`, `oos_reason`, `state_changed_at`.
+`id`, `hospital_id`, `ward_id`, `label` (`301`), `kind` bed_kind, `state` bed_state, `nightly_poisha`, `last_cleaned_at`, `expected_discharge_date`, `current_admission_id`, `reserved_until`, `oos_reason`, `state_changed_at`, `version` bigint NOT NULL DEFAULT 1 (0039).
 **IX:** `(hospital_id, kind, state)` — powers public bed counts.
+**`version` (`SY-09`).** (`emergency_cases.version`, 0040, is the same column under the same rule, raised by `trg_emergency_cases_version`.) Raised by `trg_beds_version` (`fn_raise_version`, BEFORE UPDATE: `NEW.version = OLD.version + 1`, whatever the statement supplied) on every change to the row, in the statement that makes it; a change that rolls back raises nothing. It is how a board decides which of two statements about a bed is the newer, and nothing else may be used for that: a timestamp is read after the row and can be in the opposite order. Everything a board draws for a bed is on this row except the request a reserved bed is held for, which is made and released in the same transaction as the bed's own change of state.
 `(ward_id, hospital_id)` references `wards (id, hospital_id)`, so a bed cannot be filed under another hospital's ward. CHECKs make each state say what it must: occupied ⇔ `current_admission_id`, reserved ⇔ `reserved_until`, out of service ⇔ a non-blank `oos_reason`; a discharge forecast only on an occupied bed.
 A bed added from `S-B-11` (pilot step 22) starts `out_of_service` with `oos_reason = 'setup:unconfirmed'`, a code the board translates, so a bed nobody at the ward has looked at never counts as free. `reserved_until` and `oos_reason` exist because `BTN-B06-RESERVE` ("hold with expiry") and `BTN-B06-OOS` ("with reason") need them somewhere a query can read — the public view counts a lapsed hold as free. `state_changed_at` drives the cleaning timer and "occupied for N days".
 
@@ -424,6 +465,31 @@ report computed from rows that could disagree with themselves is fiction.
 
 `ambulance_request_id` carries no foreign key until 0019: 0011 creates
 `ambulance_requests` and runs *after* 0009 on a fresh database.
+
+**Paying by being sent away (0057, plan H3; `FR-PAY-08`–`11`).**
+`provider_checkout_id` text: what the provider calls the attempt while it is
+under way (bKash's `paymentID`, Nagad's `paymentReferenceId`), written when the
+attempt begins, so the patient's return and the timer can find it; unique
+where set. `provider_ref` stays what it was: the provider's reference for money
+that moved (bKash's `trxID`). Neither is ever logged. `hold_until`
+timestamptz: the deadline of an online attempt (`FR-PAY-08`); **CHK** set only
+on an online method. `failure_reason` text, **CHK** one of `declined`,
+`cancelled`, `expired`, `superseded`, `provider_error`, `amount_mismatch`,
+and set exactly when `state = 'failed'`. `checked_at` timestamptz: when the
+provider was last asked, which paces the timer's second look. **A failed
+payment may still become paid**, and only that way round: money the provider
+reports is never refused by our row (`FR-PAY-10`). Index
+`payments_hold_due_idx` on `hold_until` where pending.
+
+#### `payment_events` (0057, `FR-PAY-11`)
+`id`, `payment_id` **FK**, `hospital_id` **FK** (copied from what was paid
+for, for the tenant policy), `kind` text **CHK** (`created`, `redirected`,
+`asked`, `paid`, `failed`, `expired`, `superseded`, `counter`, `released`,
+`owed_back`, `refunded`, `amount_mismatch`), `detail` jsonb (a reason, a
+provider's status word; never a reference, a number or a name), `at`,
+`created_at`, `updated_at`. **Append-only**: the API's role holds INSERT and
+SELECT, as on `audit_log`. Policy: the hospital's staff and `system`; a
+patient, a link and nobody, none.
 
 #### `invoices` / `subscriptions`
 `subscriptions`: `id`, `hospital_id`, `plan`, `modules` text[], `monthly_poisha`, `started_at`, `ended_at`, `state`.
@@ -488,10 +554,10 @@ A hospital's confirmed column mapping for one export format, so the same export 
 `key` **PK** (`queue.called`), `channel`, `locale`, `body`, `version`, `is_active` (`FR-NOT-05`).
 
 #### `notifications`
-`id`, `recipient_patient_id`/`guest_id`/`user_id`, `phone`, `channel` notif_channel, `template_key`, `params` jsonb, `state` notif_state, `provider_ref`, `cost_poisha`, `queued_at`, `sent_at`, `delivered_at`, `error`.
-**IX:** `(state, queued_at)`, `(recipient_patient_id)`, `(queued_at) WHERE params ? 'body'` (the 90-day purge, §8)
+`id`, `recipient_patient_id`/`guest_id`/`user_id`, `phone`, `channel` notif_channel, `template_key`, `params` jsonb, `state` notif_state, `provider_ref`, `cost_poisha`, `queued_at`, `sent_at`, `delivered_at`, `error`, and from 0053 `attempts` smallint NOT NULL DEFAULT 0 (how many times sending was tried; raised by the claim, so a try that died is counted) and `next_attempt_at` timestamptz NOT NULL DEFAULT now() (when a `queued` row is due: now, the next retry, the end of a claim, or seven in the morning for one held for quiet hours; on any other row, when it was last due).
+**IX:** `(next_attempt_at) WHERE state = 'queued'` (`notifications_due_idx`, 0053: what is due, oldest first; it replaced `(queued_at)` on the same rows), `(provider_ref) WHERE provider_ref IS NOT NULL` (`notifications_provider_ref_idx`, 0054: a delivery receipt names a message by the aggregator's reference and by nothing else), `(recipient_patient_id)`, `(queued_at) WHERE params ? 'body'` (the 90-day purge, §8)
 
-`params` holds what filled the template, the id of what the message was about (`bookingId`, `bedRequestId`, `emergencyCaseId`, `testOrderId`) and, under `body`, the text as it is kept. **A link is never stored** (`notifications_no_stored_link`, 0035): a tracking or status link is a credential (`FR-GST-05`) whose hash alone is kept, in `guest_links`. The kept text has `{link}` where the link went; the message that was sent had the link.
+`params` holds what filled the template, the id of what the message was about (`bookingId`, `bedRequestId`, `emergencyCaseId`, `testOrderId`) and, under `body`, the text as it is kept. **A link is never stored** (`notifications_no_stored_link`, 0035): a tracking or status link is a credential (`FR-GST-05`) whose hash alone is kept, in `guest_links`. The kept text has `{link}` where the link went; the message that was sent had the link. **What the link was for is kept** (plan H1): `linkKind` (`booking`, `standby`, `bed_request`, `emergency_case`, `records`), `linkBase` (the origin the link was in: a hospital's portal or the network's app), and for a stateless token whose capability it is (`linkSubject`) and which standby place (`standbyId`). Ids and an origin, none of which opens anything; from them a fresh link is issued for a message sent from its row (`BACKEND.md` §8). **A row in `queued`** is one the sender has still to send: `error` then says why it has not gone yet (`quiet_hours`, or what a gateway last said), and `failed` is kept for one given up on.
 
 #### `device_tokens`
 `id`, `user_id`/`guest_id`, `token`, `platform`, `last_seen_at`, `revoked_at`.
@@ -505,6 +571,10 @@ A hospital's confirmed column mapping for one export format, so the same export 
 
 #### `sync_cursors`
 Offline consoles: `id`, `device_id`, `staff_user_id`, `hospital_id`, `last_ack_seq` per session jsonb, `last_sync_at`.
+
+#### `backup_runs` (migration 0055, plan I2)
+What the nightly backup did, one row per run, for `/readyz` (`FR-SUP-06`: the age of the last backup is the deployment's). `id` (uuid v7), `finished_at`, `result` (`ok` | `failed`), `verified` (`restore`: restored into a scratch database and counted; `list`: only its contents read), `stamp` (the run's file name, ≤ 32), `reason` (the script's sentence for a failure, ≤ 300; present exactly when it failed), `created_at`, `updated_at`. Written by `deploy/backup.sh` as the owner, after the file its own health check reads; the API's role reads it and nothing more (§5.1), in the `system` scope only (§5.2). Nothing in it identifies anybody.
+**IX:** `(finished_at DESC)`
 
 ---
 
@@ -590,13 +660,104 @@ Added by plan 1.7 (`docs/PLATFORM_PLAN.md`). A self-hosted deployment has two ro
 | Role | Who connects as it | What it may do |
 |---|---|---|
 | The owner (`POSTGRES_USER`) | The `migrate` service and the `backup` service | Everything: it owns the schema. Serves no request |
-| The API's role (`API_DB_USER`) | The API, its workers, and the `pnpm staff:*` commands | `SELECT, INSERT, UPDATE, DELETE` on rows, `USAGE` on sequences, `EXECUTE` on functions, membership of `gov_reader`. **Not** `TRUNCATE`, not any schema change, not `SUPERUSER`/`CREATEROLE`/`CREATEDB`/`REPLICATION` |
+| The API's role (`API_DB_USER`) | The API, its workers, and the `pnpm staff:*` commands | `SELECT, INSERT, UPDATE, DELETE` on rows, `USAGE` on sequences, `EXECUTE` on functions, membership of `gov_reader` and of `app_tenant`. **Not** `TRUNCATE`, not any schema change, not `SUPERUSER`/`CREATEROLE`/`CREATEDB`/`REPLICATION`, and **not `BYPASSRLS`** (§5.2): what it reaches on a connection is what that connection has said it is working for |
 
-Three tables are narrower still: `audit_log` and `bed_events` are `INSERT` and `SELECT` only for the API's role, and `queue_events` has no `DELETE` (its `UPDATE` stays, for the one change its trigger allows — `undone_by_event_id`). `schema_migrations` is `SELECT` only. For `audit_log`, which has no trigger, that grant is what keeps a written row written.
+Three tables are narrower still: `audit_log` and `bed_events` are `INSERT` and `SELECT` only for the API's role, and `queue_events` has no `DELETE` (its `UPDATE` stays, for the one change its trigger allows — `undone_by_event_id`). `schema_migrations` and `backup_runs` are `SELECT` only: the migration runner writes the first and the nightly backup the second (plan I2), so an API made to misbehave cannot record a backup that never happened. For `audit_log`, which has no trigger, that grant is what keeps a written row written.
 
 The role is created and brought back to exactly these privileges by `pnpm db:role` (`database/scripts/lib/role.ts`), which the `migrate` service runs after every migration. The API test suite connects as an identical role, so every endpoint is tested without ownership (`backend/api/src/__tests__/apiRole.test.ts` is the list of what is refused).
 
-**Not yet true:** the table above describes policies that are not written. Row-level security is enabled on every table with **no policy**, which for a role that is not the owner means "sees nothing" — so until plan 1.10 writes the policies the API's role carries `BYPASSRLS`, and hospital scoping is enforced by the API's own checks, as it always has been. 1.10 removes the attribute in the step that adds the policies. On the demonstration deployment (Supabase) the API still connects as the owner.
+### 5.2 Hospitals kept apart by the database (plan B1, migration 0043, `FR-SEC-11`)
+
+**The table at the top of this section is the intent as first written; this is what is built.** Until 0043 there was row-level security on every table and not one policy, the API's role carried `BYPASSRLS`, and hospitals were kept apart by three habits in application code. A route that forgot its scope check, or a query that filtered by id and not by hospital, leaked across hospitals with nothing underneath.
+
+**The scope.** Every connection the API takes from its pool states who it is working for before anything else runs on it (`backend/api` `config/dbScope.ts`, `config/db.ts`): two session settings, `app.scope` and `app.hospital_id`. The scope is decided once per request, from the principal and from nothing the request says, and held for the request by `AsyncLocalStorage`. No route, service or repository mentions it, so none can forget it.
+
+| `app.scope` | Who | What the policies let it reach |
+|---|---|---|
+| `hospital` (+ `app.hospital_id`) | A member of that hospital's staff | That hospital's rows. Another hospital's do not exist for it: not to read, not to write, not to move a row of its own into |
+| `national` | A platform administrator | Organisations: hospitals, their staff, wards, beds, schedules. **Nothing about a person** — no patient, booking, visit, case, order, consent, message (`FR-ONB-08`) |
+| `patient` (+ `app.person_id`) | A signed-in account | §5.3 and §5.4: of the clinical record, of bookings, payments, messages, links, standby places and profiles, its own and nobody else's. Of the queue's own tables, nothing. Everything else, as `open` |
+| `guest` (+ `app.person_id`, `app.booking_id`) | A tracking link, or the short token it is exchanged for | §5.3 and §5.4: of the clinical record, what was written at the one booking it names; of bookings, payments, links and profiles, that booking's. Everything else, as `open` |
+| `open` | Nobody | §5.3 and §5.4: of the clinical record, nothing; of bookings, payments, messages, links, standby places, profiles and the queue, nothing. What is published, as anybody |
+| `system` | The server's own work: the schedule job, the purge, an operator's command, anything outside a request | Everything |
+| unset, or anything else | A connection that has said nothing | **Nothing** |
+
+**Who the policies are for.** `app_tenant` (NOLOGIN), which `pnpm db:role` makes the API's role a member of, in the step that takes away its `BYPASSRLS`. Not `PUBLIC`: on a hosted database other roles can reach these tables, and a policy is a grant.
+
+**The kinds of table** (`0043` has the policy for each of the 57 there were, and each table added since brings its own; `database/tests/tenancy.test.ts` fails if a table has none):
+
+| Kind | Tables | Rule under `hospital` scope |
+|---|---|---|
+| An organisation's own | `staff_users`, `staff_roles`, `wards`, `beds`, `ambulances`, `subscriptions`, `invoices`, `sync_cursors`, `import_batches`, `import_mapping_profiles`, `external_refs` | `hospital_id` is the caller's |
+| What a hospital publishes (`FR-NET-01`) | `departments`, `doctor_hospitals`, `sessions`, `session_templates`, `capabilities`, `pharmacy_stock`, `hospital_settings`, `hospital_logos` (0045) | Anybody reads; only the hospital changes |
+| A hospital's rows about its patients | `admissions`, `bed_events`, `bed_requests`, `blood_requests`, `consents`, `counter_shifts`, `feedback`, `test_orders`, `visits`, `emergency_cases` | `hospital_id` is the caller's |
+| The same, through a parent | `bookings`, `queue_events`, `queue_state`, `standby_list`, `slot_offers` (the session); `guest_links`, `payments` (the booking, or what else was paid for); `reports` (the order); `prescriptions`, `prescription_items` (the visit); `import_rows` (the batch) | The parent is the caller's hospital's |
+| People | `patients`, `users`, `guest_identities`, `device_tokens`, `otp_challenges`, `patient_documents`, `notifications` | Reachable; they belong to no hospital. A patient a hospital imported (`owner_hospital_id`) is that hospital's alone (`FR-IMP-10`) |
+| The platform's and everybody's | `hospitals` (read by anybody, changed by itself or the platform), `doctors`, `medicines`, `notification_templates`, `blood_donors`, `analytics_refresh`, `sessions_auth`, `schema_migrations` (read) | Reachable |
+| The server's own | `backup_runs` (read, in the `system` scope only; migration 0055, plan I2) | Not reachable: only the server's own work reads it |
+| `audit_log` | | Anybody appends; a hospital reads its own |
+
+**What crosses between hospitals** is named in 0043 and nowhere else: what a hospital publishes; a **referral**, to its two ends, and through it the two emergency cases it links; a **visit**, and the booking behind it, to a hospital the patient has given a live consent; and `fn_runs_emergency_desk(hospital)`, which answers yes or no from `staff_roles` with its owner's rights, because who works at a hospital is its own and that it has an emergency desk is what it publishes.
+
+**What it does not do.** It does not bind the owner: row-level security never applies to a table's owner, so migrations, seeds and backups are unaffected, **and so is a deployment whose API still connects as the owner — the public demonstration on Supabase.** The policies protect a deployment that runs the API as its own role, which is what one holding real patients does (`DEPLOY.md` Part S). One patient is kept from another by the database for the clinical record (§5.3) and for bookings, payments, messages, links, standby places and profiles (§5.4). And a hospital's staff asking for another hospital's row by id are now answered **404**, not 403: the row is not found, because for them it is not there.
+
+**The schedule job** (`sessionMaterialise.service`) runs in the `system` scope whoever prompted it: a hospital approving an import asks for it to run now, and what runs writes the chambers every hospital's schedules call for.
+
+**How it is tested.** `database/tests/tenancy.test.ts` asks the policies directly, as a member of `app_tenant` that holds rows and nothing else (`tenancy_probe`, given its rights once by the suite's setup), with queries that forget their hospital. `backend/api/src/__tests__/tenantScope.test.ts` asks that the API states the scope on a single query, in a transaction, across reused connections and with two hospitals' work interleaved. The whole API suite and **every browser suite** run with the API as a role the policies bind (`e2e/support/database.ts`), so a flow the policies refuse fails a test. And `backend/api/src/__tests__/tenantMatrix.test.ts` (plan B2) sets one hospital against another on every route the server mounts: by path, by row, by a row named in a body, as the platform, as the nation, as nobody, as a patient and as a tracking link, and then checks the other hospital is row for row what it was. A route that the matrix does not name fails it (`BACKEND.md` §11).
+
+### 5.3 A person's clinical record is their own (plan B3, migration 0044, `FR-SEC-11`, `FR-NET-02`, `FR-GST-05`)
+
+**What was left by 5.2.** A patient, a tracking link and nobody at all shared one scope, `open`, which reached everything. One hospital was kept from another by the database; one person was kept from another by the application alone, so a patient-facing query that forgot whose record it wanted returned somebody else's.
+
+**The scopes.** A connection now also says `app.person_id` and `app.booking_id`. An account is `patient` with its own id. A tracking link, and the short token it is exchanged for, is `guest` with the identity it was issued to and the one booking it names. `open` is what is left: nobody. As in 5.2 the scope comes from the principal and from nothing the request says, and no route says it.
+
+**The clinical record** is `visits`, `prescriptions`, `prescription_items`, `test_orders`, `reports`, `patient_documents`, `consents`, `admissions`.
+
+| Scope | Reads | Writes |
+|---|---|---|
+| `patient` | What is about a profile the account owns (`patients.owner_user_id`). Nobody else's, whatever the query leaves out | Its own consents (`FR-PAT-63`, `FR-PAT-64`). Nothing else: a visit, an order, a report and an admission are a hospital's to write |
+| `guest` | The visit made at the booking the token names, the tests ordered at it and their reports. **Not that person's other visits**: a link opens one booking (`FR-GST-05`). A guest token that names no booking, the one a number is given to book with, reads none | Nothing |
+| `open` | Nothing | Nothing |
+| `hospital`, `national`, `system` | As 5.2 | As 5.2 |
+
+**Three places say a scope themselves, and why.** A request with a token in its path arrives as nobody. `guest.service` resolves the tracking link and then runs the rest as that link (`asLink`), for the page and for a report's address alike. `patientAuth.service` reads what a verified number may take over (`FR-GST-09`) as the server's own work, because those profiles are not the account's yet and saying how many visits they hold is the point of the preview; the number is the account's own, from its row. The third is 5.2's schedule job.
+
+**What it did not do, and §5.4 does.** Outside the clinical record a patient and a link reached what `open` reached before: a booking, a queue event, a payment, a message, a profile. The live serial is worked out from every booking in a chamber and a serial is allocated against all of them, so those rows could not be one person's at the database until the queue acted for a person as the server (plan I3, migration 0056). `patient_documents` is a person's own to a patient and a link, and still reachable by a hospital's connection, as 5.2 left it; nothing in the application reads it yet.
+
+**How it is tested.** `database/tests/tenancy.test.ts` asks the policies as a person: an account reads its own profiles' visits, tests and reports and no others with no `WHERE` at all, reads and does not write, and gives a consent for its own profile only; a link reads the one visit of its booking when the same person has another; nobody reads none of the eight tables. `tenantScope.test.ts` asks that the API states a person's scope on reused connections and with two people's work interleaved. The whole API suite and every browser suite run under it.
+
+### 5.4 A person's bookings, payments and messages are their own (plan I3, migration 0056, `FR-SEC-11`, `FR-GST-05`)
+
+**What was left by 5.3.** Outside the clinical record a patient, a link and nobody reached every booking, payment, message, link, standby place and profile, because the queue is worked out from every booking in a chamber and a serial is allocated against all of them. The application alone kept one person's from another's.
+
+**What a person reaches now**, whatever a query leaves out:
+
+| Table | `patient` (an account) | `guest` (a link) | `open` (nobody) |
+|---|---|---|---|
+| `bookings` | A booking for a profile it owns, or one it made | The one booking the link names | None |
+| `patients` | The profiles it owns; it adds and keeps its own (`FR-PAT-02`) | The profile of that booking | None |
+| `payments` | What it paid, and what was paid for its own bookings; it pays for its own booking and nobody else's | What was paid for that booking | None |
+| `guest_links` | The links to its own bookings, which it may be given afresh (plan F1) | Itself | None |
+| `standby_list` | Its own profiles' places, to read | None | None |
+| `notifications` | What was addressed to it or to a profile it owns, to read | None | None |
+| `queue_events`, `queue_state`, `slot_offers` | None | None | None |
+
+A guest token that names no booking (the one a number is given to book with) reaches none of them. A person writes, of these, only a payment for their own booking, a link to their own booking and their own profiles; everything else is written by a hospital or by the queue. A hospital, the platform and the server's own work reach exactly what §5.2 gave them: these rules change only `app_care_session`, `app_care_booking`, `app_care_payment` and `app_patient`, which no longer admit a person, and add a person's own rows beside them.
+
+**The queue acts for a person as the server.** A serial is still allocated against every booking in a chamber, a log is still reduced over all of them, and every phone in the room is still told where it now stands. So when a person asks the queue to act (to book, cancel, say they are late, join a standby list, take or refuse a freed chair) or to say where they stand, the queue does it in the `system` scope, and only after the application has decided the request is theirs to make. One function does that, `asQueue` (`backend/api` `config/dbScope.ts`), used by the queue service's entry points, `booking.service` `createBooking` and the standby service; for a member of staff it changes nothing, so a hospital's request is held to its hospital inside the queue as outside it. What leaves the queue for a person is the patients' copy, which names nobody (plan I2c).
+
+**What the public reads of a chamber is numbers**, through `fn_chamber_counts(session)`, which runs with its owner's rights and gives back how many places are taken, how many are still waiting and how many bookings were ever made, and nothing about who. The discovery searches' open serials and the demonstration's picker read it.
+
+**The other places that say a scope themselves, and why.** Each is the server acting on a credential it has just checked, for a request that arrived as nobody or asks about rows that are not yet the caller's:
+
+- `guest.service` reads which link a token is as the server: until it resolves the request is nobody's, and finding the link is the act of telling who is asking. The rest runs as that link (`asLink`, §5.3).
+- `patientAuth.service` takes over what a verified number holds (`FR-GST-09`) as the server, as its preview already was: those profiles are not the account's until the claim has run.
+- `bed.service` files a bed request as the server: it finds which profile the number already has.
+- A payment provider's callback and an SMS aggregator's delivery report are applied as the server once their signature has checked out.
+
+**Changed for a caller:** another person's booking, profile or payment asked for by id is answered **404**, not 403, as another hospital's already was (§5.2).
+
+**How it is tested.** `database/tests/tenancy.test.ts` asks the policies as a person: an account reads its own bookings, profiles, payments, messages and places with no `WHERE` at all and nobody else's; a link reads its one booking, that booking's profile and payments and no other booking of the same person; nobody reads any of them; a person reads no queue log, state or offer; a person moves no booking, renames nobody else's profile and writes no message; an account pays for its own booking and is refused another's; `fn_chamber_counts` answers nobody with the count and no row; a hospital reaches all of its own. `tenantScope.test.ts` asks that `asQueue` reads the whole chamber for a person and nobody and only inside it, and holds a member of staff to their hospital inside it. The whole API suite, `tenantMatrix.test.ts` among it, and every browser suite run under it.
 
 ---
 
@@ -605,7 +766,7 @@ The role is created and brought back to exactly these privileges by `pnpm db:rol
 - Hot path is `queue_events(session_id, seq)` — covering index, and `queue_state` is read for display rather than replaying events per request.
 - `bookings(session_id, status)` partial index on `status IN ('booked','waiting','late')`.
 - `beds(hospital_id, kind, state)` supports the public capacity view without a scan.
-- `notifications(state, queued_at)` partial on `state='queued'` for the worker.
+- `notifications(next_attempt_at)` partial on `state='queued'` for the sender (0053; it was `(queued_at)`, which answered what is queued and not what is due).
 - Geospatial: `hospitals` uses `geography(Point,4326)` with a GiST index; emergency search filters by radius first, then ranks.
 - Partition `queue_events` and `audit_log` by month once either exceeds ~50M rows.
 - `avg_consult_seconds` is maintained incrementally on `PATIENT_DONE`, never recomputed by full scan.
@@ -682,6 +843,60 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- hospitals_live_requires_workspace_active (§2.2, FR-ONB-02)
     0038_import_mapping_profiles.sql -- V4.1: a hospital's confirmed column mappings, by heading row
                                    -- (§2.6b, FR-IMP-20)
+    0039_bed_version.sql           -- plan A2: beds.version and fn_raise_version, so a board knows
+                                   -- which statement about a bed is the newer (§2.5, SY-09)
+    0040_emergency_case_version.sql -- plan A3: emergency_cases.version, the same rule for a case
+                                   -- (§2.5, SY-09)
+    0041_booking_idempotency.sql   -- plan A5: bookings.idempotency_key, and guest_links no longer
+                                   -- one per booking (§2.1, §2.3, FR-QUE-51)
+    0042_session_family.sql        -- plan A6: sessions_auth.family_id, a sign-in's identity across
+                                   -- the rotation of its tokens (§2.1, FR-SEC-06)
+    0043_tenant_policies.sql       -- plan B1: app_tenant, the scope functions and a policy on every
+                                   -- table, so one hospital's rows are not another's (§5.2, FR-SEC-11)
+    0044_patient_policies.sql      -- plan B3: the patient and guest scopes; a person's clinical
+                                   -- record is their own (§5.3, FR-SEC-11, FR-GST-05)
+    0045_hospital_face.sql         -- plan C1: hospitals.description_bn/_en and hospital_logos
+                                   -- (§2.2, FR-BRD-06)
+    0046_portal_domain.sql         -- plan C2: hospitals.portal_domain, a hospital's own domain for
+                                   -- its portal (§2.2, FR-BRD-07)
+    0047_hospital_modules.sql      -- plan C4: hospital_settings.modules_off and fn_module_on
+    0048_publishing.sql            -- plan C5: hospital_settings.unpublished and fn_publishes
+                                   -- (§2.2, FR-BRD-11, FR-SUP-03)
+    0049_org_application.sql       -- plan D1: hospitals.self_registered and application_key,
+                                   -- staff_users.phone (§2.1, §2.2, FR-ONB-09, FR-ONB-10)
+    0050_told_eta.sql              -- plan F2c: bookings.told_eta_at, the time a patient was last
+                                   -- told (§2.3, FR-QUE-15)
+    0051_agreement_state.sql       -- plan G1: agreement_state, hospitals.agreement_* and
+                                   -- fn_workspace_usage (§2.2, FR-SUP-04)
+    0052_workspace_health.sql      -- plan G2: fn_workspace_health, a hospital's messages by
+                                   -- outcome and its late actions (§2.2, FR-SUP-06)
+    0053_notification_sending.sql  -- plan H1: notifications.attempts and next_attempt_at, the due
+                                   -- index, and fn_workspace_health's "still waiting" (§2.7,
+                                   -- FR-NOT-06, FR-NOT-07)
+    0054_notification_receipts.sql -- plan H2: notifications found by provider_ref, for a
+                                   -- delivery receipt (§2.7, FR-NOT-06)
+    0055_backup_runs.sql           -- plan I2: backup_runs, what the nightly backup did, written by
+                                   -- the owner and read by /readyz in the system scope (§2.7,
+                                   -- §5.1, FR-SUP-06)
+    0056_person_policies.sql       -- plan I3: a person's bookings, profiles, payments, links,
+                                   -- standby places and messages are their own; the queue's
+                                   -- tables nobody's; fn_chamber_counts (§5.4, FR-SEC-11)
+    0057_payment_holds.sql         -- plan H3: payments.provider_checkout_id, hold_until,
+                                   -- failure_reason, checked_at; payment_events (append-only);
+                                   -- hospital_settings.payment_hold_minutes;
+                                   -- bookings.prepayment_required (§2.6, FR-PAY-08..11)
+    0058_noshow_prepay.sql         -- plan F3: hospital_settings.noshow_prepay,
+                                   -- noshow_window_days (§2.2, FR-GST-14)
+    0059_patient_documents.sql     -- plan R3: patient_documents.content_type,
+                                   -- byte_size, uploaded_by_user; doc_type
+                                   -- in four kinds (§2.4, FR-PAT-62)
+    0060_arrival_windows.sql       -- plan R1: hospital_settings.arrival_windows,
+                                   -- bookings.arrival_window_start,
+                                   -- fn_offers_arrival_windows (FR-PAT-28)
+    0061_reception_desks.sql       -- plan R4: reception_desks,
+                                   -- reception_desk_doctors (FR-REC-32)
+    0062_chamber_organisations.sql -- plan R7: facility_kind 'chamber' (FR-ONB-11)
+    0063_desk_staff.sql            -- question 20: reception_desk_staff (FR-REC-32)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

@@ -36,6 +36,8 @@ export interface Message {
 export const CONSOLE = {
   // --- Navigation rail (B1.1) ---------------------------------------------
   navQueue: { bn: 'সিরিয়াল', en: 'Queue' },
+  // Beneath the hospital's own name on every console (FR-BRD-12, plan K4).
+  consolePoweredBy: { bn: 'Powered by MedLiveBD', en: 'Powered by MedLiveBD' },
   navRegistration: { bn: 'রেজিস্ট্রেশন', en: 'Registration' },
   navBeds: { bn: 'বেড', en: 'Beds' },
   navEmergency: { bn: 'জরুরি', en: 'Emergency' },
@@ -223,6 +225,122 @@ export const CONSOLE = {
     en: 'Forgotten your password? Ask the hospital administrator for a new one.',
   },
   loginDemoLink: { bn: 'স্টাফ অ্যাকাউন্টে লগ ইন', en: 'Sign in with a staff account' },
+
+  // --- A hospital applies by itself (S-B-00a, FR-ONB-09, FR-ONB-10) ----------
+  //
+  // Read by somebody who has never seen the product. Every line that could
+  // be taken as "you are now listed" says the opposite, because that is the
+  // misunderstanding this form would otherwise produce.
+  applyLink: { bn: 'হাসপাতাল যুক্ত করতে আবেদন করুন', en: 'Apply to add your hospital' },
+  applyFromLogin: {
+    bn: 'আপনার হাসপাতাল এখনো যুক্ত হয়নি?',
+    en: 'Is your hospital not on the platform yet?',
+  },
+  applyTitle: { bn: 'হাসপাতাল যুক্ত করার আবেদন', en: 'Apply to add your hospital' },
+  applyIntro: {
+    bn: 'হাসপাতাল, ক্লিনিক বা ডায়াগনস্টিক সেন্টারের তথ্য এবং যিনি এর প্রথম প্রশাসক হবেন তাঁর তথ্য দিন।',
+    en: 'Give the details of the hospital, clinic or diagnostic centre, and of the person who will be its first administrator.',
+  },
+  applyNothingPublic: {
+    bn: 'আবেদন করলেই হাসপাতাল রোগীদের অ্যাপে দেখা যায় না। আপনি তথ্য পূরণ করে পর্যালোচনা চাইবেন, এবং প্ল্যাটফর্মের একজন যাচাই করে অনুমোদন দিলে তবেই এটি চালু হবে।',
+    en: 'Applying does not show the hospital to patients. You fill in its details and ask for review, and it goes live only after a person at the platform has checked and approved it.',
+  },
+  applyDemoNote: {
+    bn: 'এটি একটি ডেমো সার্ভার। ফর্মটি কাজ করে, কিন্তু এখানে আসল প্রতিষ্ঠানের বা নিজের আসল তথ্য ও পাসওয়ার্ড দেবেন না।',
+    en: 'This is a demonstration server. The form works, but do not give a real facility’s details, or your own real details or password, here.',
+  },
+  applyFacility: { bn: 'প্রতিষ্ঠানের তথ্য', en: 'The facility' },
+  applyAdmin: { bn: 'প্রথম প্রশাসক', en: 'Its first administrator' },
+  applyAdminHelp: {
+    bn: 'এই ইমেইল ও পাসওয়ার্ড দিয়ে আপনি লগ ইন করবেন। পাসওয়ার্ড আপনি নিজেই ঠিক করছেন; আমরা এটি দেখি না।',
+    en: 'You will sign in with this email and password. You choose the password; we never see it.',
+  },
+  applyPhone: { bn: 'প্রতিষ্ঠানের ফোন নম্বর', en: 'The facility’s phone number' },
+  applyPhoneHelp: {
+    bn: 'ল্যান্ডফোন বা মোবাইল, যেমন ০২ ৯১২৩৪৫৬৭৮',
+    en: 'A landline or a mobile, for example 02 912345678',
+  },
+  applyPhoneWrong: {
+    bn: 'নম্বরটি ঠিক নয়। ০ দিয়ে শুরু করে পুরো নম্বর লিখুন।',
+    en: 'That is not a full number. Start with 0 and give all of it.',
+  },
+  applyRegistrationHelp: {
+    bn: 'লাইসেন্স বা নিবন্ধনের নম্বর, কাগজে যেমন লেখা আছে',
+    en: 'The licence or registration number, as written on the certificate',
+  },
+  applyMobile: { bn: 'প্রশাসকের মোবাইল নম্বর', en: 'The administrator’s mobile number' },
+  applyMobileHelp: {
+    bn: 'যাচাইয়ের জন্য এই নম্বরে ফোন করা হতে পারে',
+    en: 'We may ring this number to check the application',
+  },
+  applyMobileWrong: {
+    bn: 'মোবাইল নম্বরটি ঠিক নয়। ০১ দিয়ে শুরু করে ১১ সংখ্যা লিখুন।',
+    en: 'That is not a mobile number. Give eleven digits starting 01.',
+  },
+  applyEmailWrong: { bn: 'ইমেইল ঠিকানাটি ঠিক নয়।', en: 'That is not an email address.' },
+  applyPassword: { bn: 'পাসওয়ার্ড', en: 'Password' },
+  applyPasswordHelp: { bn: 'অন্তত {count} অক্ষর', en: 'At least {count} characters' },
+  applyPasswordShort: {
+    bn: 'পাসওয়ার্ডটি ছোট। আরও লম্বা একটি দিন।',
+    en: 'That password is too short. Choose a longer one.',
+  },
+  applyPasswordAgain: { bn: 'পাসওয়ার্ড আবার লিখুন', en: 'The password again' },
+  applyPasswordsDiffer: {
+    bn: 'দুটি পাসওয়ার্ড মিলছে না।',
+    en: 'The two passwords are not the same.',
+  },
+  applySubmit: { bn: 'আবেদন পাঠান', en: 'Send the application' },
+  applySubmitting: { bn: 'পাঠানো হচ্ছে…', en: 'Sending…' },
+  applyNeedsFields: {
+    bn: 'সব ঘর ঠিকভাবে পূরণ করুন',
+    en: 'Fill in every field correctly',
+  },
+  applyHaveAccount: { bn: 'অ্যাকাউন্ট আছে? লগ ইন করুন', en: 'Have an account? Sign in' },
+  applyOffline: {
+    bn: 'সংযোগ নেই। সংযোগ ফিরলে আবেদন পাঠানো যাবে; যা লিখেছেন তা থাকবে।',
+    en: 'No connection. The application can be sent when it is back; what you typed stays.',
+  },
+  applyPaused: {
+    bn: 'এই মুহূর্তে অনেক আবেদন যাচাইয়ের অপেক্ষায় আছে, তাই নতুন আবেদন নেওয়া বন্ধ আছে। পরে আবার চেষ্টা করুন।',
+    en: 'Many applications are waiting to be checked just now, so new ones are paused. Try again later.',
+  },
+  applyTooMany: {
+    bn: 'এই সংযোগ থেকে অল্প সময়ে কয়েকটি আবেদন এসেছে। এক ঘণ্টা পরে আবার চেষ্টা করুন।',
+    en: 'Several applications have come from this connection in a short time. Try again in an hour.',
+  },
+  applyInvalid: {
+    bn: 'কোনো একটি ঘরের তথ্য গ্রহণ করা যায়নি। ঘরগুলো দেখে আবার পাঠান।',
+    en: 'One of the fields was not accepted. Check them and send again.',
+  },
+  applyFailed: {
+    bn: 'আবেদন পাঠানো যায়নি। আবার পাঠালে একই আবেদন হিসেবেই ধরা হবে।',
+    en: 'The application could not be sent. Sending again counts as the same application.',
+  },
+  applyDoneTitle: { bn: 'আবেদন পাওয়া গেছে', en: 'The application has been received' },
+  applyDoneLine: {
+    bn: 'আপনার প্রতিষ্ঠানের জন্য একটি ওয়ার্কস্পেস তৈরি হয়েছে। এটি এখনো রোগীদের কাছে দৃশ্যমান নয়।',
+    en: 'A workspace has been made for your facility. It is not visible to patients yet.',
+  },
+  applyDoneCode: { bn: 'হাসপাতালের কোড', en: 'Hospital code' },
+  applyDoneEmail: { bn: 'লগ ইনের ইমেইল', en: 'Email to sign in with' },
+  applyNextTitle: { bn: 'এরপর যা করতে হবে', en: 'What happens next' },
+  applyNextSignIn: {
+    bn: 'আপনার ইমেইল ও পাসওয়ার্ড দিয়ে লগ ইন করুন। কোড চাইলে উপরের কোডটি দিন।',
+    en: 'Sign in with your email and password. If a code is asked for, give the one above.',
+  },
+  applyNextTwoStep: {
+    bn: 'প্রথমবার লগ ইনের সময় ফোনের অথেনটিকেটর অ্যাপ দিয়ে দুই ধাপের যাচাই চালু করুন।',
+    en: 'At the first sign-in, set up two-step verification with an authenticator app on your phone.',
+  },
+  applyNextSetUp: {
+    bn: 'বিভাগ, ডাক্তার, সময়সূচি, বেড ও স্টাফ যোগ করুন। কী বাকি আছে তা সেটিংসের তালিকায় দেখা যাবে।',
+    en: 'Add departments, doctors, schedules, beds and staff. The checklist in settings shows what is still missing.',
+  },
+  applyNextReview: {
+    bn: 'তালিকা পূর্ণ হলে পর্যালোচনা চান। প্ল্যাটফর্মের একজন যাচাই করে অনুমোদন দিলে হাসপাতাল চালু হবে।',
+    en: 'When the checklist is complete, ask for review. The hospital goes live once a person at the platform has checked and approved it.',
+  },
+  applyDoneSignIn: { bn: 'লগ ইন করুন', en: 'Sign in' },
   loginDemoNote: {
     bn: 'ডেমোর সব অ্যাকাউন্টের পাসওয়ার্ড: demo-password-2026',
     en: 'Every demo account’s password: demo-password-2026',
@@ -516,12 +634,16 @@ export const CONSOLE = {
     en: 'The patient answered nothing beforehand. Ask directly.',
   },
   pastVisits: { bn: 'আগের ভিজিট', en: 'Past visits' },
+  pastVisitsHereOnly: {
+    bn: 'শুধু এই হাসপাতালের ভিজিট দেখানো হচ্ছে। অন্য হাসপাতালের রেকর্ড দেখতে রোগীর কোড লাগবে।',
+    en: 'Only visits at this hospital are shown. Records from another hospital need the patient’s code.',
+  },
+  noPastVisitsHere: {
+    bn: 'এই হাসপাতালে এই রোগীর আগের কোনো রেকর্ড নেই',
+    en: 'No earlier records for this patient at this hospital',
+  },
   noPastVisits: { bn: 'এই রোগীর আগের কোনো রেকর্ড নেই', en: 'No earlier records for this patient' },
   // `PRD.md` §3.2: absent is stated, never implied by a blank.
-  prescriptionsAbsent: {
-    bn: 'এই সংস্করণে ব্যবস্থাপত্র নেই',
-    en: 'Prescriptions are not part of this version',
-  },
   reportsAbsent: {
     bn: 'টেস্টের রিপোর্ট এখনো যুক্ত হয়নি',
     en: 'Test reports are not connected yet',
@@ -529,6 +651,100 @@ export const CONSOLE = {
 
   // The note (INP-B05-DX, INP-B05-ADVICE, SEL-B05-FOLLOWUP).
   visitNote: { bn: 'ভিজিটের রেকর্ড', en: 'Visit record' },
+  // TBL-B05-RX, BTN-B05-ADDRX, BTN-B05-PRINT (FR-DOC-04, FR-DOC-05, FR-DOC-07; plan R2).
+  rxTitle: { bn: 'ওষুধ', en: 'Medicines' },
+  // Reading a spreadsheet for the import (FR-IMP-22; plan E1).
+  importSheet: { bn: 'কোন শিট', en: 'Which sheet' },
+  importLegacyXls: {
+    bn: 'এটি পুরোনো .xls ফাইল। Excel-এ খুলে .xlsx বা CSV হিসেবে সংরক্ষণ করে আবার দিন।',
+    en: 'This is an old .xls file. Open it in Excel, save it as .xlsx or CSV, and choose it again.',
+  },
+  importUnreadable: {
+    bn: 'ফাইলটি পড়া যায়নি, বা এতে কোনো সারি নেই। .xlsx বা CSV ফাইল দিন।',
+    en: 'The file could not be read, or holds no rows. Choose an .xlsx or CSV file.',
+  },
+  importTooBig: {
+    bn: 'ফাইলটি ১০ MB-এর বেশি। ছোট অংশে ভাগ করে দিন।',
+    en: 'The file is over 10 MB. Split it into smaller files.',
+  },
+  // FRM-B11-DESKS, SEL-B01-COUNTER (FR-REC-32; plan R4).
+  desksTitle: { bn: 'রিসেপশন ডেস্ক', en: 'Reception desks' },
+  desksHint: {
+    bn: 'প্রতিটি ডেস্কের ডাক্তার ও রিসেপশনিস্ট বেছে দিন। ডেস্কে থাকা রিসেপশনিস্ট শুধু সেই ডেস্কের ডাক্তারদের চেম্বার চালাতে পারবেন; ডেস্ক না থাকলে সবাই সব চেম্বার চালাতে পারবেন।',
+    en: "Choose each desk's doctors and receptionists. A receptionist at a desk manages only its doctors' chambers; with no desks, everyone manages every chamber.",
+  },
+  desksNone: { bn: 'এখনো কোনো ডেস্ক নেই।', en: 'No desks yet.' },
+  desksNameBn: { bn: 'ডেস্কের নাম (বাংলায়)', en: 'Desk name (Bangla)' },
+  desksNameEn: { bn: 'ডেস্কের নাম (ইংরেজিতে)', en: 'Desk name (English)' },
+  desksAdd: { bn: 'ডেস্ক যোগ করুন', en: 'Add desk' },
+  desksNameFirst: { bn: 'দুই ভাষায় নাম লিখুন।', en: 'Write the name in both languages.' },
+  desksSave: { bn: 'সংরক্ষণ করুন', en: 'Save' },
+  desksStaffHint: {
+    bn: 'এই ডেস্কের রিসেপশনিস্ট: তাঁরা শুধু এই ডেস্কের ডাক্তারদের সিরিয়াল চালাতে পারবেন। কোনো ডেস্কে না থাকলে সব চেম্বার চালাতে পারবেন।',
+    en: "This desk's receptionists: they manage only this desk's doctors. A receptionist at no desk manages every chamber.",
+  },
+  desksNothingChanged: { bn: 'কিছু বদলানো হয়নি।', en: 'Nothing has changed.' },
+  desksRemove: { bn: 'ডেস্ক সরান', en: 'Remove desk' },
+  desksRemoveSure: { bn: 'নিশ্চিত, সরান', en: 'Yes, remove' },
+  pickerDesk: { bn: 'আপনার ডেস্ক', en: 'Your desk' },
+  pickerDeskAll: { bn: 'সব চেম্বার', en: 'All chambers' },
+  pickerDeskChambers: { bn: 'এই ডেস্কের চেম্বার', en: "This desk's chambers" },
+  pickerOtherChambers: { bn: 'অন্য চেম্বার', en: 'Other chambers' },
+  // CARD-B10-NOW (FR-ADM-12; plan R6).
+  adminNowTitle: { bn: 'এখন হাসপাতালে', en: 'The hospital now' },
+  adminNowDoctors: { bn: 'আজকের ডাক্তার', en: "Today's doctors" },
+  adminNowDoctorsNote: { bn: 'এখন বসছেন / আজ চেম্বার আছে', en: 'sitting now / scheduled today' },
+  adminNowWaiting: { bn: 'অপেক্ষায় রোগী', en: 'Patients waiting' },
+  adminNowAppointments: { bn: 'আজকের সিরিয়াল', en: "Today's appointments" },
+  adminNowAppointmentsNote: { bn: 'দেখা হয়েছে / বুক করা', en: 'seen / booked' },
+  adminNowBeds: { bn: 'খালি বেড', en: 'Beds free' },
+  adminNowBedsNote: { bn: 'খালি / চালু বেড', en: 'free / in service' },
+  adminNowNoWard: { bn: 'এখানে কোনো ওয়ার্ড নেই', en: 'No ward here' },
+  adminNowEmergency: { bn: 'জরুরি বিভাগ', en: 'Emergency' },
+  adminNowEmergencyValue: {
+    bn: 'পথে {onTheWay} · ভেতরে {inEr}',
+    en: '{onTheWay} on the way · {inEr} in the ER',
+  },
+  adminNowNoEr: { bn: 'এখানে জরুরি বিভাগ নেই', en: 'No emergency desk here' },
+  rxAdd: { bn: '+ ওষুধ', en: '+ Medicine' },
+  rxName: { bn: 'ওষুধের নাম', en: 'Medicine' },
+  rxStrength: { bn: 'মাত্রা', en: 'Strength' },
+  rxSchedule: { bn: 'সেবনবিধি (সকাল+দুপুর+রাত)', en: 'Schedule (morning+midday+night)' },
+  rxScheduleInvalid: {
+    bn: 'সকাল+দুপুর+রাত লিখুন, যেমন ১+০+১।',
+    en: 'Write morning+midday+night, such as 1+0+1.',
+  },
+  rxDays: { bn: 'কত দিন', en: 'Days' },
+  rxDaysInvalid: { bn: '১ থেকে ৩৬৫ দিন।', en: '1 to 365 days.' },
+  rxInstruction: { bn: 'নির্দেশনা (বাংলায়)', en: 'Instruction (in Bangla)' },
+  rxRemove: { bn: 'সরান', en: 'Remove' },
+  rxHint: {
+    bn: 'নাম লিখতে শুরু করলে তালিকা থেকে বেছে নিতে পারেন, বা তালিকায় না থাকলে নিজে লিখুন।',
+    en: 'Start typing a name to pick from the formulary, or write one it does not carry.',
+  },
+  rxNone: { bn: 'কোনো ওষুধ লেখা হয়নি।', en: 'No medicines written.' },
+  rxFixFirst: {
+    bn: 'ওষুধের ঘরে যা ঠিক নেই, তা আগে ঠিক করুন।',
+    en: 'Correct the medicine rows first.',
+  },
+  rxPrintLast: { bn: 'শেষ প্রেসক্রিপশন প্রিন্ট', en: 'Print last prescription' },
+  rxPrint: { bn: 'প্রিন্ট', en: 'Print' },
+  rxPrintFailed: {
+    bn: 'প্রেসক্রিপশনটি আনা যায়নি। আবার চেষ্টা করুন।',
+    en: 'The prescription could not be fetched. Please try again.',
+  },
+  rxDaysCount: { bn: '{days} দিন', en: '{days} days' },
+  // The patient's own papers, under their consent (FR-PAT-62; plan R3).
+  panelPapersTitle: { bn: 'রোগীর দেওয়া কাগজ', en: 'Papers the patient provided' },
+  panelPapersHint: {
+    bn: 'রোগী নিজে যোগ করেছেন; কোনো হাসপাতালের রেকর্ড নয়।',
+    en: 'Added by the patient; not a record any hospital made.',
+  },
+  panelPapersOpen: { bn: 'খুলুন', en: 'Open' },
+  panelPapersFailed: {
+    bn: 'কাগজটি খোলা যায়নি। আবার চেষ্টা করুন।',
+    en: 'The paper could not be opened. Please try again.',
+  },
   diagnosis: { bn: 'রোগ নির্ণয়', en: 'Diagnosis' },
   diagnosisHint: { bn: 'যা বুঝলেন, সংক্ষেপে', en: 'What you concluded, briefly' },
   adviceBn: { bn: 'রোগীর জন্য পরামর্শ (বাংলায়)', en: 'Advice for the patient (in Bangla)' },
@@ -1468,6 +1684,197 @@ export const CONSOLE = {
   platformUnverified: { bn: 'যাচাই বাকি', en: 'Not verified' },
   platformVerify: { bn: 'যাচাই হয়েছে বলে চিহ্নিত করুন', en: 'Mark as verified' },
   platformAdmins: { bn: 'হাসপাতালের প্রশাসক', en: 'The hospital’s administrators' },
+  platformSelfRegistered: { bn: 'নিজে আবেদন করেছে', en: 'Applied by itself' },
+  platformAppliedLine: {
+    bn: 'নিজে আবেদন করেছে। প্রতিষ্ঠানের ফোন: {phone} · নিবন্ধন নম্বর: {registration}',
+    en: 'Applied by itself. Facility phone: {phone} · registration number: {registration}',
+  },
+  // The modules a hospital runs (`FR-BRD-11`, `FRM-B12-MODULES`).
+  moduleQueue: { bn: 'সিরিয়াল ও রিসেপশন', en: 'Serials and reception' },
+  moduleDoctor: { bn: 'ডাক্তারের কনসোল', en: 'Doctor’s console' },
+  moduleBeds: { bn: 'বেড', en: 'Beds' },
+  moduleEmergency: { bn: 'জরুরি বিভাগ', en: 'Emergency' },
+  moduleLab: { bn: 'ল্যাব', en: 'Lab' },
+  modulePharmacy: { bn: 'ফার্মেসি', en: 'Pharmacy' },
+  moduleDashboard: { bn: 'ড্যাশবোর্ড', en: 'Dashboard' },
+  moduleImport: { bn: 'তথ্য আমদানি', en: 'Data import' },
+  platformModulesTitle: { bn: 'মডিউল', en: 'Modules' },
+  platformModulesHelper: {
+    bn: 'যেটি বন্ধ, সেটি এই হাসপাতালের কনসোলে দেখানো হয় না, সার্ভার তা নেয় না, আর রোগীরাও তা দেখেন না। হাসপাতালের আগের কোনো তথ্য মোছা হয় না। সিরিয়াল বন্ধ করলে ডাক্তারের কনসোলও বন্ধ হয়।',
+    en: 'A module that is off is not shown on this hospital’s consoles, is refused by the server, and is not shown to patients. Nothing the hospital holds is deleted. Switching serials off switches the doctor’s console off with it.',
+  },
+  platformModulesSave: { bn: 'মডিউল সংরক্ষণ করুন', en: 'Save modules' },
+  platformModulesSame: { bn: 'এই বাছাইটিই এখন সংরক্ষিত আছে', en: 'This choice is already saved' },
+  settingsModulesOff: {
+    bn: 'আপনার হাসপাতালে এই মডিউলগুলো চালু নেই: {modules}। চালু করতে প্ল্যাটফর্মকে জানান।',
+    en: 'Your hospital does not run these modules: {modules}. To switch one on, ask the platform.',
+  },
+  pickerOpenSettings: { bn: 'সেটিংস খুলুন', en: 'Open settings' },
+  // Where a hospital's agreement stands, and what it has used (`FR-SUP-04`,
+  // `FRM-B12-AGREEMENT`). Four words and three counts: no plan, no amount.
+  platformAgreementTitle: { bn: 'চুক্তির অবস্থা', en: 'Agreement' },
+  platformAgreementHelper: {
+    bn: 'এটি শুধু একটি নথি। এটি বদলালে হাসপাতালের কিছুই বন্ধ হয় না; নেটওয়ার্ক থেকে সরাতে হলে নিচে হাসপাতালটি স্থগিত করুন। এখানে কোনো প্যাকেজের নাম বা টাকার অঙ্ক লেখা হয় না।',
+    en: 'This is a record. Changing it switches nothing off at the hospital; to take a hospital out of the network, suspend it below. No plan name and no amount is written here.',
+  },
+  agreementTrial: { bn: 'পরীক্ষামূলক', en: 'Trial' },
+  agreementActive: { bn: 'সক্রিয়', en: 'Active' },
+  agreementOverdue: { bn: 'বকেয়া', en: 'Overdue' },
+  agreementEnded: { bn: 'শেষ হয়েছে', en: 'Ended' },
+  platformAgreementChipOverdue: { bn: 'চুক্তি বকেয়া', en: 'Agreement overdue' },
+  platformAgreementChipEnded: { bn: 'চুক্তি শেষ', en: 'Agreement ended' },
+  platformAgreementSetAt: {
+    bn: 'এখন: {state}। {when} তারিখে ঠিক করা হয়েছে।',
+    en: 'Now: {state}. Set on {when}.',
+  },
+  platformAgreementNeverSet: {
+    bn: 'এখনো কেউ ঠিক করেননি। নতুন হাসপাতাল পরীক্ষামূলক অবস্থায় শুরু হয়।',
+    en: 'Nobody has set this yet. A new hospital starts in trial.',
+  },
+  platformAgreementNoteLabel: { bn: 'নোট (ঐচ্ছিক)', en: 'Note (optional)' },
+  platformAgreementNoteHelper: {
+    bn: 'পরে যিনি দেখবেন তাঁর জন্য এক-দুই বাক্য। টাকার অঙ্ক লিখবেন না।',
+    en: 'A sentence or two for whoever reads this next. Do not write amounts.',
+  },
+  platformAgreementNoteShort: {
+    bn: 'নোট লিখলে অন্তত তিনটি অক্ষর লিখুন',
+    en: 'A note needs at least three characters',
+  },
+  platformAgreementSave: { bn: 'চুক্তির অবস্থা সংরক্ষণ করুন', en: 'Save agreement state' },
+  platformAgreementSame: {
+    bn: 'এই অবস্থাটিই এখন সংরক্ষিত আছে',
+    en: 'This is already what is recorded',
+  },
+  platformUsageTitle: { bn: 'ব্যবহার', en: 'Usage' },
+  platformUsageSerials: {
+    bn: 'গত {days} দিনে নেওয়া সিরিয়াল',
+    en: 'Serials taken in the last {days} days',
+  },
+  platformUsageChambers: {
+    bn: 'গত {days} দিনে বসা চেম্বার',
+    en: 'Chambers held in the last {days} days',
+  },
+  platformUsageMessages: { bn: 'এই মাসে পাঠানো এসএমএস', en: 'SMS sent this month' },
+  platformUsageHelper: {
+    bn: 'শুধু সংখ্যা। কোনো রোগী বা কারও সিরিয়াল এখানে দেখানো হয় না।',
+    en: 'Counts only. No patient and nobody’s serial is shown here.',
+  },
+  // How a hospital is doing, and what was done to it (`FR-SUP-06`,
+  // `FR-ONB-07`; `TXT-B12-HEALTH`, `LIST-B12-TRAIL`).
+  platformAttentionUnconfirmed: {
+    bn: 'তথ্য কখনো নিশ্চিত করা হয়নি',
+    en: 'A figure was never confirmed',
+  },
+  platformRowStalest: {
+    bn: 'সবচেয়ে পুরোনো প্রকাশিত তথ্য: {figure}, {age} আগের',
+    en: 'Oldest published figure: {figure}, {age} old',
+  },
+  platformAttentionMessages: { bn: 'বার্তা যায়নি', en: 'Messages not sent' },
+  platformHealthTitle: { bn: 'অবস্থা', en: 'Health' },
+  platformHealthFine: {
+    bn: 'এখন নজর দেওয়ার মতো কিছু নেই।',
+    en: 'Nothing needs attention right now.',
+  },
+  platformHealthFigures: { bn: 'প্রকাশিত তথ্য কত পুরোনো', en: 'How old its published figures are' },
+  platformHealthFiguresNone: {
+    bn: 'এই হাসপাতাল বেড বা জরুরি সেবার কোনো তথ্য প্রকাশ করে না।',
+    en: 'This hospital publishes no bed or emergency-service figure.',
+  },
+  platformHealthFigureBeds: { bn: 'বেডের হিসাব', en: 'Bed figures' },
+  platformHealthFigureCapabilities: { bn: 'জরুরি সেবার ঘোষণা', en: 'Emergency services' },
+  platformHealthFresh: { bn: 'হালনাগাদ', en: 'Fresh' },
+  platformHealthStale: { bn: 'পুরোনো', en: 'Stale' },
+  platformHealthNever: { bn: 'কখনো নিশ্চিত করা হয়নি', en: 'Never confirmed' },
+  platformHealthNotShared: {
+    bn: 'নেটওয়ার্কে দেখানো হয় না',
+    en: 'Not shared with the network',
+  },
+  platformHealthAge: { bn: '{age} আগে', en: '{age} ago' },
+  platformHealthThreshold: {
+    bn: '{age} পেরোলে পুরোনো ধরা হয়। রোগীর স্ক্রিনেও এই নিয়মই চলে।',
+    en: 'Stale after {age}. A patient’s screen uses the same rule.',
+  },
+  platformHealthMessages: { bn: 'গত {days} দিনের বার্তা', en: 'Messages in the last {days} days' },
+  platformHealthSent: { bn: 'পাঠানো হয়েছে', en: 'Sent' },
+  platformHealthFailed: { bn: 'পাঠানো যায়নি', en: 'Failed' },
+  platformHealthHeld: { bn: 'আটকে রাখা হয়েছে', en: 'Held back' },
+  platformHealthHeldHelper: {
+    bn: 'আটকে রাখা মানে ইচ্ছা করে পাঠানো হয়নি: নম্বর নেই, রাতের বিরতি চলছিল, বা মাসিক সীমা পেরিয়েছে।',
+    en: 'Held back means not sent on purpose: no number, quiet hours, or the monthly cap was reached.',
+  },
+  platformHealthWaiting: { bn: 'এখনো অপেক্ষায়', en: 'Still waiting' },
+  platformHealthDelivery: {
+    bn: 'যতগুলো পাঠানোর চেষ্টা হয়েছে তার {percent}% গেছে।',
+    en: '{percent}% of the messages attempted went.',
+  },
+  platformHealthNoMessages: {
+    bn: 'এই সময়ে কোনো বার্তা পাঠানোর চেষ্টা হয়নি।',
+    en: 'No message was attempted in this time.',
+  },
+  platformHealthSync: {
+    bn: 'গত {days} দিনে দেরিতে পৌঁছানো কাজ',
+    en: 'Work that arrived late in the last {days} days',
+  },
+  platformHealthSyncHelper: {
+    bn: 'কাউন্টারের সংযোগ চলে গেলে কাজ থামে না, সংযোগ ফিরলে সার্ভারে পৌঁছায়। এটি ত্রুটি নয়। তবে প্রায়ই হলে হাসপাতালের সংযোগ দেখা দরকার। সময় মাপা হয় কাউন্টারের নিজের ঘড়ি ধরে।',
+    en: 'A counter that loses its connection keeps working and sends its work when the connection returns. That is not a fault. If it happens often, the hospital’s connection needs looking at. The delay is measured by the counter’s own clock.',
+  },
+  platformHealthLateCount: { bn: 'দেরিতে পৌঁছেছে', en: 'Arrived late' },
+  platformHealthLateSlowest: { bn: 'সবচেয়ে বেশি দেরি', en: 'Longest delay' },
+  platformHealthLateLast: { bn: 'শেষবার', en: 'Most recently' },
+  platformHealthNoLate: {
+    bn: 'এই সময়ে কোনো কাজ দেরিতে পৌঁছায়নি।',
+    en: 'Nothing arrived late in this time.',
+  },
+  platformHealthUnderMinute: { bn: 'এক মিনিটের কম', en: 'Under a minute' },
+  platformTrailTitle: { bn: 'পরিবর্তনের ইতিহাস', en: 'Trail of changes' },
+  platformTrailHelper: {
+    bn: 'হাসপাতালের সেটিংস, অবস্থা, আমদানি ও ডাউনলোডে কে কখন কী করেছেন। কোনো রোগীর তথ্য এতে নেই।',
+    en: 'Who did what and when to the hospital’s settings, its state, its imports and exports. No patient is in it.',
+  },
+  platformTrailShow: { bn: 'ইতিহাস দেখুন', en: 'Show the trail' },
+  platformTrailMore: { bn: 'আরও দেখুন', en: 'Show more' },
+  platformTrailEmpty: { bn: 'এখনো কিছু বদলানো হয়নি।', en: 'Nothing has been changed yet.' },
+  platformTrailFailed: { bn: 'ইতিহাস আনা যায়নি।', en: 'The trail could not be loaded.' },
+  platformTrailByPlatform: { bn: 'প্ল্যাটফর্ম', en: 'Platform' },
+  platformTrailByHospital: { bn: 'হাসপাতাল', en: 'Hospital' },
+  platformTrailUnknownActor: { bn: 'নাম জানা নেই', en: 'Name not known' },
+  // Where a hospital's portal is (`FR-BRD-07`, `FRM-B12-DOMAIN`).
+  platformPortalTitle: { bn: 'পোর্টালের ঠিকানা', en: 'Portal address' },
+  platformPortalAt: { bn: 'প্ল্যাটফর্মের ডোমেইনে', en: 'Under the platform’s domain' },
+  platformPortalNoDomain: {
+    bn: 'এই স্থাপনায় প্ল্যাটফর্মের নিজস্ব ডোমেইন ঠিক করা হয়নি, তাই হাসপাতালের পোর্টাল কোনো ঠিকানা দিয়ে খোলে না।',
+    en: 'This deployment has no platform domain set, so a hospital’s portal is not opened by an address.',
+  },
+  platformDomainLabel: { bn: 'হাসপাতালের নিজের ডোমেইন', en: 'The hospital’s own domain' },
+  platformDomainHelper: {
+    bn: 'যেমন portal.example-hospital.com.bd। হাসপাতাল ডোমেইনটি এই প্ল্যাটফর্মের দিকে ঘুরিয়ে দেওয়ার পরে এখানে লিখুন।',
+    en: 'For example portal.example-hospital.com.bd. Record it once the hospital has pointed the domain at this platform.',
+  },
+  platformDomainSave: { bn: 'ডোমেইন সংরক্ষণ করুন', en: 'Save domain' },
+  platformDomainRemove: { bn: 'ডোমেইন সরান', en: 'Remove domain' },
+  platformDomainNeed: { bn: 'একটি ডোমেইন লিখুন', en: 'Enter a domain' },
+  platformDomainSame: {
+    bn: 'এই ডোমেইনটিই এখন সংরক্ষিত আছে',
+    en: 'This domain is already recorded',
+  },
+  platformDomainTaken: {
+    bn: 'এই ডোমেইনটি আরেকটি হাসপাতালের নামে আছে।',
+    en: 'That domain is already recorded for another hospital.',
+  },
+  platformDomainIsOurs: {
+    bn: 'এটি প্ল্যাটফর্মের নিজের ডোমেইনের অংশ। হাসপাতালের নিজস্ব ডোমেইন লিখুন।',
+    en: 'That is part of the platform’s own domain. Record a domain the hospital owns.',
+  },
+  settingsPortalHeading: { bn: 'আপনার পোর্টালের ঠিকানা', en: 'Your portal’s address' },
+  settingsPortalHelper: {
+    bn: 'রোগীরা এই ঠিকানায় গেলে অ্যাপটি শুধু আপনার হাসপাতালের হয়ে খোলে।',
+    en: 'At this address the app opens as your hospital’s alone.',
+  },
+  settingsPortalOwnHelper: {
+    bn: 'নিজস্ব ডোমেইন যোগ বা বদল করতে প্ল্যাটফর্মকে জানান।',
+    en: 'To add or change a domain of your own, ask the platform.',
+  },
   platformActionsTitle: { bn: 'সিদ্ধান্ত', en: 'Decision' },
   platformNoActions: {
     bn: 'এখন হাসপাতালের পালা। তারা পর্যালোচনার অনুরোধ করলে এখানে সিদ্ধান্ত নেওয়া যাবে।',
@@ -1476,6 +1883,11 @@ export const CONSOLE = {
   platformClosedLine: {
     bn: 'এই ওয়ার্কস্পেস বন্ধ। আর কোনো পরিবর্তন করা যাবে না।',
     en: 'This workspace is closed. Nothing more can be changed.',
+  },
+  // `FR-ONB-10`: declining an application is closing its workspace.
+  platformDeclineLine: {
+    bn: 'যে ওয়ার্কস্পেস আর এগোবে না, যেমন কোনো আসল প্রতিষ্ঠানের নয় এমন আবেদন, তা কারণ লিখে নিচে বন্ধ করা যায়।',
+    en: 'A workspace that should not go on, such as an application that is not from a real facility, can be closed below, with the reason.',
   },
   platformApprove: { bn: 'অনুমোদন দিয়ে লাইভ করুন', en: 'Approve and go live' },
   platformSendBack: { bn: 'ফেরত পাঠান', en: 'Send back' },
@@ -1737,6 +2149,108 @@ export const CONSOLE = {
     bn: 'লাইভ করার আগে অন্তত একটি বিভাগ ও একজন সক্রিয় ডাক্তার যোগ করুন।',
     en: 'Add at least one department and one active doctor before going live.',
   },
+  // What patients see of the hospital (`FR-BRD-06`, `S-B-11`).
+  settingsFaceHeading: { bn: 'রোগীরা যা দেখবে', en: 'What patients see' },
+  settingsFaceHelper: {
+    bn: 'এই বর্ণনা, লোগো ও রং রোগীর অ্যাপে আপনার হাসপাতালের কার্ডে এবং আপনার নিজস্ব পোর্টালে দেখানো হয়।',
+    en: 'This description, logo and colour are shown on your hospital’s card in the patient app and in your own portal.',
+  },
+  settingsDescriptionBn: { bn: 'সংক্ষিপ্ত বর্ণনা (বাংলায়)', en: 'Short description (Bangla)' },
+  settingsDescriptionEn: { bn: 'সংক্ষিপ্ত বর্ণনা (ইংরেজিতে)', en: 'Short description (English)' },
+  settingsDescriptionHelper: {
+    bn: 'দুই-তিন বাক্যে লিখুন: কোথায়, কী ধরনের সেবা। এমন কোনো সংখ্যা বা প্রতিশ্রুতি নয় যা রাখা যাবে না।',
+    en: 'Two or three sentences: where you are and what you offer. No figure or promise that cannot be kept.',
+  },
+  settingsDescriptionCount: { bn: '{used}/{max} অক্ষর', en: '{used}/{max} characters' },
+  settingsDescriptionTooLong: {
+    bn: 'বর্ণনাটি বেশি লম্বা হয়েছে',
+    en: 'The description is too long',
+  },
+  settingsSaveDescription: { bn: 'বর্ণনা সংরক্ষণ করুন', en: 'Save description' },
+  settingsLogoHeading: { bn: 'লোগো', en: 'Logo' },
+  settingsLogoNone: { bn: 'কোনো লোগো নেই', en: 'No logo' },
+  settingsLogoAlt: { bn: 'হাসপাতালের লোগো', en: 'The hospital’s logo' },
+  settingsLogoChoose: { bn: 'লোগোর ফাইল বেছে নিন', en: 'Choose a logo file' },
+  settingsLogoHelper: {
+    bn: 'PNG, JPEG বা WebP; সর্বোচ্চ ২৫৬ কিলোবাইট। বর্গাকার ছবি সবচেয়ে ভালো দেখায়। রোগীর ফোনে আপনার পোর্টালের আইকন হতে হলে বর্গাকার PNG লাগবে, প্রতি পাশে কমপক্ষে ১৯২ পিক্সেল।',
+    en: 'PNG, JPEG or WebP, up to 256 KB. A square image looks best. To be your portal’s icon on a patient’s phone it has to be a square PNG, at least 192 pixels a side.',
+  },
+  settingsLogoTooLarge: {
+    bn: 'ফাইলটি ২৫৬ কিলোবাইটের বেশি। ছোট একটি ছবি দিন।',
+    en: 'That file is over 256 KB. Use a smaller image.',
+  },
+  settingsLogoWrongType: {
+    bn: 'এই ধরনের ফাইল নেওয়া যায় না। PNG, JPEG বা WebP দিন।',
+    en: 'That kind of file cannot be used. Use a PNG, JPEG or WebP.',
+  },
+  settingsLogoChooseFirst: { bn: 'আগে একটি ফাইল বেছে নিন', en: 'Choose a file first' },
+  settingsLogoSave: { bn: 'লোগো সংরক্ষণ করুন', en: 'Save logo' },
+  settingsLogoRemove: { bn: 'লোগো সরান', en: 'Remove logo' },
+  settingsLogoSaved: { bn: 'লোগো সংরক্ষণ করা হয়েছে', en: 'Logo saved' },
+  settingsLogoRemoved: { bn: 'লোগো সরানো হয়েছে', en: 'Logo removed' },
+  settingsBrandHeading: { bn: 'রং', en: 'Colour' },
+  settingsBrandColour: { bn: 'আপনার হাসপাতালের রং', en: 'Your hospital’s colour' },
+  settingsBrandIsPlatform: {
+    bn: 'এখন রোগীরা আপনার হাসপাতাল প্ল্যাটফর্মের নিজস্ব রঙে দেখছেন।',
+    en: 'Patients currently see your hospital in the platform’s own colours.',
+  },
+  settingsBrandIsOwn: {
+    bn: 'রোগীরা আপনার পোর্টাল আপনার বেছে নেওয়া রঙে দেখছেন।',
+    en: 'Patients see your portal in the colour you chose.',
+  },
+  settingsBrandPreview: {
+    bn: 'রোগীর অ্যাপে যেমন দেখাবে',
+    en: 'As it will look in the patient app',
+  },
+  settingsBrandPreviewStrip: {
+    bn: 'রঙিন পটভূমিতে লেখা এমন দেখাবে',
+    en: 'Text on a tinted background looks like this',
+  },
+  settingsBrandPreviewButton: { bn: 'সিরিয়াল নিন', en: 'Take a serial' },
+  settingsBrandDarkened: {
+    bn: 'সাদা লেখা যাতে পড়া যায়, সে জন্য রংটি একটু গাঢ় করা হয়েছে।',
+    en: 'The colour was made a little darker so that white text on it can be read.',
+  },
+  settingsBrandUnchanged: {
+    bn: 'এই রংটিই এখন সংরক্ষিত আছে',
+    en: 'This is the colour already saved',
+  },
+  settingsBrandSave: { bn: 'রং সংরক্ষণ করুন', en: 'Save colour' },
+  settingsBrandReset: {
+    bn: 'প্ল্যাটফর্মের রঙে ফিরে যান',
+    en: 'Go back to the platform’s colours',
+  },
+  settingsBrandSaved: { bn: 'রং সংরক্ষণ করা হয়েছে', en: 'Colour saved' },
+
+  // --- What the hospital shares with the network (FRM-B11-PUBLISHING) -------
+  settingsPublishingTitle: {
+    bn: 'রোগীদের যা জানানো হয়',
+    en: 'What patients are told',
+  },
+  settingsPublishingHelper: {
+    bn: 'কোন সংখ্যাগুলো রোগীদের অ্যাপে দেখানো হবে তা আপনারাই ঠিক করেন। যেটি বন্ধ রাখবেন, সেখানে লেখা থাকবে "জানানো হয়নি"; শূন্য দেখানো হবে না।',
+    en: 'You decide which figures the patient app shows. One you turn off reads "not shared" there. It is never shown as zero.',
+  },
+  settingsPublishingEmergency: {
+    bn: 'জরুরি বিভাগে কী চিকিৎসা হয় তা সব সময় দেখানো হয়; এটি বন্ধ করা যায় না। বেডের সংখ্যা বন্ধ রাখলে জরুরি খোঁজেও লেখা থাকবে "জানানো হয়নি"।',
+    en: 'What the emergency department can treat is always shown and cannot be turned off. With bed figures off, an emergency search also reads "not shared".',
+  },
+  settingsPublishSerials: { bn: 'খালি সিরিয়াল ও কে বসছেন', en: 'Open serials and who is sitting' },
+  settingsPublishBeds: { bn: 'খালি বেড ও আইসিইউ', en: 'Free beds and ICU' },
+  settingsPublishStock: { bn: 'ফার্মেসিতে কোন ওষুধ আছে', en: 'Which medicines the pharmacy has' },
+  settingsPublishingSave: { bn: 'সংরক্ষণ করুন', en: 'Save' },
+  settingsPublishingSaved: { bn: 'সংরক্ষণ করা হয়েছে', en: 'Saved' },
+  settingsPublishingSame: { bn: 'কিছু বদলানো হয়নি', en: 'Nothing has changed' },
+  settingsPublishingShared: { bn: 'দেখানো হচ্ছে', en: 'Shared' },
+  settingsPublishingWithheld: { bn: 'জানানো হচ্ছে না', en: 'Not shared' },
+  settingsBrandCleared: {
+    bn: 'প্ল্যাটফর্মের রং ফিরিয়ে আনা হয়েছে',
+    en: 'Back to the platform’s colours',
+  },
+  settingsBrandUnreadable: {
+    bn: 'এই রঙে লেখা পড়া যাবে না, তাই নেওয়া হয়নি। অন্য একটি রং বেছে নিন।',
+    en: 'Text could not be read in these colours, so they were not saved. Choose another.',
+  },
   settingsLiveNow: {
     bn: 'রোগীরা এই প্রতিষ্ঠান দেখতে পাচ্ছেন',
     en: 'Patients can see this facility',
@@ -1787,8 +2301,8 @@ export const CONSOLE = {
 
   // --- S-B-14, mapping a hospital's own export (FR-IMP-13 to FR-IMP-18) -----
   importOwnFile: {
-    bn: 'আপনাদের নিজস্ব সিস্টেমের এক্সপোর্ট ফাইলও দিতে পারেন। কলামের নাম আলাদা হলে মিলিয়ে নেওয়ার সুযোগ পাবেন।',
-    en: 'You can also give your own system’s export. If its column names differ, you will be asked to match them.',
+    bn: 'CSV বা Excel (.xlsx) ফাইল দিন; আপনাদের নিজস্ব সিস্টেমের এক্সপোর্ট ফাইলও দিতে পারেন। কলামের নাম আলাদা হলে মিলিয়ে নেওয়ার সুযোগ পাবেন।',
+    en: 'Give a CSV or Excel (.xlsx) file; you can also give your own system’s export. If its column names differ, you will be asked to match them.',
   },
   importFileNoHeader: {
     bn: 'ফাইলের প্রথম সারিতে কলামের নাম থাকতে হবে। এই ফাইলের প্রথম সারিতে তথ্য আছে বলে মনে হচ্ছে। উপরে নামের একটি সারি যোগ করে আবার দিন।',
@@ -1906,6 +2420,28 @@ export const CONSOLE = {
     bn: 'দেরিতে আসা রোগী কতজন পরে বসবেন',
     en: 'A late patient is seated after this many',
   },
+  settingsPaymentHold: {
+    bn: 'অনলাইন পেমেন্টের জন্য সিরিয়াল রাখার সময় (মিনিট)',
+    en: 'How long a serial waits for its online payment (minutes)',
+  },
+  settingsPrepayRequired: {
+    bn: 'অনলাইনে আগে পরিশোধ বাধ্যতামূলক (কাউন্টারে পরিশোধ নয়)',
+    en: 'Online payment first for every serial (no paying at the counter)',
+  },
+  settingsNoShowPrepay: {
+    bn: 'যে নম্বর তিনবার আসেনি, তার পরের সিরিয়ালে আগে পরিশোধ',
+    en: 'A number that missed three serials pays first for its next one',
+  },
+  settingsNoShowWindow: { bn: 'কত দিনের মধ্যে গোনা হবে', en: 'Counted over how many days' },
+  settingsArrivalWindows: {
+    bn: 'বুকিংয়ের সময় রোগী কোন ঘণ্টায় আসতে চান তা বেছে নিতে পারবেন (নিশ্চিত সময় নয়)',
+    en: 'Patients may choose a preferred hour to arrive when booking (never a set time)',
+  },
+  settingsNoShowWindowHelper: { bn: '৭ থেকে ৩৬৫ দিন।', en: '7 to 365 days.' },
+  settingsPaymentHoldHelper: {
+    bn: '৫ থেকে ৬০ মিনিট। সময় শেষে সিরিয়াল কাউন্টারে পরিশোধের জন্য থাকে, বা আগে-পরিশোধের সিরিয়াল ছেড়ে দেওয়া হয়।',
+    en: '5 to 60 minutes. When it runs out the serial is paid at the counter, or released where it had to be paid first.',
+  },
   settingsStaleMinutes: {
     bn: 'কত মিনিট পর তথ্য পুরোনো ধরা হবে',
     en: 'Minutes before a figure counts as stale',
@@ -1915,6 +2451,30 @@ export const CONSOLE = {
     en: 'A no-show is marked once whichever of the two takes longer has passed.',
   },
   settingsSmsBudget: { bn: 'মাসে সর্বোচ্চ এসএমএস', en: 'SMS a month, at most' },
+  // This month's SMS by what became of them (`FR-NOT-06`, `TXT-B11-SMS`).
+  settingsSmsMonthHeading: { bn: 'এই মাসের এসএমএস', en: 'This month’s SMS' },
+  settingsSmsSent: { bn: 'পাঠানো হয়েছে', en: 'Sent' },
+  settingsSmsOfCap: { bn: '{cap}-এর মধ্যে {sent}', en: '{sent} of {cap}' },
+  settingsSmsDelivered: { bn: 'রোগীর ফোনে পৌঁছেছে', en: 'Reached the phone' },
+  settingsSmsDeliveryUnknown: {
+    bn: 'এই এসএমএস সেবা পৌঁছানোর খবর দেয় না',
+    en: 'This SMS service does not report delivery',
+  },
+  settingsSmsFailed: { bn: 'পাঠানো যায়নি', en: 'Failed' },
+  settingsSmsHeld: { bn: 'আটকে রাখা হয়েছে', en: 'Held back' },
+  settingsSmsWaiting: { bn: 'এখনো অপেক্ষায়', en: 'Still waiting' },
+  settingsSmsMonthHelper: {
+    bn: 'আটকে রাখা মানে ইচ্ছা করে পাঠানো হয়নি: রোগীর নম্বর নেই, বা মাসিক সীমা পেরিয়েছে। অপেক্ষায় মানে আবার চেষ্টা চলছে, বা সকালে পাঠানোর জন্য রাখা আছে।',
+    en: 'Held back means not sent on purpose: the patient has no number, or the monthly cap was reached. Still waiting means it is being tried again, or is kept for the morning.',
+  },
+  settingsSmsMonthFailed: {
+    bn: 'এই মাসের এসএমএসের হিসাব আনা যায়নি।',
+    en: 'This month’s SMS figures could not be loaded.',
+  },
+  settingsSmsMonthOffline: {
+    bn: 'সংযোগ নেই, তাই এই মাসের এসএমএসের হিসাব আনা যায়নি।',
+    en: 'You are offline, so this month’s SMS figures could not be loaded.',
+  },
   settingsSaveRules: { bn: 'নিয়ম সংরক্ষণ করুন', en: 'Save rules' },
   settingsDepartmentsEmpty: {
     bn: 'এখনো কোনো বিভাগ নেই। প্রথম বিভাগটি যোগ করুন।',
@@ -1993,6 +2553,81 @@ export const CONSOLE = {
     en: '{count} beds added. They stay out of service until the ward brings them into service from the board.',
   },
   settingsWardLine: { bn: '{floor} তলা · {count}টি বেড', en: 'Floor {floor} · {count} beds' },
+
+  // --- Putting right what was entered wrong (S-B-11, plan D2) ----------------
+  //
+  // The checklist names what a patient needs to reach the place; these are a
+  // yes or a no, so their lines carry no number.
+  settingsCountContact: { bn: 'ঠিকানা ও ফোন নম্বর', en: 'Address and phone number' },
+  settingsCountLocation: { bn: 'মানচিত্রে অবস্থান', en: 'Place on the map' },
+  settingsCountEmergency: {
+    bn: 'ঘোষিত জরুরি সেবা: {count}',
+    en: 'Emergency services declared: {count}',
+  },
+  settingsCheckAdvised: { bn: 'যোগ করা ভালো', en: 'Worth adding' },
+  settingsAdvisedLine: {
+    bn: 'পর্যালোচনা চাইতে এগুলো লাগে না। তবে ঠিকানা, ফোন নম্বর ও মানচিত্রে অবস্থান না থাকলে রোগী হাসপাতালে পৌঁছানোর পথ বা দূরত্ব জানতে পারবেন না।',
+    en: 'Review can be asked for without these. But with no address, phone number or place on the map a patient cannot be told how to reach the hospital or how far it is.',
+  },
+  settingsEdit: { bn: 'সম্পাদনা', en: 'Edit' },
+  settingsCancel: { bn: 'বাতিল', en: 'Cancel' },
+  settingsSaveChanges: { bn: 'পরিবর্তন সংরক্ষণ করুন', en: 'Save changes' },
+  settingsRemove: { bn: 'সরান', en: 'Remove' },
+  settingsRemoveSure: { bn: 'নিশ্চিত? এটি সরানো হবে।', en: 'Sure? This will be removed.' },
+  settingsRemoveYes: { bn: 'হ্যাঁ, সরান', en: 'Yes, remove' },
+  settingsRemoved: { bn: 'সরানো হয়েছে', en: 'Removed' },
+  settingsDepartmentInUse: {
+    bn: 'তালিকাভুক্ত ডাক্তার: {count}, তাই সরানো যায় না',
+    en: 'Doctors listed here: {count}, so it cannot be removed',
+  },
+  settingsIdentityTitle: { bn: 'নিবন্ধনের তথ্য', en: 'Registration details' },
+  settingsIdentityHelp: {
+    bn: 'অনুমোদনের আগে প্ল্যাটফর্ম এগুলো যাচাই করে, আর রোগীর খোঁজ জেলা ধরে হয়। পর্যালোচনা চাওয়ার আগে পর্যন্ত আপনি এগুলো ঠিক করতে পারেন।',
+    en: 'The platform checks these before approving, and a patient’s search goes by district. You can correct them until you ask for review.',
+  },
+  settingsIdentitySave: { bn: 'নিবন্ধনের তথ্য সংরক্ষণ করুন', en: 'Save registration details' },
+  settingsIdentityNone: { bn: 'দেওয়া হয়নি', en: 'not given' },
+  settingsIdentityLocked: {
+    bn: 'বিভাগ: {division} · জেলা: {district} · নিবন্ধন নম্বর: {registration}। পর্যালোচনা চাওয়ার পর এগুলো এখান থেকে বদলানো যায় না; কোনোটি ভুল থাকলে প্ল্যাটফর্মকে জানান।',
+    en: 'Division: {division} · district: {district} · registration number: {registration}. These cannot be changed here once review has been asked for; tell the platform if one is wrong.',
+  },
+  settingsNotAllowedIdentity: {
+    bn: 'পর্যালোচনা চাওয়ার পর বিভাগ, জেলা ও নিবন্ধন নম্বর এখান থেকে বদলানো যায় না।',
+    en: 'Once review has been asked for, the division, district and registration number cannot be changed here.',
+  },
+  settingsNotAllowedDepartmentInUse: {
+    bn: 'এই বিভাগে ডাক্তার তালিকাভুক্ত আছেন, তাই এটি সরানো যায় না।',
+    en: 'Doctors are listed under this department, so it cannot be removed.',
+  },
+  settingsNotAllowedWardHasBeds: {
+    bn: 'এই ওয়ার্ডে বেড আছে, তাই এটি সরানো যায় না।',
+    en: 'This ward has beds, so it cannot be removed.',
+  },
+  settingsNotAllowedBedInUse: {
+    bn: 'ওয়ার্ড এই বেড চালু করেছে, তাই এখান থেকে সরানো যায় না। ওয়ার্ড বোর্ড থেকে এটিকে সেবার বাইরে রাখুন।',
+    en: 'The ward has brought this bed into service, so it cannot be removed here. Take it out of service from the ward board.',
+  },
+  settingsDuplicateWardName: {
+    bn: 'এই নামে আরেকটি ওয়ার্ড আছে।',
+    en: 'Another ward has this name.',
+  },
+  settingsBedsPick: {
+    bn: 'নম্বর বা ভাড়া বদলাতে একটি বেড বেছে নিন।',
+    en: 'Choose a bed to change its number or its charge.',
+  },
+  settingsBedsUnconfirmedCount: {
+    bn: 'ওয়ার্ড এখনো চালু করেনি: {count}টি।',
+    en: 'Not yet brought into service by the ward: {count}.',
+  },
+  settingsBedLabel: { bn: 'বেডের নম্বর বা নাম', en: 'Bed number or name' },
+  settingsBedUnconfirmedNote: {
+    bn: 'ওয়ার্ড এখনো এই বেড চালু করেনি। ভুল করে যোগ হয়ে থাকলে সরাতে পারেন।',
+    en: 'The ward has not brought this bed into service yet. If it was added by mistake, it can be removed.',
+  },
+  settingsBedInServiceNote: {
+    bn: 'ওয়ার্ড এই বেড চালু করেছে, তাই এখান থেকে সরানো যায় না। বন্ধ করতে হলে ওয়ার্ড বোর্ড থেকে সেবার বাইরে রাখুন।',
+    en: 'The ward has brought this bed into service, so it cannot be removed here. To retire it, take it out of service from the ward board.',
+  },
   bedUnconfirmed: {
     bn: 'সেটিংস থেকে যোগ করা — ওয়ার্ড এখনো নিশ্চিত করেনি',
     en: 'Added in settings — not yet confirmed by the ward',
@@ -2335,7 +2970,16 @@ export const PATIENT = {
   seeADoctorSub: { bn: 'কোন সমস্যার জন্য দেখাবেন?', en: 'What do you need to be seen for?' },
   quickBed: { bn: 'বেড', en: 'Beds' },
   quickReport: { bn: 'রিপোর্ট', en: 'Reports' },
-  activeSerialTitle: { bn: 'আজকের সিরিয়াল চলছে', en: 'Your serial today' },
+  // Not "today's": a chamber that runs past midnight is still theirs (`FR-PAT-39`).
+  activeSerialTitle: { bn: 'আপনার সিরিয়াল চলছে', en: 'Your serial is live' },
+  serialStatusUnknown: {
+    bn: 'এখনকার অবস্থা জানা যাচ্ছে না',
+    en: 'The current status could not be checked',
+  },
+  serialStatusUnknownSince: {
+    bn: 'এখনকার অবস্থা জানা যাচ্ছে না · শেষ জানা {age}',
+    en: 'The current status could not be checked · last known {age}',
+  },
   activeSerialMeta: { bn: '{doctor} · এখন চলছে {serving}', en: '{doctor} · now serving {serving}' },
   doctorsHere: { bn: '{count} জন ডাক্তার', en: '{count} doctors' },
 
@@ -2375,6 +3019,20 @@ export const PATIENT = {
     en: 'See what {hospital} has right now, in one place.',
   },
   scopedSearch: { bn: 'ডাক্তার, বিভাগ, আইসিইউ খুঁজুন', en: 'Search doctors, specialties, ICU' },
+
+  // --- Inside a hospital's own portal (FR-BRD-09) ----------------------------
+  //
+  // Every page there is that hospital's, except the emergency search, which
+  // says that it is not.
+  emergencyNetworkWide: {
+    bn: 'জরুরি অবস্থায় শুধু {hospital} নয়, যুক্ত সব হাসপাতাল দেখানো হয়। যেটি চিকিৎসা দিতে পারে এবং কাছে, সেটি আগে।',
+    en: 'In an emergency this shows every participating hospital, not only {hospital}. One that can treat it and is near comes first.',
+  },
+  scopedMedicinesIntro: {
+    bn: 'ওষুধের নাম লিখুন। {hospital}-এর ফার্মেসিতে আছে কি না দেখা যাবে।',
+    en: 'Type a medicine name to see whether the pharmacy at {hospital} has it.',
+  },
+  scopedMedicinesShort: { bn: 'এই ফার্মেসিতে আছে কি না', en: 'Is it in this pharmacy' },
   searchLabel: { bn: 'নাম বা প্রয়োজন লিখুন', en: 'Type a name or what you need' },
   searchHelper: {
     bn: 'ডাক্তার, হাসপাতাল, বিভাগ, আইসিইউ, বার্ন ইউনিট',
@@ -2440,6 +3098,21 @@ export const PATIENT = {
   serialsOnThisDevice: {
     bn: 'এই ফোনে নেওয়া সিরিয়াল। অ্যাকাউন্ট খুললে সব ফোনে দেখা যাবে।',
     en: 'Serials booked on this phone. An account shows them on every device.',
+  },
+  // Plan F1: signed in, the list is the account's, from the server.
+  serialsFromAccount: {
+    bn: 'আপনার অ্যাকাউন্টের সিরিয়াল। যে ফোনেই লগ ইন করুন, একই তালিকা দেখবেন।',
+    en: 'Your account’s serials. The list is the same on any phone you sign in on.',
+  },
+  // `MOD-A07-PROFILE`: a signed-in patient books for a profile, with nothing retyped (FR-GST-10).
+  bookingForWhom: { bn: 'কার জন্য সিরিয়াল?', en: 'Who is the serial for?' },
+  bookingForSomeoneElse: {
+    bn: 'অন্য কারও জন্য বুক করুন',
+    en: 'Book for somebody else',
+  },
+  bookingForOwnProfile: {
+    bn: 'আমার প্রোফাইল থেকে বেছে নিন',
+    en: 'Choose from my profiles',
   },
 
   // --- S-A-12 health wallet (FR-PAT-60..65) --------------------------------
@@ -2518,8 +3191,8 @@ export const PATIENT = {
   // `PRD.md` §3.2: an empty Reports tab would be a claim about the patient's
   // health. This is a claim about the build, which is the true one.
   walletAbsent: {
-    bn: 'ব্যবস্থাপত্র, পুরোনো কাগজ যোগ করা আর পিডিএফ ডাউনলোড — এগুলো এখনো তৈরি হয়নি।',
-    en: 'Prescriptions, adding old paper records and PDF download are not built yet.',
+    bn: 'পুরোনো কাগজ যোগ করা আর সব রেকর্ড এক পিডিএফে — এগুলো এখনো তৈরি হয়নি।',
+    en: 'Adding old paper records and all records as one PDF are not built yet.',
   },
 
   // --- TAB-A12-REP: test reports (FR-LAB-03, FR-PAT-61) --------------------
@@ -2698,6 +3371,26 @@ export const PATIENT = {
   cardIcu: { bn: 'আইসিইউ {free}/{total}', en: 'ICU {free}/{total}' },
   cardNoIcu: { bn: 'আইসিইউ নেই', en: 'No ICU' },
   cardNoBeds: { bn: 'ভর্তির ব্যবস্থা নেই', en: 'No inpatient beds' },
+  // A bed figure past its freshness threshold is not said as a number
+  // (owner, 8 October; `FR-PAT-14`, `bedFigure`): not known. Shown beside
+  // the age of the last confirmation.
+  bedsUnknown: { bn: 'খালি বেডের খবর জানা নেই', en: 'Free beds not known' },
+  icuUnknown: { bn: 'আইসিইউর খবর জানা নেই', en: 'ICU not known' },
+  kindUnknown: { bn: '{kind} বেডের খবর জানা নেই', en: '{kind} beds not known' },
+
+  // --- A figure a hospital keeps to itself (FR-NET-04) ----------------------
+  //
+  // Said in the place the figure would have been. Never a zero and never
+  // "none": the hospital has it and has not shared it.
+  serialsNotShared: {
+    bn: 'সিরিয়ালের সংখ্যা জানানো হয়নি',
+    en: 'Serial figures not shared',
+  },
+  bedsNotShared: { bn: 'বেডের সংখ্যা জানানো হয়নি', en: 'Bed figures not shared' },
+  bedsNotSharedHint: {
+    bn: 'এই হাসপাতাল বেডের সংখ্যা জানায় না। অনুরোধ পাঠিয়ে জেনে নিন।',
+    en: 'This hospital does not share its bed figures. Send a request to find out.',
+  },
 
   // --- Emergency (S-A-10, S-A-10b, S-A-10c; FR-PAT-40..47) ------------------
   //
@@ -3064,6 +3757,10 @@ export const PATIENT = {
   reconnecting: { bn: 'আবার যুক্ত হচ্ছে…', en: 'Reconnecting…' },
 
   // --- Failures ------------------------------------------------------------
+  bookingLimitReached: {
+    bn: 'এই নম্বর থেকে আজ আর সিরিয়াল নেওয়া যাবে না। কাল আবার চেষ্টা করুন, অথবা হাসপাতালের কাউন্টারে যোগাযোগ করুন।',
+    en: 'No more serials can be taken from this number today. Try again tomorrow, or ask at the hospital counter.',
+  },
   alreadyBooked: {
     bn: 'এই ডাক্তারের কাছে আজ আপনার সিরিয়াল আগেই নেওয়া আছে।',
     en: 'You already have a serial with this doctor today.',
@@ -3074,6 +3771,16 @@ export const PATIENT = {
   },
   bookingFailed: { bn: 'সিরিয়াল নেওয়া যায়নি', en: 'Could not book' },
   tryAgain: { bn: 'আবার চেষ্টা করুন', en: 'Try again' },
+  // `<PortalGate>`: a hospital's own domain, and the server could not be asked whose it is.
+  portalNobodys: {
+    bn: 'এই ঠিকানাটি কোনো হাসপাতালের পোর্টাল নয়।',
+    en: 'This address is not a hospital’s portal.',
+  },
+  portalGoNetwork: { bn: 'মূল অ্যাপে যান', en: 'Go to the main app' },
+  portalUnreachable: {
+    bn: 'এই ঠিকানাটি কোন হাসপাতালের, তা এখনই জানা যাচ্ছে না। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।',
+    en: 'We cannot tell just now whose address this is. Check your connection and try again.',
+  },
 
   // GR-03's third state, and it is not the same as the empty one. "No hospital
   // offers this" is a statement about the world; a request that failed is a
@@ -3173,6 +3880,206 @@ export const PATIENT = {
   claimHeldBy: { bn: '{hospital}-এর খাতায়', en: "In {hospital}'s register" },
   claimConfirm: { bn: 'যোগ করুন', en: 'Add them' },
   claimLater: { bn: 'এখন না', en: 'Not now' },
+  // --- Visual Direction 2 (FRONTEND.md §0.5, owner 2026-10-07) ------------
+  navSearch: { bn: 'খুঁজুন', en: 'Search' },
+  navMore: { bn: 'আরও', en: 'More' },
+  homeHeroLine1: { bn: 'চিকিৎসা এখন', en: 'Healthcare,' },
+  homeHeroLine2: { bn: 'অনেক সহজ', en: 'made simple' },
+  homeHeroBody: {
+    bn: 'ঘরে বসেই দেখুন কখন আপনার পালা।',
+    en: 'See from home when your turn is coming.',
+  },
+  homeSearchField: {
+    bn: 'ডাক্তার, হাসপাতাল বা বেড খুঁজুন',
+    en: 'Search doctors, hospitals or beds',
+  },
+  homeFindDoctor: { bn: 'ডাক্তার খুঁজুন', en: 'Find a doctor' },
+  homeMySerial: { bn: 'আমার লাইভ সিরিয়াল', en: 'My live serial' },
+  homeEmergency: { bn: 'জরুরি সহায়তা', en: 'Emergency help' },
+  homeOtherServices: { bn: 'অন্যান্য সেবা', en: 'Other services' },
+  homeBeds: { bn: 'হাসপাতালের বেড', en: 'Hospital beds' },
+  homeMedicines: { bn: 'ওষুধ খুঁজুন', en: 'Find medicines' },
+  homeRecords: { bn: 'স্বাস্থ্য রেকর্ড', en: 'Health records' },
+  moreTitle: { bn: 'আরও', en: 'More' },
+  recordsTitle: { bn: 'আমার স্বাস্থ্য রেকর্ড', en: 'My health records' },
+  // A visit's medicines and BTN-A12-PRINT (FR-DOC-04, FR-DOC-07; plan R2).
+  recordsMedicines: { bn: 'ওষুধ', en: 'Medicines' },
+  recordsPrint: { bn: 'প্রিন্ট বা PDF', en: 'Print or PDF' },
+  recordsDaysCount: { bn: '{days} দিন', en: '{days} days' },
+  // CHIP-A07C-WINDOW (FR-PAT-28; plan R1).
+  windowTitle: { bn: 'কখন আসতে চান (ঐচ্ছিক)', en: 'When would you like to come (optional)' },
+  windowAny: { bn: 'যেকোনো সময়', en: 'Any time' },
+  windowNote: {
+    bn: 'এটি আপনার পছন্দ, নিশ্চিত সময় নয়। সিরিয়াল ক্রমেই ডাকা হবে; কখন রওনা দেবেন তা লাইভ সিরিয়াল দেখে ঠিক করুন।',
+    en: 'This is your preference, not a set time. Serials are called in order; the live serial tells you when to set off.',
+  },
+  windowChosen: { bn: 'আপনার পছন্দের সময়: {window}', en: 'Your preferred time: {window}' },
+  windowRefused: {
+    bn: 'এই সময়টি এই চেম্বারে নেওয়া যাচ্ছে না। অন্য সময় বা যেকোনো সময় বেছে নিন।',
+    en: 'That time is not offered for this chamber. Choose another, or any time.',
+  },
+  // A profile's own old papers (FR-PAT-62; plan R3, BTN-A12-UPLOAD).
+  papersTitle: { bn: 'পুরোনো কাগজ', en: 'Old papers' },
+  papersHint: {
+    bn: 'ছবি (JPEG, PNG, WebP) বা PDF, ৮ MB পর্যন্ত। শুধু আপনি দেখবেন; কোনো ডাক্তার দেখবেন শুধু আপনি সম্মতি দিলে।',
+    en: 'A photo (JPEG, PNG, WebP) or a PDF, up to 8 MB. Only you see it; a doctor sees it only with your consent.',
+  },
+  papersFile: { bn: 'ফাইল', en: 'File' },
+  papersKind: { bn: 'কী কাগজ', en: 'What it is' },
+  papersDate: { bn: 'কাগজের তারিখ (জানা থাকলে)', en: 'Date on the paper (if known)' },
+  papersDoctor: { bn: 'ডাক্তারের নাম (জানা থাকলে)', en: "Doctor's name (if known)" },
+  papersAdd: { bn: 'যোগ করুন', en: 'Add' },
+  papersChooseFirst: { bn: 'আগে একটি ফাইল বেছে নিন।', en: 'Choose a file first.' },
+  papersAdded: { bn: 'কাগজটি যোগ হয়েছে।', en: 'The paper was added.' },
+  papersNone: { bn: 'এখনো কোনো কাগজ যোগ করা হয়নি।', en: 'No papers added yet.' },
+  papersOpen: { bn: 'খুলুন', en: 'Open' },
+  papersRemove: { bn: 'সরান', en: 'Remove' },
+  papersRemoveSure: { bn: 'নিশ্চিত, সরান', en: 'Yes, remove' },
+  papersUnsupported: {
+    bn: 'শুধু ছবি (JPEG, PNG, WebP) বা PDF, ৮ MB পর্যন্ত, যোগ করা যায়।',
+    en: 'Only a photo (JPEG, PNG, WebP) or a PDF, up to 8 MB, can be added.',
+  },
+  papersOnProfile: {
+    bn: 'পুরোনো কাগজ রাখতে প্রোফাইলে সাইন ইন করুন।',
+    en: 'To keep old papers, sign in on the Profile tab.',
+  },
+  papersGoProfile: { bn: 'প্রোফাইলে যান', en: 'Go to Profile' },
+  emergencyHelpTitle: { bn: 'জরুরি সহায়তা', en: 'Emergency help' },
+  bedsScreenTitle: { bn: 'হাসপাতালের বেড', en: 'Hospital beds' },
+  searchTabDoctors: { bn: 'ডাক্তার · {count}', en: 'Doctors · {count}' },
+  searchTabHospitals: { bn: 'হাসপাতাল · {count}', en: 'Hospitals · {count}' },
+  searchResultKinds: { bn: 'ফলাফল', en: 'Results' },
+  doctorDetailsTitle: { bn: 'ডাক্তারের তথ্য', en: 'Doctor details' },
+  chooseChamber: { bn: 'চেম্বার বেছে নিন', en: 'Choose a chamber' },
+  consultationFee: { bn: 'পরামর্শ ফি', en: 'Consultation fee' },
+  feeShort: { bn: 'ফি', en: 'Fee' },
+  seatsLeftCount: { bn: '{count}টি খালি', en: '{count} left' },
+  liveAhead: { bn: 'আপনার আগে', en: 'Ahead of you' },
+  liveAheadCount: { bn: '{count} জন', en: '{count}' },
+  visitSteps: { bn: 'ভিজিটের ধাপ', en: 'Steps of the visit' },
+  stepBooked: { bn: 'সিরিয়াল নেওয়া', en: 'Booked' },
+  stepWaiting: { bn: 'অপেক্ষায়', en: 'Waiting' },
+  stepYourTurn: { bn: 'আপনার পালা', en: 'Your turn' },
+  stepSeen: { bn: 'দেখানো শেষ', en: 'Seen' },
+  stepCurrent: { bn: 'এখন এই ধাপে', en: 'Current step' },
+  smsWhenNear: {
+    bn: 'আপনার পালা কাছে এলে SMS পাঠানো হবে।',
+    en: 'We will send an SMS when your turn is near.',
+  },
+  appVersionDemo: { bn: 'সংস্করণ ১.০ · ডেমো', en: 'Version 1.0 · Demo' },
+  appVersion: { bn: 'সংস্করণ ১.০', en: 'Version 1.0' },
+  doctorTitled: { bn: 'ডা. {name}', en: 'Dr {name}' },
+  dayToday: { bn: 'আজ', en: 'Today' },
+  roomLabel: { bn: 'কক্ষ {room}', en: 'Room {room}' },
+  moreSignInTitle: { bn: 'লগ ইন করুন', en: 'Sign in' },
+  // The people booked under the signed-in number. Never a family: family
+  // accounts are not in V1 (owner, 8 October; `FR-PAT-02`).
+  moreProfilesTitle: { bn: 'এই নম্বরে বুক করা রোগী', en: 'People booked under this number' },
+  moreSettingsTitle: { bn: 'সেটিংস', en: 'Settings' },
+  moreRecordsSharing: { bn: 'রেকর্ড শেয়ার ও অনুমতি', en: 'Record sharing and permissions' },
+  moreMySerials: { bn: 'আমার সিরিয়াল', en: 'My serials' },
+  moreProfileCount: { bn: '{count}টি প্রোফাইল', en: '{count} profiles' },
+  dayTomorrow: { bn: 'কাল', en: 'Tomorrow' },
+  sessionHoursRoom: { bn: '{hours} · কক্ষ {room}', en: '{hours} · Room {room}' },
+  chooseChamberHint: {
+    bn: 'চেম্বারে ট্যাপ করলে সিরিয়াল নিশ্চিত করার ধাপে যাবেন।',
+    en: 'Tap a chamber to go on to confirming your serial.',
+  },
+  searchClearNeedLabel: { bn: '{need} বাদ দিন', en: 'Remove {need}' },
+  // --- A serial held while it is paid for (S-A-07d, S-A-07p; plan H3) -------
+  holdTitle: { bn: 'সিরিয়াল রাখা হয়েছে', en: 'Serial held' },
+  holdPayWithin: {
+    bn: '{minutes} মিনিটের মধ্যে পরিশোধ করুন',
+    en: 'Pay within {minutes} min',
+  },
+  holdThenCounter: {
+    bn: 'সময়ের মধ্যে না হলে সিরিয়াল থাকবে, ফি কাউন্টারে দিতে হবে।',
+    en: 'If not paid in time, the serial stands and the fee is paid at the counter.',
+  },
+  holdThenReleased: {
+    bn: 'সময়ের মধ্যে না হলে সিরিয়াল ছেড়ে দেওয়া হবে। কোনো টাকা কাটা হবে না।',
+    en: 'If not paid in time, the serial is released. Nothing is charged.',
+  },
+  holdOver: { bn: 'পরিশোধের সময় শেষ', en: 'The time to pay has run out' },
+  payNowBkash: { bn: 'bKash-এ পরিশোধ করুন', en: 'Pay with bKash' },
+  payNowNagad: { bn: 'Nagad-এ পরিশোধ করুন', en: 'Pay with Nagad' },
+  payNowCard: { bn: 'কার্ডে পরিশোধ করুন', en: 'Pay by card' },
+  payStartFailed: {
+    bn: 'পেমেন্ট শুরু করা যায়নি। আবার চেষ্টা করুন।',
+    en: 'The payment could not be started. Please try again.',
+  },
+  prepaymentAfterNoShows: {
+    bn: 'এই নম্বরে আগের তিনটি সিরিয়ালে আসা হয়নি, তাই এবার ফি আগে অনলাইনে দিতে হবে। bKash বা Nagad বেছে নিন।',
+    en: 'This number missed three earlier serials here, so this one is paid online first. Choose bKash or Nagad.',
+  },
+  prepaymentRequired: {
+    bn: 'এই সিরিয়ালের ফি আগে অনলাইনে দিতে হবে। bKash বা Nagad বেছে নিন।',
+    en: 'This serial must be paid online first. Choose bKash or Nagad.',
+  },
+  paymentUnavailable: {
+    bn: 'এই পদ্ধতিতে এখানে পরিশোধ করা যায় না।',
+    en: 'This way of paying is not available here.',
+  },
+  payReturnTitle: { bn: 'পেমেন্ট', en: 'Payment' },
+  payChecking: { bn: 'যাচাই হচ্ছে…', en: 'Checking…' },
+  payPaidTitle: { bn: 'পরিশোধ হয়েছে', en: 'Paid' },
+  payPaidBody: { bn: 'আপনার সিরিয়াল নিশ্চিত হয়েছে।', en: 'Your serial is confirmed.' },
+  payPendingTitle: { bn: 'পেমেন্ট এখনো নিশ্চিত হয়নি', en: 'Payment not confirmed yet' },
+  payPendingBody: {
+    bn: 'আমরা কিছুক্ষণ পরপর আবার যাচাই করছি।',
+    en: 'We are checking again every few seconds.',
+  },
+  payFailedTitle: { bn: 'পেমেন্ট হয়নি', en: 'The payment did not go through' },
+  payCancelledTitle: { bn: 'পেমেন্ট বাতিল করেছেন', en: 'You cancelled the payment' },
+  payTimeLeft: {
+    bn: 'সিরিয়াল আরও {minutes} মিনিট রাখা থাকবে।',
+    en: 'The serial is held for {minutes} more min.',
+  },
+  payRetry: { bn: 'আবার চেষ্টা করুন', en: 'Try again' },
+  payAtCounterInstead: { bn: 'হাসপাতালে পরিশোধ করব', en: 'I will pay at the hospital' },
+  payCounterChosen: {
+    bn: 'ঠিক আছে — সিরিয়াল আছে, ফি কাউন্টারে দিন।',
+    en: 'Done — the serial stands; pay the fee at the counter.',
+  },
+  payExpiredCounter: {
+    bn: 'সময় শেষ — সিরিয়াল আছে, ফি কাউন্টারে দিন।',
+    en: 'Time ran out — the serial stands; pay the fee at the counter.',
+  },
+  payExpiredReleased: {
+    bn: 'সময় শেষ — সিরিয়াল ছেড়ে দেওয়া হয়েছে। কোনো টাকা কাটা হয়নি।',
+    en: 'Time ran out — the serial was released. Nothing was charged.',
+  },
+  payCheckFailed: {
+    bn: 'যাচাই করা যায়নি। আবার চেষ্টা করুন।',
+    en: 'Could not check. Please try again.',
+  },
+  payOffline: {
+    bn: 'ইন্টারনেট নেই — সংযোগ ফিরলে যাচাই হবে।',
+    en: 'No internet — it will be checked when the connection returns.',
+  },
+  payNoCredential: {
+    bn: 'আমরা যাচাই করছি; ফলাফল SMS-এ জানানো হবে।',
+    en: 'We are checking; the result will be sent by SMS.',
+  },
+
+  // --- The simulated provider's page (plan H3; demonstration and tests only) --
+  mockPayTitle: { bn: 'সিমুলেটেড পেমেন্ট (ডেমো)', en: 'Simulated payment (demo)' },
+  mockPayNote: {
+    bn: 'এটি bKash বা Nagad নয়। কোনো টাকা কাটা হবে না; ফলাফল বেছে নিন।',
+    en: 'This is not bKash or Nagad. No money moves; choose an outcome.',
+  },
+  mockPayAmount: { bn: 'পরিমাণ', en: 'Amount' },
+  mockPayPay: { bn: 'পরিশোধ সফল', en: 'Payment succeeds' },
+  mockPayFail: { bn: 'পরিশোধ ব্যর্থ', en: 'Payment fails' },
+  mockPayCancel: { bn: 'বাতিল করুন', en: 'Cancel' },
+  mockPayDone: {
+    bn: 'এই পেমেন্টের ফলাফল আগেই বেছে নেওয়া হয়েছে।',
+    en: 'This payment already has an outcome.',
+  },
+  searchFieldLabel: {
+    bn: 'ডাক্তার, হাসপাতাল বা প্রয়োজন খুঁজুন',
+    en: 'Search for a doctor, hospital or need',
+  },
 } as const satisfies Record<string, Message>;
 
 export type PatientKey = keyof typeof PATIENT;

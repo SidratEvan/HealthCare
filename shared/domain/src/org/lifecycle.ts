@@ -17,6 +17,11 @@
  * administrator asks, a platform administrator approves. Nothing in this file
  * lets one person do both, because the actions carry who may take them.
  *
+ * A workspace that never went live can be closed too, from `setup` or
+ * `ready_for_review` (not drawn above). That is how the platform declines an
+ * application (`FR-ONB-10`): a hospital may now make a workspace by itself,
+ * and one nobody can dismiss would wait in the list for ever.
+ *
  * ## Readiness is counted, never stored
  *
  * `FR-ONB-03`: the checklist is what exists — departments, doctors, schedules,
@@ -43,7 +48,12 @@ const TRANSITIONS: Readonly<Record<OrgAction, Partial<Record<OrgLifecycle, OrgLi
   send_back: { ready_for_review: 'setup' },
   suspend: { active: 'suspended' },
   reinstate: { suspended: 'active' },
-  close: { active: 'closed', suspended: 'closed' },
+  close: {
+    setup: 'closed',
+    ready_for_review: 'closed',
+    active: 'closed',
+    suspended: 'closed',
+  },
 };
 
 /** The state an action leads to from this one, or null when it is not allowed. */
@@ -90,6 +100,19 @@ export interface SetupCounts {
   readonly beds: number;
   /** Active staff accounts, the administrator's own included. */
   readonly staff: number;
+  /**
+   * 1 when the facility has an address and a phone number a patient can use,
+   * else 0 (plan D2). A yes or a no, kept as a count like the rest.
+   */
+  readonly contact: number;
+  /** 1 when it has a place on the map, else 0: without one nothing can say how far it is. */
+  readonly location: number;
+  /**
+   * The emergency services it has declared (`FR-EMG-05`); null where the
+   * hospital runs no emergency desk (`FR-BRD-11`), which is not a thing
+   * missing.
+   */
+  readonly capabilities: number | null;
 }
 
 export const CHECKLIST_ITEMS = [
@@ -97,6 +120,9 @@ export const CHECKLIST_ITEMS = [
   'doctors',
   'schedules',
   'staff',
+  'contact',
+  'location',
+  'emergency_services',
   'beds',
   'verified_doctors',
 ] as const;
@@ -115,22 +141,62 @@ export interface ChecklistItem {
    * (`FR-ONB-05`) — so they cannot be a condition of asking for it.
    */
   readonly required: boolean;
+  /**
+   * Not needed to ask for review, and a patient is worse off without it
+   * (plan D2): where the hospital is, how to ring it, where it is on the map,
+   * what its emergency department can treat. The checklist names these so
+   * that nobody goes live without having been told; it does not refuse on
+   * them, because `FR-ONB-03` lists what review waits for and they are not
+   * in it.
+   */
+  readonly advised: boolean;
 }
 
 export function setupChecklist(counts: SetupCounts): readonly ChecklistItem[] {
+  const required = { required: true, advised: false } as const;
+  const advised = { required: false, advised: true } as const;
+  const optional = { required: false, advised: false } as const;
   return [
-    { key: 'departments', count: counts.departments, done: counts.departments > 0, required: true },
-    { key: 'doctors', count: counts.doctors, done: counts.doctors > 0, required: true },
-    { key: 'schedules', count: counts.schedules, done: counts.schedules > 0, required: true },
-    { key: 'staff', count: counts.staff, done: counts.staff > 0, required: true },
-    { key: 'beds', count: counts.beds, done: counts.beds > 0, required: false },
+    { key: 'departments', count: counts.departments, done: counts.departments > 0, ...required },
+    { key: 'doctors', count: counts.doctors, done: counts.doctors > 0, ...required },
+    { key: 'schedules', count: counts.schedules, done: counts.schedules > 0, ...required },
+    { key: 'staff', count: counts.staff, done: counts.staff > 0, ...required },
+    { key: 'contact', count: counts.contact, done: counts.contact > 0, ...advised },
+    { key: 'location', count: counts.location, done: counts.location > 0, ...advised },
+    // Named only where there is an emergency desk to say it of.
+    ...(counts.capabilities === null
+      ? []
+      : [
+          {
+            key: 'emergency_services',
+            count: counts.capabilities,
+            done: counts.capabilities > 0,
+            ...advised,
+          } as const,
+        ]),
+    { key: 'beds', count: counts.beds, done: counts.beds > 0, ...optional },
     {
       key: 'verified_doctors',
       count: counts.verifiedDoctors,
       done: counts.verifiedDoctors > 0,
-      required: false,
+      ...optional,
     },
   ];
+}
+
+/**
+ * Whether a hospital may still correct what it was registered as: its
+ * division, district and registration number (plan D2).
+ *
+ * Those are what the platform checks before approving, and what a patient's
+ * search is filed under. While the workspace is setting up they are the
+ * hospital's own to get right, a typo in an application included. Once review
+ * has been asked for they are what is being reviewed, and once it is approved
+ * they are what was: a workspace sent back is setting up again and can
+ * correct them, and nothing else changes them from a screen.
+ */
+export function identityEditable(lifecycle: OrgLifecycle): boolean {
+  return lifecycle === 'setup';
 }
 
 /** The required items still missing. Empty when review can be asked for. */

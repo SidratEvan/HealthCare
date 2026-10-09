@@ -21,19 +21,21 @@
  * care what is on the other side.
  */
 
-import type {
-  BedView,
-  EmergencyCaseView,
-  Eta,
-  PublicCapacity,
-  QueueState,
-  ReferralView,
-  TestOrderView,
+import {
+  patientViewOf,
+  type BedView,
+  type EmergencyCaseView,
+  type Eta,
+  type PublicCapacity,
+  type QueueState,
+  type ReferralView,
+  type TestOrderView,
 } from '@platform/domain';
 
 import { logger } from '../config/logger.js';
+import { ticketsIn } from '../config/serialTicket.js';
 
-import { ROOMS, type RealtimeEnvelope } from './rooms.js';
+import { ROOMS, type AppliedAction, type RealtimeEnvelope } from './rooms.js';
 
 /** What a transport must be able to do. Deliberately tiny. */
 export interface RealtimeEmitter {
@@ -121,18 +123,34 @@ export function resetEmitter(): RecordingEmitter {
  * a client that missed one message must not be left holding a queue that is
  * quietly wrong; the resume-from-seq path exists for the case where a client
  * wants the events it missed instead.
+ *
+ * `applied` names the console actions the write behind this broadcast put in
+ * the log (`SY-08`): those and nothing older. It is empty when no action is
+ * behind it — a roster change. The answer to the request says the same thing
+ * by another road, and a console acts on whichever it hears first.
  */
 export function queueUpdated(
   sessionId: string,
   payload: QueueUpdatedPayload,
   seq: number,
   serverTs: string,
+  applied: readonly AppliedAction[] = [],
 ): void {
+  emitter().emit(ROOMS.sessionStaff(sessionId), 'queue.updated', {
+    type: 'queue.updated',
+    seq,
+    serverTs,
+    applied,
+    data: payload,
+  });
+  // The patients' copy (plan I2c): the same queue, naming nobody. No console
+  // actions either: a phone has none to settle.
   emitter().emit(ROOMS.session(sessionId), 'queue.updated', {
     type: 'queue.updated',
     seq,
     serverTs,
-    data: payload,
+    applied: [],
+    data: patientViewOf(payload.state, payload.etas, ticketsIn(sessionId)),
   });
 }
 
@@ -147,22 +165,16 @@ export function sessionDelayed(
   seq: number,
   serverTs: string,
 ): void {
-  emitter().emit(ROOMS.session(sessionId), 'session.delayed', {
-    type: 'session.delayed',
-    seq,
-    serverTs,
-    data,
-  });
+  for (const room of [ROOMS.sessionStaff(sessionId), ROOMS.session(sessionId)]) {
+    emitter().emit(room, 'session.delayed', { type: 'session.delayed', seq, serverTs, data });
+  }
 }
 
 /** `session.ended` — stop polling, the chamber is closed (`FR-REC-06`). */
 export function sessionEnded(sessionId: string, seq: number, serverTs: string): void {
-  emitter().emit(ROOMS.session(sessionId), 'session.ended', {
-    type: 'session.ended',
-    seq,
-    serverTs,
-    data: {},
-  });
+  for (const room of [ROOMS.sessionStaff(sessionId), ROOMS.session(sessionId)]) {
+    emitter().emit(room, 'session.ended', { type: 'session.ended', seq, serverTs, data: {} });
+  }
 }
 
 /**
@@ -199,7 +211,11 @@ export function patientCalled(
  */
 export function bedUpdated(
   hospitalId: string,
-  data: { readonly beds: readonly BedView[] },
+  data: {
+    readonly beds: readonly BedView[];
+    /** The console action behind the change, by its own key; null when nobody's (`SY-09`). */
+    readonly clientEventId?: string | null;
+  },
   serverTs: string,
 ): void {
   emitter().emit(ROOMS.beds(hospitalId), 'bed.updated', {
@@ -274,7 +290,12 @@ export function emergencyInbound(
 /** `emergency.updated` — a case moved: prepared, accepted, triaged, declined, called off. */
 export function emergencyUpdated(
   hospitalId: string,
-  data: { readonly case: EmergencyCaseView; readonly load: number },
+  data: {
+    readonly case: EmergencyCaseView;
+    readonly load: number;
+    /** The console action behind the change, by its own key; null when nobody's (`SY-09`). */
+    readonly clientEventId?: string | null;
+  },
   serverTs: string,
 ): void {
   emitter().emit(ROOMS.emergency(hospitalId), 'emergency.updated', {

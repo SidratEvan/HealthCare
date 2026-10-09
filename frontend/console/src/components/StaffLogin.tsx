@@ -229,6 +229,13 @@ export function StaffLogin({
         </form>
 
         <p className="text-body-sm text-ink-muted">{t('loginForgot', locale)}</p>
+        {/* `FR-ONB-09`: a hospital that is not on the platform yet applies here. */}
+        <p className="text-body-sm text-ink-secondary">
+          {t('applyFromLogin', locale)}{' '}
+          <a href="/?apply=1" className="underline" data-testid="login-apply-link">
+            {t('applyLink', locale)}
+          </a>
+        </p>
         {demo ? (
           <p
             className="rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700"

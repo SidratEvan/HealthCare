@@ -23,10 +23,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
-import * as demoRepo from '../repositories/demo.repo.js';
 import { createPlatformAdministrator } from '../services/staffAuth.service.js';
 
 import { asOwner } from './support/ownerDb.js';
+import { seededPlatformAdminId } from './support/queueFixture.js';
 import { bearer, nationalToken, patientToken, staffToken } from './support/tokens.js';
 
 import type { Express } from 'express';
@@ -86,8 +86,7 @@ const NOWHERE = {
 beforeAll(async () => {
   app = createApp();
 
-  const account = await demoRepo.nationalStaffFor('platform_admin');
-  if (account === null) throw new Error('The seed has no platform administrator.');
+  const account = { id: await seededPlatformAdminId() };
   platformStaffId = account.id;
   platform = await signToken({
     kind: 'access',
@@ -227,6 +226,11 @@ describe('a hospital, from nothing to live (FR-ONB-01 to FR-ONB-05)', () => {
       schedules: 0,
       beds: 0,
       staff: 1,
+      // Plan D2: named, and not waited for. No address or phone, no place on
+      // the map, and an emergency desk that has declared nothing yet.
+      contact: 0,
+      location: 0,
+      capabilities: 0,
     });
   });
 
@@ -309,7 +313,8 @@ describe('a hospital, from nothing to live (FR-ONB-01 to FR-ONB-05)', () => {
       lifecycle: 'ready_for_review',
       counts: { departments: 1, doctors: 1, verifiedDoctors: 0, schedules: 1 },
     });
-    expect([...(mine?.actions ?? [])].sort()).toEqual(['approve', 'send_back']);
+    // Approve it, send it back, or decline it altogether (`FR-ONB-10`).
+    expect([...(mine?.actions ?? [])].sort()).toEqual(['approve', 'close', 'send_back']);
 
     // What is absent is the boundary: organisations and counts, never people
     // who came for care.

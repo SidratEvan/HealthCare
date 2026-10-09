@@ -44,17 +44,25 @@ test.describe('S-A-02 Home', () => {
     await expect(emergency).toBeVisible();
     await expect(emergency).toBeInViewport();
 
-    // Then the care layer.
-    await expect(page.getByTestId('specialty-CARD')).toBeVisible();
+    // Then the way to ask, and the three main actions (Visual Direction 2).
+    await expect(page.getByTestId('home-search')).toBeVisible();
+    await expect(page.getByTestId('home-find-doctor')).toBeInViewport();
+    await expect(page.getByTestId('home-my-serial')).toBeInViewport();
   });
 
-  test('a specialty card opens the hospital list, not a doctor list', async ({ page }) => {
+  test('a specialty answers with its doctors and, a tap away, the hospitals offering it', async ({
+    page,
+  }) => {
+    // The specialties moved from Home to the search screen on 2026-10-07
+    // (APP_FLOW.md S-A-02); `S-A-07s` shows doctors first for a specialty and
+    // the hospitals offering it on the other side of the switch.
     await page.goto(PATIENT);
-    await page.getByTestId(`specialty-${demo.departmentCode}`).click();
+    await page.getByTestId('home-find-doctor').click();
+    await page.getByTestId(`need-specialty:${demo.departmentCode}`).click();
 
-    // `S-A-07` is "Specialty results — hospitals offering it": the order the
-    // owner asked for, and the order the document always specified.
-    await expect(page.getByTestId(`hospital-${demo.hospitalId}`)).toBeVisible();
+    await expect(page.locator('[data-testid^="result-doctor-"]').first()).toBeVisible();
+    await page.getByTestId('search-tab-hospitals').click();
+    await expect(page.getByTestId(`result-hospital-${demo.hospitalId}`)).toBeVisible();
   });
 
   test('a live figure on the hospital list says how old it is (FR-PAT-14)', async ({ page }) => {
@@ -67,7 +75,7 @@ test.describe('S-A-02 Home', () => {
 });
 
 test.describe('NAV-A the bottom navigation', () => {
-  test('carries four labelled tabs', async ({ page }) => {
+  test('carries five labelled tabs', async ({ page }) => {
     await page.goto(PATIENT);
 
     const nav = page.getByTestId('bottom-nav');
@@ -76,7 +84,7 @@ test.describe('NAV-A the bottom navigation', () => {
     // `ICO-03`: the label carries the meaning. An icon alone is not reliably
     // decoded by the older users this product is largely for, so the words stay
     // on screen rather than appearing only on the active tab.
-    for (const label of ['হোম', 'সিরিয়াল', 'রেকর্ড', 'প্রোফাইল']) {
+    for (const label of ['হোম', 'খুঁজুন', 'সিরিয়াল', 'রেকর্ড', 'আরও']) {
       await expect(nav.getByText(label)).toBeVisible();
     }
   });
@@ -93,7 +101,7 @@ test.describe('NAV-A the bottom navigation', () => {
   test('every tab lands somewhere that explains itself', async ({ page }) => {
     await page.goto(PATIENT);
 
-    for (const tab of ['serials', 'records', 'profile']) {
+    for (const tab of ['search', 'serials', 'records', 'profile']) {
       await page.getByTestId(`nav-${tab}`).click();
       await expect(page).toHaveURL(new RegExp(`/${tab}$`));
 

@@ -21,7 +21,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { normaliseBdMobile } from '@platform/domain';
+import { SPECIALTIES, arrivalWindows, normaliseBdMobile } from '@platform/domain';
+import type { ArrivalWindow } from '@platform/domain';
 import {
   formatDateTime,
   formatMinutes,
@@ -33,19 +34,25 @@ import {
   districtName,
   numeralsFor,
   localName,
+  type Locale,
 } from '@platform/i18n';
 import { Button, Card, Chip, FreshnessLine, Input, useLocale } from '@platform/ui';
 
-import { BottomNav, BottomNavSpacer } from '@/components/BottomNav';
-import { DemoBanner } from '@/components/DemoBanner';
 import { GuestCodeCard } from '@/components/GuestCodeCard';
 import { HospitalBeds } from '@/components/HospitalBeds';
-import { BackIcon, ChevronIcon, HospitalIcon } from '@/components/icons';
+import { HospitalMark } from '@/components/HospitalMark';
+import { ChevronIcon } from '@/components/icons';
+import { Monogram } from '@/components/Monogram';
+import { NotShared, withholds } from '@/components/NotShared';
+import { PaymentHold } from '@/components/PaymentHold';
 import { StandbyJoin } from '@/components/StandbyJoin';
+import { EmptyState, FailedState, OfflineNotice, Panel, SkeletonCards } from '@/components/States';
+import { TabScreen } from '@/components/TabScreen';
 import { useDeployment } from '@/hooks/useDeployment';
 import { useGuestPhoneProof } from '@/hooks/useGuestPhoneProof';
 import { useNow } from '@/hooks/useNow';
 import { useOnline } from '@/hooks/useOnline';
+import { bookAsProfile, profiles, readAccount, type Profile } from '@/lib/account';
 import {
   allHospitals,
   availability,
@@ -55,7 +62,10 @@ import {
   hospitalsForSpecialty,
 } from '@/lib/api';
 import { rememberBooking } from '@/lib/bookings';
+import { doctorName } from '@/lib/doctor';
+import { sessionDay, sessionHours } from '@/lib/when';
 
+import type { BackTarget } from '@/components/AppHeader';
 import type { BookingResponse } from '@/lib/api';
 import type {
   Availability,
@@ -111,6 +121,8 @@ export default function BookPage(): ReactNode {
   const [session, setSession] = useState<SessionCard | null>(null);
   const [slots, setSlots] = useState<Availability | null>(null);
   const [booking, setBooking] = useState<BookingResponse | null>(null);
+  // The preferred hour chosen at confirm, for the success screen (`FR-PAT-28`).
+  const [chosenWindow, setChosenWindow] = useState<ArrivalWindow | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
   // Read after mount: the server has no `location`, and reading it during
@@ -210,120 +222,121 @@ export default function BookPage(): ReactNode {
   }, []);
 
   if (step === 'done' && booking !== null && session !== null) {
-    return <Success booking={booking} session={session} />;
+    return <Success booking={booking} session={session} window={chosenWindow} />;
   }
 
+  // The header says where in the flow a person is, and its back control is
+  // one step back inside the flow, never a dead end (`BTN-A07-BACK`).
+  const specialtyEntry =
+    specialty === null || specialty === ANY_SPECIALTY
+      ? undefined
+      : SPECIALTIES.find((entry) => entry.code === specialty);
+  const stepBack = (to: Step): BackTarget => ({
+    onBack: () => {
+      setStep(to);
+    },
+    testId: 'step-back',
+  });
+  const header: { readonly title: string; readonly back: BackTarget } =
+    step === 'doctor'
+      ? { title: tp('chooseDoctor', locale), back: stepBack('hospital') }
+      : step === 'session'
+        ? { title: tp('doctorDetailsTitle', locale), back: stepBack('doctor') }
+        : step === 'standby'
+          ? { title: tp('standbyJoinTitle', locale), back: stepBack('session') }
+          : step === 'confirm'
+            ? { title: tp('confirmTitle', locale), back: stepBack('session') }
+            : {
+                title:
+                  specialtyEntry === undefined
+                    ? tp('homeFindDoctor', locale)
+                    : localName(locale, specialtyEntry.nameBn, specialtyEntry.nameEn),
+                back: { fallback: '/search' },
+              };
+
   return (
-    <>
-      <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5">
-        <DemoBanner />
-
-        {/* GR-03: the fourth state. Announced, because a person who has just
+    <TabScreen title={header.title} back={header.back}>
+      {/* GR-03: the fourth state. Announced, because a person who has just
           lost signal is not necessarily looking at the top of the screen. */}
-        {online ? null : (
-          <p
-            role="status"
-            data-testid="offline-notice"
-            className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
-          >
-            {tp('offlineBooking', locale)}
-          </p>
-        )}
+      {online ? null : (
+        <OfflineNotice testId="offline-notice">{tp('offlineBooking', locale)}</OfflineNotice>
+      )}
 
-        {step === 'hospital' ? (
-          // A result that names its hospital waits for the list rather than
-          // showing it for a moment and then leaving it.
-          <HospitalList
-            hospitals={entry.hospital === null ? places : { state: 'loading' }}
-            onChoose={chooseHospital}
-          />
-        ) : null}
+      {step === 'hospital' ? (
+        // A result that names its hospital waits for the list rather than
+        // showing it for a moment and then leaving it.
+        <HospitalList
+          hospitals={entry.hospital === null ? places : { state: 'loading' }}
+          onChoose={chooseHospital}
+        />
+      ) : null}
 
-        {step === 'doctor' && place !== null ? (
-          <DoctorList
-            hospital={place}
-            doctors={doctors}
-            onChoose={chooseDoctor}
-            onBack={() => {
-              setStep('hospital');
-            }}
-          />
-        ) : null}
+      {step === 'doctor' && place !== null ? (
+        <DoctorList hospital={place} doctors={doctors} onChoose={chooseDoctor} />
+      ) : null}
 
-        {step === 'session' && doctor !== null ? (
-          <SessionList
-            doctor={doctor}
-            sessions={sessions}
-            onChoose={chooseSession}
-            onStandby={chooseStandby}
-            onBack={() => {
-              setStep('doctor');
-            }}
-          />
-        ) : null}
+      {step === 'session' && doctor !== null ? (
+        <SessionList
+          doctor={doctor}
+          hospital={place}
+          asOf={doctors.state === 'ready' ? doctors.asOf : null}
+          sessions={sessions}
+          onChoose={chooseSession}
+          onStandby={chooseStandby}
+        />
+      ) : null}
 
-        {step === 'standby' && session !== null ? (
-          <>
-            <BackLink
-              onBack={() => {
-                setStep('session');
-              }}
-            />
-            <StandbyJoin
-              session={session}
-              online={online}
-              onJoined={(joined) => {
-                // The status token is the place on the list; the page it
-                // opens is where the offer — or the seat — arrives.
-                globalThis.location.assign(`/standby?t=${encodeURIComponent(joined.token)}`);
-              }}
-            />
-          </>
-        ) : null}
+      {step === 'standby' && session !== null ? (
+        <StandbyJoin
+          session={session}
+          online={online}
+          onJoined={(joined) => {
+            // The status token is the place on the list; the page it
+            // opens is where the offer — or the seat — arrives.
+            globalThis.location.assign(`/standby?t=${encodeURIComponent(joined.token)}`);
+          }}
+        />
+      ) : null}
 
-        {step === 'confirm' && session !== null ? (
-          <Confirm
-            session={session}
-            slots={slots}
-            online={online}
-            failure={failure}
-            onFailure={setFailure}
-            onBooked={(result) => {
-              setBooking(result);
-              setStep('done');
+      {step === 'confirm' && session !== null ? (
+        <Confirm
+          session={session}
+          slots={slots}
+          online={online}
+          failure={failure}
+          onFailure={setFailure}
+          onBooked={(result, window) => {
+            setBooking(result);
+            setChosenWindow(window);
+            setStep('done');
 
-              // `S-A-09` and the home screen's live strip both read this. A
-              // guest has no account for `GET /me/bookings` to list against
-              // (CLAUDE.md §4.1), so the device remembers what it booked — and
-              // the serials tab says as much rather than implying more.
-              if (result.trackingUrl !== null && doctor !== null) {
-                const token = new URL(result.trackingUrl).searchParams.get('t');
-                if (token !== null) {
-                  rememberBooking({
-                    bookingId: result.bookingId,
-                    serial: result.serial,
-                    sessionId: result.sessionId,
-                    doctorNameBn: doctor.nameBn,
-                    doctorNameEn: doctor.nameEn,
-                    hospitalNameBn: place?.nameBn ?? '',
-                    hospitalNameEn: place?.nameEn ?? '',
-                    ...(place === null ? {} : { hospitalId: place.id }),
-                    plannedStart: session.plannedStart,
-                    url: `/s?b=${result.bookingId}&t=${encodeURIComponent(token)}`,
-                    token,
-                    savedAt: new Date().toISOString(),
-                  });
-                }
+            // `S-A-09` and the home screen's live strip both read this. A
+            // guest has no account for `GET /me/bookings` to list against
+            // (CLAUDE.md §4.1), so the device remembers what it booked — and
+            // the serials tab says as much rather than implying more.
+            if (result.trackingUrl !== null && doctor !== null) {
+              const token = new URL(result.trackingUrl).searchParams.get('t');
+              if (token !== null) {
+                rememberBooking({
+                  bookingId: result.bookingId,
+                  serial: result.serial,
+                  sessionId: result.sessionId,
+                  doctorNameBn: doctor.nameBn,
+                  doctorNameEn: doctor.nameEn,
+                  hospitalNameBn: place?.nameBn ?? '',
+                  hospitalNameEn: place?.nameEn ?? '',
+                  ...(place === null ? {} : { hospitalId: place.id }),
+                  plannedStart: session.plannedStart,
+                  url: `/s?b=${result.bookingId}&t=${encodeURIComponent(token)}`,
+                  token,
+                  savedAt: new Date().toISOString(),
+                });
               }
-            }}
-          />
-        ) : null}
-
-        <BottomNavSpacer />
-      </main>
-
-      <BottomNav />
-    </>
+            }
+          }}
+        />
+      ) : null}
+    </TabScreen>
   );
 }
 
@@ -349,20 +362,20 @@ function HospitalList({
 
   // GR-03: all four are designed states, not the absence of one — and the
   // failed one never borrows the empty one's words.
-  if (hospitals.state === 'loading')
-    return <p className="text-body-md text-ink-muted">{tp('loading', locale)}</p>;
+  if (hospitals.state === 'loading') return <SkeletonCards count={3} />;
   if (hospitals.state === 'failed') return <LoadFailed />;
   if (hospitals.items.length === 0) {
-    return <p className="text-body-md text-ink-muted">{tp('noHospitals', locale)}</p>;
+    return <EmptyState>{tp('noHospitals', locale)}</EmptyState>;
   }
 
   return (
     <section className="flex flex-col gap-3">
-      <h1 className="font-reading text-title-lg">{tp('chooseHospitalFirst', locale)}</h1>
-
-      {/* DoD §5.8 and FR-PAT-14: "who is sitting now" is a live figure, so the
-          list says how old it is rather than implying it is this instant. */}
-      <Freshness asOf={hospitals.asOf} now={now} />
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <h2 className="text-title-sm font-bold">{tp('chooseHospitalFirst', locale)}</h2>
+        {/* DoD §5.8 and FR-PAT-14: "who is sitting now" is a live figure, so the
+            list says how old it is rather than implying it is this instant. */}
+        <Freshness asOf={hospitals.asOf} now={now} />
+      </div>
 
       <ul className="flex flex-col gap-3">
         {hospitals.items.map((hospital) => (
@@ -372,35 +385,39 @@ function HospitalList({
               onClick={() => {
                 onChoose(hospital);
               }}
-              className="w-full text-left"
+              className="w-full rounded-md border border-line bg-surface p-4 text-left shadow-1"
               data-testid={`hospital-${hospital.id}`}
             >
-              <Card tone={hospital.sittingNow > 0 ? 'brand' : 'default'}>
-                <div className="flex items-start gap-3">
-                  <span className="mt-0.5 text-brand-600">
-                    <HospitalIcon size={22} />
+              <span className="flex items-start gap-3">
+                <HospitalMark hospitalId={hospital.id} logoVersion={hospital.logoVersion} />
+
+                <span className="min-w-0 flex-1">
+                  <span className="block text-title-sm font-bold">
+                    {localName(locale, hospital.nameBn, hospital.nameEn)}
+                  </span>
+                  <span className="block text-body-sm text-ink-muted">
+                    {(locale === 'en' ? hospital.addressEn : hospital.addressBn) ??
+                      districtName(hospital.district, locale)}
                   </span>
 
-                  <div className="min-w-0 flex-1">
-                    <p className="text-title-sm">
-                      {localName(locale, hospital.nameBn, hospital.nameEn)}
-                    </p>
-                    <p className="text-body-sm text-ink-muted">
-                      {(locale === 'en' ? hospital.addressEn : hospital.addressBn) ??
-                        districtName(hospital.district, locale)}
-                    </p>
+                  <span className="mt-2 flex flex-wrap items-center gap-2">
+                    {hospital.doctorCount === null ? null : (
+                      <Chip tone="neutral">
+                        {tp('doctorsHere', locale).replace(
+                          '{count}',
+                          formatNumber(hospital.doctorCount, numerals),
+                        )}
+                      </Chip>
+                    )}
 
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {hospital.doctorCount === null ? null : (
-                        <Chip tone="neutral">
-                          {tp('doctorsHere', locale).replace(
-                            '{count}',
-                            formatNumber(hospital.doctorCount, numerals),
-                          )}
-                        </Chip>
-                      )}
-
-                      {/* A11Y-03: the state is a sentence, not a colour. */}
+                    {/* A11Y-03: the state is a sentence, not a colour. And a
+                        hospital that keeps the figure is not said to have
+                        nobody sitting (FR-NET-04). */}
+                    {hospital.sittingNow === null ? (
+                      withholds(hospital, 'serials') ? (
+                        <NotShared figure="serials" />
+                      ) : null
+                    ) : (
                       <Chip tone={hospital.sittingNow > 0 ? 'positive' : 'neutral'}>
                         {hospital.sittingNow > 0
                           ? tp('sittingNowCount', locale).replace(
@@ -409,17 +426,21 @@ function HospitalList({
                             )
                           : tp('nobodySittingNow', locale)}
                       </Chip>
-                    </div>
-
-                    {/* FR-PAT-14: free beds and ICU, with their own age. */}
-                    <HospitalBeds beds={hospital.beds} now={now} />
-                  </div>
-
-                  <span className="mt-1 text-ink-muted">
-                    <ChevronIcon size={18} />
+                    )}
                   </span>
-                </div>
-              </Card>
+
+                  {/* FR-PAT-14: free beds and ICU, with their own age. */}
+                  <HospitalBeds
+                    beds={hospital.beds}
+                    notShared={withholds(hospital, 'beds')}
+                    now={now}
+                  />
+                </span>
+
+                <span className="mt-1 text-ink-muted">
+                  <ChevronIcon size={18} />
+                </span>
+              </span>
             </button>
           </li>
         ))}
@@ -440,12 +461,10 @@ function DoctorList({
   hospital,
   doctors,
   onChoose,
-  onBack,
 }: {
   readonly hospital: HospitalCard;
   readonly doctors: Loadable<HospitalDoctorCard>;
   readonly onChoose: (doctor: HospitalDoctorCard) => void;
-  readonly onBack: () => void;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
@@ -453,21 +472,27 @@ function DoctorList({
 
   return (
     <section className="flex flex-col gap-3">
-      <BackLink onBack={onBack} />
-
-      <div>
-        <h1 className="font-reading text-title-lg">
+      <div className="flex items-center gap-3">
+        <HospitalMark hospitalId={hospital.id} logoVersion={hospital.logoVersion} size="header" />
+        <h2 className="min-w-0 text-title-sm font-bold">
           {localName(locale, hospital.nameBn, hospital.nameEn)}
-        </h1>
-        <p className="text-body-sm text-ink-muted">{tp('chooseDoctor', locale)}</p>
+        </h2>
       </div>
 
+      {/* What the hospital says of itself (`FR-BRD-06`): its own words, shown
+          as its own, in the reader's language where it wrote both. */}
+      {describe(hospital, locale) === null ? null : (
+        <p className="text-body-md text-ink-secondary" data-testid="facility-description">
+          {describe(hospital, locale)}
+        </p>
+      )}
+
       {doctors.state === 'loading' ? (
-        <p className="text-body-md text-ink-muted">{tp('loading', locale)}</p>
+        <SkeletonCards count={3} />
       ) : doctors.state === 'failed' ? (
         <LoadFailed />
       ) : doctors.items.length === 0 ? (
-        <p className="text-body-md text-ink-muted">{tp('noDoctorsHere', locale)}</p>
+        <EmptyState>{tp('noDoctorsHere', locale)}</EmptyState>
       ) : (
         <>
           {/* Who is in a chamber right now is the liveliest figure on the
@@ -482,51 +507,49 @@ function DoctorList({
                   onClick={() => {
                     onChoose(doctor);
                   }}
-                  className="w-full text-left"
+                  className="w-full rounded-md border border-line bg-surface p-4 text-left shadow-1"
                   data-testid={`doctor-${doctor.id}`}
                 >
-                  <Card tone={doctor.sittingNow ? 'brand' : 'default'}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-title-sm">
-                          {localName(locale, doctor.nameBn, doctor.nameEn)}
-                        </p>
-                        {doctor.degrees === null ? null : (
-                          <p className="text-body-sm text-ink-muted">{doctor.degrees}</p>
+                  <span className="flex items-start gap-3">
+                    <Monogram name={localName(locale, doctor.nameBn, doctor.nameEn)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-title-sm font-bold">
+                        {doctorName(locale, doctor.nameBn, doctor.nameEn)}
+                      </span>
+                      {doctor.degrees === null ? null : (
+                        <span className="block text-body-sm text-ink-muted">{doctor.degrees}</span>
+                      )}
+
+                      <span className="mt-2 flex flex-wrap items-center gap-2">
+                        <DoctorStatus doctor={doctor} />
+
+                        {doctor.openSerials === null ? null : (
+                          <Chip tone={doctor.openSerials > 0 ? 'neutral' : 'caution'}>
+                            {doctor.openSerials > 0
+                              ? tp('serialsLeft', locale).replace(
+                                  '{count}',
+                                  formatNumber(doctor.openSerials, numerals),
+                                )
+                              : tp('sessionFull', locale)}
+                          </Chip>
                         )}
 
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {/* FR-PAT-13: in a chamber now, or the next time they
-                            sit — never a bare "available". */}
-                          <Chip tone={doctor.sittingNow ? 'positive' : 'neutral'}>
-                            {doctor.sittingNow
-                              ? tp('inChamberNow', locale)
-                              : doctor.nextSessionAt === null
-                                ? tp('notSittingSoon', locale)
-                                : tp('nextSitting', locale).replace(
-                                    '{time}',
-                                    formatDateTime(doctor.nextSessionAt, numerals),
-                                  )}
-                          </Chip>
+                        {/* When a doctor sits is a schedule and is shown;
+                            who is in a chamber now and how many serials are
+                            left are the hospital's to keep (FR-NET-04). */}
+                        {doctor.serialsShared === false ? <NotShared figure="serials" /> : null}
+                      </span>
+                    </span>
 
-                          {doctor.openSerials === null ? null : (
-                            <Chip tone={doctor.openSerials > 0 ? 'neutral' : 'caution'}>
-                              {doctor.openSerials > 0
-                                ? tp('serialsLeft', locale).replace(
-                                    '{count}',
-                                    formatNumber(doctor.openSerials, numerals),
-                                  )
-                                : tp('sessionFull', locale)}
-                            </Chip>
-                          )}
-                        </div>
-                      </div>
-
-                      <p className="shrink-0 text-body-md font-semibold tabular-nums">
+                    <span className="shrink-0 text-right">
+                      <span className="block text-caption text-ink-muted">
+                        {tp('feeShort', locale)}
+                      </span>
+                      <span className="block text-body-md font-bold tabular-nums">
                         {formatTaka(doctor.feePoisha, numerals)}
-                      </p>
-                    </div>
-                  </Card>
+                      </span>
+                    </span>
+                  </span>
                 </button>
               </li>
             ))}
@@ -535,6 +558,39 @@ function DoctorList({
       )}
     </section>
   );
+}
+
+/**
+ * `FR-PAT-13`: in a chamber now, or the next time they sit — never a bare
+ * "available". Green only for the first, which is good news (§0.5).
+ */
+function DoctorStatus({ doctor }: { readonly doctor: HospitalDoctorCard }): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  return (
+    <Chip tone={doctor.sittingNow === true ? 'positive' : 'neutral'}>
+      {doctor.sittingNow === true
+        ? tp('inChamberNow', locale)
+        : doctor.nextSessionAt === null
+          ? tp('notSittingSoon', locale)
+          : tp('nextSitting', locale).replace(
+              '{time}',
+              formatDateTime(doctor.nextSessionAt, numerals),
+            )}
+    </Chip>
+  );
+}
+
+/**
+ * A hospital's description in the reader's language, or in the other one when
+ * it wrote only that; null when it has said nothing.
+ */
+function describe(hospital: HospitalCard, locale: Locale): string | null {
+  const [first, second] =
+    locale === 'en'
+      ? [hospital.descriptionEn, hospital.descriptionBn]
+      : [hospital.descriptionBn, hospital.descriptionEn];
+  return first ?? second ?? null;
 }
 
 /**
@@ -548,20 +604,21 @@ function DoctorList({
 function LoadFailed(): ReactNode {
   const locale = useLocale();
   return (
-    <div
+    <FailedState
       role="status"
-      data-testid="load-failed"
-      className="flex flex-col gap-3 rounded-md border border-line bg-surface p-5"
+      testId="load-failed"
+      action={
+        <Button
+          onClick={() => {
+            globalThis.location.reload();
+          }}
+        >
+          {tp('tryAgain', locale)}
+        </Button>
+      }
     >
-      <p className="text-body-md text-ink-secondary">{tp('listFailed', locale)}</p>
-      <Button
-        onClick={() => {
-          globalThis.location.reload();
-        }}
-      >
-        {tp('tryAgain', locale)}
-      </Button>
-    </div>
+      {tp('listFailed', locale)}
+    </FailedState>
   );
 }
 
@@ -570,8 +627,8 @@ function LoadFailed(): ReactNode {
  *
  * `FreshnessLine` takes its labels and its number formatting from the caller so
  * that `shared/ui` never imports a locale; every patient surface passes the
- * same four Bangla strings and Bengali numerals, so they are passed once here
- * rather than twice at each call site.
+ * same four strings and the screen's numerals, so they are passed once here
+ * rather than at each call site.
  */
 function Freshness({ asOf, now }: { readonly asOf: string; readonly now: Date }): ReactNode {
   const locale = useLocale();
@@ -591,49 +648,81 @@ function Freshness({ asOf, now }: { readonly asOf: string; readonly now: Date })
   );
 }
 
-/** `BTN-A07-BACK` — one step back, never a dead end. */
-function BackLink({ onBack }: { readonly onBack: () => void }): ReactNode {
-  const locale = useLocale();
-  return (
-    <button
-      type="button"
-      onClick={onBack}
-      data-testid="step-back"
-      className="flex min-h-touch items-center gap-1 self-start text-body-md text-ink-secondary"
-    >
-      <BackIcon size={18} />
-      {tp('back', locale)}
-    </button>
-  );
-}
-
-/** `S-A-07b` — the session picker. */
+/**
+ * `S-A-06d` and `S-A-07b` — the doctor, and their chambers.
+ *
+ * The approved screen (FRONTEND.md §0.5): the doctor's card first, with the
+ * live status and its age and the fee; then the chambers, each a row with its
+ * day, its hours and room, and how many serials are left. A tap on a chamber
+ * goes straight on to confirming, as it always has: one decision, one tap.
+ */
 function SessionList({
   doctor,
+  hospital,
+  asOf,
   sessions,
   onChoose,
   onStandby,
-  onBack,
 }: {
   readonly doctor: HospitalDoctorCard;
+  readonly hospital: HospitalCard | null;
+  readonly asOf: string | null;
   readonly sessions: SessionCard[] | null;
   readonly onChoose: (session: SessionCard) => void;
   readonly onStandby: (session: SessionCard) => void;
-  readonly onBack: () => void;
 }): ReactNode {
   const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const now = useNow();
+  const department = localName(locale, doctor.departmentNameBn, doctor.departmentNameEn);
+
   return (
-    <section className="flex flex-col gap-3">
-      <BackLink onBack={onBack} />
-      <h1 className="font-reading text-title-lg">{tp('chooseTime', locale)}</h1>
-      <p className="text-body-sm text-ink-muted">
-        {localName(locale, doctor.nameBn, doctor.nameEn)}
-      </p>
+    <section className="flex flex-col gap-4">
+      <Panel className="p-4" testId="doctor-card">
+        <div className="flex items-center gap-4">
+          <Monogram name={localName(locale, doctor.nameBn, doctor.nameEn)} size="lg" />
+          <div className="min-w-0">
+            <p className="text-title-sm font-bold">
+              {doctorName(locale, doctor.nameBn, doctor.nameEn)}
+            </p>
+            {doctor.degrees === null ? null : (
+              <p className="text-body-sm text-ink-muted">{doctor.degrees}</p>
+            )}
+            <p className="text-body-sm text-ink-secondary">
+              {hospital === null
+                ? department
+                : `${department} · ${localName(locale, hospital.nameBn, hospital.nameEn)}`}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <DoctorStatus doctor={doctor} />
+          {doctor.serialsShared === false ? <NotShared figure="serials" /> : null}
+        </div>
+        {asOf === null ? null : (
+          <div className="mt-1">
+            <Freshness asOf={asOf} now={now} />
+          </div>
+        )}
+
+        <div className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
+          <span className="text-body-sm text-ink-secondary">{tp('consultationFee', locale)}</span>
+          <span className="text-title-sm font-bold tabular-nums">
+            {formatTaka(doctor.feePoisha, numerals)}
+          </span>
+        </div>
+      </Panel>
+
+      <div className="flex flex-col gap-1">
+        <h2 className="text-title-sm font-bold">{tp('chooseChamber', locale)}</h2>
+        <p className="text-body-sm text-ink-muted">{tp('chooseChamberHint', locale)}</p>
+      </div>
 
       {sessions === null ? (
-        <p className="text-body-md text-ink-muted">{tp('loading', locale)}</p>
+        <SkeletonCards count={2} height={76} />
       ) : sessions.length === 0 ? (
-        <p className="text-body-md text-ink-muted">{tp('noSessions', locale)}</p>
+        <EmptyState>{tp('noSessions', locale)}</EmptyState>
       ) : (
         <SessionCards sessions={sessions} onChoose={onChoose} onStandby={onStandby} />
       )}
@@ -652,75 +741,128 @@ function SessionCards({
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
+  const now = useNow();
   return (
-    <>
-      <ul className="flex flex-col gap-3">
-        {sessions.map((session) => {
-          const remaining =
-            session.capacity === null ? null : Math.max(0, session.capacity - session.taken);
-          const full = remaining === 0;
+    <ul className="flex flex-col gap-2.5">
+      {sessions.map((session) => {
+        // `taken` is null where the hospital does not share its serial
+        // figures (FR-NET-04). Whether the chamber is full is always said: a
+        // patient is not sent into a booking that can only be refused.
+        const remaining =
+          session.capacity === null || session.taken === null
+            ? null
+            : Math.max(0, session.capacity - session.taken);
+        const full = session.full ?? remaining === 0;
+        const hours = sessionHours(session.plannedStart, session.plannedEnd, locale);
 
-          return (
-            <li key={session.id}>
-              <button
-                type="button"
-                disabled={full}
-                onClick={() => {
-                  onChoose(session);
-                }}
-                className="w-full text-left disabled:opacity-40"
-                data-testid={`session-${session.id}`}
-              >
-                <Card>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-title-sm tabular-nums">
-                        {formatDateTime(session.plannedStart, numerals)}
-                      </p>
-                      <p className="text-body-sm text-ink-muted">
-                        {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
-                      </p>
-                    </div>
+        return (
+          <li key={session.id}>
+            <button
+              type="button"
+              disabled={full}
+              onClick={() => {
+                onChoose(session);
+              }}
+              className="flex w-full items-center gap-3 rounded-md border border-line bg-surface px-4 py-3 text-left shadow-1 hover:border-brand-600 disabled:opacity-50 disabled:shadow-none"
+              data-testid={`session-${session.id}`}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-body-md font-bold">
+                  {sessionDay(session.plannedStart, locale, now)}
+                </span>
+                <span className="block text-body-sm text-ink-secondary tabular-nums">
+                  {session.room === null
+                    ? hours
+                    : tp('sessionHoursRoom', locale)
+                        .replace('{hours}', hours)
+                        .replace('{room}', session.room)}
+                </span>
+                <span className="block text-caption text-ink-muted">
+                  {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
+                </span>
+              </span>
 
-                    <div className="text-right">
-                      {full ? (
-                        <Chip tone="caution">{tp('sessionFull', locale)}</Chip>
-                      ) : (
-                        <p className="text-body-sm tabular-nums text-ink-secondary">
-                          {remaining === null
-                            ? ''
-                            : `${formatMinutes(remaining, numerals)} ${tp('seatsLeft', locale)}`}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              </button>
+              <span className="shrink-0 text-right">
+                {full ? (
+                  <Chip tone="caution">{tp('sessionFull', locale)}</Chip>
+                ) : remaining === null ? (
+                  session.taken === null ? (
+                    <span className="text-body-sm text-ink-muted">
+                      {tp('serialsNotShared', locale)}
+                    </span>
+                  ) : null
+                ) : (
+                  <span className="text-body-md font-bold text-brand-700 tabular-nums">
+                    {tp('seatsLeftCount', locale).replace(
+                      '{count}',
+                      formatNumber(remaining, numerals),
+                    )}
+                  </span>
+                )}
+              </span>
 
-              {/* `BTN-A06D-STANDBY` — "visible only when a session is full". */}
-              {full ? (
-                <div className="mt-2">
-                  <Button
-                    variant="secondary"
-                    fullWidth
-                    onClick={() => {
-                      onStandby(session);
-                    }}
-                    data-testid={`standby-join-${session.id}`}
-                  >
-                    {tp('standbyJoin', locale)}
-                  </Button>
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </>
+              {full ? null : (
+                <span className="text-ink-muted">
+                  <ChevronIcon size={18} />
+                </span>
+              )}
+            </button>
+
+            {/* `BTN-A06D-STANDBY` — "visible only when a session is full". */}
+            {full ? (
+              <div className="mt-2">
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  onClick={() => {
+                    onStandby(session);
+                  }}
+                  data-testid={`standby-join-${session.id}`}
+                >
+                  {tp('standbyJoin', locale)}
+                </Button>
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
 /** `S-A-07c` — the guest sheet, the fee breakdown, and the one blocking wait. */
+/**
+ * Why a booking was refused, stated in Bangla, by cause. "Something went
+ * wrong" tells a person nothing they can act on (BACKEND.md §9 maps codes to
+ * copy). One answer whether the booking followed a code check or not: a
+ * number proving itself for the first time is refused for the same reasons.
+ */
+function bookingFailure(error: unknown, locale: Locale): string {
+  const code = (error as { code?: string }).code ?? '';
+  // FR-GST-14 (plan F3): the reason a serial must be paid first, said.
+  const why = (error as { details?: { reason?: unknown } }).details?.reason;
+  switch (code) {
+    case 'AUTH_OTP_INVALID':
+      return tp('accountCodeWrong', locale);
+    case 'AUTH_LOCKED':
+      return tp('accountLocked', locale);
+    case 'BOOKING_DUPLICATE':
+      return tp('alreadyBooked', locale);
+    case 'SESSION_FULL':
+      return tp('chamberFull', locale);
+    case 'BOOKING_LIMIT_REACHED':
+      return tp('bookingLimitReached', locale);
+    case 'PREPAYMENT_REQUIRED':
+      return tp(why === 'no_shows' ? 'prepaymentAfterNoShows' : 'prepaymentRequired', locale);
+    case 'PAYMENT_UNAVAILABLE':
+      return tp('paymentUnavailable', locale);
+    case 'ARRIVAL_WINDOW_NOT_OFFERED':
+      return tp('windowRefused', locale);
+    default:
+      return tp('bookingFailed', locale);
+  }
+}
+
 function Confirm({
   session,
   slots,
@@ -734,10 +876,20 @@ function Confirm({
   readonly online: boolean;
   readonly failure: string | null;
   readonly onFailure: (message: string | null) => void;
-  readonly onBooked: (booking: BookingResponse) => void;
+  readonly onBooked: (booking: BookingResponse, window: ArrivalWindow | null) => void;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
+  // `CHIP-A07C-WINDOW` (`FR-PAT-28`, plan R1): a preferred hour, where the
+  // hospital offers one. None, "any time", is the default and the common case.
+  const windows = useMemo(
+    () =>
+      session.offersArrivalWindow === true
+        ? arrivalWindows(session.plannedStart, session.plannedEnd)
+        : [],
+    [session.offersArrivalWindow, session.plannedStart, session.plannedEnd],
+  );
+  const [arrivalWindow, setArrivalWindow] = useState<ArrivalWindow | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [age, setAge] = useState('');
@@ -747,9 +899,16 @@ function Confirm({
   // A deployment with no online payment offers the counter only (pilot step 26).
   const deployment = useDeployment();
   const onlinePayments = deployment?.onlinePayments !== false;
+  // The online methods this deployment can take (plan H3): card only where a
+  // provider takes it. An older server that does not say offers all three.
+  const offered = deployment?.paymentMethods ?? ['bkash', 'nagad', 'card'];
   useEffect(() => {
     if (!onlinePayments) setMethod('at_hospital');
-  }, [onlinePayments]);
+    else if (method !== 'at_hospital' && !offered.includes(method)) {
+      const first = offered[0];
+      setMethod(first === 'bkash' || first === 'nagad' || first === 'card' ? first : 'at_hospital');
+    }
+  }, [onlinePayments, offered, method]);
   const [busy, setBusy] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
 
@@ -780,10 +939,39 @@ function Confirm({
   // who typed their number the way they say it.
   const phoneStored = normaliseBdMobile(phone);
   const phoneValid = phoneStored !== null;
+
+  /**
+   * Signed in: the account's own profiles, so nothing is typed again
+   * (`FR-GST-10`, `FR-PAT-03`; plan F1). Null means the guest sheet: nobody
+   * is signed in, the account holds no profile yet, or the profiles could not
+   * be read, none of which may stand between a person and a serial
+   * (`FR-GST-11`).
+   */
+  const [ownProfiles, setOwnProfiles] = useState<readonly Profile[] | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
+  // Booking for somebody who is not one of the profiles: the guest sheet, as asked for.
+  const [forSomebodyElse, setForSomebodyElse] = useState(false);
+  useEffect(() => {
+    if (readAccount() === null) return undefined;
+    let stale = false;
+    void profiles().then((answer) => {
+      if (stale || !answer.ok || answer.value.length === 0) return;
+      setOwnProfiles(answer.value);
+      const first = answer.value.find((profile) => profile.isPrimary) ?? answer.value[0];
+      setProfileId(first?.patientId ?? null);
+    });
+    return () => {
+      stale = true;
+    };
+  }, []);
+  const asAccount = ownProfiles !== null && !forSomebodyElse;
+
   // Offline is part of readiness, not a separate guard: the button then
   // carries "no connection" as its reason rather than silently doing nothing
   // when tapped (`FRONTEND.md` §5.1).
-  const ready = online && name.trim().length >= 2 && phoneValid && Number(age) >= 0 && age !== '';
+  const ready = asAccount
+    ? online && profileId !== null
+    : online && name.trim().length >= 2 && phoneValid && Number(age) >= 0 && age !== '';
 
   const fee = useMemo(() => {
     // Shown from the session's own fee before the server answers, so a person
@@ -814,10 +1002,22 @@ function Confirm({
         reason,
         idempotencyKey,
         guestToken,
+        arrivalWindowStart: arrivalWindow?.start ?? null,
       });
-      onBooked(result);
+      onBooked(result, arrivalWindow);
     },
-    [session.id, method, name, phoneStored, age, sex, reason, idempotencyKey, onBooked],
+    [
+      session.id,
+      method,
+      name,
+      phoneStored,
+      age,
+      sex,
+      reason,
+      idempotencyKey,
+      onBooked,
+      arrivalWindow,
+    ],
   );
 
   const proveCode = useCallback(
@@ -827,14 +1027,7 @@ function Confirm({
       try {
         await finish(await provePhone(phoneStored, name.trim(), code));
       } catch (error) {
-        const code = (error as { code?: string }).code;
-        onFailure(
-          code === 'AUTH_OTP_INVALID'
-            ? tp('accountCodeWrong', locale)
-            : code === 'AUTH_LOCKED'
-              ? tp('accountLocked', locale)
-              : tp('bookingFailed', locale),
-        );
+        onFailure(bookingFailure(error, locale));
       } finally {
         setBusy(false);
       }
@@ -843,47 +1036,71 @@ function Confirm({
   );
 
   const confirm = useCallback(async () => {
-    if (phoneStored === null) return;
+    if (asAccount ? profileId === null : phoneStored === null) return;
     setBusy(true);
     onFailure(null);
 
     try {
+      if (asAccount && profileId !== null) {
+        // The account is a number that was proved (`FR-PAT-01`): no code is
+        // asked for, and the profile carries the name, the age and the sex.
+        onBooked(
+          await bookAsProfile({
+            sessionId: session.id,
+            method,
+            patientId: profileId,
+            reason,
+            idempotencyKey,
+            arrivalWindowStart: arrivalWindow?.start ?? null,
+          }),
+          arrivalWindow,
+        );
+        return;
+      }
+      if (phoneStored === null) return;
       const start = await beginPhoneCheck(phoneStored, name.trim());
       if (!start.ready) return;
       await finish(start.guestToken);
     } catch (error) {
-      // Stated in Bangla, by cause. "Something went wrong" tells a person
-      // nothing they can act on (BACKEND.md §9 maps codes to copy).
-      const code = (error as { code?: string }).code;
-      onFailure(
-        code === 'BOOKING_DUPLICATE'
-          ? tp('alreadyBooked', locale)
-          : code === 'SESSION_FULL'
-            ? tp('chamberFull', locale)
-            : tp('bookingFailed', locale),
-      );
+      onFailure(bookingFailure(error, locale));
     } finally {
       setBusy(false);
     }
-  }, [phoneStored, name, finish, beginPhoneCheck, onFailure, locale]);
+  }, [
+    asAccount,
+    profileId,
+    session.id,
+    method,
+    reason,
+    idempotencyKey,
+    onBooked,
+    phoneStored,
+    name,
+    finish,
+    beginPhoneCheck,
+    onFailure,
+    locale,
+  ]);
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="font-reading text-title-lg">{tp('confirmTitle', locale)}</h1>
-
-      <Card>
-        <p className="text-title-sm tabular-nums">
-          {formatDateTime(session.plannedStart, numerals)}
+      <Panel className="p-4">
+        <p className="text-body-md font-bold">
+          {doctorName(locale, session.doctorNameBn, session.doctorNameEn)}
         </p>
-        <p className="text-body-sm text-ink-muted">
-          {localName(locale, session.doctorNameBn, session.doctorNameEn)}
-        </p>
-        <p className="text-body-sm text-ink-muted">
+        <p className="text-body-sm text-ink-secondary">
           {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
+        </p>
+        <p className="text-body-sm text-ink-secondary tabular-nums">
+          {`${sessionDay(session.plannedStart, locale, now)} · ${sessionHours(
+            session.plannedStart,
+            session.plannedEnd,
+            locale,
+          )}`}
         </p>
 
         {/* FR-PAT-13: unknown is a real answer, and not the same as zero. */}
-        <p className="mt-2 text-body-sm text-ink-secondary">
+        <p className="mt-2 border-t border-line pt-2 text-body-sm text-ink-secondary">
           {tp('expectedWait', locale)}:{' '}
           {slots?.expectedWaitMinutes == null
             ? tp('waitUnknown', locale)
@@ -903,66 +1120,123 @@ function Confirm({
           }}
           formatMinutes={(value) => formatAge(value, locale, numerals)}
         />
-      </Card>
+      </Panel>
+
+      {/* MOD-A07-PROFILE (plan F1): signed in, the serial is for one of the
+          account's own profiles and nothing is typed again (FR-GST-10). */}
+      {asAccount && ownProfiles !== null ? (
+        <fieldset className="flex flex-col gap-2 border-0 p-0" data-testid="booking-profiles">
+          <legend className="font-ui text-body-sm font-semibold text-ink">
+            {tp('bookingForWhom', locale)}
+          </legend>
+          <div className="flex flex-col gap-2">
+            {ownProfiles.map((profile) => (
+              <button
+                key={profile.patientId}
+                type="button"
+                aria-pressed={profileId === profile.patientId}
+                data-testid={`booking-profile-${profile.patientId}`}
+                onClick={() => {
+                  setProfileId(profile.patientId);
+                }}
+                className="min-h-touch rounded-sm border border-line-strong bg-surface px-3 py-2 text-left text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
+              >
+                <span className="block font-semibold">{profile.fullName}</span>
+                {profile.ageYears === null ? null : (
+                  <span className="block text-body-sm text-ink-muted">
+                    {`${tp('age', locale)}: ${formatNumber(profile.ageYears, numerals)}`}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="min-h-touch self-start text-body-sm text-brand-600 underline"
+            data-testid="booking-for-someone-else"
+            onClick={() => {
+              setForSomebodyElse(true);
+            }}
+          >
+            {tp('bookingForSomeoneElse', locale)}
+          </button>
+        </fieldset>
+      ) : null}
+      {ownProfiles !== null && forSomebodyElse ? (
+        <button
+          type="button"
+          className="min-h-touch self-start text-body-sm text-brand-600 underline"
+          data-testid="booking-for-own-profile"
+          onClick={() => {
+            setForSomebodyElse(false);
+          }}
+        >
+          {tp('bookingForOwnProfile', locale)}
+        </button>
+      ) : null}
 
       {/* MOD-A07-GUEST: name, phone, age, sex. Nothing else is asked
           (FR-GST-02) — a guest supplies only what the task needs. */}
       <div className="flex flex-col gap-4">
-        <Input
-          label={tp('patientName', locale)}
-          required
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-          }}
-        />
+        {asAccount ? null : (
+          <>
+            <Input
+              label={tp('patientName', locale)}
+              required
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value);
+              }}
+            />
 
-        <Input
-          label={tp('mobileNumber', locale)}
-          kind="phone"
-          required
-          value={phone}
-          placeholder="01XXXXXXXXX"
-          helper={tp('mobileHelper', locale)}
-          {...(phoneTouched && !phoneValid ? { error: tp('mobileInvalid', locale) } : {})}
-          onBlur={() => {
-            setPhoneTouched(true);
-          }}
-          onChange={(event) => {
-            setPhone(event.target.value.trim());
-          }}
-        />
+            <Input
+              label={tp('mobileNumber', locale)}
+              kind="phone"
+              required
+              value={phone}
+              placeholder="01XXXXXXXXX"
+              helper={tp('mobileHelper', locale)}
+              {...(phoneTouched && !phoneValid ? { error: tp('mobileInvalid', locale) } : {})}
+              onBlur={() => {
+                setPhoneTouched(true);
+              }}
+              onChange={(event) => {
+                setPhone(event.target.value.trim());
+              }}
+            />
 
-        <Input
-          label={tp('age', locale)}
-          kind="number"
-          required
-          value={age}
-          onChange={(event) => {
-            setAge(event.target.value.replace(/\D/g, ''));
-          }}
-        />
+            <Input
+              label={tp('age', locale)}
+              kind="number"
+              required
+              value={age}
+              onChange={(event) => {
+                setAge(event.target.value.replace(/\D/g, ''));
+              }}
+            />
 
-        <fieldset className="flex flex-col gap-2 border-0 p-0">
-          <legend className="font-ui text-body-sm font-semibold text-ink">
-            {tp('sex', locale)}
-          </legend>
-          <div className="flex gap-2">
-            {(['female', 'male', 'other'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={sex === value}
-                onClick={() => {
-                  setSex(value);
-                }}
-                className="min-h-touch flex-1 rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
-              >
-                {tp(value, locale)}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+            <fieldset className="flex flex-col gap-2 border-0 p-0">
+              <legend className="font-ui text-body-sm font-semibold text-ink">
+                {tp('sex', locale)}
+              </legend>
+              <div className="flex gap-2">
+                {(['female', 'male', 'other'] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={sex === value}
+                    onClick={() => {
+                      setSex(value);
+                    }}
+                    className="min-h-touch flex-1 rounded-sm border border-line-strong bg-surface px-3 text-body-md aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
+                  >
+                    {tp(value, locale)}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </>
+        )}
 
         <Input
           label={tp('reason', locale)}
@@ -995,6 +1269,35 @@ function Confirm({
         </dl>
       </Card>
 
+      {windows.length === 0 ? null : (
+        <fieldset className="flex flex-col gap-2 border-0 p-0" data-testid="arrival-windows">
+          <legend className="font-ui text-body-sm font-semibold text-ink">
+            {tp('windowTitle', locale)}
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            {[null, ...windows].map((choice) => (
+              <button
+                key={choice?.start ?? 'any'}
+                type="button"
+                aria-pressed={arrivalWindow?.start === choice?.start}
+                data-testid={choice === null ? 'window-any' : `window-${choice.start}`}
+                onClick={() => {
+                  setArrivalWindow(choice);
+                }}
+                className="min-h-touch rounded-pill border border-line-strong bg-surface px-4 text-body-sm aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
+              >
+                {choice === null
+                  ? tp('windowAny', locale)
+                  : sessionHours(choice.start, choice.end, locale)}
+              </button>
+            ))}
+          </div>
+          <p className="text-caption text-ink-muted" data-testid="window-note">
+            {tp('windowNote', locale)}
+          </p>
+        </fieldset>
+      )}
+
       <fieldset className="flex flex-col gap-2 border-0 p-0">
         <legend className="font-ui text-body-sm font-semibold text-ink">
           {tp('payWith', locale)}
@@ -1008,7 +1311,9 @@ function Confirm({
               ['at_hospital', 'payAtHospital'],
             ] as const
           )
-            .filter(([value]) => onlinePayments || value === 'at_hospital')
+            .filter(
+              ([value]) => value === 'at_hospital' || (onlinePayments && offered.includes(value)),
+            )
             .map(([value, key]) => (
               <button
                 key={value}
@@ -1068,64 +1373,86 @@ function Confirm({
 function Success({
   booking,
   session,
+  window,
 }: {
   readonly booking: BookingResponse;
   readonly session: SessionCard;
+  /** The preferred hour chosen at confirm (`FR-PAT-28`), said as a preference. */
+  readonly window: ArrivalWindow | null;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
   return (
-    <>
-      <main className="mx-auto flex max-w-[480px] flex-col gap-5 p-5" data-testid="booking-success">
-        <h1 className="font-reading text-title-lg">{tp('bookingDone', locale)}</h1>
+    <TabScreen title={tp('bookingDone', locale)} testId="booking-success">
+      <section className="flex flex-col items-center gap-1 rounded-lg bg-brand-100 px-5 py-6 text-center">
+        <p className="text-body-md font-semibold text-brand-700">{tp('yourSerial', locale)}</p>
+        <p
+          className="text-display-xl leading-[1.1] font-extrabold text-brand-600 tabular-nums"
+          data-testid="serial"
+        >
+          {formatSerial(booking.serial, numerals)}
+        </p>
+        <p className="mt-1 text-body-md font-bold">
+          {doctorName(locale, session.doctorNameBn, session.doctorNameEn)}
+        </p>
+        <p className="text-body-sm text-ink-secondary">
+          {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
+        </p>
+        <p className="text-body-sm text-ink-secondary tabular-nums">
+          {`${sessionDay(session.plannedStart, locale)} · ${sessionHours(
+            session.plannedStart,
+            session.plannedEnd,
+            locale,
+          )}`}
+        </p>
+        {window === null ? null : (
+          <p className="text-body-sm text-brand-700" data-testid="success-window">
+            {tp('windowChosen', locale).replace(
+              '{window}',
+              sessionHours(window.start, window.end, locale),
+            )}
+          </p>
+        )}
+      </section>
 
-        <Card tone="brand" hero>
-          <p className="text-body-sm text-ink-secondary">{tp('yourSerial', locale)}</p>
-          <p className="font-reading text-display-xl tabular-nums" data-testid="serial">
-            {formatSerial(booking.serial, numerals)}
-          </p>
-          <p className="mt-2 text-body-md">
-            {localName(locale, session.doctorNameBn, session.doctorNameEn)}
-          </p>
-          <p className="text-body-sm text-ink-muted">
-            {localName(locale, session.hospitalNameBn, session.hospitalNameEn)}
-          </p>
-          <p className="text-body-sm text-ink-muted tabular-nums">
-            {formatDateTime(session.plannedStart, numerals)}
-          </p>
-        </Card>
+      <Panel className="p-4">
+        <dl className="flex flex-col gap-1.5 text-body-md">
+          <Row
+            label={tp('feeConsultation', locale)}
+            value={formatTaka(booking.fee.consultationPoisha, numerals)}
+          />
+          <Row
+            label={tp('feePlatform', locale)}
+            value={formatTaka(booking.fee.platformFeePoisha, numerals)}
+          />
+          <Row
+            label={tp('feeTotal', locale)}
+            value={formatTaka(booking.fee.totalPoisha, numerals)}
+            strong
+          />
+          <Row
+            label={tp('feeDueAtHospital', locale)}
+            value={formatTaka(booking.fee.dueAtHospitalPoisha, numerals)}
+          />
+        </dl>
+      </Panel>
 
-        <Card>
-          <dl className="flex flex-col gap-1 text-body-md">
-            <Row
-              label={tp('feeConsultation', locale)}
-              value={formatTaka(booking.fee.consultationPoisha, numerals)}
-            />
-            <Row
-              label={tp('feePlatform', locale)}
-              value={formatTaka(booking.fee.platformFeePoisha, numerals)}
-            />
-            <Row
-              label={tp('feeTotal', locale)}
-              value={formatTaka(booking.fee.totalPoisha, numerals)}
-              strong
-            />
-            <Row
-              label={tp('feeDueAtHospital', locale)}
-              value={formatTaka(booking.fee.dueAtHospitalPoisha, numerals)}
-            />
-          </dl>
-        </Card>
+      {/* FR-PAY-08 (plan H3): paid online at a provider that sends the patient
+          away, the serial is held until the payment is confirmed. */}
+      {booking.payment?.state === 'pending' && booking.payment.holdUntil !== null ? (
+        <PaymentHold bookingId={booking.bookingId} payment={booking.payment} />
+      ) : null}
 
-        {/* FR-GST-05: the SMS carries the tracking link. Shown here too, because
+      {/* FR-GST-05: the SMS carries the tracking link. Shown here too, because
           in a demo there is no SMS to open and the link is the point. */}
-        <p className="text-body-sm text-ink-secondary">{tp('smsSent', locale)}</p>
+      <p className="text-body-sm text-ink-secondary">{tp('smsSent', locale)}</p>
 
+      <div className="flex flex-col gap-2.5">
         {booking.trackingUrl === null ? null : (
           <a
             href={booking.trackingUrl}
             data-testid="tracking-link"
-            className="flex min-h-touch items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-semibold text-white"
+            className="flex min-h-[52px] items-center justify-center rounded-md bg-brand-600 px-5 text-body-lg font-bold text-white"
           >
             {tp('viewLiveSerial', locale)}
           </a>
@@ -1133,16 +1460,12 @@ function Success({
 
         <a
           href="/"
-          className="flex min-h-touch items-center justify-center rounded-md border border-line-strong bg-surface px-5 text-body-md"
+          className="flex min-h-[52px] items-center justify-center rounded-md border border-line-strong bg-surface px-5 text-body-md font-semibold text-ink-secondary"
         >
           {tp('backHome', locale)}
         </a>
-
-        <BottomNavSpacer />
-      </main>
-
-      <BottomNav />
-    </>
+      </div>
+    </TabScreen>
   );
 }
 

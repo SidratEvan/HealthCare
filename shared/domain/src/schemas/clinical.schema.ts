@@ -5,20 +5,62 @@
  * console builds `S-B-05` from these and the API validates with them, so the
  * screen cannot submit a visit the server would refuse.
  *
- * ## What is not here
- *
- * No medicine rows, no formulary lookup, no prescription. The owner dropped
- * e-prescriptions from this version (`FR-DOC-04`, `FR-DOC-05`, `FR-DOC-07`), so
- * a visit is a diagnosis, advice in Bangla and a follow-up date — which is what
- * `DATABASE.md` §2.4 calls a `visits` row and what the wallet reads.
+ * A visit is a diagnosis, advice in Bangla, a follow-up date and, since plan
+ * R2, its medicines (`FR-DOC-04`) — what `DATABASE.md` §2.4 calls a `visits`
+ * row with its `prescription_items`, and what the wallet reads.
  */
 
 import { z } from 'zod';
 
+import {
+  DOCUMENT_CONTENT_TYPES,
+  DOCUMENT_KINDS,
+  MAX_DOCUMENT_BYTES,
+} from '../clinical/documents.js';
+import {
+  MAX_DURATION_DAYS,
+  MAX_PRESCRIPTION_ROWS,
+  readSchedule,
+  scheduleText,
+} from '../clinical/prescription.js';
 import { SYMPTOM_SIGNALS } from '../types/enums.js';
 
 /** A UUID as it arrives on the wire, before it is branded. */
 const uuid = z.string().uuid();
+
+/**
+ * One medicine row (`FR-DOC-04`, plan R2). Only the name is required: a doctor
+ * may write a medicine the formulary does not carry (`FR-DOC-05`), and
+ * `medicineId` says when it came from the formulary. The schedule is the
+ * notation `readSchedule` reads, written back in its canonical form, so the
+ * printed sheet says exactly what was checked.
+ */
+export const prescribedMedicine = z.object({
+  medicineId: uuid.optional(),
+  name: z.string().trim().min(1).max(200),
+  strength: z.string().trim().max(60).optional(),
+  schedule: z
+    .string()
+    .trim()
+    .transform((raw, ctx) => {
+      const read = readSchedule(raw);
+      if (read === null) {
+        ctx.addIssue({ code: 'custom', message: 'must be a schedule such as 1+0+1' });
+        return z.NEVER;
+      }
+      return scheduleText(read);
+    })
+    .optional(),
+  durationDays: z.number().int().min(1).max(MAX_DURATION_DAYS).optional(),
+  instructionBn: z.string().trim().max(300).optional(),
+});
+
+export type PrescribedMedicineInput = z.infer<typeof prescribedMedicine>;
+
+/** `GET /formulary?q=` (`FR-DOC-05`): the start of a generic or brand name. */
+export const formularyQuery = z.object({
+  q: z.string().trim().min(2).max(60),
+});
 
 /**
  * `POST /visits` — what a doctor wrote about one consultation.
@@ -60,6 +102,14 @@ export const createVisitBody = z.object({
    * shown back to the patient — the free-text diagnosis stays the record.
    */
   symptomSignal: z.enum(SYMPTOM_SIGNALS).nullable().optional(),
+
+  /**
+   * `TBL-B05-RX` (`FR-DOC-04`, plan R2): the medicines, in the doctor's order.
+   *
+   * Absent leaves a draft's rows as they are; an empty list clears them. Saved
+   * with the visit and final with it once signed.
+   */
+  medicines: z.array(prescribedMedicine).max(MAX_PRESCRIPTION_ROWS).optional(),
 
   /**
    * True for `BTN-B05-SIGN`, false for `BTN-B05-DRAFT`.
@@ -150,3 +200,40 @@ export const redeemConsentBody = z.object({
 });
 
 export type RedeemConsentBody = z.infer<typeof redeemConsentBody>;
+
+// ---------------------------------------------------------------------------
+// A patient's own old papers (`FR-PAT-62`; plan R3)
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /me/documents` — a photograph or a PDF of an old paper, for one of
+ * the account's profiles. The content type is what the sender says; the
+ * server reads the bytes and refuses a file that is not what it says
+ * (`sniffDocument`). The base64 limit is the byte limit, encoded.
+ */
+export const uploadDocumentBody = z.object({
+  patientId: uuid,
+  contentType: z.enum(DOCUMENT_CONTENT_TYPES),
+  dataBase64: z
+    .string()
+    .min(1)
+    .max(Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4),
+  docType: z.enum(DOCUMENT_KINDS),
+  docDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'must be a date as YYYY-MM-DD')
+    .optional(),
+  doctorName: z.string().trim().max(120).optional(),
+  idempotencyKey: uuid,
+});
+
+export type UploadDocumentBody = z.infer<typeof uploadDocumentBody>;
+
+/** `GET /me/documents?patient=` — one profile's papers. */
+export const documentsQuery = z.object({ patient: uuid });
+
+/** `DELETE /me/documents/:id`. */
+export const documentIdParams = z.object({ id: uuid });
+
+/** `GET /patients/:id/documents/:docId/url`. */
+export const documentUrlParams = z.object({ id: uuid, docId: uuid });

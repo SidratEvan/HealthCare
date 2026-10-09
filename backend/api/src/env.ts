@@ -130,6 +130,34 @@ const schema = z.object({
   /** The patient PWA. What a guest tracking link is built from (`FR-GST-05`). */
   WEB_BASE_URL: httpUrl.default('http://localhost:3000'),
   /**
+   * The platform's own domain, without a scheme: `medlivebd.example`
+   * (`FR-BRD-07`, plan C2).
+   *
+   * With it, the patient app opened at `<code>.<this domain>` is that
+   * hospital's portal, a hospital's own recorded domain is too, and both are
+   * let through CORS and the socket handshake. Empty, which is the default,
+   * means the deployment has no domain of its own: every address is the
+   * network and a portal is opened with `?scope=`, as before.
+   *
+   * `localhost` is accepted, so a developer's machine and the browser tests
+   * can open `padma.localhost`.
+   */
+  PLATFORM_DOMAIN: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .default('')
+    .refine(
+      (value) =>
+        value === '' ||
+        value === 'localhost' ||
+        /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(
+          value,
+        ),
+      'must be a domain name with no scheme or path, e.g. medlivebd.example',
+    ),
+
+  /**
    * The staff console.
    *
    * A separate origin from the patient app, and always has been: they are two
@@ -221,9 +249,14 @@ const schema = z.object({
   OTP_MAX_PER_HOUR: positiveInt.max(100).default(5),
 
   // --- SMS ----------------------------------------------------------------
-  SMS_PROVIDER: z.enum(['local', 'log']).default('log'),
+  // `http` is an aggregator reached over HTTPS (`adapters/smsHttp.ts`, plan
+  // H2): the three below it are then required, and so is the secret its
+  // delivery receipts are signed with. `local` still refuses everything.
+  SMS_PROVIDER: z.enum(['http', 'local', 'log']).default('log'),
+  SMS_API_URL: z.string().default(''),
   SMS_API_KEY: z.string().default(''),
   SMS_SENDER_ID: z.string().default(''),
+  SMS_DLR_SECRET: z.string().default(''),
   SMS_MONTHLY_CAP: positiveInt.default(20_000),
 
   // --- Web Push (VAPID) ---------------------------------------------------
@@ -240,6 +273,13 @@ const schema = z.object({
    * face a real patient.
    */
   PAYMENT_PROVIDER: z.enum(['mock', 'live', 'off']).default('mock'),
+  /**
+   * Under `mock` only (plan H3): `inline` settles every charge on the spot, as
+   * the demonstration always has; `redirect` sends the patient to a page of
+   * the API's own that says it is a simulation and offers pay, fail and
+   * cancel, so the held serial and the return page can be shown and tested.
+   */
+  MOCK_PAYMENT_FLOW: z.enum(['inline', 'redirect']).default('inline'),
   BKASH_BASE_URL: z.string().default(''),
   BKASH_APP_KEY: z.string().default(''),
   BKASH_APP_SECRET: z.string().default(''),
@@ -279,6 +319,31 @@ const schema = z.object({
    * step 25, `FR-GST-03`). Unset means: on, except on a demonstration.
    */
   GUEST_BOOKING_OTP: boolish.optional(),
+
+  /**
+   * How many bookings one phone number may make without an account in a
+   * rolling day (`FR-GST-14`). One phone often books for a household, so
+   * this is generous; it stops a number being used to fill a doctor's list.
+   */
+  GUEST_BOOKINGS_PER_PHONE_PER_DAY: positiveInt.max(1_000).default(10),
+
+  /**
+   * How old the last good backup may be before `/readyz` says so (plan I2;
+   * `shared/domain` `org/deployment`). The same figure as the backup
+   * container's own `BACKUP_MAX_AGE_HOURS`, and set by the self-hosted stack
+   * to the same value. Unset, this deployment's backups are somebody else's
+   * (Supabase's, for the demonstration) and are reported as not watched.
+   */
+  BACKUP_MAX_AGE_HOURS: positiveInt.max(24 * 14).optional(),
+
+  /**
+   * How many hospitals' own applications may wait unanswered at once
+   * (`FR-ONB-09`). The form is public, and a workspace is cheap to ask for:
+   * at this many still setting up, the form is refused until the platform
+   * has looked at what is waiting. It limits nothing a platform
+   * administrator creates.
+   */
+  ORG_APPLICATIONS_OPEN_MAX: positiveInt.max(10_000).default(200),
 
   /**
    * How many reverse proxies sit in front of this process.
@@ -393,6 +458,17 @@ const PRODUCTION_REQUIREMENTS: readonly {
     unless: (env) => env.SMS_PROVIDER === 'log',
   },
   {
+    key: 'SMS_API_URL',
+    because: 'SMS_PROVIDER=http sends to this address, and without it no message leaves',
+    unless: (env) => env.SMS_PROVIDER !== 'http',
+  },
+  {
+    key: 'SMS_DLR_SECRET',
+    because:
+      'delivery receipts are believed only when signed with it, and without it every one is refused (FR-NOT-06)',
+    unless: (env) => env.SMS_PROVIDER !== 'http',
+  },
+  {
     key: 'TOTP_ENCRYPTION_KEY',
     because:
       "administrators' second factors would be encrypted with a key derived from JWT_REFRESH_SECRET, and rotating that secret would lock every one of them out (FR-SEC-10)",
@@ -479,6 +555,28 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
         key: 'JWT_REFRESH_SECRET',
         message:
           'must differ from JWT_ACCESS_SECRET — sharing them lets a 15-minute access token be replayed as a 30-day refresh token',
+      });
+    }
+
+    // The tracking link's key and the second factor's key are each one
+    // secret's whole job (plan I2b). A link key equal to a token key makes one
+    // stolen secret both; a second-factor key equal to either means whoever
+    // can sign a token can read every administrator's authenticator seed.
+    const tokenKeys = [env.JWT_ACCESS_SECRET, env.JWT_REFRESH_SECRET];
+    if (tokenKeys.includes(env.GUEST_LINK_SECRET)) {
+      problems.push({
+        key: 'GUEST_LINK_SECRET',
+        message: 'must differ from both JWT secrets — a tracking link is signed with its own key',
+      });
+    }
+    if (
+      env.TOTP_ENCRYPTION_KEY !== '' &&
+      [...tokenKeys, env.GUEST_LINK_SECRET].includes(env.TOTP_ENCRYPTION_KEY)
+    ) {
+      problems.push({
+        key: 'TOTP_ENCRYPTION_KEY',
+        message:
+          'must differ from the JWT and tracking-link secrets — it encrypts what a second factor is made from (FR-SEC-10)',
       });
     }
   }

@@ -82,6 +82,10 @@ describe('the schema is not the API’s to change', () => {
     ],
     ['make another account', sql`CREATE ROLE somebody LOGIN SUPERUSER`],
     ['rewrite the migration ledger', sql`DELETE FROM schema_migrations`],
+    [
+      'record a backup that was never made (plan I2)',
+      sql`INSERT INTO backup_runs (result, verified, stamp) VALUES ('ok', 'restore', 'forged')`,
+    ],
   ])('cannot %s', async (_what, statement) => {
     expect(await codeOf(statement)).toBe(REFUSED);
   });

@@ -22,13 +22,22 @@ const PATIENT = 'http://localhost:3000';
 
 /** What a self-hosted server with no merchant account answers. */
 async function withoutOnlinePayments(page: Page): Promise<void> {
-  await page.route('**/api/v1/config', async (route) => {
+  // With whatever the app adds to the question: it says which address it is
+  // at (`?host=`, `FR-BRD-07`), and a pattern without that would let the real
+  // answer through.
+  await page.route('**/api/v1/config**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         ok: true,
-        data: { demo: false, onlinePayments: false, guestPhoneCheck: false },
+        data: {
+          demo: false,
+          onlinePayments: false,
+          guestPhoneCheck: false,
+          address: 'network',
+          scope: null,
+        },
       }),
     });
   });

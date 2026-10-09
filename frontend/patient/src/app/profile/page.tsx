@@ -26,10 +26,23 @@ import {
   numeralsFor,
   tp,
   type PatientKey,
+  prescriptionSheet,
 } from '@platform/i18n';
-import { Button, Card, Input, OtpInput, useLocale } from '@platform/ui';
+import { Button, Card, Input, OtpInput, useLocale, usePrintSheet } from '@platform/ui';
 
+import { BrandLogo } from '@/components/BrandLogo';
+import {
+  ChevronIcon,
+  GlobeIcon,
+  LogoutIcon,
+  ProfileIcon,
+  SerialIcon,
+  ShieldIcon,
+} from '@/components/icons';
+import { LanguageToggle } from '@/components/LanguageToggle';
+import { ProfilePapers } from '@/components/ProfilePapers';
 import { TabScreen } from '@/components/TabScreen';
+import { useDeployment } from '@/hooks/useDeployment';
 import { useOnline } from '@/hooks/useOnline';
 import {
   claimAll,
@@ -44,6 +57,7 @@ import {
   type ClaimableProfile,
   type Profile,
 } from '@/lib/account';
+import { doctorName } from '@/lib/doctor';
 
 import type { VisitRecord } from '@/lib/types';
 
@@ -65,6 +79,8 @@ function failureKey(failure: AccountFailure): PatientKey {
       return 'accountCodeExpired';
     case 'signedOut':
       return 'accountSignedOut';
+    case 'unsupported':
+      return 'papersUnsupported';
     case 'failed':
       return 'accountFailed';
   }
@@ -128,7 +144,7 @@ export default function Page(): ReactNode {
 
   if (stage === null) {
     return (
-      <TabScreen title={tp('navProfile', locale)}>
+      <TabScreen title={tp('moreTitle', locale)}>
         <div className="h-40 rounded-md bg-sunken" aria-busy="true" />
       </TabScreen>
     );
@@ -137,14 +153,20 @@ export default function Page(): ReactNode {
   const waitSeconds = Math.max(0, Math.ceil((resendAt - now) / 1000));
 
   return (
-    <TabScreen title={tp('navProfile', locale)}>
+    <TabScreen title={tp('moreTitle', locale)}>
       {stage === 'phone' ? (
         <form
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-4 rounded-md border border-line bg-surface p-4 shadow-1"
           noValidate
           onSubmit={(event) => void send(event)}
           data-testid="signin-phone"
         >
+          <div className="flex items-center gap-3">
+            <span className="flex size-12 shrink-0 items-center justify-center rounded-pill bg-brand-100 text-brand-600">
+              <ProfileIcon size={24} />
+            </span>
+            <p className="text-title-sm font-bold">{tp('moreSignInTitle', locale)}</p>
+          </div>
           <p className="text-body-md text-ink-secondary">{tp('accountIntro', locale)}</p>
           <Input
             label={tp('mobileNumber', locale)}
@@ -175,7 +197,10 @@ export default function Page(): ReactNode {
       ) : null}
 
       {stage === 'code' ? (
-        <div className="flex flex-col gap-4" data-testid="signin-code">
+        <div
+          className="flex flex-col gap-4 rounded-md border border-line bg-surface p-4 shadow-1"
+          data-testid="signin-code"
+        >
           <p className="text-body-md text-ink-secondary">
             {formatPatient('accountCodeSent', locale, { phone })}
           </p>
@@ -248,7 +273,111 @@ export default function Page(): ReactNode {
           }}
         />
       ) : null}
+
+      <Menu />
+
+      {stage === 'account' ? (
+        <SignOutRow
+          onSignedOut={() => {
+            setPhone('');
+            setStage('phone');
+          }}
+        />
+      ) : null}
+
+      <BrandFoot />
     </TabScreen>
+  );
+}
+
+/**
+ * The আরও menu (`S-A-19`, FRONTEND.md §0.5): only what works. Language, and
+ * the way to the record sharing that lives with the records. Help and the
+ * hospital link (`BTN-A19-HELP`, `BTN-A19-FORHOSPITAL`) are not built, so
+ * they are not offered.
+ */
+function Menu(): ReactNode {
+  const locale = useLocale();
+  return (
+    <section aria-labelledby="more-settings" className="flex flex-col gap-2">
+      <h2 id="more-settings" className="text-body-sm font-semibold text-ink-muted">
+        {tp('moreSettingsTitle', locale)}
+      </h2>
+      <ul className="divide-y divide-line rounded-md border border-line bg-surface shadow-1">
+        <li className="flex min-h-[56px] items-center gap-3 px-4 py-2">
+          <span className="text-brand-600">
+            <GlobeIcon size={22} />
+          </span>
+          <span className="flex-1 text-body-md font-medium">{tp('language', locale)}</span>
+          <LanguageToggle />
+        </li>
+        <li>
+          <a
+            href="/serials"
+            className="flex min-h-[56px] items-center gap-3 px-4 text-body-md font-medium"
+          >
+            <span className="text-brand-600">
+              <SerialIcon size={22} />
+            </span>
+            <span className="flex-1">{tp('moreMySerials', locale)}</span>
+            <span className="text-ink-muted">
+              <ChevronIcon size={18} />
+            </span>
+          </a>
+        </li>
+        <li>
+          <a
+            href="/records"
+            className="flex min-h-[56px] items-center gap-3 px-4 text-body-md font-medium"
+          >
+            <span className="text-brand-600">
+              <ShieldIcon size={22} />
+            </span>
+            <span className="flex-1">{tp('moreRecordsSharing', locale)}</span>
+            <span className="text-ink-muted">
+              <ChevronIcon size={18} />
+            </span>
+          </a>
+        </li>
+      </ul>
+    </section>
+  );
+}
+
+/** Sign-out: its own row, beneath the menu, never beside something else. */
+function SignOutRow({ onSignedOut }: { readonly onSignedOut: () => void }): ReactNode {
+  const locale = useLocale();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void signOut().then(onSignedOut);
+      }}
+      data-testid="account-sign-out"
+      className="flex min-h-[56px] items-center gap-3 rounded-md border border-line bg-surface px-4 text-left text-body-md font-medium text-ink-secondary shadow-1"
+    >
+      <span className="text-ink-muted">
+        <LogoutIcon size={22} />
+      </span>
+      {tp('accountSignOut', locale)}
+    </button>
+  );
+}
+
+/** The official logo at the foot of the screen (FRONTEND.md §0.5), and the version. */
+function BrandFoot(): ReactNode {
+  const locale = useLocale();
+  const demo = useDeployment()?.demo === true;
+  const scope = useDeployment()?.scope ?? null;
+  // Inside a hospital's own app the network's logo would be the wrong one.
+  if (scope !== null) return null;
+  return (
+    <div className="flex flex-col items-center gap-1 pt-2">
+      <BrandLogo height={52} />
+      <p className="text-caption text-ink-muted">
+        {tp(demo ? 'appVersionDemo' : 'appVersion', locale)}
+      </p>
+    </div>
   );
 }
 
@@ -279,13 +408,13 @@ function Claim({ onDone }: { readonly onDone: () => void }): ReactNode {
 
   return (
     <section className="flex flex-col gap-4" data-testid="claim">
-      <h2 className="font-reading text-title-md">{tp('claimTitle', locale)}</h2>
+      <h2 className="text-title-md font-bold">{tp('claimTitle', locale)}</h2>
       <p className="text-body-md text-ink-secondary">{tp('claimIntro', locale)}</p>
       {list === null && problem === null ? (
         <div className="h-24 rounded-md bg-sunken" aria-busy="true" />
       ) : null}
       {list?.map((entry) => (
-        <Card key={entry.patientId}>
+        <Card elevated key={entry.patientId}>
           <p className="text-body-lg font-semibold">{entry.fullName}</p>
           <p className="text-body-sm text-ink-muted">
             {formatPatient('claimCounts', locale, {
@@ -323,6 +452,8 @@ function Account({ onSignedOut }: { readonly onSignedOut: () => void }): ReactNo
   const [records, setRecords] = useState<ReadonlyMap<string, readonly VisitRecord[]>>(new Map());
   const [problem, setProblem] = useState<PatientKey | null>(null);
   const account = readAccount();
+  // `FR-DOC-07` (plan R2): a visit's prescription, printed as it was given.
+  const { sheet, print } = usePrintSheet();
 
   const load = useCallback(async () => {
     setProblem(null);
@@ -350,23 +481,29 @@ function Account({ onSignedOut }: { readonly onSignedOut: () => void }): ReactNo
 
   return (
     <section className="flex flex-col gap-4" data-testid="account">
-      <Card>
-        <p className="text-body-sm text-ink-muted">{tp('accountSignedInAs', locale)}</p>
-        <p className="text-body-lg font-semibold" data-testid="account-phone">
-          {account?.phone ?? ''}
-        </p>
-        <div className="mt-3">
-          <Button
-            variant="secondary"
-            onClick={() => {
-              void signOut().then(onSignedOut);
-            }}
-            data-testid="account-sign-out"
-          >
-            {tp('accountSignOut', locale)}
-          </Button>
+      <div className="flex items-center gap-4 rounded-md border border-line bg-surface p-4 shadow-1">
+        <span className="flex size-14 shrink-0 items-center justify-center rounded-pill bg-brand-100 text-brand-600">
+          <ProfileIcon size={28} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-body-sm text-ink-muted">{tp('accountSignedInAs', locale)}</p>
+          <p className="text-title-sm font-bold tabular-nums" data-testid="account-phone">
+            {account?.phone ?? ''}
+          </p>
+          {list === null || list.length === 0 ? null : (
+            <p className="text-body-sm text-ink-secondary">
+              {tp('moreProfileCount', locale).replace(
+                '{count}',
+                formatNumber(list.length, numerals),
+              )}
+            </p>
+          )}
         </div>
-      </Card>
+      </div>
+
+      <h2 className="-mb-2 text-body-sm font-semibold text-ink-muted">
+        {tp('moreProfilesTitle', locale)}
+      </h2>
 
       {problem !== null ? (
         <div role="alert" className="flex flex-col items-start gap-3 rounded-md bg-alert-100 p-4">
@@ -378,12 +515,12 @@ function Account({ onSignedOut }: { readonly onSignedOut: () => void }): ReactNo
       ) : list === null ? (
         <div className="h-32 rounded-md bg-sunken" aria-busy="true" data-testid="account-loading" />
       ) : list.length === 0 ? (
-        <Card data-testid="account-empty">
+        <Card elevated data-testid="account-empty">
           <p className="text-body-md text-ink-secondary">{tp('accountNoProfiles', locale)}</p>
         </Card>
       ) : (
         list.map((profile) => (
-          <Card key={profile.patientId} data-testid={`profile-${profile.patientId}`}>
+          <Card elevated key={profile.patientId} data-testid={`profile-${profile.patientId}`}>
             <p className="text-body-lg font-semibold">{profile.fullName}</p>
             <p className="text-body-sm text-ink-muted">
               {formatPatient('claimCounts', locale, {
@@ -402,16 +539,42 @@ function Account({ onSignedOut }: { readonly onSignedOut: () => void }): ReactNo
                     {visit.diagnosisText ?? tp('accountNoDiagnosis', locale)}
                   </p>
                   <p className="text-caption text-ink-muted">
-                    {localName(locale, visit.doctorNameBn, visit.doctorNameEn)} ·{' '}
+                    {doctorName(locale, visit.doctorNameBn, visit.doctorNameEn)} ·{' '}
                     {localName(locale, visit.hospitalNameBn, visit.hospitalNameEn)} ·{' '}
                     {formatDateTime(visit.visitedAt, numerals)}
                   </p>
+                  {visit.medicines.length === 0 ? null : (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="text-body-sm" data-testid="account-visit-medicines">
+                        {`${tp('recordsMedicines', locale)}: ${visit.medicines.map((medicine) => medicine.name).join(', ')}`}
+                      </p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        data-testid="account-visit-print"
+                        onClick={() => {
+                          print(
+                            prescriptionSheet(visit, {
+                              name: profile.fullName,
+                              ageYears: profile.ageYears,
+                              sex: profile.sex,
+                            }),
+                          );
+                        }}
+                      >
+                        {tp('recordsPrint', locale)}
+                      </Button>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
+            {/* BTN-A12-UPLOAD (FR-PAT-62, plan R3): this profile's own old papers. */}
+            <ProfilePapers patientId={profile.patientId} onSignedOut={onSignedOut} />
           </Card>
         ))
       )}
+      {sheet}
     </section>
   );
 }

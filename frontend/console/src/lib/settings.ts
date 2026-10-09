@@ -23,16 +23,21 @@ import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import type {
   OrgLifecycle,
   SetupCounts,
+  BedPatchBody,
   BedsBody,
   DepartmentBody,
+  DepartmentPatchBody,
+  BrandTheme,
   DoctorBody,
   DoctorPatchBody,
+  LogoBody,
   ProfileBody,
   RulesBody,
   StaffBody,
   StaffPatchBody,
   TemplateBody,
   WardBody,
+  WardPatchBody,
 } from '@platform/domain';
 
 import { readDemoSession } from '@/lib/demo';
@@ -48,11 +53,20 @@ export interface SetupSnapshot {
     readonly kind: string;
     readonly division: string;
     readonly district: string;
+    /** Its licence or registration number; its own to correct while setting up (plan D2). */
+    readonly registrationNo: string | null;
     readonly thana: string | null;
     readonly addressBn: string | null;
     readonly addressEn: string | null;
     readonly phone: string | null;
     readonly emergencyPhone: string | null;
+    /** The modules it does not run (`FR-BRD-11`); empty when everything is on. */
+    readonly modulesOff: readonly string[];
+    /** The live figures it does not share with the network (`FR-NET-04`). */
+    readonly unpublished: readonly string[];
+    /** What the hospital says of itself to patients (`FR-BRD-06`). */
+    readonly descriptionBn: string | null;
+    readonly descriptionEn: string | null;
     readonly lat: number | null;
     readonly lng: number | null;
     readonly isLive: boolean;
@@ -71,6 +85,31 @@ export interface SetupSnapshot {
     readonly lateReinsertAfter: number;
     readonly staleThresholdMinutes: number;
     readonly smsBudgetMonthly: number | null;
+    /** How long a serial waits for its online payment (plan H3, `FR-PAY-08`). */
+    readonly paymentHoldMinutes?: number;
+    readonly prepayRequired?: boolean;
+    readonly noShowPrepay?: boolean;
+    readonly noShowWindowDays?: number;
+    /** `FR-PAT-28` (plan R1). */
+    readonly arrivalWindows?: boolean;
+  };
+  /** Whether this deployment takes payment online (plan H3). */
+  readonly onlinePayments?: boolean;
+  /**
+   * Where patients reach this hospital's own portal (`FR-BRD-07`): under the
+   * platform's domain, and at a domain of its own when the platform has
+   * recorded one. Both null on a deployment with no domain.
+   */
+  readonly portal: { readonly platform: string | null; readonly own: string | null };
+  /** Its colours and its logo (`FR-BRD-06`). */
+  readonly face: {
+    /** Null: the platform's own colours. */
+    readonly theme: BrandTheme | null;
+    readonly logo: {
+      readonly version: string;
+      readonly contentType: string;
+      readonly bytes: number;
+    } | null;
   };
   readonly departments: readonly SettingsDepartment[];
   readonly doctors: readonly SettingsDoctor[];
@@ -130,6 +169,8 @@ export interface SettingsWard {
     readonly kind: string;
     readonly state: string;
     readonly nightlyPoisha: number;
+    /** Added here and never brought into service by the ward: the one kind that can be removed. */
+    readonly unconfirmed: boolean;
   }[];
 }
 
@@ -217,6 +258,67 @@ export function signedInStaffId(): string | null {
   }
 }
 
+/**
+ * The hospital's own logo as an address this page can show, or null.
+ *
+ * Read with the administrator's token and turned into a blob address, because
+ * the public address answers for a live hospital only and an `<img>` cannot
+ * send a token. The caller revokes the address when it is done with it.
+ */
+export async function loadOwnLogo(): Promise<string | null> {
+  const token = readDemoSession()?.token;
+  if (token === undefined) return null;
+  try {
+    const response = await fetch(`${API_BASE}/hospital/logo`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    return URL.createObjectURL(await response.blob());
+  } catch {
+    return null;
+  }
+}
+
+/** A hospital's SMS this month, by what became of them (`FR-NOT-06`). */
+export interface MonthOfMessages {
+  readonly sent: number;
+  readonly delivered: number;
+  readonly failed: number;
+  readonly held: number;
+  readonly waiting: number;
+  /** False where the provider reports no delivery: "delivered" is then unknown, not nought. */
+  readonly reportsDelivery: boolean;
+  readonly asOf: string;
+}
+
+export async function loadMonthOfMessages(): Promise<MonthOfMessages | 'offline' | 'error'> {
+  try {
+    return await client().get<MonthOfMessages>('/hospital/messages');
+  } catch (error: unknown) {
+    return error instanceof NetworkError ? 'offline' : 'error';
+  }
+}
+
+/** A reception desk and the doctors it looks after (`FR-REC-32`, plan R4). */
+export interface Desk {
+  readonly id: string;
+  readonly nameBn: string;
+  readonly nameEn: string;
+  readonly doctorIds: readonly string[];
+  /** Its receptionists (`FR-REC-32`, question 20): they manage only its doctors. */
+  readonly staffIds: readonly string[];
+}
+
+/** `GET /hospital/desks`, for the settings screen and the picker. */
+export async function loadDesks(): Promise<readonly Desk[] | 'offline' | 'error'> {
+  try {
+    return (await client().get<{ desks: Desk[] }>('/hospital/desks')).desks;
+  } catch (error: unknown) {
+    return error instanceof NetworkError ? 'offline' : 'error';
+  }
+}
+
 /** Loading: `'offline'` when the request never reached the server. */
 export async function loadSetup(): Promise<SetupSnapshot | 'offline' | 'error'> {
   try {
@@ -228,9 +330,23 @@ export async function loadSetup(): Promise<SetupSnapshot | 'offline' | 'error'> 
 
 export const settingsApi = {
   profile: (body: ProfileBody) => save((api, key) => api.patch('/hospital/profile', body, key)),
+  /** The hospital's colours, or null for the platform's own (`FR-BRD-06`). */
+  brand: (theme: BrandTheme | null) =>
+    save((api, key) => api.put('/hospital/brand', { theme }, key)),
+  /** Which live figures the hospital keeps to itself (`FR-NET-04`). */
+  publishing: (unpublished: readonly string[]) =>
+    save((api, key) => api.put('/hospital/publishing', { unpublished }, key)),
+  logo: (body: LogoBody) =>
+    save((api, key) => api.put<{ version: string }>('/hospital/logo', body, key)),
+  removeLogo: () => save((api, key) => api.delete('/hospital/logo', key)),
   rules: (body: RulesBody) => save((api, key) => api.patch('/hospital/rules', body, key)),
   addDepartment: (body: DepartmentBody) =>
     save((api, key) => api.post<{ departmentId: string }>('/hospital/departments', body, key)),
+  updateDepartment: (departmentId: string, body: DepartmentPatchBody) =>
+    save((api, key) => api.patch(`/hospital/departments/${departmentId}`, body, key)),
+  /** One nobody sits in (plan D2); refused, with why, while a doctor is listed under it. */
+  removeDepartment: (departmentId: string) =>
+    save((api, key) => api.delete(`/hospital/departments/${departmentId}`, key)),
   addDoctor: (body: DoctorBody) =>
     save((api, key) =>
       api.post<{ doctorHospitalId: string; linkedExisting: boolean }>(
@@ -251,8 +367,33 @@ export const settingsApi = {
     ),
   addWard: (body: WardBody) =>
     save((api, key) => api.post<{ wardId: string }>('/hospital/wards', body, key)),
+  updateWard: (wardId: string, body: WardPatchBody) =>
+    save((api, key) => api.patch(`/hospital/wards/${wardId}`, body, key)),
+  /** One that holds no bed (plan D2). */
+  removeWard: (wardId: string) => save((api, key) => api.delete(`/hospital/wards/${wardId}`, key)),
   addBeds: (body: BedsBody) =>
     save((api, key) => api.post<{ bedIds: string[] }>('/hospital/beds', body, key)),
+  updateBed: (bedId: string, body: BedPatchBody) =>
+    save((api, key) => api.patch(`/hospital/beds/${bedId}`, body, key)),
+  /** One the ward never brought into service (plan D2). */
+  removeBed: (bedId: string) => save((api, key) => api.delete(`/hospital/beds/${bedId}`, key)),
+  /** Reception desks (`FR-REC-32`, plan R4). */
+  addDesk: (body: {
+    nameBn: string;
+    nameEn: string;
+    doctorIds: readonly string[];
+    staffIds?: readonly string[];
+  }) => save((api, key) => api.post<{ deskId: string }>('/hospital/desks', body, key)),
+  updateDesk: (
+    deskId: string,
+    body: {
+      nameBn?: string;
+      nameEn?: string;
+      doctorIds?: readonly string[];
+      staffIds?: readonly string[];
+    },
+  ) => save((api, key) => api.patch(`/hospital/desks/${deskId}`, body, key)),
+  removeDesk: (deskId: string) => save((api, key) => api.delete(`/hospital/desks/${deskId}`, key)),
   addStaff: (body: StaffBody) =>
     save((api, key) =>
       api.post<{ staffId: string; temporaryPassword: string }>('/hospital/staff', body, key),

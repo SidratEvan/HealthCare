@@ -47,6 +47,7 @@ import { ImportMapping } from '@/components/ImportMapping';
 import { ImportWarnings } from '@/components/ImportWarnings';
 import {
   downloadTemplate,
+  readImportFile,
   importApi,
   type ImportBatch,
   type ImportBatchView,
@@ -97,6 +98,13 @@ const ERROR_NAME: Readonly<Record<string, ConsoleKey>> = {
 
 type Load = 'loading' | 'ready' | 'error' | 'offline';
 
+/** Why a chosen file gave nothing to check (`FR-IMP-22`, plan E1). */
+const READ_PROBLEM = {
+  legacy_xls: 'importLegacyXls',
+  unreadable: 'importUnreadable',
+  too_big: 'importTooBig',
+} as const;
+
 export function HospitalImport(): ReactNode {
   return (
     <ToastProvider placement="console">
@@ -114,6 +122,12 @@ function ImportScreen(): ReactNode {
   const [online, setOnline] = useState(true);
   const [set, setSet] = useState<ImportSet>('structure');
   const [file, setFile] = useState<{ readonly name: string; readonly text: string } | null>(null);
+  /** An `.xlsx` chosen (`FR-IMP-22`, plan E1): the file, its sheets with rows, and which is read. */
+  const [workbook, setWorkbook] = useState<{
+    readonly source: File;
+    readonly sheets: readonly string[];
+    readonly sheet: string | null;
+  } | null>(null);
   const [preview, setPreview] = useState<ImportBatchView | null>(null);
   /**
    * The mapping step (`FR-IMP-15`–`18`): shown when the file's columns are
@@ -387,7 +401,7 @@ function ImportScreen(): ReactNode {
               {t('importFile', locale)}
               <input
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 data-testid="import-file"
                 className="text-body-sm"
                 onChange={(event) => {
@@ -395,12 +409,23 @@ function ImportScreen(): ReactNode {
                   setPreview(null);
                   setMapping(null);
                   setProblem(null);
+                  setWorkbook(null);
                   if (chosen === undefined) {
                     setFile(null);
                     return;
                   }
-                  void chosen.text().then((text) => {
-                    setFile({ name: chosen.name, text });
+                  void readImportFile(chosen).then((read) => {
+                    if (read.kind !== 'ok') {
+                      setFile(null);
+                      setProblem(t(READ_PROBLEM[read.kind], locale));
+                      return;
+                    }
+                    setFile({ name: read.name, text: read.text });
+                    setWorkbook(
+                      read.sheets.length === 0
+                        ? null
+                        : { source: chosen, sheets: read.sheets, sheet: read.sheet },
+                    );
                   });
                 }}
               />
@@ -423,6 +448,38 @@ function ImportScreen(): ReactNode {
               </Button>
             )}
           </div>
+          {/* A workbook with more than one sheet holding rows: which one is read. */}
+          {workbook === null || workbook.sheets.length < 2 ? null : (
+            <label className="mt-3 flex flex-col gap-2 text-body-sm font-semibold text-ink">
+              {t('importSheet', locale)}
+              <select
+                value={workbook.sheet ?? ''}
+                data-testid="import-sheet"
+                className="min-h-touch rounded-md border border-line-strong bg-surface px-3 text-body-md"
+                onChange={(event) => {
+                  const sheet = event.target.value;
+                  setPreview(null);
+                  setMapping(null);
+                  setProblem(null);
+                  void readImportFile(workbook.source, sheet).then((read) => {
+                    if (read.kind !== 'ok') {
+                      setFile(null);
+                      setProblem(t(READ_PROBLEM[read.kind], locale));
+                      return;
+                    }
+                    setFile({ name: read.name, text: read.text });
+                    setWorkbook({ ...workbook, sheet: read.sheet });
+                  });
+                }}
+              >
+                {workbook.sheets.map((sheet) => (
+                  <option key={sheet} value={sheet}>
+                    {sheet}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <p className="mt-3 text-caption text-ink-muted" data-testid="import-own-file">
             {t('importOwnFile', locale)}
           </p>

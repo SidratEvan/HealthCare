@@ -8,14 +8,78 @@
  * drift.
  */
 
+/**
+ * Names the development server answers its own assets at, besides
+ * `localhost`.
+ *
+ * A hospital's portal is this app at another name (`FR-BRD-07`): under the
+ * platform's domain, or at a domain of the hospital's own. On a developer's
+ * machine those are `padma.localhost` and whatever name a test maps to this
+ * machine, and Next's development server refuses its scripts to a name it was
+ * not told about. Development only: a built app serves whoever asks.
+ */
+const DEV_ORIGINS = [
+  '*.localhost',
+  ...(process.env.DEV_PORTAL_HOSTS ?? '')
+    .split(',')
+    .map((host) => host.trim())
+    .filter((host) => host !== ''),
+];
+
 /** @type {import('next').NextConfig} */
 export default {
   reactStrictMode: true,
+  allowedDevOrigins: DEV_ORIGINS,
   transpilePackages: ['@platform/ui', '@platform/client', '@platform/domain', '@platform/i18n'],
 
   // The patient app is a PWA served to phones on 3G. Nothing here is
   // indexed — the marketing site is a separate app (FRONTEND.md §10).
   poweredByHeader: false,
+
+  /**
+   * The headers every page carries (plan A7; `NFR-08`; handover finding 22).
+   *
+   * - nothing here is drawn inside somebody else's page (`X-Frame-Options`,
+   *   `frame-ancestors`): a screen with a patient's serial or a hospital's
+   *   queue on it is not something to be framed and overlaid;
+   * - a file is what its type says (`nosniff`);
+   * - an address is passed on only as far as its origin, so a tracking
+   *   link's token does not travel to wherever the next click goes;
+   * - the patient app may ask where the phone is, for the emergency search, and for nothing else;
+   * - a browser that has reached this origin over HTTPS does not try it in
+   *   the clear again. A browser ignores this header over plain HTTP, so a
+   *   developer's machine is unaffected.
+   *
+   * The Content-Security-Policy is the part that can be stated without
+   * breaking the page: where it may be framed, what a form may post to, no
+   * plugins. It is sent with everything, the files included. A page also
+   * carries a second policy, from `src/proxy.ts`, that restricts its scripts to
+   * the nonce minted for it (plan I2d); what follows is why that is not here.
+   * Until I2d it did not restrict scripts. Next writes inline scripts,
+   * and a policy that allowed them all would be a policy in name only; one
+   * built on a nonce per request is a change to how every page is served.
+   */
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Permissions-Policy',
+            value: 'geolocation=(self), camera=(), microphone=(), payment=()',
+          },
+          { key: 'Strict-Transport-Security', value: 'max-age=15552000; includeSubDomains' },
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+          },
+        ],
+      },
+    ];
+  },
 
   // Next writes its own AGENTS.md and CLAUDE.md on first run. This repository
   // already has one, at the root, and it is the operating contract — a second

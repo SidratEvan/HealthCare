@@ -118,6 +118,28 @@ test.describe('S-B-11: a facility with no seed data sets itself up', () => {
     await page.getByTestId('settings-add-department-submit').click();
     await expect(page.getByTestId('settings-departments')).toContainText('MED');
 
+    // --- a mistake is put right where it stands (plan D2) -------------------
+    // A name typed wrong is changed.
+    await page.getByTestId('settings-dept-edit-MED').click();
+    await page.getByTestId('settings-dept-name-bn-MED').fill('মেডিসিন বিভাগ (ডেমো)');
+    await page.getByTestId('settings-dept-save-MED').click();
+    await expect(page.getByTestId('settings-dept-row-MED')).toContainText('মেডিসিন বিভাগ (ডেমো)');
+
+    // A department added by mistake is taken away, asked twice.
+    await department.getByLabel('নাম (বাংলায়)').fill('ভুল বিভাগ (ডেমো)');
+    await department.getByLabel('নাম (ইংরেজিতে)').fill('Wrong Department (Demo)');
+    await department.getByLabel(/^কোড/).fill('oops');
+    await page.getByTestId('settings-add-department-submit').click();
+    await expect(page.getByTestId('settings-dept-row-OOPS')).toBeVisible();
+    await page.getByTestId('settings-dept-remove-OOPS').click();
+    // Asked, and answered no: it stays.
+    await page.getByTestId('settings-dept-remove-OOPS-no').click();
+    await expect(page.getByTestId('settings-dept-row-OOPS')).toBeVisible();
+    await page.getByTestId('settings-dept-remove-OOPS').click();
+    await page.getByTestId('settings-dept-remove-OOPS-yes').click();
+    await expect(page.getByTestId('settings-dept-row-OOPS')).toHaveCount(0);
+    await expect(page.getByTestId('settings-dept-row-MED')).toBeVisible();
+
     // --- a doctor and a weekly chamber -------------------------------------
     await tab(page, 'doctors');
     const doctor = page.getByTestId('settings-add-doctor');
@@ -144,6 +166,12 @@ test.describe('S-B-11: a facility with no seed data sets itself up', () => {
     // one day of the coming eight on that weekday.
     expect(await chamberDates(facility.hospitalId)).toEqual([tomorrow.date]);
 
+    // A department a doctor is listed under cannot be taken away, and says why
+    // in place of the button (plan D2).
+    await tab(page, 'departments');
+    await expect(page.getByTestId('settings-dept-in-use-MED')).toContainText('তাই সরানো যায় না');
+    await expect(page.getByTestId('settings-dept-remove-MED')).toHaveCount(0);
+
     // --- a ward and its beds, never falsely free ---------------------------
     await tab(page, 'beds');
     const ward = page.getByTestId('settings-add-ward');
@@ -162,6 +190,29 @@ test.describe('S-B-11: a facility with no seed data sets itself up', () => {
       'out_of_service',
       'out_of_service',
     ]);
+
+    // 303 was one too many. The ward has never brought it into service, so it
+    // can be taken away (plan D2); the screen says that is why.
+    await wardCard.getByTestId('settings-bedchip-303').click();
+    await expect(page.getByTestId('settings-bed-unconfirmed')).toBeVisible();
+    await page.getByTestId('settings-bed-remove').click();
+    await page.getByTestId('settings-bed-remove-yes').click();
+    await expect(wardCard.getByTestId('settings-bedchip-303')).toHaveCount(0);
+    expect(await bedStates(facility.hospitalId)).toEqual(['out_of_service', 'out_of_service']);
+
+    // A bed's number is changed where it stands.
+    await wardCard.getByTestId('settings-bedchip-302').click();
+    await page.getByTestId('settings-bed-label').fill('302-A');
+    await page.getByTestId('settings-bed-save').click();
+    await expect(wardCard.getByTestId('settings-bedchip-302-A')).toBeVisible();
+
+    // And the ward itself is moved to the floor it is really on.
+    await wardCard.locator('[data-testid^="settings-edit-ward-"]').first().click();
+    await wardCard.locator('[data-testid^="settings-edit-ward-floor-"]').fill('4');
+    await wardCard.locator('[data-testid^="settings-edit-ward-save-"]').click();
+    await expect(wardCard).toContainText('৪ তলা');
+    // A ward with beds in it offers no removal.
+    await expect(wardCard.locator('[data-testid^="settings-remove-ward-"]')).toHaveCount(0);
 
     // --- emergency services offered ----------------------------------------
     await tab(page, 'capabilities');
@@ -203,8 +254,32 @@ test.describe('S-B-11: a facility with no seed data sets itself up', () => {
     );
     await expect(page.getByTestId('settings-missing')).toHaveCount(0);
 
+    // What a patient needs to reach the place is named too, and does not hold
+    // the request back (plan D2): no address yet, and the burn unit declared.
+    const contact = page.getByTestId('settings-check-contact');
+    await expect(contact).toHaveAttribute('data-done', 'false');
+    await expect(contact).toContainText('যোগ করা ভালো');
+    await expect(page.getByTestId('settings-check-location')).toHaveAttribute('data-done', 'false');
+    await expect(page.getByTestId('settings-check-emergency_services')).toHaveAttribute(
+      'data-done',
+      'true',
+    );
+    await expect(page.getByTestId('settings-advised')).toBeVisible();
+
+    // What it was registered as is its own to correct while it is setting up.
+    await page.getByTestId('settings-district').fill('Gazipur');
+    await page.getByTestId('settings-registration').fill('DEMO-REG-5150');
+    await page.getByTestId('settings-save-identity').click();
+    await expect(page.getByText('সংরক্ষণ করা হয়েছে').first()).toBeVisible();
+
     await page.getByTestId('settings-request-review').click();
     await expect(status).toHaveAttribute('data-lifecycle', 'ready_for_review');
+    // Asked for: those details are now what is being reviewed, shown and not
+    // offered for change.
+    const locked = page.getByTestId('settings-identity-locked');
+    await expect(locked).toContainText('Gazipur');
+    await expect(locked).toContainText('DEMO-REG-5150');
+    await expect(page.getByTestId('settings-identity')).toHaveCount(0);
     await expect(page.getByTestId('settings-request-review')).toHaveCount(0);
     await expect(page.getByTestId('settings-live')).toHaveCount(0);
 
@@ -237,8 +312,24 @@ test.describe('S-B-11 with the connection gone (GR-03)', () => {
     await expect(save).toBeDisabled();
     await expect(save).toHaveAttribute('title', 'সংরক্ষণ করতে ইন্টারনেট সংযোগ লাগবে');
 
+    // A browser says "online" when a network is attached, which is before the
+    // server can be reached. The first read after that announcement is made to
+    // fail here, as it does on a router still dialling: the screen has to try
+    // again by itself, not stay "offline" until somebody reloads it.
+    let refused = 0;
+    await page.route(
+      '**/hospital/setup',
+      async (route) => {
+        refused += 1;
+        await route.abort('internetdisconnected');
+      },
+      { times: 1 },
+    );
     await context.setOffline(false);
     await expect(page.getByTestId('settings-offline-banner')).toHaveCount(0);
+    expect(refused).toBe(1);
+    // The button no longer blames the connection for being unavailable.
+    await expect(save).not.toHaveAttribute('title', 'সংরক্ষণ করতে ইন্টারনেট সংযোগ লাগবে');
   });
 });
 

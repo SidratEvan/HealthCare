@@ -56,6 +56,11 @@ export async function getDashboard(req: Request, res: Response): Promise<void> {
   res.json({ ok: true, data });
 }
 
+/** `GET /admin/overview` — `CARD-B10-NOW` (`FR-ADM-12`, plan R6). */
+export async function getOverview(req: Request, res: Response): Promise<void> {
+  res.json({ ok: true, data: await adminService.overview(hospitalOf(req)) });
+}
+
 /**
  * `GET /admin/export?view=&from&to` — one section as CSV (`FR-ADM-10`).
  *

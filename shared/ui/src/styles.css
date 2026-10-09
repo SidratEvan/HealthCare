@@ -85,6 +85,13 @@
   --color-warn-100: var(--warn-100);
   --color-warn-border: var(--warn-border);
 
+  /* Good news only (§5.5); and the accent, never text (§0.5). */
+  --color-positive-700: var(--positive-700);
+  --color-positive-600: var(--positive-600);
+  --color-positive-100: var(--positive-100);
+  --color-accent-500: var(--accent-500);
+  --color-accent-100: var(--accent-100);
+
   --color-line-strong: var(--line-strong);
   --color-line: var(--line-soft);
   --color-line-hairline: var(--line-hairline);
@@ -179,5 +186,31 @@
   :focus-visible {
     outline: 2px solid var(--brand-600);
     outline-offset: 2px;
+  }
+}
+
+/*
+ * The printed prescription (FR-DOC-07, plan R2; `PrescriptionSheet`).
+ *
+ * Never on screen. While a sheet is being printed the document is marked
+ * `data-printing`, and the print is the sheet and nothing else: no rail, no
+ * header, no buttons on a piece of paper a patient keeps.
+ */
+[data-print-sheet] {
+  display: none;
+}
+
+@media print {
+  html[data-printing] body > :not([data-print-sheet]) {
+    display: none !important;
+  }
+
+  html[data-printing],
+  html[data-printing] body {
+    background: var(--bg-surface);
+  }
+
+  html[data-printing] [data-print-sheet] {
+    display: flex;
   }
 }

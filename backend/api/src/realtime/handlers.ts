@@ -16,8 +16,13 @@
  * long enough that the delta is bigger than the state.
  */
 
+import { patientViewOf } from '@platform/domain';
+
+import { runInDbScope, scopeOfPrincipal } from '../config/dbScope.js';
 import { logger } from '../config/logger.js';
+import { ticketsIn } from '../config/serialTicket.js';
 import { AppError } from '../errors/AppError.js';
+import { deskLimit } from '../services/deskAccess.service.js';
 import * as queueService from '../services/queue.service.js';
 
 import { forgetSocket, sessionOf } from './auth.js';
@@ -31,7 +36,14 @@ interface SubscribeMessage {
   readonly sessionId?: unknown;
   /** The highest sequence number this client has already folded (`SY-01`). */
   readonly lastSeq?: unknown;
+  /** A console's own actions the server has not yet answered (`SY-08`). */
+  readonly unanswered?: unknown;
 }
+
+/** The most keys a subscribe may ask about. A shift's outbox is far below it. */
+const MAX_UNANSWERED = 500;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * How far behind a client may be and still get a delta.
@@ -61,7 +73,11 @@ export function registerHandlers(io: Server): void {
     }
 
     socket.on('session:subscribe', (message: SubscribeMessage) => {
-      void subscribeToSession(socket, message).catch((error: unknown) => {
+      // A socket's reads are held to its principal's scope like a request's
+      // (`config/dbScope.ts`, `FR-SEC-11`).
+      void runInDbScope(scopeOfPrincipal(session.principal), async () => {
+        await subscribeToSession(socket, message);
+      }).catch((error: unknown) => {
         emitError(socket, error);
       });
     });
@@ -69,9 +85,10 @@ export function registerHandlers(io: Server): void {
     socket.on('session:unsubscribe', (message: SubscribeMessage) => {
       const sessionId = readSessionId(message);
       if (sessionId === null) return;
-      const room = ROOMS.session(sessionId);
-      void socket.leave(room);
-      session.rooms.delete(room);
+      for (const room of [ROOMS.session(sessionId), ROOMS.sessionStaff(sessionId)]) {
+        void socket.leave(room);
+        session.rooms.delete(room);
+      }
     });
 
     socket.on('disconnect', (reason) => {
@@ -107,12 +124,17 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
     holdsBooking: await holdsBooking(session.principal, sessionId),
   });
 
-  if (!allowed) {
+  // `FR-REC-32` (question 20): the same desk rule as every route.
+  const deskLimited = await deskLimit(session.principal);
+  if (!allowed || (deskLimited !== null && !deskLimited.has(record.doctorId))) {
     emitError(socket, new AppError('AUTH_FORBIDDEN_SCOPE', { details: { room: 'session' } }));
     return;
   }
 
-  const room = ROOMS.session(sessionId);
+  // Staff hear the queue as reception holds it; anybody else the patients'
+  // copy, which names nobody (plan I2c, `queue/patientView`).
+  const staff = session.principal.kind === 'staff';
+  const room = staff ? ROOMS.sessionStaff(sessionId) : ROOMS.session(sessionId);
   await socket.join(room);
   session.rooms.add(room);
 
@@ -120,6 +142,27 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
   const state = await queueService.getState(sessionId);
   const etas = await queueService.getEtas(sessionId);
   const serverTs = new Date().toISOString();
+
+  // A phone is caught up with the patients' copy as it stands, never with the
+  // log's events: an event names the booking it is about.
+  if (!staff) {
+    socket.emit('queue.updated', {
+      type: 'queue.updated',
+      seq: state.lastSeq,
+      serverTs,
+      applied: [],
+      data: patientViewOf(state, etas, ticketsIn(sessionId)),
+    });
+    return;
+  }
+
+  // `SY-08`: a console that subscribes with actions it has not been answered
+  // for says which. Those the log already holds are named beside the state
+  // that contains them, so an answer lost on the way is settled here. Staff
+  // only: nobody else has actions. Read after the state and bounded by its
+  // sequence, so nothing is named that this state does not yet show.
+  const unanswered = readUnanswered(message);
+  const applied = await queueService.appliedAmong(sessionId, unanswered, state.lastSeq);
 
   // Far enough behind, or never subscribed: send the state rather than a
   // delta. A client that has to fold five hundred events to learn it is
@@ -129,6 +172,7 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
       type: 'queue.updated',
       seq: state.lastSeq,
       serverTs,
+      applied,
       data: { state, etas },
     });
     return;
@@ -151,8 +195,22 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
     type: 'queue.updated',
     seq: state.lastSeq,
     serverTs,
+    applied,
     data: { state, etas },
   });
+}
+
+/** The keys a console asks about: well-formed, distinct, and not too many. */
+function readUnanswered(message: SubscribeMessage): string[] {
+  const value = message.unanswered;
+  if (!Array.isArray(value)) return [];
+
+  const keys = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry === 'string' && UUID.test(entry)) keys.add(entry.toLowerCase());
+    if (keys.size >= MAX_UNANSWERED) break;
+  }
+  return [...keys];
 }
 
 /** Whether this principal holds a booking in the session. */

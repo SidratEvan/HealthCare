@@ -404,3 +404,71 @@ test.describe('the four states (GR-03)', () => {
     await expect(page).toHaveURL(/view=ward/);
   });
 });
+
+test.describe('one action, shown once, on the board (SY-09)', () => {
+  /**
+   * A bed's change is stated twice: in the answer to the request, and in a
+   * broadcast. The board used to drop its own drawing when the answer came
+   * and read the whole board again; for as long as that read took, the tile
+   * showed the bed before the tap. Here the socket says nothing and the
+   * re-read is not allowed at all, so the answer is everything the board has.
+   */
+  test('the socket silent: the tile settles from the answer and never shows the bed before', async ({
+    page,
+  }) => {
+    let held = false;
+    await page.routeWebSocket(/socket\.io/, (socket) => {
+      const server = socket.connectToServer();
+      socket.onMessage((message) => {
+        server.send(message);
+      });
+      server.onMessage((message) => {
+        if (!held) socket.send(message);
+      });
+    });
+
+    await openWardBoard(page);
+    const tile = page.getByTestId(`bed-tile-${bed(0).label}`);
+    await expect(tile).toHaveAttribute('data-state', 'free');
+
+    // Every state the tile shows from here on, in order.
+    await page.evaluate((label) => {
+      const read = (): string =>
+        document.querySelector(`[data-testid="bed-tile-${label}"]`)?.getAttribute('data-state') ??
+        '';
+      const shown = [read()];
+      new MutationObserver(() => {
+        const now = read();
+        if (now !== '' && now !== shown[shown.length - 1]) shown.push(now);
+      }).observe(document.body, { subtree: true, childList: true, attributes: true });
+      (globalThis as unknown as { states: string[] }).states = shown;
+    }, bed(0).label);
+    const states = async (): Promise<string[]> =>
+      await page.evaluate(() => (globalThis as unknown as { states: string[] }).states);
+
+    // From here the board cannot be read again, and the socket is silent.
+    held = true;
+    let reads = 0;
+    await page.route(`**/hospitals/${ward.hospitalId}/beds`, async (route) => {
+      reads += 1;
+      await route.abort('failed');
+    });
+
+    const answered = page.waitForResponse(
+      (response) => response.url().includes(`/beds/${bed(0).id}/admit`) && response.ok(),
+    );
+    await admitAtDesk(page, bed(0).label, 'আনোয়ারা বেগম (ডেমো)');
+    await answered;
+
+    // Nothing left to send, the bed is taken, and the public figure the
+    // answer carried is on the mirror — all from the answer alone.
+    await expect(page.getByTestId('pending-count')).toBeHidden();
+    await expect(tile).toHaveAttribute('data-state', 'occupied');
+    expect(await bedState(bed(0).id)).toBe('occupied');
+
+    // It went from free to occupied and was never put back.
+    expect(await states()).toEqual(['free', 'occupied']);
+    // And the board did not need to ask again.
+    expect(reads).toBe(0);
+  });
+});

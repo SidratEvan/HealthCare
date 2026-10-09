@@ -15,7 +15,15 @@
 
 import { sql } from 'kysely';
 
-import type { OrgLifecycle, SetupCounts } from '@platform/domain';
+import type {
+  AgreementState,
+  FigureStamp,
+  MessageCounts,
+  OrgLifecycle,
+  SetupCounts,
+  SyncCounts,
+  Timestamp,
+} from '@platform/domain';
 
 import { db } from '../config/db.js';
 
@@ -37,7 +45,15 @@ const COUNTS = sql`
   (SELECT count(*) FROM beds b
     WHERE b.hospital_id = h.id AND b.deleted_at IS NULL)::int AS beds,
   (SELECT count(*) FROM staff_users su
-    WHERE su.hospital_id = h.id AND su.deleted_at IS NULL AND su.is_active)::int AS staff
+    WHERE su.hospital_id = h.id AND su.deleted_at IS NULL AND su.is_active)::int AS staff,
+  -- Plan D2: what a patient needs to reach the place, as a yes or a no.
+  (CASE WHEN h.phone IS NOT NULL AND coalesce(h.address_bn, h.address_en) IS NOT NULL
+        THEN 1 ELSE 0 END)::int AS contact,
+  (CASE WHEN h.lat IS NOT NULL AND h.lng IS NOT NULL THEN 1 ELSE 0 END)::int AS location,
+  -- Null where there is no emergency desk to declare anything of (FR-BRD-11).
+  (CASE WHEN fn_module_on(h.id, 'emergency')
+        THEN (SELECT count(*) FROM capabilities c WHERE c.hospital_id = h.id)::int
+        ELSE NULL END) AS capabilities
 `;
 
 interface CountColumns {
@@ -47,6 +63,9 @@ interface CountColumns {
   schedules: number;
   beds: number;
   staff: number;
+  contact: number;
+  location: number;
+  capabilities: number | null;
 }
 
 function countsOf(row: CountColumns): SetupCounts {
@@ -57,6 +76,9 @@ function countsOf(row: CountColumns): SetupCounts {
     schedules: row.schedules,
     beds: row.beds,
     staff: row.staff,
+    contact: row.contact,
+    location: row.location,
+    capabilities: row.capabilities,
   };
 }
 
@@ -79,6 +101,12 @@ export interface WorkspaceRow {
   readonly division: string;
   readonly district: string;
   readonly registrationNo: string | null;
+  /** True when the hospital applied for this workspace itself (`FR-ONB-10`). */
+  readonly selfRegistered: boolean;
+  /** A domain the hospital owns, recorded for its portal (`FR-BRD-07`); null for none. */
+  readonly portalDomain: string | null;
+  /** The modules it does not run (`FR-BRD-11`); empty when everything is on. */
+  readonly modulesOff: readonly string[];
   readonly lifecycle: OrgLifecycle;
   readonly isLive: boolean;
   readonly reviewRequestedAt: string | null;
@@ -86,6 +114,15 @@ export interface WorkspaceRow {
   readonly reviewNote: string | null;
   readonly createdAt: string;
   readonly counts: SetupCounts;
+  /**
+   * Where its agreement stands, as the platform last recorded it
+   * (`FR-SUP-04`, 0051). No plan and no amount: those are not in the product.
+   */
+  readonly agreement: {
+    readonly state: AgreementState;
+    readonly note: string | null;
+    readonly changedAt: string | null;
+  };
 }
 
 interface WorkspaceColumns extends CountColumns {
@@ -97,12 +134,18 @@ interface WorkspaceColumns extends CountColumns {
   division: string;
   district: string;
   registration_no: string | null;
+  self_registered: boolean;
+  portal_domain: string | null;
+  modules_off: string[];
   lifecycle: OrgLifecycle;
   is_live: boolean;
   review_requested_at: Date | null;
   reviewed_at: Date | null;
   review_note: string | null;
   created_at: Date;
+  agreement_state: AgreementState;
+  agreement_note: string | null;
+  agreement_changed_at: Date | null;
 }
 
 function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
@@ -115,6 +158,9 @@ function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
     division: row.division,
     district: row.district,
     registrationNo: row.registration_no,
+    selfRegistered: row.self_registered,
+    portalDomain: row.portal_domain,
+    modulesOff: row.modules_off,
     lifecycle: row.lifecycle,
     isLive: row.is_live,
     reviewRequestedAt: row.review_requested_at?.toISOString() ?? null,
@@ -122,14 +168,77 @@ function workspaceOf(row: WorkspaceColumns): WorkspaceRow {
     reviewNote: row.review_note,
     createdAt: row.created_at.toISOString(),
     counts: countsOf(row),
+    agreement: {
+      state: row.agreement_state,
+      note: row.agreement_note,
+      changedAt: row.agreement_changed_at?.toISOString() ?? null,
+    },
   };
 }
 
 const WORKSPACE_COLUMNS = sql`
   h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
-  h.registration_no, h.lifecycle::text AS lifecycle, h.is_live,
-  h.review_requested_at, h.reviewed_at, h.review_note, h.created_at
+  h.registration_no, h.self_registered, h.portal_domain,
+  coalesce((SELECT s.modules_off FROM hospital_settings s WHERE s.hospital_id = h.id),
+           '{}'::text[]) AS modules_off,
+  h.lifecycle::text AS lifecycle, h.is_live,
+  h.review_requested_at, h.reviewed_at, h.review_note, h.created_at,
+  h.agreement_state::text AS agreement_state, h.agreement_note, h.agreement_changed_at
 `;
+
+/** Records where a hospital's agreement stands (`FR-SUP-04`). False when it is not there. */
+export async function setAgreement(
+  trx: Tx,
+  input: {
+    readonly hospitalId: string;
+    readonly state: AgreementState;
+    readonly note: string | null;
+    readonly changedBy: string;
+  },
+): Promise<boolean> {
+  const result = await sql<{ id: string }>`
+    UPDATE hospitals
+       SET agreement_state = ${input.state}::agreement_state,
+           agreement_note = ${input.note},
+           agreement_changed_at = now(),
+           agreement_changed_by = ${input.changedBy}::uuid,
+           updated_at = now()
+     WHERE id = ${input.hospitalId} AND deleted_at IS NULL
+    RETURNING id
+  `.execute(trx);
+  return result.rows.length === 1;
+}
+
+/** What a hospital has used: three counts, from a function that returns no row of anybody's. */
+export interface WorkspaceUsage {
+  /** Serials taken at its chambers in the last thirty days. */
+  readonly serialsTaken30d: number;
+  /** Chambers that actually began in the last thirty days. */
+  readonly chambersHeld30d: number;
+  /** SMS sent for its chambers this calendar month. */
+  readonly messagesSentThisMonth: number;
+}
+
+/**
+ * `fn_workspace_usage` (0051). A platform administrator's connection cannot
+ * read a booking or a message, and must not; the function counts with its
+ * owner's rights and answers the platform and the server only.
+ */
+export async function usageOf(hospitalId: string): Promise<WorkspaceUsage> {
+  const result = await sql<{
+    serials_30d: number | null;
+    chambers_30d: number | null;
+    messages_month: number | null;
+  }>`
+    SELECT serials_30d, chambers_30d, messages_month FROM fn_workspace_usage(${hospitalId}::uuid)
+  `.execute(db);
+  const row = result.rows[0];
+  return {
+    serialsTaken30d: row?.serials_30d ?? 0,
+    chambersHeld30d: row?.chambers_30d ?? 0,
+    messagesSentThisMonth: row?.messages_month ?? 0,
+  };
+}
 
 /**
  * Every workspace, the ones waiting for review first and oldest first among
@@ -155,6 +264,26 @@ export async function findWorkspace(hospitalId: string): Promise<WorkspaceRow | 
   `.execute(db);
   const row = result.rows[0];
   return row === undefined ? null : workspaceOf(row);
+}
+
+/** The hospital that already has this domain, if any does. */
+export async function hospitalWithDomain(domain: string): Promise<string | null> {
+  const result = await sql<{ id: string }>`
+    SELECT id FROM hospitals WHERE portal_domain = ${domain} AND deleted_at IS NULL
+  `.execute(db);
+  return result.rows[0]?.id ?? null;
+}
+
+/** Records a hospital's own domain, or removes it (`FR-BRD-07`, migration 0046). */
+export async function setPortalDomain(
+  trx: Tx,
+  hospitalId: string,
+  domain: string | null,
+): Promise<void> {
+  await sql`
+    UPDATE hospitals SET portal_domain = ${domain}, updated_at = now()
+     WHERE id = ${hospitalId} AND deleted_at IS NULL
+  `.execute(trx);
 }
 
 /** A doctor as the platform verifies them: what is on the public register. */
@@ -195,19 +324,37 @@ export async function doctorsOf(hospitalId: string): Promise<WorkspaceDoctor[]> 
   }));
 }
 
+/**
+ * The facility's own phone, as it gave it; null when it gave none.
+ *
+ * Read for one workspace when it is opened and not with the list: the list
+ * is organisations and counts (`FR-ONB-08`), and somebody rings a hospital
+ * only once they are looking at it (`FR-ONB-10`).
+ */
+export async function facilityPhoneOf(hospitalId: string): Promise<string | null> {
+  const result = await sql<{ phone: string | null }>`
+    SELECT phone FROM hospitals WHERE id = ${hospitalId} AND deleted_at IS NULL
+  `.execute(db);
+  return result.rows[0]?.phone ?? null;
+}
+
 /** The administrators a workspace has: who the platform would write to. */
 export async function administratorsOf(
   hospitalId: string,
-): Promise<{ readonly fullName: string; readonly email: string }[]> {
-  const result = await sql<{ full_name: string; email: string }>`
-    SELECT su.full_name, su.email
+): Promise<{ readonly fullName: string; readonly email: string; readonly phone: string | null }[]> {
+  const result = await sql<{ full_name: string; email: string; phone: string | null }>`
+    SELECT su.full_name, su.email, su.phone
       FROM staff_users su
       JOIN staff_roles sr ON sr.staff_user_id = su.id AND sr.hospital_id = su.hospital_id
      WHERE su.hospital_id = ${hospitalId} AND su.deleted_at IS NULL AND su.is_active
        AND sr.role = 'hospital_admin' AND sr.deleted_at IS NULL
      ORDER BY su.created_at
   `.execute(db);
-  return result.rows.map((row) => ({ fullName: row.full_name, email: row.email }));
+  return result.rows.map((row) => ({
+    fullName: row.full_name,
+    email: row.email,
+    phone: row.phone,
+  }));
 }
 
 /**
@@ -287,4 +434,165 @@ export async function verifyDoctorAt(
     RETURNING d.id
   `.execute(trx);
   return result.rows.length === 1;
+}
+
+// --- health and the trail of changes (`FR-SUP-06`, `FR-ONB-07`, plan G2) ------
+
+/** What was counted for one workspace's health. The rule that reads it is the domain's. */
+export interface HealthCounts {
+  readonly live: boolean;
+  /** The hospital's own threshold, the one a patient's screen uses for it. */
+  readonly staleAfterMinutes: number;
+  /** One per figure the hospital has to report: none for a module it does not run. */
+  readonly stamps: readonly FigureStamp[];
+  readonly messages: MessageCounts;
+  readonly sync: SyncCounts;
+}
+
+interface HealthColumns {
+  id: string;
+  is_live: boolean;
+  stale_after: number;
+  reports_beds: boolean;
+  shares_beds: boolean;
+  beds_as_of: Date | null;
+  reports_capabilities: boolean;
+  capabilities_as_of: Date | null;
+  messages_sent: number | null;
+  messages_failed: number | null;
+  messages_held: number | null;
+  messages_waiting: number | null;
+  late_actions: number | null;
+  slowest_seconds: number | null;
+  last_late_at: Date | null;
+}
+
+const stamp = (value: Date | null): Timestamp | null =>
+  value === null ? null : (value.toISOString() as Timestamp);
+
+function healthOfRow(row: HealthColumns): HealthCounts {
+  const stamps: FigureStamp[] = [];
+  if (row.reports_beds) {
+    stamps.push({ figure: 'beds', shared: row.shares_beds, asOf: stamp(row.beds_as_of) });
+  }
+  if (row.reports_capabilities) {
+    stamps.push({ figure: 'capabilities', shared: true, asOf: stamp(row.capabilities_as_of) });
+  }
+  return {
+    live: row.is_live,
+    staleAfterMinutes: row.stale_after,
+    stamps,
+    messages: {
+      sent: row.messages_sent ?? 0,
+      failed: row.messages_failed ?? 0,
+      held: row.messages_held ?? 0,
+      waiting: row.messages_waiting ?? 0,
+    },
+    sync: {
+      lateActions: row.late_actions ?? 0,
+      slowestSeconds: row.slowest_seconds ?? 0,
+      lastLateAt: stamp(row.last_late_at),
+    },
+  };
+}
+
+/**
+ * The health of one workspace, or of every one (`hospitalId` null).
+ *
+ * The ages are of what the hospital publishes, read where a patient's screen
+ * reads them: the bed figure's is the public view's own `beds_as_of`, the
+ * oldest kind's; the emergency services' is the oldest declaration's. A
+ * figure is reported only where the hospital has it to report: beds where it
+ * runs the module and has a bed, emergency services where it runs that
+ * module and has declared any.
+ *
+ * The messages and the late actions come from `fn_workspace_health` (0052),
+ * because this connection reads neither table, and must not.
+ */
+async function healthRows(hospitalId: string | null): Promise<HealthColumns[]> {
+  const result = await sql<HealthColumns>`
+    SELECT h.id, h.is_live,
+           coalesce(s.stale_threshold_minutes, 10) AS stale_after,
+           (fn_module_on(h.id, 'beds') AND coalesce(c.bed_total, 0) > 0) AS reports_beds,
+           fn_publishes(h.id, 'beds') AS shares_beds,
+           c.beds_as_of,
+           (fn_module_on(h.id, 'emergency')
+             AND EXISTS (SELECT 1 FROM capabilities cp WHERE cp.hospital_id = h.id))
+             AS reports_capabilities,
+           (SELECT min(cp.updated_at) FROM capabilities cp WHERE cp.hospital_id = h.id)
+             AS capabilities_as_of,
+           w.messages_sent, w.messages_failed, w.messages_held, w.messages_waiting,
+           w.late_actions, w.slowest_seconds, w.last_late_at
+      FROM hospitals h
+      LEFT JOIN hospital_settings s ON s.hospital_id = h.id
+      LEFT JOIN v_public_hospital_capacity c ON c.hospital_id = h.id
+      LEFT JOIN LATERAL fn_workspace_health(h.id) w ON true
+     WHERE h.deleted_at IS NULL
+       AND (${hospitalId}::uuid IS NULL OR h.id = ${hospitalId}::uuid)
+  `.execute(db);
+  return result.rows;
+}
+
+export async function healthOf(hospitalId: string): Promise<HealthCounts | null> {
+  const row = (await healthRows(hospitalId))[0];
+  return row === undefined ? null : healthOfRow(row);
+}
+
+export async function healthOfAll(): Promise<Map<string, HealthCounts>> {
+  return new Map((await healthRows(null)).map((row) => [row.id, healthOfRow(row)]));
+}
+
+/** One line of an organisation's trail: what was done, by whom, when. */
+export interface TrailRow {
+  readonly id: string;
+  readonly at: string;
+  /** A code of `AUDIT_CHANGES`, or one this version does not name. */
+  readonly change: string;
+  readonly actorName: string | null;
+  /** True for a platform administrator; false for the hospital's own staff. */
+  readonly byPlatform: boolean;
+}
+
+/**
+ * What was done to an organisation, newest first (`FR-ONB-07`).
+ *
+ * Three kinds of row and no other: a settings change, an import's step, an
+ * export. **Never a row about a person**: a record opened and a queue action
+ * are in the same table with the patient they concern, and are left out
+ * twice over, by the action and by `patient_id IS NULL`, so that a new kind
+ * of row about a patient cannot arrive here by being given an action this
+ * list happens to name (`FR-ONB-08`). No column of a patient is selected.
+ */
+export async function auditTrailOf(hospitalId: string, limit: number): Promise<TrailRow[]> {
+  const result = await sql<{
+    id: string;
+    created_at: Date;
+    change: string | null;
+    actor_name: string | null;
+    by_platform: boolean;
+  }>`
+    SELECT a.id, a.created_at,
+           CASE a.action
+             WHEN 'SETTINGS_CHANGE' THEN a.meta ->> 'change'
+             WHEN 'IMPORT' THEN 'import_' || (a.meta ->> 'event')
+             ELSE 'export'
+           END AS change,
+           su.full_name AS actor_name,
+           (su.id IS NOT NULL AND su.hospital_id IS NULL) AS by_platform
+      FROM audit_log a
+      LEFT JOIN staff_users su ON su.id = a.actor_staff_id
+     WHERE a.hospital_id = ${hospitalId}::uuid
+       AND a.action IN ('SETTINGS_CHANGE', 'IMPORT', 'EXPORT')
+       AND a.patient_id IS NULL
+     ORDER BY a.created_at DESC, a.id DESC
+     LIMIT ${limit}
+  `.execute(db);
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    at: row.created_at.toISOString(),
+    change: row.change ?? '',
+    actorName: row.actor_name,
+    byPlatform: row.by_platform,
+  }));
 }

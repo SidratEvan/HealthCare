@@ -138,8 +138,11 @@ describe('called (FR-NOT-03)', () => {
 
     await queueService.callNext({ sessionId: fixture.sessionId, actor: staff() });
 
+    // Written with the event, and sent by the sender once the event has
+    // answered (plan H1): the row is there at once, `sent` when it has gone.
+    expect((await keysFor('queue.called')).length).toBeGreaterThan(0);
+    await notifications.settled();
     const called = await keysFor('queue.called');
-    expect(called.length).toBeGreaterThan(0);
     expect(called[0]?.state).toBe('sent');
   });
 
@@ -169,6 +172,7 @@ describe('called (FR-NOT-03)', () => {
     });
     await queueService.callNext({ sessionId: fixture.sessionId, actor: staff() });
 
+    await notifications.settled();
     const sent = outbox.all();
     expect(sent.length).toBeGreaterThan(0);
     expect(sent.some((message) => message.templateKey === 'queue.called')).toBe(true);
@@ -338,7 +342,9 @@ describe('nothing is silently not sent', () => {
     expect(delayed[0]?.error).toBe('sms_budget_exhausted');
 
     // And nothing reached the adapter: a cap that recorded a skip and sent
-    // anyway would be worse than no cap at all.
+    // anyway would be worse than no cap at all. Asked once the sender has
+    // had its turn, or "nothing yet" would pass for "nothing".
+    await notifications.settled();
     expect(outbox.all()).toHaveLength(0);
   });
 
@@ -355,8 +361,12 @@ describe('nothing is silently not sent', () => {
       actor: staff(),
     });
 
+    // Not lost, and not given up on after one refusal either: still queued,
+    // saying what the gateway said, to be asked again
+    // (`notificationSender.test.ts` follows it to the fifth refusal).
+    await notifications.settled();
     const delayed = await keysFor('queue.delayed');
-    expect(delayed[0]?.state).toBe('failed');
+    expect(delayed[0]?.state).toBe('queued');
     expect(delayed[0]?.error).toBe('gateway_timeout');
   });
 
@@ -381,8 +391,9 @@ describe('nothing is silently not sent', () => {
       }),
     ).resolves.toBeDefined();
 
+    await notifications.settled();
     const delayed = await keysFor('queue.delayed');
-    expect(delayed[0]?.state).toBe('failed');
+    expect(delayed[0]?.state).toBe('queued');
     expect(delayed[0]?.error).toBe('dispatch_threw');
   });
 });
@@ -428,6 +439,25 @@ describe('quiet hours (FR-NOT-07)', () => {
       notifications.withinQuietHours('care.followup', new Date('2026-09-18T09:00:00.000Z')),
     ).toBe(false);
   });
+
+  it('says when a held message goes: seven in the morning, in Dhaka (plan H1)', async () => {
+    // Held is queued and due, not skipped: `lab.routes.test.ts` follows a
+    // report through the night to the morning's send.
+    const { endOfQuietHours } = await import('@platform/domain');
+    // Three in the morning in Dhaka on the 19th: seven the same morning.
+    expect(endOfQuietHours('2026-09-18T21:00:00.000Z' as never)).toBe('2026-09-19T01:00:00.000Z');
+  });
+
+  it('holds a report-ready message through the night, and sends it by day (plan F2)', () => {
+    // A report is not a summons. Three in the morning in Dhaka, then three in
+    // the afternoon.
+    expect(
+      notifications.withinQuietHours('lab.report_ready', new Date('2026-09-18T21:00:00.000Z')),
+    ).toBe(true);
+    expect(
+      notifications.withinQuietHours('lab.report_ready', new Date('2026-09-18T09:00:00.000Z')),
+    ).toBe(false);
+  });
 });
 
 describe('the booking confirmation (FR-PAT-22, FR-GST-05)', () => {
@@ -462,6 +492,8 @@ describe('the log provider is the implementation, not a stand-in', () => {
       actor: staff(),
     });
 
+    await notifications.settled();
+
     // This chamber's rows only. Every test in this file sends a
     // `queue.delayed` somewhere, through whichever adapter it set, and "any
     // sent row in the table" would answer for one of theirs.
@@ -475,5 +507,135 @@ describe('the log provider is the implementation, not a stand-in', () => {
 
     expect(rows.rows.length).toBeGreaterThan(0);
     for (const row of rows.rows) expect(row.cost_poisha).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// An estimate that moves earlier than a patient was told (`FR-QUE-15`, plan F2c)
+// ---------------------------------------------------------------------------
+
+describe('a turn that is coming sooner than the patient was told (FR-QUE-15)', () => {
+  async function arrive(): Promise<void> {
+    await queueService.appendEvent({
+      sessionId: fixture.sessionId,
+      type: 'DOCTOR_ARRIVED',
+      payload: { arrivedAt: new Date().toISOString(), minutesLate: 30 },
+      actor: staff(),
+    });
+  }
+
+  async function cancel(index: number): Promise<void> {
+    await queueService.appendEvent({
+      sessionId: fixture.sessionId,
+      type: 'BOOKING_CANCELLED',
+      payload: {
+        bookingId: fixture.bookingIds[index],
+        reason: 'রোগী বাতিল করেছেন (ডেমো)',
+      },
+      actor: staff(),
+    });
+  }
+
+  async function checkIn(index: number): Promise<void> {
+    await queueService.appendEvent({
+      sessionId: fixture.sessionId,
+      type: 'PATIENT_ARRIVED',
+      payload: { bookingId: fixture.bookingIds[index], quotedWaitMinutes: 20 },
+      actor: staff(),
+    });
+  }
+
+  /** The "may come sooner" messages written for one booking, by SMS. */
+  async function soonerFor(index: number): Promise<{ state: string; body: string }[]> {
+    const rows = await notificationRepo.listForSession(fixture.sessionId);
+    return rows
+      .filter(
+        (row) =>
+          row.templateKey === 'queue.earlier' &&
+          row.channel === 'sms' &&
+          row.params['bookingId'] === fixture.bookingIds[index],
+      )
+      .map((row) => ({
+        state: row.state,
+        body: typeof row.params['body'] === 'string' ? row.params['body'] : '',
+      }));
+  }
+
+  async function toldAt(index: number): Promise<Date | null> {
+    const row = await sql<{ told_eta_at: Date | null }>`
+      SELECT told_eta_at FROM bookings WHERE id = ${fixture.bookingIds[index] ?? ''}::uuid
+    `.execute(db);
+    return row.rows[0]?.told_eta_at ?? null;
+  }
+
+  it('keeps the time each patient is told when the doctor arrives', async () => {
+    // Told nothing but the planned start, so far.
+    expect(await toldAt(4)).toBeNull();
+
+    await arrive();
+
+    // "The doctor has arrived, expected around …": that time is now what the
+    // last patient was told, and it is ahead of now.
+    const told = await toldAt(4);
+    expect(told).not.toBeNull();
+    expect(told?.getTime() ?? 0).toBeGreaterThan(Date.now());
+    // The arrival's own message told them: nobody is told twice by one write.
+    expect(await soonerFor(4)).toEqual([]);
+  });
+
+  it('tells a patient whose turn has come forward, once for each move, and moves what they were told', async () => {
+    await arrive();
+    const first = await toldAt(4);
+
+    // Three patients ahead give up their serials, one after another. The last
+    // patient's turn comes forward by three consultations.
+    await cancel(0);
+    await cancel(1);
+    await cancel(2);
+
+    await notifications.settled();
+    const sooner = await soonerFor(4);
+    // Told, by SMS, and sent.
+    expect(sooner.length).toBeGreaterThanOrEqual(1);
+    expect(sooner.every((row) => row.state === 'sent')).toBe(true);
+    expect(sooner[0]?.body).toContain('আগে আসতে পারে');
+    // Never more often than the turn moved.
+    expect(sooner.length).toBeLessThanOrEqual(3);
+
+    // What they were told is the earlier time now.
+    const second = await toldAt(4);
+    expect(second?.getTime() ?? 0).toBeLessThan(first?.getTime() ?? 0);
+
+    // Something that moves nobody's turn tells nobody anything more.
+    await checkIn(3);
+    expect(await soonerFor(4)).toHaveLength(sooner.length);
+
+    // The patients who cancelled were told that, and not that they are sooner.
+    expect(await soonerFor(0)).toEqual([]);
+    expect((await keysFor('queue.cancelled')).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('does not message a patient reception has checked in: they are in the corridor', async () => {
+    await arrive();
+    await checkIn(4);
+
+    await cancel(0);
+    await cancel(1);
+    await cancel(2);
+
+    expect(await soonerFor(4)).toEqual([]);
+    // The one before them, still on their way, is told.
+    expect((await soonerFor(3)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('says nothing while the chamber cannot support a time at all', async () => {
+    // The doctor has not arrived: the estimate is shown as "not known", so
+    // there is no earlier time on any screen to warn about.
+    await cancel(0);
+    await cancel(1);
+    await cancel(2);
+
+    expect(await soonerFor(4)).toEqual([]);
+    expect(await toldAt(4)).toBeNull();
   });
 });

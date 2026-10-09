@@ -82,7 +82,9 @@ Decided with it, and replacing what stood before:
   tables. The domain is still undecided.
 
 Do not add commercial content to this repository — pricing, what a module
-costs, subscription tiers, or the data terms offered to a hospital. Those are
+costs, the names and contents of subscription tiers, or the data terms offered
+to a hospital. (Which modules a hospital has on, and whether its agreement is
+active, are product state and are built: §4.5.) Those are
 negotiated per agreement and live outside the repo. Product requirements that
 *handle* money stay (`FR-PAY-*`, `FR-SUP-04`, the fee breakdown in
 `FR-PAT-21`): the code has to charge, itemise and invoice. What it charges is
@@ -135,7 +137,7 @@ included — by a fast-forward (`git branch -f demo <that commit>`), never by
 work of its own. Move it after each merge into `mvp` that is worth showing,
 and say so in the report. Pushing it follows the rule below like any branch.
 
-**Pushing: standing permission since 2026-10-03.** Until that day every push
+**Pushing: standing permission since 2026-10-03** (moving `main` and `demo` suspended by §4.6 until the owner says). Until that day every push
 needed a fresh yes, and a yes was spent by the one push it allowed. On
 2026-10-03 the owner replaced that rule, in these words: "I give you explicit
 permission to push, pull or whatever you need to do, or merge to any branch,
@@ -271,9 +273,9 @@ per row, in order, merged into `mvp` only when §5 is met.
 - The decisions that plan lists as the owner's (§7 there) are not to be chosen
   silently.
 
-### 4.4 The V1 pitch build — the active plan (owner, 2026-10-05)
+### 4.4 The V1 pitch build (owner, 2026-10-05)
 
-**This is what is being built now.** It replaces the client-readiness freeze
+**Built and released on 6 October.** It replaced the client-readiness freeze
 of the same morning ("no feature coding until a hospital agrees to pilot"),
 which the owner lifted that evening. The reception-pilot candidate `fb1d1d8`
 stays what it was: a tested commit for one hospital's own server.
@@ -311,6 +313,90 @@ Rules for it, all the owner's:
 - The only AI is the import mapping. It proposes; a person confirms; the
   existing checker decides what is written. No patient row goes to a model
   (`FR-IMP-17`).
+
+### 4.5 V1 completion (owner, 2026-10-06)
+
+**Superseded in part by §4.6 (8 October), which finishes this plan.** After the pitch release of 6 October the
+owner replaced "then stop adding scope" (§4.4): development does not stop
+because a pilot or a pitch is ready. The target is the finished V1.
+
+- **Build everything that needs nothing from outside.** Left undone are only
+  the things that need an account, a credential, a contract or an approval the
+  owner has not provided: a real SMS provider and sender ID; bKash, Nagad or
+  card merchant credentials; a hospital's domain and DNS; store accounts; a
+  hospital's own HMS. Up to that line everything is built, tested and
+  documented, behind an adapter with a safe fake for tests.
+- **A configurable white-label platform, never a fork.** A hospital may have a
+  presence in the MedLiveBD network, its own branded portal (name, logo,
+  colours, address, installable app, enabled modules), or both. The network
+  is itself one context of the same product.
+- **Decided with it:** emergency discovery stays network-wide inside a
+  hospital's own portal (patient safety before brand); every other page there
+  is that hospital's; a record crosses between hospitals only under the
+  consent rules already written (`FR-NET-02`, `FR-SEC-04`), whatever the
+  shared screen would allow.
+- **Not an ERP.** No payroll, HR, general accounting, inventory ERP, insurance
+  administration or PACS.
+- **AI is the import mapping**, which proposes and never writes
+  (`FR-IMP-16`, `FR-IMP-17`). An operations assistant is built only if the
+  documents approve one; on 6 October they did not (`PRD.md` §27), so it is a
+  question for the owner in `docs/STATUS.md`, not a branch.
+- **Entitlements without commerce.** Which modules a hospital has switched on,
+  and the state of its agreement, are product state and are built. Plan names,
+  prices and terms still stay out of the repository (§1.2).
+- **One missing decision never stops the build.** Finish what does not depend
+  on it, write the question in `docs/STATUS.md`, go on to the next branch.
+- **Testing is layered** (§6): what a change touches while building; the wider
+  suites for the area when a branch is finished; the full gate at an
+  integration or release point, and not again for a document or for a test
+  correction whose effect is already proven.
+- **After each meaningful branch**, a short plain report: what was wrong or
+  missing, what changed, what a user or a hospital can now do, the tests, what
+  remains.
+
+The order, branch by branch with its state, is `docs/PLATFORM_PLAN.md` §2
+(*Now: V1 completion*): A correctness, security and realtime; B tenancy;
+C branding; D onboarding; E import; F remaining workflows; G platform
+administration; H notification and payment adapters; I hardening; J the gate.
+The rules of §4.4 that are not replaced here still hold.
+
+### 4.6 Finish V1, then launch (owner, 2026-10-08)
+
+**This is what is being built now.** The owner's note of 8 October: V1 already
+has enough for the first hospital pilots. **Launch first, improve later.**
+Finish the rows of `docs/PLATFORM_PLAN.md` §2 that remain (K1, K2, H3, F3,
+E1), then prepare J. Do not add features.
+
+- **Release restrictions, until the owner's explicit word.** Do not move
+  `main` or `demo`, do not deploy the public demo, do not apply migrations to
+  the public Supabase database, do not run a destructive reset against it, do
+  not activate real payments, do not touch a hospital's live infrastructure.
+  This suspends, for now, the parts of §3.1 that let `main` and `demo` move
+  without asking. Working branches still merge into `mvp` when green, and
+  `mvp` is still pushed (§3.1); J is prepared up to the point of release and
+  stops there.
+- **Software is not activation.** bKash, Nagad, an SMS aggregator, hosting,
+  a domain: the code is finished against stand-ins and documented sandbox
+  interfaces; switching each on waits for company registration and the
+  provider's approval. Nothing claims an integration was verified against a
+  real provider when it was not.
+- **Family accounts are not in V1.** No linked family accounts, dependants or
+  family record management. The people booked under one phone stay as they
+  are (the identity model is not changed); the patient app simply does not
+  present them as a family.
+- **The owner's approved product decisions** (his second note of 8 October;
+  `docs/PLATFORM_PLAN.md` §2, *The owner's approved product decisions*) are
+  recorded there with the state of each. Priority 1 is finishing V1;
+  priority 2 (K3, K4) is small corrections, built now; priority 3
+  (prescriptions, patient uploads, arrival windows, the admin overview, desk
+  assignment, chamber organisations, one doctor across workplaces) is built
+  after J is prepared, each on its own branch, documents first. **Anything that
+  would delay the first pilot is raised with the owner before it is started.**
+  Nothing beyond those decisions is invented.
+- **AI stays the import mapping** (§4.5). No diagnostic AI, no generated
+  prescriptions, no treatment advice, no operations assistant.
+- **No commercial terms** (§1.2): no prices, packages, trials, setup fees,
+  commissions or revenue shares, anywhere in the repository.
 
 ## 5. Definition of Done (every branch)
 

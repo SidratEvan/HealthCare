@@ -480,3 +480,96 @@ describe('v_public_hospital_capacity (FR-PAT-14, FR-PAT-51, FR-BED-05)', () => {
     });
   });
 });
+
+describe('a bed says which statement about it is newer (SY-09, migration 0039)', () => {
+  async function versionOf(client: Client, bedId: string): Promise<number> {
+    const { rows } = await client.query<{ version: string }>(
+      'SELECT version::text AS version FROM beds WHERE id = $1',
+      [bedId],
+    );
+    return Number(rows[0]?.version ?? '-1');
+  }
+
+  it('starts at one, and every change to the row raises it by one', async () => {
+    await withRollback(async (client) => {
+      const graph = await insertGraph(client);
+      const ward = await insertWard(client, graph.hospitalId);
+      const bed = await insertBed(client, {
+        hospitalId: graph.hospitalId,
+        wardId: ward,
+        label: '301',
+      });
+      expect(await versionOf(client, bed)).toBe(1);
+
+      await client.query(
+        `UPDATE beds SET state = 'cleaning', state_changed_at = now() WHERE id = $1`,
+        [bed],
+      );
+      expect(await versionOf(client, bed)).toBe(2);
+
+      // Any column: a board draws the price and the label too.
+      await client.query('UPDATE beds SET nightly_poisha = nightly_poisha + 100 WHERE id = $1', [
+        bed,
+      ]);
+      expect(await versionOf(client, bed)).toBe(3);
+    });
+  });
+
+  it('cannot be set, lowered or left where it is by the statement that changes the bed', async () => {
+    await withRollback(async (client) => {
+      const graph = await insertGraph(client);
+      const ward = await insertWard(client, graph.hospitalId);
+      const bed = await insertBed(client, {
+        hospitalId: graph.hospitalId,
+        wardId: ward,
+        label: '301',
+      });
+
+      await client.query('UPDATE beds SET version = 500 WHERE id = $1', [bed]);
+      expect(await versionOf(client, bed)).toBe(2);
+      await client.query('UPDATE beds SET version = 0 WHERE id = $1', [bed]);
+      expect(await versionOf(client, bed)).toBe(3);
+      await client.query('UPDATE beds SET version = version WHERE id = $1', [bed]);
+      expect(await versionOf(client, bed)).toBe(4);
+    });
+  });
+
+  it('a change that is rolled back raises nothing', async () => {
+    await withRollback(async (client) => {
+      const graph = await insertGraph(client);
+      const ward = await insertWard(client, graph.hospitalId);
+      const bed = await insertBed(client, {
+        hospitalId: graph.hospitalId,
+        wardId: ward,
+        label: '301',
+      });
+
+      await client.query('SAVEPOINT attempt');
+      await client.query(
+        `UPDATE beds SET state = 'cleaning', state_changed_at = now() WHERE id = $1`,
+        [bed],
+      );
+      expect(await versionOf(client, bed)).toBe(2);
+      await client.query('ROLLBACK TO SAVEPOINT attempt');
+
+      expect(await versionOf(client, bed)).toBe(1);
+    });
+  });
+
+  it('a change the table refuses raises nothing either', async () => {
+    await withRollback(async (client) => {
+      const graph = await insertGraph(client);
+      const ward = await insertWard(client, graph.hospitalId);
+      const bed = await insertBed(client, {
+        hospitalId: graph.hospitalId,
+        wardId: ward,
+        label: '301',
+      });
+
+      await expectRejection(client, () =>
+        client.query(`UPDATE beds SET state = 'occupied' WHERE id = $1`, [bed]),
+      );
+      expect(await versionOf(client, bed)).toBe(1);
+    });
+  });
+});

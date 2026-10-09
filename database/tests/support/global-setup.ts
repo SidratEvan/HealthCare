@@ -16,7 +16,12 @@
 import { resolveTestDatabaseUrl } from '../../scripts/lib/env.js';
 
 import { buildTestDatabase } from './build.js';
+import { ensureTenancyProbe } from './tenancyProbe.js';
 
 export default async function setup(): Promise<void> {
-  await buildTestDatabase(resolveTestDatabaseUrl(), 'schema test');
+  const connectionString = resolveTestDatabaseUrl();
+  await buildTestDatabase(connectionString, 'schema test');
+  // The role the tenancy tests ask the policies as, given its rights here
+  // and not inside a test (`tenancyProbe.ts` says why).
+  await ensureTenancyProbe(connectionString);
 }

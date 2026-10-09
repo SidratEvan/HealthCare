@@ -28,6 +28,7 @@ import type {
   BookingStatus,
   PatientId,
   RosterBooking,
+  SessionStatus,
   Timestamp,
 } from '@platform/domain';
 
@@ -153,6 +154,10 @@ export interface BookingDetail {
   readonly staleThresholdMinutes: number;
   /** The hospital's own rule, as recorded. Empty means none is on file. */
   readonly refundPolicy: Record<string, unknown>;
+  /** Whether this serial had to be paid for first (0057, `FR-PAY-02`, `FR-PAY-08`). */
+  readonly prepaymentRequired: boolean;
+  /** How long a serial waits for its online payment (0057, `FR-PAY-08`). */
+  readonly paymentHoldMinutes: number;
 }
 
 interface DetailQueryRow {
@@ -175,6 +180,8 @@ interface DetailQueryRow {
   planned_end: Date;
   stale_threshold_minutes: number | null;
   refund_policy: Record<string, unknown> | null;
+  prepayment_required: boolean;
+  payment_hold_minutes: number | null;
 }
 
 /** The booking behind a live serial screen, with its chamber. */
@@ -198,7 +205,9 @@ export async function findDetail(bookingId: string, trx?: Tx): Promise<BookingDe
            dep.code  AS department_code,
            s.room, s.session_date, s.planned_start, s.planned_end,
            hs.stale_threshold_minutes,
-           hs.refund_policy
+           hs.refund_policy,
+           b.prepayment_required,
+           hs.payment_hold_minutes
       FROM bookings b
       JOIN patients p    ON p.id = b.patient_id
       JOIN sessions s    ON s.id = b.session_id
@@ -237,6 +246,8 @@ export async function findDetail(bookingId: string, trx?: Tx): Promise<BookingDe
     // written yet (`FR-OFF-04`).
     staleThresholdMinutes: row.stale_threshold_minutes ?? 10,
     refundPolicy: row.refund_policy ?? {},
+    prepaymentRequired: row.prepayment_required,
+    paymentHoldMinutes: row.payment_hold_minutes ?? 15,
   };
 }
 
@@ -374,17 +385,27 @@ export async function insertBooking(
     readonly bookedByGuestId: string | null;
     readonly reasonText: string | null;
     readonly intake: Record<string, unknown>;
+    /** The request's own key, so the same request sent again finds this row (`FR-QUE-51`). */
+    readonly idempotencyKey?: string | null;
+    /** Whether it must be paid for first (0057, `FR-PAY-02`). Decided once, here. */
+    readonly prepaymentRequired?: boolean;
+    /** The preferred hour's start (0060, `FR-PAT-28`): a preference the queue never reads. */
+    readonly arrivalWindowStart?: string | null;
   },
 ): Promise<string> {
   const result = await sql<{ id: string }>`
     INSERT INTO bookings
       (session_id, patient_id, serial_number, source, fee_poisha,
-       booked_by_user_id, booked_by_guest_id, reason_text, intake)
+       booked_by_user_id, booked_by_guest_id, reason_text, intake, idempotency_key,
+       prepayment_required, arrival_window_start)
     VALUES (
       ${input.sessionId}, ${input.patientId}, ${input.serial},
       ${input.source}::booking_source, ${input.feePoisha},
       ${input.bookedByUserId}, ${input.bookedByGuestId},
-      ${input.reasonText}, ${JSON.stringify(input.intake)}::jsonb
+      ${input.reasonText}, ${JSON.stringify(input.intake)}::jsonb,
+      ${input.idempotencyKey ?? null},
+      ${input.prepaymentRequired ?? false},
+      ${input.arrivalWindowStart ?? null}::timestamptz
     )
     RETURNING id
   `.execute(trx);
@@ -392,6 +413,62 @@ export async function insertBooking(
   const id = result.rows[0]?.id;
   if (id === undefined) throw new Error('bookings insert returned no id.');
   return id;
+}
+
+/**
+ * The booking a request's key has already made, if any (`FR-QUE-51`).
+ *
+ * Whatever its status: a booking that was made and then cancelled was still
+ * made by that request, and the request is not run a second time.
+ */
+export async function findByIdempotencyKey(
+  trx: Tx,
+  idempotencyKey: string,
+): Promise<{
+  readonly id: string;
+  readonly sessionId: string;
+  readonly patientId: string;
+  readonly serial: number;
+} | null> {
+  const result = await sql<{
+    id: string;
+    session_id: string;
+    patient_id: string;
+    serial_number: number;
+  }>`
+    SELECT id, session_id, patient_id, serial_number
+      FROM bookings
+     WHERE idempotency_key = ${idempotencyKey}
+  `.execute(trx);
+
+  const row = result.rows[0];
+  return row === undefined
+    ? null
+    : {
+        id: row.id,
+        sessionId: row.session_id,
+        patientId: row.patient_id,
+        serial: row.serial_number,
+      };
+}
+
+/**
+ * How many bookings this guest identity has made since `since`
+ * (`FR-GST-14`). Cancelled ones count: the limit is on what a number asks
+ * for, and booking and cancelling in a loop is the thing it is there to stop.
+ */
+export async function countGuestBookingsSince(
+  trx: Tx,
+  guestId: string,
+  since: Date,
+): Promise<number> {
+  const result = await sql<{ n: string }>`
+    SELECT count(*)::text AS n
+      FROM bookings
+     WHERE booked_by_guest_id = ${guestId}
+       AND created_at > ${since}
+  `.execute(trx);
+  return Number(result.rows[0]?.n ?? '0');
 }
 
 /**
@@ -496,6 +573,125 @@ export async function ownerOf(
   };
 }
 
+/** One of an account's bookings, as My serials lists it (`S-A-09`, plan F1). */
+export interface AccountBooking {
+  readonly bookingId: string;
+  readonly sessionId: string;
+  readonly serial: number;
+  readonly status: BookingStatus;
+  readonly sessionStatus: SessionStatus;
+  /** Whom it is for: one of the account's profiles (`FR-PAT-03`). */
+  readonly patientId: string;
+  readonly patientName: string;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
+  readonly sessionDate: string;
+  readonly plannedStart: string;
+  readonly plannedEnd: string;
+  /** The serial in the chamber now, when somebody is. */
+  readonly nowServing: number | null;
+}
+
+/** How far back My serials reaches, the same as this phone's own list keeps. */
+const ACCOUNT_BOOKING_DAYS = 30;
+
+/**
+ * The bookings of every profile an account owns, newest first (plan F1).
+ *
+ * By the profile and not by who made the booking (`FR-PAT-03`): a serial
+ * taken at the counter for a profile this account has since claimed
+ * (`FR-GST-09`) is that person's serial, and one the account made for a
+ * profile it no longer owns is not.
+ */
+export async function listForAccount(userId: string): Promise<AccountBooking[]> {
+  const result = await sql<{
+    id: string;
+    session_id: string;
+    serial_number: number;
+    status: BookingStatus;
+    session_status: SessionStatus;
+    patient_id: string;
+    full_name: string;
+    hospital_id: string;
+    hospital_name_bn: string;
+    hospital_name_en: string;
+    doctor_name_bn: string;
+    doctor_name_en: string;
+    session_date: Date | string;
+    planned_start: Date;
+    planned_end: Date;
+    now_serving: number | null;
+  }>`
+    SELECT b.id, b.session_id, b.serial_number, b.status, s.status AS session_status,
+           b.patient_id, p.full_name,
+           h.id AS hospital_id, h.name_bn AS hospital_name_bn, h.name_en AS hospital_name_en,
+           d.full_name_bn AS doctor_name_bn, d.full_name_en AS doctor_name_en,
+           s.session_date, s.planned_start, s.planned_end,
+           (SELECT x.serial_number FROM bookings x
+             WHERE x.session_id = b.session_id AND x.status = 'in_chamber'
+               AND x.deleted_at IS NULL
+             ORDER BY x.serial_number LIMIT 1) AS now_serving
+      FROM bookings b
+      JOIN patients p  ON p.id = b.patient_id
+      JOIN sessions s  ON s.id = b.session_id
+      JOIN hospitals h ON h.id = s.hospital_id
+      JOIN doctors d   ON d.id = s.doctor_id
+     WHERE p.owner_user_id = ${userId} AND p.deleted_at IS NULL AND b.deleted_at IS NULL
+       AND s.session_date >= (now() AT TIME ZONE 'Asia/Dhaka')::date - ${ACCOUNT_BOOKING_DAYS}::int
+     ORDER BY s.planned_start DESC, b.created_at DESC
+     LIMIT 100
+  `.execute(db);
+
+  return result.rows.map((row) => ({
+    bookingId: row.id,
+    sessionId: row.session_id,
+    serial: row.serial_number,
+    status: row.status,
+    sessionStatus: row.session_status,
+    patientId: row.patient_id,
+    patientName: row.full_name,
+    hospitalId: row.hospital_id,
+    hospitalNameBn: row.hospital_name_bn,
+    hospitalNameEn: row.hospital_name_en,
+    doctorNameBn: row.doctor_name_bn,
+    doctorNameEn: row.doctor_name_en,
+    sessionDate:
+      row.session_date instanceof Date
+        ? row.session_date.toISOString().slice(0, 10)
+        : row.session_date,
+    plannedStart: row.planned_start.toISOString(),
+    plannedEnd: row.planned_end.toISOString(),
+    nowServing: row.now_serving,
+  }));
+}
+
+/**
+ * One of an account's own bookings, for a link to its live screen: its
+ * session, when that ends, and the name on it. Null when the booking is not
+ * for one of this account's profiles, which is also what a booking that does
+ * not exist answers.
+ */
+export async function ownedByAccount(
+  bookingId: string,
+  userId: string,
+): Promise<{ sessionId: string; plannedEnd: Date; patientName: string } | null> {
+  const result = await sql<{ session_id: string; planned_end: Date; full_name: string }>`
+    SELECT b.session_id, s.planned_end, p.full_name
+      FROM bookings b
+      JOIN patients p ON p.id = b.patient_id
+      JOIN sessions s ON s.id = b.session_id
+     WHERE b.id = ${bookingId} AND b.deleted_at IS NULL
+       AND p.owner_user_id = ${userId} AND p.deleted_at IS NULL
+  `.execute(db);
+  const row = result.rows[0];
+  return row === undefined
+    ? null
+    : { sessionId: row.session_id, plannedEnd: row.planned_end, patientName: row.full_name };
+}
+
 function toBookingRow(row: DisplayQueryRow): BookingRow {
   return {
     id: row.id,
@@ -508,4 +704,37 @@ function toBookingRow(row: DisplayQueryRow): BookingRow {
     feePoisha: row.fee_poisha,
     createdAt: row.created_at.toISOString(),
   };
+}
+
+/**
+ * A number's no-shows at one hospital since a date (`FR-GST-14`; plan F3).
+ *
+ * The number is the guest identity behind it, which every guest booking and
+ * every counter registration by phone records (`FR-GST-12`, `FR-GST-13`).
+ * This hospital's chambers only: another hospital's attendance is that
+ * hospital's (`FR-NET-02`).
+ */
+export async function countNoShowsAt(
+  trx: Tx,
+  input: { readonly guestId: string; readonly hospitalId: string; readonly since: string },
+): Promise<number> {
+  const result = await sql<{ n: string }>`
+    SELECT count(*)::text AS n
+      FROM bookings b
+      JOIN sessions s ON s.id = b.session_id
+     WHERE b.booked_by_guest_id = ${input.guestId}::uuid
+       AND s.hospital_id = ${input.hospitalId}::uuid
+       AND b.status = 'no_show'
+       AND b.deleted_at IS NULL
+       AND s.session_date >= ${input.since}::date
+  `.execute(trx);
+  return Number(result.rows[0]?.n ?? '0');
+}
+
+/** Whether a hospital offers a preferred arrival hour at booking (0060, `FR-PAT-28`). */
+export async function offersArrivalWindows(trx: Tx, hospitalId: string): Promise<boolean> {
+  const result = await sql<{ offers: boolean }>`
+    SELECT fn_offers_arrival_windows(${hospitalId}::uuid) AS offers
+  `.execute(trx);
+  return result.rows[0]?.offers ?? false;
 }

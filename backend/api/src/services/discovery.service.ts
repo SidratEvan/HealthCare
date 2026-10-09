@@ -12,8 +12,10 @@
  */
 
 import {
+  notSharedOf,
   orderForNeed,
   parseNeed,
+  pngSize,
   projectedEnd,
   readBrandTheme,
   readSearch,
@@ -29,6 +31,7 @@ import { AppError, notFound } from '../errors/AppError.js';
 import * as bedRepo from '../repositories/bed.repo.js';
 import * as discoveryRepo from '../repositories/discovery.repo.js';
 
+import * as modules from './modules.service.js';
 import * as queueService from './queue.service.js';
 
 import type { DoctorCard, HospitalCard, SessionCard } from '../repositories/discovery.repo.js';
@@ -68,6 +71,28 @@ export interface ScopeInfo {
   readonly nameEn: string;
   /** Its colours, if it has set some and they are readable (`FR-BRD-03`). */
   readonly theme: BrandTheme | null;
+  /** What it says of itself, and which logo it has (`FR-BRD-06`). */
+  readonly descriptionBn: string | null;
+  readonly descriptionEn: string | null;
+  readonly logoVersion: string | null;
+  /**
+   * What the logo is as an image, for the description a phone is given when
+   * the portal is installed (`FR-BRD-08`). The size is known for a PNG, read
+   * from the file's own header; null for any other type, and for no logo.
+   */
+  readonly logoImage: {
+    readonly type: string;
+    readonly width: number;
+    readonly height: number;
+  } | null;
+  /**
+   * The modules it does not run (`FR-BRD-11`) and the figures it keeps
+   * (`FR-NET-04`), so that its own portal offers nothing that would only
+   * ever answer with nothing: no bed search where there is no ward, no
+   * medicine search where there is no shelf to ask.
+   */
+  readonly modulesOff: readonly string[];
+  readonly notShared: readonly string[];
 }
 
 /**
@@ -87,7 +112,24 @@ export async function scopeInfo(code: string): Promise<ScopeInfo> {
     nameBn: row.nameBn,
     nameEn: row.nameEn,
     theme: readBrandTheme(row.brand),
+    descriptionBn: row.descriptionBn,
+    descriptionEn: row.descriptionEn,
+    logoVersion: row.logoVersion,
+    logoImage: logoImageOf(row.logoType, row.logoHeadHex),
+    modulesOff: row.modulesOff,
+    notShared: notSharedOf(row.unpublished, row.modulesOff),
   };
+}
+
+function logoImageOf(type: string | null, headHex: string | null): ScopeInfo['logoImage'] {
+  if (type !== 'image/png' || headHex === null) return null;
+  const size = pngSize(headHex);
+  return size === null ? null : { type, ...size };
+}
+
+/** A live hospital's logo, or null when it has none (`FR-BRD-06`). */
+export async function logo(hospitalId: string): Promise<discoveryRepo.LogoFile | null> {
+  return await discoveryRepo.findLogo(hospitalId);
 }
 
 async function scopedHospitalId(scope: string | undefined): Promise<string | undefined> {
@@ -349,8 +391,13 @@ export async function doctorsAt(
 export interface Availability {
   readonly sessionId: string;
   readonly capacity: number | null;
-  readonly taken: number;
-  /** Null when the session has no capacity limit. */
+  /**
+   * Null, with `remaining`, where the hospital does not share its serial
+   * figures (`FR-NET-04`). `full` and `nextSerial` are not withheld: they are
+   * the booking's own answer, to the person about to make it.
+   */
+  readonly taken: number | null;
+  /** Null when the session has no capacity limit, or the figure is not shared. */
   readonly remaining: number | null;
   readonly full: boolean;
   /** The serial the next booking would be given. */
@@ -370,11 +417,14 @@ export interface Availability {
 
 export async function availability(sessionId: string): Promise<Availability> {
   const session = await queueService.requireSession(sessionId);
+  // Not published where the hospital does not run serials (`FR-BRD-11`).
+  await modules.requireOn(session.hospitalId, 'queue');
   const state = await queueService.getState(sessionId);
   const now: Timestamp = time.fromDate(new Date());
 
   const taken = state.entries.filter((entry) => entry.status !== 'cancelled').length;
   const capacity = session.capacity;
+  const shared = await discoveryRepo.publishes(session.hospitalId, 'serials');
 
   // The serial allocator is the authority; this only previews what it would
   // give, so a patient is not shown a number the transaction then changes.
@@ -383,8 +433,8 @@ export async function availability(sessionId: string): Promise<Availability> {
   return {
     sessionId,
     capacity,
-    taken,
-    remaining: capacity === null ? null : Math.max(0, capacity - taken),
+    taken: shared ? taken : null,
+    remaining: capacity === null || !shared ? null : Math.max(0, capacity - taken),
     full: capacity !== null && taken >= capacity,
     nextSerial,
     expectedWaitMinutes: waitForNextSerial(state, now),

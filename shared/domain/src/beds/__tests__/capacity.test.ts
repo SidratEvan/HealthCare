@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { BED_KINDS } from '../../types/enums.js';
 import { timestamp, type DhakaDate } from '../../types/ids.js';
 import {
+  bedFigure,
   forecastTomorrow,
   mirrorMismatches,
   nextDay,
@@ -41,6 +42,7 @@ function bed(overrides: Partial<BedView> = {}): BedView {
     oosReason: null,
     admissionId: null,
     heldForRequestId: null,
+    version: 1,
     ...overrides,
   };
 }
@@ -153,5 +155,30 @@ describe('mirrorMismatches — the board against the published figure (FR-BED-06
       BED_KINDS,
     );
     expect(mirrorMismatches(board, published(1))).toEqual(['general']);
+  });
+});
+
+describe('bedFigure: what a patient may be told (FR-PAT-14, owner 8 October)', () => {
+  const at = (minutesAgo: number) =>
+    timestamp(new Date(Date.parse(NOW) - minutesAgo * 60_000).toISOString());
+
+  it('gives the exact count while the figure is fresh', () => {
+    expect(bedFigure(4, at(3), NOW, 10)).toEqual({ kind: 'count', free: 4 });
+    expect(bedFigure(0, at(9), NOW, 10)).toEqual({ kind: 'count', free: 0 });
+  });
+
+  it('is not known once the threshold is reached, free beds or none (decision 10)', () => {
+    expect(bedFigure(4, at(10), NOW, 10)).toEqual({ kind: 'unknown' });
+    expect(bedFigure(0, at(240), NOW, 10)).toEqual({ kind: 'unknown' });
+  });
+
+  it("follows the hospital's own threshold", () => {
+    expect(bedFigure(2, at(25), NOW, 30)).toEqual({ kind: 'count', free: 2 });
+    expect(bedFigure(2, at(25), NOW, 20)).toEqual({ kind: 'unknown' });
+  });
+
+  it('never turns an unknown into a zero', () => {
+    expect(bedFigure(null, at(1), NOW, 10)).toEqual({ kind: 'unknown' });
+    expect(bedFigure(3, null, NOW, 10)).toEqual({ kind: 'unknown' });
   });
 });

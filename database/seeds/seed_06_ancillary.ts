@@ -42,7 +42,14 @@ export const seed06Ancillary: SeedModule = {
   name: 'seed_06_ancillary',
   title: 'ambulances, blood donors and pharmacy stock',
   requirements: ['FR-DEM-05'],
-  writes: ['ambulances', 'blood_donors', 'pharmacy_stock'],
+  writes: [
+    'ambulances',
+    'blood_donors',
+    'pharmacy_stock',
+    'patient_documents',
+    'reception_desks',
+    'reception_desk_doctors',
+  ],
 
   async run({ client, now, log }: SeedContext): Promise<SeedSummary> {
     const facilities = await facilityIds(client);
@@ -50,17 +57,26 @@ export const seed06Ancillary: SeedModule = {
     const ambulances = await insertAmbulances(client, facilities);
     const donors = await insertDonors(client, now);
     const stock = await insertStock(client, facilities, now);
+    const papers = await insertPatientPapers(client);
+    const desks = await insertDesks(client, facilities);
 
     log(
       `      ${String(ambulances)} ambulances, ${String(donors)} blood donors, ` +
         `${String(stock)} pharmacy items across ${String(DEMO_SHELVES.length)} shelves`,
     );
     log('      no ambulance or blood requests: S-A-16 and S-A-17 are later steps');
+    log(`      ${String(papers)} old papers patients added to their own records (FR-PAT-62)`);
+    log(
+      `      ${String(desks.desks)} reception desks at Padma, ${String(desks.doctors)} doctors assigned (FR-REC-32)`,
+    );
 
     return {
       ambulances,
       blood_donors: donors,
       pharmacy_stock: stock,
+      patient_documents: papers,
+      reception_desks: desks.desks,
+      reception_desk_doctors: desks.doctors,
     };
   },
 };
@@ -212,4 +228,81 @@ function required(map: ReadonlyMap<string, string>, key: string): string {
     throw new Error(`No facility for "${key}". Has seed_01 run?`);
   }
   return value;
+}
+
+/**
+ * Old papers patients added to their own records (`FR-PAT-62`; plan R3).
+ *
+ * One each for the first profiles held by demo accounts, so a signed-in demo
+ * patient has something under "old papers" and a doctor shown their consent
+ * code sees it labelled as the patient's. The file is the store's demo
+ * placeholder (`documents/demo/`), a page that says it is demonstration
+ * data, as the seeded lab reports are. The doctors named are invented and
+ * labelled; nothing here is a real person's paper (`FR-SEC-08`).
+ */
+const DEMO_PAPERS = [
+  { docType: 'prescription', doctorName: 'ডা. আনোয়ার হোসেন (ডেমো)', daysAgo: 420 },
+  { docType: 'report', doctorName: null, daysAgo: 210 },
+  { docType: 'discharge', doctorName: 'ডা. নাসরিন সুলতানা (ডেমো)', daysAgo: 760 },
+] as const;
+
+async function insertPatientPapers(client: Client): Promise<number> {
+  const result = await client.query(
+    `WITH held AS (
+       SELECT p.id, p.owner_user_id, row_number() OVER (ORDER BY p.id) AS n
+         FROM patients p
+        WHERE p.owner_user_id IS NOT NULL AND p.deleted_at IS NULL
+        ORDER BY p.id
+        LIMIT 12
+     ), kinds AS (
+       SELECT * FROM jsonb_to_recordset($1::jsonb)
+         AS k(i int, "docType" text, "doctorName" text, "daysAgo" int)
+     ), papers AS (
+       -- One id per row: a volatile function in a select list is evaluated for
+       -- each row, where an uncorrelated LATERAL subquery is evaluated once.
+       SELECT uuid_generate_v7() AS id, held.id AS patient_id, held.owner_user_id,
+              k."docType", k."doctorName", k."daysAgo"
+         FROM held
+         JOIN kinds k ON k.i = (held.n - 1) % $2
+     )
+     INSERT INTO patient_documents
+       (id, patient_id, file_url, doc_type, doc_date, doctor_name_text, content_type,
+        uploaded_by_user, uploaded_at)
+     SELECT p.id, p.patient_id, 'documents/demo/' || p.id || '.pdf', p."docType",
+            (now() AT TIME ZONE 'Asia/Dhaka')::date - p."daysAgo",
+            p."doctorName", 'application/pdf', p.owner_user_id, now() - interval '3 days'
+       FROM papers p`,
+    [JSON.stringify(DEMO_PAPERS.map((paper, i) => ({ i, ...paper }))), DEMO_PAPERS.length],
+  );
+  return result.rowCount ?? 0;
+}
+
+/**
+ * Two reception desks at Padma (`FR-REC-32`; plan R4), its doctors split
+ * between them, so the picker shows a desk's chambers first. The other five
+ * hospitals have none, which is the ordinary state: one common workspace.
+ */
+async function insertDesks(
+  client: Client,
+  facilities: ReadonlyMap<string, string>,
+): Promise<{ desks: number; doctors: number }> {
+  const hospitalId = required(facilities, 'padma-specialised');
+  const made = await client.query<{ id: string }>(
+    `INSERT INTO reception_desks (hospital_id, name_bn, name_en)
+     VALUES ($1, 'নিচতলা কাউন্টার (ডেমো)', 'Ground-floor counter (Demo)'),
+            ($1, 'দোতলা কাউন্টার (ডেমো)', 'First-floor counter (Demo)')
+     RETURNING id`,
+    [hospitalId],
+  );
+  const [ground, first] = made.rows;
+  if (ground === undefined || first === undefined) throw new Error('desk insert returned no rows.');
+  const assigned = await client.query(
+    `INSERT INTO reception_desk_doctors (desk_id, doctor_id, hospital_id)
+     SELECT CASE WHEN here.n % 2 = 1 THEN $2::uuid ELSE $3::uuid END, here.doctor_id, $1
+       FROM (SELECT doctor_id, row_number() OVER (ORDER BY doctor_id) AS n
+               FROM (SELECT DISTINCT doctor_id FROM doctor_hospitals
+                      WHERE hospital_id = $1) AS distinct_doctors) AS here`,
+    [hospitalId, ground.id, first.id],
+  );
+  return { desks: made.rowCount ?? 0, doctors: assigned.rowCount ?? 0 };
 }

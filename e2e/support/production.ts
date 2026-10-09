@@ -18,13 +18,9 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { E2E_DATABASE_URL } from './database.js';
+import { E2E_API_ROLE, E2E_DATABASE_URL, asApiRole } from './database.js';
 
-/** The role the API connects as; made by `globalSetup.prod.ts`. */
-export const E2E_API_ROLE = {
-  name: 'healthcare_e2e_api',
-  password: 'e2e-only-api-role-not-a-real-credential',
-} as const;
+export { E2E_API_ROLE };
 
 const SECRETS = {
   JWT_ACCESS_SECRET: 'e2e-only-access-secret-not-a-real-credential',
@@ -33,13 +29,6 @@ const SECRETS = {
   // 64 hex characters, as the key must be. All zeros and ones: not a key.
   TOTP_ENCRYPTION_KEY: '0101010101010101010101010101010101010101010101010101010101010101',
 } as const;
-
-function asApiRole(ownerUrl: string): string {
-  const url = new URL(ownerUrl);
-  url.username = E2E_API_ROLE.name;
-  url.password = E2E_API_ROLE.password;
-  return url.toString();
-}
 
 export const PRODUCTION_API_ENV: Readonly<Record<string, string>> = {
   NODE_ENV: 'production',

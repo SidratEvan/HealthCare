@@ -39,6 +39,7 @@ import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 
 import { normaliseBdMobile } from '@platform/domain';
 
 import { sms } from '../adapters/sms.js';
+import { runInDbScope } from '../config/dbScope.js';
 import { durationMs, signToken, verifyToken } from '../config/jwt.js';
 import { logger } from '../config/logger.js';
 import { env } from '../env.js';
@@ -191,7 +192,7 @@ async function issue(
     ip: client.ip,
     device: deviceOf(client),
   });
-  const claimable = (await repo.claimableFor(user.phone)).length;
+  const claimable = (await claimableOf(user.phone)).length;
   return {
     access,
     refresh: `${sessionId}.${secret}`,
@@ -256,6 +257,20 @@ export async function profiles(userId: string): Promise<repo.ProfileRow[]> {
 }
 
 /**
+ * What a verified number may take over, with how many visits each profile
+ * holds (`FR-GST-09`, `FR-PAT-04`).
+ *
+ * Read as the server's own work, and it is one of the few reads that are
+ * (`config/dbScope.ts`): these profiles are not the account's yet, so an
+ * account's own scope does not reach their visits, and saying how many there
+ * are is the point of the preview. The number is the account's own, read from
+ * its row and never from the request.
+ */
+async function claimableOf(phone: string): ReturnType<typeof repo.claimableFor> {
+  return await runInDbScope({ kind: 'system' }, async () => await repo.claimableFor(phone));
+}
+
+/**
  * Without `confirm`, what the account's number holds (`S-A-20`'s preview);
  * with it, takes it all over at once (`FR-GST-09`).
  */
@@ -265,12 +280,19 @@ export async function claim(
 ): Promise<{ claimable: Awaited<ReturnType<typeof repo.claimableFor>>; claimed: number }> {
   const user = await repo.userById(userId);
   if (user === null) throw new AppError('AUTH_TOKEN_INVALID', { details: { reason: 'account' } });
-  if (!confirm) return { claimable: await repo.claimableFor(user.phone), claimed: 0 };
-  const claimed = await withTransaction(async (trx) => {
-    const moved = await repo.claim(trx, { userId, phone: user.phone });
-    if (moved > 0) await repo.auditClaim(trx, { userId, moved });
-    return moved;
-  });
+  if (!confirm) return { claimable: await claimableOf(user.phone), claimed: 0 };
+  // As the server's own work, like the preview (`claimableOf`): what is
+  // taken over is not the account's until this has run (migration 0056), and
+  // the number is the account's own, from its row.
+  const claimed = await runInDbScope(
+    { kind: 'system' },
+    async () =>
+      await withTransaction(async (trx) => {
+        const moved = await repo.claim(trx, { userId, phone: user.phone });
+        if (moved > 0) await repo.auditClaim(trx, { userId, moved });
+        return moved;
+      }),
+  );
   return { claimable: [], claimed };
 }
 

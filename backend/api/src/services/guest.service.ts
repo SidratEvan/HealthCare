@@ -31,6 +31,7 @@ import { createHash } from 'node:crypto';
 
 import type { TestOrderView } from '@platform/domain';
 
+import { runInDbScope } from '../config/dbScope.js';
 import { signToken } from '../config/jwt.js';
 import { AppError, notFound } from '../errors/AppError.js';
 import * as clinicalRepo from '../repositories/clinical.repo.js';
@@ -102,42 +103,79 @@ const TOKEN_TTL_SECONDS = 15 * 60;
  * genuine link reads the same sentence either way — this link has done its job.
  */
 export async function reportUrl(token: string, reportId: string): Promise<string> {
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-  const link = await guestRepo.resolveTrackingToken(tokenHash);
+  const link = await resolve(token);
   if (link === null) throw new AppError('GUEST_LINK_EXPIRED');
 
   // **The link's own booking, and nothing else.** A live token must not open
   // a report belonging to somebody else's visit, so the report is looked up
   // among this booking's orders rather than by id alone — an unknown id and
-  // another patient's id are the same 404 from outside.
-  const orders = await lab.ordersForBooking(link.bookingId);
-  const owned = orders.some((order) => order.report?.id === reportId);
-  if (!owned) throw notFound('report');
+  // another patient's id are the same 404 from outside. And the database is
+  // told the same thing (`asLink`), so that it is true of every read here.
+  return await asLink(link, async () => {
+    const orders = await lab.ordersForBooking(link.bookingId);
+    const owned = orders.some((order) => order.report?.id === reportId);
+    if (!owned) throw notFound('report');
 
-  const url = await lab.reportUrl(reportId);
-  if (url === null) throw notFound('report');
-  return url;
+    const url = await lab.reportUrl(reportId);
+    if (url === null) throw notFound('report');
+    return url;
+  });
+}
+
+/**
+ * The link a token is, or `null` (`FR-GST-05`).
+ *
+ * Read as the server's own work (migration 0056): until the token resolves the
+ * request is nobody's, and nobody reads any link. Finding which link a token
+ * is, is the act of telling who is asking, as a sign-in is.
+ */
+async function resolve(token: string): ReturnType<typeof guestRepo.resolveTrackingToken> {
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  return await runInDbScope(
+    { kind: 'system' },
+    async () => await guestRepo.resolveTrackingToken(tokenHash),
+  );
+}
+
+/**
+ * Runs `body` as the link that has just resolved (`FR-GST-05`, `FR-SEC-11`;
+ * migration 0044).
+ *
+ * The request arrived with a token in its path and no principal, so until
+ * here it was nobody's: the `open` scope, which reaches no clinical record at
+ * all. From here it is the link's: the visit and the tests of the booking it
+ * names, and nobody else's.
+ */
+async function asLink<T>(
+  link: { readonly guestId: string; readonly bookingId: string },
+  body: () => Promise<T>,
+): Promise<T> {
+  return await runInDbScope(
+    { kind: 'guest', guestId: link.guestId, bookingId: link.bookingId },
+    body,
+  );
 }
 
 export async function openTrackingLink(token: string): Promise<TrackingLinkView> {
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-  const link = await guestRepo.resolveTrackingToken(tokenHash);
+  const link = await resolve(token);
 
   if (link === null) throw new AppError('GUEST_LINK_EXPIRED');
 
-  const view = await bookingService.bookingView(link.bookingId);
+  return await asLink(link, async () => {
+    const view = await bookingService.bookingView(link.bookingId, 'patient');
 
-  return {
-    ...view,
-    record: await clinicalRepo.findVisitForBooking(link.bookingId),
-    tests: await lab.ordersForBooking(link.bookingId),
-    token: await signToken({
-      kind: 'access',
-      // `bookingId` is what scopes it: `requireBookingScope` refuses this
-      // principal on any other booking, so one forwarded SMS cannot be walked
-      // through a hospital's queue.
-      claims: { sub: link.guestId, kind: 'guest', bookingId: link.bookingId },
-    }),
-    expiresInSeconds: TOKEN_TTL_SECONDS,
-  };
+    return {
+      ...view,
+      record: await clinicalRepo.findVisitForBooking(link.bookingId),
+      tests: await lab.ordersForBooking(link.bookingId),
+      token: await signToken({
+        kind: 'access',
+        // `bookingId` is what scopes it: `requireBookingScope` refuses this
+        // principal on any other booking, so one forwarded SMS cannot be walked
+        // through a hospital's queue.
+        claims: { sub: link.guestId, kind: 'guest', bookingId: link.bookingId },
+      }),
+      expiresInSeconds: TOKEN_TTL_SECONDS,
+    };
+  });
 }

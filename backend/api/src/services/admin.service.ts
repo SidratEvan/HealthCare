@@ -33,6 +33,9 @@
 
 import {
   forecastVolume,
+  IN_ER_STATES,
+  ON_THE_WAY_STATES,
+  time,
   lossAndRecovery,
   punctualityByDoctor,
   quoteAccuracy,
@@ -46,6 +49,7 @@ import {
 import { logger } from '../config/logger.js';
 import { AppError } from '../errors/AppError.js';
 import * as adminRepo from '../repositories/admin.repo.js';
+import * as bedRepo from '../repositories/bed.repo.js';
 import { withTransaction } from '../repositories/transaction.js';
 
 /**
@@ -696,4 +700,52 @@ function daysBefore(date: string, days: number): string {
   const at = new Date(`${date}T00:00:00Z`);
   at.setUTCDate(at.getUTCDate() - days);
   return at.toISOString().slice(0, 10);
+}
+
+// ---------------------------------------------------------------------------
+// The hospital now (`FR-ADM-12`; plan R6, `CARD-B10-NOW`)
+// ---------------------------------------------------------------------------
+
+export interface Overview {
+  readonly doctors: { readonly scheduled: number; readonly sitting: number };
+  readonly waiting: number;
+  readonly appointments: { readonly booked: number; readonly seen: number };
+  /**
+   * Beds free of those in service, with the age of the ward's last word.
+   * Null where the hospital keeps no ward here: absent, never a zero.
+   */
+  readonly beds: {
+    readonly free: number;
+    readonly total: number;
+    readonly asOf: string | null;
+  } | null;
+  /** Null where the hospital runs no emergency desk. */
+  readonly emergency: { readonly onTheWay: number; readonly inEr: number } | null;
+  /** When these were read: the panel's freshness (`FR-OFF-03`). */
+  readonly serverTs: string;
+}
+
+export async function overview(hospitalId: string): Promise<Overview> {
+  const now = time.fromDate(new Date());
+  const [counts, capacity] = await Promise.all([
+    adminRepo.overviewToday({
+      hospitalId,
+      date: time.toDhakaDate(now),
+      onTheWay: ON_THE_WAY_STATES,
+      inEr: IN_ER_STATES,
+    }),
+    bedRepo.publicCapacity([hospitalId]),
+  ]);
+  const published = capacity.get(hospitalId) ?? null;
+  return {
+    doctors: { scheduled: counts.doctorsScheduled, sitting: counts.doctorsSitting },
+    waiting: counts.waiting,
+    appointments: { booked: counts.appointments, seen: counts.seen },
+    beds:
+      counts.bedsOn && published !== null && published.bedTotal > 0
+        ? { free: published.bedFree, total: published.bedTotal, asOf: published.bedsAsOf }
+        : null,
+    emergency: counts.emergency,
+    serverTs: now,
+  };
 }

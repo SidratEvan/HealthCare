@@ -302,6 +302,8 @@ export interface RefreshSession {
   readonly tokenHash: string;
   readonly expiresAt: Date;
   readonly revokedAt: Date | null;
+  /** The sign-in this session belongs to, across the rotation of its tokens (0042). */
+  readonly familyId: string;
 }
 
 export async function createRefreshSession(input: {
@@ -310,11 +312,14 @@ export async function createRefreshSession(input: {
   readonly expiresAt: Date;
   readonly ip: string | null;
   readonly userAgent: string | null;
+  /** The sign-in this session belongs to, carried through every renewal (0042). */
+  readonly familyId: string;
 }): Promise<string> {
   const result = await sql<{ id: string }>`
-    INSERT INTO sessions_auth (subject_id, subject_kind, token_hash, device_fingerprint, ip, expires_at)
+    INSERT INTO sessions_auth
+      (subject_id, subject_kind, token_hash, device_fingerprint, ip, expires_at, family_id)
     VALUES (${input.staffId}, 'staff', ${input.tokenHash}, ${input.userAgent},
-            ${input.ip}::inet, ${input.expiresAt})
+            ${input.ip}::inet, ${input.expiresAt}, ${input.familyId}::uuid)
     RETURNING id
   `.execute(db);
   const id = result.rows[0]?.id;
@@ -329,8 +334,9 @@ export async function findRefreshSession(id: string): Promise<RefreshSession | n
     token_hash: string;
     expires_at: Date;
     revoked_at: Date | null;
+    family_id: string | null;
   }>`
-    SELECT id, subject_id, token_hash, expires_at, revoked_at
+    SELECT id, subject_id, token_hash, expires_at, revoked_at, family_id
       FROM sessions_auth
      WHERE id = ${id} AND subject_kind = 'staff'
   `.execute(db);
@@ -343,7 +349,40 @@ export async function findRefreshSession(id: string): Promise<RefreshSession | n
         tokenHash: row.token_hash,
         expiresAt: row.expires_at,
         revokedAt: row.revoked_at,
+        // A session from before 0042 was backfilled to its own id.
+        familyId: row.family_id ?? row.id,
       };
+}
+
+/**
+ * What an access token for this account, from this sign-in, stands on
+ * (`FR-SEC-06`, plan A6).
+ *
+ * Null when no account has this id: nothing of that name was ever revoked.
+ * Otherwise whether the account is still there and active, and whether the
+ * sign-in still holds a session that is neither revoked nor expired. One read
+ * by primary key, and an index lookup for the family.
+ */
+export async function accessState(
+  staffId: string,
+  familyId: string | null,
+): Promise<{ readonly accountLive: boolean; readonly familyLive: boolean } | null> {
+  const result = await sql<{ account_live: boolean; family_live: boolean }>`
+    SELECT (su.is_active AND su.deleted_at IS NULL) AS account_live,
+           EXISTS (
+             SELECT 1 FROM sessions_auth sa
+              WHERE sa.family_id = ${familyId}::uuid
+                AND sa.subject_kind = 'staff'
+                AND sa.subject_id = su.id
+                AND sa.revoked_at IS NULL
+                AND sa.expires_at > now()
+           ) AS family_live
+      FROM staff_users su
+     WHERE su.id = ${staffId}::uuid
+  `.execute(db);
+
+  const row = result.rows[0];
+  return row === undefined ? null : { accountLive: row.account_live, familyLive: row.family_live };
 }
 
 /**

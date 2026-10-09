@@ -64,12 +64,18 @@ import type { Timestamp } from '../types/ids.js';
  * `standby_unseated`: paid when joining a standby list (`FR-PAT-26`) and never
  * given a chair — the session ended first, or they left the list. Nothing was
  * delivered, so all of it comes back, as it does for an absent doctor.
+ *
+ * `duplicate_payment` and `paid_after_release` (plan H3, `FR-PAY-10`): money
+ * a provider reported for a serial already paid for, or already released
+ * because its hold ran out. Nothing was bought with it, so all of it comes back.
  */
 export const REFUND_REASONS = [
   'patient_cancelled',
   'doctor_absent',
   'session_ended',
   'standby_unseated',
+  'duplicate_payment',
+  'paid_after_release',
 ] as const;
 export type RefundReason = (typeof REFUND_REASONS)[number];
 
@@ -186,7 +192,9 @@ export function refundFor(
   if (
     input.reason === 'doctor_absent' ||
     input.reason === 'session_ended' ||
-    input.reason === 'standby_unseated'
+    input.reason === 'standby_unseated' ||
+    input.reason === 'duplicate_payment' ||
+    input.reason === 'paid_after_release'
   ) {
     return { refundPoisha: remaining, reason: input.reason, guaranteed: true, stated: true };
   }

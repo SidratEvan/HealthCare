@@ -22,9 +22,18 @@
  * Writing a record has no such reason, so `POST /visits` does carry the role.
  */
 
-import { Router } from 'express';
+import { json, Router } from 'express';
 
-import { createVisitBody, idParams, recordsQuery } from '@platform/domain';
+import {
+  createVisitBody,
+  documentIdParams,
+  documentsQuery,
+  documentUrlParams,
+  formularyQuery,
+  idParams,
+  recordsQuery,
+  uploadDocumentBody,
+} from '@platform/domain';
 
 import * as clinical from '../controllers/clinical.controller.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -66,4 +75,63 @@ clinicalRoutes.post(
   idempotency({ required: true }),
   validate({ body: createVisitBody }),
   clinical.createVisit,
+);
+
+/**
+ * `GET /formulary?q=` — the formulary, by the start of a name (`FR-DOC-05`,
+ * plan R2). Doctors only: it is the prescribing screen's, and the public
+ * question "where is this medicine in stock" is `GET /medicines`.
+ */
+clinicalRoutes.get(
+  '/formulary',
+  requireAuth,
+  requireRole('doctor'),
+  validate({ query: formularyQuery }),
+  clinical.searchFormulary,
+);
+
+// --- A patient's own old papers (`FR-PAT-62`; plan R3) ----------------------
+
+/** A photograph or a PDF up to 8 MB, base64 in JSON: its own limit, as a report's is. */
+const DOCUMENT_BODY_LIMIT = '12mb';
+
+/**
+ * `POST /me/documents` — a signed-in patient adds a paper to one of the
+ * profiles their account holds. The service decides whose: a role cannot say
+ * "this account's profile", and a tracking link is refused there.
+ */
+clinicalRoutes.post(
+  '/me/documents',
+  // Before auth so an oversized body is refused before anything else is read.
+  json({ limit: DOCUMENT_BODY_LIMIT }),
+  requireAuth,
+  idempotency({ required: true }),
+  validate({ body: uploadDocumentBody }),
+  clinical.uploadDocument,
+);
+
+clinicalRoutes.get(
+  '/me/documents',
+  requireAuth,
+  validate({ query: documentsQuery }),
+  clinical.listDocuments,
+);
+
+clinicalRoutes.delete(
+  '/me/documents/:id',
+  requireAuth,
+  validate({ params: documentIdParams }),
+  clinical.removeDocument,
+);
+
+/**
+ * `GET /patients/:id/documents/:docId/url` — the patient's own, or a doctor
+ * under the patient's live consent; decided in `clinical.service`, as the
+ * record read is.
+ */
+clinicalRoutes.get(
+  '/patients/:id/documents/:docId/url',
+  requireAuth,
+  validate({ params: documentUrlParams }),
+  clinical.documentUrl,
 );

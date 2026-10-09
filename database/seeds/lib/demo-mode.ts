@@ -17,6 +17,24 @@ import { loadEnvFile } from '../../scripts/lib/env.js';
 export function assertDemoMode(command: string): void {
   loadEnvFile();
 
+  // Checked first, and not lifted by DEMO_MODE. On a hospital's server the
+  // database host is `db`, which counts as local (`assertSafeTarget`), so
+  // DEMO_MODE would be the only thing between one typed word and a truncated
+  // production database. The image sets NODE_ENV=production, and the API
+  // already refuses DEMO_MODE=true beside it (FR-SEC-08).
+  if (process.env['NODE_ENV'] === 'production') {
+    throw new Error(
+      [
+        'NODE_ENV is production.',
+        '',
+        `Refusing ${command}: seeds and resets write demonstration data and`,
+        'truncate every table, and a production environment holds real',
+        'records (FR-SEC-08). There is no flag that permits it. Run demo',
+        'seeding from a development environment pointed at the demo database.',
+      ].join('\n'),
+    );
+  }
+
   if (process.env['DEMO_MODE'] !== 'true') {
     throw new Error(
       [

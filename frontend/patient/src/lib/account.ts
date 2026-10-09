@@ -20,6 +20,9 @@
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import { toLatinDigits } from '@platform/i18n';
 
+import { fileHref, type BookingResponse } from '@/lib/api';
+import { forgetLinks, rememberLink } from '@/lib/bookings';
+
 import type { VisitRecord } from '@/lib/types';
 
 const BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
@@ -65,6 +68,8 @@ export type AccountFailure =
   | { readonly kind: 'wrong'; readonly attemptsLeft: number | null }
   | { readonly kind: 'expired' }
   | { readonly kind: 'signedOut' }
+  /** A paper that is not a photograph or a PDF, or is over 8 MB (`FR-PAT-62`). */
+  | { readonly kind: 'unsupported' }
   | { readonly kind: 'failed' };
 
 export type AccountResult<T> =
@@ -109,6 +114,7 @@ function failureOf(error: unknown): AccountFailure {
       }
       return { kind: 'expired' };
     }
+    if (error.code === 'DOCUMENT_NOT_SUPPORTED') return { kind: 'unsupported' };
     if (error.code === 'AUTH_TOKEN_INVALID' || error.code === 'AUTH_REQUIRED')
       return { kind: 'signedOut' };
   }
@@ -225,13 +231,190 @@ export async function recordsOf(patientId: string): Promise<AccountResult<readon
   );
 }
 
+// ---------------------------------------------------------------------------
+// The account's own serials (plan F1, `S-A-09`, `FR-PAT-03`, `FR-GST-10`)
+// ---------------------------------------------------------------------------
+
+/** One of the account's bookings, as `GET /me/bookings` lists it. */
+export interface AccountBooking {
+  readonly bookingId: string;
+  readonly sessionId: string;
+  readonly serial: number;
+  /** Current or past, by the chamber's state and the booking's, never by the date (`FR-PAT-39`). */
+  readonly standing: 'current' | 'past';
+  readonly patientId: string;
+  readonly patientName: string;
+  readonly hospitalId: string;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
+  readonly plannedStart: string;
+  /** The serial in the chamber now, when somebody is. */
+  readonly nowServing: number | null;
+}
+
+/** My serials, from the server: the same on every phone the account is signed in on. */
+export async function myBookings(): Promise<
+  AccountResult<{ readonly bookings: readonly AccountBooking[]; readonly serverTs: string }>
+> {
+  return await attempt(
+    async () =>
+      await (
+        await signedIn()
+      ).get<{ bookings: AccountBooking[]; serverTs: string }>('/me/bookings'),
+  );
+}
+
+/**
+ * A link to the live screen of one of the account's own bookings, for a phone
+ * that holds none. Kept once given (`rememberLink`), so it is asked for once.
+ */
+export async function linkForBooking(bookingId: string): Promise<AccountResult<string>> {
+  return await attempt(async () => {
+    const { url } = await (
+      await signedIn()
+    ).post<{ url: string }>(`/me/bookings/${bookingId}/link`, {}, crypto.randomUUID());
+    const token = new URL(url, globalThis.location.origin).searchParams.get('t') ?? '';
+    if (token !== '') rememberLink(bookingId, token);
+    return token;
+  });
+}
+
+/**
+ * Books for one of the account's own profiles (`FR-GST-10`): nothing is
+ * retyped, and no phone is proved again, because the account is a phone that
+ * was. Throws what the API threw, so the screen names the cause as it does
+ * for a guest.
+ */
+export async function bookAsProfile(input: {
+  readonly sessionId: string;
+  readonly method: string;
+  readonly patientId: string;
+  readonly reason?: string;
+  readonly idempotencyKey: string;
+  /** `CHIP-A07C-WINDOW` (`FR-PAT-28`): the preferred hour's start, or none. */
+  readonly arrivalWindowStart?: string | null;
+}): Promise<BookingResponse> {
+  return await (
+    await signedIn()
+  ).post<BookingResponse>(
+    '/bookings',
+    {
+      sessionId: input.sessionId,
+      method: input.method,
+      patientId: input.patientId,
+      ...(input.reason === undefined || input.reason === '' ? {} : { reason: input.reason }),
+      ...(input.arrivalWindowStart === undefined || input.arrivalWindowStart === null
+        ? {}
+        : { arrivalWindowStart: input.arrivalWindowStart }),
+    },
+    input.idempotencyKey,
+  );
+}
+
 export async function signOut(): Promise<void> {
   const session = readAccount();
   writeAccount(null);
+  // The links kept for this account's serials were this account's.
+  forgetLinks();
   if (session === null) return;
   try {
     await publicApi.post('/auth/logout', { refresh: session.refresh });
   } catch {
     // Signed out on this device either way; the server's session lapses on its own.
   }
+}
+
+// ---------------------------------------------------------------------------
+// A profile's own old papers (`FR-PAT-62`; plan R3, `BTN-A12-UPLOAD`)
+// ---------------------------------------------------------------------------
+
+/** One paper, as `GET /me/documents` lists it. Always the patient's own. */
+export interface PatientPaper {
+  readonly id: string;
+  readonly docType: 'prescription' | 'report' | 'discharge' | 'other' | null;
+  readonly docDate: string | null;
+  readonly doctorName: string | null;
+  readonly contentType: string | null;
+  readonly uploadedAt: string;
+  readonly source: 'patient_provided';
+}
+
+export async function papersOf(patientId: string): Promise<AccountResult<readonly PatientPaper[]>> {
+  return await attempt(
+    async () =>
+      (
+        await (
+          await signedIn()
+        ).get<{ documents: PatientPaper[] }>(
+          `/me/documents?patient=${encodeURIComponent(patientId)}`,
+        )
+      ).documents,
+  );
+}
+
+/** The file read in the browser and sent as base64; the server reads its bytes again. */
+export async function addPaper(input: {
+  readonly patientId: string;
+  readonly file: File;
+  readonly docType: 'prescription' | 'report' | 'discharge' | 'other';
+  readonly docDate: string | null;
+  readonly doctorName: string;
+}): Promise<AccountResult<PatientPaper>> {
+  const buffer = new Uint8Array(await input.file.arrayBuffer());
+  let binary = '';
+  for (let index = 0; index < buffer.length; index += 0x8000) {
+    binary += String.fromCharCode(...buffer.subarray(index, index + 0x8000));
+  }
+  const key = crypto.randomUUID();
+  return await attempt(
+    async () =>
+      (
+        await (
+          await signedIn()
+        ).post<{ document: PatientPaper }>(
+          '/me/documents',
+          {
+            patientId: input.patientId,
+            contentType: input.file.type,
+            dataBase64: btoa(binary),
+            docType: input.docType,
+            ...(input.docDate === null ? {} : { docDate: input.docDate }),
+            ...(input.doctorName.trim() === '' ? {} : { doctorName: input.doctorName.trim() }),
+            idempotencyKey: key,
+          },
+          key,
+        )
+      ).document,
+  );
+}
+
+export async function removePaper(documentId: string): Promise<AccountResult<boolean>> {
+  return await attempt(
+    async () =>
+      (
+        await (
+          await signedIn()
+        ).delete<{ removed: boolean }>(`/me/documents/${encodeURIComponent(documentId)}`)
+      ).removed,
+  );
+}
+
+/** A fresh signed link, minted at the moment of opening. */
+export async function paperLink(
+  patientId: string,
+  documentId: string,
+): Promise<AccountResult<string>> {
+  return await attempt(async () =>
+    fileHref(
+      (
+        await (
+          await signedIn()
+        ).get<{ url: string }>(
+          `/patients/${encodeURIComponent(patientId)}/documents/${encodeURIComponent(documentId)}/url`,
+        )
+      ).url,
+    ),
+  );
 }

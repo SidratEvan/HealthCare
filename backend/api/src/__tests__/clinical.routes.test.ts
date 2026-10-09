@@ -217,8 +217,9 @@ describe('who may read a record (FR-DOC-10)', () => {
       .get(`${BASE}/patients/${String(fixture.patientIds[0])}/records`)
       .set('authorization', `Bearer ${await guestToken()}`);
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.details.reason).toBe('guest_link_is_not_consent');
+    // Another person's row does not exist for this caller (migration 0056,
+    // DATABASE.md §5.4): it is not found before anything is decided about it.
+    expect(response.status).toBe(404);
   });
 
   it('refuses an account holder reading somebody else', async () => {
@@ -226,8 +227,9 @@ describe('who may read a record (FR-DOC-10)', () => {
       .get(`${BASE}/patients/${String(fixture.patientIds[0])}/records`)
       .set('authorization', `Bearer ${await patientToken()}`);
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.details.reason).toBe('not_your_record');
+    // Another person's row does not exist for this caller (migration 0056,
+    // DATABASE.md §5.4): it is not found before anything is decided about it.
+    expect(response.status).toBe(404);
   });
 
   it('404s a patient who does not exist, before deciding anything else', async () => {
@@ -336,9 +338,10 @@ describe('the patient panel (S-B-05, FR-DOC-03)', () => {
       .set('authorization', `Bearer ${await staff(['doctor'])}`);
 
     // `FR-DOC-03` asks for previous prescriptions and recent results too.
-    // Prescriptions were dropped, reports are step 17; an empty area would read
-    // as "this patient has none" (`PRD.md` §3.2).
-    expect(response.body.data.absent).toEqual(['prescriptions', 'reports']);
+    // Prescriptions are on each visit since plan R2; results are not part of
+    // this read, and an empty area would read as "this patient has none"
+    // (`PRD.md` §3.2).
+    expect(response.body.data.absent).toEqual(['reports']);
   });
 
   it('refuses a booking that belongs to a different patient', async () => {
@@ -476,8 +479,10 @@ describe('writing a visit (FR-DOC-08)', () => {
       await staff(['doctor'], elsewhere, await staffIdFor(elsewhere, 'doctor')),
     );
 
-    expect(response.status).toBe(403);
-    expect(response.body.error.details.reason).toBe('hospital_scope');
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('NOT_FOUND');
   });
 
   // BACKEND.md §7.6: a visit is a doctor's. Found by the security review of
@@ -612,5 +617,155 @@ describe('writing a visit (FR-DOC-08)', () => {
     // `visits_signed_has_content`. A signed record with nothing in it is a
     // document a patient could be shown that says nothing.
     expect(response.status).toBeGreaterThanOrEqual(400);
+  });
+});
+
+describe('which records a doctor reads, once they may read at all (FR-NET-02, FR-DOC-10)', () => {
+  interface Visit {
+    readonly id: string;
+    readonly hospitalNameEn: string;
+  }
+
+  /** A seeded patient with signed visits at two hospitals, and no consent to the first. */
+  async function patientSeenInTwoPlaces(): Promise<{
+    patientId: string;
+    here: string;
+    hereName: string;
+    elsewhereName: string;
+    total: number;
+  }> {
+    const found = await sql<{
+      patient_id: string;
+      here: string;
+      here_name: string;
+      elsewhere_name: string;
+      total: string;
+    }>`
+      SELECT a.patient_id, a.hospital_id AS here, ha.name_en AS here_name,
+             hb.name_en AS elsewhere_name,
+             (SELECT count(*) FROM visits v
+               WHERE v.patient_id = a.patient_id AND v.signed_at IS NOT NULL
+                 AND v.deleted_at IS NULL)::text AS total
+        FROM visits a
+        JOIN visits b ON b.patient_id = a.patient_id AND b.hospital_id <> a.hospital_id
+        JOIN hospitals ha ON ha.id = a.hospital_id
+        JOIN hospitals hb ON hb.id = b.hospital_id
+       WHERE a.signed_at IS NOT NULL AND b.signed_at IS NOT NULL
+         AND a.deleted_at IS NULL AND b.deleted_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM consents c
+            WHERE c.patient_id = a.patient_id AND c.hospital_id = a.hospital_id
+              AND c.revoked_at IS NULL AND c.deleted_at IS NULL
+         )
+       ORDER BY a.created_at
+       LIMIT 1
+    `.execute(db);
+
+    const row = found.rows[0];
+    if (row === undefined) {
+      throw new Error('The seed should give some patient signed visits at two hospitals.');
+    }
+    return {
+      patientId: row.patient_id,
+      here: row.here,
+      hereName: row.here_name,
+      elsewhereName: row.elsewhere_name,
+      total: Number(row.total),
+    };
+  }
+
+  async function readAsDoctorAt(hospitalId: string, patientId: string): Promise<request.Response> {
+    return await request(app)
+      .get(`${BASE}/patients/${patientId}/records`)
+      .set(
+        'authorization',
+        `Bearer ${await staff(['doctor'], hospitalId, await staffIdFor(hospitalId, 'doctor'))}`,
+      );
+  }
+
+  it('shows a treating hospital’s doctor that hospital’s visits, and none another hospital made', async () => {
+    const seen = await patientSeenInTwoPlaces();
+
+    const response = await readAsDoctorAt(seen.here, seen.patientId);
+    expect(response.status).toBe(200);
+    expect(response.body.data.visitsFrom).toBe('this_hospital');
+
+    const visits = response.body.data.visits as Visit[];
+    expect(visits.length).toBeGreaterThan(0);
+    expect(new Set(visits.map((visit) => visit.hospitalNameEn))).toEqual(new Set([seen.hereName]));
+    // The other hospital's name is nowhere in what was sent.
+    expect(JSON.stringify(response.body)).not.toContain(seen.elsewhereName);
+    expect(visits.length).toBeLessThan(seen.total);
+  });
+
+  it('shows every hospital’s once the patient has consented, and narrows again when they revoke', async () => {
+    const seen = await patientSeenInTwoPlaces();
+    const granted = await sql<{ id: string }>`
+      INSERT INTO consents (patient_id, hospital_id, scope, expires_at, granted_via)
+      VALUES (${seen.patientId}::uuid, ${seen.here}::uuid, 'hospital', now() + interval '1 day', 'qr')
+      RETURNING id
+    `.execute(db);
+    const consentId = granted.rows[0]?.id ?? '';
+
+    try {
+      const open = await readAsDoctorAt(seen.here, seen.patientId);
+      expect(open.body.data.visitsFrom).toBe('everywhere');
+      const names = new Set(
+        (open.body.data.visits as Visit[]).map((visit) => visit.hospitalNameEn),
+      );
+      expect(names.has(seen.hereName)).toBe(true);
+      expect(names.has(seen.elsewhereName)).toBe(true);
+
+      await sql`UPDATE consents SET revoked_at = now() WHERE id = ${consentId}::uuid`.execute(db);
+
+      const closed = await readAsDoctorAt(seen.here, seen.patientId);
+      expect(closed.body.data.visitsFrom).toBe('this_hospital');
+      expect(JSON.stringify(closed.body)).not.toContain(seen.elsewhereName);
+    } finally {
+      await sql`UPDATE consents SET revoked_at = coalesce(revoked_at, now()) WHERE id = ${consentId}::uuid`.execute(
+        db,
+      );
+    }
+  });
+
+  it('records in the audit row which it was', async () => {
+    const seen = await patientSeenInTwoPlaces();
+    await readAsDoctorAt(seen.here, seen.patientId);
+
+    const audit = await sql<{ visits_from: string | null }>`
+      SELECT meta->>'visitsFrom' AS visits_from FROM audit_log
+       WHERE patient_id = ${seen.patientId}::uuid AND action = 'RECORD_VIEW'
+       ORDER BY created_at DESC LIMIT 1
+    `.execute(db);
+    expect(audit.rows[0]?.visits_from).toBe('this_hospital');
+  });
+
+  it('shows a patient their own record whole, wherever it was written', async () => {
+    // An account holder the seed gave signed visits at two hospitals.
+    const found = await sql<{ patient_id: string; owner_user_id: string; n: string }>`
+      SELECT p.id AS patient_id, p.owner_user_id,
+             count(DISTINCT v.hospital_id)::text AS n
+        FROM patients p
+        JOIN visits v ON v.patient_id = p.id AND v.signed_at IS NOT NULL AND v.deleted_at IS NULL
+       WHERE p.owner_user_id IS NOT NULL AND p.deleted_at IS NULL
+       GROUP BY p.id, p.owner_user_id
+      HAVING count(DISTINCT v.hospital_id) > 1
+       ORDER BY p.id
+       LIMIT 1
+    `.execute(db);
+    const row = found.rows[0];
+    if (row === undefined) {
+      throw new Error('The seed should give some account holder signed visits at two hospitals.');
+    }
+
+    const response = await request(app)
+      .get(`${BASE}/patients/${row.patient_id}/records`)
+      .set('authorization', `Bearer ${await patientToken(row.owner_user_id)}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data.visitsFrom).toBe('everywhere');
+    const hospitals = new Set(
+      (response.body.data.visits as Visit[]).map((visit) => visit.hospitalNameEn),
+    );
+    expect(hospitals.size).toBe(Number(row.n));
   });
 });

@@ -51,14 +51,26 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError } from '@platform/client';
-import { formatDateTime, formatSerial, tp, numeralsFor, localName } from '@platform/i18n';
-import { Button, Card, useLocale } from '@platform/ui';
+import {
+  formatDateTime,
+  formatSerial,
+  tp,
+  numeralsFor,
+  localName,
+  prescriptionSheet,
+  toBengaliDigits,
+} from '@platform/i18n';
+import { Button, Card, useLocale, usePrintSheet } from '@platform/ui';
 
+import { RecordsIcon, StethoscopeIcon } from '@/components/icons';
+import { Segmented } from '@/components/Segmented';
+import { EmptyState, SkeletonCards } from '@/components/States';
 import { TabScreen } from '@/components/TabScreen';
 import { WalletConsent, type Speaker } from '@/components/WalletConsent';
 import { useOnline } from '@/hooks/useOnline';
 import { openReportFile, openTrackingLink } from '@/lib/api';
 import { recentBookings, type SavedBooking } from '@/lib/bookings';
+import { doctorName } from '@/lib/doctor';
 
 import type { TestOrder, VisitRecord } from '@/lib/types';
 import type { ReactNode } from 'react';
@@ -125,12 +137,11 @@ export default function RecordsPage(): ReactNode {
   }, []);
 
   return (
-    <TabScreen title={tp('navRecords', locale)}>
+    <TabScreen title={tp('recordsTitle', locale)}>
       {state.kind === 'loading' ? (
         // GR-03 loading: the shape of the answer, never a spinner.
-        <div className="flex flex-col gap-3" aria-busy="true" data-testid="records-loading">
-          <div className="h-24 rounded-md bg-sunken" />
-          <div className="h-24 rounded-md bg-sunken" />
+        <div data-testid="records-loading">
+          <SkeletonCards count={3} height={96} />
           <span className="sr-only">{tp('loading', locale)}</span>
         </div>
       ) : state.kind === 'failed' ? (
@@ -167,27 +178,17 @@ function Loaded({
   return (
     <>
       {hasTests ? (
-        <div
-          className="flex gap-2"
-          role="tablist"
-          aria-label={tp('navRecords', locale)}
-          data-testid="wallet-tabs"
-        >
-          {(['timeline', 'reports'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={tab === value}
-              data-testid={`wallet-tab-${value}`}
-              onClick={() => {
-                setTab(value);
-              }}
-              className="min-h-touch rounded-pill px-4 text-body-md aria-selected:bg-brand-100 aria-selected:font-semibold"
-            >
-              {tp(value === 'timeline' ? 'timelineTab' : 'reportsTab', locale)}
-            </button>
-          ))}
+        <div data-testid="wallet-tabs">
+          <Segmented<'timeline' | 'reports'>
+            label={tp('navRecords', locale)}
+            value={tab}
+            onChange={setTab}
+            options={(['timeline', 'reports'] as const).map((value) => ({
+              value,
+              label: tp(value === 'timeline' ? 'timelineTab' : 'reportsTab', locale),
+              testId: `wallet-tab-${value}`,
+            }))}
+          />
         </div>
       ) : null}
 
@@ -203,19 +204,14 @@ function Loaded({
       {tab === 'reports' ? (
         <ReportList tests={wallet.tests} />
       ) : wallet.records.length === 0 ? (
-        <div
-          data-testid="records-empty"
-          className="flex flex-col gap-3 rounded-md border border-line bg-surface p-5"
-        >
-          <p className="text-body-md text-ink-secondary">
-            {wallet.pending === 0
-              ? tp('noRecordsYet', locale)
-              : tp('recordsAfterVisit', locale).replace(
-                  '{count}',
-                  formatSerial(wallet.pending, numerals),
-                )}
-          </p>
-        </div>
+        <EmptyState testId="records-empty" icon={<RecordsIcon size={24} />}>
+          {wallet.pending === 0
+            ? tp('noRecordsYet', locale)
+            : tp('recordsAfterVisit', locale).replace(
+                '{count}',
+                formatSerial(wallet.pending, numerals),
+              )}
+        </EmptyState>
       ) : (
         <ul className="flex flex-col gap-3" data-testid="record-list">
           {wallet.records.map((record) => (
@@ -271,6 +267,15 @@ function Loaded({
       <p data-testid="wallet-absent" className="text-caption text-ink-muted">
         {tp('walletAbsent', locale)}
       </p>
+
+      {/* BTN-A12-UPLOAD (FR-PAT-62, plan R3): old papers are kept under a
+          signed-in profile, never through a link on this device. */}
+      <p className="text-caption text-ink-muted" data-testid="papers-on-profile">
+        {tp('papersOnProfile', locale)}{' '}
+        <a href="/profile" className="font-semibold text-brand-700 underline">
+          {tp('papersGoProfile', locale)}
+        </a>
+      </p>
     </>
   );
 }
@@ -279,22 +284,28 @@ function Loaded({
 function RecordCard({ record }: { readonly record: VisitRecord }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
+  // `BTN-A12-PRINT` (`FR-DOC-07`, plan R2): the sheet the doctor prints.
+  const { sheet, print } = usePrintSheet();
+  const digits = (text: string): string => (locale === 'bn' ? toBengaliDigits(text) : text);
   return (
-    <Card>
+    <Card elevated>
       <div className="flex flex-col gap-2" data-testid={`record-${record.id}`}>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-title-sm">
-            {localName(locale, record.departmentNameBn, record.departmentNameEn)}
-          </p>
-          <p className="text-body-sm tabular-nums text-ink-muted">
-            {formatDateTime(record.visitedAt, numerals)}
-          </p>
+        <div className="flex items-start gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-sm bg-brand-100 text-brand-600">
+            <StethoscopeIcon size={22} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-caption font-semibold text-brand-700 tabular-nums">
+              {`${localName(locale, record.departmentNameBn, record.departmentNameEn)} · ${formatDateTime(record.visitedAt, numerals)}`}
+            </p>
+            <p className="text-title-sm font-bold">
+              {doctorName(locale, record.doctorNameBn, record.doctorNameEn)}
+            </p>
+            <p className="text-body-sm text-ink-secondary">
+              {localName(locale, record.hospitalNameBn, record.hospitalNameEn)}
+            </p>
+          </div>
         </div>
-
-        <p className="text-body-sm text-ink-secondary">
-          {localName(locale, record.doctorNameBn, record.doctorNameEn)} ·{' '}
-          {localName(locale, record.hospitalNameBn, record.hospitalNameEn)}
-        </p>
 
         {record.diagnosisText === null ? null : (
           <p className="text-body-lg font-semibold">{record.diagnosisText}</p>
@@ -312,7 +323,50 @@ function RecordCard({ record }: { readonly record: VisitRecord }): ReactNode {
             )}
           </p>
         )}
+
+        {/* The visit's medicines (`FR-DOC-04`), as the doctor wrote them. */}
+        {record.medicines.length === 0 ? null : (
+          <div className="flex flex-col gap-2" data-testid={`record-medicines-${record.id}`}>
+            <p className="text-body-sm font-semibold">{tp('recordsMedicines', locale)}</p>
+            <ul className="flex flex-col gap-1">
+              {record.medicines.map((medicine, index) => (
+                <li key={`${String(index)}-${medicine.name}`} className="text-body-md">
+                  <span className="font-semibold">{medicine.name}</span>
+                  {[
+                    medicine.strength,
+                    medicine.schedule === null ? null : digits(medicine.schedule),
+                    medicine.durationDays === null
+                      ? null
+                      : tp('recordsDaysCount', locale).replace(
+                          '{days}',
+                          digits(String(medicine.durationDays)),
+                        ),
+                    medicine.instructionBn,
+                  ]
+                    .filter((part): part is string => part !== null && part !== '')
+                    .map((part) => ` · ${part}`)
+                    .join('')}
+                </li>
+              ))}
+            </ul>
+            <div>
+              <Button
+                variant="secondary"
+                size="sm"
+                data-testid={`record-print-${record.id}`}
+                onClick={() => {
+                  // The device does not keep the patient's name with a
+                  // booking, so the sheet leaves the patient line off.
+                  print(prescriptionSheet(record, null));
+                }}
+              >
+                {tp('recordsPrint', locale)}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
+      {sheet}
     </Card>
   );
 }
@@ -370,10 +424,10 @@ function ReportCard({ test }: { readonly test: LinkedTest }): ReactNode {
   const waitingKey = WAITING_LABEL[test.state];
 
   return (
-    <Card>
+    <Card elevated>
       <div className="flex flex-col gap-2" data-testid={`report-${test.id}`}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-title-sm">{test.testName}</p>
+          <p className="text-title-sm font-bold">{test.testName}</p>
           <p className="text-body-sm tabular-nums text-ink-muted">
             {tp('reportOrderedOn', locale).replace(
               '{date}',

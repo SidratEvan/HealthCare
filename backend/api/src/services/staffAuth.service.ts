@@ -40,7 +40,7 @@
  * setup (`attachPrincipal`), so no administrator reaches a console without it.
  */
 
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { TWO_FACTOR_REQUIRED_ROLES } from '@platform/domain';
 
@@ -71,7 +71,11 @@ import * as chamberRepo from '../repositories/chamber.repo.js';
 import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
 import { withTransaction } from '../repositories/transaction.js';
 
+import { endStaffSession, revokeStaffSessions } from './accessGuard.service.js';
+import { deskLimit } from './deskAccess.service.js';
+
 import type { StaffAccount } from '../repositories/staffAuth.repo.js';
+import type { Principal } from '../types/express.js';
 
 /** What a successful sign-in, refresh or password change hands the console. */
 export interface StaffSession {
@@ -141,23 +145,20 @@ async function issue(
   account: StaffAccount,
   roles: readonly string[],
   client: Client,
+  /**
+   * The sign-in these tokens belong to. A new one for a sign-in; the same one
+   * when tokens are renewed, so that what was signed in stays one thing to
+   * revoke, and a console is not cut off every time its tokens rotate.
+   */
+  familyId: string = randomUUID(),
 ): Promise<StaffSession> {
   const accessTtl = durationMs(env.JWT_ACCESS_TTL);
   const twoFactor = twoFactorOf(account, roles);
   // The password change comes first; its fresh token then carries `tfa`.
   const setupOnly = twoFactor.required && !twoFactor.enabled && !account.mustChangePassword;
-  const access = await signToken({
-    kind: 'access',
-    claims: {
-      sub: account.id,
-      kind: 'staff',
-      ...(account.hospitalId === null ? {} : { hospitalId: account.hospitalId }),
-      roles,
-      ...(account.mustChangePassword ? { mcp: true } : {}),
-      ...(setupOnly ? { tfa: 'setup' as const } : {}),
-    },
-  });
 
+  // The session first: the access token names the sign-in it stands on, and
+  // is refused once that sign-in holds no live session (`accessGuard`).
   const secret = randomBytes(32).toString('base64url');
   const sessionId = await staffAuthRepo.createRefreshSession({
     staffId: account.id,
@@ -165,6 +166,20 @@ async function issue(
     expiresAt: new Date(Date.now() + durationMs(env.JWT_REFRESH_TTL)),
     ip: client.ip,
     userAgent: client.userAgent === null ? null : client.userAgent.slice(0, 300),
+    familyId,
+  });
+
+  const access = await signToken({
+    kind: 'access',
+    claims: {
+      sub: account.id,
+      kind: 'staff',
+      sid: familyId,
+      ...(account.hospitalId === null ? {} : { hospitalId: account.hospitalId }),
+      roles,
+      ...(account.mustChangePassword ? { mcp: true } : {}),
+      ...(setupOnly ? { tfa: 'setup' as const } : {}),
+    },
   });
 
   return {
@@ -426,7 +441,7 @@ export async function enableTwoFactor(
   });
   if (!enabled) throw new AppError('AUTH_2FA_ALREADY_ON');
 
-  await staffAuthRepo.revokeOtherSessions(account.id, null);
+  await revokeStaffSessions(account.id);
   const updated = await accountOf(account.id);
   return {
     recoveryCodes,
@@ -461,7 +476,7 @@ export async function resetTwoFactorFromServer(input: {
       userAgent: null,
     });
   });
-  await staffAuthRepo.revokeOtherSessions(account.id, null);
+  await revokeStaffSessions(account.id);
   return { fullName: account.fullName, hospitalCode: account.hospitalCode };
 }
 
@@ -496,7 +511,7 @@ export async function refresh(token: string, client: Client): Promise<StaffSessi
   if (session.revokedAt !== null) {
     // A token that was already used is being used again: two parties hold it.
     // Revoke everything the account has open and make it sign in again.
-    await staffAuthRepo.revokeOtherSessions(session.subjectId, null);
+    await revokeStaffSessions(session.subjectId);
     logger.warn({ staffId: session.subjectId }, 'refresh token reused; sessions revoked');
     throw refreshInvalid('reused');
   }
@@ -507,9 +522,11 @@ export async function refresh(token: string, client: Client): Promise<StaffSessi
 
   // Two refreshes racing with the same token: only the one that revokes the
   // row goes on, and the other is refused rather than issued a second session.
+  // Renewal is not a sign-out: the row is replaced, the sign-in goes on, and
+  // the connections it holds are left alone.
   if (!(await staffAuthRepo.revokeRefreshSession(session.id))) throw refreshInvalid('raced');
 
-  return await issue(account, await rolesOrRefuse(account), client);
+  return await issue(account, await rolesOrRefuse(account), client, session.familyId);
 }
 
 /** `POST /staff/logout`. Quietly does nothing for a token it does not recognise. */
@@ -518,7 +535,9 @@ export async function logout(token: string): Promise<void> {
   if (parsed === null) return;
   const session = await staffAuthRepo.findRefreshSession(parsed.id);
   if (session !== null && hashMatches(parsed.secret, session.tokenHash)) {
-    await staffAuthRepo.revokeRefreshSession(session.id);
+    // The sign-in ends: its access token is refused from the next request,
+    // and its live connections are closed now (`FR-SEC-06`).
+    await endStaffSession(session);
   }
 }
 
@@ -573,7 +592,7 @@ export async function changePassword(
   if (problem !== null) throw new AppError('AUTH_PASSWORD_WEAK', { details: { reason: problem } });
 
   await staffAuthRepo.setPassword(account.id, await hashPassword(input.next), false);
-  await staffAuthRepo.revokeOtherSessions(account.id, null);
+  await revokeStaffSessions(account.id);
 
   const updated = await accountOf(account.id);
   return await issue(updated, await rolesOrRefuse(updated), client);
@@ -582,6 +601,15 @@ export async function changePassword(
 /** `GET /staff/chambers` — today's chambers at the caller's own facility. */
 export async function chambers(hospitalId: string): Promise<chamberRepo.ChamberRow[]> {
   return await chamberRepo.todaysChambers(hospitalId);
+}
+
+/** Today's chambers this member of staff may open: a desk's only, for a receptionist at one. */
+export async function chambersFor(
+  principal: Principal & { readonly kind: 'staff' },
+): Promise<chamberRepo.ChamberRow[]> {
+  const all = await chamberRepo.todaysChambers(principal.hospitalId);
+  const allowed = await deskLimit(principal);
+  return allowed === null ? all : all.filter((chamber) => allowed.has(chamber.doctorId));
 }
 
 // --- The first administrator (the `staff:create` command) ---------------------

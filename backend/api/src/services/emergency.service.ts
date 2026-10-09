@@ -61,8 +61,7 @@ import {
 } from '@platform/domain';
 
 import { travelTime } from '../adapters/traveltime.js';
-import { signToken, verifyToken } from '../config/jwt.js';
-import { patientLink } from '../config/links.js';
+import { verifyToken } from '../config/jwt.js';
 import { env } from '../env.js';
 import { AppError, forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
@@ -72,6 +71,8 @@ import * as emergencyRepo from '../repositories/emergency.repo.js';
 import * as referralRepo from '../repositories/referral.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
+import { emergencyCaseToken, emergencyCaseUrl } from './emergencyLink.js';
+import * as modules from './modules.service.js';
 import * as notifications from './notification.service.js';
 
 import type { CapabilityRow, CaseRow, CaseStatusRow } from '../repositories/emergency.repo.js';
@@ -86,6 +87,20 @@ export interface ErActor {
 export interface Envelope {
   readonly clientEventId: string | null;
   readonly clientTs: string | null;
+}
+
+/**
+ * A coordinator acting from a console, with the console's own key for the
+ * action. The key is said back in the broadcast, so that the console which
+ * took the action can tell its own when it hears it (`SY-09`).
+ */
+interface Acting {
+  readonly actor: ErActor;
+  readonly clientEventId: string | null;
+}
+
+function acting(actor: ErActor, envelope: Envelope): Acting {
+  return { actor, clientEventId: envelope.clientEventId };
 }
 
 /** The longest an ETA can be (`emergency_cases_eta_sane`). */
@@ -115,6 +130,8 @@ export interface EmergencyResult {
   readonly erLoad: number;
   /** Free beds of `bedKind`, or of every kind when that is null. Null: no such beds here. */
   readonly freeBeds: number | null;
+  /** False where the bed figures are withheld, which is not the same as having none. */
+  readonly bedsShared: boolean;
   readonly bedKind: BedKind | null;
   /** Null when the facility has no ICU — which is not a full one. */
   readonly icuTotal: number | null;
@@ -185,8 +202,9 @@ export async function search(query: {
     geography === null ? candidates : candidates.filter((hospital) => geography.has(hospital.id));
   const ids = inRange.map((hospital) => hospital.id);
 
-  const [capacity, figures, thresholds, capable] = await Promise.all([
+  const [capacity, withheld, figures, thresholds, capable] = await Promise.all([
     bedRepo.publicCapacity(ids),
+    bedRepo.withholdingBeds(ids),
     emergencyRepo.emergencyFigures(ids),
     emergencyRepo.staleThresholds(ids),
     geography === null && capability !== null
@@ -223,6 +241,9 @@ export async function search(query: {
       hasCapability,
       erLoad: er?.erActive ?? 0,
       freeBeds: freeBedsFor(need, cardFigures),
+      // False where the hospital has beds and does not share the figure
+      // (`FR-NET-04`): the card then says so, and not that it has none.
+      bedsShared: !withheld.has(hospital.id),
       bedKind: need.bedKind,
       icuTotal: beds?.icuTotal ?? null,
       icuFree: beds?.icuFree ?? null,
@@ -295,6 +316,12 @@ export async function inbound(input: {
   readonly sex: Sex | null;
   readonly idempotencyKey: string | null;
 }): Promise<InboundResult> {
+  // Not a hospital that does not run its emergency module here
+  // (`FR-BRD-11`). Asked first, and said as what it is: such a hospital is in
+  // no emergency search either, so the desk check below would refuse it too,
+  // with a reason that is not the true one.
+  await modules.requireOn(input.hospitalId, 'emergency');
+
   // Only a facility with somebody to ring. A family told "the hospital has
   // been notified" by a facility with no ER console has been told a lie.
   if (!(await emergencyRepo.hasEmergencyDesk(input.hospitalId))) {
@@ -341,11 +368,11 @@ export async function inbound(input: {
     emit.emergencyInbound(input.hospitalId, { case: toView(created) }, now());
   }
 
-  const token = await caseToken(filed.id);
+  const token = await emergencyCaseToken(filed.id);
   return {
     case: await statusView(filed.id),
     token,
-    trackUrl: trackUrlFor(token),
+    trackUrl: emergencyCaseUrl(token),
     duplicate: filed.duplicate,
   };
 }
@@ -457,15 +484,15 @@ export interface CaseActionResult {
 /** `POST /emergency/cases/:id/acknowledge` — `BTN-B07-PREPARE`. */
 export async function acknowledge(
   caseId: string,
-  _envelope: Envelope,
+  envelope: Envelope,
   actor: ErActor,
 ): Promise<CaseActionResult> {
-  return await act(caseId, 'acknowledge', {}, actor, async (trx) => {
+  return await act(caseId, 'acknowledge', {}, acting(actor, envelope), async (trx) => {
     await emergencyRepo.writeCase(trx, caseId, { state: 'acknowledged', acknowledged: true });
     return await notifications.queueEmergencyAnswer(trx, {
       caseId,
       outcome: 'acknowledged',
-      link: trackUrlFor(await caseToken(caseId)),
+      link: emergencyCaseUrl(await emergencyCaseToken(caseId)),
     });
   });
 }
@@ -481,13 +508,13 @@ export type CaseCommand =
 export async function command(
   caseId: string,
   body: CaseCommand,
-  _envelope: Envelope,
+  envelope: Envelope,
   actor: ErActor,
 ): Promise<CaseActionResult> {
   switch (body.action) {
     case 'accept':
       // `BTN-B07-ACCEPT`: the person is here. A token is given at the door.
-      return await act(caseId, 'accept', {}, actor, async (trx, current) => {
+      return await act(caseId, 'accept', {}, acting(actor, envelope), async (trx, current) => {
         const tokens = await emergencyRepo.tokenContext(trx, current.hospitalId, today());
         await emergencyRepo.writeCase(trx, caseId, {
           state: 'arrived',
@@ -500,25 +527,37 @@ export async function command(
     case 'decline':
       // `BTN-B07-DECLINE` (`FR-EMG-02`). The family is told, if they left a
       // number, and their screen says so on its next look either way.
-      return await act(caseId, 'decline', { reason: body.reason }, actor, async (trx) => {
-        await emergencyRepo.writeCase(trx, caseId, {
-          state: 'declined',
-          closed: true,
-          declineReason: body.reason.trim(),
-        });
-        return await notifications.queueEmergencyAnswer(trx, {
-          caseId,
-          outcome: 'declined',
-          link: trackUrlFor(await caseToken(caseId)),
-        });
-      });
+      return await act(
+        caseId,
+        'decline',
+        { reason: body.reason },
+        acting(actor, envelope),
+        async (trx) => {
+          await emergencyRepo.writeCase(trx, caseId, {
+            state: 'declined',
+            closed: true,
+            declineReason: body.reason.trim(),
+          });
+          return await notifications.queueEmergencyAnswer(trx, {
+            caseId,
+            outcome: 'declined',
+            link: emergencyCaseUrl(await emergencyCaseToken(caseId)),
+          });
+        },
+      );
 
     case 'triage':
       // `BTN-B07-TRIAGE-<c>` (`FR-EMG-03`).
-      return await act(caseId, 'triage', { triage: body.triage }, actor, async (trx) => {
-        await emergencyRepo.writeCase(trx, caseId, { triage: body.triage });
-        return notifications.NOTHING;
-      });
+      return await act(
+        caseId,
+        'triage',
+        { triage: body.triage },
+        acting(actor, envelope),
+        async (trx) => {
+          await emergencyRepo.writeCase(trx, caseId, { triage: body.triage });
+          return notifications.NOTHING;
+        },
+      );
 
     case 'handoff': {
       // `BTN-B07-ADMIT`: "hands off to ward board with the case attached".
@@ -527,16 +566,22 @@ export async function command(
       if (!kinds.includes(body.bedKind)) {
         throw validationFailed({ field: 'bedKind', reason: 'not_at_this_hospital' });
       }
-      return await act(caseId, 'handoff', { bedKind: body.bedKind }, actor, async (trx) => {
-        await emergencyRepo.writeCase(trx, caseId, { admitBedKind: body.bedKind });
-        return notifications.NOTHING;
-      });
+      return await act(
+        caseId,
+        'handoff',
+        { bedKind: body.bedKind },
+        acting(actor, envelope),
+        async (trx) => {
+          await emergencyRepo.writeCase(trx, caseId, { admitBedKind: body.bedKind });
+          return notifications.NOTHING;
+        },
+      );
     }
 
     case 'discharge':
       // Seen and sent home. Closing the case is what keeps `FR-EMG-04`'s
       // counter honest; a handoff still waiting for a bed is withdrawn with it.
-      return await act(caseId, 'discharge', {}, actor, async (trx) => {
+      return await act(caseId, 'discharge', {}, acting(actor, envelope), async (trx) => {
         await emergencyRepo.writeCase(trx, caseId, { state: 'discharged', closed: true });
         return notifications.NOTHING;
       });
@@ -582,7 +627,8 @@ export async function walkIn(
     return { id, duplicate: false };
   });
 
-  return await publishCase(filed.id, filed.duplicate);
+  // The walk-in's idempotency key is the console's key for the action.
+  return await publishCase(filed.id, filed.duplicate, input.idempotencyKey);
 }
 
 /** `PUT /hospitals/:id/capabilities` — `SW-B07-<capability>` (`FR-EMG-05`). */
@@ -626,7 +672,12 @@ export async function confirmCapabilities(
  * Also what the ward calls after placing an ER case in a bed, so the ER
  * console sees the case leave its triage list.
  */
-export async function publishCase(caseId: string, duplicate = false): Promise<CaseActionResult> {
+export async function publishCase(
+  caseId: string,
+  duplicate = false,
+  /** The console action behind this, by the console's own key, when there was one (`SY-09`). */
+  clientEventId: string | null = null,
+): Promise<CaseActionResult> {
   const current = await requiredCase(caseId);
   const load =
     (await emergencyRepo.emergencyFigures([current.hospitalId])).get(current.hospitalId)
@@ -635,7 +686,10 @@ export async function publishCase(caseId: string, duplicate = false): Promise<Ca
   const view = toView(current);
 
   if (!duplicate) {
-    emit.emergencyUpdated(current.hospitalId, { case: view, load }, serverTs);
+    // The case carries its version, and the broadcast names the action: a
+    // console keeps the highest version it has been told, and takes its own
+    // drawing of the action off at the first statement that names it.
+    emit.emergencyUpdated(current.hospitalId, { case: view, load, clientEventId }, serverTs);
     if (current.admitRequestedAt !== null) {
       emit.emergencyHandoff(current.hospitalId, { caseId, state: current.state }, serverTs);
     }
@@ -658,9 +712,12 @@ async function act(
   caseId: string,
   action: EmergencyAction,
   context: EmergencyActionContext,
-  actor: ErActor | null,
+  who: ErActor | Acting | null,
   write: (trx: Tx, current: CaseRow) => Promise<notifications.QueuedBatch>,
 ): Promise<CaseActionResult> {
+  const actor = who === null ? null : 'actor' in who ? who.actor : who;
+  const clientEventId = who !== null && 'actor' in who ? who.clientEventId : null;
+
   const outcome = await withTransaction(async (trx) => {
     const current = await emergencyRepo.lockCase(trx, caseId);
     if (current === null) throw notFound('emergency case');
@@ -687,7 +744,7 @@ async function act(
   });
 
   await notifications.dispatch(outcome.batch);
-  return await publishCase(caseId, outcome.duplicate);
+  return await publishCase(caseId, outcome.duplicate, clientEventId);
 }
 
 async function requiredCase(caseId: string): Promise<CaseRow> {
@@ -712,13 +769,6 @@ function assertScope(current: CaseRow, actor: ErActor): void {
   if (current.hospitalId !== actor.hospitalId) throw forbiddenScope({ reason: 'wrong_hospital' });
 }
 
-async function caseToken(caseId: string): Promise<string> {
-  return await signToken({
-    kind: 'emergency_case',
-    claims: { sub: caseId, kind: 'guest', emergencyCaseId: caseId },
-  });
-}
-
 async function caseIdFrom(token: string): Promise<string> {
   const verified = await verifyToken(token, 'emergency_case');
   if (!verified.ok) {
@@ -731,11 +781,6 @@ async function caseIdFrom(token: string): Promise<string> {
     throw new AppError('AUTH_TOKEN_INVALID', { details: { reason: 'no_case' } });
   }
   return caseId;
-}
-
-/** The family's status page in the patient app (`S-A-10c`). */
-function trackUrlFor(token: string): string {
-  return patientLink('/emergency/onway', { t: token });
 }
 
 function now(): Timestamp {

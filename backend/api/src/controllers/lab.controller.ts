@@ -113,6 +113,7 @@ export async function searchMedicines(req: Request, res: Response): Promise<void
   res.json({
     ok: true,
     data: await pharmacy.searchMedicines({
+      scope: query.scope,
       q: query.q,
       lat: query.lat ?? null,
       lng: query.lng ?? null,

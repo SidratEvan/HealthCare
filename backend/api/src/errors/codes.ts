@@ -63,6 +63,15 @@ export const ERROR_CODES = {
   SETTINGS_DUPLICATE: { status: 409, message: 'Something with that value already exists here.' },
   SETTINGS_NOT_ALLOWED: { status: 422, message: 'That change is not allowed.' },
 
+  // --- Modules (plan C4, FR-BRD-11) ------------------------------------------
+  //
+  // The hospital does not run the module the request belongs to. A 403 that
+  // names the module in `details.module`: the hospital is there, and saying
+  // what it does not do is how a console hides the screen and a patient goes
+  // elsewhere. It fails however often it is sent, until the platform switches
+  // the module on.
+  MODULE_OFF: { status: 403, message: 'This hospital does not run that module.' },
+
   // --- Imports (pilot step 24, FR-IMP-05..07) -------------------------------
   //
   // A file that cannot be read as the set at all — empty, a quote never
@@ -155,6 +164,25 @@ export const ERROR_CODES = {
     message: 'The report could not be stored. Nothing was delivered; try again.',
   },
 
+  // `FR-PAT-28` (plan R1). A preferred hour that is not one of the chamber's,
+  // or asked of a hospital that does not offer them. Nothing is written.
+  ARRIVAL_WINDOW_NOT_OFFERED: {
+    status: 422,
+    message: 'That arrival hour is not one this chamber offers.',
+  },
+
+  // `FR-PAT-62` (plan R3). The bytes are read, not the name: a file that is
+  // not a JPEG, PNG, WebP or PDF, or is over 8 MB, is refused whatever it says.
+  DOCUMENT_NOT_SUPPORTED: {
+    status: 422,
+    message: 'Only a photograph (JPEG, PNG or WebP) or a PDF, up to 8 MB, can be added.',
+  },
+  /** The same as `REPORT_STORAGE_FAILED`, for a patient's own paper. Nothing was kept. */
+  DOCUMENT_STORAGE_FAILED: {
+    status: 503,
+    message: 'The paper could not be stored. Nothing was kept; try again.',
+  },
+
   // `FR-PAT-63`. Expired, forged and never-real share one code on purpose: a
   // caller guessing at consent codes must not learn which guess was closer.
   CONSENT_CODE_INVALID: { status: 400, message: 'That code has expired or is not valid.' },
@@ -169,6 +197,20 @@ export const ERROR_CODES = {
   PAYMENT_FAILED: { status: 402, message: 'The payment provider declined the transaction.' },
   /** `PAYMENT_PROVIDER=off`: this deployment takes payment at the hospital only (pilot step 26). */
   PAYMENT_UNAVAILABLE: { status: 422, message: 'Only paying at the hospital is available here.' },
+  // Plan H3 (`FR-PAY-08`, `FR-PAY-10`, `FR-PAY-12`).
+  PAYMENT_ALREADY_MADE: { status: 409, message: 'This serial has already been paid for.' },
+  PAYMENT_HOLD_ENDED: {
+    status: 409,
+    message: 'The time to pay for this serial online has run out.',
+  },
+  PREPAYMENT_REQUIRED: {
+    status: 422,
+    message: 'This serial must be paid for online before it is confirmed.',
+  },
+  REFUND_NOTE_REQUIRED: {
+    status: 422,
+    message: 'A refund made by hand needs the reference it was made under.',
+  },
   /**
    * The hospital has set no cancellation terms, so there is no rule to
    * enforce (`FR-PAY-03`). A 409 rather than a 500: nothing is broken, and
@@ -199,7 +241,30 @@ export const ERROR_CODES = {
     status: 400,
     message: 'This endpoint requires an Idempotency-Key header.',
   },
+  /**
+   * The key has already made something else (`FR-QUE-51`). A key names one
+   * request: the same request sent again is answered with what it made, and a
+   * different request under the same key is the caller's mistake.
+   */
+  IDEMPOTENCY_KEY_REUSED: {
+    status: 422,
+    message: 'This Idempotency-Key was already used for a different request.',
+  },
+  /**
+   * Two writes reached for the same thing at the same moment and the database
+   * let one through. Not a fault of the server: the caller reads again and
+   * decides. Used where no route has a more precise word for the race.
+   */
+  WRITE_CONFLICT: {
+    status: 409,
+    message: 'Something else changed this at the same moment. Please try again.',
+  },
   RATE_LIMITED: { status: 429, message: 'Too many requests.' },
+  /** Too many bookings from one phone number in a day (`FR-GST-14`). */
+  BOOKING_LIMIT_REACHED: {
+    status: 429,
+    message: 'This phone number has made too many bookings today.',
+  },
   /** A body over its route's limit (256kb, or the report and import routes' own). */
   PAYLOAD_TOO_LARGE: { status: 413, message: 'The request body is too large.' },
   NOT_FOUND: { status: 404, message: 'No such resource.' },

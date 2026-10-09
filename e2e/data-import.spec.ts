@@ -14,6 +14,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { newFacility, removeFacility, type NewFacility } from './support/facility.js';
 import { passSecondFactor } from './support/twoFactor.js';
+import { xlsx } from './support/xlsx.js';
 
 const CONSOLE = 'http://localhost:3100';
 const PASSWORD = 'import-e2e-password';
@@ -174,5 +175,59 @@ test.describe('S-B-14: a hospital imports its own data', () => {
     await page.getByTestId('import-commit').click();
     await page.getByTestId('import-confirm-yes').click();
     await expect(page.getByText('আমদানি সংরক্ষণ করা হয়েছে').first()).toBeVisible();
+  });
+
+  test('an Excel workbook is read like its CSV, a sheet chosen, and an old .xls is named (FR-IMP-22)', async ({
+    page,
+  }) => {
+    const facility = await newFacility(PASSWORD);
+    made.push(facility);
+    await openImport(page, facility);
+    await page.getByRole('button', { name: 'খ রোগীর তালিকা' }).click();
+
+    // An old .xls: not read, and the screen says what to do.
+    await page.getByTestId('import-file').setInputFiles({
+      name: 'patients.xls',
+      mimeType: 'application/vnd.ms-excel',
+      buffer: Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0, 0, 0]),
+    });
+    await expect(page.getByTestId('import-problem')).toContainText('.xlsx বা CSV');
+
+    // A workbook of two sheets, the patients on the second, birth dates held
+    // as Excel dates rather than as text.
+    const workbook = xlsx([
+      { name: 'Notes', rows: [['Exported from the old system (Demo)']] },
+      {
+        name: 'Patients',
+        rows: [
+          ['ref', 'full_name', 'date_of_birth', 'age_years', 'sex', 'mobile', 'blood_group'],
+          ['X-1', 'এক্সেল রোগী (ডেমো)', { date: '1975-10-05' }, null, 'F', '01812345675', null],
+          [
+            'X-2',
+            'আরেক এক্সেল রোগী (ডেমো)',
+            { date: '1980-11-06' },
+            null,
+            'M',
+            '01912345675',
+            null,
+          ],
+        ],
+      },
+    ]);
+    await page.getByTestId('import-file').setInputFiles({
+      name: 'patients.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: workbook,
+    });
+    const sheet = page.getByTestId('import-sheet');
+    await expect(sheet).toBeVisible();
+    await sheet.selectOption('Patients');
+    await page.getByTestId('import-check').click();
+
+    // The same check, preview and counts a CSV gets.
+    await expect(page.getByTestId('import-preview')).toBeVisible();
+    await expect(page.getByTestId('import-count-add')).toContainText('২');
+    await expect(page.getByTestId('import-count-error')).toContainText('০');
+    await page.getByTestId('import-discard').click();
   });
 });

@@ -8,47 +8,75 @@
  *
  * ## Whose serials these are
  *
- * This device's. `GET /me/bookings` is the endpoint that would answer the
- * question properly, and it answers it for an *account* — of which there are
- * none, because authentication is deferred to Supabase Auth (`CLAUDE.md`
- * §4.1). A guest's identity, as far as the server is concerned, is one
- * tracking link per booking.
+ * **Signed in: the account's** (plan F1). `GET /me/bookings` lists the
+ * serials of every profile the account owns, wherever they were booked, so
+ * the list is the same on every phone. Opening one takes a tracking link;
+ * this phone uses the one it holds, and `S-A-08` asks for one when it holds
+ * none.
  *
- * `APP_FLOW.md` A1.5 already states the consequence and accepts it: for a
- * guest, multi-device access is "only via the SMS link". So the screen shows
- * what this phone booked and **says so on the screen**, rather than implying
- * it holds somebody's history and quietly losing half of it when they pick up
- * a different phone.
+ * **Not signed in: this device's.** A guest's identity, as far as the server
+ * is concerned, is one tracking link per booking, and `APP_FLOW.md` A1.5
+ * accepts the consequence: for a guest, multi-device access is "only via the
+ * SMS link". So the screen shows what this phone booked and **says so on the
+ * screen**, rather than implying it holds somebody's history and quietly
+ * losing half of it when they pick up a different phone. A signed-in patient
+ * whose server cannot be reached is shown the same, with the same sentence.
  */
 
 import { useEffect, useState } from 'react';
 
-import { formatDateTime, formatSerial, tp, numeralsFor, localName } from '@platform/i18n';
+import {
+  formatAge,
+  formatDateTime,
+  formatSerial,
+  tp,
+  numeralsFor,
+  localName,
+} from '@platform/i18n';
 import { Card, useLocale } from '@platform/ui';
 
 import { ChevronIcon } from '@/components/icons';
 import { TabScreen } from '@/components/TabScreen';
 import { useDeployment } from '@/hooks/useDeployment';
-import { bookingsInScope, recentBookings, type DatedBooking } from '@/lib/bookings';
+import { doctorName } from '@/lib/doctor';
 import { scopedHospitalId } from '@/lib/scope';
+import { serialsFor, type StoodBooking } from '@/lib/standing';
 
 import type { ReactNode } from 'react';
 
 export default function SerialsPage(): ReactNode {
   const locale = useLocale();
-  const [bookings, setBookings] = useState<readonly DatedBooking[] | null>(null);
+  const [bookings, setBookings] = useState<readonly StoodBooking[] | null>(null);
+  // Whether the list is the account's, from the server, or this phone's own.
+  const [fromAccount, setFromAccount] = useState(false);
 
   // Read after mount: `localStorage` does not exist on the server, and reading
   // it during render makes the first client render disagree with it.
   // An app open for one hospital lists that hospital's serials (`FR-BRD-02`).
   const inHospital = scopedHospitalId(useDeployment());
   useEffect(() => {
-    setBookings(bookingsInScope(recentBookings(), inHospital));
+    let stale = false;
+
+    // Where each one stands is the server's to say, not the calendar's
+    // (`FR-PAT-39`): the shape of the answer is shown until it has. A
+    // signed-in patient's list is the server's too (plan F1).
+    setBookings(null);
+    void serialsFor(inHospital).then((serials) => {
+      if (stale) return;
+      setBookings(serials.bookings);
+      setFromAccount(serials.fromAccount);
+    });
+    return () => {
+      stale = true;
+    };
   }, [inHospital]);
 
-  const today = bookings?.filter((entry) => entry.isToday) ?? [];
-  const upcoming = bookings?.filter((entry) => !entry.isToday && !entry.isPast) ?? [];
-  const past = bookings?.filter((entry) => entry.isPast) ?? [];
+  // Current, whatever the date; and one that could not be checked stays here,
+  // marked, rather than being filed under past.
+  const today =
+    bookings?.filter((entry) => entry.standing === 'current' || entry.standing === 'unknown') ?? [];
+  const upcoming = bookings?.filter((entry) => entry.standing === 'upcoming') ?? [];
+  const past = bookings?.filter((entry) => entry.standing === 'past') ?? [];
 
   return (
     <TabScreen title={tp('mySerials', locale)}>
@@ -73,12 +101,20 @@ export default function SerialsPage(): ReactNode {
         </div>
       ) : (
         <>
-          <Section title={tp('serialsToday', locale)} bookings={today} live />
-          <Section title={tp('serialsUpcoming', locale)} bookings={upcoming} />
-          <Section title={tp('serialsPast', locale)} bookings={past} />
+          <Section title={tp('serialsToday', locale)} bookings={today} live name="current" />
+          <Section title={tp('serialsUpcoming', locale)} bookings={upcoming} name="upcoming" />
+          <Section title={tp('serialsPast', locale)} bookings={past} name="past" />
 
-          {/* The honest caveat, on the screen rather than in a comment. */}
-          <p className="text-caption text-ink-muted">{tp('serialsOnThisDevice', locale)}</p>
+          {/* Whose list this is, on the screen rather than in a comment: the
+              account's, the same on every phone, or only what this phone
+              booked. */}
+          <p
+            className="text-caption text-ink-muted"
+            data-testid="serials-source"
+            data-source={fromAccount ? 'account' : 'device'}
+          >
+            {tp(fromAccount ? 'serialsFromAccount' : 'serialsOnThisDevice', locale)}
+          </p>
         </>
       )}
     </TabScreen>
@@ -88,10 +124,12 @@ export default function SerialsPage(): ReactNode {
 function Section({
   title,
   bookings,
+  name,
   live = false,
 }: {
   readonly title: string;
-  readonly bookings: readonly DatedBooking[];
+  readonly bookings: readonly StoodBooking[];
+  readonly name: 'current' | 'upcoming' | 'past';
   readonly live?: boolean;
 }): ReactNode {
   const locale = useLocale();
@@ -99,14 +137,14 @@ function Section({
   if (bookings.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-title-sm">{title}</h2>
+    <section className="flex flex-col gap-3" data-testid={`serials-${name}`}>
+      <h2 className="text-title-sm font-bold">{title}</h2>
 
       <ul className="flex flex-col gap-3">
         {bookings.map((booking) => (
           <li key={booking.bookingId}>
             <a href={booking.url} data-testid={`serial-${booking.bookingId}`}>
-              <Card tone={live ? 'brand' : 'default'}>
+              <Card elevated tone={live ? 'brand' : 'default'}>
                 <div className="flex items-center gap-3">
                   <span
                     className={`flex size-11 shrink-0 items-center justify-center rounded-pill text-title-sm font-bold tabular-nums ${
@@ -118,7 +156,7 @@ function Section({
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-body-lg font-semibold">
-                      {localName(locale, booking.doctorNameBn, booking.doctorNameEn)}
+                      {doctorName(locale, booking.doctorNameBn, booking.doctorNameEn)}
                     </p>
                     <p className="truncate text-body-sm text-ink-muted">
                       {localName(locale, booking.hospitalNameBn, booking.hospitalNameEn)}
@@ -126,6 +164,26 @@ function Section({
                     <p className="text-body-sm tabular-nums text-ink-secondary">
                       {formatDateTime(booking.plannedStart, numerals)}
                     </p>
+                    {booking.standing !== 'unknown' ? null : (
+                      <p
+                        className="text-caption text-ink-muted"
+                        data-testid={`serial-unknown-${booking.bookingId}`}
+                      >
+                        {booking.knownAt === null
+                          ? tp('serialStatusUnknown', locale)
+                          : tp('serialStatusUnknownSince', locale).replace(
+                              '{age}',
+                              formatAge(
+                                Math.max(
+                                  0,
+                                  Math.round((Date.now() - Date.parse(booking.knownAt)) / 60_000),
+                                ),
+                                locale,
+                                numerals,
+                              ),
+                            )}
+                      </p>
+                    )}
                   </div>
 
                   <span className="text-brand-600">

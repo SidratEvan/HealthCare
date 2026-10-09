@@ -22,6 +22,8 @@ import { io, type Socket } from 'socket.io-client';
 
 import type { EmergencyCaseView, PublicCapacity, ReferralView } from '@platform/domain';
 
+import { reconnectIfDropped } from './reconnect.js';
+
 export interface CapabilityState {
   readonly kind: string;
   readonly available: boolean;
@@ -33,7 +35,16 @@ export interface EmergencyChannelOptions {
   readonly getToken: () => string | null;
   readonly onConnection: (connected: boolean) => void;
   readonly onInbound: (current: EmergencyCaseView, serverTs: string) => void;
-  readonly onCase: (current: EmergencyCaseView, load: number, serverTs: string) => void;
+  /**
+   * `clientEventId` is the console action behind the change, when there was
+   * one: a console whose own action it is stops drawing it (`SY-09`).
+   */
+  readonly onCase: (
+    current: EmergencyCaseView,
+    load: number,
+    serverTs: string,
+    clientEventId: string | null,
+  ) => void;
   readonly onCapabilities: (capabilities: readonly CapabilityState[], serverTs: string) => void;
   readonly onCapacity: (published: PublicCapacity, serverTs: string) => void;
   /** `incoming` is true for a referral this ER has just been sent. */
@@ -56,10 +67,18 @@ export function openEmergencyChannel(options: EmergencyChannelOptions): {
     reconnectionDelayMax: 10_000,
   });
 
+  /** Set by `close`: a channel its owner has closed is never reopened. */
+  let closed = false;
+
   socket.on('connect', () => {
     options.onConnection(true);
   });
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    // A close the server asked for is tried once more with the credential now
+    // held: a console given a new sign-in comes back, a revoked one is refused
+    // (`reconnect.ts`, `FR-SEC-06`).
+    reconnectIfDropped(socket, reason, () => closed);
+
     // The console stays on screen with what it knew, and says it is offline.
     // An ER screen that blanks when the wifi drops is useless exactly when a
     // bus crash fills the corridor (`FR-OFF-01`).
@@ -74,8 +93,16 @@ export function openEmergencyChannel(options: EmergencyChannelOptions): {
   );
   socket.on(
     'emergency.updated',
-    (message: { serverTs: string; data: { case: EmergencyCaseView; load: number } }) => {
-      options.onCase(message.data.case, message.data.load, message.serverTs);
+    (message: {
+      serverTs: string;
+      data: { case: EmergencyCaseView; load: number; clientEventId?: string | null };
+    }) => {
+      options.onCase(
+        message.data.case,
+        message.data.load,
+        message.serverTs,
+        message.data.clientEventId ?? null,
+      );
     },
   );
   socket.on(
@@ -102,6 +129,7 @@ export function openEmergencyChannel(options: EmergencyChannelOptions): {
 
   return {
     close: () => {
+      closed = true;
       socket.disconnect();
     },
     socket,

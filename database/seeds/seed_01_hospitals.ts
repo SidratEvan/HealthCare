@@ -17,6 +17,8 @@
  *     real choice between two hospitals instead of one obvious answer.
  */
 
+import { createHash } from 'node:crypto';
+
 import { DEMO_FACILITIES } from './data/hospitals.js';
 import { composeName, rosterFor } from './data/people.js';
 import { isDeclaredDistrict, specialty } from './data/reference.js';
@@ -30,6 +32,7 @@ import {
 } from './lib/demo.js';
 import { insertRows } from './lib/insert.js';
 import { facilityIds } from './lib/lookup.js';
+import { markPng } from './lib/markPng.js';
 
 import type { SeedContext, SeedModule, SeedSummary } from './lib/runner.js';
 
@@ -56,6 +59,13 @@ const UNAVAILABLE: readonly { hospitalSlug: string; kind: string }[] = [
  * That is the point: the patient-facing rule is that a live number always
  * carries its freshness and a stale one says so (`PRD.md` §3.2).
  */
+/**
+ * The hospitals that offer a preferred arrival hour at booking (`FR-PAT-28`,
+ * plan R1). One, so the demo shows the choice at one hospital and its absence
+ * everywhere else, which is the setting's default.
+ */
+const ARRIVAL_WINDOWS: ReadonlySet<string> = new Set(['padma-specialised']);
+
 const CAPABILITY_AGE_MINUTES: Readonly<Record<string, number>> = {
   'shapla-general': 3,
   'padma-specialised': 2,
@@ -99,6 +109,63 @@ const BRANDS: Readonly<Record<string, { colors: Record<string, string> }>> = {
       'brand-100': '#e7eff6',
       'brand-border': '#c5d6e6',
     },
+  },
+};
+
+/**
+ * The modules a facility does not run (`FR-BRD-11`, migration 0047).
+ *
+ * A diagnostic centre keeps no pharmacy shelf; a small clinic has no ward.
+ * Each holds nothing of what is off here (the centre stocks no medicine,
+ * `data/beds.ts` gives the clinic no bed), so the demonstration has two
+ * facilities whose settings and whose workspace on the platform's screen show
+ * a module switched off. Every other facility runs everything, which is the
+ * ordinary state.
+ *
+ * The centre's beds stay on though it has none: "runs beds and has none" is a
+ * state of its own, which a card says as zero and not as "not shared", and
+ * the bed tests stand on it.
+ */
+const MODULES_OFF: Readonly<Record<string, readonly string[]>> = {
+  'meghna-diagnostic': ['pharmacy'],
+  'buriganga-clinic': ['beds'],
+};
+
+/**
+ * The live figures a facility does not share with the network (`FR-NET-04`,
+ * migration 0048).
+ *
+ * One facility keeps one figure, so the demonstration shows what that looks
+ * like from both sides: the clinic's settings have the switch off, and its
+ * card in the patient app says its serial figures are not shared, where
+ * every other card gives a count. Its doctors, when they sit and its
+ * chambers are all still there to book. Every other facility shares
+ * everything, which is the ordinary state.
+ */
+const UNPUBLISHED: Readonly<Record<string, readonly string[]>> = {
+  'buriganga-clinic': ['serials'],
+};
+
+/**
+ * Where each facility's agreement stands (`FR-SUP-04`, migration 0051).
+ *
+ * A record on the platform's screen and nothing else: it switches no module
+ * and unlists nobody. Most are active, which is the ordinary state; the
+ * centre is still in its trial, and the clinic is overdue with a note, so the
+ * demonstration shows the two states somebody at `S-B-12` has to act on. No
+ * plan and no amount, here or anywhere (`CLAUDE.md` §1.2).
+ */
+const AGREEMENTS: Readonly<
+  Record<string, { readonly state: string; readonly note: string | null; readonly daysAgo: number }>
+> = {
+  'shapla-general': { state: 'active', note: null, daysAgo: 12 },
+  'padma-specialised': { state: 'active', note: null, daysAgo: 12 },
+  'karnaphuli-general': { state: 'active', note: null, daysAgo: 12 },
+  'jamuna-medical-college': { state: 'active', note: null, daysAgo: 12 },
+  'buriganga-clinic': {
+    state: 'overdue',
+    note: 'নবায়নের কাগজ এখনো আসেনি, প্রশাসককে ফোন করা হয়েছে (ডেমো)',
+    daysAgo: 3,
   },
 };
 
@@ -159,6 +226,7 @@ export const seed01Hospitals: SeedModule = {
   writes: [
     'hospitals',
     'hospital_settings',
+    'hospital_logos',
     'departments',
     'capabilities',
     'staff_users',
@@ -195,10 +263,20 @@ export const seed01Hospitals: SeedModule = {
       facility.thana,
       facility.addressBn,
       facility.addressEn,
+      facility.descriptionBn,
+      facility.descriptionEn,
       facility.lat,
       facility.lng,
       facility.phone,
       facility.emergencyPhone,
+      // Not named above: still in its trial, set by nobody yet.
+      AGREEMENTS[facility.slug]?.state ?? 'trial',
+      AGREEMENTS[facility.slug]?.note ?? null,
+      AGREEMENTS[facility.slug] === undefined
+        ? null
+        : new Date(
+            Date.parse(now) - (AGREEMENTS[facility.slug]?.daysAgo ?? 0) * 86_400_000,
+          ).toISOString(),
     ]);
 
     await insertRows(
@@ -215,10 +293,15 @@ export const seed01Hospitals: SeedModule = {
           'thana',
           'address_bn',
           'address_en',
+          'description_bn',
+          'description_en',
           'lat',
           'lng',
           'phone',
           'emergency_phone',
+          'agreement_state',
+          'agreement_note',
+          'agreement_changed_at',
           'is_live',
           'lifecycle',
           'onboarded_at',
@@ -397,6 +480,10 @@ export const seed01Hospitals: SeedModule = {
         // and an empty one is what `readRefundPolicy` reads as "no policy".
         JSON.stringify(REFUND_POLICIES[facility.slug] ?? {}),
         BRANDS[facility.slug] === undefined ? null : JSON.stringify(BRANDS[facility.slug]),
+        // A text array, written the way PostgreSQL reads one.
+        `{${(MODULES_OFF[facility.slug] ?? []).join(',')}}`,
+        `{${(UNPUBLISHED[facility.slug] ?? []).join(',')}}`,
+        ARRIVAL_WINDOWS.has(facility.slug),
         admins.get(facility.slug) ?? null,
       ];
     });
@@ -404,8 +491,48 @@ export const seed01Hospitals: SeedModule = {
     await insertRows(
       client,
       'hospital_settings',
-      { columns: ['hospital_id', 'numeral_style', 'refund_policy', 'brand', 'created_by'] },
+      {
+        columns: [
+          'hospital_id',
+          'numeral_style',
+          'refund_policy',
+          'brand',
+          'modules_off',
+          'unpublished',
+          'arrival_windows',
+          'created_by',
+        ],
+      },
       settingsRows,
+      '',
+    );
+
+    // --- hospital_logos ----------------------------------------------------
+    //
+    // A mark for each facility that has colours of its own (`FR-BRD-06`), in
+    // its main colour, so that the logo on a card, in the portal's header and
+    // on the settings screen is something to look at. The others have none,
+    // which is the ordinary state and the one a card has to look right in.
+    const logoRows: unknown[][] = [];
+    for (const facility of DEMO_FACILITIES) {
+      const brand = BRANDS[facility.slug];
+      const colour = brand?.colors['brand-600'];
+      const hospitalId = facilities.get(facility.slug);
+      if (colour === undefined || hospitalId === undefined) continue;
+      const bytes = markPng(colour);
+      logoRows.push([
+        hospitalId,
+        'image/png',
+        bytes,
+        createHash('sha256').update(bytes).digest('hex'),
+        admins.get(facility.slug) ?? null,
+      ]);
+    }
+    await insertRows(
+      client,
+      'hospital_logos',
+      { columns: ['hospital_id', 'content_type', 'bytes', 'sha256', 'created_by'] },
+      logoRows,
       '',
     );
 
@@ -472,6 +599,95 @@ export const seed01Hospitals: SeedModule = {
         columns: ['hospital_id', 'kind', 'is_available', 'updated_by', 'created_at', 'updated_at'],
       },
       capabilityRows,
+      '',
+    );
+
+    // --- audit_log: each workspace's trail of changes -----------------------
+    //
+    // What a platform administrator reads on a workspace (`FR-ONB-07`,
+    // `LIST-B12-TRAIL`): how the hospital was brought on. The platform made
+    // the workspace; the hospital's administrator set it up and asked for
+    // review; the platform verified a doctor and approved it, twelve days ago,
+    // which is `onboarded_at` above. Then whatever the tables above say was
+    // set afterwards: a module switched off, a figure kept back, an agreement
+    // recorded. Organisational changes only, as every row of this trail is:
+    // nothing here names a patient.
+    const minute = 60_000;
+    const day = 24 * 60 * minute;
+    const at = (daysAgo: number, minutesLater = 0): string =>
+      new Date(Date.parse(now) - daysAgo * day + minutesLater * minute).toISOString();
+
+    const trailRows: unknown[][] = [];
+    for (const facility of DEMO_FACILITIES) {
+      const hospitalId = facilities.get(facility.slug);
+      const adminId = admins.get(facility.slug) ?? null;
+      if (hospitalId === undefined) throw new Error(`No id for ${facility.slug}.`);
+
+      const steps: [string, string | null, string, string][] = [
+        ['workspace_created', platformId, 'hospitals', at(14)],
+        ['profile', adminId, 'hospitals', at(13, 20)],
+        ['department_added', adminId, 'departments', at(13, 32)],
+        ['doctor_added', adminId, 'doctor_hospitals', at(13, 47)],
+        ['schedule_added', adminId, 'session_templates', at(13, 58)],
+        ['staff_added', adminId, 'staff_users', at(13, 75)],
+        ...(facility.capabilities.length > 0
+          ? [
+              ['capabilities_declared', adminId, 'capabilities', at(13, 90)] as [
+                string,
+                string | null,
+                string,
+                string,
+              ],
+            ]
+          : []),
+        ['review_requested', adminId, 'hospitals', at(12, -180)],
+        ['doctor_verified', platformId, 'doctors', at(12, -45)],
+        ['workspace_approve', platformId, 'hospitals', at(12)],
+      ];
+      if ((MODULES_OFF[facility.slug] ?? []).length > 0) {
+        steps.push(['modules', platformId, 'hospital_settings', at(12, 10)]);
+      }
+      if ((UNPUBLISHED[facility.slug] ?? []).length > 0) {
+        steps.push(['publishing', adminId, 'hospital_settings', at(9, 30)]);
+      }
+      const agreement = AGREEMENTS[facility.slug];
+      if (agreement !== undefined) {
+        steps.push([
+          `agreement_${agreement.state}`,
+          platformId,
+          'hospitals',
+          at(agreement.daysAgo),
+        ]);
+      }
+
+      for (const [change, actor, table, when] of steps) {
+        trailRows.push([
+          actor,
+          hospitalId,
+          'SETTINGS_CHANGE',
+          table,
+          hospitalId,
+          JSON.stringify({ change, ...DEMO_MARKER }),
+          when,
+        ]);
+      }
+    }
+
+    await insertRows(
+      client,
+      'audit_log',
+      {
+        columns: [
+          'actor_staff_id',
+          'hospital_id',
+          'action',
+          'subject_table',
+          'subject_id',
+          'meta',
+          'created_at',
+        ],
+      },
+      trailRows,
       '',
     );
 

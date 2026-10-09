@@ -51,7 +51,13 @@ x-api-env: &api-env
   # How many people one address stands for (DEPLOY.md §S2). 1 unless the
   # hospital's patients book from the hospital's own network.
   ADDRESS_RATE_LIMIT_FACTOR: ${ADDRESS_RATE_LIMIT_FACTOR:-1}
+  GUEST_BOOKINGS_PER_PHONE_PER_DAY: ${GUEST_BOOKINGS_PER_PHONE_PER_DAY:-10}
+  # The same allowance the backup container checks itself against: `/readyz`
+  # reports a backup older than this (plan I2).
+  BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-26}
   EXTRA_ALLOWED_ORIGINS: ${EXTRA_ALLOWED_ORIGINS:-}
+  # The platform's own domain: <code>.<this> is a hospital's portal (FR-BRD-07).
+  PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-}
   MAPPING_PROVIDER: ${MAPPING_PROVIDER:-off}
   MAPPING_API_KEY: ${MAPPING_API_KEY:-}
   MAPPING_MODEL: ${MAPPING_MODEL:-claude-opus-5-5}
@@ -129,6 +135,8 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${API_ORIGIN}/api/v1
         NEXT_PUBLIC_SOCKET_URL: ${API_ORIGIN}
+        # The same value the API has, baked in when the app is built.
+        NEXT_PUBLIC_PLATFORM_DOMAIN: ${PLATFORM_DOMAIN:-}
     restart: unless-stopped
     logging: *logging
     depends_on:
@@ -176,6 +184,7 @@ services:
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       BACKUP_AT_UTC_HOUR: ${BACKUP_AT_UTC_HOUR:-20}
       BACKUP_VERIFY_RESTORE: ${BACKUP_VERIFY_RESTORE:-true}
+      BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-26}
       # Set only when the host names a second location: with none, the script
       # says so and reports every run as failing, rather than copying a backup
       # onto the disk it is a backup of and calling that a second copy.

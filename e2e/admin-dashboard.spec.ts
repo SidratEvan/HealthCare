@@ -50,6 +50,22 @@ test.describe('the hospital dashboard (S-B-10)', () => {
     await expect(page.getByTestId('admin-seen-value')).toHaveText(ANY_DIGIT);
   });
 
+  test('opens on the hospital now: five live figures with their age (FR-ADM-12)', async ({
+    page,
+  }) => {
+    await openThroughPicker(page);
+
+    const now = page.getByTestId('admin-now');
+    await expect(now).toBeVisible();
+    await expect(now.getByTestId('freshness').first()).toBeVisible();
+    for (const tile of ['doctors', 'waiting', 'appointments', 'beds', 'emergency']) {
+      await expect(now.getByTestId(`admin-now-${tile}`)).toBeVisible();
+    }
+    // Live counts, in Bengali digits, for the figures every hospital has.
+    await expect(now.getByTestId('admin-now-doctors')).toContainText(ANY_DIGIT);
+    await expect(now.getByTestId('admin-now-appointments')).toContainText(ANY_DIGIT);
+  });
+
   test('shows every section, each with its own age (CLAUDE.md §5.8)', async ({ page }) => {
     await openThroughPicker(page);
 

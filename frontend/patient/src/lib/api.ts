@@ -36,6 +36,15 @@ const BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1
 /** Where the socket connects. Same origin as the API, without the path. */
 export const SOCKET_URL = process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:4000';
 
+/**
+ * Where a hospital's logo is (`FR-BRD-06`). The version is part of the
+ * address, so a changed logo is a new address and an unchanged one is kept by
+ * the phone.
+ */
+export function logoUrl(hospitalId: string, version: string): string {
+  return `${BASE}/hospitals/${hospitalId}/logo?v=${encodeURIComponent(version)}`;
+}
+
 /** No token: every discovery surface is public, and booking is guest-first. */
 export const api = new ApiClient({ baseUrl: BASE, getToken: () => null });
 
@@ -136,6 +145,38 @@ export interface BookingResponse {
   };
   readonly trackingUrl: string | null;
   readonly paid: boolean;
+  /**
+   * The payment the booking started (plan H3): where to go to pay and until
+   * when the serial is held for it. Null when none was written.
+   */
+  readonly payment?: BookingPaymentView | null;
+}
+
+/** A booking's own payment, as the patient sees it (`FR-PAY-08`). */
+export interface BookingPaymentView {
+  readonly id: string;
+  readonly method: string;
+  readonly state: string;
+  readonly redirectUrl: string | null;
+  readonly holdUntil: string | null;
+  /** What happens to the serial if the hold runs out. */
+  readonly afterHold?: 'counter' | 'released';
+}
+
+/** What a payment is after the server asked the provider (`S-A-07p`, `FR-PAY-09`). */
+export interface PaymentConfirmation {
+  readonly payment: {
+    readonly id: string;
+    readonly state: string;
+    readonly method: string;
+    readonly amountPoisha: number;
+    readonly holdUntil: string | null;
+    readonly failureReason: string | null;
+  };
+  readonly serial: 'held' | 'confirmed' | 'counter' | 'released' | 'cancelled';
+  /** Whether paying at the counter may be chosen instead. */
+  readonly counterAllowed: boolean;
+  readonly serverTs: string;
 }
 
 /**
@@ -158,6 +199,8 @@ export async function book(input: {
   readonly idempotencyKey: string;
   /** From `MOD-GST-OTP`, when the deployment asks a guest to prove the phone (`FR-GST-03`). */
   readonly guestToken?: string | null;
+  /** `CHIP-A07C-WINDOW` (`FR-PAT-28`): the preferred hour's start, or none. */
+  readonly arrivalWindowStart?: string | null;
 }): Promise<BookingResponse> {
   return await callerFor(input.guestToken).post<BookingResponse>(
     '/bookings',
@@ -166,6 +209,9 @@ export async function book(input: {
       method: input.method,
       guest: input.guest,
       ...(input.reason === undefined || input.reason === '' ? {} : { reason: input.reason }),
+      ...(input.arrivalWindowStart === undefined || input.arrivalWindowStart === null
+        ? {}
+        : { arrivalWindowStart: input.arrivalWindowStart }),
     },
     input.idempotencyKey,
   );
@@ -235,8 +281,10 @@ export async function openTrackingLink(token: string): Promise<TrackingLinkView>
  * which is the honest fallback rather than a guessed coordinate.
  */
 export async function searchMedicines(q: string): Promise<readonly MedicineAvailability[]> {
+  // Scoped: inside a hospital's own portal the answer is about that
+  // hospital's pharmacy and no other (`FR-BRD-09`).
   const result = await api.get<{ medicines: readonly MedicineAvailability[] }>(
-    `/medicines?q=${encodeURIComponent(q)}`,
+    scopedPath('/medicines', new URLSearchParams({ q })),
   );
   return result.medicines;
 }
@@ -252,7 +300,19 @@ export async function openReportFile(token: string, reportId: string): Promise<s
   const result = await api.get<{ url: string }>(
     `/guest/link/${encodeURIComponent(token)}/reports/${encodeURIComponent(reportId)}`,
   );
-  return result.url;
+  return fileHref(result.url);
+}
+
+/**
+ * A stored file's signed address, as something a tab can open.
+ *
+ * The demonstration's store and a server's own disk answer with a path on the
+ * API (`/files/<key>?expires=&sig=`), which is under the versioned API, not
+ * under this app. Opened as it came, it was this app's address and a page
+ * that does not exist; a bucket's full address is left as it is.
+ */
+export function fileHref(url: string): string {
+  return url.startsWith('/') ? `${BASE}${url}` : url;
 }
 
 /**
@@ -279,6 +339,53 @@ export async function declareLate(input: {
     { expectedMinutes: input.expectedMinutes, clientEventId: input.clientEventId },
     input.idempotencyKey,
   );
+}
+
+/**
+ * `POST /bookings/:id/payments/:paymentId/confirm` — `S-A-07p` (plan H3).
+ * The provider's word from the return address goes along only to choose how
+ * the server asks; the answer is the server's (`FR-PAY-09`).
+ */
+export async function confirmPayment(input: {
+  readonly bookingId: string;
+  readonly paymentId: string;
+  readonly token: string;
+  readonly hint: 'success' | 'failure' | 'cancel' | null;
+}): Promise<PaymentConfirmation> {
+  return await authed(input.token).post<PaymentConfirmation>(
+    `/bookings/${input.bookingId}/payments/${input.paymentId}/confirm`,
+    { hint: input.hint },
+  );
+}
+
+/**
+ * `POST /payments/intent` — another attempt at paying for a held serial
+ * (`BTN-A07P-RETRY`, `BTN-A07D-PAY`), or paying at the counter instead
+ * (`BTN-A07P-COUNTER`). A new key each time: each is a new attempt.
+ */
+export async function payAgain(input: {
+  readonly bookingId: string;
+  readonly token: string;
+  readonly method: string;
+}): Promise<{ readonly payment: BookingPaymentView; readonly redirectUrl: string | null }> {
+  const key = crypto.randomUUID();
+  const answer = await authed(input.token).post<{
+    readonly payment: {
+      readonly id: string;
+      readonly method: string;
+      readonly state: string;
+      readonly holdUntil: string | null;
+    };
+    readonly redirectUrl: string | null;
+  }>(
+    '/payments/intent',
+    { bookingId: input.bookingId, method: input.method, idempotencyKey: key },
+    key,
+  );
+  return {
+    payment: { ...answer.payment, redirectUrl: answer.redirectUrl },
+    redirectUrl: answer.redirectUrl,
+  };
 }
 
 /** `POST /bookings/:id/cancel` — `MOD-A08-CANCEL` (`FR-PAT-23`). */

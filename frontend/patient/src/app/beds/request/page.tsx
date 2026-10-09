@@ -113,7 +113,7 @@ export default function Page(): ReactNode {
   }, [token, settled, load]);
 
   return (
-    <TabScreen title={tp('requestStatus', locale)}>
+    <TabScreen title={tp('requestStatus', locale)} back={{ fallback: '/beds' }}>
       <Status
         loaded={loaded}
         now={now}

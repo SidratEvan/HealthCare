@@ -127,6 +127,47 @@ describe('migration files (DATABASE.md §7)', () => {
       '0037',
       // V4.1: a hospital's confirmed column mappings, by heading row (FR-IMP-20).
       '0038',
+      // Plan A2: a bed's version, raised by the database on every change (SY-09).
+      '0039',
+      // Plan A3: the same for an emergency case.
+      '0040',
+      // Plan A5: a booking remembers the request that made it (FR-QUE-51).
+      '0041',
+      // Plan A6: a sign-in's identity across the rotation of its tokens (FR-SEC-06).
+      '0042',
+      // Plan B1: hospitals kept apart by the database (FR-SEC-11).
+      '0043',
+      // Plan B3: a person's clinical record is their own at the database (FR-SEC-11).
+      '0044',
+      // Plan C1: a hospital's description and logo (FR-BRD-06).
+      '0045',
+      // Plan C2: a hospital's own domain for its portal (FR-BRD-07).
+      '0046',
+      // Plan C4: the modules a hospital runs (FR-BRD-11).
+      '0047',
+      '0048',
+      '0049',
+      // Plan F2c: what a patient was last told (FR-QUE-15).
+      '0050',
+      // Plan G1: a hospital's agreement state and what it has used (FR-SUP-04).
+      '0051',
+      // Plan G2: a hospital's messages by outcome and its late actions (FR-SUP-06).
+      '0052',
+      // Plan H1: a message's tries and when it is next due (FR-NOT-06, FR-NOT-07).
+      '0053',
+      // Plan H2: a message found by its aggregator's reference (FR-NOT-06).
+      '0054',
+      // Plan I2: what the nightly backup did, where /readyz can read it (FR-SUP-06).
+      '0055',
+      // Plan I3: a person's bookings, payments and messages are their own (FR-SEC-11).
+      '0056',
+      '0057',
+      '0058',
+      '0059',
+      '0060',
+      '0061',
+      '0062',
+      '0063',
     ]);
   });
 

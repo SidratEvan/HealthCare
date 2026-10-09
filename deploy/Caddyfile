@@ -19,3 +19,29 @@
 	# The realtime socket upgrades on this same address (BACKEND.md §6).
 	reverse_proxy api:4000
 }
+
+# A hospital's portal is the patient app at another name (FR-BRD-07, plan C2):
+# <hospital code>.<PLATFORM_DOMAIN>, or a domain the hospital owns and a
+# platform administrator has recorded. The app and the API already answer for
+# those names; this file has to as well, and that part is yours, because it
+# needs DNS and certificates the product cannot arrange:
+#
+#   - for every hospital under the platform's domain, a wildcard record and a
+#     wildcard certificate (Caddy gets one through a DNS challenge, which needs
+#     the build of Caddy with your DNS provider's module):
+#
+#       *.medlivebd.example {
+#       	encode gzip
+#       	reverse_proxy patient:3000
+#       }
+#
+#   - for a hospital's own domain, once it points here, a site of its own,
+#     for which Caddy obtains the certificate itself:
+#
+#       portal.example-hospital.com.bd {
+#       	encode gzip
+#       	reverse_proxy patient:3000
+#       }
+#
+# Names under the platform's domain that are the platform's own (the console,
+# the API) keep their own sites above, and a more specific site wins.

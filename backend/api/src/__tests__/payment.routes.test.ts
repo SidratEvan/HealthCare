@@ -208,22 +208,32 @@ describe('a retry never double-charges (FR-PAY-06)', () => {
     expect(await paymentCount(bookingId)).toBe(before + 1);
   });
 
-  it('makes a separate payment for a different key', async () => {
-    // The key is what makes a retry safe; two genuinely different attempts
-    // are two payments, and conflating them would be the opposite bug.
+  it('refuses a second payment under a new key once the serial is paid (FR-PAY-10)', async () => {
+    // The key makes a retry safe; a genuinely new attempt is a new payment,
+    // until the serial is paid for. Since plan H3 a paid serial takes no
+    // more money: under the mock the first settles at once, so the second
+    // key is refused and nothing is written.
     const { bookingId, token } = await payableBooking();
     const before = await paymentCount(bookingId);
 
-    for (const key of [randomUUID(), randomUUID()]) {
-      await request(app)
-        .post(`${BASE}/payments/intent`)
-        .set('Authorization', bearer(token))
-        .set('Idempotency-Key', key)
-        .send({ bookingId, method: 'bkash', idempotencyKey: key })
-        .expect(201);
-    }
+    const first = randomUUID();
+    await request(app)
+      .post(`${BASE}/payments/intent`)
+      .set('Authorization', bearer(token))
+      .set('Idempotency-Key', first)
+      .send({ bookingId, method: 'bkash', idempotencyKey: first })
+      .expect(201);
 
-    expect(await paymentCount(bookingId)).toBe(before + 2);
+    const second = randomUUID();
+    const refused = await request(app)
+      .post(`${BASE}/payments/intent`)
+      .set('Authorization', bearer(token))
+      .set('Idempotency-Key', second)
+      .send({ bookingId, method: 'bkash', idempotencyKey: second })
+      .expect(409);
+    expect(refused.body.error.code).toBe('PAYMENT_ALREADY_MADE');
+
+    expect(await paymentCount(bookingId)).toBe(before + 1);
   });
 });
 
@@ -373,22 +383,60 @@ describe('the auth matrix', () => {
     });
 
     it('refuses an account holder who does not own it', async () => {
-      expect(await read(booking(0), await patientToken())).toBe(403);
+      // Not 403: another person's booking does not exist for this caller, so it
+      // is not found (`FR-SEC-11`, migration 0056). The refusal is the database's.
+      expect(await read(booking(0), await patientToken())).toBe(404);
     });
 
     it('refuses staff at another hospital', async () => {
       const elsewhere = await otherHospitalId(fixture.hospitalId);
-      expect(await read(booking(0), await staffToken(['hospital_admin'], elsewhere))).toBe(403);
+      // Not 403: another hospital's row does not exist for this caller, so it is
+      // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+      expect(await read(booking(0), await staffToken(['hospital_admin'], elsewhere))).toBe(404);
     });
 
     it('refuses a national account', async () => {
-      expect(await read(booking(0), await nationalToken())).toBe(403);
+      // Not 403: another hospital's row does not exist for this caller, so it is
+      // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+      expect(await read(booking(0), await nationalToken())).toBe(404);
     });
 
     it('refuses anybody not signed in', async () => {
       const response = await request(app).get(`${BASE}/bookings/${booking(0)}/payments`);
       expect(response.status).toBe(401);
     });
+  });
+
+  it('refuses an account paying for a booking that is not its own, and writes nothing', async () => {
+    // Until the tenant matrix of plan B2 only a tracking link was held to its
+    // booking: an account could start a payment against anybody's, and the
+    // answer told it that booking's fee.
+    const { bookingId } = await payableBooking();
+    const somebodyElse = await sql<{ owner_user_id: string }>`
+      SELECT owner_user_id FROM patients
+       WHERE owner_user_id IS NOT NULL AND deleted_at IS NULL
+         AND owner_user_id NOT IN (
+               SELECT p.owner_user_id FROM bookings b JOIN patients p ON p.id = b.patient_id
+                WHERE b.id = ${bookingId}::uuid AND p.owner_user_id IS NOT NULL)
+       ORDER BY created_at, id
+       LIMIT 1
+    `.execute(db);
+    const accountId = somebodyElse.rows[0]?.owner_user_id;
+    if (accountId === undefined) throw new Error('The seed should hold patient accounts.');
+
+    const before = await paymentCount(bookingId);
+    const key = randomUUID();
+    const response = await request(app)
+      .post(`${BASE}/payments/intent`)
+      .set('Authorization', bearer(await patientToken(accountId)))
+      .set('Idempotency-Key', key)
+      .send({ bookingId, method: 'at_hospital', idempotencyKey: key });
+
+    // Not 403: another person's booking does not exist for this caller, so it
+    // is not found (`FR-SEC-11`, migration 0056). The refusal is the database's.
+    expect(response.status).toBe(404);
+    expect(JSON.stringify(response.body)).not.toContain('amountPoisha');
+    expect(await paymentCount(bookingId)).toBe(before);
   });
 
   it('refuses staff paying, because paying is the patient’s', async () => {

@@ -12,6 +12,7 @@
  * else's queue are both refused here.
  */
 
+import { randomUUID } from 'node:crypto';
 import { createServer, type Server as HttpServer } from 'node:http';
 import { type AddressInfo } from 'node:net';
 
@@ -313,5 +314,265 @@ describe('the broadcast the product is built on (NFR-01)', () => {
     // Everything after the sequence it reported, and nothing it already had.
     expect(replayed.length).toBeGreaterThan(0);
     for (const seq of replayed) expect(seq).toBeGreaterThan(first.seq);
+  });
+});
+
+describe('a statement of the queue names the actions it took in (SY-08)', () => {
+  const actor = (): Parameters<typeof queueService.appendBatch>[0]['actor'] => ({
+    kind: 'staff' as const,
+    staffUserId: fixture.receptionistId as never,
+    role: 'receptionist' as const,
+  });
+
+  interface Named {
+    readonly seq: number;
+    readonly applied: readonly { clientEventId: string; seq: number; eventId: string }[];
+  }
+
+  it('a broadcast names the actions of the write behind it, and nothing older', async () => {
+    const socket = open(await staffToken());
+    await once(socket, 'connect');
+    socket.emit('session:subscribe', { sessionId: fixture.sessionId });
+    // The catch-up for a console waiting on nothing names nothing.
+    expect((await once<Named>(socket, 'queue.updated')).applied).toEqual([]);
+
+    const arrived = randomUUID();
+    const first$ = once<Named>(socket, 'queue.updated');
+    const batch = await queueService.appendBatch({
+      sessionId: fixture.sessionId,
+      actor: actor(),
+      entries: [
+        {
+          clientEventId: arrived,
+          type: 'DOCTOR_ARRIVED',
+          payload: { arrivedAt: new Date().toISOString(), minutesLate: 0 },
+          clientTs: new Date().toISOString(),
+        },
+      ],
+    });
+    const first = await first$;
+    const accepted = batch.outcomes[0];
+    if (accepted?.kind !== 'accepted') throw new Error('the batch was refused');
+    // By the console's own key, with what the log made of it: the same thing
+    // the answer says, by the other road.
+    expect(first.applied).toEqual([
+      { clientEventId: arrived, seq: accepted.seq, eventId: accepted.eventId },
+    ]);
+    expect(first.seq).toBe(accepted.seq);
+
+    // The next write names its own action only.
+    const delayed = randomUUID();
+    const second$ = once<Named>(socket, 'queue.updated');
+    await queueService.appendBatch({
+      sessionId: fixture.sessionId,
+      actor: actor(),
+      entries: [
+        {
+          clientEventId: delayed,
+          type: 'DELAY_DECLARED',
+          payload: { minutes: 30, reason: null, declaredBy: 'reception' },
+          clientTs: new Date().toISOString(),
+        },
+      ],
+    });
+    const second = await second$;
+    expect(second.applied.map((entry) => entry.clientEventId)).toEqual([delayed]);
+    expect(second.seq).toBeGreaterThan(first.seq);
+  });
+
+  it('a catch-up names the unanswered actions the log holds, and only those', async () => {
+    const taken = randomUUID();
+    const batch = await queueService.appendBatch({
+      sessionId: fixture.sessionId,
+      actor: actor(),
+      entries: [
+        {
+          clientEventId: taken,
+          type: 'DOCTOR_ARRIVED',
+          payload: { arrivedAt: new Date().toISOString(), minutesLate: 0 },
+          clientTs: new Date().toISOString(),
+        },
+      ],
+    });
+    const accepted = batch.outcomes[0];
+    if (accepted?.kind !== 'accepted') throw new Error('the batch was refused');
+
+    // A console reconnects still waiting on two actions: the one above, whose
+    // answer it never got, and one that never reached the server.
+    const neverSent = randomUUID();
+    const socket = open(await staffToken());
+    await once(socket, 'connect');
+    socket.emit('session:subscribe', {
+      sessionId: fixture.sessionId,
+      unanswered: [taken, neverSent, 'not-a-key', 42],
+    });
+    const caughtUp = await once<Named>(socket, 'queue.updated');
+    expect(caughtUp.applied).toEqual([
+      { clientEventId: taken, seq: accepted.seq, eventId: accepted.eventId },
+    ]);
+    // Named beside a queue that contains it.
+    expect(caughtUp.seq).toBeGreaterThanOrEqual(accepted.seq);
+  });
+
+  it('does not name another chamber’s action, whatever key is asked about', async () => {
+    const elsewhere = await createQueueFixture(2);
+    const key = randomUUID();
+    await queueService.appendBatch({
+      sessionId: elsewhere.sessionId,
+      actor: {
+        kind: 'staff' as const,
+        staffUserId: elsewhere.receptionistId as never,
+        role: 'receptionist' as const,
+      },
+      entries: [
+        {
+          clientEventId: key,
+          type: 'DOCTOR_ARRIVED',
+          payload: { arrivedAt: new Date().toISOString(), minutesLate: 0 },
+          clientTs: new Date().toISOString(),
+        },
+      ],
+    });
+
+    const socket = open(await staffToken());
+    await once(socket, 'connect');
+    socket.emit('session:subscribe', { sessionId: fixture.sessionId, unanswered: [key] });
+    expect((await once<Named>(socket, 'queue.updated')).applied).toEqual([]);
+  });
+});
+
+describe('a patient’s phone is sent a queue that names nobody (plan I2c, handover 30)', () => {
+  const actor = {
+    kind: 'staff' as const,
+    staffUserId: '' as never,
+    role: 'receptionist' as const,
+  };
+
+  /** A guest booking in the fixture's chamber, and the link a phone follows it with. */
+  async function guestOnPhone(): Promise<{ bookingId: string; link: string }> {
+    const phone = `+88019${String(Math.floor(Math.random() * 90_000_000) + 10_000_000)}`;
+    const response = await request(httpServer)
+      .post('/api/v1/bookings')
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        sessionId: fixture.sessionId,
+        method: 'at_hospital',
+        guest: { name: 'সালমা বেগম (ডেমো)', phone, ageYears: 41, sex: 'female' },
+      });
+    expect(response.status).toBe(201);
+    const bookingId = response.body.data.bookingId as string;
+    const row = await sql<{ booked_by_guest_id: string }>`
+      SELECT booked_by_guest_id FROM bookings WHERE id = ${bookingId}::uuid
+    `.execute(db);
+    const link = await signToken({
+      kind: 'access',
+      claims: { sub: row.rows[0]?.booked_by_guest_id ?? '', kind: 'guest', bookingId },
+    });
+    return { bookingId, link };
+  }
+
+  /** Every booking and patient id in the chamber, as the database holds them. */
+  async function everyoneHere(): Promise<string[]> {
+    const rows = await sql<{ id: string; patient_id: string }>`
+      SELECT id, patient_id FROM bookings WHERE session_id = ${fixture.sessionId}::uuid
+    `.execute(db);
+    return rows.rows.flatMap((row) => [row.id, row.patient_id]);
+  }
+
+  interface Statement {
+    applied: unknown[];
+    data: {
+      state: { entries: { bookingId: string; serial: number }[] };
+      etas: { bookingId: string }[];
+    };
+  }
+
+  it('hears every tap, finds its own row by its ticket, and holds no other person’s id', async () => {
+    const mine = await guestOnPhone();
+    const view = await request(httpServer)
+      .get(`/api/v1/bookings/${mine.bookingId}`)
+      .set('Authorization', `Bearer ${mine.link}`);
+    expect(view.status).toBe(200);
+    const ticket = view.body.data.ticket as string;
+    expect(ticket).not.toBe(mine.bookingId);
+
+    const phone = open(mine.link);
+    const desk = open(await staffToken());
+    await Promise.all([once(phone, 'connect'), once(desk, 'connect')]);
+    phone.emit('session:subscribe', { sessionId: fixture.sessionId });
+    desk.emit('session:subscribe', { sessionId: fixture.sessionId });
+    const [caughtUp] = await Promise.all([
+      once<Statement>(phone, 'queue.updated'),
+      once(desk, 'queue.updated'),
+    ]);
+
+    const phoneHears = once<Statement>(phone, 'queue.updated');
+    const deskHears = once<Statement>(desk, 'queue.updated');
+    await queueService.appendEvent({
+      sessionId: fixture.sessionId,
+      type: 'DOCTOR_ARRIVED',
+      payload: { arrivedAt: new Date().toISOString(), minutesLate: 0 },
+      actor: { ...actor, staffUserId: fixture.receptionistId as never },
+    });
+    const [heard, deskHeard] = await Promise.all([phoneHears, deskHears]);
+
+    // The broadcasts name nobody at all, the phone's own booking included.
+    const ids = await everyoneHere();
+    for (const said of [caughtUp, heard]) {
+      const sent = JSON.stringify(said);
+      for (const id of ids) expect(sent).not.toContain(id);
+    }
+    // The first paint carries the phone's own booking, and nobody else's.
+    const ownPatient = view.body.data.booking.patientId as string;
+    const others = ids.filter((id) => id !== mine.bookingId && id !== ownPatient);
+    const painted = JSON.stringify(view.body.data);
+    for (const id of others) expect(painted).not.toContain(id);
+
+    // Its own row and estimate, by the ticket it was given.
+    const row = heard.data.state.entries.find((entry) => entry.bookingId === ticket);
+    expect(row?.serial).toBe(view.body.data.booking.serial);
+    expect(heard.data.etas.some((eta) => eta.bookingId === ticket)).toBe(true);
+    expect(heard.applied).toEqual([]);
+
+    // Reception still holds the queue as it is.
+    expect(deskHeard.data.state.entries.map((entry) => entry.bookingId)).toContain(mine.bookingId);
+  });
+
+  it('is caught up with the queue as it stands, never with the log’s events', async () => {
+    const mine = await guestOnPhone();
+    const first = await queueService.appendEvent({
+      sessionId: fixture.sessionId,
+      type: 'DOCTOR_ARRIVED',
+      payload: { arrivedAt: new Date().toISOString(), minutesLate: 0 },
+      actor: { ...actor, staffUserId: fixture.receptionistId as never },
+    });
+    await queueService.callNext({
+      sessionId: fixture.sessionId,
+      actor: { ...actor, staffUserId: fixture.receptionistId as never },
+    });
+
+    const phone = open(mine.link);
+    await once(phone, 'connect');
+    const replayed: unknown[] = [];
+    phone.on('queue.event', (payload: unknown) => {
+      replayed.push(payload);
+    });
+    phone.emit('session:subscribe', { sessionId: fixture.sessionId, lastSeq: first.seq });
+    const state = await once<Statement>(phone, 'queue.updated');
+
+    expect(replayed).toEqual([]);
+    const sent = JSON.stringify(state);
+    for (const id of await everyoneHere()) expect(sent).not.toContain(id);
+  });
+
+  it('staff are shown a booking with its own id, and the queue as reception holds it', async () => {
+    const mine = await guestOnPhone();
+    const response = await request(httpServer)
+      .get(`/api/v1/bookings/${mine.bookingId}`)
+      .set('Authorization', `Bearer ${await staffToken()}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data.ticket).toBe(mine.bookingId);
+    const entries = response.body.data.state.entries as { bookingId: string }[];
+    expect(entries.map((entry) => entry.bookingId)).toContain(mine.bookingId);
   });
 });

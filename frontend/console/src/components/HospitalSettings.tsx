@@ -27,14 +27,17 @@
 
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
+import { retryDelayMs } from '@platform/client';
 import {
   BED_KINDS,
   CAPABILITY_KINDS,
   FACILITY_ROLES,
+  isHospitalModule,
   missingForReview,
   setupChecklist,
   type ChecklistItemKey,
   type FacilityRole,
+  type HospitalModule,
   type OrgLifecycle,
 } from '@platform/domain';
 import {
@@ -68,12 +71,23 @@ import {
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { DemoBanner } from '@/components/DemoBanner';
+import { DeskSettings } from '@/components/DeskSettings';
+import { HospitalFace } from '@/components/HospitalFace';
+import {
+  DepartmentRow,
+  IdentityForm,
+  WardBeds,
+  WardEditor,
+} from '@/components/SettingsCorrections';
+import { WorkspaceBrandMark } from '@/components/WorkspaceBrandMark';
 import {
   expandBedLabels,
+  loadMonthOfMessages,
   loadSetup,
   settingsApi,
   signedInStaffId,
   takaToPoisha,
+  type MonthOfMessages,
   type SaveFailure,
   type Saved,
   type SettingsDoctor,
@@ -92,6 +106,18 @@ const TABS: readonly { readonly id: Tab; readonly key: ConsoleKey }[] = [
   { id: 'capabilities', key: 'settingsTabCapabilities' },
   { id: 'staff', key: 'settingsTabStaff' },
 ];
+
+/** A module's name, as the settings and the platform's screen say it. */
+export const MODULE_KEY: Readonly<Record<HospitalModule, ConsoleKey>> = {
+  queue: 'moduleQueue',
+  doctor: 'moduleDoctor',
+  beds: 'moduleBeds',
+  emergency: 'moduleEmergency',
+  lab: 'moduleLab',
+  pharmacy: 'modulePharmacy',
+  dashboard: 'moduleDashboard',
+  import: 'moduleImport',
+};
 
 const ROLE_KEY: Readonly<Record<FacilityRole, ConsoleKey>> = {
   receptionist: 'roleReceptionist',
@@ -144,16 +170,20 @@ function SettingsScreen(): ReactNode {
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const [tab, setTab] = useState<Tab>('profile');
   const [now, setNow] = useState(() => new Date());
+  /** Reads in a row that could not reach the server; spaces out the next one. */
+  const [unreached, setUnreached] = useState(0);
 
   const reload = useCallback(async () => {
     const answer = await loadSetup();
     if (answer === 'offline' || answer === 'error') {
       // What was on screen stays there, with its age.
       setState(answer);
+      if (answer === 'offline') setUnreached((count) => count + 1);
       return;
     }
     setSnapshot(answer);
     setLoadedAt(new Date(answer.serverTs));
+    setUnreached(0);
     setState('ready');
   }, []);
 
@@ -178,6 +208,22 @@ function SettingsScreen(): ReactNode {
       globalThis.removeEventListener('online', back);
     };
   }, [reload]);
+
+  // "Online" is the browser's word for a network being attached, not for the
+  // server being reachable: a router still dialling, a phone changing towers.
+  // One read on that announcement can fail, and the screen used to say offline
+  // from then until somebody reloaded it. So while it says offline and the
+  // browser says there is a network, it reads again, with the outbox's backoff
+  // (GR-03). With no network at all there is nothing to try; `back` starts it.
+  useEffect(() => {
+    if (state !== 'offline' || !globalThis.navigator.onLine) return undefined;
+    const timer = setTimeout(() => {
+      void reload();
+    }, retryDelayMs(unreached));
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [state, unreached, reload]);
 
   // The freshness line has to age with nothing else happening.
   useEffect(() => {
@@ -227,6 +273,15 @@ function SettingsScreen(): ReactNode {
   const offline = state === 'offline';
   const props: TabProps = { snapshot, offline, run };
 
+  // A module this hospital does not run has no tab here (`FR-BRD-11`): its
+  // wards and beds, and what it can treat in an emergency.
+  const modulesOff = snapshot.hospital.modulesOff;
+  const tabs = TABS.filter(
+    (entry) =>
+      !(entry.id === 'beds' && modulesOff.includes('beds')) &&
+      !(entry.id === 'capabilities' && modulesOff.includes('emergency')),
+  );
+
   return (
     <Shell snapshot={snapshot}>
       {offline ? (
@@ -258,7 +313,17 @@ function SettingsScreen(): ReactNode {
 
       <SetupStatus {...props} />
 
-      <Tabs selected={tab} onSelect={setTab} />
+      {modulesOff.length === 0 ? null : (
+        <p className="text-body-sm text-ink-secondary" data-testid="settings-modules-off">
+          {format('settingsModulesOff', locale, {
+            modules: modulesOff
+              .map((module) => (isHospitalModule(module) ? t(MODULE_KEY[module], locale) : module))
+              .join(', '),
+          })}
+        </p>
+      )}
+
+      <Tabs tabs={tabs} selected={tab} onSelect={setTab} />
 
       <div
         role="tabpanel"
@@ -298,7 +363,9 @@ function Shell({
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 p-6" data-testid="hospital-settings">
         <header className="flex flex-wrap items-baseline justify-between gap-3">
-          <div>
+          <div className="flex flex-col gap-2">
+            {/* FR-BRD-12 (plan K4): the hospital's own, powered by MedLiveBD. */}
+            <WorkspaceBrandMark locale={locale} />
             <h1 className="text-title-lg">{t('settingsTitle', locale)}</h1>
             {hospital === null ? null : (
               <p className="text-body-sm text-ink-muted">
@@ -311,20 +378,24 @@ function Shell({
           </div>
           <div className="flex items-center gap-3">
             <ConsoleLanguageSwitch className="" />
-            <a
-              href="/?view=admin"
-              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
-              data-testid="settings-back"
-            >
-              {t('settingsBackToDashboard', locale)}
-            </a>
-            <a
-              href="/?view=imports"
-              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
-              data-testid="settings-open-import"
-            >
-              {t('importOpen', locale)}
-            </a>
+            {hospital?.modulesOff.includes('dashboard') === true ? null : (
+              <a
+                href="/?view=admin"
+                className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
+                data-testid="settings-back"
+              >
+                {t('settingsBackToDashboard', locale)}
+              </a>
+            )}
+            {hospital?.modulesOff.includes('import') === true ? null : (
+              <a
+                href="/?view=imports"
+                className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
+                data-testid="settings-open-import"
+              >
+                {t('importOpen', locale)}
+              </a>
+            )}
           </div>
         </header>
 
@@ -340,6 +411,11 @@ const CHECK_LABEL: Readonly<Record<ChecklistItemKey, ConsoleKey>> = {
   doctors: 'settingsCountDoctors',
   schedules: 'settingsCountSchedules',
   staff: 'settingsCountStaff',
+  // Plan D2: what a patient needs to reach the place. A yes or a no, so the
+  // line has no number in it.
+  contact: 'settingsCountContact',
+  location: 'settingsCountLocation',
+  emergency_services: 'settingsCountEmergency',
   beds: 'settingsCountBeds',
   verified_doctors: 'settingsCountVerified',
 };
@@ -450,7 +526,9 @@ function SetupStatus({ snapshot, offline, run }: TabProps): ReactNode {
                       ? t('settingsCheckByPlatform', locale)
                       : item.required
                         ? t('settingsCheckMissing', locale)
-                        : t('settingsCheckOptional', locale)}
+                        : item.advised
+                          ? t('settingsCheckAdvised', locale)
+                          : t('settingsCheckOptional', locale)}
                 </Chip>
                 <span className="text-ink-secondary">
                   {format(CHECK_LABEL[item.key], locale, { count: num(item.count) })}
@@ -458,6 +536,14 @@ function SetupStatus({ snapshot, offline, run }: TabProps): ReactNode {
               </li>
             ))}
           </ul>
+
+          {/* Not asked for before review, and said plainly what a patient
+              loses without them (plan D2). */}
+          {items.some((item) => item.advised && !item.done) ? (
+            <p className="text-body-sm text-ink-secondary" data-testid="settings-advised">
+              {t('settingsAdvisedLine', locale)}
+            </p>
+          ) : null}
 
           {settingUp && missing.length > 0 ? (
             <p className="text-body-sm text-warn-700" data-testid="settings-missing">
@@ -482,9 +568,11 @@ function SetupStatus({ snapshot, offline, run }: TabProps): ReactNode {
 }
 
 function Tabs({
+  tabs,
   selected,
   onSelect,
 }: {
+  readonly tabs: typeof TABS;
   readonly selected: Tab;
   readonly onSelect: (tab: Tab) => void;
 }): ReactNode {
@@ -496,16 +584,16 @@ function Tabs({
       onKeyDown={(event) => {
         if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
         event.preventDefault();
-        const index = TABS.findIndex((entry) => entry.id === selected);
+        const index = tabs.findIndex((entry) => entry.id === selected);
         const next =
-          TABS[(index + (event.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length];
+          tabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length];
         if (next === undefined) return;
         onSelect(next.id);
         globalThis.document.getElementById(`settings-tab-${next.id}`)?.focus();
       }}
       className="flex flex-wrap gap-1 border-b border-line pb-2"
     >
-      {TABS.map((entry) => {
+      {tabs.map((entry) => {
         const active = entry.id === selected;
         return (
           <button
@@ -556,6 +644,15 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
   const [smsBudget, setSmsBudget] = useState(
     rules.smsBudgetMonthly === null ? '' : String(rules.smsBudgetMonthly),
   );
+  const [holdMinutes, setHoldMinutes] = useState(String(rules.paymentHoldMinutes ?? 15));
+  // FR-PAY-02, FR-GST-14 (plan F3): both off until the hospital turns them on.
+  const [paysFirst, setPaysFirst] = useState(rules.prepayRequired === true);
+  const [noShowPrepay, setNoShowPrepay] = useState(rules.noShowPrepay === true);
+  const [windowDays, setWindowDays] = useState(String(rules.noShowWindowDays ?? 90));
+  // FR-PAT-28 (plan R1): a preferred arrival hour offered at booking; off by default.
+  const [arrivalWindows, setArrivalWindows] = useState(rules.arrivalWindows === true);
+  // The payment hold means something only where payment is taken online.
+  const paysOnline = snapshot.onlinePayments === true;
   const [rulesBusy, setRulesBusy] = useState(false);
 
   const coordinates = coordinatesOf(lat, lng);
@@ -585,8 +682,15 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
 
   const ruleValues = [gracePatients, graceMinutes, reinsertAfter, staleMinutes].map(wholeNumber);
   const budget = smsBudget.trim() === '' ? null : wholeNumber(smsBudget);
+  const hold = wholeNumber(holdMinutes);
+  const holdValid = !paysOnline || (hold !== null && hold >= 5 && hold <= 60);
+  const days = wholeNumber(windowDays);
+  const windowValid = !paysOnline || !noShowPrepay || (days !== null && days >= 7 && days <= 365);
   const rulesReady =
-    ruleValues.every((value) => value !== null) && (smsBudget.trim() === '' || budget !== null);
+    ruleValues.every((value) => value !== null) &&
+    (smsBudget.trim() === '' || budget !== null) &&
+    holdValid &&
+    windowValid;
 
   function saveRules(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -602,6 +706,15 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
           lateReinsertAfter: reinsert,
           staleThresholdMinutes: stale,
           smsBudgetMonthly: budget,
+          arrivalWindows,
+          ...(paysOnline && hold !== null ? { paymentHoldMinutes: hold } : {}),
+          ...(paysOnline
+            ? {
+                prepayRequired: paysFirst,
+                noShowPrepay,
+                ...(days !== null && days >= 7 && days <= 365 ? { noShowWindowDays: days } : {}),
+              }
+            : {}),
         }),
       () => t('settingsSaved', locale),
     ).finally(() => {
@@ -661,6 +774,12 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
         </SaveButton>
       </form>
 
+      {/* What it was registered as: its own to correct until review is asked for. */}
+      <IdentityForm snapshot={snapshot} offline={offline} run={run} />
+
+      {/* What patients see of it: its words, its logo, its colour (`FR-BRD-06`). */}
+      <HospitalFace snapshot={snapshot} offline={offline} run={run} />
+
       <form
         className="flex flex-col gap-4"
         noValidate
@@ -693,6 +812,62 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
             value={staleMinutes}
             onValue={setStaleMinutes}
           />
+          {paysOnline ? (
+            <Field
+              label={t('settingsPaymentHold', locale)}
+              kind="number"
+              helper={t('settingsPaymentHoldHelper', locale)}
+              value={holdMinutes}
+              onValue={setHoldMinutes}
+              {...(holdValid ? {} : { error: t('settingsPaymentHoldHelper', locale) })}
+            />
+          ) : null}
+          <label className="flex items-center gap-2 text-body-md md:col-span-2">
+            <input
+              type="checkbox"
+              checked={arrivalWindows}
+              onChange={(event) => {
+                setArrivalWindows(event.target.checked);
+              }}
+              data-testid="settings-arrival-windows"
+            />
+            {t('settingsArrivalWindows', locale)}
+          </label>
+          {paysOnline ? (
+            <div className="flex flex-col gap-2 md:col-span-2" data-testid="settings-prepay">
+              <label className="flex items-center gap-2 text-body-md">
+                <input
+                  type="checkbox"
+                  checked={paysFirst}
+                  onChange={(event) => {
+                    setPaysFirst(event.target.checked);
+                  }}
+                  data-testid="settings-prepay-required"
+                />
+                {t('settingsPrepayRequired', locale)}
+              </label>
+              <label className="flex items-center gap-2 text-body-md">
+                <input
+                  type="checkbox"
+                  checked={noShowPrepay}
+                  onChange={(event) => {
+                    setNoShowPrepay(event.target.checked);
+                  }}
+                  data-testid="settings-noshow-prepay"
+                />
+                {t('settingsNoShowPrepay', locale)}
+              </label>
+              {noShowPrepay ? (
+                <Field
+                  label={t('settingsNoShowWindow', locale)}
+                  kind="number"
+                  value={windowDays}
+                  onValue={setWindowDays}
+                  {...(windowValid ? {} : { error: t('settingsNoShowWindowHelper', locale) })}
+                />
+              ) : null}
+            </div>
+          ) : null}
           <Field
             label={t('settingsSmsBudget', locale)}
             kind="number"
@@ -712,7 +887,153 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
           {t('settingsSaveRules', locale)}
         </SaveButton>
       </form>
+
+      {/* What became of this month's SMS, beside the cap that limits them (`FR-NOT-06`). */}
+      <MonthOfSms cap={rules.smsBudgetMonthly} offline={offline} />
     </>
+  );
+}
+
+type MonthState =
+  | { readonly state: 'loading' }
+  | { readonly state: 'failed' }
+  | { readonly state: 'ready'; readonly month: MonthOfMessages };
+
+/**
+ * This month's SMS by what became of them (`FR-NOT-06`: "budget caps and
+ * delivery reporting"; `TXT-B11-SMS`).
+ *
+ * Under the cap, because the first line is what the cap is held against.
+ * Plain lines, not tiles. Where the provider reports no delivery the line
+ * says so and shows no number: nought would read as "none arrived", and
+ * nobody knows that (`PRD.md` §3.2).
+ *
+ * The four states (`GR-03`): the shape of the lines while it loads; a
+ * sentence and a retry when it could not be read; offline, what was last
+ * read stays with its age, and a first read that never arrived says so.
+ */
+function MonthOfSms({
+  cap,
+  offline,
+}: {
+  readonly cap: number | null;
+  readonly offline: boolean;
+}): ReactNode {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const [view, setView] = useState<MonthState>({ state: 'loading' });
+  const [now, setNow] = useState(() => new Date());
+
+  const read = useCallback(async (): Promise<void> => {
+    const loaded = await loadMonthOfMessages();
+    setNow(new Date());
+    // Offline with something already on screen: it stays, and its age says so.
+    setView((held) =>
+      typeof loaded === 'string'
+        ? held.state === 'ready'
+          ? held
+          : { state: 'failed' }
+        : { state: 'ready', month: loaded },
+    );
+  }, []);
+
+  useEffect(() => {
+    void read();
+  }, [read]);
+
+  useEffect(() => {
+    const timer = globalThis.setInterval(() => {
+      setNow(new Date());
+    }, 30_000);
+    return () => {
+      globalThis.clearInterval(timer);
+    };
+  }, []);
+
+  const num = (value: number): string => formatNumber(value, numerals);
+
+  return (
+    <section className="flex flex-col gap-3" data-testid="settings-sms-month">
+      <h2 className="text-title-md">{t('settingsSmsMonthHeading', locale)}</h2>
+
+      {view.state === 'loading' ? (
+        <div className="flex flex-col gap-2" aria-busy="true">
+          <div className="h-5 w-64 rounded-sm bg-sunken" />
+          <div className="h-5 w-56 rounded-sm bg-sunken" />
+          <div className="h-5 w-48 rounded-sm bg-sunken" />
+        </div>
+      ) : null}
+
+      {view.state === 'failed' ? (
+        <div role="alert" className="flex flex-col gap-2">
+          <p className="text-body-sm">
+            {t(offline ? 'settingsSmsMonthOffline' : 'settingsSmsMonthFailed', locale)}
+          </p>
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setView({ state: 'loading' });
+                void read();
+              }}
+            >
+              {t('retry', locale)}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {view.state === 'ready' ? (
+        <>
+          <dl className="grid w-fit grid-cols-2 gap-x-6 gap-y-1 text-body-sm">
+            <dt className="text-ink-secondary">{t('settingsSmsSent', locale)}</dt>
+            <dd className="text-right tabular-nums" data-testid="settings-sms-sent">
+              {cap === null
+                ? num(view.month.sent)
+                : format('settingsSmsOfCap', locale, {
+                    sent: num(view.month.sent),
+                    cap: num(cap),
+                  })}
+            </dd>
+            <dt className="text-ink-secondary">{t('settingsSmsDelivered', locale)}</dt>
+            <dd
+              className="text-right tabular-nums"
+              data-testid="settings-sms-delivered"
+              data-known={view.month.reportsDelivery ? 'true' : 'false'}
+            >
+              {view.month.reportsDelivery
+                ? num(view.month.delivered)
+                : t('settingsSmsDeliveryUnknown', locale)}
+            </dd>
+            <dt className="text-ink-secondary">{t('settingsSmsFailed', locale)}</dt>
+            <dd className="text-right tabular-nums" data-testid="settings-sms-failed">
+              {num(view.month.failed)}
+            </dd>
+            <dt className="text-ink-secondary">{t('settingsSmsHeld', locale)}</dt>
+            <dd className="text-right tabular-nums" data-testid="settings-sms-held">
+              {num(view.month.held)}
+            </dd>
+            <dt className="text-ink-secondary">{t('settingsSmsWaiting', locale)}</dt>
+            <dd className="text-right tabular-nums" data-testid="settings-sms-waiting">
+              {num(view.month.waiting)}
+            </dd>
+          </dl>
+          <p className="text-caption text-ink-muted">{t('settingsSmsMonthHelper', locale)}</p>
+          <FreshnessLine
+            asOf={new Date(view.month.asOf)}
+            now={now}
+            labels={{
+              justNow: t('updatedJustNow', locale),
+              ago: t('updatedAgo', locale),
+              never: t('adminNeverRecorded', locale),
+              stale: t('staleWarning', locale),
+            }}
+            formatMinutes={(value) => formatAge(value, locale, numerals)}
+          />
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -766,12 +1087,15 @@ function DepartmentsTab({ snapshot, offline, run }: TabProps): ReactNode {
           data-testid="settings-departments"
         >
           {snapshot.departments.map((department) => (
-            <li key={department.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <span className="text-body-md">
-                {localName(locale, department.nameBn, department.nameEn)}
-              </span>
-              <Chip tone="neutral">{department.code}</Chip>
-            </li>
+            <DepartmentRow
+              key={department.id}
+              department={department}
+              doctorsListed={
+                snapshot.doctors.filter((doctor) => doctor.departmentId === department.id).length
+              }
+              offline={offline}
+              run={run}
+            />
           ))}
         </ul>
       )}
@@ -1312,15 +1636,11 @@ function WardCard({
         })}
         {` · ${kindName(ward.kind, locale)}`}
       </p>
-      {ward.beds.length === 0 ? null : (
-        <ul className="mt-3 flex flex-wrap gap-2">
-          {ward.beds.map((bed) => (
-            <li key={bed.id}>
-              <Chip tone={bed.state === 'out_of_service' ? 'caution' : 'neutral'}>{bed.label}</Chip>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* Plan D2: its names and floor, and its removal while it is empty. */}
+      <WardEditor ward={ward} offline={offline} run={run} />
+      {/* A bed is chosen to change its number or charge, or to take away one
+          the ward never brought into service. */}
+      <WardBeds ward={ward} offline={offline} run={run} />
 
       <form className="mt-4 flex flex-col gap-3 rounded-md bg-sunken p-4" noValidate onSubmit={add}>
         <div className="grid gap-3 md:grid-cols-2">
@@ -1523,6 +1843,9 @@ function StaffTab({ snapshot, offline, run }: TabProps): ReactNode {
 
   return (
     <>
+      {/* FRM-B11-DESKS (FR-REC-32, plan R4): the reception desks and their doctors. */}
+      <DeskSettings snapshot={snapshot} offline={offline} run={run} />
+
       {handover === null ? null : (
         <Card tone="brand" data-testid="settings-temp-password">
           <p className="text-body-sm">
@@ -1893,6 +2216,7 @@ function failureText(failure: SaveFailure, locale: Locale): string {
         schedule: 'settingsDuplicateSchedule',
         email: 'settingsDuplicateEmail',
         staffCode: 'settingsDuplicateStaffCode',
+        nameEn: 'settingsDuplicateWardName',
       };
       if (failure.field === 'label') {
         return format('settingsDuplicateLabel', locale, {
@@ -1909,6 +2233,12 @@ function failureText(failure: SaveFailure, locale: Locale): string {
         doctor_verified: 'settingsNotAllowedVerified',
         doctor_shared: 'settingsNotAllowedShared',
         nothing_to_publish: 'settingsNotAllowedNothing',
+        brand_unreadable: 'settingsBrandUnreadable',
+        // Plan D2: the server refuses these whatever the screen offered.
+        identity_after_review: 'settingsNotAllowedIdentity',
+        department_has_doctors: 'settingsNotAllowedDepartmentInUse',
+        ward_has_beds: 'settingsNotAllowedWardHasBeds',
+        bed_in_use: 'settingsNotAllowedBedInUse',
       };
       return t(byReason[failure.reason] ?? 'settingsSaveFailed', locale);
     }

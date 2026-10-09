@@ -154,6 +154,14 @@ export const DEMO_ASSESSMENTS: readonly {
   readonly complaintEn: string;
   readonly diagnosisBn: string;
   readonly adviceBn: string;
+  /**
+   * The demonstration prescription for this diagnosis (`FR-DEM-03`,
+   * `FR-DOC-04`; plan R2), from `DEMO_FORMULARY` only. Declared here, beside
+   * the diagnosis it goes with, and for a few common ones only: most visits
+   * in the demo end with advice and no medicine, as many real ones do. Not
+   * clinical guidance; demonstration rows (`CLAUDE.md` §8).
+   */
+  readonly prescription?: readonly DemoPrescribed[];
 }[] = [
   {
     complaintEn: 'Chest pain',
@@ -164,17 +172,44 @@ export const DEMO_ASSESSMENTS: readonly {
   {
     complaintEn: 'Hypertension follow-up',
     diagnosisBn: 'উচ্চ রক্তচাপ — নিয়ন্ত্রণে আছে',
+    prescription: [
+      {
+        generic: 'Amlodipine',
+        strength: '5 mg',
+        schedule: '1+0+0',
+        days: 30,
+        instructionBn: 'প্রতিদিন একই সময়ে',
+      },
+    ],
     adviceBn:
       'লবণ কমান, প্রতিদিন হাঁটুন, বাড়িতে রক্তচাপ মেপে লিখে রাখুন। তিন মাস পর আবার দেখাবেন।',
   },
   {
     complaintEn: 'Fever and cough',
     diagnosisBn: 'শ্বাসনালীর সংক্রমণ',
+    prescription: [
+      {
+        generic: 'Paracetamol',
+        strength: '500 mg',
+        schedule: '1+1+1',
+        days: 3,
+        instructionBn: 'খাবারের পরে, জ্বর থাকলে',
+      },
+    ],
     adviceBn: 'বিশ্রাম নিন, প্রচুর পানি পান করুন। তিন দিনে জ্বর না কমলে আবার দেখাবেন।',
   },
   {
     complaintEn: 'Diabetes follow-up',
     diagnosisBn: 'টাইপ-২ ডায়াবেটিস — ফলো-আপ',
+    prescription: [
+      {
+        generic: 'Metformin',
+        strength: '500 mg',
+        schedule: '1+0+1',
+        days: 30,
+        instructionBn: 'খাবারের পরে',
+      },
+    ],
     adviceBn: 'খাবারের নিয়ম মেনে চলুন, প্রতিদিন হাঁটুন। তিন মাস পর HbA1c পরীক্ষা করে দেখাবেন।',
   },
   {
@@ -215,6 +250,15 @@ export const DEMO_ASSESSMENTS: readonly {
   {
     complaintEn: 'Headache',
     diagnosisBn: 'টেনশন হেডেক',
+    prescription: [
+      {
+        generic: 'Paracetamol',
+        strength: '500 mg',
+        schedule: '1+0+1',
+        days: 3,
+        instructionBn: 'ব্যথা থাকলে, খাবারের পরে',
+      },
+    ],
     adviceBn: 'ঘুম নিয়মিত করুন, পর্দার সময় কমান। ব্যথা বাড়লে বা বমি হলে আবার দেখাবেন।',
   },
   {
@@ -284,6 +328,16 @@ export const DEMO_SIGNAL_CASES = {
  * the two tables have drifted, and a visit record with an empty diagnosis is
  * exactly the empty screen CLAUDE.md §5.3 forbids.
  */
+/** One medicine in a declared demonstration prescription. */
+export interface DemoPrescribed {
+  /** A `DEMO_FORMULARY` generic name, which is how the row finds its medicine. */
+  readonly generic: string;
+  readonly strength: string;
+  readonly schedule: string;
+  readonly days: number;
+  readonly instructionBn: string;
+}
+
 export function assessmentFor(complaintEn: string): { diagnosisBn: string; adviceBn: string } {
   const found = DEMO_ASSESSMENTS.find((entry) => entry.complaintEn === complaintEn);
   if (found === undefined) {
@@ -318,9 +372,9 @@ export const DEMO_INTAKE = {
  *
  * Generic name, a common brand, and the strengths a pharmacy in Bangladesh
  * actually stocks. It exists so `FR-DOC-05`'s autocomplete has something to
- * search when that feature is built; nothing reads it in this version, because
- * e-prescriptions were dropped. Manufacturers carry `(Demo)` for the same reason
- * every facility name does (`FR-DEM-07`).
+ * search (`GET /formulary`, plan R2), and the demo prescriptions name its rows.
+ * Manufacturers carry `(Demo)` for the same reason every facility name does
+ * (`FR-DEM-07`).
  */
 export const DEMO_FORMULARY: readonly {
   readonly generic: string;

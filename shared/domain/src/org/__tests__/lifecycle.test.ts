@@ -6,8 +6,10 @@ import { describe, expect, it } from 'vitest';
 
 import { ORG_LIFECYCLES, type OrgLifecycle } from '../../types/enums.js';
 import {
+  CHECKLIST_ITEMS,
   ORG_ACTIONS,
   actionNeedsNote,
+  identityEditable,
   isPublicLifecycle,
   missingForApproval,
   missingForReview,
@@ -25,6 +27,9 @@ const EMPTY: SetupCounts = {
   schedules: 0,
   beds: 0,
   staff: 1,
+  contact: 0,
+  location: 0,
+  capabilities: 0,
 };
 
 const SET_UP: SetupCounts = {
@@ -34,6 +39,9 @@ const SET_UP: SetupCounts = {
   schedules: 8,
   beds: 0,
   staff: 4,
+  contact: 0,
+  location: 0,
+  capabilities: 0,
 };
 
 describe('the path to going live (FR-ONB-04)', () => {
@@ -71,6 +79,12 @@ describe('suspending and closing (FR-ONB-06)', () => {
   it('closes from active or suspended, and nothing leaves closed', () => {
     expect(nextLifecycle('active', 'close')).toBe('closed');
     expect(nextLifecycle('suspended', 'close')).toBe('closed');
+    // One that never went live as well: an application is declined this way
+    // (`FR-ONB-10`).
+    expect(nextLifecycle('setup', 'close')).toBe('closed');
+    expect(nextLifecycle('ready_for_review', 'close')).toBe('closed');
+    expect(ORG_ACTIONS.close).toBe('platform');
+    expect(actionNeedsNote('close')).toBe(true);
     for (const action of Object.keys(ORG_ACTIONS) as OrgAction[]) {
       expect(nextLifecycle('closed', action), action).toBeNull();
     }
@@ -89,8 +103,8 @@ describe('every state and action is accounted for', () => {
 
   it('offers the platform exactly what is allowed from each state', () => {
     const offered: Record<OrgLifecycle, readonly OrgAction[]> = {
-      setup: [],
-      ready_for_review: ['approve', 'send_back'],
+      setup: ['close'],
+      ready_for_review: ['approve', 'send_back', 'close'],
       active: ['suspend', 'close'],
       suspended: ['reinstate', 'close'],
       closed: [],
@@ -152,5 +166,47 @@ describe('the checklist (FR-ONB-03)', () => {
       'schedules',
       'verified_doctors',
     ]);
+  });
+});
+
+describe('what a patient needs to reach the place (plan D2)', () => {
+  const advised = (counts: SetupCounts): string[] =>
+    setupChecklist(counts)
+      .filter((item) => item.advised)
+      .map((item) => item.key);
+
+  it('is named: an address and a phone, a place on the map, the emergency services', () => {
+    expect(advised(SET_UP)).toEqual(['contact', 'location', 'emergency_services']);
+    for (const item of setupChecklist(SET_UP).filter((entry) => entry.advised)) {
+      expect(item, item.key).toMatchObject({ done: false, required: false });
+    }
+    const filled = setupChecklist({ ...SET_UP, contact: 1, location: 1, capabilities: 3 });
+    expect(filled.filter((item) => item.advised).every((item) => item.done)).toBe(true);
+    expect(filled.find((item) => item.key === 'emergency_services')?.count).toBe(3);
+  });
+
+  it('and review does not wait for any of it (FR-ONB-03)', () => {
+    expect(missingForReview(SET_UP)).toEqual([]);
+    expect(missingForApproval({ ...SET_UP, verifiedDoctors: 1 })).toEqual([]);
+    // Nothing is both: what is required refuses, what is advised only says.
+    expect(setupChecklist(SET_UP).filter((item) => item.required && item.advised)).toEqual([]);
+  });
+
+  it('a hospital with no emergency desk is not told it lacks emergency services', () => {
+    expect(advised({ ...SET_UP, capabilities: null })).toEqual(['contact', 'location']);
+  });
+
+  it('every item the checklist can hold is one it knows how to name', () => {
+    for (const item of setupChecklist({ ...SET_UP, capabilities: 1 })) {
+      expect(CHECKLIST_ITEMS).toContain(item.key);
+    }
+  });
+});
+
+describe('what it was registered as (plan D2)', () => {
+  it('is the hospital’s to correct only while it is setting up', () => {
+    expect(ORG_LIFECYCLES.filter(identityEditable)).toEqual(['setup']);
+    // Sent back is setting up again.
+    expect(identityEditable(nextLifecycle('ready_for_review', 'send_back') ?? 'active')).toBe(true);
   });
 });

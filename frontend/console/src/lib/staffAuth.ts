@@ -451,6 +451,27 @@ export interface StaffChamber {
 }
 
 /** `GET /staff/chambers`. Null when the server could not be asked. */
+/**
+ * The modules the signed-in member's hospital does not run (`FR-BRD-11`);
+ * empty when it runs them all, and when it cannot be asked: the server
+ * refuses what is off either way.
+ */
+export async function fetchStaffModulesOff(): Promise<readonly string[]> {
+  const session = readDemoSession();
+  if (session === null) return [];
+  try {
+    const response = await fetch(`${API}/staff/chambers`, {
+      headers: { authorization: `Bearer ${session.token}` },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!response.ok) return [];
+    const body = (await response.json()) as { data: { modulesOff?: string[] } };
+    return body.data.modulesOff ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchStaffChambers(): Promise<readonly StaffChamber[] | null> {
   const session = readDemoSession();
   if (session === null) return null;

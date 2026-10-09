@@ -11,6 +11,7 @@
  * of its own — `queue_events` is append-only and cannot be cleaned up.
  */
 
+import { sql } from 'kysely';
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -18,6 +19,7 @@ import { time } from '@platform/domain';
 import type { StaffRole } from '@platform/domain';
 
 import { createApp } from '../app.js';
+import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 import { resetEmitter } from '../realtime/emit.js';
 import * as queueService from '../services/queue.service.js';
@@ -716,5 +718,91 @@ describe('a whole offline shift', () => {
     };
     expect(state.entries.filter((entry) => entry.status === 'done')).toHaveLength(2);
     expect(state.rate.samples).toEqual([600, 540]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A doctor's arrival queued offline (`FR-REC-02`; handover 27, plan F2b)
+// ---------------------------------------------------------------------------
+
+describe('a doctor’s arrival queued offline', () => {
+  interface Recorded {
+    readonly arrivedAt: string;
+    readonly minutesLate: number;
+    readonly plannedStart: Date;
+    readonly actualStart: Date | null;
+  }
+
+  async function pushArrival(payload: Record<string, unknown>): Promise<Recorded> {
+    const response = await request(app)
+      .post(`${BASE}/sync/events`)
+      .set('Authorization', `Bearer ${await receptionist()}`)
+      .send({
+        sessionId: fixture.sessionId,
+        events: [entry('DOCTOR_ARRIVED', payload, minutesAgo(40))],
+      });
+    expect(response.status).toBe(200);
+    expect(response.body.data.conflicts).toEqual([]);
+
+    const row = await sql<{
+      payload: { arrivedAt: string; minutesLate: number };
+      planned_start: Date;
+      actual_start: Date | null;
+    }>`
+      SELECT e.payload, s.planned_start, s.actual_start
+        FROM queue_events e JOIN sessions s ON s.id = e.session_id
+       WHERE e.session_id = ${fixture.sessionId} AND e.type = 'DOCTOR_ARRIVED'
+    `.execute(db);
+    const recorded = row.rows[0];
+    if (recorded === undefined) throw new Error('the arrival was not recorded');
+    return {
+      arrivedAt: recorded.payload.arrivedAt,
+      minutesLate: recorded.payload.minutesLate,
+      plannedStart: recorded.planned_start,
+      actualStart: recorded.actual_start,
+    };
+  }
+
+  const minutesBetween = (later: number, earlier: number): number =>
+    Math.round((later - earlier) / 60_000);
+
+  it('keeps the time the console recorded, and works out the lateness itself', async () => {
+    const claimed = minutesAgo(40);
+    // The console always said zero minutes late, whatever the hour.
+    const recorded = await pushArrival({ arrivedAt: claimed, minutesLate: 0 });
+
+    // When the doctor walked in, not forty minutes later when the tap arrived.
+    expect(Date.parse(recorded.arrivedAt)).toBe(Date.parse(claimed));
+    expect(recorded.actualStart?.getTime()).toBe(Date.parse(claimed));
+    // Against the planned start, as the online route works it out.
+    expect(recorded.minutesLate).toBe(
+      minutesBetween(Date.parse(claimed), recorded.plannedStart.getTime()),
+    );
+  });
+
+  it('is not the console’s to say how late: a figure it sends is ignored', async () => {
+    const claimed = minutesAgo(25);
+    const recorded = await pushArrival({ arrivedAt: claimed, minutesLate: -500 });
+    expect(recorded.minutesLate).toBe(
+      minutesBetween(Date.parse(claimed), recorded.plannedStart.getTime()),
+    );
+  });
+
+  it('is timed when the server heard of it, where the console’s clock cannot be right', async () => {
+    const cases: readonly (readonly [string, Record<string, unknown>])[] = [
+      ['tomorrow', { arrivedAt: new Date(Date.now() + 86_400_000).toISOString(), minutesLate: 0 }],
+      ['three days ago', { arrivedAt: minutesAgo(3 * 24 * 60), minutesLate: 0 }],
+      ['not a time', { arrivedAt: 'half past six', minutesLate: 0 }],
+      ['nothing at all', {}],
+    ];
+    for (const [name, payload] of cases) {
+      fixture = await createQueueFixture(1);
+      const before = Date.now();
+      const recorded = await pushArrival(payload);
+      const at = Date.parse(recorded.arrivedAt);
+      expect(at, name).toBeGreaterThanOrEqual(before - 1_000);
+      expect(at, name).toBeLessThanOrEqual(Date.now() + 1_000);
+      expect(recorded.minutesLate, name).toBe(minutesBetween(at, recorded.plannedStart.getTime()));
+    }
   });
 });

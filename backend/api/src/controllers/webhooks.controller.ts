@@ -27,6 +27,7 @@
 
 import { logger } from '../config/logger.js';
 import { rawBodyOf } from '../config/rawBody.js';
+import * as notifications from '../services/notification.service.js';
 import * as paymentService from '../services/payment.service.js';
 
 import type { Request, Response } from 'express';
@@ -82,6 +83,46 @@ export function callback(providerName: 'bkash' | 'nagad') {
     // 200 whether or not anything changed — see the header.
     res.json({ ok: true, data: { applied: result.applied } });
   };
+}
+
+/**
+ * `POST /webhooks/sms-dlr` — an aggregator's delivery receipt (`FR-NOT-06`,
+ * plan H2).
+ *
+ * The same shape as a payment callback and for the same reasons: the
+ * signature over the bytes as sent is the authentication, and a receipt that
+ * fails it gets a 401 and changes nothing; the provider's vocabulary is the
+ * adapter's to read; and a receipt already recorded, or for a message this
+ * system does not know, still answers 200, because a 4xx makes an aggregator
+ * send it again for days.
+ *
+ * What a forged receipt could do, if it were believed, is tell a hospital
+ * its messages arrived when they did not, or the reverse. Nobody's record is
+ * opened by it and no money moves; it is refused all the same.
+ */
+export async function smsDelivery(req: Request, res: Response): Promise<void> {
+  const raw = rawBodyOf(req) ?? '';
+
+  if (!notifications.verifyReceiptSignature(raw, req.get('x-signature'))) {
+    logger.warn({ provider: 'sms' }, 'delivery receipt signature rejected');
+    res.status(401).json({
+      ok: false,
+      error: { code: 'AUTH_TOKEN_INVALID', message: 'Signature is not valid.' },
+    });
+    return;
+  }
+
+  const result = await notifications.applyDeliveryReceipt(safeJson(raw));
+  if (!result.recognised) {
+    res.status(400).json({
+      ok: false,
+      error: { code: 'VALIDATION_FAILED', message: 'Unrecognised receipt body.' },
+    });
+    return;
+  }
+
+  // 200 whether or not anything changed — see above.
+  res.json({ ok: true, data: { applied: result.applied } });
 }
 
 function safeJson(raw: string): unknown {

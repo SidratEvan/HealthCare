@@ -41,6 +41,8 @@
 import { logger } from '../config/logger.js';
 import { env } from '../env.js';
 
+import { HttpSmsAdapter } from './smsHttp.js';
+
 /** What an SMS provider is asked to do. */
 export interface SmsMessage {
   /** Normalised `+8801…` (`DB-P6`). */
@@ -60,11 +62,45 @@ export interface SmsMessage {
 /** What it reports back. Recorded verbatim onto the notification row. */
 export type SmsResult =
   | { readonly ok: true; readonly providerRef: string; readonly costPoisha: number }
-  | { readonly ok: false; readonly error: string };
+  | {
+      readonly ok: false;
+      readonly error: string;
+      /**
+       * False where asking again cannot help: the number does not exist, the
+       * sender is barred. Absent means it may (`shared/domain`
+       * `messaging/sending`): a gateway that is down is the ordinary failure.
+       */
+      readonly retryable?: boolean;
+    };
+
+/**
+ * A delivery receipt as this system reads it, whatever the aggregator calls
+ * things (`FR-NOT-06`, plan H2). `pending` is anything that is not final: it
+ * is acknowledged and changes nothing.
+ */
+export interface SmsReceipt {
+  readonly providerRef: string;
+  readonly outcome: 'delivered' | 'failed' | 'pending';
+  /** What the aggregator gave as the reason, where it gave one. */
+  readonly reason: string | null;
+}
 
 export interface SmsAdapter {
   readonly name: string;
   send(message: SmsMessage): Promise<SmsResult>;
+  /**
+   * True where the provider reports what became of a message after taking
+   * it. Absent or false: "sent" is the last this system is told, and a screen
+   * must say so and not show "none delivered" (`PRD.md` §3.2).
+   */
+  readonly reportsDelivery?: boolean;
+  /**
+   * Whether a delivery receipt is this provider's, by its signature over the
+   * bytes as sent. An adapter without one believes no receipt.
+   */
+  verifyReceipt?(rawBody: string, signature: string | undefined): boolean;
+  /** Reads a receipt out of the provider's body; null for one it does not recognise. */
+  readReceipt?(body: unknown): SmsReceipt | null;
 }
 
 /**
@@ -75,7 +111,7 @@ export interface SmsAdapter {
  * UCS-2, so a message over 70 characters is billed as two — which is why
  * `templates.test.ts` counts characters.
  */
-const POISHA_PER_SEGMENT = 35;
+export const POISHA_PER_SEGMENT = 35;
 const UCS2_SEGMENT = 70;
 
 export function segmentsFor(body: string): number {
@@ -139,7 +175,12 @@ let current: SmsAdapter | null = null;
 
 /** The adapter this process sends through. */
 export function sms(): SmsAdapter {
-  current ??= env.SMS_PROVIDER === 'log' ? new LogSmsAdapter() : new UnconfiguredSmsAdapter();
+  current ??=
+    env.SMS_PROVIDER === 'log'
+      ? new LogSmsAdapter()
+      : env.SMS_PROVIDER === 'http'
+        ? new HttpSmsAdapter()
+        : new UnconfiguredSmsAdapter();
   return current;
 }
 

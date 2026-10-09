@@ -45,6 +45,7 @@ import {
 import * as bed from '../controllers/bed.controller.js';
 import { requireAuth } from '../middleware/auth.js';
 import { idempotency } from '../middleware/idempotency.js';
+import { byIp, rateLimit } from '../middleware/rateLimit.js';
 import { requireHospitalScope, requireRole } from '../middleware/requireRole.js';
 import { validate } from '../middleware/validate.js';
 
@@ -153,8 +154,19 @@ bedRoutes.post(
  * No account: a family asks for a bed with name and phone, as a guest books —
  * and, as a guest booking does, proves the phone first where the deployment
  * asks (`FR-GST-03`; the controller).
+ *
+ * Limited per address as a place on a standby list is (plan I2b): a request
+ * sends nothing until a ward answers it, and a script that made them in a
+ * loop would fill a ward's board instead.
  */
-bedRoutes.post('/bed-requests', write, validate({ body: createBedRequestBody }), bed.createRequest);
+const bedRequestLimit = rateLimit({ limit: 10, windowSeconds: 600, keyFor: byIp });
+bedRoutes.post(
+  '/bed-requests',
+  bedRequestLimit,
+  write,
+  validate({ body: createBedRequestBody }),
+  bed.createRequest,
+);
 
 /** Public: the signed token in the path is the credential. */
 bedRoutes.get(

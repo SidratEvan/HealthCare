@@ -15,11 +15,16 @@
  * the facility never declared.
  */
 
-import { Router } from 'express';
+import { json, Router } from 'express';
 
 import {
   bedPatchBody,
   bedsBody,
+  brandBody,
+  deskBody,
+  deskPatchBody,
+  logoBody,
+  publishingBody,
   declaredCapabilitiesBody,
   departmentBody,
   departmentPatchBody,
@@ -33,6 +38,7 @@ import {
   staffPatchBody,
   templateBody,
   wardBody,
+  wardPatchBody,
 } from '@platform/domain';
 
 import * as settings from '../controllers/hospitalSettings.controller.js';
@@ -48,6 +54,39 @@ const write = idempotency({ required: true });
 const byId = { params: settingsIdParams };
 
 hospitalSettingsRoutes.get('/hospital/setup', ...admin, settings.getSetup);
+// The hospital's own face on every console (plan K4, `FR-BRD-12`): any member
+// of its staff, its own hospital only, from the principal.
+hospitalSettingsRoutes.get('/hospital/brand', requireAuth, settings.getBrand);
+
+// Reception desks (`FR-REC-32`, plan R4): read by any member of the hospital's
+// staff, for the picker; changed by its administrator.
+hospitalSettingsRoutes.get('/hospital/desks', requireAuth, settings.getDesks);
+hospitalSettingsRoutes.post(
+  '/hospital/desks',
+  ...admin,
+  write,
+  validate({ body: deskBody }),
+  settings.postDesk,
+);
+hospitalSettingsRoutes.patch(
+  '/hospital/desks/:id',
+  ...admin,
+  write,
+  validate({ ...byId, body: deskPatchBody }),
+  settings.patchDesk,
+);
+hospitalSettingsRoutes.delete(
+  '/hospital/desks/:id',
+  ...admin,
+  write,
+  validate(byId),
+  settings.deleteDesk,
+);
+
+// `FR-NOT-06`: this month's SMS by what became of them, beside the cap the
+// same screen sets. Counts of the hospital's own messages; no message's words
+// and nobody's number.
+hospitalSettingsRoutes.get('/hospital/messages', ...admin, settings.getMessages);
 
 hospitalSettingsRoutes.patch(
   '/hospital/profile',
@@ -56,6 +95,35 @@ hospitalSettingsRoutes.patch(
   validate({ body: profileBody }),
   settings.patchProfile,
 );
+// Its public face (`FR-BRD-06`): colours, and a logo. The logo's body is an
+// image in base64, larger than the API's ordinary limit, so it brings its own
+// parser (`app.ts` `OWN_BODY_LIMIT`), as a lab report does.
+hospitalSettingsRoutes.put(
+  '/hospital/brand',
+  ...admin,
+  write,
+  validate({ body: brandBody }),
+  settings.putBrand,
+);
+hospitalSettingsRoutes.get('/hospital/logo', ...admin, settings.getOwnLogo);
+// Which live figures it shares with the network (`FR-NET-04`): its own to decide.
+hospitalSettingsRoutes.put(
+  '/hospital/publishing',
+  ...admin,
+  write,
+  validate({ body: publishingBody }),
+  settings.putPublishing,
+);
+hospitalSettingsRoutes.put(
+  '/hospital/logo',
+  json({ limit: '512kb' }),
+  ...admin,
+  write,
+  validate({ body: logoBody }),
+  settings.putLogo,
+);
+hospitalSettingsRoutes.delete('/hospital/logo', ...admin, write, settings.deleteLogo);
+
 hospitalSettingsRoutes.patch(
   '/hospital/rules',
   ...admin,
@@ -77,6 +145,16 @@ hospitalSettingsRoutes.patch(
   write,
   validate({ ...byId, body: departmentPatchBody }),
   settings.patchDepartment,
+);
+// Plan D2: what was added by mistake can be taken away, while nothing stands
+// on it. A department nobody sits in; further down, a ward with no bed and a
+// bed the ward never brought into service.
+hospitalSettingsRoutes.delete(
+  '/hospital/departments/:id',
+  ...admin,
+  write,
+  validate(byId),
+  settings.deleteDepartment,
 );
 
 hospitalSettingsRoutes.post(
@@ -129,6 +207,27 @@ hospitalSettingsRoutes.patch(
   write,
   validate({ ...byId, body: bedPatchBody }),
   settings.patchBed,
+);
+hospitalSettingsRoutes.delete(
+  '/hospital/beds/:id',
+  ...admin,
+  write,
+  validate(byId),
+  settings.deleteBed,
+);
+hospitalSettingsRoutes.patch(
+  '/hospital/wards/:id',
+  ...admin,
+  write,
+  validate({ ...byId, body: wardPatchBody }),
+  settings.patchWard,
+);
+hospitalSettingsRoutes.delete(
+  '/hospital/wards/:id',
+  ...admin,
+  write,
+  validate(byId),
+  settings.deleteWard,
 );
 
 hospitalSettingsRoutes.post(

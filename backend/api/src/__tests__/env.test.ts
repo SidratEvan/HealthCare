@@ -168,6 +168,25 @@ describe('production', () => {
     expect(problems).toContain('JWT_REFRESH_SECRET');
   });
 
+  it('refuses a tracking-link key that is also a token key (plan I2b)', () => {
+    expect(problemsOf({ ...PROD, GUEST_LINK_SECRET: PROD['JWT_ACCESS_SECRET'] ?? '' })).toContain(
+      'GUEST_LINK_SECRET',
+    );
+    expect(problemsOf({ ...PROD, GUEST_LINK_SECRET: PROD['JWT_REFRESH_SECRET'] ?? '' })).toContain(
+      'GUEST_LINK_SECRET',
+    );
+  });
+
+  it('refuses a second-factor key that is any other secret (FR-SEC-10, plan I2b)', () => {
+    for (const other of ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'GUEST_LINK_SECRET']) {
+      expect(problemsOf({ ...PROD, TOTP_ENCRYPTION_KEY: PROD[other] ?? '' }), other).toContain(
+        'TOTP_ENCRYPTION_KEY',
+      );
+    }
+    // Four different keys, as the complete environment above has, boot.
+    expect(problemsOf({ ...PROD })).toEqual([]);
+  });
+
   it('refuses missing storage credentials, and says what breaks', () => {
     try {
       loadEnv({ ...PROD, SUPABASE_SERVICE_ROLE_KEY: '' });

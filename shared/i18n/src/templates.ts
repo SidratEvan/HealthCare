@@ -37,9 +37,14 @@
 /** Every message the platform sends. One key per material event. */
 export const TEMPLATE_KEYS = [
   'booking.confirmed',
+  'booking.held',
+  'payment.counter',
+  'payment.released',
+  'payment.owed_back',
   'queue.doctor_arrived',
   'queue.delayed',
   'queue.two_away',
+  'queue.earlier',
   'queue.called',
   'queue.no_show',
   'queue.cancelled',
@@ -95,6 +100,68 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
     en: 'Serial {serial} confirmed — {doctor}, {time}',
   },
 
+  // --- A serial held while it is paid for (plan H3, FR-PAY-08, FR-PAY-10) ---
+  //
+  // Held: the serial is the patient's, the payment is not finished, and the
+  // link is how they get back to finish it. Then one of three: paid (the
+  // ordinary confirmation, above), turned to the counter, or released.
+  {
+    key: 'booking.held',
+    channel: 'sms',
+    version: 1,
+    bn: 'সিরিয়াল {serial} রাখা হয়েছে, {minutes} মিনিটের মধ্যে পরিশোধ করুন: {link}',
+    en: 'Serial {serial} is held. Pay within {minutes} min: {link}',
+  },
+  {
+    key: 'booking.held',
+    channel: 'push',
+    version: 1,
+    bn: 'সিরিয়াল {serial} রাখা হয়েছে — {minutes} মিনিটের মধ্যে পরিশোধ করুন',
+    en: 'Serial {serial} held — pay within {minutes} min',
+  },
+  {
+    key: 'payment.counter',
+    channel: 'sms',
+    version: 1,
+    bn: 'পেমেন্ট হয়নি। সিরিয়াল {serial} আছে, ফি কাউন্টারে দিন: {link}',
+    en: 'Payment not completed. Serial {serial} stands; pay at the counter: {link}',
+  },
+  {
+    key: 'payment.counter',
+    channel: 'push',
+    version: 1,
+    bn: 'সিরিয়াল {serial} আছে — ফি কাউন্টারে দিন',
+    en: 'Serial {serial} stands — pay at the counter',
+  },
+  {
+    key: 'payment.released',
+    channel: 'sms',
+    version: 1,
+    bn: 'পেমেন্ট হয়নি, সিরিয়াল {serial} ছেড়ে দেওয়া হয়েছে। কোনো টাকা কাটা হয়নি।',
+    en: 'Payment not completed; serial {serial} was released. Nothing was charged.',
+  },
+  {
+    key: 'payment.released',
+    channel: 'push',
+    version: 1,
+    bn: 'সিরিয়াল {serial} ছেড়ে দেওয়া হয়েছে — পেমেন্ট হয়নি',
+    en: 'Serial {serial} released — payment not completed',
+  },
+  {
+    key: 'payment.owed_back',
+    channel: 'sms',
+    version: 1,
+    bn: 'সিরিয়াল {serial}-এর বাড়তি পেমেন্ট ফেরত দেওয়া হবে।',
+    en: 'The extra payment for serial {serial} will be returned.',
+  },
+  {
+    key: 'payment.owed_back',
+    channel: 'push',
+    version: 1,
+    bn: 'বাড়তি পেমেন্ট ফেরত দেওয়া হবে',
+    en: 'The extra payment will be returned',
+  },
+
   // --- The chamber opens ----------------------------------------------------
   {
     key: 'queue.doctor_arrived',
@@ -135,6 +202,25 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
   //
   // The message that makes the queue worth keeping: it is the one that lets a
   // person wait somewhere other than a corridor.
+  // `FR-QUE-15` (plan F2c). The estimate has moved earlier than the time this
+  // patient was last told, by more than its own band. Somebody told "around
+  // 6:30" who is then called at 5:50 has been failed by the app, so they are
+  // told before any screen shows the earlier time. It says "may": an estimate
+  // is still an estimate (`FR-QUE-13`).
+  {
+    key: 'queue.earlier',
+    channel: 'sms',
+    version: 1,
+    bn: 'সিরিয়াল {serial} আগে আসতে পারে, এখন আনুমানিক {eta}। সময়মতো আসুন।',
+    en: 'Serial {serial} may come sooner, now around {eta}. Please come in time.',
+  },
+  {
+    key: 'queue.earlier',
+    channel: 'push',
+    version: 1,
+    bn: 'সিরিয়াল {serial} আগে আসতে পারে — এখন আনুমানিক {eta}',
+    en: 'Serial {serial} may come sooner — now around {eta}',
+  },
   {
     key: 'queue.two_away',
     channel: 'sms',
@@ -364,11 +450,23 @@ export const TEMPLATES: readonly TemplateDefinition[] = [
     en: '{hospital} cannot take you right now — see other hospitals',
   },
 
-  // `FR-LAB-03`. **Push only**, because BACKEND.md §8's mapping says push and
-  // nothing else — a report is not a summons, and it is already in the wallet
-  // by the time this is written. In this version that means the row is
-  // recorded and skipped with `no_device_token`, like every other push: the
-  // delivery itself is what FR-LAB-03 promises, and it has already happened.
+  // `FR-LAB-03`, and since plan F2 `FR-NOT-02`/`FR-NOT-03`: "report ready" is
+  // a material event, so somebody without the app is told by SMS, like every
+  // other. Until then it was push only, and with no screen asking for
+  // notification permission every row was skipped: nobody was told at all.
+  //
+  // The message names the test and the hospital and nothing else. A result on
+  // a lock screen is read by whoever is holding the phone (`DB-P7`), so it
+  // says where to read the report, never what the report says. The link is
+  // the Records page and carries no token: what opens the report there is the
+  // phone's own booking, or signing in with the number.
+  {
+    key: 'lab.report_ready',
+    channel: 'sms',
+    version: 1,
+    bn: '{hospital}: আপনার {test}-এর রিপোর্ট এসেছে। রেকর্ড অংশে দেখুন: {link}',
+    en: '{hospital}: your {test} report is ready. See it under Records: {link}',
+  },
   {
     key: 'lab.report_ready',
     channel: 'push',

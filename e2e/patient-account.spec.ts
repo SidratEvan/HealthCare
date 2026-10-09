@@ -96,6 +96,46 @@ test('a guest signs in later with the same number and finds the record', async (
   await expect(account).toContainText(GUEST_NAME);
   await expect(account.getByTestId('account-visit').first()).toContainText(ASSESSMENT.diagnosisBn);
   await expect(page.getByTestId('account-phone')).toHaveText(`+88${phone}`);
+  // Family accounts are not in V1 (owner, 8 October; `FR-PAT-02`): the people
+  // under the number are listed, and nothing calls them a family.
+  await expect(account).toContainText('এই নম্বরে বুক করা রোগী');
+  await expect(account).not.toContainText('পরিবার');
+
+  // --- an old paper, kept under the profile (FR-PAT-62, plan R3) ---------------
+  const papers = account
+    .locator('[data-testid^="papers-"]')
+    .filter({
+      has: page.getByTestId('papers-form'),
+    })
+    .first();
+  await expect(papers.getByTestId('papers-none')).toBeVisible();
+  await papers.getByTestId('papers-file').setInputFiles({
+    name: 'old-prescription.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.4\n% demo paper\n%%EOF\n', 'utf8'),
+  });
+  await papers.getByTestId('papers-kind').selectOption('report');
+  await papers.getByTestId('papers-doctor').fill('ডা. পরীক্ষা (ডেমো)');
+  await papers.getByTestId('papers-add').click();
+  await expect(papers.getByTestId('papers-added')).toBeVisible();
+  const list = papers.getByTestId('papers-list');
+  await expect(list).toContainText('টেস্টের রিপোর্ট');
+  // Labelled as the patient's own wherever it is shown.
+  await expect(list).toContainText('রোগীর দেওয়া কাগজ');
+
+  // A page named like a PDF is read by its bytes and refused, in plain words.
+  await papers.getByTestId('papers-file').setInputFiles({
+    name: 'not-really.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('<html>not a paper</html>', 'utf8'),
+  });
+  await papers.getByTestId('papers-add').click();
+  await expect(papers.getByTestId('papers-problem')).toContainText('শুধু ছবি');
+
+  // Removed, after asking twice.
+  await list.locator('[data-testid^="paper-remove-"]').first().click();
+  await list.locator('[data-testid^="paper-remove-sure-"]').first().click();
+  await expect(papers.getByTestId('papers-none')).toBeVisible();
 
   // Signing out forgets the account on this phone.
   await page.getByTestId('account-sign-out').click();

@@ -115,6 +115,14 @@ export interface TokenClaims extends JWTPayload {
   hospitalId?: string;
   /** Present for staff only. */
   roles?: readonly string[];
+  /**
+   * Present on a staff access token issued by a sign-in: the sign-in it came
+   * from (a session family, `sessions_auth.family_id`). The token is honoured
+   * while that sign-in still holds a live session (`FR-SEC-06`,
+   * `accessGuard.service`). Absent from a demonstration's password-less
+   * token, which has no session to name.
+   */
+  sid?: string;
   /** Present for a guest tracking link: the one booking it may see. */
   bookingId?: string;
   /** Present for a bed request's status link: the one request it may see. */

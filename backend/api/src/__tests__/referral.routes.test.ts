@@ -206,7 +206,9 @@ describe('POST /referrals — who may send (FR-ROLE-01)', () => {
   it('refuses another hospital’s case', async () => {
     const caseId = await inEr(jamuna);
     const response = await sendReferral(caseId, padma, {}, { token: shapla.erToken });
-    expect(response.status).toBe(403);
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect(response.status).toBe(404);
   });
 
   it('needs an idempotency key, and something to ask for', async () => {
@@ -369,7 +371,9 @@ describe('the receiving ER’s steps (LIST-B07-IN, FR-EMG-09)', () => {
     expect(receiverWithdraws.status).toBe(403);
 
     const stranger = await step(referral.id, 'accept', padma.erToken);
-    expect(stranger.status).toBe(403);
+    // Not 403: another hospital's row does not exist for this caller, so it is
+    // not found (`FR-SEC-11`, migration 0043). The refusal is the database's.
+    expect(stranger.status).toBe(404);
 
     const ward = await step(referral.id, 'accept', shapla.wardToken);
     expect(ward.status).toBe(403);

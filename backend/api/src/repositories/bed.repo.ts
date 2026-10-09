@@ -54,6 +54,7 @@ interface BedSqlRow {
   oos_reason: string | null;
   current_admission_id: string | null;
   held_for_request_id: string | null;
+  version: string;
 }
 
 /**
@@ -67,7 +68,7 @@ const BED_SELECT = sql`
   b.id, b.hospital_id, b.ward_id, b.label, b.kind::text AS kind, b.state::text AS state,
   b.nightly_poisha, b.last_cleaned_at, b.state_changed_at,
   b.expected_discharge_date::text AS expected_discharge_date,
-  b.reserved_until, b.oos_reason, b.current_admission_id,
+  b.reserved_until, b.oos_reason, b.current_admission_id, b.version::text AS version,
   (SELECT r.id FROM bed_requests r
     WHERE r.bed_id = b.id AND r.state = 'held' AND r.deleted_at IS NULL
     LIMIT 1) AS held_for_request_id
@@ -89,6 +90,8 @@ function toBed(row: BedSqlRow): BedRow {
     oosReason: row.oos_reason,
     admissionId: row.current_admission_id,
     heldForRequestId: row.held_for_request_id,
+    // bigint, which the driver hands over as text.
+    version: Number(row.version),
   };
 }
 
@@ -456,15 +459,36 @@ export async function publicCapacity(
     SELECT hospital_id, bed_total, bed_free, icu_total, icu_free, icu_as_of, beds_as_of, by_kind
       FROM v_public_hospital_capacity
      WHERE hospital_id = ANY(${[...hospitalIds]}::uuid[])
+       -- A hospital that does not run beds has no bed figure (FR-BRD-11), and
+       -- one that withholds it shares none (FR-NET-04). Absent either way; a
+       -- card is told which (notShared), and never says none are free.
+       AND fn_module_on(hospital_id, 'beds')
+       AND fn_publishes(hospital_id, 'beds')
   `.execute(db);
 
   return new Map(result.rows.map((row) => [row.hospital_id, toCapacity(row)]));
 }
 
+/**
+ * Of these hospitals, the ones that run beds and do not share the figure
+ * (`FR-NET-04`): where a card has to say "not shared" and not "none".
+ */
+export async function withholdingBeds(hospitalIds: readonly string[]): Promise<Set<string>> {
+  if (hospitalIds.length === 0) return new Set();
+  const result = await sql<{ id: string }>`
+    SELECT h.id FROM hospitals h
+     WHERE h.id = ANY(${[...hospitalIds]}::uuid[])
+       AND fn_module_on(h.id, 'beds') AND NOT fn_publishes(h.id, 'beds')
+  `.execute(db);
+  return new Set(result.rows.map((row) => row.id));
+}
+
 /** Hospitals with at least one bed of `kind` (`CHIP-A11-<type>`). */
 export async function hospitalsWithKind(kind: BedKind): Promise<Set<string>> {
   const result = await sql<{ hospital_id: string }>`
-    SELECT DISTINCT hospital_id FROM beds WHERE kind = ${kind}::bed_kind AND deleted_at IS NULL
+    SELECT DISTINCT hospital_id FROM beds
+     WHERE kind = ${kind}::bed_kind AND deleted_at IS NULL
+       AND fn_module_on(hospital_id, 'beds')
   `.execute(db);
   return new Set(result.rows.map((row) => row.hospital_id));
 }

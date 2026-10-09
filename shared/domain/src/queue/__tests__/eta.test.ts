@@ -13,6 +13,7 @@ import { differenceInMinutes } from '../../util/time.js';
 import {
   bandMinutes,
   computeEtas,
+  earlierThanTold,
   etaFor,
   outstandingDelayMinutes,
   projectedEnd,
@@ -321,6 +322,101 @@ describe('an ETA that moves earlier (FR-QUE-15)', () => {
     const eta = etaFor(state, bookingId(1), timestamp('2026-09-17T10:00:00.000Z'));
 
     expect(eta?.movedEarlier).toBe(false);
+  });
+});
+
+describe('earlier than a patient was told (FR-QUE-15)', () => {
+  const NOTHING_TOLD = new Map<BookingId, Timestamp>();
+
+  /** A running chamber of six: the doctor in at the planned start, serial 1 called. */
+  function running(): { state: QueueState; log: LogBuilder } {
+    const { state, log } = session(6);
+    return {
+      state: fold(state, [
+        arrive(log, PLANNED_START),
+        log.next('PATIENT_CALLED', { bookingId: bookingId(1), serial: serial(1) }),
+      ]),
+      log,
+    };
+  }
+
+  const who = (etas: readonly { readonly bookingId: BookingId }[]): BookingId[] =>
+    etas.map((eta) => eta.bookingId);
+
+  it('names nobody while every estimate is at or after what was told', () => {
+    const { state } = running();
+    const etas = computeEtas(state, PLANNED_START);
+    // Told the planned start by the confirmation; every turn is at or after it.
+    expect(earlierThanTold(state, etas, NOTHING_TOLD, PLANNED_START)).toEqual([]);
+  });
+
+  it('names a patient whose estimate has come forward past its band', () => {
+    const { state } = running();
+    const etas = computeEtas(state, PLANNED_START);
+    const fifth = etas.find((eta) => eta.bookingId === bookingId(5));
+    if (fifth === undefined) throw new Error('serial 5 has no estimate');
+
+    // Told a time well after the estimate now stands: by more than the band.
+    const toldLate = new Map<BookingId, Timestamp>([
+      [bookingId(5), timestamp('2026-09-17T13:00:00.000Z')],
+    ]);
+    expect(who(earlierThanTold(state, etas, toldLate, PLANNED_START))).toEqual([bookingId(5)]);
+
+    // Told a time the estimate is still inside the band of: that is an
+    // estimate being an estimate, and nobody is woken for it.
+    const inside = new Date(Date.parse(fifth.etaAt) + fifth.bandMinutes * 60_000).toISOString();
+    const toldClose = new Map<BookingId, Timestamp>([[bookingId(5), timestamp(inside)]]);
+    expect(earlierThanTold(state, etas, toldClose, PLANNED_START)).toEqual([]);
+
+    // One minute past the band is past it.
+    const past = new Date(Date.parse(inside) + 60_000).toISOString();
+    expect(
+      who(
+        earlierThanTold(
+          state,
+          etas,
+          new Map<BookingId, Timestamp>([[bookingId(5), timestamp(past)]]),
+          PLANNED_START,
+        ),
+      ),
+    ).toEqual([bookingId(5)]);
+  });
+
+  it('falls back to the planned start, the time in the confirmation', () => {
+    // The doctor came in forty minutes early and nobody has been told a time
+    // since the booking: everybody's turn is now before the planned start.
+    const { state, log } = session(4);
+    const early = timestamp('2026-09-17T10:20:00.000Z');
+    const begun = fold(state, [arrive(log, early)]);
+    const etas = computeEtas(begun, early);
+
+    expect(who(earlierThanTold(begun, etas, NOTHING_TOLD, PLANNED_START))).toContain(bookingId(1));
+  });
+
+  it('does not warn about a time the chamber cannot support', () => {
+    // Not arrived: the estimate is shown as no time at all, so there is no
+    // earlier time on any screen to warn about.
+    const { state } = session(4);
+    const now = timestamp('2026-09-17T10:00:00.000Z');
+    const etas = computeEtas(state, now);
+    const toldLate = new Map<BookingId, Timestamp>([
+      [bookingId(2), timestamp('2026-09-17T15:00:00.000Z')],
+    ]);
+    expect(earlierThanTold(state, etas, toldLate, PLANNED_START)).toEqual([]);
+  });
+
+  it('leaves out a patient reception has checked in: the corridor tells them', () => {
+    const { state, log } = running();
+    const checkedIn = reduce(
+      state,
+      log.next('PATIENT_ARRIVED', { bookingId: bookingId(5), quotedWaitMinutes: 20 }),
+    );
+    const etas = computeEtas(checkedIn, PLANNED_START);
+    const toldLate = new Map<BookingId, Timestamp>([
+      [bookingId(5), timestamp('2026-09-17T13:00:00.000Z')],
+      [bookingId(6), timestamp('2026-09-17T13:00:00.000Z')],
+    ]);
+    expect(who(earlierThanTold(checkedIn, etas, toldLate, PLANNED_START))).toEqual([bookingId(6)]);
   });
 });
 

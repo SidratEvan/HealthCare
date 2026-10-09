@@ -42,6 +42,20 @@
   --warn-100: #f7eedc;
   --warn-border: #e8d6b0;
 
+  /* --- Positive status (§5.5) ------------------------------------------- *
+   * A chip that says something good: in chamber, in stock, ready. Here it is
+   * the brand green, so the consoles look as they always have; the patient
+   * app gives it its own status green (`patient.css`, FRONTEND.md §0.5).   */
+  --positive-700: #08402f;
+  --positive-600: #0c5c46;
+  --positive-100: #e8f0ec;
+
+  /* --- Accent (§0.5) ------------------------------------------------------ *
+   * The live dot and small decoration only, never text. Nothing in the
+   * consoles uses it; the patient app sets it to the logo's teal.           */
+  --accent-500: #7fd6a8;
+  --accent-100: #e8f0ec;
+
   /* --- Neutral lines ----------------------------------------------------- */
   --line-strong: #d9d4c8;
   --line-soft: #e2ded4;

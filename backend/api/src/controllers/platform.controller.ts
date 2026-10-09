@@ -5,13 +5,18 @@
  */
 
 import {
+  agreementBody,
+  applicationBody,
   lifecycleNoteBody,
+  modulesBody,
   platformDoctorParams,
+  portalDomainBody,
   settingsIdParams,
   workspaceBody,
 } from '@platform/domain';
 
-import { authRequired, forbiddenScope } from '../errors/AppError.js';
+import { AppError, authRequired, forbiddenScope } from '../errors/AppError.js';
+import * as applications from '../services/orgApplication.service.js';
 import * as platform from '../services/platform.service.js';
 
 import type { Request, RequestHandler, Response } from 'express';
@@ -27,6 +32,24 @@ function actorOf(req: Request): platform.PlatformActor {
   };
 }
 
+/**
+ * `POST /hospital-applications` — public (`FR-ONB-09`). Answers with the
+ * code the workspace was given and the email to sign in with, and nothing
+ * else: no token, because signing in is its own step with its own second
+ * factor.
+ */
+export async function postApplication(req: Request, res: Response): Promise<void> {
+  const key = req.idempotencyKey;
+  if (key === undefined) throw new AppError('IDEMPOTENCY_KEY_REQUIRED');
+  const answer = await applications.apply({
+    body: applicationBody.parse(req.body),
+    key,
+    ip: req.ip ?? null,
+    userAgent: req.get('user-agent') ?? null,
+  });
+  res.status(201).json({ ok: true, data: answer });
+}
+
 export async function listWorkspaces(_req: Request, res: Response): Promise<void> {
   res.json({ ok: true, data: { workspaces: await platform.listWorkspaces() } });
 }
@@ -34,6 +57,12 @@ export async function listWorkspaces(_req: Request, res: Response): Promise<void
 export async function getWorkspace(req: Request, res: Response): Promise<void> {
   const { id } = settingsIdParams.parse(req.params);
   res.json({ ok: true, data: await platform.workspace(id) });
+}
+
+/** `GET /platform/hospitals/:id/audit` — what was done to the organisation, newest first. */
+export async function getAuditTrail(req: Request, res: Response): Promise<void> {
+  const { id } = settingsIdParams.parse(req.params);
+  res.json({ ok: true, data: await platform.auditTrail(id) });
 }
 
 export async function postWorkspace(req: Request, res: Response): Promise<void> {
@@ -48,6 +77,27 @@ export function postAct(action: platform.PlatformAction): RequestHandler {
     const { note } = lifecycleNoteBody.parse(req.body);
     res.json({ ok: true, data: await platform.act(actorOf(req), id, action, note) });
   };
+}
+
+/** `PUT /platform/hospitals/:id/modules` — the modules the hospital does not run. */
+export async function putModules(req: Request, res: Response): Promise<void> {
+  const { id } = settingsIdParams.parse(req.params);
+  const { off } = modulesBody.parse(req.body);
+  res.json({ ok: true, data: await platform.setModules(actorOf(req), id, off) });
+}
+
+/** `PUT /platform/hospitals/:id/agreement` — where the hospital's agreement stands. */
+export async function putAgreement(req: Request, res: Response): Promise<void> {
+  const { id } = settingsIdParams.parse(req.params);
+  const { state, note } = agreementBody.parse(req.body);
+  res.json({ ok: true, data: await platform.setAgreement(actorOf(req), id, state, note ?? null) });
+}
+
+/** `POST /platform/hospitals/:id/domain` — the hospital's own domain, or null to remove it. */
+export async function postPortalDomain(req: Request, res: Response): Promise<void> {
+  const { id } = settingsIdParams.parse(req.params);
+  const { domain } = portalDomainBody.parse(req.body);
+  res.json({ ok: true, data: await platform.setPortalDomain(actorOf(req), id, domain) });
 }
 
 export async function postVerifyDoctor(req: Request, res: Response): Promise<void> {

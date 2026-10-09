@@ -21,6 +21,7 @@ export {
   MIN_BODY_SIZE_PX,
   MIN_TOUCH_TARGET_PX,
   MOTION,
+  PATIENT_COLOUR,
   RADIUS,
   SPACE,
   TYPE_SCALE,
@@ -80,6 +81,14 @@ export { cx, type ClassValue } from './components/cx.js';
 // `<FreshnessLine>` lands first because CLAUDE.md §5.8 requires it beneath
 // every live figure, so no screen can ship without it.
 export { FreshnessLine, type FreshnessLineProps } from './components/FreshnessLine.js';
+
+// The printed prescription (FR-DOC-07, plan R2).
+export {
+  PrescriptionSheet,
+  usePrintSheet,
+  type PrescriptionSheetData,
+  type PrescriptionSheetMedicine,
+} from './components/PrescriptionSheet.js';
 
 // The ward board's pair (§6.5, build step 14).
 export { BedTile, type BedTileProps, type BedTileState } from './components/BedTile.js';
