@@ -804,7 +804,7 @@ export async function medicinesFor(
            i.duration_days, i.instruction_bn
       FROM prescriptions p
       JOIN prescription_items i ON i.prescription_id = p.id
-     WHERE p.visit_id = ANY(${visitIds as string[]}::uuid[])
+     WHERE p.visit_id = ANY(${visitIds}::uuid[])
        AND p.deleted_at IS NULL
        AND i.deleted_at IS NULL
      ORDER BY i.created_at, i.id

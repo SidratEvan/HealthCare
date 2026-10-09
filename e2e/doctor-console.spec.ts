@@ -206,9 +206,7 @@ test.describe('prescribing (FR-DOC-04, FR-DOC-05, FR-DOC-07; plan R2)', () => {
         }[];
       };
     };
-    const written = body.data.visits.find(
-      (visit) => visit.diagnosisText === 'শ্বাসনালীর সংক্রমণ',
-    );
+    const written = body.data.visits.find((visit) => visit.diagnosisText === 'শ্বাসনালীর সংক্রমণ');
     expect(written?.medicines).toHaveLength(1);
     expect(written?.medicines[0]).toMatchObject({
       name: 'Paracetamol (Napa)',

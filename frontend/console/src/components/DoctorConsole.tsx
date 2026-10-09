@@ -53,8 +53,7 @@ import {
   time,
   waitingQueue,
 } from '@platform/domain';
-import type { MedicineRow, MedicineRowProblems } from '@platform/domain';
-import type { QueueEntry } from '@platform/domain';
+import type { MedicineRow, MedicineRowProblems, QueueEntry } from '@platform/domain';
 import {
   format,
   formatClock,
@@ -781,9 +780,7 @@ function VisitNote({
               variant="secondary"
               size="lg"
               disabled
-              disabledReason={
-                disabled ? t('nobodyToSee', locale) : t('rxFixFirst', locale)
-              }
+              disabledReason={disabled ? t('nobodyToSee', locale) : t('rxFixFirst', locale)}
               data-testid="save-draft"
             >
               {t('saveDraft', locale)}

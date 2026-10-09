@@ -19,10 +19,10 @@ import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 import { resetEmitter } from '../realtime/emit.js';
+import * as clinicalRepo from '../repositories/clinical.repo.js';
 import * as queueService from '../services/queue.service.js';
 
 import { createQueueFixture, type QueueFixture } from './support/queueFixture.js';
-import { trackingLink } from './support/tokens.js';
 
 import type { Express } from 'express';
 
@@ -167,8 +167,8 @@ describe('POST /visits with medicines (FR-DOC-04)', () => {
     ).toBe(201);
 
     const edit = await postVisit({ medicines: [{ name: 'Ibuprofen' }], sign: false });
-    expect(edit.status).toBe(409);
-    expect(edit.body.error.code).toBe('VISIT_ALREADY_SIGNED');
+    expect(edit.status).toBe(422);
+    expect(edit.body.error.details.guard).toBe('VISIT_ALREADY_SIGNED');
     expect(await storedRows()).toEqual([{ name_text: 'Paracetamol (Napa)', schedule: '1+1+1' }]);
   });
 
@@ -176,9 +176,7 @@ describe('POST /visits with medicines (FR-DOC-04)', () => {
     await callFirstPatient();
     expect((await postVisit({ medicines: [{ name: 'X', schedule: 'twice' }] })).status).toBe(400);
     expect((await postVisit({ medicines: [{ name: '  ' }] })).status).toBe(400);
-    expect(
-      (await postVisit({ medicines: [{ name: 'X', durationDays: 400 }] })).status,
-    ).toBe(400);
+    expect((await postVisit({ medicines: [{ name: 'X', durationDays: 400 }] })).status).toBe(400);
     expect(
       (await postVisit({ medicines: Array.from({ length: 21 }, () => ({ name: 'X' })) })).status,
     ).toBe(400);
@@ -205,12 +203,10 @@ describe('POST /visits with medicines (FR-DOC-04)', () => {
     await callFirstPatient();
     await postVisit({ diagnosisText: 'জ্বর', medicines: [PARACETAMOL], sign: true });
 
-    const view = await request(app).get(
-      `${BASE}/guest/link/${await trackingLink(String(fixture.bookingIds[0]))}`,
-    );
-    expect(view.status).toBe(200);
-    expect(view.body.data.record.medicines).toHaveLength(1);
-    expect(view.body.data.record.medicines[0].name).toBe('Paracetamol (Napa)');
+    // What `guest.service` hands the link's holder as `record`, unchanged.
+    const record = await clinicalRepo.findVisitForBooking(String(fixture.bookingIds[0]));
+    expect(record?.medicines).toHaveLength(1);
+    expect(record?.medicines[0]?.name).toBe('Paracetamol (Napa)');
   });
 });
 

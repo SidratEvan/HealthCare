@@ -205,7 +205,7 @@ function MedicineRowFields({
         <Input
           label={t('rxDays', locale)}
           density="console"
-          inputMode="numeric"
+          kind="number"
           value={row.days}
           disabled={disabled}
           data-testid={`rx-days-${String(index)}`}

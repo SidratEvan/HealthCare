@@ -1001,7 +1001,9 @@ async function insertDemoPrescriptions(
     for (const [index, medicine] of assessment.prescription.entries()) {
       const found = DEMO_FORMULARY.find((entry) => entry.generic === medicine.generic);
       if (found === undefined) {
-        throw new Error(`A demo prescription names ${medicine.generic}, which the formulary does not carry.`);
+        throw new Error(
+          `A demo prescription names ${medicine.generic}, which the formulary does not carry.`,
+        );
       }
       const added = await client.query(
         `INSERT INTO prescription_items

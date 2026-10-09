@@ -188,7 +188,9 @@ test.describe('S-A-12 the timeline', () => {
     const medicines = page.locator('[data-testid^="record-medicines-"]');
     await expect(medicines).toContainText(name);
     // Bengali digits on a Bangla screen, the notation as the doctor wrote it.
-    await expect(medicines).toContainText(medicine.schedule.replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[Number(d)] ?? d));
+    await expect(medicines).toContainText(
+      medicine.schedule.replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[Number(d)] ?? d),
+    );
 
     await page.locator('[data-testid^="record-print-"]').click();
     const sheet = page.getByTestId('prescription-sheet');
