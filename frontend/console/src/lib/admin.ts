@@ -238,11 +238,30 @@ export function dhakaDate(daysAgo: number): string {
   return at.toISOString().slice(0, 10);
 }
 
+/** `GET /admin/overview` — `CARD-B10-NOW` (`FR-ADM-12`, plan R6). */
+export interface Overview {
+  readonly doctors: { readonly scheduled: number; readonly sitting: number };
+  readonly waiting: number;
+  readonly appointments: { readonly booked: number; readonly seen: number };
+  /** Null where the hospital keeps no ward: absent, never a zero. */
+  readonly beds: {
+    readonly free: number;
+    readonly total: number;
+    readonly asOf: string | null;
+  } | null;
+  /** Null where the hospital runs no emergency desk. */
+  readonly emergency: { readonly onTheWay: number; readonly inEr: number } | null;
+  readonly serverTs: string;
+}
+
 export const adminApi = {
   async dashboard(token: string, days: RangeDays): Promise<Dashboard> {
     const to = dhakaDate(0);
     const from = dhakaDate(days);
     return await client(token).get<Dashboard>(`/admin/dashboard?from=${from}&to=${to}`);
+  },
+  async overview(token: string): Promise<Overview> {
+    return await client(token).get<Overview>('/admin/overview');
   },
 };
 

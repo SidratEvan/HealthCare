@@ -484,6 +484,7 @@ change when `S-A-13` lands.
 - `FR-ADM-09` Volume forecast by day and session for staffing.
 - `FR-ADM-10` Export any view to CSV/PDF.
 - `FR-ADM-11` Staff management: add users, assign roles, deactivate.
+- `FR-ADM-12` **The hospital now, at a glance** (owner, 8 October; decision 8b; plan R6). The administrator's dashboard opens on one panel of live figures for today: doctors scheduled and sitting now; patients waiting across today's chambers; today's appointments and how many have been seen; beds free of those in service, with the age of the ward's last confirmation; and the emergency desk's cases on the way and in the ER. Each figure is read when the panel is, says its age, and is refreshed every minute while the screen is open (`FR-OFF-03`). A figure the hospital has no means of knowing is said to be absent, never shown as zero: no wards, no beds figure; no emergency desk, no emergency figure (`PRD.md` §3.2). The reports stay on their own sections below it (`FR-ADM-01`–`10`). Counts only: the panel names no patient.
 
 ---
 

@@ -1058,6 +1058,7 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 | Section | Controls | Wiring |
 |---|---|---|
+| Now | `CARD-B10-NOW` | Above everything else (`FR-ADM-12`, plan R6): five tiles — doctors (sitting of scheduled), waiting, appointments (seen of booked), beds (free of in service, with the ward's age), emergency (on the way · in the ER). `GET /admin/overview`, read on opening and every minute; one freshness line for the panel, the beds' own age under their tile; a tile with nothing to know says so |
 | Today | Date range selector, department filter | Live KPIs (`FR-ADM-01`) |
 | Trends | Wait-time chart with adoption marker | `FR-ADM-02` |
 | Loss & recovery | No-show taka value, recovered value | `FR-ADM-03` |

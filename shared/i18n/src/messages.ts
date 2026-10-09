@@ -653,6 +653,22 @@ export const CONSOLE = {
   visitNote: { bn: 'ভিজিটের রেকর্ড', en: 'Visit record' },
   // TBL-B05-RX, BTN-B05-ADDRX, BTN-B05-PRINT (FR-DOC-04, FR-DOC-05, FR-DOC-07; plan R2).
   rxTitle: { bn: 'ওষুধ', en: 'Medicines' },
+  // CARD-B10-NOW (FR-ADM-12; plan R6).
+  adminNowTitle: { bn: 'এখন হাসপাতালে', en: 'The hospital now' },
+  adminNowDoctors: { bn: 'আজকের ডাক্তার', en: "Today's doctors" },
+  adminNowDoctorsNote: { bn: 'এখন বসছেন / আজ চেম্বার আছে', en: 'sitting now / scheduled today' },
+  adminNowWaiting: { bn: 'অপেক্ষায় রোগী', en: 'Patients waiting' },
+  adminNowAppointments: { bn: 'আজকের সিরিয়াল', en: "Today's appointments" },
+  adminNowAppointmentsNote: { bn: 'দেখা হয়েছে / বুক করা', en: 'seen / booked' },
+  adminNowBeds: { bn: 'খালি বেড', en: 'Beds free' },
+  adminNowBedsNote: { bn: 'খালি / চালু বেড', en: 'free / in service' },
+  adminNowNoWard: { bn: 'এখানে কোনো ওয়ার্ড নেই', en: 'No ward here' },
+  adminNowEmergency: { bn: 'জরুরি বিভাগ', en: 'Emergency' },
+  adminNowEmergencyValue: {
+    bn: 'পথে {onTheWay} · ভেতরে {inEr}',
+    en: '{onTheWay} on the way · {inEr} in the ER',
+  },
+  adminNowNoEr: { bn: 'এখানে জরুরি বিভাগ নেই', en: 'No emergency desk here' },
   rxAdd: { bn: '+ ওষুধ', en: '+ Medicine' },
   rxName: { bn: 'ওষুধের নাম', en: 'Medicine' },
   rxStrength: { bn: 'মাত্রা', en: 'Strength' },

@@ -88,6 +88,7 @@ import {
 } from '@platform/i18n';
 import { Button, Card, FilterChip, FreshnessLine, useLocale } from '@platform/ui';
 
+import { AdminNow } from '@/components/AdminNow';
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { DemoBanner } from '@/components/DemoBanner';
 import { WorkspaceBrandMark } from '@/components/WorkspaceBrandMark';
@@ -268,6 +269,9 @@ export function AdminDashboard(): ReactNode {
           {t('adminLoadFailed', locale)}
         </p>
       ) : null}
+
+      {/* `CARD-B10-NOW` (`FR-ADM-12`, plan R6): the hospital now, above the reports. */}
+      <AdminNow />
 
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         {RANGES.map((range) => (
