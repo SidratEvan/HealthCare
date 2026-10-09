@@ -9,12 +9,14 @@
  */
 
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
+import { isLegacyXls, isZip, sheetHasRows, sheetToCsv } from '@platform/domain';
 import type {
   ColumnMapping,
   FieldProposal,
   FileColumn,
   ImportSet,
   ImportWarnings,
+  SpreadsheetCell,
   StructureType,
 } from '@platform/domain';
 
@@ -214,5 +216,63 @@ export async function downloadTemplate(set: ImportSet): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// A spreadsheet read in the browser (`FR-IMP-22`; plan E1)
+// ---------------------------------------------------------------------------
+
+/** What choosing a file gave: text for the importer, or why there is none. */
+export type ReadFile =
+  | {
+      readonly kind: 'ok';
+      readonly name: string;
+      readonly text: string;
+      /** The sheets that hold rows, when the file was a spreadsheet; the first is read. */
+      readonly sheets: readonly string[];
+      readonly sheet: string | null;
+    }
+  | { readonly kind: 'legacy_xls' }
+  | { readonly kind: 'unreadable' }
+  | { readonly kind: 'too_big' };
+
+/** A spreadsheet larger than this is refused before it is opened in the browser. */
+const MAX_SPREADSHEET_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Reads a chosen file as the CSV text the importer takes. A CSV is read as it
+ * is; an `.xlsx` is opened with `read-excel-file` (loaded only now) and one of
+ * its sheets written as CSV (`sheetToCsv`); an old `.xls` is not read, and the
+ * screen says to save it as `.xlsx` or CSV (the owner's answer to question 19).
+ * Everything after this is the importer as it was: analyse, mapping, check,
+ * preview, approval, audit and undo.
+ */
+export async function readImportFile(file: File, sheet: string | null = null): Promise<ReadFile> {
+  const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+  const looksXlsx = isZip(head) || /\.xlsx$/i.test(file.name);
+  if (isLegacyXls(head) || (/\.xls$/i.test(file.name) && !isZip(head))) {
+    return { kind: 'legacy_xls' };
+  }
+  if (!looksXlsx) {
+    return { kind: 'ok', name: file.name, text: await file.text(), sheets: [], sheet: null };
+  }
+  if (file.size > MAX_SPREADSHEET_BYTES) return { kind: 'too_big' };
+  try {
+    const { default: readXlsxFile } = await import('read-excel-file/browser');
+    const sheets = (await readXlsxFile(file)).filter((entry) =>
+      sheetHasRows(entry.data as unknown as readonly (readonly SpreadsheetCell[])[]),
+    );
+    const chosen = sheets.find((entry) => entry.sheet === sheet) ?? sheets[0];
+    if (chosen === undefined) return { kind: 'unreadable' };
+    return {
+      kind: 'ok',
+      name: file.name,
+      text: sheetToCsv(chosen.data as unknown as readonly (readonly SpreadsheetCell[])[]),
+      sheets: sheets.map((entry) => entry.sheet),
+      sheet: chosen.sheet,
+    };
+  } catch {
+    return { kind: 'unreadable' };
   }
 }

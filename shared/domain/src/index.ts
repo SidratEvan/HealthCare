@@ -595,6 +595,13 @@ export { BD_MOBILE, normaliseBdMobile } from './util/phone.js';
 // --- Importing a hospital's own data (pilot step 24, FR-IMP) ---------------
 export { bookingStanding, type BookingStanding } from './queue/standing.js';
 export { csvField, csvLine, parseCsv, type CsvProblem, type CsvTable } from './imports/csv.js';
+export {
+  isLegacyXls,
+  isZip,
+  sheetHasRows,
+  sheetToCsv,
+  type SpreadsheetCell,
+} from './imports/spreadsheet.js';
 // Mapping a hospital's own export onto the template (`FR-IMP-13`–`20`).
 export {
   COLUMN_KINDS,

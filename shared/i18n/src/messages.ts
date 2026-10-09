@@ -653,6 +653,20 @@ export const CONSOLE = {
   visitNote: { bn: 'ভিজিটের রেকর্ড', en: 'Visit record' },
   // TBL-B05-RX, BTN-B05-ADDRX, BTN-B05-PRINT (FR-DOC-04, FR-DOC-05, FR-DOC-07; plan R2).
   rxTitle: { bn: 'ওষুধ', en: 'Medicines' },
+  // Reading a spreadsheet for the import (FR-IMP-22; plan E1).
+  importSheet: { bn: 'কোন শিট', en: 'Which sheet' },
+  importLegacyXls: {
+    bn: 'এটি পুরোনো .xls ফাইল। Excel-এ খুলে .xlsx বা CSV হিসেবে সংরক্ষণ করে আবার দিন।',
+    en: 'This is an old .xls file. Open it in Excel, save it as .xlsx or CSV, and choose it again.',
+  },
+  importUnreadable: {
+    bn: 'ফাইলটি পড়া যায়নি, বা এতে কোনো সারি নেই। .xlsx বা CSV ফাইল দিন।',
+    en: 'The file could not be read, or holds no rows. Choose an .xlsx or CSV file.',
+  },
+  importTooBig: {
+    bn: 'ফাইলটি ১০ MB-এর বেশি। ছোট অংশে ভাগ করে দিন।',
+    en: 'The file is over 10 MB. Split it into smaller files.',
+  },
   // FRM-B11-DESKS, SEL-B01-COUNTER (FR-REC-32; plan R4).
   desksTitle: { bn: 'রিসেপশন ডেস্ক', en: 'Reception desks' },
   desksHint: {
@@ -2283,8 +2297,8 @@ export const CONSOLE = {
 
   // --- S-B-14, mapping a hospital's own export (FR-IMP-13 to FR-IMP-18) -----
   importOwnFile: {
-    bn: 'আপনাদের নিজস্ব সিস্টেমের এক্সপোর্ট ফাইলও দিতে পারেন। কলামের নাম আলাদা হলে মিলিয়ে নেওয়ার সুযোগ পাবেন।',
-    en: 'You can also give your own system’s export. If its column names differ, you will be asked to match them.',
+    bn: 'CSV বা Excel (.xlsx) ফাইল দিন; আপনাদের নিজস্ব সিস্টেমের এক্সপোর্ট ফাইলও দিতে পারেন। কলামের নাম আলাদা হলে মিলিয়ে নেওয়ার সুযোগ পাবেন।',
+    en: 'Give a CSV or Excel (.xlsx) file; you can also give your own system’s export. If its column names differ, you will be asked to match them.',
   },
   importFileNoHeader: {
     bn: 'ফাইলের প্রথম সারিতে কলামের নাম থাকতে হবে। এই ফাইলের প্রথম সারিতে তথ্য আছে বলে মনে হচ্ছে। উপরে নামের একটি সারি যোগ করে আবার দিন।',
