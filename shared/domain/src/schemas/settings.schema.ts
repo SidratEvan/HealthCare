@@ -347,6 +347,8 @@ export const deskBody = z.strictObject({
   nameBn: name,
   nameEn: name,
   doctorIds: z.array(z.string().uuid()).max(200).default([]),
+  /** Its receptionists (0063): an assigned receptionist manages only these doctors. */
+  staffIds: z.array(z.string().uuid()).max(200).default([]),
 });
 
 export type DeskBody = z.infer<typeof deskBody>;
@@ -357,6 +359,7 @@ export const deskPatchBody = z
     nameBn: name.optional(),
     nameEn: name.optional(),
     doctorIds: z.array(z.string().uuid()).max(200).optional(),
+    staffIds: z.array(z.string().uuid()).max(200).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'change at least one field');
 

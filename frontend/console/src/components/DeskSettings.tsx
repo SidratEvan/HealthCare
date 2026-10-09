@@ -163,9 +163,17 @@ function DeskRow({
 }): ReactNode {
   const locale = useLocale();
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set(desk.doctorIds));
+  // Question 20: the receptionists at this desk manage only its doctors.
+  const [staff, setStaff] = useState<ReadonlySet<string>>(() => new Set(desk.staffIds));
+  const receptionists = snapshot.staff.filter(
+    (person) => person.isActive && person.roles.includes('receptionist'),
+  );
   const [confirming, setConfirming] = useState(false);
   const changed =
-    chosen.size !== desk.doctorIds.length || desk.doctorIds.some((id) => !chosen.has(id));
+    chosen.size !== desk.doctorIds.length ||
+    desk.doctorIds.some((id) => !chosen.has(id)) ||
+    staff.size !== desk.staffIds.length ||
+    desk.staffIds.some((id) => !staff.has(id));
   // A doctor listed twice under the hospital (two departments) is one chip.
   const doctors = [...new Map(snapshot.doctors.map((d) => [d.doctorId, d])).values()];
 
@@ -191,6 +199,28 @@ function DeskRow({
           </FilterChip>
         ))}
       </div>
+      {receptionists.length === 0 ? null : (
+        <div className="flex flex-col gap-2" data-testid={`desk-staff-${desk.id}`}>
+          <p className="text-caption text-ink-muted">{t('desksStaffHint', locale)}</p>
+          <div className="flex flex-wrap gap-2">
+            {receptionists.map((person) => (
+              <FilterChip
+                key={person.id}
+                selected={staff.has(person.id)}
+                data-testid={`desk-staff-${desk.id}-${person.id}`}
+                onToggle={() => {
+                  const next = new Set(staff);
+                  if (next.has(person.id)) next.delete(person.id);
+                  else next.add(person.id);
+                  setStaff(next);
+                }}
+              >
+                {person.fullName}
+              </FilterChip>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         {offline || !changed ? (
           <Button
@@ -209,7 +239,8 @@ function DeskRow({
             data-testid={`desk-save-${desk.id}`}
             onClick={() => {
               void run(
-                () => settingsApi.updateDesk(desk.id, { doctorIds: [...chosen] }),
+                () =>
+                  settingsApi.updateDesk(desk.id, { doctorIds: [...chosen], staffIds: [...staff] }),
                 () => t('settingsSaved', locale),
               ).then((saved) => {
                 if (saved) onChanged();

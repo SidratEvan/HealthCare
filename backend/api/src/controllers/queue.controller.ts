@@ -16,6 +16,7 @@ import { measuredConsultSeconds, time, UNDO_WINDOW_SECONDS } from '@platform/dom
 import type { QueueActor } from '@platform/domain';
 
 import { AppError, forbiddenScope, notFound } from '../errors/AppError.js';
+import { assertDeskAllows } from '../services/deskAccess.service.js';
 import * as queueService from '../services/queue.service.js';
 
 import type {
@@ -565,6 +566,9 @@ async function assertSessionScope(req: Request, sessionId: string): Promise<Sess
   if (principal.kind === 'staff' && principal.hospitalId !== session.hospitalId) {
     throw forbiddenScope({ reason: 'wrong_hospital' });
   }
+
+  // `FR-REC-32` (question 20): a receptionist at a desk manages its doctors only.
+  await assertDeskAllows(principal, session);
 
   return session;
 }
