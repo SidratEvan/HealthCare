@@ -862,8 +862,9 @@ before Docker sees them. A Linux server needs nothing.
 
 - **`NODE_ENV=production`, `DEMO_MODE=false`.** No demonstration banner data,
   no password-less picker, no seeding: `db:seed` and `db:reset` refuse to run
-  unless `DEMO_MODE=true` is set on purpose. Staff sign in with their own
-  accounts (`FR-SEC-06`).
+  under `NODE_ENV=production` whatever `DEMO_MODE` says, and the image sets
+  it, so no flag typed on this server truncates its database (`FR-SEC-08`).
+  Staff sign in with their own accounts (`FR-SEC-06`).
 - **Files on the server's disk** (`STORAGE_PROVIDER=local`, a named volume),
   served only through signed, expiring links.
 - **No online payment** (`PAYMENT_PROVIDER=off`): the patient app offers
