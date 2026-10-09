@@ -256,9 +256,25 @@ model's import suggestions are off on the deployed demo unless
 
 ## 7. Releasing V1 to the public demo (plan J)
 
-**Prepared on 8–9 October. Nothing in this section has been run against
-Supabase, Render or Vercel, and none of it is run without the owner's word**
-(`CLAUDE.md` §4.6; the owner's note of 8 October: "NOT YET"). It releases
+**State, 9 October (the owner authorised one public-demo release that day).**
+Done: the gate on the release code (§7.1; `b7b1094`, plus `a4ca5b0`'s reset
+guard with its own tests); Supabase identified as the demo (project
+`vrfbwnbfzogfkwgajcjn`, six "(Demo)" hospitals, the seeded 200 patients and
+no others, migrations through 0038, PostgreSQL 17.6); the daily refresh
+**disabled**; the backup taken (§7.3) at
+`%LOCALAPPDATA%\HealthCareDemo\backups\supabase-before-v1-20261009T0650Z.dump`
+with `pg_dump` 17 from the `postgres:17-alpine` image, and **restored** into a
+scratch database with every count matching. **Stopped at §7.4 step 4:** the
+session's permission check refused the remote migration, so Supabase, `main`,
+Render and Vercel are untouched and the public demo is still the 6 October
+release. Render cannot be suspended from the machine (no credential), so step
+2 is skipped: the gap is bookings failing for the few minutes between the
+migration and Render's redeploy. **Keep the refresh disabled until the
+migrations are applied:** `db:verify` does not notice missing migrations, so a
+refresh from today's `mvp` would truncate and then fail to seed.
+
+Originally: **prepared on 8–9 October, nothing in this section run against
+Supabase, Render or Vercel without the owner's word** (`CLAUDE.md` §4.6). It releases
 `mvp` over the pitch release of 6 October (`fa31157`, migrations through
 0038). Still a pitch deployment: `DEMO_MODE=true`, `SMS_PROVIDER=log`,
 `PAYMENT_PROVIDER=mock`, `STORAGE_PROVIDER=mock`, demonstration data only.
