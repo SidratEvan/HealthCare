@@ -670,15 +670,19 @@ export const CONSOLE = {
   // FRM-B11-DESKS, SEL-B01-COUNTER (FR-REC-32; plan R4).
   desksTitle: { bn: 'রিসেপশন ডেস্ক', en: 'Reception desks' },
   desksHint: {
-    bn: 'প্রতিটি ডেস্কের জন্য ডাক্তার বেছে দিন। সেই ডেস্কে তাঁদের চেম্বার আগে দেখাবে; অন্য সব চেম্বারও খোলা থাকবে, কেউ আটকে যাবেন না।',
-    en: "Choose each desk's doctors. Their chambers come first at that desk; every other chamber stays open, and nobody is locked out.",
+    bn: 'প্রতিটি ডেস্কের ডাক্তার ও রিসেপশনিস্ট বেছে দিন। ডেস্কে থাকা রিসেপশনিস্ট শুধু সেই ডেস্কের ডাক্তারদের চেম্বার চালাতে পারবেন; ডেস্ক না থাকলে সবাই সব চেম্বার চালাতে পারবেন।',
+    en: "Choose each desk's doctors and receptionists. A receptionist at a desk manages only its doctors' chambers; with no desks, everyone manages every chamber.",
   },
   desksNone: { bn: 'এখনো কোনো ডেস্ক নেই।', en: 'No desks yet.' },
   desksNameBn: { bn: 'ডেস্কের নাম (বাংলায়)', en: 'Desk name (Bangla)' },
   desksNameEn: { bn: 'ডেস্কের নাম (ইংরেজিতে)', en: 'Desk name (English)' },
   desksAdd: { bn: 'ডেস্ক যোগ করুন', en: 'Add desk' },
   desksNameFirst: { bn: 'দুই ভাষায় নাম লিখুন।', en: 'Write the name in both languages.' },
-  desksSave: { bn: 'ডাক্তার সংরক্ষণ করুন', en: 'Save doctors' },
+  desksSave: { bn: 'সংরক্ষণ করুন', en: 'Save' },
+  desksStaffHint: {
+    bn: 'এই ডেস্কের রিসেপশনিস্ট: তাঁরা শুধু এই ডেস্কের ডাক্তারদের সিরিয়াল চালাতে পারবেন। কোনো ডেস্কে না থাকলে সব চেম্বার চালাতে পারবেন।',
+    en: "This desk's receptionists: they manage only this desk's doctors. A receptionist at no desk manages every chamber.",
+  },
   desksNothingChanged: { bn: 'কিছু বদলানো হয়নি।', en: 'Nothing has changed.' },
   desksRemove: { bn: 'ডেস্ক সরান', en: 'Remove desk' },
   desksRemoveSure: { bn: 'নিশ্চিত, সরান', en: 'Yes, remove' },

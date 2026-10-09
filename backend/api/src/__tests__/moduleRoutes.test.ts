@@ -108,6 +108,16 @@ const NOBODYS: readonly string[] = [
   'POST /payments/intent',
   'GET /hospital/setup',
   'GET /hospital/brand',
+  // Reception desks are settings, as staff are (FR-REC-32, plans R4 and R4b).
+  'GET /hospital/desks',
+  'POST /hospital/desks',
+  'PATCH /hospital/desks/:id',
+  'DELETE /hospital/desks/:id',
+  // A patient's own papers are the patient's, no hospital's module (FR-PAT-62, plan R3).
+  'POST /me/documents',
+  'GET /me/documents',
+  'DELETE /me/documents/:id',
+  'GET /patients/:id/documents/:docId/url',
   'GET /hospital/messages',
   'PATCH /hospital/profile',
   'PATCH /hospital/rules',

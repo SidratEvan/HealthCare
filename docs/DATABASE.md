@@ -407,7 +407,7 @@ Since 0059 (plan R3): `content_type` (`image/jpeg`, `image/png`, `image/webp`, `
 ### 2.5 Beds, emergency, referrals
 
 #### `reception_desks`, `reception_desk_doctors` (0061, `FR-REC-32`)
-`reception_desks`: `id`, `hospital_id`, `name_bn`, `name_en`, `created_by`, `deleted_at`; a live name is unique per hospital (`lower(name_en)`). `reception_desk_doctors`: `desk_id`, `doctor_id`, `hospital_id` (**PK** desk and doctor). An organisation's own rows (`app_org`). They order the console and restrict nothing.
+`reception_desks`: `id`, `hospital_id`, `name_bn`, `name_en`, `created_by`, `deleted_at`; a live name is unique per hospital (`lower(name_en)`). `reception_desk_doctors`: `desk_id`, `doctor_id`, `hospital_id` (**PK** desk and doctor). `reception_desk_staff` (0063): `desk_id`, `staff_user_id`, `hospital_id` (**PK** desk and member of staff): the receptionists at a desk, who then manage only its doctors (question 20). An organisation's own rows (`app_org`).
 
 #### `wards`
 `id`, `hospital_id`, `name_bn`, `name_en`, `floor` (smallint, 0 = ground), `kind` bed_kind.
@@ -896,6 +896,7 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0061_reception_desks.sql       -- plan R4: reception_desks,
                                    -- reception_desk_doctors (FR-REC-32)
     0062_chamber_organisations.sql -- plan R7: facility_kind 'chamber' (FR-ONB-11)
+    0063_desk_staff.sql            -- question 20: reception_desk_staff (FR-REC-32)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

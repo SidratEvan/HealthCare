@@ -1310,18 +1310,26 @@ export interface DeskRow {
   readonly nameEn: string;
   /** The doctors the desk looks after; their chambers come first at this desk. */
   readonly doctorIds: readonly string[];
+  /** The receptionists at it (0063): they manage only its doctors. */
+  readonly staffIds: readonly string[];
 }
 
 /** A hospital's live desks, each with its doctors, by English name. */
 export async function listDesks(hospitalId: string, trx?: Tx): Promise<DeskRow[]> {
-  const result = await sql<{ id: string; name_bn: string; name_en: string; doctor_ids: string[] }>`
+  const result = await sql<{
+    id: string;
+    name_bn: string;
+    name_en: string;
+    doctor_ids: string[];
+    staff_ids: string[];
+  }>`
     SELECT d.id, d.name_bn, d.name_en,
-           coalesce(array_agg(dd.doctor_id::text ORDER BY dd.doctor_id)
-                    FILTER (WHERE dd.doctor_id IS NOT NULL), '{}') AS doctor_ids
+           coalesce((SELECT array_agg(dd.doctor_id::text ORDER BY dd.doctor_id)
+                       FROM reception_desk_doctors dd WHERE dd.desk_id = d.id), '{}') AS doctor_ids,
+           coalesce((SELECT array_agg(ds.staff_user_id::text ORDER BY ds.staff_user_id)
+                       FROM reception_desk_staff ds WHERE ds.desk_id = d.id), '{}') AS staff_ids
       FROM reception_desks d
-      LEFT JOIN reception_desk_doctors dd ON dd.desk_id = d.id
      WHERE d.hospital_id = ${hospitalId}::uuid AND d.deleted_at IS NULL
-     GROUP BY d.id
      ORDER BY d.name_en
   `.execute(trx ?? db);
   return result.rows.map((row) => ({
@@ -1329,6 +1337,7 @@ export async function listDesks(hospitalId: string, trx?: Tx): Promise<DeskRow[]
     nameBn: row.name_bn,
     nameEn: row.name_en,
     doctorIds: row.doctor_ids,
+    staffIds: row.staff_ids,
   }));
 }
 
@@ -1426,5 +1435,70 @@ export async function removeDesk(trx: Tx, hospitalId: string, deskId: string): P
   `.execute(trx);
   if (Number(result.numAffectedRows ?? 0) === 0) return false;
   await sql`DELETE FROM reception_desk_doctors WHERE desk_id = ${deskId}::uuid`.execute(trx);
+  // A removed desk binds nobody: its receptionists go back to the common workspace.
+  await sql`DELETE FROM reception_desk_staff WHERE desk_id = ${deskId}::uuid`.execute(trx);
   return true;
+}
+
+/**
+ * The doctors a receptionist may manage when assigned to desks (0063,
+ * `FR-REC-32`): every doctor of every live desk they are at. Null when they
+ * are at no desk, which keeps the common workspace (decision 2a).
+ */
+export async function deskDoctorsForStaff(
+  staffUserId: string,
+  hospitalId: string,
+): Promise<ReadonlySet<string> | null> {
+  const result = await sql<{ assigned: boolean; doctor_ids: string[] }>`
+    SELECT EXISTS (
+             SELECT 1 FROM reception_desk_staff ds
+               JOIN reception_desks d ON d.id = ds.desk_id AND d.deleted_at IS NULL
+              WHERE ds.staff_user_id = ${staffUserId}::uuid AND ds.hospital_id = ${hospitalId}::uuid
+           ) AS assigned,
+           coalesce((
+             SELECT array_agg(DISTINCT dd.doctor_id::text)
+               FROM reception_desk_staff ds
+               JOIN reception_desks d ON d.id = ds.desk_id AND d.deleted_at IS NULL
+               JOIN reception_desk_doctors dd ON dd.desk_id = d.id
+              WHERE ds.staff_user_id = ${staffUserId}::uuid AND ds.hospital_id = ${hospitalId}::uuid
+           ), '{}') AS doctor_ids
+  `.execute(db);
+  const row = result.rows[0];
+  if (!row?.assigned) return null;
+  return new Set(row.doctor_ids);
+}
+
+/** Replaces the receptionists at a desk. */
+export async function setDeskStaff(
+  trx: Tx,
+  hospitalId: string,
+  deskId: string,
+  staffUserIds: readonly string[],
+): Promise<void> {
+  await sql`DELETE FROM reception_desk_staff WHERE desk_id = ${deskId}::uuid`.execute(trx);
+  if (staffUserIds.length === 0) return;
+  await sql`
+    INSERT INTO reception_desk_staff (desk_id, staff_user_id, hospital_id)
+    SELECT ${deskId}::uuid, staff, ${hospitalId}::uuid
+      FROM unnest(${staffUserIds}::uuid[]) AS staff
+    ON CONFLICT DO NOTHING
+  `.execute(trx);
+}
+
+/** The ids among these that are not receptionists of this hospital. */
+export async function staffNotReceptionists(
+  hospitalId: string,
+  staffUserIds: readonly string[],
+): Promise<string[]> {
+  if (staffUserIds.length === 0) return [];
+  const result = await sql<{ id: string }>`
+    SELECT wanted.id
+      FROM unnest(${staffUserIds}::uuid[]) AS wanted(id)
+     WHERE NOT EXISTS (
+       SELECT 1 FROM staff_roles sr
+        WHERE sr.staff_user_id = wanted.id AND sr.hospital_id = ${hospitalId}::uuid
+          AND sr.role = 'receptionist' AND sr.deleted_at IS NULL
+     )
+  `.execute(db);
+  return result.rows.map((row) => row.id);
 }

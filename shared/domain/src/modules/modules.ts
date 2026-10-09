@@ -145,6 +145,8 @@ export const MODULE_ROUTES: Readonly<Record<string, readonly HospitalModule[]>> 
   // A patient reads their own record here; for staff it is the doctor's panel.
   'GET /patients/:id/records': ['doctor'],
   'POST /consents/qr': ['doctor'],
+  // The formulary the prescribing screen suggests from (FR-DOC-05, plan R2).
+  'GET /formulary': ['doctor'],
   'GET /lab/catalogue': ['doctor', 'lab'],
   'POST /test-orders': ['doctor', 'lab'],
 
@@ -195,6 +197,8 @@ export const MODULE_ROUTES: Readonly<Record<string, readonly HospitalModule[]>> 
 
   // --- the administrator's figures ---------------------------------------------------------
   'GET /admin/dashboard': ['dashboard'],
+  // The hospital now (FR-ADM-12, plan R6).
+  'GET /admin/overview': ['dashboard'],
   'GET /admin/export': ['dashboard'],
   'GET /hospitals/:hospitalId/settlement': ['dashboard'],
   'POST /payments/:id/refund': ['dashboard'],

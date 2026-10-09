@@ -22,6 +22,7 @@ import { runInDbScope, scopeOfPrincipal } from '../config/dbScope.js';
 import { logger } from '../config/logger.js';
 import { ticketsIn } from '../config/serialTicket.js';
 import { AppError } from '../errors/AppError.js';
+import { deskLimit } from '../services/deskAccess.service.js';
 import * as queueService from '../services/queue.service.js';
 
 import { forgetSocket, sessionOf } from './auth.js';
@@ -123,7 +124,9 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
     holdsBooking: await holdsBooking(session.principal, sessionId),
   });
 
-  if (!allowed) {
+  // `FR-REC-32` (question 20): the same desk rule as every route.
+  const deskLimited = await deskLimit(session.principal);
+  if (!allowed || (deskLimited !== null && !deskLimited.has(record.doctorId))) {
     emitError(socket, new AppError('AUTH_FORBIDDEN_SCOPE', { details: { room: 'session' } }));
     return;
   }

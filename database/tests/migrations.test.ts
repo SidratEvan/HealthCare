@@ -167,6 +167,7 @@ describe('migration files (DATABASE.md §7)', () => {
       '0060',
       '0061',
       '0062',
+      '0063',
     ]);
   });
 

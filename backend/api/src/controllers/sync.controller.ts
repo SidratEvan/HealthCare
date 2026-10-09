@@ -17,6 +17,7 @@ import { syncBatchBody, syncParams, syncPullQuery } from '@platform/domain';
 import type { StaffRole } from '@platform/domain';
 
 import { forbiddenScope } from '../errors/AppError.js';
+import { assertDeskAllows } from '../services/deskAccess.service.js';
 import * as queueService from '../services/queue.service.js';
 import * as syncService from '../services/sync.service.js';
 
@@ -27,7 +28,9 @@ import type { Request, Response } from 'express';
 /** `POST /sync/events` — replay a console's offline batch (`SY-05`). */
 export async function pushEvents(req: Request, res: Response): Promise<void> {
   const body = syncBatchBody.parse(req.body);
-  const roles = requireStaffScope(req, await hospitalOf(body.sessionId));
+  const session = await sessionOf(body.sessionId);
+  const roles = requireStaffScope(req, session.hospitalId);
+  await assertDeskOf(req, session);
 
   const result = await syncService.pushBatch({
     sessionId: body.sessionId,
@@ -49,7 +52,9 @@ export async function pullSession(req: Request, res: Response): Promise<void> {
   const { id } = syncParams.parse(req.params);
   const query = syncPullQuery.parse(req.query);
 
-  requireStaffScope(req, await hospitalOf(id));
+  const session = await sessionOf(id);
+  requireStaffScope(req, session.hospitalId);
+  await assertDeskOf(req, session);
 
   const result = await syncService.pullSince({
     sessionId: id,
@@ -60,10 +65,17 @@ export async function pullSession(req: Request, res: Response): Promise<void> {
   res.status(200).json({ ok: true, data: result });
 }
 
-/** The hospital a session belongs to; 404 if there is no such session. */
-async function hospitalOf(sessionId: string): Promise<string> {
+/** The hospital and the doctor a session belongs to; 404 if there is no such session. */
+async function sessionOf(
+  sessionId: string,
+): Promise<{ readonly hospitalId: string; readonly doctorId: string }> {
   const session = await queueService.requireSession(sessionId);
-  return session.hospitalId;
+  return { hospitalId: session.hospitalId, doctorId: session.doctorId };
+}
+
+/** `FR-REC-32` (question 20): a receptionist at a desk syncs its doctors' chambers only. */
+async function assertDeskOf(req: Request, session: { readonly doctorId: string }): Promise<void> {
+  if (req.principal !== undefined) await assertDeskAllows(req.principal, session);
 }
 
 /**

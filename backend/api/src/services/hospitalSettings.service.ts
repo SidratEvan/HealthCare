@@ -748,9 +748,19 @@ async function assertOwnDoctors(hospitalId: string, doctorIds: readonly string[]
   if (strangers.length > 0) throw notAllowed('doctor_not_here', { doctorIds: strangers });
 }
 
+/** Only this hospital's receptionists are put at a desk. */
+async function assertOwnReceptionists(
+  hospitalId: string,
+  staffIds: readonly string[],
+): Promise<void> {
+  const strangers = await repo.staffNotReceptionists(hospitalId, staffIds);
+  if (strangers.length > 0) throw notAllowed('not_a_receptionist_here', { staffIds: strangers });
+}
+
 export async function addDesk(actor: Actor, body: DeskBody): Promise<{ deskId: string }> {
   if (await repo.deskNameTaken(actor.hospitalId, body.nameEn, null)) throw duplicate('nameEn');
   await assertOwnDoctors(actor.hospitalId, body.doctorIds);
+  await assertOwnReceptionists(actor.hospitalId, body.staffIds);
   return await change(actor, { table: 'reception_desks', change: 'desk_added' }, async (trx) => {
     const deskId = await repo.createDesk(trx, {
       hospitalId: actor.hospitalId,
@@ -759,6 +769,7 @@ export async function addDesk(actor: Actor, body: DeskBody): Promise<{ deskId: s
       createdBy: actor.staffId,
     });
     await repo.setDeskDoctors(trx, actor.hospitalId, deskId, body.doctorIds);
+    await repo.setDeskStaff(trx, actor.hospitalId, deskId, body.staffIds);
     return { result: { deskId }, subjectId: deskId };
   });
 }
@@ -771,12 +782,16 @@ export async function updateDesk(actor: Actor, deskId: string, body: DeskPatchBo
     throw duplicate('nameEn');
   }
   if (body.doctorIds !== undefined) await assertOwnDoctors(actor.hospitalId, body.doctorIds);
+  if (body.staffIds !== undefined) await assertOwnReceptionists(actor.hospitalId, body.staffIds);
   await change(actor, { table: 'reception_desks', change: 'desk_changed' }, async (trx) => {
     // Renaming nothing still finds the desk, so an unknown one is a 404.
     const found = await repo.renameDesk(trx, actor.hospitalId, deskId, body);
     if (!found) throw notFound('desk');
     if (body.doctorIds !== undefined) {
       await repo.setDeskDoctors(trx, actor.hospitalId, deskId, body.doctorIds);
+    }
+    if (body.staffIds !== undefined) {
+      await repo.setDeskStaff(trx, actor.hospitalId, deskId, body.staffIds);
     }
     return { result: undefined, subjectId: deskId };
   });
