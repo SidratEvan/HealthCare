@@ -256,102 +256,236 @@ model's import suggestions are off on the deployed demo unless
 
 ## 7. Releasing V1 to the public demo (plan J)
 
-**Prepared on 8 October. Nothing in this section has been run against
+**Prepared on 8–9 October. Nothing in this section has been run against
 Supabase, Render or Vercel, and none of it is run without the owner's word**
-(`CLAUDE.md` §4.6). It is the release of `mvp` over the pitch release of 6
-October (`fa31157`, migrations through 0038). What `mvp` adds is
-`docs/PLATFORM_PLAN.md` §2, A to K, F3 and H3: tenancy at the database,
-branding, onboarding, the mapped import, the notification sender, the payment
-holds, the patient redesign. Still a pitch deployment: `DEMO_MODE=true`,
-`SMS_PROVIDER=log`, `PAYMENT_PROVIDER=mock`, demonstration data only.
+(`CLAUDE.md` §4.6; the owner's note of 8 October: "NOT YET"). It releases
+`mvp` over the pitch release of 6 October (`fa31157`, migrations through
+0038). Still a pitch deployment: `DEMO_MODE=true`, `SMS_PROVIDER=log`,
+`PAYMENT_PROVIDER=mock`, `STORAGE_PROVIDER=mock`, demonstration data only.
+A hospital's own pilot is a different deployment (Part S) and a different
+checklist (§7.9).
 
-### 7.1 Before: the gate
+The order, each step with its check: **7.1** the gate · **7.2** what the
+migrations do · **7.3** the backup · **7.4** the window and the order ·
+**7.5** the limited database role (optional, the owner's question 18) ·
+**7.6** the smoke walk · **7.7** rolling back · **7.8** after.
 
-The full gate passed on `mvp` as `docs/STATUS.md` records under plan J:
-`pnpm verify`, `pnpm build`, `pnpm test:e2e` (the canary among them),
-`pnpm test:e2e:built` and `pnpm test:e2e:prod`. If anything has been merged
-into `mvp` since, the gate is run again on the commit being released. Nothing
-red goes out.
+### 7.1 Before anything: the gate, on the commit being released
 
-### 7.2 The migrations Supabase does not have: 0039 to 0058
+On a clean checkout of the `mvp` commit to be released, with the local
+database (never Supabase):
 
-All forward-only, applied in order by `pnpm db:migrate`, which skips what is
-applied. Four of them change rows that exist; the rest add columns, tables,
-indexes, functions or policies.
+```bash
+pnpm install --frozen-lockfile
+pnpm verify                 # typecheck, lint, format, every unit/API/schema test
+pnpm build
+pnpm test:e2e               # the whole browser suite, the canary among it
+pnpm test:e2e:built
+pnpm test:e2e:prod
+pnpm audit --prod           # expect: no known vulnerabilities
+```
+
+Nothing red goes out (§3.1). The browser suite runs the API with
+`DEMO_MODE=true` **as a limited database role**, exactly as §7.5 would run
+the public demo, so it is also the test of §7.5. Write the commit hash down:
+it is what `main` will point at.
+
+### 7.2 The migrations Supabase does not have: 0039 to 0063
+
+Forward-only, applied in order by `pnpm db:migrate`, each in its own
+transaction: one that fails is rolled back whole, the run stops, and the ones
+before it stay applied. Re-running continues from where it stopped. Five
+change rows that exist; the rest add.
 
 | Migration | What it does | Rows it changes |
 |---|---|---|
-| 0039, 0040 | A version on a bed and on an emergency case (newer statement wins) | none |
-| 0041 | A booking keeps its idempotency key; a booking may hold several tracking links | none, but **drops `guest_links_booking_key`** (see 7.4) |
+| 0039, 0040 | A version on a bed and on an emergency case | none |
+| 0041 | A booking keeps its idempotency key; several tracking links per booking | none, but **drops `guest_links_booking_key`** (§7.4) |
 | 0042 | A staff sign-in keeps one family across refreshes | sets `family_id` on staff refresh rows |
-| 0043, 0044, 0056 | Tenant, patient and person policies; the role `app_tenant` | none. The role is created if missing; Supabase's `postgres` may create it |
+| 0043, 0044, 0056 | Tenant, patient and person policies; the role `app_tenant` | none; the role is created if missing, which Supabase's `postgres` may do |
 | 0045 to 0049 | Logos, portal domain, modules, publishing, applications | none |
 | 0050 to 0052 | Told ETA, agreement state, workspace health | none |
 | 0053 | The notification sender's attempts and due time | sets `next_attempt_at` on queued messages |
 | 0054, 0055 | Delivery receipts, backup runs | none |
 | 0057 | Payment holds and `payment_events` | marks old failed payments `declined` |
-| 0058 | The no-show prepayment settings | none (off by default) |
+| 0058 | No-show prepayment settings | none (off by default) |
+| 0059 | A patient's own papers: content type, size, uploader | none (nothing wrote the table) |
+| 0060 | Preferred arrival hour | none (off by default) |
+| 0061, 0063 | Reception desks, their doctors, their receptionists | none |
+| 0062 | `facility_kind` gains `chamber` (`ALTER TYPE … ADD VALUE`) | none; allowed inside a transaction on PostgreSQL 12 and later, and nothing uses the value in that migration |
 
-**The policies change nothing on the demo as it stands.** The demo's API
-connects as Supabase's `postgres`, which bypasses row-level security. The
-hospital-to-hospital separation the browser suites prove holds only where the
-API connects as its own role, as the self-hosted stack does (`pnpm db:role`,
-S2). Whether the public demo should connect as a limited role too is the
-owner's question 18 in `docs/STATUS.md`; on synthetic data it is not a
-release blocker.
+**Rehearsed on 9 October, locally:** a database built by the released commit (`fa31157`: its 36 migrations and its demo reset, 975 payments and a live session among them), then `pnpm db:migrate` from `mvp`: all 25 applied in under a second, `pnpm db:verify` held every invariant, the new reset filled the new screens, and `pnpm db:role` made a role without bypass that, querying with no hospital scope, saw no hospital at all. Supabase itself has not been touched.
 
-### 7.3 Demo data
+**Compatibility, both ways.** The new API needs every one of these (it reads
+columns and tables they add), so it must not run against the old schema. The
+old API (`fa31157`) runs against the new schema with one exception: it writes
+a tracking link with `ON CONFLICT (booking_id)`, which needs the unique index
+0041 drops, so **from the migration until the new API is live, every booking
+on the demo fails**. Nothing else the old API does is broken by an additive
+column, table or policy (the policies bind nobody while the API connects as
+`postgres`). Hence the order in §7.4.
 
-The seed now carries what the new screens show: hospitals' logos and colours,
-agreements, and the history the platform's health and trail are read from.
-Without a reset those screens are empty or show defaults. So
-the release includes the reset, which **truncates every table** (§1.2). The
-data is synthetic, so a reset is also the way back if a step goes wrong.
+### 7.3 The backup, before the first statement
 
-### 7.4 The order, and the one gap
+The demo holds synthetic data only (`FR-SEC-08`), so the reset in §7.4 is
+itself a way back; the backup is for the schema and for the case where the
+reset is what fails. On Supabase's free plan there is no point-in-time
+recovery, so take one by hand, from the machine that will run the migration:
 
-The API the demo runs now (`fa31157`) writes a tracking link with
-`ON CONFLICT (booking_id)`, which needs the unique index that 0041 drops. So
-**from the moment the migrations are applied until Render has deployed the new
-API, every booking on the public demo fails.** The new API, run against the
-old schema, would fail worse (columns it reads are missing). The gap cannot be
-removed, only kept short and kept away from a meeting:
+```bash
+export DATABASE_URL='postgresql://…pooler.supabase.com:5432/postgres'   # the owner, §1.1
+pg_dump --no-owner --no-privileges --format=custom \
+  --file="supabase-before-v1-$(date -u +%Y%m%dT%H%MZ).dump" "$DATABASE_URL"
+pg_restore --list supabase-before-v1-*.dump | head        # it opens, and lists tables
+```
 
-1. Pick a time nobody is being shown the demo.
-2. On Render, **suspend** the API service (Settings → Suspend), so nobody books
-   into the gap.
-3. From a machine with the session-pooler URL (§1.1):
+Keep the file off the repository (`.gitignore` ignores `*.dump`) and keep it
+until the release is confirmed good. A
+`pg_dump` whose major version is older than the server's refuses; use the
+server's major (`SHOW server_version`).
+
+### 7.4 The window, and the order
+
+The gap in §7.2 cannot be removed, only kept short and away from a meeting.
+About ten minutes end to end; the booking outage is steps 2 to 6.
+
+1. Pick a time nobody is being shown the demo. Pause the demo's own daily
+   refresh on the owner's machine for the evening (Task Scheduler, *HealthCare
+   demo refresh*, Disable), so it cannot reset in the middle.
+2. **Render: suspend the API service** (Settings → Suspend). The patient app
+   and console then say they cannot reach the server, which is the honest
+   state; nobody books into the gap.
+3. **Backup** (§7.3), if not taken already.
+4. **Migrate, verify, reset**, from that machine with the owner URL:
    ```bash
-   ALLOW_REMOTE_DB=1 pnpm db:migrate        # 0039 to 0058
-   ALLOW_REMOTE_DB=1 pnpm db:verify
+   ALLOW_REMOTE_DB=1 pnpm db:migrate        # 0039 to 0063
+   ALLOW_REMOTE_DB=1 pnpm db:verify         # every invariant holds
    ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 DEMO_MODE=true pnpm db:reset
    ```
-4. Merge `mvp` into `main` and push `main`. Render and Vercel build from it.
-5. On Render, **resume** the API. It builds the new commit; wait for `/healthz`.
-6. Move `demo` to the released commit and push it (`CLAUDE.md` §3.1).
+   The reset is what fills the new screens (logos, agreements, desks, demo
+   prescriptions and papers, the arrival-hour hospital) and rebuilds today's
+   chambers. It **truncates every table**.
+5. **Merge `mvp` into `main` at the commit from §7.1, and push `main`.**
+   Vercel builds both apps from it; Render builds the API when resumed.
+6. **Render: resume the API.** Wait for `GET /healthz` to answer `ok`, and for
+   both Vercel deployments to show *Ready*.
+7. **Smoke walk** (§7.6). If it passes: move `demo` to the same commit and
+   push it (§3.1), and re-enable the daily refresh.
 
-Render's environment needs nothing new: every setting added since 6 October
-has a default that is right for the demo (`.env.example`).
-`PLATFORM_DOMAIN` stays empty until there is a domain (X3), so portals are
-opened with `?scope=<code>` as before.
+Render's environment needs nothing new for this release: every setting added
+since 6 October has a default right for the demo (`.env.example`).
+`PLATFORM_DOMAIN` stays empty until there is a domain, so portals open with
+`?scope=<code>` as before.
 
-### 7.5 After: the smoke walk
+### 7.5 The public demo on a limited database role (question 18; optional, separate)
+
+The owner wants the demo eventually to connect as a limited role, as a real
+deployment does, so that the database itself keeps hospitals apart (0043).
+**Not part of the release above unless the owner says so; nothing here has
+been run on Supabase, and no credential is changed without the release
+approval.** It is safe to do after §7.4 on another evening.
+
+What makes it safe: the browser suite has always run the API in exactly this
+way (`DEMO_MODE=true`, connected as `healthcare_e2e_api`, a role made by the
+same `lib/role.ts`), and the demo's daily reset runs on the owner's machine
+with the owner URL, never through the API, so it is unaffected.
+
+1. Generate the role's password (32 random bytes, hex) and keep it with the
+   other secrets.
+2. From the machine, with the owner URL:
+   ```bash
+   API_DB_USER=medlivebd_api API_DB_PASSWORD='…' ALLOW_REMOTE_DB=1 pnpm db:role
+   ```
+   It creates the role (login, no superuser, no bypass of row-level
+   security), grants rows only, and makes it a member of `app_tenant`; it
+   touches no Supabase role. Safe to run again.
+3. Check it, as that role, through the pooler (user `medlivebd_api.<project-ref>`):
+   ```sql
+   SELECT current_user, r.rolbypassrls FROM pg_roles r WHERE r.rolname = current_user;
+   -- medlivebd_api | f
+   ```
+4. **Render:** change `DATABASE_URL` to the same session-pooler address with
+   that user and password (percent-encoded, §1.1). Redeploy. `GET /readyz`.
+5. Smoke walk (§7.6), plus the platform administrator's screen and one
+   hospital's import preview, which are the reads that cross the most tables.
+6. **Rollback:** put the owner URL back in Render's `DATABASE_URL` and
+   redeploy. The role can stay; it has no power of its own.
+
+### 7.6 The smoke walk
 
 On two devices, against the deployed URLs:
 
 - `GET /healthz` answers `ok`; `GET /readyz` answers and names the backup as
   not watched (Supabase's own).
-- §4's walk: book as a guest, open the live serial, tap next in the console,
-  see it move within two seconds.
-- The console picker opens a hospital whose rail shows its own logo and
-  colours (Padma), and the platform administrator's screen lists the
-  workspaces with their health.
-- Booking with bKash on the demo settles at once (mock); the success screen
-  shows a paid serial.
+- Guest booking: book, open the live serial, tap next in the console, see it
+  move within two seconds.
+- The console picker: Padma's rail shows its logo and colours, and its desk
+  choice; the admin dashboard opens on *the hospital now*.
+- The doctor's console: write a medicine, sign, print the sheet.
+- Booking with bKash settles at once (mock); the success screen shows a paid
+  serial. At Padma the confirm step offers a preferred hour.
+- The platform administrator's screen lists the workspaces with their health.
+- An `.xlsx` patient file reaches the preview on a hospital's import.
 
-If any of these fails, the demo is put back by resetting again; nothing on it
-is real.
+Any failure: §7.7.
 
+### 7.7 Rolling back
+
+- **The new API misbehaves, the data is fine:** in Render, *Manual Deploy* →
+  the previous deploy, or point `main` back at the previous release
+  (`98c98ca`) and push. **This needs the schema the old API can run on**:
+  with 0041 applied, bookings fail (§7.2), so a code rollback alone is a demo
+  without bookings. Prefer fixing forward on `mvp`, gated, and releasing
+  again.
+- **The migration itself fails partway:** the failing migration is rolled
+  back; the API is still suspended; read the error, fix on `mvp`, gate, and
+  run `pnpm db:migrate` again (it continues). If the schema must go back,
+  restore the dump: `pg_restore --clean --if-exists --no-owner --dbname="$DATABASE_URL" supabase-before-v1-….dump`,
+  then resume the old API.
+- **The data is wrong after the reset:** run the reset again (§1.2). It is
+  synthetic.
+- `demo` is moved only after the smoke walk passes, so it never points at a
+  release that failed.
+
+### 7.8 After
+
+- `docs/STATUS.md`: the release, its commit, the migrations Supabase now has,
+  `demo` moved.
+- Re-enable the daily refresh (§7.4 step 1).
+
+### 7.9 Before the first hospital pilot: what is outside the code
+
+The demo release above needs only the owner's word. A hospital pilot needs
+things the code cannot provide, in roughly this order:
+
+1. **The company registered in Bangladesh** (X0). Every account below is
+   opened in its name.
+2. **A server in Bangladesh** for the hospital's deployment (`FR-SEC-07`,
+   X7): a hosting account, or the hospital's own machine (Part S, §S1), and
+   **a domain with DNS and a certificate** (X3), which `PLATFORM_DOMAIN` and
+   the HTTPS terminator need.
+3. **Off-machine backups:** where the nightly dump is copied, and one restore
+   rehearsed on that server (§S5).
+4. **An SMS aggregator account and a registered sender ID** (X1), set as
+   `SMS_PROVIDER=http` with its URL, key, sender and receipt secret (§S3,
+   *An SMS aggregator*). Until then patients get no SMS: a pilot can run on
+   the counter and the live link shown on screen, but booking confirmations
+   and *you are next* messages need it.
+5. **Payments, only if the pilot takes money online:** bKash and Nagad
+   merchant approval and credentials, each provider's sandbox run through the
+   ten-item checklist (§S3, *bKash and Nagad*) and one real transaction
+   verified (X2, X9). Question 17 (whose merchant account) is the owner's to
+   settle first. Without them the pilot takes payment at the counter, which
+   the product supports (`PAYMENT_PROVIDER=off`).
+6. **The hospital's agreement** (X10), its administrator's details, and its
+   data: either entered on the settings screen or imported from its own
+   export (`.xlsx` or CSV, sets A to C); patient data only with the
+   hospital's legal adviser's agreement (`FR-IMP-11`, `FR-IMP-12`).
+7. **The dry run on that server** (§S8), with the production suite
+   (`pnpm test:e2e:prod`) against it, before the first real patient.
+8. **Not needed for the first pilot:** store accounts (the PWA is the launch
+   format), an independent security test (X8, recommended before scale), the
+   import model's API key (X6; rules and manual mapping work without it).
 
 ---
 

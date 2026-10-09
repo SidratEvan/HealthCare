@@ -61,3 +61,7 @@ pnpm-debug.log*
 deploy/backups/
 deploy/backups-second/
 storage/
+
+# A database dump taken before a release (DEPLOY.md 7.3). It can hold a
+# deployment's data and never belongs in the repository.
+*.dump
