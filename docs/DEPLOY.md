@@ -264,14 +264,23 @@ no others, migrations through 0038, PostgreSQL 17.6); the daily refresh
 **disabled**; the backup taken (§7.3) at
 `%LOCALAPPDATA%\HealthCareDemo\backups\supabase-before-v1-20261009T0650Z.dump`
 with `pg_dump` 17 from the `postgres:17-alpine` image, and **restored** into a
-scratch database with every count matching. **Stopped at §7.4 step 4:** the
-session's permission check refused the remote migration, so Supabase, `main`,
-Render and Vercel are untouched and the public demo is still the 6 October
-release. Render cannot be suspended from the machine (no credential), so step
-2 is skipped: the gap is bookings failing for the few minutes between the
-migration and Render's redeploy. **Keep the refresh disabled until the
-migrations are applied:** `db:verify` does not notice missing migrations, so a
-refresh from today's `mvp` would truncate and then fail to seed.
+scratch database with every count matching. Render could not be suspended
+from the machine (no credential), so step 2 was skipped. Then, on the owner's
+second explicit word: 0039–0063 applied (25, about half a second each),
+`db:verify` held, the reset filled the new screens, `main` merged and pushed
+(`99e4c5e`, the tree of `mvp` `a373b3b`). Render served the new API about a
+minute after the push (`GET /api/v1/formulary` went from 404 to 401) and
+Vercel the new apps (the nonce policy appeared). `/readyz`: schema 0063, all
+four workers on time. **Smoke walk on the deployed URLs:** a guest booked
+serial 18 through the patient app with a tracking link on the patient app's
+own address; two reception taps reached the patient's screen in 1,276 ms and
+464 ms. The demo was reset again after it, `demo` fast-forwarded to `99e4c5e`
+and pushed, and the daily refresh re-enabled. Keep the backup until the
+release has been used in a meeting.
+
+**One thing learned:** `db:verify` does not notice migrations that are missing,
+so a refresh from an `mvp` newer than Supabase's schema truncates and then
+fails to seed. Apply migrations before the refresh next runs.
 
 Originally: **prepared on 8–9 October, nothing in this section run against
 Supabase, Render or Vercel without the owner's word** (`CLAUDE.md` §4.6). It releases
