@@ -38,6 +38,7 @@ export async function createBooking(req: Request, res: Response): Promise<void> 
     method: body.method,
     reason: body.reason ?? null,
     intake: body.intake,
+    arrivalWindowStart: body.arrivalWindowStart,
     // The route requires the header; this is what makes it mean something
     // (`FR-QUE-51`). It was read, validated and dropped before.
     clientEventId: req.idempotencyKey ?? null,

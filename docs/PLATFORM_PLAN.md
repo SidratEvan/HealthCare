@@ -211,7 +211,7 @@ October. *Built* means in `mvp` and tested; *partly* says which half;
 |---|---|---|---|---|
 | 1a | Hospitals set each doctor's real sessions, any hours, no fixed morning/afternoon/evening | **Built** | Weekly chambers with their own start and end on `S-B-11` (step 22, `FR-SUP-01`); sessions made from them for seven days | — |
 | 1b | Session booking with a serial, the default | **Built** | `S-A-07b` → `S-A-07c` | — |
-| 1c | Optional preferred one-hour arrival window, offered per hospital, never a guaranteed time; the live serial and ETA stay authoritative | **Missing** | Needs requirements (`PRD.md`), screens and a hospital setting; touches booking, not the queue engine | 3, `feat/arrival-windows` (R1) |
+| 1c | Optional preferred one-hour arrival window, offered per hospital, never a guaranteed time; the live serial and ETA stay authoritative | **Built** (R1, 8 October) | `FR-PAT-28`: a hospital setting, off by default; the confirm step offers the chamber's hours beside any time, says it is a preference and not a set time; kept on the booking and repeated on the success screen; the queue never reads it | 3, `feat/arrival-windows` (R1) |
 | 1d | A full session offers standby | **Built** | `MOD-A06D-STANDBY`, `FR-PAT-25`–`27` | — |
 | 1e | One shared serial pool; online, walk-in and telephone bookings all use it | **Built** | One capacity per session; a walk-in and a counter booking are bookings of the same session; reception may seat a walk-in past it | — |
 | 1f | No walk-in management in the patient app | **Built** | The patient app has none | — |

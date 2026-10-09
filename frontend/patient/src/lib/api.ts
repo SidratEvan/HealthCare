@@ -199,6 +199,8 @@ export async function book(input: {
   readonly idempotencyKey: string;
   /** From `MOD-GST-OTP`, when the deployment asks a guest to prove the phone (`FR-GST-03`). */
   readonly guestToken?: string | null;
+  /** `CHIP-A07C-WINDOW` (`FR-PAT-28`): the preferred hour's start, or none. */
+  readonly arrivalWindowStart?: string | null;
 }): Promise<BookingResponse> {
   return await callerFor(input.guestToken).post<BookingResponse>(
     '/bookings',
@@ -207,6 +209,9 @@ export async function book(input: {
       method: input.method,
       guest: input.guest,
       ...(input.reason === undefined || input.reason === '' ? {} : { reason: input.reason }),
+      ...(input.arrivalWindowStart === undefined || input.arrivalWindowStart === null
+        ? {}
+        : { arrivalWindowStart: input.arrivalWindowStart }),
     },
     input.idempotencyKey,
   );

@@ -72,6 +72,8 @@ export interface SetupSnapshot {
     /** Three no-shows here in the window ask for payment first (0058, `FR-GST-14`). */
     readonly noShowPrepay: boolean;
     readonly noShowWindowDays: number;
+    /** A preferred arrival hour offered at booking (0060, `FR-PAT-28`). */
+    readonly arrivalWindows: boolean;
   };
   /** Its public face beyond words (`FR-BRD-06`): colours and a logo. */
   readonly face: {
@@ -193,6 +195,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
     prepay_required: boolean | null;
     noshow_prepay: boolean | null;
     noshow_window_days: number | null;
+    arrival_windows: boolean | null;
     sms_budget_monthly: number | null;
   }>`
     SELECT h.id, h.code, h.name_bn, h.name_en, h.kind::text AS kind, h.division, h.district,
@@ -206,7 +209,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
            h.lifecycle::text AS lifecycle, h.review_requested_at, h.review_note,
            s.no_show_grace_patients, s.no_show_grace_minutes, s.late_reinsert_after,
            s.stale_threshold_minutes, s.sms_budget_monthly, s.payment_hold_minutes,
-           s.prepay_required, s.noshow_prepay, s.noshow_window_days
+           s.prepay_required, s.noshow_prepay, s.noshow_window_days, s.arrival_windows
       FROM hospitals h
       LEFT JOIN hospital_settings s ON s.hospital_id = h.id
       LEFT JOIN hospital_logos l ON l.hospital_id = h.id
@@ -357,6 +360,7 @@ export async function snapshot(hospitalId: string): Promise<SetupSnapshot | null
       prepayRequired: row.prepay_required ?? false,
       noShowPrepay: row.noshow_prepay ?? false,
       noShowWindowDays: row.noshow_window_days ?? 90,
+      arrivalWindows: row.arrival_windows ?? false,
     },
     face: {
       theme: readBrandTheme(row.brand),
@@ -593,6 +597,7 @@ export interface RuleFields {
   readonly prepayRequired?: boolean | undefined;
   readonly noShowPrepay?: boolean | undefined;
   readonly noShowWindowDays?: number | undefined;
+  readonly arrivalWindows?: boolean | undefined;
 }
 
 export async function updateRules(trx: Tx, hospitalId: string, fields: RuleFields): Promise<void> {
@@ -610,6 +615,7 @@ export async function updateRules(trx: Tx, hospitalId: string, fields: RuleField
       prepay_required = coalesce(${fields.prepayRequired ?? null}::boolean, prepay_required),
       noshow_prepay = coalesce(${fields.noShowPrepay ?? null}::boolean, noshow_prepay),
       noshow_window_days = coalesce(${fields.noShowWindowDays ?? null}::int, noshow_window_days),
+      arrival_windows = coalesce(${fields.arrivalWindows ?? null}::boolean, arrival_windows),
       sms_budget_monthly = CASE WHEN ${fields.smsBudgetMonthly !== undefined}
                                 THEN ${fields.smsBudgetMonthly ?? null}::int ELSE sms_budget_monthly END,
       updated_at = now()

@@ -149,6 +149,8 @@ export interface SessionCard {
   readonly taken: number | null;
   /** Whether no place is left. Said whether the figures are shared or not. */
   readonly full?: boolean;
+  /** Whether its hospital offers a preferred arrival hour (`FR-PAT-28`). Absent: no. */
+  readonly offersArrivalWindow?: boolean;
 }
 
 export interface Availability {

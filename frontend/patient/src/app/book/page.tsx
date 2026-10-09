@@ -21,7 +21,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { SPECIALTIES, normaliseBdMobile } from '@platform/domain';
+import { SPECIALTIES, arrivalWindows, normaliseBdMobile } from '@platform/domain';
+import type { ArrivalWindow } from '@platform/domain';
 import {
   formatDateTime,
   formatMinutes,
@@ -120,6 +121,8 @@ export default function BookPage(): ReactNode {
   const [session, setSession] = useState<SessionCard | null>(null);
   const [slots, setSlots] = useState<Availability | null>(null);
   const [booking, setBooking] = useState<BookingResponse | null>(null);
+  // The preferred hour chosen at confirm, for the success screen (`FR-PAT-28`).
+  const [chosenWindow, setChosenWindow] = useState<ArrivalWindow | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
   // Read after mount: the server has no `location`, and reading it during
@@ -219,7 +222,7 @@ export default function BookPage(): ReactNode {
   }, []);
 
   if (step === 'done' && booking !== null && session !== null) {
-    return <Success booking={booking} session={session} />;
+    return <Success booking={booking} session={session} window={chosenWindow} />;
   }
 
   // The header says where in the flow a person is, and its back control is
@@ -302,8 +305,9 @@ export default function BookPage(): ReactNode {
           online={online}
           failure={failure}
           onFailure={setFailure}
-          onBooked={(result) => {
+          onBooked={(result, window) => {
             setBooking(result);
+            setChosenWindow(window);
             setStep('done');
 
             // `S-A-09` and the home screen's live strip both read this. A
@@ -852,6 +856,8 @@ function bookingFailure(error: unknown, locale: Locale): string {
       return tp(why === 'no_shows' ? 'prepaymentAfterNoShows' : 'prepaymentRequired', locale);
     case 'PAYMENT_UNAVAILABLE':
       return tp('paymentUnavailable', locale);
+    case 'ARRIVAL_WINDOW_NOT_OFFERED':
+      return tp('windowRefused', locale);
     default:
       return tp('bookingFailed', locale);
   }
@@ -870,10 +876,20 @@ function Confirm({
   readonly online: boolean;
   readonly failure: string | null;
   readonly onFailure: (message: string | null) => void;
-  readonly onBooked: (booking: BookingResponse) => void;
+  readonly onBooked: (booking: BookingResponse, window: ArrivalWindow | null) => void;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
+  // `CHIP-A07C-WINDOW` (`FR-PAT-28`, plan R1): a preferred hour, where the
+  // hospital offers one. None, "any time", is the default and the common case.
+  const windows = useMemo(
+    () =>
+      session.offersArrivalWindow === true
+        ? arrivalWindows(session.plannedStart, session.plannedEnd)
+        : [],
+    [session.offersArrivalWindow, session.plannedStart, session.plannedEnd],
+  );
+  const [arrivalWindow, setArrivalWindow] = useState<ArrivalWindow | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [age, setAge] = useState('');
@@ -986,10 +1002,22 @@ function Confirm({
         reason,
         idempotencyKey,
         guestToken,
+        arrivalWindowStart: arrivalWindow?.start ?? null,
       });
-      onBooked(result);
+      onBooked(result, arrivalWindow);
     },
-    [session.id, method, name, phoneStored, age, sex, reason, idempotencyKey, onBooked],
+    [
+      session.id,
+      method,
+      name,
+      phoneStored,
+      age,
+      sex,
+      reason,
+      idempotencyKey,
+      onBooked,
+      arrivalWindow,
+    ],
   );
 
   const proveCode = useCallback(
@@ -1023,7 +1051,9 @@ function Confirm({
             patientId: profileId,
             reason,
             idempotencyKey,
+            arrivalWindowStart: arrivalWindow?.start ?? null,
           }),
+          arrivalWindow,
         );
         return;
       }
@@ -1239,6 +1269,35 @@ function Confirm({
         </dl>
       </Card>
 
+      {windows.length === 0 ? null : (
+        <fieldset className="flex flex-col gap-2 border-0 p-0" data-testid="arrival-windows">
+          <legend className="font-ui text-body-sm font-semibold text-ink">
+            {tp('windowTitle', locale)}
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            {[null, ...windows].map((choice) => (
+              <button
+                key={choice?.start ?? 'any'}
+                type="button"
+                aria-pressed={arrivalWindow?.start === choice?.start}
+                data-testid={choice === null ? 'window-any' : `window-${choice.start}`}
+                onClick={() => {
+                  setArrivalWindow(choice);
+                }}
+                className="min-h-touch rounded-pill border border-line-strong bg-surface px-4 text-body-sm aria-pressed:border-brand-600 aria-pressed:bg-brand-100"
+              >
+                {choice === null
+                  ? tp('windowAny', locale)
+                  : sessionHours(choice.start, choice.end, locale)}
+              </button>
+            ))}
+          </div>
+          <p className="text-caption text-ink-muted" data-testid="window-note">
+            {tp('windowNote', locale)}
+          </p>
+        </fieldset>
+      )}
+
       <fieldset className="flex flex-col gap-2 border-0 p-0">
         <legend className="font-ui text-body-sm font-semibold text-ink">
           {tp('payWith', locale)}
@@ -1314,9 +1373,12 @@ function Confirm({
 function Success({
   booking,
   session,
+  window,
 }: {
   readonly booking: BookingResponse;
   readonly session: SessionCard;
+  /** The preferred hour chosen at confirm (`FR-PAT-28`), said as a preference. */
+  readonly window: ArrivalWindow | null;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
@@ -1343,6 +1405,14 @@ function Success({
             locale,
           )}`}
         </p>
+        {window === null ? null : (
+          <p className="text-body-sm text-brand-700" data-testid="success-window">
+            {tp('windowChosen', locale).replace(
+              '{window}',
+              sessionHours(window.start, window.end, locale),
+            )}
+          </p>
+        )}
       </section>
 
       <Panel className="p-4">

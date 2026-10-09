@@ -28,6 +28,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  arrivalWindowAt,
   bookingStanding,
   id,
   patientViewOf,
@@ -116,6 +117,8 @@ export interface CreateBookingInput {
   readonly method: PaymentMethod;
   readonly reason?: string | null;
   readonly intake?: Record<string, unknown> | undefined;
+  /** `CHIP-A07C-WINDOW` (`FR-PAT-28`): the preferred hour's start, if one was chosen. */
+  readonly arrivalWindowStart?: string | undefined;
   /**
    * The request's Idempotency-Key (`FR-QUE-51`). The same request sent again
    * — a confirm whose answer was lost on the way — is answered with the
@@ -295,6 +298,22 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
         throw new AppError('PREPAYMENT_REQUIRED', { details: { reason: prepayment } });
       }
 
+      // `FR-PAT-28` (plan R1): a preferred hour, only where the hospital
+      // offers one and only one of the chamber's own. A preference: nothing
+      // after this line, and nothing in the queue, reads it.
+      let arrivalWindowStart: string | null = null;
+      if (input.arrivalWindowStart !== undefined) {
+        const window = (await bookingRepo.offersArrivalWindows(trx, locked.hospitalId))
+          ? arrivalWindowAt(
+              locked.plannedStart.toISOString(),
+              locked.plannedEnd.toISOString(),
+              input.arrivalWindowStart,
+            )
+          : null;
+        if (window === null) throw new AppError('ARRIVAL_WINDOW_NOT_OFFERED');
+        arrivalWindowStart = window.start;
+      }
+
       const bookingId = await bookingRepo.insertBooking(trx, {
         sessionId: input.sessionId,
         patientId,
@@ -310,6 +329,7 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
         intake: { ...(input.intake ?? {}), ...(env.DEMO_MODE ? { demo: true } : {}) },
         idempotencyKey: key,
         prepaymentRequired,
+        arrivalWindowStart,
       });
 
       const payer: payments.Payer =

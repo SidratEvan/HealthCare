@@ -293,6 +293,8 @@ export async function bookAsProfile(input: {
   readonly patientId: string;
   readonly reason?: string;
   readonly idempotencyKey: string;
+  /** `CHIP-A07C-WINDOW` (`FR-PAT-28`): the preferred hour's start, or none. */
+  readonly arrivalWindowStart?: string | null;
 }): Promise<BookingResponse> {
   return await (
     await signedIn()
@@ -303,6 +305,9 @@ export async function bookAsProfile(input: {
       method: input.method,
       patientId: input.patientId,
       ...(input.reason === undefined || input.reason === '' ? {} : { reason: input.reason }),
+      ...(input.arrivalWindowStart === undefined || input.arrivalWindowStart === null
+        ? {}
+        : { arrivalWindowStart: input.arrivalWindowStart }),
     },
     input.idempotencyKey,
   );

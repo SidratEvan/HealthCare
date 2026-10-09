@@ -221,6 +221,8 @@ One row per refresh token (`POST /staff/login`, step 21). Refreshing rotates it:
 
 **`noshow_prepay` boolean NOT NULL DEFAULT false, `noshow_window_days` int NOT NULL DEFAULT 90 (0058, `FR-GST-14`).** Whether this hospital asks for payment first from a number with three no-shows here in the window, and the window (**CHK** 7 to 365 days). Off until the hospital turns it on; the API never applies it where no payment can be taken online.
 
+**`arrival_windows` boolean NOT NULL DEFAULT false (0060, `FR-PAT-28`).** Whether this hospital offers a preferred arrival hour at booking. `fn_offers_arrival_windows(hospital)` is what the public session list asks. `bookings.arrival_window_start` timestamptz (0060) is the hour chosen, or null; the queue never reads it.
+
 **`payment_hold_minutes` int NOT NULL DEFAULT 15 (0057, `FR-PAY-08`).** How long a serial waits for its online payment. **CHK** 5 to 60. Read when an attempt starts; the deadline is written on the payment, so changing it never moves a hold already running.
 
 **`unpublished` text[] NOT NULL DEFAULT `{}` (0048, `FR-NET-04`).** The live figures this hospital does not share with the network, from `serials`, `beds`, `stock`; empty, the ordinary state, is everything shared. **CHK** `hospital_settings_unpublished_known` (a subset of the three). `fn_publishes(hospital, figure)` is the one definition of "shares" that every public read of a figure asks, beside `fn_module_on`: a module that is off has no figure, a figure that is kept is said to be kept.
@@ -883,6 +885,9 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
     0059_patient_documents.sql     -- plan R3: patient_documents.content_type,
                                    -- byte_size, uploaded_by_user; doc_type
                                    -- in four kinds (§2.4, FR-PAT-62)
+    0060_arrival_windows.sql       -- plan R1: hospital_settings.arrival_windows,
+                                   -- bookings.arrival_window_start,
+                                   -- fn_offers_arrival_windows (FR-PAT-28)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

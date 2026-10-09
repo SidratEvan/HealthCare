@@ -2380,6 +2380,10 @@ export const CONSOLE = {
     en: 'A number that missed three serials pays first for its next one',
   },
   settingsNoShowWindow: { bn: 'কত দিনের মধ্যে গোনা হবে', en: 'Counted over how many days' },
+  settingsArrivalWindows: {
+    bn: 'বুকিংয়ের সময় রোগী কোন ঘণ্টায় আসতে চান তা বেছে নিতে পারবেন (নিশ্চিত সময় নয়)',
+    en: 'Patients may choose a preferred hour to arrive when booking (never a set time)',
+  },
   settingsNoShowWindowHelper: { bn: '৭ থেকে ৩৬৫ দিন।', en: '7 to 365 days.' },
   settingsPaymentHoldHelper: {
     bn: '৫ থেকে ৬০ মিনিট। সময় শেষে সিরিয়াল কাউন্টারে পরিশোধের জন্য থাকে, বা আগে-পরিশোধের সিরিয়াল ছেড়ে দেওয়া হয়।',
@@ -3849,6 +3853,18 @@ export const PATIENT = {
   recordsMedicines: { bn: 'ওষুধ', en: 'Medicines' },
   recordsPrint: { bn: 'প্রিন্ট বা PDF', en: 'Print or PDF' },
   recordsDaysCount: { bn: '{days} দিন', en: '{days} days' },
+  // CHIP-A07C-WINDOW (FR-PAT-28; plan R1).
+  windowTitle: { bn: 'কখন আসতে চান (ঐচ্ছিক)', en: 'When would you like to come (optional)' },
+  windowAny: { bn: 'যেকোনো সময়', en: 'Any time' },
+  windowNote: {
+    bn: 'এটি আপনার পছন্দ, নিশ্চিত সময় নয়। সিরিয়াল ক্রমেই ডাকা হবে; কখন রওনা দেবেন তা লাইভ সিরিয়াল দেখে ঠিক করুন।',
+    en: 'This is your preference, not a set time. Serials are called in order; the live serial tells you when to set off.',
+  },
+  windowChosen: { bn: 'আপনার পছন্দের সময়: {window}', en: 'Your preferred time: {window}' },
+  windowRefused: {
+    bn: 'এই সময়টি এই চেম্বারে নেওয়া যাচ্ছে না। অন্য সময় বা যেকোনো সময় বেছে নিন।',
+    en: 'That time is not offered for this chamber. Choose another, or any time.',
+  },
   // A profile's own old papers (FR-PAT-62; plan R3, BTN-A12-UPLOAD).
   papersTitle: { bn: 'পুরোনো কাগজ', en: 'Old papers' },
   papersHint: {

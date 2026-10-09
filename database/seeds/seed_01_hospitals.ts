@@ -59,6 +59,13 @@ const UNAVAILABLE: readonly { hospitalSlug: string; kind: string }[] = [
  * That is the point: the patient-facing rule is that a live number always
  * carries its freshness and a stale one says so (`PRD.md` §3.2).
  */
+/**
+ * The hospitals that offer a preferred arrival hour at booking (`FR-PAT-28`,
+ * plan R1). One, so the demo shows the choice at one hospital and its absence
+ * everywhere else, which is the setting's default.
+ */
+const ARRIVAL_WINDOWS: ReadonlySet<string> = new Set(['padma-specialised']);
+
 const CAPABILITY_AGE_MINUTES: Readonly<Record<string, number>> = {
   'shapla-general': 3,
   'padma-specialised': 2,
@@ -476,6 +483,7 @@ export const seed01Hospitals: SeedModule = {
         // A text array, written the way PostgreSQL reads one.
         `{${(MODULES_OFF[facility.slug] ?? []).join(',')}}`,
         `{${(UNPUBLISHED[facility.slug] ?? []).join(',')}}`,
+        ARRIVAL_WINDOWS.has(facility.slug),
         admins.get(facility.slug) ?? null,
       ];
     });
@@ -491,6 +499,7 @@ export const seed01Hospitals: SeedModule = {
           'brand',
           'modules_off',
           'unpublished',
+          'arrival_windows',
           'created_by',
         ],
       },

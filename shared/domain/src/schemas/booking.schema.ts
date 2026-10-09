@@ -158,6 +158,11 @@ export const createBookingBody = z.object({
   reason: z.string().trim().max(500).optional(),
   /** Pre-visit answers, so the doctor's screen is populated (`FR-DOC-03`). */
   intake: z.record(z.string(), z.unknown()).optional(),
+  /**
+   * `CHIP-A07C-WINDOW` (`FR-PAT-28`, plan R1): the start of the preferred hour,
+   * one of the chamber's windows; a preference the queue never reads.
+   */
+  arrivalWindowStart: z.string().datetime({ offset: true }).optional(),
 });
 
 /**

@@ -103,6 +103,8 @@ export const rulesBody = z
     /** `FR-GST-14` (plan F3): three no-shows here in the window ask for payment first. */
     noShowPrepay: z.boolean().optional(),
     noShowWindowDays: z.number().int().min(7).max(365).optional(),
+    /** `FR-PAT-28` (plan R1): a preferred arrival hour offered at booking. */
+    arrivalWindows: z.boolean().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'change at least one field');
 

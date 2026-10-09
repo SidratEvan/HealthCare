@@ -648,6 +648,8 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
   const [paysFirst, setPaysFirst] = useState(rules.prepayRequired === true);
   const [noShowPrepay, setNoShowPrepay] = useState(rules.noShowPrepay === true);
   const [windowDays, setWindowDays] = useState(String(rules.noShowWindowDays ?? 90));
+  // FR-PAT-28 (plan R1): a preferred arrival hour offered at booking; off by default.
+  const [arrivalWindows, setArrivalWindows] = useState(rules.arrivalWindows === true);
   // The payment hold means something only where payment is taken online.
   const paysOnline = snapshot.onlinePayments === true;
   const [rulesBusy, setRulesBusy] = useState(false);
@@ -703,6 +705,7 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
           lateReinsertAfter: reinsert,
           staleThresholdMinutes: stale,
           smsBudgetMonthly: budget,
+          arrivalWindows,
           ...(paysOnline && hold !== null ? { paymentHoldMinutes: hold } : {}),
           ...(paysOnline
             ? {
@@ -818,6 +821,17 @@ function ProfileTab({ snapshot, offline, run }: TabProps): ReactNode {
               {...(holdValid ? {} : { error: t('settingsPaymentHoldHelper', locale) })}
             />
           ) : null}
+          <label className="flex items-center gap-2 text-body-md md:col-span-2">
+            <input
+              type="checkbox"
+              checked={arrivalWindows}
+              onChange={(event) => {
+                setArrivalWindows(event.target.checked);
+              }}
+              data-testid="settings-arrival-windows"
+            />
+            {t('settingsArrivalWindows', locale)}
+          </label>
           {paysOnline ? (
             <div className="flex flex-col gap-2 md:col-span-2" data-testid="settings-prepay">
               <label className="flex items-center gap-2 text-body-md">
