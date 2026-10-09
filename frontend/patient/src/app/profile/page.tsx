@@ -40,6 +40,7 @@ import {
   ShieldIcon,
 } from '@/components/icons';
 import { LanguageToggle } from '@/components/LanguageToggle';
+import { ProfilePapers } from '@/components/ProfilePapers';
 import { TabScreen } from '@/components/TabScreen';
 import { useDeployment } from '@/hooks/useDeployment';
 import { useOnline } from '@/hooks/useOnline';
@@ -78,6 +79,8 @@ function failureKey(failure: AccountFailure): PatientKey {
       return 'accountCodeExpired';
     case 'signedOut':
       return 'accountSignedOut';
+    case 'unsupported':
+      return 'papersUnsupported';
     case 'failed':
       return 'accountFailed';
   }
@@ -566,6 +569,8 @@ function Account({ onSignedOut }: { readonly onSignedOut: () => void }): ReactNo
                 </li>
               ))}
             </ul>
+            {/* BTN-A12-UPLOAD (FR-PAT-62, plan R3): this profile's own old papers. */}
+            <ProfilePapers patientId={profile.patientId} onSignedOut={onSignedOut} />
           </Card>
         ))
       )}

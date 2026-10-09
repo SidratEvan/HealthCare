@@ -164,6 +164,18 @@ export const ERROR_CODES = {
     message: 'The report could not be stored. Nothing was delivered; try again.',
   },
 
+  // `FR-PAT-62` (plan R3). The bytes are read, not the name: a file that is
+  // not a JPEG, PNG, WebP or PDF, or is over 8 MB, is refused whatever it says.
+  DOCUMENT_NOT_SUPPORTED: {
+    status: 422,
+    message: 'Only a photograph (JPEG, PNG or WebP) or a PDF, up to 8 MB, can be added.',
+  },
+  /** The same as `REPORT_STORAGE_FAILED`, for a patient's own paper. Nothing was kept. */
+  DOCUMENT_STORAGE_FAILED: {
+    status: 503,
+    message: 'The paper could not be stored. Nothing was kept; try again.',
+  },
+
   // `FR-PAT-63`. Expired, forged and never-real share one code on purpose: a
   // caller guessing at consent codes must not learn which guess was closer.
   CONSENT_CODE_INVALID: { status: 400, message: 'That code has expired or is not valid.' },

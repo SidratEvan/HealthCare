@@ -265,6 +265,13 @@ const KEPT: Readonly<Record<string, Kept>> = {
 
   // --- a patient's own ----------------------------------------------------------
   'GET /me/profiles': { by: 'patient' },
+  // A patient's own papers (FR-PAT-62, plan R3). The link is the patient's, or a
+  // doctor's under the patient's consent, which no hospital's scope gives;
+  // `patientDocuments.routes.test.ts` asks both.
+  'POST /me/documents': { by: 'patient' },
+  'GET /me/documents': { by: 'patient' },
+  'DELETE /me/documents/:id': { by: 'patient' },
+  'GET /patients/:id/documents/:docId/url': { by: 'patient' },
   // Plan F1: an account's own serials, and a link to one of them. Whose they
   // are comes off the principal; another person's is asked for in
   // `myBookings.routes.test.ts`.

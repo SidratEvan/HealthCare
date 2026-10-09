@@ -295,7 +295,19 @@ export async function openReportFile(token: string, reportId: string): Promise<s
   const result = await api.get<{ url: string }>(
     `/guest/link/${encodeURIComponent(token)}/reports/${encodeURIComponent(reportId)}`,
   );
-  return result.url;
+  return fileHref(result.url);
+}
+
+/**
+ * A stored file's signed address, as something a tab can open.
+ *
+ * The demonstration's store and a server's own disk answer with a path on the
+ * API (`/files/<key>?expires=&sig=`), which is under the versioned API, not
+ * under this app. Opened as it came, it was this app's address and a page
+ * that does not exist; a bucket's full address is left as it is.
+ */
+export function fileHref(url: string): string {
+  return url.startsWith('/') ? `${BASE}${url}` : url;
 }
 
 /**

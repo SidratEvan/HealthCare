@@ -44,6 +44,16 @@ export interface PrescribedMedicine {
   readonly instructionBn: string | null;
 }
 
+/** A paper the patient added to their own record (`FR-PAT-62`). */
+export interface PatientPaper {
+  readonly id: string;
+  readonly docType: string | null;
+  readonly docDate: string | null;
+  readonly doctorName: string | null;
+  readonly uploadedAt: string;
+  readonly source: 'patient_provided';
+}
+
 /** One chip on `BTN-B05-TEST`, from the hospital's catalogue. */
 export interface CatalogueTest {
   readonly code: string;
@@ -100,6 +110,11 @@ export interface PatientRecords {
    * only this hospital's (`FR-NET-02`). Absent from a server older than this.
    */
   readonly visitsFrom?: 'everywhere' | 'this_hospital';
+  /**
+   * The patient's own papers (`FR-PAT-62`, plan R3): present only under the
+   * patient's consent, and always the patient's, never a hospital's record.
+   */
+  readonly documents?: readonly PatientPaper[];
   /** What this version cannot show, so the screen can say so. */
   readonly absent: readonly string[];
 }
@@ -359,4 +374,23 @@ export async function fetchFormulary(input: {
     { method: 'GET' },
   );
   return result.medicines;
+}
+
+/**
+ * `GET /patients/:id/documents/:docId/url` — a paper the patient added, opened
+ * under their consent; the server audits the opening (`FR-PAT-62`, `DB-P7`).
+ * The store's path is under the API, so it is made the API's address here.
+ */
+export async function fetchPaperUrl(input: {
+  readonly apiBaseUrl: string;
+  readonly token: string | null;
+  readonly patientId: string;
+  readonly documentId: string;
+}): Promise<string> {
+  const result = await call<{ url: string }>(
+    `${input.apiBaseUrl}/patients/${encodeURIComponent(input.patientId)}/documents/${encodeURIComponent(input.documentId)}/url`,
+    input.token,
+    { method: 'GET' },
+  );
+  return result.url.startsWith('/') ? `${input.apiBaseUrl}${result.url}` : result.url;
 }

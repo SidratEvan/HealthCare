@@ -331,6 +331,30 @@ describe('FR-DEM-03: two hundred profiles and five hundred past visits', () => {
   );
 
   it(
+    'gives some account profiles an old paper of their own, labelled demo (FR-PAT-62, plan R3)',
+    async () => {
+      await seeded(async (client) => {
+        expect(
+          await count(client, 'SELECT count(*)::text AS n FROM patient_documents'),
+        ).toBeGreaterThan(0);
+        // Each is a profile's own, added by the account that holds it, and
+        // served by the store's demo placeholder.
+        expect(
+          await count(
+            client,
+            `SELECT count(*)::text AS n FROM patient_documents d
+               JOIN patients p ON p.id = d.patient_id
+              WHERE d.uploaded_by_user IS DISTINCT FROM p.owner_user_id
+                 OR d.file_url NOT LIKE 'documents/demo/%'
+                 OR (d.doctor_name_text IS NOT NULL AND d.doctor_name_text NOT LIKE '%(ডেমো)')`,
+          ),
+        ).toBe(0);
+      });
+    },
+    SEED_TIMEOUT,
+  );
+
+  it(
     'gives the visits their declared demo prescriptions, from the formulary (FR-DOC-04, plan R2)',
     async () => {
       await seeded(async (client) => {

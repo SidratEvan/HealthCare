@@ -31,6 +31,9 @@ import {
   t,
   numeralsFor,
   localName,
+  paperDate,
+  paperKindName,
+  PATIENT_PROVIDED,
   prescriptionSheet,
   toBengaliDigits,
 } from '@platform/i18n';
@@ -38,7 +41,12 @@ import type { Locale } from '@platform/i18n';
 import { Button, Card, Chip, useLocale, usePrintSheet } from '@platform/ui';
 
 import { readDemoSession } from '@/lib/demo';
-import { fetchRecords, type PatientRecords, type PrescribedMedicine } from '@/lib/visits';
+import {
+  fetchPaperUrl,
+  fetchRecords,
+  type PatientRecords,
+  type PrescribedMedicine,
+} from '@/lib/visits';
 
 import type { ReactNode } from 'react';
 
@@ -306,7 +314,76 @@ export function PastVisits({ records }: { readonly records: PatientRecords }): R
         </ul>
       )}
       {sheet}
+      <PatientPapers records={records} />
     </section>
+  );
+}
+
+/**
+ * The patient's own papers (`FR-PAT-62`, plan R3), only where the read came
+ * with them: under the patient's consent. Labelled as the patient's, and
+ * opened through a link the server audits.
+ */
+function PatientPapers({ records }: { readonly records: PatientRecords }): ReactNode {
+  const locale = useLocale();
+  const [failed, setFailed] = useState(false);
+  const papers = records.documents ?? [];
+  if (papers.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-line pt-3" data-testid="panel-papers">
+      <h4 className="text-body-sm font-semibold">{t('panelPapersTitle', locale)}</h4>
+      <p className="text-caption text-ink-muted">{t('panelPapersHint', locale)}</p>
+      {failed ? (
+        <p role="alert" className="text-caption text-alert-700">
+          {t('panelPapersFailed', locale)}
+        </p>
+      ) : null}
+      <ul className="flex flex-col gap-2">
+        {papers.map((paper) => (
+          <li
+            key={paper.id}
+            className="flex flex-wrap items-center gap-2 rounded-sm bg-surface p-3"
+            data-testid={`panel-paper-${paper.id}`}
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-body-sm font-semibold">{paperKindName(paper.docType, locale)}</p>
+              <p className="text-caption text-ink-muted">
+                {[
+                  PATIENT_PROVIDED[locale],
+                  paper.docDate === null ? null : paperDate(paper.docDate, locale),
+                  paper.doctorName,
+                ]
+                  .filter((part): part is string => part !== null)
+                  .join(' · ')}
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              data-testid={`panel-paper-open-${paper.id}`}
+              onClick={() => {
+                setFailed(false);
+                void fetchPaperUrl({
+                  apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
+                  token: readDemoSession()?.token ?? null,
+                  patientId: records.patient.id,
+                  documentId: paper.id,
+                })
+                  .then((url) => {
+                    globalThis.open(url, '_blank', 'noopener');
+                  })
+                  .catch(() => {
+                    setFailed(true);
+                  });
+              }}
+            >
+              {t('panelPapersOpen', locale)}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

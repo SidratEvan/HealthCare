@@ -122,6 +122,9 @@ function mockUrlFor(key: string): string {
  */
 const DEMO_REPORT_PREFIX = 'reports/demo/';
 
+/** The same, for a patient's own paper the seed added (`FR-PAT-62`, plan R3). */
+const DEMO_DOCUMENT_PREFIX = 'documents/demo/';
+
 /**
  * A one-page PDF saying what it is.
  *
@@ -208,7 +211,7 @@ export class MockStorageAdapter implements StorageAdapter {
     if (held !== undefined) return await Promise.resolve(held);
 
     // A report the seed wrote in another process. See `DEMO_REPORT_PREFIX`.
-    if (key.startsWith(DEMO_REPORT_PREFIX)) {
+    if (key.startsWith(DEMO_REPORT_PREFIX) || key.startsWith(DEMO_DOCUMENT_PREFIX)) {
       return await Promise.resolve({ contentType: 'application/pdf', bytes: demoReportPdf() });
     }
 
