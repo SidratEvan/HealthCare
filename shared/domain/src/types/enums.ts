@@ -35,8 +35,26 @@ export const STAFF_ROLES = [
 ] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
-export const FACILITY_KINDS = ['hospital', 'clinic', 'diagnostic', 'government'] as const;
+export const FACILITY_KINDS = [
+  'hospital',
+  'clinic',
+  'diagnostic',
+  'government',
+  'chamber',
+] as const;
 export type FacilityKind = (typeof FACILITY_KINDS)[number];
+
+/**
+ * The kinds an organisation may apply as by itself (`FR-ONB-09`). Not
+ * `chamber`: a private chamber joins only once the platform has approved it
+ * (`FR-ONB-11`, plan R7, 0062), so only a platform administrator creates one.
+ */
+export const APPLICABLE_FACILITY_KINDS = [
+  'hospital',
+  'clinic',
+  'diagnostic',
+  'government',
+] as const satisfies readonly FacilityKind[];
 
 export const SESSION_STATUSES = ['scheduled', 'running', 'paused', 'ended', 'cancelled'] as const;
 export type SessionStatus = (typeof SESSION_STATUSES)[number];
