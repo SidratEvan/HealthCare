@@ -711,6 +711,7 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `PAYMENT_UNAVAILABLE` | 422 | an online method on a deployment with `PAYMENT_PROVIDER=off`; refused before the booking is written (step 26). Since plan H3 also a method no provider here takes (card under `live`) |
 | `PAYMENT_ALREADY_MADE` | 409 | a new payment for a booking that already holds a paid one (plan H3, `FR-PAY-10`) |
 | `PAYMENT_HOLD_ENDED` | 409 | a new online attempt after the booking's payment hold ran out (`FR-PAY-08`) |
+| `ARRIVAL_WINDOW_NOT_OFFERED` | 422 | a preferred hour that is not one of the chamber's windows, or asked of a hospital that does not offer them (`FR-PAT-28`, plan R1); the booking is not written |
 | `PREPAYMENT_REQUIRED` | 422 | paying at the counter for a booking that must be paid first (`FR-PAY-02`, `FR-GST-14`); the booking, or the payment, is not written. `details.reason` is `hospital` (the hospital takes no payment at the counter) or `no_shows` (plan F3: three no-shows on this number at this hospital in its window), and the patient app says which |
 | `DOCUMENT_NOT_SUPPORTED` | 422 | a patient's paper whose bytes are not a JPEG, PNG, WebP or PDF, or over 8 MB, whatever it is called (`FR-PAT-62`, plan R3) |
 | `DOCUMENT_STORAGE_FAILED` | 503 | the store refused a patient's paper; nothing was kept (plan R3) |

@@ -516,6 +516,8 @@ export interface SessionCard {
    * patient is not sent into a booking that can only be refused.
    */
   readonly full: boolean;
+  /** Whether its hospital offers a preferred arrival hour at booking (`FR-PAT-28`). */
+  readonly offersArrivalWindow: boolean;
 }
 
 /**
@@ -552,6 +554,7 @@ export async function listBookableSessions(input: {
     capacity: number | null;
     taken: string;
     serials_shared: boolean;
+    offers_windows: boolean;
   }>`
     SELECT s.id, s.hospital_id,
            h.name_bn AS hospital_name_bn, h.name_en AS hospital_name_en,
@@ -562,7 +565,8 @@ export async function listBookableSessions(input: {
            s.planned_start, s.planned_end, s.status::text AS status,
            s.room, s.fee_poisha, s.capacity,
            (SELECT c.taken FROM fn_chamber_counts(s.id) c)::text AS taken,
-           fn_publishes(s.hospital_id, 'serials') AS serials_shared
+           fn_publishes(s.hospital_id, 'serials') AS serials_shared,
+           fn_offers_arrival_windows(s.hospital_id) AS offers_windows
       FROM sessions s
       JOIN hospitals h ON h.id = s.hospital_id
       JOIN doctors d ON d.id = s.doctor_id
@@ -598,6 +602,7 @@ export async function listBookableSessions(input: {
     capacity: row.capacity,
     taken: row.serials_shared ? Number(row.taken) : null,
     full: row.capacity !== null && Number(row.taken) >= row.capacity,
+    offersArrivalWindow: row.offers_windows,
   }));
 }
 

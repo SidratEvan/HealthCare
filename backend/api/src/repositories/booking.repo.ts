@@ -389,20 +389,23 @@ export async function insertBooking(
     readonly idempotencyKey?: string | null;
     /** Whether it must be paid for first (0057, `FR-PAY-02`). Decided once, here. */
     readonly prepaymentRequired?: boolean;
+    /** The preferred hour's start (0060, `FR-PAT-28`): a preference the queue never reads. */
+    readonly arrivalWindowStart?: string | null;
   },
 ): Promise<string> {
   const result = await sql<{ id: string }>`
     INSERT INTO bookings
       (session_id, patient_id, serial_number, source, fee_poisha,
        booked_by_user_id, booked_by_guest_id, reason_text, intake, idempotency_key,
-       prepayment_required)
+       prepayment_required, arrival_window_start)
     VALUES (
       ${input.sessionId}, ${input.patientId}, ${input.serial},
       ${input.source}::booking_source, ${input.feePoisha},
       ${input.bookedByUserId}, ${input.bookedByGuestId},
       ${input.reasonText}, ${JSON.stringify(input.intake)}::jsonb,
       ${input.idempotencyKey ?? null},
-      ${input.prepaymentRequired ?? false}
+      ${input.prepaymentRequired ?? false},
+      ${input.arrivalWindowStart ?? null}::timestamptz
     )
     RETURNING id
   `.execute(trx);
@@ -726,4 +729,12 @@ export async function countNoShowsAt(
        AND s.session_date >= ${input.since}::date
   `.execute(trx);
   return Number(result.rows[0]?.n ?? '0');
+}
+
+/** Whether a hospital offers a preferred arrival hour at booking (0060, `FR-PAT-28`). */
+export async function offersArrivalWindows(trx: Tx, hospitalId: string): Promise<boolean> {
+  const result = await sql<{ offers: boolean }>`
+    SELECT fn_offers_arrival_windows(${hospitalId}::uuid) AS offers
+  `.execute(trx);
+  return result.rows[0]?.offers ?? false;
 }

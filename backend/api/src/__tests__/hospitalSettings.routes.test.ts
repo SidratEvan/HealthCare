@@ -184,6 +184,8 @@ describe('who may open S-B-11 (FR-ROLE-01)', () => {
       prepayRequired: false,
       noShowPrepay: false,
       noShowWindowDays: 90,
+      // FR-PAT-28 (plan R1): off until the hospital offers it.
+      arrivalWindows: false,
     });
     expect(data.staff).toHaveLength(1);
     expect(data.staff[0].roles).toEqual(['hospital_admin']);

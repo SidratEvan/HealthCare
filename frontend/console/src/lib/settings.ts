@@ -90,6 +90,8 @@ export interface SetupSnapshot {
     readonly prepayRequired?: boolean;
     readonly noShowPrepay?: boolean;
     readonly noShowWindowDays?: number;
+    /** `FR-PAT-28` (plan R1). */
+    readonly arrivalWindows?: boolean;
   };
   /** Whether this deployment takes payment online (plan H3). */
   readonly onlinePayments?: boolean;

@@ -338,6 +338,7 @@ A **need** is one of the three things hospitals publish live: a specialty, a bed
 | Element | ID | Wiring |
 |---|---|---|
 | Profile selector | `BTN-A07C-PROFILE` | Logged in: opens `S-A-06`, defaults to active profile (`FR-PAT-03`). No account: opens `MOD-A07-GUEST` guest details sheet (`FR-GST-02`). **As built (plan F1), `MOD-A07-PROFILE`:** signed in, with at least one profile, the confirm step shows **কার জন্য সিরিয়াল?** and the account's profiles as buttons (name, age), the primary one chosen; no name, number or age is asked for and no code is sent (`FR-GST-10`) → `POST /bookings` with `patientId` and the account's token → the same success screen, with its link to the live serial. **অন্য কারও জন্য বুক করুন** opens the guest sheet for somebody who is not one of the profiles, and **আমার প্রোফাইল থেকে বেছে নিন** returns. Signed in with no profile yet, the profiles unreadable, or offline: the guest sheet, never a wall (`FR-GST-11`). `S-A-06` as a screen of its own, and adding a profile by hand (`FR-PAT-02`), are not built |
+| Preferred hour (optional) | `CHIP-A07C-WINDOW` | Only where the hospital offers it (`FR-PAT-28`, plan R1; `offersArrivalWindow` on the session): কখন আসতে চান (ঐচ্ছিক), যেকোনো সময় first and chosen, then each hour of the chamber. Beneath, always: a preference, not a set time; the live serial says when to set off. Sent as `arrivalWindowStart`; shown on `S-A-07d` |
 | Reason field (optional) | `INP-A07C-REASON` | Free text, feeds the doctor's pre-visit summary (`FR-DOC-03`) |
 | Pre-visit questions | `BTN-A07C-INTAKE` | Opens `MOD-A07-INTAKE`: 4–6 progressive questions (duration, main symptom, chronic conditions, current medicines, allergies) |
 | Fee breakdown | — | Consultation + platform fee + total + due at hospital (`FR-PAT-21`) |
@@ -356,7 +357,7 @@ A **need** is one of the three things hospitals publish live: a specialty, a bed
 
 | Element | ID | Wiring |
 |---|---|---|
-| Serial number (large) | — | Plus doctor, hospital, date, expected window |
+| Serial number (large) | — | Plus doctor, hospital, date, expected window, and the preferred hour when one was chosen, labelled as a preference (`FR-PAT-28`) |
 | লাইভ সিরিয়াল দেখুন | `BTN-A07D-LIVE` | → `S-A-08` |
 | ক্যালেন্ডারে যোগ | `BTN-A07D-CAL` | Device calendar event |
 | শেয়ার করুন | `BTN-A07D-SHARE` | Share sheet with a text summary (families coordinate over WhatsApp/Messenger) |

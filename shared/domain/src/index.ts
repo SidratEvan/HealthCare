@@ -589,6 +589,7 @@ export {
   type PlannedSession,
   type ScheduleTemplate,
 } from './sessions/materialise.js';
+export { arrivalWindowAt, arrivalWindows, type ArrivalWindow } from './sessions/arrivalWindows.js';
 export { BD_MOBILE, normaliseBdMobile } from './util/phone.js';
 
 // --- Importing a hospital's own data (pilot step 24, FR-IMP) ---------------

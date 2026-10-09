@@ -164,6 +164,13 @@ export const ERROR_CODES = {
     message: 'The report could not be stored. Nothing was delivered; try again.',
   },
 
+  // `FR-PAT-28` (plan R1). A preferred hour that is not one of the chamber's,
+  // or asked of a hospital that does not offer them. Nothing is written.
+  ARRIVAL_WINDOW_NOT_OFFERED: {
+    status: 422,
+    message: 'That arrival hour is not one this chamber offers.',
+  },
+
   // `FR-PAT-62` (plan R3). The bytes are read, not the name: a file that is
   // not a JPEG, PNG, WebP or PDF, or is over 8 MB, is refused whatever it says.
   DOCUMENT_NOT_SUPPORTED: {
