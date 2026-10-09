@@ -39,10 +39,9 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 
 import {
   APPLICATION_PASSWORD_MIN,
-  FACILITY_KINDS,
+  APPLICABLE_FACILITY_KINDS,
   facilityPhoneFrom,
   mobileFrom,
-  type FacilityKind,
 } from '@platform/domain';
 import {
   DIVISION_NAMES,
@@ -83,7 +82,7 @@ export function HospitalApplication(): ReactNode {
 
   const [nameBn, setNameBn] = useState('');
   const [nameEn, setNameEn] = useState('');
-  const [kind, setKind] = useState<FacilityKind>('hospital');
+  const [kind, setKind] = useState<(typeof APPLICABLE_FACILITY_KINDS)[number]>('hospital');
   const [division, setDivision] = useState<string>('Dhaka');
   const [district, setDistrict] = useState('');
   const [phone, setPhone] = useState('');
@@ -258,7 +257,7 @@ export function HospitalApplication(): ReactNode {
                     {t('platformFieldKind', locale)}
                   </legend>
                   <div className="flex flex-wrap gap-2">
-                    {FACILITY_KINDS.map((candidate) => (
+                    {APPLICABLE_FACILITY_KINDS.map((candidate) => (
                       <FilterChip
                         key={candidate}
                         selected={kind === candidate}

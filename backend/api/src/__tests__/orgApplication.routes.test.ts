@@ -169,6 +169,41 @@ describe('POST /hospital-applications: what may be sent', () => {
   });
 });
 
+describe('a private chamber joins only once the platform approves it (FR-ONB-11, plan R7)', () => {
+  it('is not a kind the public form may apply as', async () => {
+    const refused = await apply(
+      form({ kind: 'chamber', nameEn: `${MARK} Private Chamber (Demo)` }),
+    );
+    expect(refused.status).toBe(400);
+    expect(await workspaces()).toEqual([]);
+  });
+
+  it('is a kind the platform administrator may create', async () => {
+    const made = await request(app)
+      .post(`${BASE}/platform/hospitals`)
+      .set('Authorization', bearer(platform))
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        code: `CH${randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()}`,
+        nameBn: 'ধলেশ্বরী প্রাইভেট চেম্বার (ডেমো)',
+        nameEn: `${MARK} Private Chamber (Demo)`,
+        kind: 'chamber',
+        division: 'Dhaka',
+        district: 'Munshiganj',
+        adminName: 'Demo Doctor',
+        adminEmail: `chamber-${randomUUID().slice(0, 8)}@dhaleshwari.example`,
+      });
+    expect(made.status).toBe(201);
+    const kind = await asOwner(async (owner) => {
+      const result = await sql<{ kind: string }>`
+        SELECT kind::text AS kind FROM hospitals WHERE id = ${made.body.data.hospitalId as string}
+      `.execute(owner);
+      return result.rows[0]?.kind;
+    });
+    expect(kind).toBe('chamber');
+  });
+});
+
 describe('what an application makes (FR-ONB-09)', () => {
   it('a workspace that is setting up, marked as applied for, and one administrator', async () => {
     const body = form();

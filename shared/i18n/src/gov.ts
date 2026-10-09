@@ -69,6 +69,8 @@ export const FACILITY_KIND_NAMES = {
   clinic: { bn: 'ক্লিনিক', en: 'Clinic' },
   diagnostic: { bn: 'ডায়াগনস্টিক সেন্টার', en: 'Diagnostic centre' },
   government: { bn: 'সরকারি হাসপাতাল', en: 'Government hospital' },
+  // An approved private chamber (FR-ONB-11, plan R7).
+  chamber: { bn: 'প্রাইভেট চেম্বার', en: 'Private chamber' },
 } as const satisfies Record<string, Message>;
 
 export type FacilityKindName = keyof typeof FACILITY_KIND_NAMES;

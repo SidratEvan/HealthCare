@@ -30,6 +30,8 @@ CREATE TYPE user_kind         AS ENUM ('patient','guest','staff','platform');
 CREATE TYPE sex               AS ENUM ('male','female','other');
 CREATE TYPE staff_role        AS ENUM ('receptionist','doctor','ward','emergency','lab','pharmacy','hospital_admin','platform_admin','gov_viewer');
 CREATE TYPE facility_kind     AS ENUM ('hospital','clinic','diagnostic','government');
+-- 0062 (plan R7, FR-ONB-11) adds 'chamber': an approved private chamber,
+-- created by the platform and never by the public application.
 CREATE TYPE session_status    AS ENUM ('scheduled','running','paused','ended','cancelled');
 CREATE TYPE booking_status    AS ENUM ('booked','waiting','in_chamber','done','late','no_show','cancelled','rescheduled');
 CREATE TYPE booking_source    AS ENUM ('app','guest_link','counter','phone','walkin','import');   -- 'import': 0029, FR-IMP-01 set C
@@ -893,6 +895,7 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- fn_offers_arrival_windows (FR-PAT-28)
     0061_reception_desks.sql       -- plan R4: reception_desks,
                                    -- reception_desk_doctors (FR-REC-32)
+    0062_chamber_organisations.sql -- plan R7: facility_kind 'chamber' (FR-ONB-11)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

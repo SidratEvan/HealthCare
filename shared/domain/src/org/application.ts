@@ -21,7 +21,7 @@
 import { z } from 'zod';
 
 import { bdPhone } from '../schemas/booking.schema.js';
-import { FACILITY_KINDS } from '../types/enums.js';
+import { APPLICABLE_FACILITY_KINDS } from '../types/enums.js';
 
 /** The shortest password an applicant may choose; the server's own rule (`config/password`). */
 export const APPLICATION_PASSWORD_MIN = 10;
@@ -38,7 +38,8 @@ const facilityPhone = z
 export const applicationBody = z.strictObject({
   nameBn: name,
   nameEn: name,
-  kind: z.enum(FACILITY_KINDS),
+  /** Never `chamber` (`FR-ONB-11`): the platform creates an approved chamber itself. */
+  kind: z.enum(APPLICABLE_FACILITY_KINDS),
   division: z.string().trim().min(2).max(40),
   district: z.string().trim().min(2).max(60),
   phone: facilityPhone,
