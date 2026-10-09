@@ -600,10 +600,16 @@ Ranking: capability match → travel time → ER load → free beds. Stale facil
 > the hospital. A delivered report opens through a signed URL minted at the
 > moment of tapping, because a signature expires.
 >
-> **Not built:** `TAB-A12-RX` (prescribing is out of scope, `PRD.md` §9),
-> `BTN-A12-UPLOAD` (needs Supabase Storage) and `BTN-A12-EXPORT` (needs a PDF
-> writer). None is rendered as an empty tab; the screen names them in one line
-> instead.
+> **A visit's medicines are on its card** (plan R2, `FR-DOC-04`): each row's
+> name, strength, schedule, days and instruction, under the diagnosis and
+> advice. A visit with medicines offers **প্রিন্ট বা PDF** (`BTN-A12-PRINT`),
+> which opens the same Bangla sheet the doctor prints (`FR-DOC-07`) and the
+> browser's print, where it can also be saved as a PDF.
+>
+> **Not built:** `TAB-A12-RX` (its point is the reminders of `FR-PAT-72`,
+> which are not built), `BTN-A12-UPLOAD` (plan R3) and `BTN-A12-EXPORT` (one
+> PDF of everything, `FR-PAT-65`). None is rendered as an empty tab; the
+> screen names them in one line instead.
 
 | Element | ID | Wiring |
 |---|---|---|
@@ -611,6 +617,7 @@ Ranking: capability match → travel time → ER load → free beds. Stale facil
 | Tab: রিপোর্ট | `TAB-A12-REP` | Lab and imaging only |
 | Tab: ওষুধ | `TAB-A12-RX` | Active prescriptions with reminder toggles (`FR-PAT-72`) |
 | Record row | `CARD-A12-<recordId>` | → record detail with PDF viewer and share |
+| প্রিন্ট বা PDF | `BTN-A12-PRINT` | On a visit with medicines: the printed sheet (`FR-DOC-07`) and the browser's print (plan R2) |
 | পুরোনো কাগজ যোগ করুন | `BTN-A12-UPLOAD` | Camera/gallery → tag date, doctor, type → stored (`FR-PAT-62`) |
 | QR দেখান | `BTN-A12-QR` | Full-screen QR for the doctor console to scan (`FR-PAT-63`); shows consent scope and expiry |
 | কে দেখেছে | `BTN-A12-ACCESS` | Access log: hospital, person, timestamp (`FR-SEC-03`, `FR-PAT-64`) |
@@ -832,14 +839,21 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 ## B2. Doctor console — `S-B-05`
 
 > **Built in this version:** the session header, `BTN-B05-DELAY`, the patient
-> panel, `INP-B05-DX`, `INP-B05-ADVICE`, `SEL-B05-FOLLOWUP`, `BTN-B05-DRAFT` and
-> `BTN-B05-SIGN`.
+> panel, `INP-B05-DX`, `INP-B05-ADVICE`, `SEL-B05-FOLLOWUP`, `BTN-B05-DRAFT`,
+> `BTN-B05-SIGN`, `BTN-B05-TEST` (step 17), and since plan R2 `TBL-B05-RX`,
+> `BTN-B05-ADDRX` and printing (`BTN-B05-PRINT`).
 >
-> **Not built:** `TBL-B05-RX`, `BTN-B05-ADDRX` and the printing half of
-> `BTN-B05-SIGN` — prescribing is out of scope for this version (`PRD.md` §9).
-> `BTN-B05-TEST` is step 17 and is absent from the screen rather than shown
-> disabled: a control that cannot work should not be on a screen a doctor is
-> learning.
+> **Prescribing (plan R2, `PRD.md` §9).** `BTN-B05-ADDRX` adds a row to
+> `TBL-B05-RX`; the name field suggests from the formulary as the doctor types
+> (`GET /formulary?q=`, two letters or more) and takes a name it does not
+> carry. A row with no name is not sent; one with a schedule the notation does
+> not allow says so under the field and holds the save. Rows go with
+> `BTN-B05-DRAFT` and `BTN-B05-SIGN` as part of the visit. Signing moves the
+> chamber to the next patient, so the visit just signed stays offered as
+> **শেষ প্রেসক্রিপশন প্রিন্ট** (`BTN-B05-PRINT`) until the next one is signed:
+> it reads the signed record back from the server and prints that, never the
+> screen's copy. A past visit with medicines in the patient panel offers the
+> same print.
 >
 > `BTN-B05-SCAN` is built as a **pasted code, not a camera**: the doctor enters
 > the code `BTN-A12-QR` shows, and the patient's earlier visits open beneath
@@ -867,7 +881,8 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 | Public health signal | `CHIP-B05-SIGNAL` | কোনোটি নয় / ডেঙ্গু / ডায়রিয়া / জ্বর — one or none, "none" first and selected by default. Filed with the visit as `visits.symptom_signal` and counted by district only (`FR-GOV-03`, `v_gov_symptom_daily`). Not a diagnosis and not shown in the patient's wallet: `INP-B05-DX` stays the record. Added at step 20, because a spike needs a category to count and nothing else in the product records one |
 | Follow-up | `SEL-B05-FOLLOWUP` | 7/14/30 days or date → schedules patient reminder (`FR-PAT-80`) |
 | খসড়া রাখুন | `BTN-B05-DRAFT` | Saves without finishing the consultation |
-| **রেকর্ড দিন ও পরবর্তী** | `BTN-B05-SIGN` | Signs the visit → writes the record to the patient wallet → `EVT-PATIENT_DONE` + `EVT-PATIENT_CALLED` for the next patient (`FR-DOC-08`). Printing is part of the prescribing scope this version does not have |
+| **রেকর্ড দিন ও পরবর্তী** | `BTN-B05-SIGN` | Signs the visit and its medicines → writes the record to the patient wallet → `EVT-PATIENT_DONE` + `EVT-PATIENT_CALLED` for the next patient (`FR-DOC-08`) |
+| শেষ প্রেসক্রিপশন প্রিন্ট | `BTN-B05-PRINT` | The visit last signed here, read back from the server → the Bangla sheet → the browser's print (`FR-DOC-07`, plan R2) |
 
 **Failure handling:** if the record fails to save, the consultation is **not** marked done, and the doctor sees a retry banner with the draft preserved on screen. The record is written first and the queue advances only on success, which is what makes that order observable rather than aspirational.
 

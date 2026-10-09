@@ -338,9 +338,10 @@ describe('the patient panel (S-B-05, FR-DOC-03)', () => {
       .set('authorization', `Bearer ${await staff(['doctor'])}`);
 
     // `FR-DOC-03` asks for previous prescriptions and recent results too.
-    // Prescriptions were dropped, reports are step 17; an empty area would read
-    // as "this patient has none" (`PRD.md` §3.2).
-    expect(response.body.data.absent).toEqual(['prescriptions', 'reports']);
+    // Prescriptions are on each visit since plan R2; results are not part of
+    // this read, and an empty area would read as "this patient has none"
+    // (`PRD.md` §3.2).
+    expect(response.body.data.absent).toEqual(['reports']);
   });
 
   it('refuses a booking that belongs to a different patient', async () => {

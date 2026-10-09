@@ -242,6 +242,17 @@ export interface VisitRecord {
   readonly hospitalNameEn: string;
   readonly serial: number;
   readonly visitedAt: string;
+  /** What a printed prescription is signed under (plan R2). */
+  readonly doctorBmdc: string;
+  /** The medicines written on the visit; empty when none (`FR-DOC-04`). */
+  readonly medicines: readonly {
+    readonly medicineId: string | null;
+    readonly name: string;
+    readonly strength: string | null;
+    readonly schedule: string | null;
+    readonly durationDays: number | null;
+    readonly instructionBn: string | null;
+  }[];
 }
 
 /** What the tracking link hands back, plus the token it exchanges for. */

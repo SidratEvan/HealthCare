@@ -49,7 +49,12 @@ import {
   type Timestamp,
 } from '@platform/domain';
 
-import { assessmentFor, complaintsFor, DEMO_FORMULARY } from './data/reference.js';
+import {
+  assessmentFor,
+  complaintsFor,
+  DEMO_ASSESSMENTS,
+  DEMO_FORMULARY,
+} from './data/reference.js';
 import {
   bookingSource,
   buildIntake,
@@ -160,6 +165,8 @@ export const seed04History: SeedModule = {
     'queue_state',
     'visits',
     'medicines',
+    'prescriptions',
+    'prescription_items',
     'test_orders',
     'reports',
     'standby_list',
@@ -167,10 +174,10 @@ export const seed04History: SeedModule = {
     'feedback',
   ],
   // `visits` arrived with migration 0007, so the record half of `FR-DEM-03` is
-  // written now. Prescriptions are not deferred but **dropped**: the owner
-  // removed e-prescriptions from this version (`FR-DOC-04`), so there is no
-  // longer anything to wait for. Reports arrived with the lab at step 17 and
-  // are written below, so `FR-DEM-03` is now covered in full.
+  // written now. Prescriptions came back with plan R2 (`FR-DOC-04`): the
+  // visits whose declared diagnosis has a declared demo prescription carry it.
+  // Reports arrived with the lab at step 17 and are written below, so
+  // `FR-DEM-03` is covered in full.
 
   async run({ client, now, rng, log }: SeedContext): Promise<SeedSummary> {
     const history = rng.stream('history');
@@ -328,6 +335,7 @@ export const seed04History: SeedModule = {
       );
     }
 
+    const prescribed = await insertDemoPrescriptions(client);
     const lab = await insertLabWork(client, now, rng.stream('lab'));
     const confirmations = await insertConfirmations(client, now);
 
@@ -337,7 +345,9 @@ export const seed04History: SeedModule = {
     log(
       `      ${String(visits)} signed visit records, ${String(formulary)} medicines in the formulary`,
     );
-    log('      no prescriptions: FR-DOC-04 was dropped from this version');
+    log(
+      `      ${String(prescribed.prescriptions)} prescriptions, ${String(prescribed.items)} medicines on them (FR-DOC-04)`,
+    );
     log(
       `      ${String(offersMade)} freed chairs offered to the standby list, ` +
         `${String(offersAccepted)} taken (FR-QUE-30, FR-ADM-03)`,
@@ -356,6 +366,8 @@ export const seed04History: SeedModule = {
       queue_state: sessions,
       visits,
       medicines: formulary,
+      prescriptions: prescribed.prescriptions,
+      prescription_items: prescribed.items,
       test_orders: lab.orders,
       reports: lab.reports,
       standby_list: standby,
@@ -857,10 +869,9 @@ async function insertPastSession(
  * The record each completed consultation left behind (`FR-DEM-03`, 0007).
  *
  * `FR-DEM-03` asks for "~500 historical visits with prescriptions and reports".
- * The visits and their notes land here; prescriptions do not, because the owner
- * dropped e-prescriptions from this version (`FR-DOC-04`), and reports arrive
- * with the lab at step 17. So the history holds what this product can honestly
- * produce today: a diagnosis, advice in Bangla, and sometimes a follow-up date.
+ * The visits and their notes land here: a diagnosis, advice in Bangla, and
+ * sometimes a follow-up date. Their prescriptions are `insertDemoPrescriptions`
+ * (plan R2), and reports arrive with the lab (step 17).
  *
  * ## Why the note follows the complaint
  *
@@ -956,6 +967,67 @@ async function insertVisits(
     if (detail === undefined) throw new Error('visit rows and their details drifted apart.');
     return { visitId: visit.id, ...detail };
   });
+}
+
+/**
+ * The demonstration prescriptions (`FR-DEM-03`, `FR-DOC-04`; plan R2).
+ *
+ * Every signed visit whose diagnosis is one `DEMO_ASSESSMENTS` declares a
+ * prescription for gets that prescription, signed by whoever signed the
+ * visit and dated with it. The medicines are the formulary's own rows, named
+ * as the doctor's screen names them (generic, then brand), so the records a
+ * demo shows match what a doctor would pick.
+ */
+async function insertDemoPrescriptions(
+  client: Client,
+): Promise<{ prescriptions: number; items: number }> {
+  let prescriptions = 0;
+  let items = 0;
+  for (const assessment of DEMO_ASSESSMENTS) {
+    if (assessment.prescription === undefined) continue;
+
+    const written = await client.query<{ id: string }>(
+      `INSERT INTO prescriptions (visit_id, created_by, created_at, updated_at)
+       SELECT v.id, v.created_by, v.signed_at, v.signed_at
+         FROM visits v
+        WHERE v.diagnosis_text = $1 AND v.signed_at IS NOT NULL AND v.deleted_at IS NULL
+       RETURNING id`,
+      [assessment.diagnosisBn],
+    );
+    prescriptions += written.rowCount ?? 0;
+    const ids = written.rows.map((row) => row.id);
+    if (ids.length === 0) continue;
+
+    for (const [index, medicine] of assessment.prescription.entries()) {
+      const found = DEMO_FORMULARY.find((entry) => entry.generic === medicine.generic);
+      if (found === undefined) {
+        throw new Error(
+          `A demo prescription names ${medicine.generic}, which the formulary does not carry.`,
+        );
+      }
+      const added = await client.query(
+        `INSERT INTO prescription_items
+           (prescription_id, medicine_id, name_text, strength, schedule, duration_days,
+            instruction_bn, created_at)
+         SELECT p.id, m.id, $2, $3, $4, $5, $6, p.created_at + $7::int * interval '1 microsecond'
+           FROM prescriptions p
+           JOIN medicines m ON m.generic_name = $8 AND m.deleted_at IS NULL
+          WHERE p.id = ANY($1::uuid[])`,
+        [
+          ids,
+          `${found.generic} (${found.brand})`,
+          medicine.strength,
+          medicine.schedule,
+          medicine.days,
+          medicine.instructionBn,
+          index,
+          found.generic,
+        ],
+      );
+      items += added.rowCount ?? 0;
+    }
+  }
+  return { prescriptions, items };
 }
 
 /** The Dhaka calendar date `days` after an instant, as `YYYY-MM-DD`. */

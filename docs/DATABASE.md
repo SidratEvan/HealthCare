@@ -362,6 +362,8 @@ One completed consultation: `id`, `booking_id` **FK U**, `patient_id`, `hospital
 `prescriptions`: `id`, `visit_id` **FK**, `pdf_url`, `qr_token_hash`, `dispensed_at`.
 `prescription_items`: `id`, `prescription_id` **FK**, `medicine_id` **FK** nullable, `name_text`, `strength`, `schedule` (`1+0+1`), `duration_days`, `instruction_bn`.
 
+Written since plan R2 by `clinical.service` with the visit, in its transaction: one `prescriptions` row per visit that has medicines, its items in the doctor's order (by `created_at`, then `id`). While the visit is a draft a save replaces the items; once it is signed nothing changes them. `pdf_url`, `qr_token_hash` and `dispensed_at` stay null: the sheet is printed by the browser (`FR-DOC-07`), and the QR and dispensing are not built (`FR-PAT-71`, `FR-PHR-01`). No migration: the tables and their policies (0043, 0044) are what R2 writes.
+
 #### `medicines`
 Formulary for autocomplete (`FR-DOC-05`): `id`, `generic_name`, `brand_name`, `manufacturer`, `strengths` text[], `form`.
 

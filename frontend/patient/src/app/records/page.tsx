@@ -51,8 +51,16 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError } from '@platform/client';
-import { formatDateTime, formatSerial, tp, numeralsFor, localName } from '@platform/i18n';
-import { Button, Card, useLocale } from '@platform/ui';
+import {
+  formatDateTime,
+  formatSerial,
+  tp,
+  numeralsFor,
+  localName,
+  prescriptionSheet,
+  toBengaliDigits,
+} from '@platform/i18n';
+import { Button, Card, useLocale, usePrintSheet } from '@platform/ui';
 
 import { RecordsIcon, StethoscopeIcon } from '@/components/icons';
 import { Segmented } from '@/components/Segmented';
@@ -267,6 +275,9 @@ function Loaded({
 function RecordCard({ record }: { readonly record: VisitRecord }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
+  // `BTN-A12-PRINT` (`FR-DOC-07`, plan R2): the sheet the doctor prints.
+  const { sheet, print } = usePrintSheet();
+  const digits = (text: string): string => (locale === 'bn' ? toBengaliDigits(text) : text);
   return (
     <Card elevated>
       <div className="flex flex-col gap-2" data-testid={`record-${record.id}`}>
@@ -303,7 +314,50 @@ function RecordCard({ record }: { readonly record: VisitRecord }): ReactNode {
             )}
           </p>
         )}
+
+        {/* The visit's medicines (`FR-DOC-04`), as the doctor wrote them. */}
+        {record.medicines.length === 0 ? null : (
+          <div className="flex flex-col gap-2" data-testid={`record-medicines-${record.id}`}>
+            <p className="text-body-sm font-semibold">{tp('recordsMedicines', locale)}</p>
+            <ul className="flex flex-col gap-1">
+              {record.medicines.map((medicine, index) => (
+                <li key={`${String(index)}-${medicine.name}`} className="text-body-md">
+                  <span className="font-semibold">{medicine.name}</span>
+                  {[
+                    medicine.strength,
+                    medicine.schedule === null ? null : digits(medicine.schedule),
+                    medicine.durationDays === null
+                      ? null
+                      : tp('recordsDaysCount', locale).replace(
+                          '{days}',
+                          digits(String(medicine.durationDays)),
+                        ),
+                    medicine.instructionBn,
+                  ]
+                    .filter((part): part is string => part !== null && part !== '')
+                    .map((part) => ` · ${part}`)
+                    .join('')}
+                </li>
+              ))}
+            </ul>
+            <div>
+              <Button
+                variant="secondary"
+                size="sm"
+                data-testid={`record-print-${record.id}`}
+                onClick={() => {
+                  // The device does not keep the patient's name with a
+                  // booking, so the sheet leaves the patient line off.
+                  print(prescriptionSheet(record, null));
+                }}
+              >
+                {tp('recordsPrint', locale)}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
+      {sheet}
     </Card>
   );
 }

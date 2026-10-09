@@ -7,8 +7,9 @@
  * chronic conditions, allergies, last visits, previous prescriptions, recent
  * test results."
  *
- * Four of those six are here. Prescriptions were dropped from this version
- * (`FR-DOC-04`) and test reports arrive with the lab at step 17, and both are
+ * Five of those six are here: previous prescriptions are each past visit's
+ * medicines since plan R2 (`FR-DOC-04`), printable as the patient was given
+ * them (`FR-DOC-07`). Test results are not part of this read, and that is
  * **named on the screen** rather than left as blank space. That is `PRD.md` §3.2:
  * an empty area under a heading reads as "this patient has none", which about
  * allergies or medication is not a harmless difference.
@@ -24,11 +25,20 @@
 import { useEffect, useState } from 'react';
 
 import type { QueueEntry } from '@platform/domain';
-import { formatDateTime, formatNumber, t, numeralsFor, localName } from '@platform/i18n';
-import { Card, Chip, useLocale } from '@platform/ui';
+import {
+  formatDateTime,
+  formatNumber,
+  t,
+  numeralsFor,
+  localName,
+  prescriptionSheet,
+  toBengaliDigits,
+} from '@platform/i18n';
+import type { Locale } from '@platform/i18n';
+import { Button, Card, Chip, useLocale, usePrintSheet } from '@platform/ui';
 
 import { readDemoSession } from '@/lib/demo';
-import { fetchRecords, type PatientRecords } from '@/lib/visits';
+import { fetchRecords, type PatientRecords, type PrescribedMedicine } from '@/lib/visits';
 
 import type { ReactNode } from 'react';
 
@@ -221,6 +231,8 @@ function Field({ label, value }: { readonly label: string; readonly value: strin
 export function PastVisits({ records }: { readonly records: PatientRecords }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
+  // `FR-DOC-07`: a past prescription printed as the patient was given it.
+  const { sheet, print } = usePrintSheet();
   return (
     <section className="flex flex-col gap-2 border-t border-line pt-4">
       <h3 className="text-body-sm font-semibold">{t('pastVisits', locale)}</h3>
@@ -257,21 +269,70 @@ export function PastVisits({ records }: { readonly records: PatientRecords }): R
               {visit.adviceTextBn === null ? null : (
                 <p className="mt-1 text-body-sm text-ink-secondary">{visit.adviceTextBn}</p>
               )}
+              {visit.medicines.length === 0 ? null : (
+                <div className="mt-2 flex flex-col gap-2">
+                  <ul
+                    className="flex flex-col gap-1 text-body-sm"
+                    data-testid={`past-visit-medicines-${visit.id}`}
+                  >
+                    {visit.medicines.map((medicine, index) => (
+                      <li key={`${String(index)}-${medicine.name}`}>
+                        {medicineSummary(medicine, locale)}
+                      </li>
+                    ))}
+                  </ul>
+                  <div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      data-testid={`past-visit-print-${visit.id}`}
+                      onClick={() => {
+                        print(
+                          prescriptionSheet(visit, {
+                            name: records.patient.fullName,
+                            ageYears: records.patient.ageYears,
+                            sex: records.patient.sex,
+                          }),
+                        );
+                      }}
+                    >
+                      {t('rxPrint', locale)}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>
       )}
+      {sheet}
     </section>
   );
+}
+
+/** One medicine on one line: name, strength, schedule, days, instruction. */
+function medicineSummary(medicine: PrescribedMedicine, locale: Locale): string {
+  const digits = (text: string): string => (locale === 'bn' ? toBengaliDigits(text) : text);
+  return [
+    medicine.name,
+    medicine.strength,
+    medicine.schedule === null ? null : digits(medicine.schedule),
+    medicine.durationDays === null
+      ? null
+      : t('rxDaysCount', locale).replace('{days}', digits(String(medicine.durationDays))),
+    medicine.instructionBn,
+  ]
+    .filter((part): part is string => part !== null && part !== '')
+    .join(' · ');
 }
 
 /**
  * What the panel cannot show, said out loud.
  *
- * `FR-DOC-03` lists previous prescriptions and recent test results. Neither
- * exists in this version, and a heading with nothing under it would tell a
- * doctor this patient has never been prescribed anything — which is a clinical
- * statement the product cannot support (`PRD.md` §3.2, `FR-OFF-05`).
+ * `FR-DOC-03` lists recent test results, which this read does not carry, and
+ * a heading with nothing under it would tell a doctor this patient has had
+ * none — a clinical statement the product cannot support (`PRD.md` §3.2,
+ * `FR-OFF-05`).
  */
 export function Absent({ records }: { readonly records: PatientRecords }): ReactNode {
   const locale = useLocale();
@@ -279,11 +340,7 @@ export function Absent({ records }: { readonly records: PatientRecords }): React
 
   return (
     <p data-testid="panel-absent" className="text-caption text-ink-muted">
-      {records.absent
-        .map((what) =>
-          what === 'prescriptions' ? t('prescriptionsAbsent', locale) : t('reportsAbsent', locale),
-        )
-        .join(' · ')}
+      {records.absent.map(() => t('reportsAbsent', locale)).join(' · ')}
     </p>
   );
 }

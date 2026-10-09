@@ -372,26 +372,41 @@ The highest-volume surface in the system. Optimise for keyboard and repetition.
 - `FR-DOC-01` Today's sessions with counts: seen, waiting, late, average duration.
 - `FR-DOC-02` One-tap delay declaration from the doctor's own phone, without calling reception.
 - `FR-DOC-03` On calling a patient, the screen opens with: pre-visit intake summary, chronic conditions, allergies, last visits, previous prescriptions, recent test results.
-- `FR-DOC-04` E-prescription: diagnosis field, medicine rows (name, strength, schedule, duration), free-text advice, follow-up date. **Not in this version** — see below.
-- `FR-DOC-05` Medicine autocomplete over a local formulary (generic and brand names). **Not in this version.**
+- `FR-DOC-04` E-prescription: diagnosis field, medicine rows (name, strength, schedule, duration), free-text advice, follow-up date. (**Built, plan R2**, the owner's decision 3 of 8 October — see below.)
+- `FR-DOC-05` Medicine autocomplete over a local formulary (generic and brand names). (**Built, plan R2.** A medicine the formulary does not carry may still be written by name: the formulary helps and never decides what a doctor prescribes.)
 - `FR-DOC-06` Order tests directly into the diagnostics queue.
-- `FR-DOC-07` Patient-facing output prints and delivers in Bangla, including dosage instructions. **Not in this version.**
+- `FR-DOC-07` Patient-facing output prints and delivers in Bangla, including dosage instructions. (**Built, plan R2:** one printed sheet, in Bangla, from the doctor's console and from the patient's records; the browser's print, which also saves it as a PDF.)
 - `FR-DOC-08` Sign and finish advances the queue (equivalent to reception's *done*).
 - `FR-DOC-09` Session earnings summary.
 - `FR-DOC-10` Doctor may only view records of patients in their own sessions, or with explicit patient consent. **And which records** (`FR-NET-02`; plan A8): having treated a patient opens the visits *this hospital* made; the visits another hospital made are read only under the patient's consent. The screen says that what is shown is this hospital's part, and does not say whether there is more.
 
-**Prescribing is out of scope for this version.** The owner removed it on
-2026-09-19, so `FR-DOC-04`, `FR-DOC-05` and `FR-DOC-07` are not built: there are
-no medicine rows, no formulary autocomplete and no printed output. They stay
-here because they remain requirements of the product, in the same way the
-deferred authentication requirements do (`CLAUDE.md` §4.1).
+**Prescribing is built (plan R2; the owner's decision 3 of 8 October).** It
+had been removed on 2026-09-19; the owner restored it as written, saved,
+signed and printed in the doctor's console, the patient's to see and to keep,
+by authorised clinicians only, and with no AI. So:
 
-What a consultation produces instead is a **visit record** — diagnosis, advice
-in Bangla, and a follow-up date. That is what `DATABASE.md` §2.4 calls a
-`visits` row, what `FR-DOC-08` signs, and what the health wallet reads. The
-`prescriptions`, `prescription_items` and `medicines` tables exist and are
-seeded with a sample formulary, so prescribing is a screen to build rather than
-a schema to design.
+- `FR-DOC-04`: a visit carries medicine rows beside its diagnosis, advice and
+  follow-up. Each row is a medicine's name and, each optional, its strength,
+  its schedule in the notation every prescription here uses (`1+0+1`:
+  morning, midday, night; a dose is 0 to 9 or ½), how many days (1 to 365),
+  and an instruction in Bangla. Up to twenty rows. They are saved with the
+  draft and signed with the visit, in the same transaction, and like the visit
+  they are final once signed.
+- Only a doctor writes them, for the patient in their own chamber, exactly as a
+  visit is written (`FR-DOC-08`, `FR-DOC-10`); whoever may read a visit reads
+  its medicines, and nobody else.
+- `FR-DOC-07`: the printed sheet carries the hospital, the doctor and their
+  BMDC number, the patient, the date, the diagnosis, the medicines with their
+  schedule and days, the advice and the follow-up date, in Bangla. Nothing is
+  generated: every word on it is what the doctor wrote or chose.
+- **Still not built:** a prescription QR and dispensing against it
+  (`FR-PAT-71`, `FR-PHR-01`), and medicine reminders (`FR-PAT-72`). The
+  owner's decision covers prescribing; those are further work.
+
+What a consultation produces is still a **visit record** (`DATABASE.md` §2.4,
+`visits`), which `FR-DOC-08` signs and the health wallet reads; a
+prescription is that record's medicines (`prescriptions`,
+`prescription_items`), and the formulary is `medicines`.
 
 ---
 
@@ -431,12 +446,11 @@ a schema to design.
   **Not in this version** — see below.
 - `FR-PHR-02` Out-of-stock flagging feeds medicine availability search in the patient app.
 
-**Dispensing is out of scope for this version, because prescribing is.**
-`FR-PHR-01` is downstream of `FR-DOC-04`, which the owner removed on
-2026-09-19 (§9): no code path and no seed creates a `prescriptions` row, so
-there is nothing to scan a QR against and nothing to dispense. It stays here
-because it remains a requirement of the product, in the same way the deferred
-authentication requirements do (`CLAUDE.md` §4.1).
+**Dispensing is out of scope for this version.** `FR-PHR-01` is downstream
+of `FR-DOC-04`, which plan R2 built (§9), but a prescription carries no QR yet
+(`FR-PAT-71`), so there is nothing for a pharmacy to scan, and the owner's
+decision of 8 October covers prescribing only. It stays here because it
+remains a requirement of the product.
 
 What the pharmacy does instead is `FR-PHR-02`, which needs no prescription: a
 counter marks what is and is not on the shelf, and that feeds the patient

@@ -77,9 +77,8 @@ test.describe('S-B-05 the doctor console', () => {
   test('names what it cannot show rather than leaving a gap (PRD.md §3.2)', async ({ page }) => {
     await openDoctorConsole(page);
 
-    // Prescriptions were dropped from this version and reports are step 17. An
-    // empty area under those headings would read as "this patient has none",
-    // which about medication is not a harmless difference.
+    // Test results are not part of this read. An empty area under that heading
+    // would read as "this patient has none", which is not a harmless difference.
     await expect(page.getByTestId('panel-absent')).toBeVisible();
   });
 
@@ -148,6 +147,84 @@ test.describe('signing files the record and advances the queue (FR-DOC-08)', () 
     // Still serial 1: a draft is a note, not a decision.
     await expect(page.getByTestId('patient-panel')).toContainText(bengali(1));
     await expect(page.getByTestId('visit-diagnosis')).toHaveValue('পরীক্ষা বাকি');
+  });
+});
+
+test.describe('prescribing (FR-DOC-04, FR-DOC-05, FR-DOC-07; plan R2)', () => {
+  test('suggests from the formulary, holds a wrong schedule, signs, and prints what was signed', async ({
+    page,
+  }) => {
+    // The browser's print dialog is not something a test can press; what is
+    // proven is that it was asked for, with the sheet on the page.
+    await page.addInitScript(() => {
+      (globalThis as unknown as { printed: number }).printed = 0;
+      globalThis.print = () => {
+        (globalThis as unknown as { printed: number }).printed += 1;
+      };
+    });
+    await openDoctorConsole(page);
+    await expect(page.getByTestId('patient-panel')).toBeVisible();
+
+    await page.getByTestId('visit-diagnosis').fill('শ্বাসনালীর সংক্রমণ');
+    await page.getByTestId('rx-add').click();
+
+    // FR-DOC-05: typing a name offers the formulary's entries.
+    const name = page.getByTestId('rx-name-0');
+    await name.pressSequentially('Para');
+    await expect(page.locator('datalist option[value="Paracetamol (Napa)"]')).toBeAttached();
+    await name.fill('Paracetamol (Napa)');
+    await page.getByTestId('rx-strength-0').fill('500 mg');
+
+    // A schedule the notation does not allow is said under its field, and
+    // holds the signature until it is corrected.
+    await page.getByTestId('rx-schedule-0').fill('twice');
+    await expect(page.getByText('সকাল+দুপুর+রাত লিখুন, যেমন ১+০+১।')).toBeVisible();
+    await expect(page.getByTestId('sign-and-next')).toBeDisabled();
+
+    await page.getByTestId('rx-schedule-0').fill('১+১+১');
+    await page.getByTestId('rx-days-0').fill('3');
+    await page.getByTestId('rx-instruction-0').fill('খাবারের পরে');
+    await expect(page.getByTestId('sign-and-next')).toBeEnabled();
+    await page.getByTestId('sign-and-next').click();
+    await expect(page.getByTestId('patient-panel')).toContainText(bengali(2));
+
+    // The record carries the medicine as written, tied to the formulary.
+    const records = await page.request.get(
+      `http://localhost:4000/api/v1/patients/${await patientOfSerial(page, 1)}/records`,
+      { headers: { authorization: `Bearer ${demo.doctorToken}` } },
+    );
+    const body = (await records.json()) as {
+      data: {
+        visits: {
+          diagnosisText: string | null;
+          medicines: {
+            medicineId: string | null;
+            name: string;
+            schedule: string | null;
+            durationDays: number | null;
+          }[];
+        }[];
+      };
+    };
+    const written = body.data.visits.find((visit) => visit.diagnosisText === 'শ্বাসনালীর সংক্রমণ');
+    expect(written?.medicines).toHaveLength(1);
+    expect(written?.medicines[0]).toMatchObject({
+      name: 'Paracetamol (Napa)',
+      schedule: '1+1+1',
+      durationDays: 3,
+    });
+    expect(written?.medicines[0]?.medicineId).not.toBeNull();
+
+    // FR-DOC-07: the visit just signed is offered for printing, in Bangla.
+    await page.getByTestId('print-last').click();
+    const sheet = page.getByTestId('prescription-sheet');
+    await expect(sheet).toBeAttached();
+    await expect(sheet).toContainText('Paracetamol (Napa)');
+    await expect(sheet).toContainText('500 mg · ১+১+১ · ৩ দিন');
+    await expect(sheet).toContainText('বিএমডিসি নং');
+    expect(await page.evaluate(() => (globalThis as unknown as { printed: number }).printed)).toBe(
+      1,
+    );
   });
 });
 

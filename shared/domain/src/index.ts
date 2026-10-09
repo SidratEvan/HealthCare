@@ -566,6 +566,7 @@ export * from './schemas/sync.schema.js';
 export * from './schemas/auth.schema.js';
 export * from './schemas/booking.schema.js';
 export * from './schemas/clinical.schema.js';
+export * from './clinical/prescription.js';
 export * from './schemas/bed.schema.js';
 export * from './schemas/standby.schema.js';
 export * from './schemas/emergency.schema.js';

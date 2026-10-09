@@ -20,7 +20,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 
-import { DEMO_ASSESSMENTS } from '../database/seeds/data/reference.js';
+import { DEMO_ASSESSMENTS, DEMO_FORMULARY } from '../database/seeds/data/reference.js';
 
 import {
   bookingBySerial,
@@ -142,6 +142,64 @@ test.describe('S-A-12 the timeline', () => {
     await expect(list).toBeVisible();
     await expect(list).toContainText(ASSESSMENT?.diagnosisBn ?? '');
     await expect(list).toContainText(ASSESSMENT?.adviceBn ?? '');
+  });
+
+  test('a signed prescription is on the record, and prints in Bangla (FR-DOC-04, FR-DOC-07)', async ({
+    page,
+  }) => {
+    // The seed's own declared demo prescription, so the spec invents no
+    // clinical content (CLAUDE.md §8).
+    const prescribed = DEMO_ASSESSMENTS.find((entry) => entry.prescription !== undefined);
+    const medicine = prescribed?.prescription?.[0];
+    const formulary = DEMO_FORMULARY.find((entry) => entry.generic === medicine?.generic);
+    if (prescribed === undefined || medicine === undefined || formulary === undefined) {
+      throw new Error('the seed declares no demo prescription');
+    }
+    const name = `${formulary.generic} (${formulary.brand})`;
+
+    await page.addInitScript(() => {
+      (globalThis as unknown as { printed: number }).printed = 0;
+      globalThis.print = () => {
+        (globalThis as unknown as { printed: number }).printed += 1;
+      };
+    });
+    const bookingId = await bookAsGuest(page);
+    const first = demo.bookingsBySerial.get(1);
+    if (first === undefined) throw new Error('no serial 1');
+    await signVisit(demo, first, {
+      diagnosisText: prescribed.diagnosisBn,
+      adviceTextBn: prescribed.adviceBn,
+    });
+    await signVisit(demo, bookingId, {
+      diagnosisText: prescribed.diagnosisBn,
+      adviceTextBn: prescribed.adviceBn,
+      medicines: [
+        {
+          name,
+          strength: medicine.strength,
+          schedule: medicine.schedule,
+          durationDays: medicine.days,
+          instructionBn: medicine.instructionBn,
+        },
+      ],
+    });
+
+    await page.goto(`${PATIENT}/records`);
+    const medicines = page.locator('[data-testid^="record-medicines-"]');
+    await expect(medicines).toContainText(name);
+    // Bengali digits on a Bangla screen, the notation as the doctor wrote it.
+    await expect(medicines).toContainText(
+      medicine.schedule.replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[Number(d)] ?? d),
+    );
+
+    await page.locator('[data-testid^="record-print-"]').click();
+    const sheet = page.getByTestId('prescription-sheet');
+    await expect(sheet).toBeAttached();
+    await expect(sheet).toContainText(name);
+    await expect(sheet).toContainText(prescribed.diagnosisBn);
+    expect(await page.evaluate(() => (globalThis as unknown as { printed: number }).printed)).toBe(
+      1,
+    );
   });
 
   test('inside another hospital’s portal the wallet is still the patient’s own (FR-BRD-10)', async ({

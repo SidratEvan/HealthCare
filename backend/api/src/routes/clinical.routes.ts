@@ -24,7 +24,7 @@
 
 import { Router } from 'express';
 
-import { createVisitBody, idParams, recordsQuery } from '@platform/domain';
+import { createVisitBody, formularyQuery, idParams, recordsQuery } from '@platform/domain';
 
 import * as clinical from '../controllers/clinical.controller.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -66,4 +66,17 @@ clinicalRoutes.post(
   idempotency({ required: true }),
   validate({ body: createVisitBody }),
   clinical.createVisit,
+);
+
+/**
+ * `GET /formulary?q=` — the formulary, by the start of a name (`FR-DOC-05`,
+ * plan R2). Doctors only: it is the prescribing screen's, and the public
+ * question "where is this medicine in stock" is `GET /medicines`.
+ */
+clinicalRoutes.get(
+  '/formulary',
+  requireAuth,
+  requireRole('doctor'),
+  validate({ query: formularyQuery }),
+  clinical.searchFormulary,
 );

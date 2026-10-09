@@ -26,8 +26,9 @@ import {
   numeralsFor,
   tp,
   type PatientKey,
+  prescriptionSheet,
 } from '@platform/i18n';
-import { Button, Card, Input, OtpInput, useLocale } from '@platform/ui';
+import { Button, Card, Input, OtpInput, useLocale, usePrintSheet } from '@platform/ui';
 
 import { BrandLogo } from '@/components/BrandLogo';
 import {
@@ -448,6 +449,8 @@ function Account({ onSignedOut }: { readonly onSignedOut: () => void }): ReactNo
   const [records, setRecords] = useState<ReadonlyMap<string, readonly VisitRecord[]>>(new Map());
   const [problem, setProblem] = useState<PatientKey | null>(null);
   const account = readAccount();
+  // `FR-DOC-07` (plan R2): a visit's prescription, printed as it was given.
+  const { sheet, print } = usePrintSheet();
 
   const load = useCallback(async () => {
     setProblem(null);
@@ -537,12 +540,36 @@ function Account({ onSignedOut }: { readonly onSignedOut: () => void }): ReactNo
                     {localName(locale, visit.hospitalNameBn, visit.hospitalNameEn)} ·{' '}
                     {formatDateTime(visit.visitedAt, numerals)}
                   </p>
+                  {visit.medicines.length === 0 ? null : (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="text-body-sm" data-testid="account-visit-medicines">
+                        {`${tp('recordsMedicines', locale)}: ${visit.medicines.map((medicine) => medicine.name).join(', ')}`}
+                      </p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        data-testid="account-visit-print"
+                        onClick={() => {
+                          print(
+                            prescriptionSheet(visit, {
+                              name: profile.fullName,
+                              ageYears: profile.ageYears,
+                              sex: profile.sex,
+                            }),
+                          );
+                        }}
+                      >
+                        {tp('recordsPrint', locale)}
+                      </Button>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
           </Card>
         ))
       )}
+      {sheet}
     </section>
   );
 }

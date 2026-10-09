@@ -76,14 +76,14 @@ export interface PatientRecords {
    */
   readonly visitsFrom: VisitsFrom;
   /**
-   * What this version cannot show, named rather than omitted.
+   * What this read cannot show, named rather than omitted.
    *
    * `FR-DOC-03` asks for previous prescriptions and recent test results as well.
-   * Prescriptions were dropped from this version (`FR-DOC-04`) and reports
-   * arrive with the lab at step 17, so the panel says so instead of rendering an
-   * empty area that reads as "this patient has none" (`PRD.md` §3.2).
+   * Prescriptions are on each visit since plan R2; reports are not part of
+   * this read, so the panel says so instead of rendering an empty area that
+   * reads as "this patient has none" (`PRD.md` §3.2).
    */
-  readonly absent: readonly ('prescriptions' | 'reports')[];
+  readonly absent: readonly 'reports'[];
 }
 
 /**
@@ -142,11 +142,16 @@ export async function patientRecords(input: {
     intake,
     visits,
     visitsFrom,
-    absent: ['prescriptions', 'reports'],
+    absent: ['reports'],
   };
 }
 
 /** What `POST /visits` gives back. */
+/** `GET /formulary?q=` (`FR-DOC-05`): what a doctor may pick from as they type. */
+export async function formulary(query: string): Promise<readonly clinicalRepo.FormularyEntry[]> {
+  return await clinicalRepo.searchFormulary(query);
+}
+
 export interface SignVisitResult {
   readonly visitId: string;
   readonly signed: boolean;
@@ -192,21 +197,39 @@ export async function saveVisit(input: {
     );
   }
 
-  const visit = await withTransaction(
-    async (trx) =>
-      await clinicalRepo.upsertVisit(trx, {
-        bookingId: booking.bookingId,
-        patientId: booking.patientId,
-        hospitalId: booking.hospitalId,
-        doctorId: booking.doctorId,
-        diagnosisText: blankToNull(body.diagnosisText),
-        adviceTextBn: blankToNull(body.adviceTextBn),
-        followUpDate: body.followUpDate ?? null,
-        symptomSignal: body.symptomSignal ?? null,
-        sign: body.sign,
-        staffUserId: input.principal.id,
-      }),
-  );
+  const staffUserId = input.principal.id;
+  const visit = await withTransaction(async (trx) => {
+    const written = await clinicalRepo.upsertVisit(trx, {
+      bookingId: booking.bookingId,
+      patientId: booking.patientId,
+      hospitalId: booking.hospitalId,
+      doctorId: booking.doctorId,
+      diagnosisText: blankToNull(body.diagnosisText),
+      adviceTextBn: blankToNull(body.adviceTextBn),
+      followUpDate: body.followUpDate ?? null,
+      symptomSignal: body.symptomSignal ?? null,
+      sign: body.sign,
+      staffUserId,
+    });
+    // `FR-DOC-04` (plan R2): the medicines go with the visit, in its
+    // transaction, and only while it is a draft. A signed visit's rows are as
+    // final as the visit; the refusal below says so.
+    if (!written.alreadySigned && body.medicines !== undefined) {
+      await clinicalRepo.replaceMedicines(trx, {
+        visitId: written.id,
+        staffUserId,
+        medicines: body.medicines.map((medicine) => ({
+          medicineId: medicine.medicineId ?? null,
+          name: medicine.name,
+          strength: blankToNull(medicine.strength),
+          schedule: blankToNull(medicine.schedule),
+          durationDays: medicine.durationDays ?? null,
+          instructionBn: blankToNull(medicine.instructionBn),
+        })),
+      });
+    }
+    return written;
+  });
 
   // Signed is final. A sign sent again is the same act replayed and goes on to
   // the queue's own replay below; anything else against a signed record is an

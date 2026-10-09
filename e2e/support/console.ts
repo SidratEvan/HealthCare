@@ -670,7 +670,12 @@ export async function queueAction(
 export async function signVisit(
   session: ConsoleSession,
   bookingId: string,
-  record: { readonly diagnosisText: string; readonly adviceTextBn: string },
+  record: {
+    readonly diagnosisText: string;
+    readonly adviceTextBn: string;
+    /** The medicines, as `POST /visits` takes them (`FR-DOC-04`, plan R2). */
+    readonly medicines?: readonly Record<string, unknown>[];
+  },
 ): Promise<void> {
   const key = crypto.randomUUID();
 

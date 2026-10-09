@@ -16,14 +16,13 @@
  * and the only way two screens can be trusted to agree is for them to be
  * reading the same state from the same place.
  *
- * ## What this screen does not have
+ * ## Prescribing (plan R2)
  *
- * No medicine rows, no formulary autocomplete, no printed prescription. The
- * owner dropped e-prescriptions from this version (`FR-DOC-04`, `FR-DOC-05`,
- * `FR-DOC-07`), so `TBL-B05-RX`, `BTN-B05-ADDRX` and the print half of
- * `BTN-B05-SIGN` are absent. What remains is `INP-B05-DX`, `INP-B05-ADVICE`,
- * `SEL-B05-FOLLOWUP`, `BTN-B05-DRAFT` and `BTN-B05-SIGN` — a visit record,
- * which is what the wallet reads and what step 13 is built on.
+ * `TBL-B05-RX` and `BTN-B05-ADDRX` (`FR-DOC-04`, `FR-DOC-05`) are the
+ * medicine rows, saved and signed with the visit. Signing moves the chamber
+ * to the next patient, so the visit just signed stays offered for printing
+ * (`BTN-B05-PRINT`, `FR-DOC-07`) until the next one is signed; it prints the
+ * record read back from the server, never the screen's copy of it.
  *
  * `BTN-B05-SCAN` is here as a pasted code rather than a camera — see
  * `ConsentScan`.
@@ -49,11 +48,12 @@ import {
   nowServing,
   outstandingDelayMinutes,
   queueCounts,
+  readMedicineRows,
   SYMPTOM_SIGNALS,
   time,
   waitingQueue,
 } from '@platform/domain';
-import type { QueueEntry } from '@platform/domain';
+import type { MedicineRow, MedicineRowProblems, QueueEntry } from '@platform/domain';
 import {
   format,
   formatClock,
@@ -64,6 +64,7 @@ import {
   formatAge,
   numeralsFor,
   localName,
+  prescriptionSheet,
 } from '@platform/i18n';
 import {
   Button,
@@ -75,16 +76,19 @@ import {
   ToastProvider,
   useToast,
   useLocale,
+  usePrintSheet,
 } from '@platform/ui';
 
 import { ConsentScan } from '@/components/ConsentScan';
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
+import { MedicineRows } from '@/components/MedicineRows';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { PatientPanel } from '@/components/PatientPanel';
 import { WorkspaceBrandMark } from '@/components/WorkspaceBrandMark';
 import { useSessionQueue } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 import {
+  fetchRecords,
   fetchSessionFee,
   fetchTestCatalogue,
   orderTests,
@@ -223,17 +227,61 @@ function DoctorBody(): ReactNode {
     };
   }, []);
 
+  // `FR-DOC-04`: the rows as the API takes them, and any that are not right.
+  const medicines = useMemo(() => readMedicineRows(draft.medicines), [draft.medicines]);
+
   const canSign = useMemo(
     () =>
       draft.diagnosisText.trim() !== '' ||
       draft.adviceTextBn.trim() !== '' ||
-      draft.followUpDays !== null,
-    [draft],
+      draft.followUpDays !== null ||
+      medicines.body.length > 0,
+    [draft, medicines],
   );
+
+  /**
+   * `BTN-B05-PRINT`: the visit last signed with medicines, until the next one
+   * is signed. Who and which booking, so the print reads the signed record
+   * back rather than trusting what the screen held.
+   */
+  const [lastSigned, setLastSigned] = useState<{
+    readonly patientId: string;
+    readonly bookingId: string;
+  } | null>(null);
+  const { sheet, print } = usePrintSheet();
+  const [printing, setPrinting] = useState(false);
+
+  const printLast = useCallback(async () => {
+    if (lastSigned === null) return;
+    setPrinting(true);
+    try {
+      const records = await fetchRecords({
+        apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
+        token: readToken(),
+        patientId: lastSigned.patientId,
+        bookingId: lastSigned.bookingId,
+      });
+      const visit = records.visits.find((entry) => entry.bookingId === lastSigned.bookingId);
+      if (visit === undefined) throw new Error('the signed visit was not in the record');
+      print(
+        prescriptionSheet(visit, {
+          name: records.patient.fullName,
+          ageYears: records.patient.ageYears,
+          sex: records.patient.sex,
+        }),
+      );
+    } catch {
+      show({ title: t('rxPrintFailed', locale), tone: 'caution' });
+    } finally {
+      setPrinting(false);
+    }
+  }, [lastSigned, print, show, locale]);
 
   const submit = useCallback(
     async (sign: boolean) => {
-      if (servingBookingId === null) return;
+      if (servingBookingId === null || serving === null) return;
+      // The screen holds the buttons while a row is wrong; this is the same rule.
+      if (medicines.problems.size > 0) return;
 
       setBusy(true);
       setFailed(false);
@@ -243,6 +291,7 @@ function DoctorBody(): ReactNode {
           token: readToken(),
           bookingId: servingBookingId,
           draft,
+          medicines: medicines.body,
           sign,
         });
 
@@ -274,6 +323,14 @@ function DoctorBody(): ReactNode {
           return;
         }
 
+        // The visit just signed is the one offered for printing, if it has
+        // medicines; one signed without them takes the offer away.
+        setLastSigned(
+          medicines.body.length > 0
+            ? { patientId: serving.patientId, bookingId: servingBookingId }
+            : null,
+        );
+
         // The queue came back with the record, so the screen already knows who
         // is next without waiting for the socket to say so.
         const called = result.queue?.state.entries.find((entry) => entry.status === 'in_chamber');
@@ -294,7 +351,7 @@ function DoctorBody(): ReactNode {
         setBusy(false);
       }
     },
-    [servingBookingId, draft, testKey, show, locale],
+    [servingBookingId, serving, draft, medicines, testKey, show, locale],
   );
 
   if (sessionId === null) {
@@ -348,6 +405,7 @@ function DoctorBody(): ReactNode {
             draft={draft}
             onChange={setDraft}
             canSign={canSign}
+            medicineProblems={medicines.problems}
             failed={failed}
             onDraft={() => {
               void submit(false);
@@ -356,6 +414,22 @@ function DoctorBody(): ReactNode {
               void submit(true);
             }}
           />
+
+          {lastSigned === null ? null : (
+            <Card>
+              <Button
+                variant="secondary"
+                loading={printing}
+                data-testid="print-last"
+                onClick={() => {
+                  void printLast();
+                }}
+              >
+                {t('rxPrintLast', locale)}
+              </Button>
+            </Card>
+          )}
+          {sheet}
 
           <OfflineBlock
             connected={queue.connected}
@@ -518,6 +592,7 @@ function VisitNote({
   draft,
   onChange,
   canSign,
+  medicineProblems,
   failed,
   onDraft,
   onSign,
@@ -528,6 +603,8 @@ function VisitNote({
   readonly draft: VisitDraft;
   readonly onChange: (draft: VisitDraft) => void;
   readonly canSign: boolean;
+  /** Rows of `TBL-B05-RX` that are not right yet; the save waits for them. */
+  readonly medicineProblems: ReadonlyMap<string, MedicineRowProblems>;
   readonly failed: boolean;
   readonly onDraft: () => void;
   readonly onSign: () => void;
@@ -580,6 +657,16 @@ function VisitNote({
           />
           <p className="text-caption text-ink-muted">{t('adviceHint', locale)}</p>
         </div>
+
+        {/* `TBL-B05-RX`, `BTN-B05-ADDRX` (`FR-DOC-04`, plan R2). */}
+        <MedicineRows
+          rows={draft.medicines}
+          problems={medicineProblems}
+          disabled={disabled}
+          onChange={(rows: readonly MedicineRow[]) => {
+            onChange({ ...draft, medicines: rows });
+          }}
+        />
 
         {/* `BTN-B05-TEST` (`FR-DOC-06`). Absent when the hospital has no
             catalogue, rather than an empty box. */}
@@ -688,12 +775,12 @@ function VisitNote({
             branch below carries the sentence a doctor should read instead of a
             dead control.
           */}
-          {disabled ? (
+          {disabled || medicineProblems.size > 0 ? (
             <Button
               variant="secondary"
               size="lg"
               disabled
-              disabledReason={t('nobodyToSee', locale)}
+              disabledReason={disabled ? t('nobodyToSee', locale) : t('rxFixFirst', locale)}
               data-testid="save-draft"
             >
               {t('saveDraft', locale)}
@@ -704,12 +791,16 @@ function VisitNote({
             </Button>
           )}
 
-          {disabled || !canSign ? (
+          {disabled || !canSign || medicineProblems.size > 0 ? (
             <Button
               size="lg"
               disabled
               disabledReason={
-                disabled ? t('nobodyToSee', locale) : t('needSomethingToSign', locale)
+                disabled
+                  ? t('nobodyToSee', locale)
+                  : medicineProblems.size > 0
+                    ? t('rxFixFirst', locale)
+                    : t('needSomethingToSign', locale)
               }
               data-testid="sign-and-next"
             >
@@ -787,6 +878,7 @@ function emptyDraft(): VisitDraft {
     followUpDays: null,
     testCodes: [],
     symptomSignal: null,
+    medicines: [],
   };
 }
 
