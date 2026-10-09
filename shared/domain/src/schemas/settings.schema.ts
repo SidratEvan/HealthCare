@@ -337,3 +337,27 @@ export type DeclaredCapabilitiesBody = z.infer<typeof declaredCapabilitiesBody>;
  * language until the ward brings it into service.
  */
 export const BED_UNCONFIRMED_REASON = 'setup:unconfirmed';
+
+// ---------------------------------------------------------------------------
+// Reception desks (`FR-REC-32`; plan R4)
+// ---------------------------------------------------------------------------
+
+/** `POST /hospital/desks`: a desk's names and the doctors it looks after. */
+export const deskBody = z.strictObject({
+  nameBn: name,
+  nameEn: name,
+  doctorIds: z.array(z.string().uuid()).max(200).default([]),
+});
+
+export type DeskBody = z.infer<typeof deskBody>;
+
+/** `PATCH /hospital/desks/:id`: names, or the doctors, which replace the desk's list. */
+export const deskPatchBody = z
+  .strictObject({
+    nameBn: name.optional(),
+    nameEn: name.optional(),
+    doctorIds: z.array(z.string().uuid()).max(200).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'change at least one field');
+
+export type DeskPatchBody = z.infer<typeof deskPatchBody>;

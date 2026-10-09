@@ -11,6 +11,8 @@ import {
   bedPatchBody,
   bedsBody,
   brandBody,
+  deskBody,
+  deskPatchBody,
   logoBody,
   publishingBody,
   declaredCapabilitiesBody,
@@ -105,6 +107,25 @@ export async function getOwnLogo(req: Request, res: Response): Promise<void> {
 }
 
 /** `GET /hospital/brand` (plan K4, `FR-BRD-12`): any member of the hospital's staff. */
+/** `GET /hospital/desks` (`FR-REC-32`): any member of the hospital's staff. */
+export async function getDesks(req: Request, res: Response): Promise<void> {
+  res.json({ ok: true, data: { desks: await settings.listDesks(actorOf(req).hospitalId) } });
+}
+
+export async function postDesk(req: Request, res: Response): Promise<void> {
+  done(res, await settings.addDesk(actorOf(req), deskBody.parse(req.body)));
+}
+
+export async function patchDesk(req: Request, res: Response): Promise<void> {
+  await settings.updateDesk(actorOf(req), idOf(req), deskPatchBody.parse(req.body));
+  done(res);
+}
+
+export async function deleteDesk(req: Request, res: Response): Promise<void> {
+  await settings.removeDesk(actorOf(req), idOf(req));
+  done(res, { removed: true });
+}
+
 export async function getBrand(req: Request, res: Response): Promise<void> {
   res.json({ ok: true, data: await settings.workspaceBrand(actorOf(req).hospitalId) });
 }

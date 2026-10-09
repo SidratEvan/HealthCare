@@ -300,6 +300,23 @@ export async function loadMonthOfMessages(): Promise<MonthOfMessages | 'offline'
   }
 }
 
+/** A reception desk and the doctors it looks after (`FR-REC-32`, plan R4). */
+export interface Desk {
+  readonly id: string;
+  readonly nameBn: string;
+  readonly nameEn: string;
+  readonly doctorIds: readonly string[];
+}
+
+/** `GET /hospital/desks`, for the settings screen and the picker. */
+export async function loadDesks(): Promise<readonly Desk[] | 'offline' | 'error'> {
+  try {
+    return (await client().get<{ desks: Desk[] }>('/hospital/desks')).desks;
+  } catch (error: unknown) {
+    return error instanceof NetworkError ? 'offline' : 'error';
+  }
+}
+
 /** Loading: `'offline'` when the request never reached the server. */
 export async function loadSetup(): Promise<SetupSnapshot | 'offline' | 'error'> {
   try {
@@ -358,6 +375,14 @@ export const settingsApi = {
     save((api, key) => api.patch(`/hospital/beds/${bedId}`, body, key)),
   /** One the ward never brought into service (plan D2). */
   removeBed: (bedId: string) => save((api, key) => api.delete(`/hospital/beds/${bedId}`, key)),
+  /** Reception desks (`FR-REC-32`, plan R4). */
+  addDesk: (body: { nameBn: string; nameEn: string; doctorIds: readonly string[] }) =>
+    save((api, key) => api.post<{ deskId: string }>('/hospital/desks', body, key)),
+  updateDesk: (
+    deskId: string,
+    body: { nameBn?: string; nameEn?: string; doctorIds?: readonly string[] },
+  ) => save((api, key) => api.patch(`/hospital/desks/${deskId}`, body, key)),
+  removeDesk: (deskId: string) => save((api, key) => api.delete(`/hospital/desks/${deskId}`, key)),
   addStaff: (body: StaffBody) =>
     save((api, key) =>
       api.post<{ staffId: string; temporaryPassword: string }>('/hospital/staff', body, key),

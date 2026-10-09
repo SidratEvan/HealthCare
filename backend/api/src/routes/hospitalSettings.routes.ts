@@ -21,6 +21,8 @@ import {
   bedPatchBody,
   bedsBody,
   brandBody,
+  deskBody,
+  deskPatchBody,
   logoBody,
   publishingBody,
   declaredCapabilitiesBody,
@@ -55,6 +57,31 @@ hospitalSettingsRoutes.get('/hospital/setup', ...admin, settings.getSetup);
 // The hospital's own face on every console (plan K4, `FR-BRD-12`): any member
 // of its staff, its own hospital only, from the principal.
 hospitalSettingsRoutes.get('/hospital/brand', requireAuth, settings.getBrand);
+
+// Reception desks (`FR-REC-32`, plan R4): read by any member of the hospital's
+// staff, for the picker; changed by its administrator.
+hospitalSettingsRoutes.get('/hospital/desks', requireAuth, settings.getDesks);
+hospitalSettingsRoutes.post(
+  '/hospital/desks',
+  ...admin,
+  write,
+  validate({ body: deskBody }),
+  settings.postDesk,
+);
+hospitalSettingsRoutes.patch(
+  '/hospital/desks/:id',
+  ...admin,
+  write,
+  validate({ ...byId, body: deskPatchBody }),
+  settings.patchDesk,
+);
+hospitalSettingsRoutes.delete(
+  '/hospital/desks/:id',
+  ...admin,
+  write,
+  validate(byId),
+  settings.deleteDesk,
+);
 
 // `FR-NOT-06`: this month's SMS by what became of them, beside the cap the
 // same screen sets. Counts of the hospital's own messages; no message's words

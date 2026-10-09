@@ -91,6 +91,8 @@ export interface DemoConsole {
   /** The modules this hospital does not run (`FR-BRD-11`): the picker offers none of them. */
   readonly modulesOff: readonly string[];
   readonly sessions: readonly demoRepo.DemoSessionRow[];
+  /** Its reception desks (`FR-REC-32`, plan R4): the picker orders chambers by them. */
+  readonly desks: demoRepo.DemoConsoleRow['desks'];
 }
 
 /** `GET /demo/consoles` — what `S-B-01` lists. */
@@ -110,6 +112,7 @@ export async function listConsoles(): Promise<readonly DemoConsole[]> {
       roles: OFFERED.filter((role) => row.roles.includes(role)),
       modulesOff: await modules.modulesOff(row.hospitalId),
       sessions: row.sessions,
+      desks: row.desks,
     })),
   );
 }

@@ -42,6 +42,8 @@ import {
   type BedsBody,
   type BrandBody,
   type DeclaredCapabilitiesBody,
+  type DeskBody,
+  type DeskPatchBody,
   type DepartmentBody,
   type DepartmentPatchBody,
   type DoctorBody,
@@ -731,4 +733,58 @@ export async function requestReview(actor: Actor): Promise<void> {
 /** `pnpm doctor:verify` (`FR-SUP-02`): platform staff, after checking the register. */
 export async function verifyDoctor(bmdcNumber: string): Promise<string | null> {
   return await repo.markDoctorVerified(bmdcNumber);
+}
+
+// --- reception desks (`FR-REC-32`; plan R4) ------------------------------------
+
+/** Any member of the hospital's staff: the picker orders chambers by them. */
+export async function listDesks(hospitalId: string): Promise<readonly repo.DeskRow[]> {
+  return await repo.listDesks(hospitalId);
+}
+
+/** The doctors named must sit at this hospital; another hospital's are refused. */
+async function assertOwnDoctors(hospitalId: string, doctorIds: readonly string[]): Promise<void> {
+  const strangers = await repo.doctorsNotHere(hospitalId, doctorIds);
+  if (strangers.length > 0) throw notAllowed('doctor_not_here', { doctorIds: strangers });
+}
+
+export async function addDesk(actor: Actor, body: DeskBody): Promise<{ deskId: string }> {
+  if (await repo.deskNameTaken(actor.hospitalId, body.nameEn, null)) throw duplicate('nameEn');
+  await assertOwnDoctors(actor.hospitalId, body.doctorIds);
+  return await change(actor, { table: 'reception_desks', change: 'desk_added' }, async (trx) => {
+    const deskId = await repo.createDesk(trx, {
+      hospitalId: actor.hospitalId,
+      nameBn: body.nameBn,
+      nameEn: body.nameEn,
+      createdBy: actor.staffId,
+    });
+    await repo.setDeskDoctors(trx, actor.hospitalId, deskId, body.doctorIds);
+    return { result: { deskId }, subjectId: deskId };
+  });
+}
+
+export async function updateDesk(actor: Actor, deskId: string, body: DeskPatchBody): Promise<void> {
+  if (
+    body.nameEn !== undefined &&
+    (await repo.deskNameTaken(actor.hospitalId, body.nameEn, deskId))
+  ) {
+    throw duplicate('nameEn');
+  }
+  if (body.doctorIds !== undefined) await assertOwnDoctors(actor.hospitalId, body.doctorIds);
+  await change(actor, { table: 'reception_desks', change: 'desk_changed' }, async (trx) => {
+    // Renaming nothing still finds the desk, so an unknown one is a 404.
+    const found = await repo.renameDesk(trx, actor.hospitalId, deskId, body);
+    if (!found) throw notFound('desk');
+    if (body.doctorIds !== undefined) {
+      await repo.setDeskDoctors(trx, actor.hospitalId, deskId, body.doctorIds);
+    }
+    return { result: undefined, subjectId: deskId };
+  });
+}
+
+export async function removeDesk(actor: Actor, deskId: string): Promise<void> {
+  await change(actor, { table: 'reception_desks', change: 'desk_removed' }, async (trx) => {
+    if (!(await repo.removeDesk(trx, actor.hospitalId, deskId))) throw notFound('desk');
+    return { result: undefined, subjectId: deskId };
+  });
 }

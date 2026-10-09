@@ -71,6 +71,7 @@ import {
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { DemoBanner } from '@/components/DemoBanner';
+import { DeskSettings } from '@/components/DeskSettings';
 import { HospitalFace } from '@/components/HospitalFace';
 import {
   DepartmentRow,
@@ -1842,6 +1843,9 @@ function StaffTab({ snapshot, offline, run }: TabProps): ReactNode {
 
   return (
     <>
+      {/* FRM-B11-DESKS (FR-REC-32, plan R4): the reception desks and their doctors. */}
+      <DeskSettings snapshot={snapshot} offline={offline} run={run} />
+
       {handover === null ? null : (
         <Card tone="brand" data-testid="settings-temp-password">
           <p className="text-body-sm">

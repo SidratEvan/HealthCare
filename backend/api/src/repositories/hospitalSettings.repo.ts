@@ -1299,3 +1299,132 @@ export async function declareCapabilities(
     `.execute(trx);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Reception desks (`FR-REC-32`; plan R4, 0061)
+// ---------------------------------------------------------------------------
+
+export interface DeskRow {
+  readonly id: string;
+  readonly nameBn: string;
+  readonly nameEn: string;
+  /** The doctors the desk looks after; their chambers come first at this desk. */
+  readonly doctorIds: readonly string[];
+}
+
+/** A hospital's live desks, each with its doctors, by English name. */
+export async function listDesks(hospitalId: string, trx?: Tx): Promise<DeskRow[]> {
+  const result = await sql<{ id: string; name_bn: string; name_en: string; doctor_ids: string[] }>`
+    SELECT d.id, d.name_bn, d.name_en,
+           coalesce(array_agg(dd.doctor_id::text ORDER BY dd.doctor_id)
+                    FILTER (WHERE dd.doctor_id IS NOT NULL), '{}') AS doctor_ids
+      FROM reception_desks d
+      LEFT JOIN reception_desk_doctors dd ON dd.desk_id = d.id
+     WHERE d.hospital_id = ${hospitalId}::uuid AND d.deleted_at IS NULL
+     GROUP BY d.id
+     ORDER BY d.name_en
+  `.execute(trx ?? db);
+  return result.rows.map((row) => ({
+    id: row.id,
+    nameBn: row.name_bn,
+    nameEn: row.name_en,
+    doctorIds: row.doctor_ids,
+  }));
+}
+
+/** Whether another live desk at the hospital already has this English name. */
+export async function deskNameTaken(
+  hospitalId: string,
+  nameEn: string,
+  exceptId: string | null,
+): Promise<boolean> {
+  const result = await sql<{ taken: boolean }>`
+    SELECT EXISTS (
+      SELECT 1 FROM reception_desks
+       WHERE hospital_id = ${hospitalId}::uuid AND deleted_at IS NULL
+         AND lower(name_en) = lower(${nameEn})
+         AND (${exceptId}::uuid IS NULL OR id <> ${exceptId}::uuid)
+    ) AS taken
+  `.execute(db);
+  return result.rows[0]?.taken ?? false;
+}
+
+/** The ids among these that are not doctors sitting at this hospital. */
+export async function doctorsNotHere(
+  hospitalId: string,
+  doctorIds: readonly string[],
+): Promise<string[]> {
+  if (doctorIds.length === 0) return [];
+  const result = await sql<{ id: string }>`
+    SELECT wanted.id
+      FROM unnest(${doctorIds}::uuid[]) AS wanted(id)
+     WHERE NOT EXISTS (
+       SELECT 1 FROM doctor_hospitals dh
+        WHERE dh.doctor_id = wanted.id AND dh.hospital_id = ${hospitalId}::uuid
+     )
+  `.execute(db);
+  return result.rows.map((row) => row.id);
+}
+
+export async function createDesk(
+  trx: Tx,
+  input: {
+    readonly hospitalId: string;
+    readonly nameBn: string;
+    readonly nameEn: string;
+    readonly createdBy: string;
+  },
+): Promise<string> {
+  const result = await sql<{ id: string }>`
+    INSERT INTO reception_desks (hospital_id, name_bn, name_en, created_by)
+    VALUES (${input.hospitalId}::uuid, ${input.nameBn}, ${input.nameEn}, ${input.createdBy}::uuid)
+    RETURNING id
+  `.execute(trx);
+  const id = result.rows[0]?.id;
+  if (id === undefined) throw new Error('desk insert returned no id.');
+  return id;
+}
+
+/** Changes a live desk's names; false when there is no such desk here. */
+export async function renameDesk(
+  trx: Tx,
+  hospitalId: string,
+  deskId: string,
+  names: { readonly nameBn?: string | undefined; readonly nameEn?: string | undefined },
+): Promise<boolean> {
+  const result = await sql`
+    UPDATE reception_desks
+       SET name_bn = coalesce(${names.nameBn ?? null}, name_bn),
+           name_en = coalesce(${names.nameEn ?? null}, name_en)
+     WHERE id = ${deskId}::uuid AND hospital_id = ${hospitalId}::uuid AND deleted_at IS NULL
+  `.execute(trx);
+  return Number(result.numAffectedRows ?? 0) > 0;
+}
+
+/** Replaces the doctors a desk looks after. */
+export async function setDeskDoctors(
+  trx: Tx,
+  hospitalId: string,
+  deskId: string,
+  doctorIds: readonly string[],
+): Promise<void> {
+  await sql`DELETE FROM reception_desk_doctors WHERE desk_id = ${deskId}::uuid`.execute(trx);
+  if (doctorIds.length === 0) return;
+  await sql`
+    INSERT INTO reception_desk_doctors (desk_id, doctor_id, hospital_id)
+    SELECT ${deskId}::uuid, doctor, ${hospitalId}::uuid
+      FROM unnest(${doctorIds}::uuid[]) AS doctor
+    ON CONFLICT DO NOTHING
+  `.execute(trx);
+}
+
+/** Marks a desk removed; its list of doctors goes with it. False when none here. */
+export async function removeDesk(trx: Tx, hospitalId: string, deskId: string): Promise<boolean> {
+  const result = await sql`
+    UPDATE reception_desks SET deleted_at = now()
+     WHERE id = ${deskId}::uuid AND hospital_id = ${hospitalId}::uuid AND deleted_at IS NULL
+  `.execute(trx);
+  if (Number(result.numAffectedRows ?? 0) === 0) return false;
+  await sql`DELETE FROM reception_desk_doctors WHERE desk_id = ${deskId}::uuid`.execute(trx);
+  return true;
+}
