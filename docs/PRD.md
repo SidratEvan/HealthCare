@@ -304,7 +304,12 @@ Many people will never create an account. Guest mode is a first-class path, not 
 
 - `FR-PAT-60` Every completed visit creates a record: hospital, doctor, date, diagnosis, prescription, tests ordered.
 - `FR-PAT-61` Lab and imaging reports are pushed into the wallet when ready, with a notification; no second trip required.
-- `FR-PAT-62` Patients can photograph old paper records; these are stored with date, doctor, and type tags.
+- `FR-PAT-62` Patients can photograph old paper records; these are stored with date, doctor, and type tags. (**Built, plan R3**, the owner's decision 4 of 8 October:)
+  - A patient signed in with a verified phone (`FR-PAT-01`) adds a photograph (JPEG, PNG or WebP) or a PDF, up to 8 MB, to one of the profiles under that phone, with what it is (a prescription, a test report, a discharge paper, or other), its date if known (never in the future) and the doctor's name if known. Not through a tracking link: an SMS link that was forwarded must not be able to add papers to somebody's record.
+  - The file is checked by its contents, not its name: what is not one of those four kinds is refused.
+  - It is **private**: the patient sees and opens their own, and may remove one. It is labelled **রোগীর দেওয়া কাগজ** (provided by the patient) wherever it is shown, so it is never read as a record a hospital made.
+  - A clinician sees it **only under the patient's consent** (`FR-PAT-63`, `FR-SEC-04`): having treated the patient opens that hospital's own visits (`FR-DOC-10`), and a patient's own papers are not that hospital's. Every opening by staff is an audited read (`DB-P7`, `FR-SEC-03`) and appears in the patient's access log (`FR-PAT-64`).
+  - It is stored where the deployment keeps every file: on the deployment's own disk on a server in Bangladesh (`FR-SEC-07`), and in the demonstration's store for the demo. Nothing is sent anywhere else, and nothing reads its contents.
 - `FR-PAT-63` A QR code presents the patient's identity so a doctor console can open their history with consent.
 - `FR-PAT-64` Consent is explicit and revocable per hospital; the patient can see who viewed their records and when.
 - `FR-PAT-65` Records export as a single PDF.

@@ -267,6 +267,15 @@ function Loaded({
       <p data-testid="wallet-absent" className="text-caption text-ink-muted">
         {tp('walletAbsent', locale)}
       </p>
+
+      {/* BTN-A12-UPLOAD (FR-PAT-62, plan R3): old papers are kept under a
+          signed-in profile, never through a link on this device. */}
+      <p className="text-caption text-ink-muted" data-testid="papers-on-profile">
+        {tp('papersOnProfile', locale)}{' '}
+        <a href="/profile" className="font-semibold text-brand-700 underline">
+          {tp('papersGoProfile', locale)}
+        </a>
+      </p>
     </>
   );
 }

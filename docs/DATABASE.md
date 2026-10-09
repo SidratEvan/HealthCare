@@ -393,6 +393,8 @@ one. A mistake is corrected by cancelling and re-ordering.
 #### `patient_documents`
 Patient-uploaded paper records (`FR-PAT-62`): `id`, `patient_id`, `file_url`, `doc_type`, `doc_date`, `doctor_name_text`, `uploaded_at`.
 
+Since 0059 (plan R3): `content_type` (`image/jpeg`, `image/png`, `image/webp`, `application/pdf`), `byte_size` (**CHK** 1 to 8 MB), `uploaded_by_user` (**FK** `users`, the account that added it), and **CHK** `doc_type` in `prescription`, `report`, `discharge`, `other`. `file_url` is an object key (`documents/<patientId>/<id>.<ext>`), never a public address; it is opened by a signed link minted at the moment of opening. A removal sets `deleted_at` and the file stays, as every clinical row's does.
+
 #### `consents` (`FR-PAT-64`)
 `id`, `patient_id`, `hospital_id`, `doctor_id` nullable, `scope` consent_scope, `granted_at`, `expires_at`, `revoked_at`, `granted_via` (`qr`,`app`,`counter`).
 
@@ -878,6 +880,9 @@ Sequential, forward-only, one concern per file. Never edit a shipped migration.
                                    -- bookings.prepayment_required (§2.6, FR-PAY-08..11)
     0058_noshow_prepay.sql         -- plan F3: hospital_settings.noshow_prepay,
                                    -- noshow_window_days (§2.2, FR-GST-14)
+    0059_patient_documents.sql     -- plan R3: patient_documents.content_type,
+                                   -- byte_size, uploaded_by_user; doc_type
+                                   -- in four kinds (§2.4, FR-PAT-62)
   /seeds
     seed_00_reference.sql          -- districts, capability list, medicine formulary sample
     seed_01_hospitals.ts           -- 6 facilities and the national gov_viewer (FR-DEM-01, FR-ROLE-01)

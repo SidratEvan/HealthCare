@@ -13,6 +13,11 @@
 import { z } from 'zod';
 
 import {
+  DOCUMENT_CONTENT_TYPES,
+  DOCUMENT_KINDS,
+  MAX_DOCUMENT_BYTES,
+} from '../clinical/documents.js';
+import {
   MAX_DURATION_DAYS,
   MAX_PRESCRIPTION_ROWS,
   readSchedule,
@@ -195,3 +200,40 @@ export const redeemConsentBody = z.object({
 });
 
 export type RedeemConsentBody = z.infer<typeof redeemConsentBody>;
+
+// ---------------------------------------------------------------------------
+// A patient's own old papers (`FR-PAT-62`; plan R3)
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /me/documents` — a photograph or a PDF of an old paper, for one of
+ * the account's profiles. The content type is what the sender says; the
+ * server reads the bytes and refuses a file that is not what it says
+ * (`sniffDocument`). The base64 limit is the byte limit, encoded.
+ */
+export const uploadDocumentBody = z.object({
+  patientId: uuid,
+  contentType: z.enum(DOCUMENT_CONTENT_TYPES),
+  dataBase64: z
+    .string()
+    .min(1)
+    .max(Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4),
+  docType: z.enum(DOCUMENT_KINDS),
+  docDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'must be a date as YYYY-MM-DD')
+    .optional(),
+  doctorName: z.string().trim().max(120).optional(),
+  idempotencyKey: uuid,
+});
+
+export type UploadDocumentBody = z.infer<typeof uploadDocumentBody>;
+
+/** `GET /me/documents?patient=` — one profile's papers. */
+export const documentsQuery = z.object({ patient: uuid });
+
+/** `DELETE /me/documents/:id`. */
+export const documentIdParams = z.object({ id: uuid });
+
+/** `GET /patients/:id/documents/:docId/url`. */
+export const documentUrlParams = z.object({ id: uuid, docId: uuid });

@@ -20,9 +20,9 @@
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import { toLatinDigits } from '@platform/i18n';
 
+import { fileHref, type BookingResponse } from '@/lib/api';
 import { forgetLinks, rememberLink } from '@/lib/bookings';
 
-import type { BookingResponse } from '@/lib/api';
 import type { VisitRecord } from '@/lib/types';
 
 const BASE = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
@@ -68,6 +68,8 @@ export type AccountFailure =
   | { readonly kind: 'wrong'; readonly attemptsLeft: number | null }
   | { readonly kind: 'expired' }
   | { readonly kind: 'signedOut' }
+  /** A paper that is not a photograph or a PDF, or is over 8 MB (`FR-PAT-62`). */
+  | { readonly kind: 'unsupported' }
   | { readonly kind: 'failed' };
 
 export type AccountResult<T> =
@@ -112,6 +114,7 @@ function failureOf(error: unknown): AccountFailure {
       }
       return { kind: 'expired' };
     }
+    if (error.code === 'DOCUMENT_NOT_SUPPORTED') return { kind: 'unsupported' };
     if (error.code === 'AUTH_TOKEN_INVALID' || error.code === 'AUTH_REQUIRED')
       return { kind: 'signedOut' };
   }
@@ -316,4 +319,97 @@ export async function signOut(): Promise<void> {
   } catch {
     // Signed out on this device either way; the server's session lapses on its own.
   }
+}
+
+// ---------------------------------------------------------------------------
+// A profile's own old papers (`FR-PAT-62`; plan R3, `BTN-A12-UPLOAD`)
+// ---------------------------------------------------------------------------
+
+/** One paper, as `GET /me/documents` lists it. Always the patient's own. */
+export interface PatientPaper {
+  readonly id: string;
+  readonly docType: 'prescription' | 'report' | 'discharge' | 'other' | null;
+  readonly docDate: string | null;
+  readonly doctorName: string | null;
+  readonly contentType: string | null;
+  readonly uploadedAt: string;
+  readonly source: 'patient_provided';
+}
+
+export async function papersOf(patientId: string): Promise<AccountResult<readonly PatientPaper[]>> {
+  return await attempt(
+    async () =>
+      (
+        await (
+          await signedIn()
+        ).get<{ documents: PatientPaper[] }>(
+          `/me/documents?patient=${encodeURIComponent(patientId)}`,
+        )
+      ).documents,
+  );
+}
+
+/** The file read in the browser and sent as base64; the server reads its bytes again. */
+export async function addPaper(input: {
+  readonly patientId: string;
+  readonly file: File;
+  readonly docType: 'prescription' | 'report' | 'discharge' | 'other';
+  readonly docDate: string | null;
+  readonly doctorName: string;
+}): Promise<AccountResult<PatientPaper>> {
+  const buffer = new Uint8Array(await input.file.arrayBuffer());
+  let binary = '';
+  for (let index = 0; index < buffer.length; index += 0x8000) {
+    binary += String.fromCharCode(...buffer.subarray(index, index + 0x8000));
+  }
+  const key = crypto.randomUUID();
+  return await attempt(
+    async () =>
+      (
+        await (
+          await signedIn()
+        ).post<{ document: PatientPaper }>(
+          '/me/documents',
+          {
+            patientId: input.patientId,
+            contentType: input.file.type,
+            dataBase64: btoa(binary),
+            docType: input.docType,
+            ...(input.docDate === null ? {} : { docDate: input.docDate }),
+            ...(input.doctorName.trim() === '' ? {} : { doctorName: input.doctorName.trim() }),
+            idempotencyKey: key,
+          },
+          key,
+        )
+      ).document,
+  );
+}
+
+export async function removePaper(documentId: string): Promise<AccountResult<boolean>> {
+  return await attempt(
+    async () =>
+      (
+        await (
+          await signedIn()
+        ).delete<{ removed: boolean }>(`/me/documents/${encodeURIComponent(documentId)}`)
+      ).removed,
+  );
+}
+
+/** A fresh signed link, minted at the moment of opening. */
+export async function paperLink(
+  patientId: string,
+  documentId: string,
+): Promise<AccountResult<string>> {
+  return await attempt(async () =>
+    fileHref(
+      (
+        await (
+          await signedIn()
+        ).get<{ url: string }>(
+          `/patients/${encodeURIComponent(patientId)}/documents/${encodeURIComponent(documentId)}/url`,
+        )
+      ).url,
+    ),
+  );
 }

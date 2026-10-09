@@ -907,6 +907,108 @@ export async function searchFormulary(query: string, limit = 10): Promise<Formul
 }
 
 // ---------------------------------------------------------------------------
+// A patient's own old papers (`FR-PAT-62`; plan R3)
+// ---------------------------------------------------------------------------
+
+/** One paper a patient added, as their screens and a consenting doctor list it. */
+export interface PatientDocument {
+  readonly id: string;
+  readonly docType: string | null;
+  readonly docDate: string | null;
+  readonly doctorName: string | null;
+  readonly contentType: string | null;
+  readonly byteSize: number | null;
+  readonly uploadedAt: string;
+  /** Always: a paper the patient gave is never read as a hospital's record. */
+  readonly source: 'patient_provided';
+}
+
+export async function insertDocument(input: {
+  readonly id: string;
+  readonly patientId: string;
+  readonly key: string;
+  readonly docType: string;
+  readonly docDate: string | null;
+  readonly doctorName: string | null;
+  readonly contentType: string;
+  readonly byteSize: number;
+  readonly userId: string;
+}): Promise<PatientDocument> {
+  const result = await sql<{ uploaded_at: Date }>`
+    INSERT INTO patient_documents
+      (id, patient_id, file_url, doc_type, doc_date, doctor_name_text, content_type,
+       byte_size, uploaded_by_user)
+    VALUES (${input.id}::uuid, ${input.patientId}::uuid, ${input.key}, ${input.docType},
+            ${input.docDate}::date, ${input.doctorName}, ${input.contentType},
+            ${input.byteSize}, ${input.userId}::uuid)
+    RETURNING uploaded_at
+  `.execute(db);
+  const row = result.rows[0];
+  if (row === undefined) throw new Error('document insert returned no row.');
+  return {
+    id: input.id,
+    docType: input.docType,
+    docDate: input.docDate,
+    doctorName: input.doctorName,
+    contentType: input.contentType,
+    byteSize: input.byteSize,
+    uploadedAt: row.uploaded_at.toISOString(),
+    source: 'patient_provided',
+  };
+}
+
+/** A profile's papers, newest paper first, removed ones left out. */
+export async function listDocuments(patientId: string): Promise<PatientDocument[]> {
+  const result = await sql<{
+    id: string;
+    doc_type: string | null;
+    doc_date: Date | string | null;
+    doctor_name_text: string | null;
+    content_type: string | null;
+    byte_size: number | null;
+    uploaded_at: Date;
+  }>`
+    SELECT id, doc_type, doc_date, doctor_name_text, content_type, byte_size, uploaded_at
+      FROM patient_documents
+     WHERE patient_id = ${patientId}::uuid AND deleted_at IS NULL
+     ORDER BY coalesce(doc_date, uploaded_at::date) DESC, uploaded_at DESC
+     LIMIT 100
+  `.execute(db);
+  return result.rows.map((row) => ({
+    id: row.id,
+    docType: row.doc_type,
+    docDate: row.doc_date === null ? null : toDateOnly(row.doc_date),
+    doctorName: row.doctor_name_text,
+    contentType: row.content_type,
+    byteSize: row.byte_size,
+    uploadedAt: row.uploaded_at.toISOString(),
+    source: 'patient_provided',
+  }));
+}
+
+/** The paper's patient and object key, for a check before it is opened or removed. */
+export async function findDocument(
+  documentId: string,
+): Promise<{ readonly patientId: string; readonly key: string } | null> {
+  const result = await sql<{ patient_id: string; file_url: string }>`
+    SELECT patient_id, file_url
+      FROM patient_documents
+     WHERE id = ${documentId}::uuid AND deleted_at IS NULL
+  `.execute(db);
+  const row = result.rows[0];
+  return row === undefined ? null : { patientId: row.patient_id, key: row.file_url };
+}
+
+/** Marks a paper removed. The row and the file stay, as every clinical row's do. */
+export async function removeDocument(documentId: string): Promise<boolean> {
+  const result = await sql`
+    UPDATE patient_documents SET deleted_at = now()
+     WHERE id = ${documentId}::uuid AND deleted_at IS NULL
+  `.execute(db);
+  return Number(result.numAffectedRows ?? 0) > 0;
+}
+
+// ---------------------------------------------------------------------------
 
 function asText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null;

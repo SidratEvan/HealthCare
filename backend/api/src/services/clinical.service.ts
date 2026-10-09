@@ -50,9 +50,14 @@
  * over the atomic one deliberately; the alternative loses a record.
  */
 
-import type { CreateVisitBody, QueueActor } from '@platform/domain';
+import { randomUUID } from 'node:crypto';
 
-import { forbiddenScope, guardFailed, notFound } from '../errors/AppError.js';
+import { documentKey, MAX_DOCUMENT_BYTES, sniffDocument, time } from '@platform/domain';
+import type { CreateVisitBody, QueueActor, UploadDocumentBody } from '@platform/domain';
+
+import { storage } from '../adapters/storage.js';
+import { logger } from '../config/logger.js';
+import { AppError, forbiddenScope, guardFailed, notFound } from '../errors/AppError.js';
 import * as clinicalRepo from '../repositories/clinical.repo.js';
 import { withTransaction } from '../repositories/transaction.js';
 
@@ -75,6 +80,12 @@ export interface PatientRecords {
    * hospital's (`FR-NET-02`).
    */
   readonly visitsFrom: VisitsFrom;
+  /**
+   * The patient's own papers (`FR-PAT-62`, plan R3), each labelled as the
+   * patient's. Only for the patient and for a doctor under consent: they are
+   * not a hospital's record, so having treated the patient does not open them.
+   */
+  readonly documents: readonly clinicalRepo.PatientDocument[];
   /**
    * What this read cannot show, named rather than omitted.
    *
@@ -125,12 +136,16 @@ export async function patientRecords(input: {
       : null,
   );
 
+  const documents =
+    visitsFrom === 'everywhere' ? await clinicalRepo.listDocuments(input.patientId) : [];
+
   // After the read succeeded, so a refusal leaves no row claiming it happened.
   await audit(input.principal, input.patientId, {
     subjectTable: 'visits',
     subjectId: null,
     meta: {
       visits: visits.length,
+      documents: documents.length,
       // What was opened: this hospital's part, or everything under consent.
       visitsFrom,
       ...(input.bookingId === undefined ? {} : { bookingId: input.bookingId }),
@@ -142,8 +157,125 @@ export async function patientRecords(input: {
     intake,
     visits,
     visitsFrom,
+    documents,
     absent: ['reports'],
   };
+}
+
+// ---------------------------------------------------------------------------
+// A patient's own old papers (`FR-PAT-62`; plan R3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Only a signed-in patient, for a profile their account holds. A tracking
+ * link is never enough: an SMS that was forwarded must not add papers to
+ * somebody's record (`PRD.md` `FR-PAT-62`).
+ */
+async function assertOwnProfile(principal: Principal, patientId: string): Promise<string> {
+  if (principal.kind !== 'patient') throw forbiddenScope({ reason: 'patient_only' });
+  const owns = await clinicalRepo.patientBelongsToUser(patientId, principal.id);
+  if (!owns) throw forbiddenScope({ reason: 'not_your_record' });
+  return principal.id;
+}
+
+/** `POST /me/documents`: stores the file, then the row; a file with no row is never shown. */
+export async function uploadDocument(
+  principal: Principal,
+  body: UploadDocumentBody,
+): Promise<clinicalRepo.PatientDocument> {
+  const userId = await assertOwnProfile(principal, body.patientId);
+
+  const bytes = Buffer.from(body.dataBase64, 'base64');
+  // The bytes decide, not the name and not what the sender said it was.
+  const kind = bytes.length === 0 ? null : sniffDocument(bytes);
+  if (kind === null || kind !== body.contentType || bytes.length > MAX_DOCUMENT_BYTES) {
+    throw new AppError('DOCUMENT_NOT_SUPPORTED');
+  }
+  if (body.docDate !== undefined && body.docDate > time.toDhakaDate(time.fromDate(new Date()))) {
+    throw guardFailed('DOCUMENT_DATE_IN_FUTURE', 'A paper cannot be dated after today.');
+  }
+
+  const id = randomUUID();
+  const key = documentKey(body.patientId, id, kind);
+  try {
+    await storage().put({ key, contentType: kind, bytes });
+  } catch (cause) {
+    logger.error({ documentId: id, err: cause }, 'document upload failed');
+    throw new AppError('DOCUMENT_STORAGE_FAILED', { cause });
+  }
+
+  return await clinicalRepo.insertDocument({
+    id,
+    patientId: body.patientId,
+    key,
+    docType: body.docType,
+    docDate: body.docDate ?? null,
+    doctorName: blankToNull(body.doctorName),
+    contentType: kind,
+    byteSize: bytes.length,
+    userId,
+  });
+}
+
+/** `GET /me/documents?patient=`. */
+export async function listOwnDocuments(
+  principal: Principal,
+  patientId: string,
+): Promise<readonly clinicalRepo.PatientDocument[]> {
+  await assertOwnProfile(principal, patientId);
+  return await clinicalRepo.listDocuments(patientId);
+}
+
+/** `DELETE /me/documents/:id`. An unknown paper and somebody else's are the same 404. */
+export async function removeOwnDocument(principal: Principal, documentId: string): Promise<void> {
+  const found = await clinicalRepo.findDocument(documentId);
+  if (found === null) throw notFound('document');
+  if (principal.kind !== 'patient') throw forbiddenScope({ reason: 'patient_only' });
+  if (!(await clinicalRepo.patientBelongsToUser(found.patientId, principal.id))) {
+    throw notFound('document');
+  }
+  await clinicalRepo.removeDocument(documentId);
+}
+
+/**
+ * `GET /patients/:id/documents/:docId/url`: a fresh signed link.
+ *
+ * The patient opens their own. A doctor opens one only under the patient's
+ * live consent, and the opening is an audited read (`DB-P7`, `FR-SEC-03`)
+ * the patient sees in their access log (`FR-PAT-64`). Treating the patient
+ * is not enough: the paper is the patient's, not the hospital's.
+ */
+export async function documentUrl(input: {
+  readonly principal: Principal;
+  readonly patientId: string;
+  readonly documentId: string;
+}): Promise<string> {
+  const { principal } = input;
+  if (principal.kind === 'patient') {
+    await assertOwnProfile(principal, input.patientId);
+  } else if (principal.kind === 'staff') {
+    if (!principal.roles.includes('doctor')) {
+      throw forbiddenScope({ reason: 'role_not_permitted' });
+    }
+    if (!(await clinicalRepo.hasLiveConsent(input.patientId, principal.hospitalId))) {
+      throw forbiddenScope({ reason: 'patient_document_needs_consent' });
+    }
+  } else {
+    throw forbiddenScope({ reason: 'patient_only' });
+  }
+
+  const found = await clinicalRepo.findDocument(input.documentId);
+  if (found?.patientId !== input.patientId) throw notFound('document');
+
+  const url = await storage().signedUrl(found.key);
+  if (principal.kind === 'staff') {
+    await audit(principal, input.patientId, {
+      subjectTable: 'patient_documents',
+      subjectId: input.documentId,
+      meta: { opened: 'patient_document' },
+    });
+  }
+  return url;
 }
 
 /** What `POST /visits` gives back. */

@@ -607,7 +607,7 @@ Ranking: capability match → travel time → ER load → free beds. Stale facil
 > browser's print, where it can also be saved as a PDF.
 >
 > **Not built:** `TAB-A12-RX` (its point is the reminders of `FR-PAT-72`,
-> which are not built), `BTN-A12-UPLOAD` (plan R3) and `BTN-A12-EXPORT` (one
+> which are not built), `BTN-A12-UPLOAD` (on the Profile tab since plan R3, for a signed-in account) and `BTN-A12-EXPORT` (one
 > PDF of everything, `FR-PAT-65`). None is rendered as an empty tab; the
 > screen names them in one line instead.
 
@@ -618,7 +618,7 @@ Ranking: capability match → travel time → ER load → free beds. Stale facil
 | Tab: ওষুধ | `TAB-A12-RX` | Active prescriptions with reminder toggles (`FR-PAT-72`) |
 | Record row | `CARD-A12-<recordId>` | → record detail with PDF viewer and share |
 | প্রিন্ট বা PDF | `BTN-A12-PRINT` | On a visit with medicines: the printed sheet (`FR-DOC-07`) and the browser's print (plan R2) |
-| পুরোনো কাগজ যোগ করুন | `BTN-A12-UPLOAD` | Camera/gallery → tag date, doctor, type → stored (`FR-PAT-62`) |
+| পুরোনো কাগজ যোগ করুন | `BTN-A12-UPLOAD` | Camera/gallery → tag date, doctor, type → stored (`FR-PAT-62`). Built in plan R3 on the Profile tab, under each profile of a signed-in account (`FRM-A19-DOC`): the file, its kind, its date, the doctor; the list beneath with **খুলুন** (a signed link) and **সরান**. On `S-A-12` a device with no account is told in one line that old papers are kept under a signed-in profile, with the way there |
 | QR দেখান | `BTN-A12-QR` | Full-screen QR for the doctor console to scan (`FR-PAT-63`); shows consent scope and expiry |
 | কে দেখেছে | `BTN-A12-ACCESS` | Access log: hospital, person, timestamp (`FR-SEC-03`, `FR-PAT-64`) |
 | সব ডাউনলোড | `BTN-A12-EXPORT` | Generates a single PDF |

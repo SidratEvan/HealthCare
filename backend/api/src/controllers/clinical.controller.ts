@@ -8,7 +8,16 @@
  * business asking the database anything.
  */
 
-import { createVisitBody, formularyQuery, idParams, recordsQuery } from '@platform/domain';
+import {
+  createVisitBody,
+  documentIdParams,
+  documentsQuery,
+  documentUrlParams,
+  formularyQuery,
+  idParams,
+  recordsQuery,
+  uploadDocumentBody,
+} from '@platform/domain';
 
 import { authRequired } from '../errors/AppError.js';
 import * as clinical from '../services/clinical.service.js';
@@ -73,4 +82,54 @@ export async function createVisit(req: Request, res: Response): Promise<void> {
 export async function searchFormulary(req: Request, res: Response): Promise<void> {
   const { q } = formularyQuery.parse(req.query);
   res.json({ ok: true, data: { medicines: await clinical.formulary(q) } });
+}
+
+// ---------------------------------------------------------------------------
+// A patient's own old papers (`FR-PAT-62`; plan R3)
+// ---------------------------------------------------------------------------
+
+function principalOf(req: Request): NonNullable<Request['principal']> {
+  const principal = req.principal;
+  if (principal === undefined) throw authRequired();
+  return principal;
+}
+
+/** `POST /me/documents`. */
+export async function uploadDocument(req: Request, res: Response): Promise<void> {
+  const body = uploadDocumentBody.parse(req.body);
+  res.status(201).json({
+    ok: true,
+    data: { document: await clinical.uploadDocument(principalOf(req), body) },
+  });
+}
+
+/** `GET /me/documents?patient=`. */
+export async function listDocuments(req: Request, res: Response): Promise<void> {
+  const { patient } = documentsQuery.parse(req.query);
+  res.json({
+    ok: true,
+    data: { documents: await clinical.listOwnDocuments(principalOf(req), patient) },
+  });
+}
+
+/** `DELETE /me/documents/:id`. */
+export async function removeDocument(req: Request, res: Response): Promise<void> {
+  const { id } = documentIdParams.parse(req.params);
+  await clinical.removeOwnDocument(principalOf(req), id);
+  res.json({ ok: true, data: { removed: true } });
+}
+
+/** `GET /patients/:id/documents/:docId/url`. */
+export async function documentUrl(req: Request, res: Response): Promise<void> {
+  const { id, docId } = documentUrlParams.parse(req.params);
+  res.json({
+    ok: true,
+    data: {
+      url: await clinical.documentUrl({
+        principal: principalOf(req),
+        patientId: id,
+        documentId: docId,
+      }),
+    },
+  });
 }

@@ -514,7 +514,12 @@ The patient's bed search (`S-A-11`) re-reads `/hospitals?bedKind=` every thirty 
 > from the patient side. With `DEMO_MODE` off a guest is refused all three, and
 > when accounts exist the branch is deleted (`assertSpeaksFor` in
 > `consent.service`).
-| POST | `/documents` | patient — paper upload |
+| POST | `/me/documents` | patient (own profile) — a paper upload (`FR-PAT-62`, plan R3): `{patientId, contentType, dataBase64, docType, docDate?, doctorName?}`, the file read by its contents (JPEG, PNG, WebP, PDF), up to 8 MB; its own 12mb body limit. Idempotency-Key required |
+| GET | `/me/documents?patient=` | patient (own profile) — the profile's papers, newest first |
+| DELETE | `/me/documents/:id` | patient (own) — removes one; the row is kept as removed |
+| GET | `/patients/:id/documents/:docId/url` | patient (own) \| doctor under the patient's live consent — a fresh signed link. A doctor's opening is an audited read |
+
+> **A patient's own papers are not a hospital's record** (plan R3). `GET /patients/:id/records` lists them as `documents` (each labelled `patient_provided`) for the patient and for a doctor holding consent, and not at all for a doctor whose hospital has only treated the patient (`visitsFrom: 'this_hospital'`).
 | GET | `/lab/catalogue` | doctor — the chips `BTN-B05-TEST` renders |
 | POST | `/test-orders` | doctor. Several tests in one request; the patient and the hospital are read from the booking's visit, never from the body |
 | GET | `/hospitals/:id/test-orders?state=&days=` | lab \| hospital_admin — the bench queue and its turnaround figures (`FR-LAB-01`, `FR-LAB-04`) |
@@ -707,6 +712,8 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `PAYMENT_ALREADY_MADE` | 409 | a new payment for a booking that already holds a paid one (plan H3, `FR-PAY-10`) |
 | `PAYMENT_HOLD_ENDED` | 409 | a new online attempt after the booking's payment hold ran out (`FR-PAY-08`) |
 | `PREPAYMENT_REQUIRED` | 422 | paying at the counter for a booking that must be paid first (`FR-PAY-02`, `FR-GST-14`); the booking, or the payment, is not written. `details.reason` is `hospital` (the hospital takes no payment at the counter) or `no_shows` (plan F3: three no-shows on this number at this hospital in its window), and the patient app says which |
+| `DOCUMENT_NOT_SUPPORTED` | 422 | a patient's paper whose bytes are not a JPEG, PNG, WebP or PDF, or over 8 MB, whatever it is called (`FR-PAT-62`, plan R3) |
+| `DOCUMENT_STORAGE_FAILED` | 503 | the store refused a patient's paper; nothing was kept (plan R3) |
 | `REFUND_NOTE_REQUIRED` | 422 | a refund recorded by hand without the reference it was made under (`FR-PAY-12`) |
 | `CONSENT_REQUIRED` | 403 | doctor lacks record consent |
 | `CAPACITY_STALE` | 200 + flag | data returned but marked stale |

@@ -42,6 +42,13 @@ export {
   type SheetVisit,
 } from './prescription.js';
 export {
+  PAPER_KIND_NAMES,
+  PATIENT_PROVIDED,
+  paperDate,
+  paperKindName,
+  type PaperKindName,
+} from './papers.js';
+export {
   COLUMN_KIND_NAMES,
   IMPORT_FIELD_NAMES,
   STRUCTURE_TYPE_NAMES,
