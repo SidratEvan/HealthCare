@@ -14,6 +14,8 @@ import { db } from '../config/db.js';
 export interface ChamberRow {
   readonly hospitalId: string;
   readonly id: string;
+  /** Which doctor sits it: what a reception desk is assigned (`FR-REC-32`). */
+  readonly doctorId: string;
   readonly doctorNameBn: string;
   readonly doctorNameEn: string;
   readonly departmentNameBn: string;
@@ -42,6 +44,7 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
   const sessions = await sql<{
     hospital_id: string;
     id: string;
+    doctor_id: string;
     doctor_name_bn: string;
     doctor_name_en: string;
     department_name_bn: string;
@@ -56,6 +59,7 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
     total: string;
   }>`
     SELECT s.hospital_id, s.id,
+           s.doctor_id,
            d.full_name_bn AS doctor_name_bn,
            d.full_name_en AS doctor_name_en,
            dep.name_bn    AS department_name_bn,
@@ -105,6 +109,7 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
   return sessions.rows.map((row) => ({
     hospitalId: row.hospital_id,
     id: row.id,
+    doctorId: row.doctor_id,
     doctorNameBn: row.doctor_name_bn,
     doctorNameEn: row.doctor_name_en,
     departmentNameBn: row.department_name_bn,

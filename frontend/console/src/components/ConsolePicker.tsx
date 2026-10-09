@@ -39,10 +39,11 @@ import {
   t,
   type ConsoleKey,
 } from '@platform/i18n';
-import { Button, Card, CardMeta, CardTitle, useLocale } from '@platform/ui';
+import { Button, Card, CardMeta, CardTitle, FilterChip, useLocale } from '@platform/ui';
 
 import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { mintDemoToken, readDemoSession, writeDemoSession } from '@/lib/demo';
+import { loadDesks, type Desk } from '@/lib/settings';
 import { fetchStaffChambers, fetchStaffModulesOff, signOut } from '@/lib/staffAuth';
 
 import type { ReactNode } from 'react';
@@ -86,6 +87,8 @@ const ROLE_LABEL: Record<string, ConsoleKey> = {
 
 interface DemoSessionCard {
   readonly id: string;
+  /** Which doctor sits it: what a reception desk is assigned (`FR-REC-32`). */
+  readonly doctorId?: string;
   readonly doctorNameBn: string;
   readonly doctorNameEn: string;
   readonly departmentNameBn: string;
@@ -109,6 +112,55 @@ interface DemoConsole {
   /** The modules this hospital does not run (`FR-BRD-11`). */
   readonly modulesOff?: readonly string[];
   readonly sessions: readonly DemoSessionCard[];
+  /** Its reception desks (`FR-REC-32`, plan R4). Absent from an older API: none. */
+  readonly desks?: readonly Desk[];
+}
+
+/** A signed-in hospital's desks; none when they cannot be read, which hides nothing. */
+async function staffDesks(): Promise<readonly Desk[]> {
+  const desks = await loadDesks();
+  return typeof desks === 'string' ? [] : desks;
+}
+
+/** Where this device remembers its desk at a hospital (`SEL-B01-COUNTER`). */
+const deskKey = (hospitalId: string): string => `console.desk.${hospitalId}`;
+
+function readDesk(hospitalId: string): string | null {
+  try {
+    return globalThis.localStorage.getItem(deskKey(hospitalId));
+  } catch {
+    return null;
+  }
+}
+
+function writeDesk(hospitalId: string, deskId: string | null): void {
+  try {
+    if (deskId === null) globalThis.localStorage.removeItem(deskKey(hospitalId));
+    else globalThis.localStorage.setItem(deskKey(hospitalId), deskId);
+  } catch {
+    // Storage refused (a private window): the choice lasts as long as the page.
+  }
+}
+
+/**
+ * The chambers in the order a desk wants them (`FR-REC-32`): its doctors'
+ * first, then every other. Nothing is left out: a desk organises and never
+ * restricts (decision 2a).
+ */
+function byDesk(
+  sessions: readonly DemoSessionCard[],
+  desk: Desk | null,
+): readonly { readonly title: ConsoleKey | null; readonly sessions: readonly DemoSessionCard[] }[] {
+  if (desk === null) return [{ title: null, sessions }];
+  const mine = new Set(desk.doctorIds);
+  const own = sessions.filter(
+    (session) => session.doctorId !== undefined && mine.has(session.doctorId),
+  );
+  const other = sessions.filter((session) => !own.includes(session));
+  return [
+    { title: 'pickerDeskChambers', sessions: own },
+    { title: 'pickerOtherChambers', sessions: other },
+  ];
 }
 
 /**
@@ -176,6 +228,11 @@ export function ConsolePicker({
   const [waking, setWaking] = useState(false);
   const [hospital, setHospital] = useState<DemoConsole | null>(null);
   const [busy, setBusy] = useState(false);
+  /** `SEL-B01-COUNTER`: this device's desk at the chosen hospital, if any. */
+  const [deskId, setDeskId] = useState<string | null>(null);
+  useEffect(() => {
+    setDeskId(hospital === null ? null : readDesk(hospital.hospitalId));
+  }, [hospital]);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,6 +262,7 @@ export function ConsolePicker({
         roles,
         modulesOff: await fetchStaffModulesOff(),
         sessions: chambers,
+        desks: await staffDesks(),
       });
       if (cancelled) return;
       setConsoles([own]);
@@ -491,75 +549,112 @@ export function ConsolePicker({
             </p>
           ) : null}
 
-          <ul className="grid gap-3 md:grid-cols-2">
-            {hospital.sessions.map((session) => (
-              <li key={session.id}>
-                <Card
-                  tone={session.status === 'running' ? 'brand' : 'default'}
-                  data-testid={`chamber-card-${session.id}`}
-                  data-today={session.today ? 'true' : 'false'}
+          {/* SEL-B01-COUNTER (FR-REC-32, plan R4): where the hospital has desks. */}
+          {(hospital.desks ?? []).length === 0 ? null : (
+            <div className="flex flex-wrap items-center gap-2" data-testid="picker-desks">
+              <span className="text-body-sm font-semibold">{t('pickerDesk', locale)}</span>
+              {[null, ...(hospital.desks ?? [])].map((desk) => (
+                <FilterChip
+                  key={desk?.id ?? 'all'}
+                  selected={deskId === (desk?.id ?? null)}
+                  data-testid={desk === null ? 'picker-desk-all' : `picker-desk-${desk.id}`}
+                  onToggle={() => {
+                    const next = desk?.id ?? null;
+                    setDeskId(next);
+                    writeDesk(hospital.hospitalId, next);
+                  }}
                 >
-                  <CardTitle>
-                    {localName(locale, session.doctorNameBn, session.doctorNameEn)}
-                  </CardTitle>
-                  {/* Which day's chamber, and when it was due to start
+                  {desk === null
+                    ? t('pickerDeskAll', locale)
+                    : localName(locale, desk.nameBn, desk.nameEn)}
+                </FilterChip>
+              ))}
+            </div>
+          )}
+
+          {byDesk(
+            hospital.sessions,
+            (hospital.desks ?? []).find((desk) => desk.id === deskId) ?? null,
+          ).map((group) => (
+            <div
+              key={group.title ?? 'all'}
+              className="flex flex-col gap-2"
+              data-testid={`picker-group-${group.title ?? 'all'}`}
+            >
+              {group.title === null ? null : (
+                <h3 className="text-body-md font-semibold">{t(group.title, locale)}</h3>
+              )}
+              <ul className="grid gap-3 md:grid-cols-2">
+                {group.sessions.map((session) => (
+                  <li key={session.id}>
+                    <Card
+                      tone={session.status === 'running' ? 'brand' : 'default'}
+                      data-testid={`chamber-card-${session.id}`}
+                      data-today={session.today ? 'true' : 'false'}
+                    >
+                      <CardTitle>
+                        {localName(locale, session.doctorNameBn, session.doctorNameEn)}
+                      </CardTitle>
+                      {/* Which day's chamber, and when it was due to start
                       (`S-B-01`, owner's decision 2026-10-05). A chamber nobody
                       ended is still listed the next morning, beside today's for
                       the same doctor, and without this the two cards read the
                       same — so today's patients went into yesterday's queue. */}
-                  <p
-                    className={
-                      session.today
-                        ? 'mt-1 text-body-sm text-ink-secondary'
-                        : 'mt-1 text-body-sm font-bold text-warn-700'
-                    }
-                    data-testid={`chamber-when-${session.id}`}
-                  >
-                    {session.today
-                      ? format('chamberToday', locale, {
-                          time: formatClock(session.plannedStart, numerals),
-                        })
-                      : format('chamberEarlierDay', locale, {
-                          when: formatDateTime(session.plannedStart, numerals),
+                      <p
+                        className={
+                          session.today
+                            ? 'mt-1 text-body-sm text-ink-secondary'
+                            : 'mt-1 text-body-sm font-bold text-warn-700'
+                        }
+                        data-testid={`chamber-when-${session.id}`}
+                      >
+                        {session.today
+                          ? format('chamberToday', locale, {
+                              time: formatClock(session.plannedStart, numerals),
+                            })
+                          : format('chamberEarlierDay', locale, {
+                              when: formatDateTime(session.plannedStart, numerals),
+                            })}
+                      </p>
+                      <CardMeta>
+                        {localName(locale, session.departmentNameBn, session.departmentNameEn)}
+                        {session.room === null ? '' : ` · ${session.room}`} ·{' '}
+                        {t(statusKey(session.status), locale)} ·{' '}
+                        {format('waitingCount', locale, {
+                          count: formatNumber(session.waiting, numerals),
                         })}
-                  </p>
-                  <CardMeta>
-                    {localName(locale, session.departmentNameBn, session.departmentNameEn)}
-                    {session.room === null ? '' : ` · ${session.room}`} ·{' '}
-                    {t(statusKey(session.status), locale)} ·{' '}
-                    {format('waitingCount', locale, {
-                      count: formatNumber(session.waiting, numerals),
-                    })}
-                  </CardMeta>
+                      </CardMeta>
 
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {hospital.roles
-                      // The ward board, the ER, the lab, the pharmacy and the
-                      // dashboard belong to the hospital, not to a chamber, and
-                      // are offered once above.
-                      .filter((role) => !HOSPITAL_CONSOLES.has(role))
-                      .map((role) => (
-                        <Button
-                          key={role}
-                          variant={role === 'receptionist' ? 'primary' : 'secondary'}
-                          size="sm"
-                          loading={busy}
-                          data-testid={`open-${role}-${session.id}`}
-                          onClick={() => {
-                            void open(hospital.hospitalId, role, {
-                              kind: 'chamber',
-                              sessionId: session.id,
-                            });
-                          }}
-                        >
-                          {t(ROLE_LABEL[role] ?? 'roleReceptionist', locale)}
-                        </Button>
-                      ))}
-                  </div>
-                </Card>
-              </li>
-            ))}
-          </ul>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {hospital.roles
+                          // The ward board, the ER, the lab, the pharmacy and the
+                          // dashboard belong to the hospital, not to a chamber, and
+                          // are offered once above.
+                          .filter((role) => !HOSPITAL_CONSOLES.has(role))
+                          .map((role) => (
+                            <Button
+                              key={role}
+                              variant={role === 'receptionist' ? 'primary' : 'secondary'}
+                              size="sm"
+                              loading={busy}
+                              data-testid={`open-${role}-${session.id}`}
+                              onClick={() => {
+                                void open(hospital.hospitalId, role, {
+                                  kind: 'chamber',
+                                  sessionId: session.id,
+                                });
+                              }}
+                            >
+                              {t(ROLE_LABEL[role] ?? 'roleReceptionist', locale)}
+                            </Button>
+                          ))}
+                      </div>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
       )}
 

@@ -42,7 +42,14 @@ export const seed06Ancillary: SeedModule = {
   name: 'seed_06_ancillary',
   title: 'ambulances, blood donors and pharmacy stock',
   requirements: ['FR-DEM-05'],
-  writes: ['ambulances', 'blood_donors', 'pharmacy_stock', 'patient_documents'],
+  writes: [
+    'ambulances',
+    'blood_donors',
+    'pharmacy_stock',
+    'patient_documents',
+    'reception_desks',
+    'reception_desk_doctors',
+  ],
 
   async run({ client, now, log }: SeedContext): Promise<SeedSummary> {
     const facilities = await facilityIds(client);
@@ -51,6 +58,7 @@ export const seed06Ancillary: SeedModule = {
     const donors = await insertDonors(client, now);
     const stock = await insertStock(client, facilities, now);
     const papers = await insertPatientPapers(client);
+    const desks = await insertDesks(client, facilities);
 
     log(
       `      ${String(ambulances)} ambulances, ${String(donors)} blood donors, ` +
@@ -58,12 +66,17 @@ export const seed06Ancillary: SeedModule = {
     );
     log('      no ambulance or blood requests: S-A-16 and S-A-17 are later steps');
     log(`      ${String(papers)} old papers patients added to their own records (FR-PAT-62)`);
+    log(
+      `      ${String(desks.desks)} reception desks at Padma, ${String(desks.doctors)} doctors assigned (FR-REC-32)`,
+    );
 
     return {
       ambulances,
       blood_donors: donors,
       pharmacy_stock: stock,
       patient_documents: papers,
+      reception_desks: desks.desks,
+      reception_desk_doctors: desks.doctors,
     };
   },
 };
@@ -262,4 +275,34 @@ async function insertPatientPapers(client: Client): Promise<number> {
     [JSON.stringify(DEMO_PAPERS.map((paper, i) => ({ i, ...paper }))), DEMO_PAPERS.length],
   );
   return result.rowCount ?? 0;
+}
+
+/**
+ * Two reception desks at Padma (`FR-REC-32`; plan R4), its doctors split
+ * between them, so the picker shows a desk's chambers first. The other five
+ * hospitals have none, which is the ordinary state: one common workspace.
+ */
+async function insertDesks(
+  client: Client,
+  facilities: ReadonlyMap<string, string>,
+): Promise<{ desks: number; doctors: number }> {
+  const hospitalId = required(facilities, 'padma-specialised');
+  const made = await client.query<{ id: string }>(
+    `INSERT INTO reception_desks (hospital_id, name_bn, name_en)
+     VALUES ($1, 'নিচতলা কাউন্টার (ডেমো)', 'Ground-floor counter (Demo)'),
+            ($1, 'দোতলা কাউন্টার (ডেমো)', 'First-floor counter (Demo)')
+     RETURNING id`,
+    [hospitalId],
+  );
+  const [ground, first] = made.rows;
+  if (ground === undefined || first === undefined) throw new Error('desk insert returned no rows.');
+  const assigned = await client.query(
+    `INSERT INTO reception_desk_doctors (desk_id, doctor_id, hospital_id)
+     SELECT CASE WHEN here.n % 2 = 1 THEN $2::uuid ELSE $3::uuid END, here.doctor_id, $1
+       FROM (SELECT doctor_id, row_number() OVER (ORDER BY doctor_id) AS n
+               FROM (SELECT DISTINCT doctor_id FROM doctor_hospitals
+                      WHERE hospital_id = $1) AS distinct_doctors) AS here`,
+    [hospitalId, ground.id, first.id],
+  );
+  return { desks: made.rowCount ?? 0, doctors: assigned.rowCount ?? 0 };
 }

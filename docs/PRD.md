@@ -370,6 +370,7 @@ The highest-volume surface in the system. Optimise for keyboard and repetition.
 
 - `FR-REC-30` When a slot frees (no-show, cancellation), the console offers it to standby patients in order and shows acceptance status.
 - `FR-REC-31` Recovered slots and their taka value are recorded for the admin dashboard.
+- `FR-REC-32` **Reception desks** (owner, 8 October; decision 2b; plan R4). A hospital administrator names the hospital's reception desks and assigns doctors to each; a doctor may be at more than one desk. A receptionist chooses their desk on this device, and the console lists that desk's chambers first and every other chamber of the hospital after them. **A desk organises and never restricts** (decision 2a, one common reception workspace): every chamber stays reachable from any desk, so a receptionist covering for another desk is never locked out of a queue. Reconciling money per desk (`FR-REC-23`) is not part of this.
 
 ---
 

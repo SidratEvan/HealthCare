@@ -653,6 +653,25 @@ export const CONSOLE = {
   visitNote: { bn: 'ভিজিটের রেকর্ড', en: 'Visit record' },
   // TBL-B05-RX, BTN-B05-ADDRX, BTN-B05-PRINT (FR-DOC-04, FR-DOC-05, FR-DOC-07; plan R2).
   rxTitle: { bn: 'ওষুধ', en: 'Medicines' },
+  // FRM-B11-DESKS, SEL-B01-COUNTER (FR-REC-32; plan R4).
+  desksTitle: { bn: 'রিসেপশন ডেস্ক', en: 'Reception desks' },
+  desksHint: {
+    bn: 'প্রতিটি ডেস্কের জন্য ডাক্তার বেছে দিন। সেই ডেস্কে তাঁদের চেম্বার আগে দেখাবে; অন্য সব চেম্বারও খোলা থাকবে, কেউ আটকে যাবেন না।',
+    en: "Choose each desk's doctors. Their chambers come first at that desk; every other chamber stays open, and nobody is locked out.",
+  },
+  desksNone: { bn: 'এখনো কোনো ডেস্ক নেই।', en: 'No desks yet.' },
+  desksNameBn: { bn: 'ডেস্কের নাম (বাংলায়)', en: 'Desk name (Bangla)' },
+  desksNameEn: { bn: 'ডেস্কের নাম (ইংরেজিতে)', en: 'Desk name (English)' },
+  desksAdd: { bn: 'ডেস্ক যোগ করুন', en: 'Add desk' },
+  desksNameFirst: { bn: 'দুই ভাষায় নাম লিখুন।', en: 'Write the name in both languages.' },
+  desksSave: { bn: 'ডাক্তার সংরক্ষণ করুন', en: 'Save doctors' },
+  desksNothingChanged: { bn: 'কিছু বদলানো হয়নি।', en: 'Nothing has changed.' },
+  desksRemove: { bn: 'ডেস্ক সরান', en: 'Remove desk' },
+  desksRemoveSure: { bn: 'নিশ্চিত, সরান', en: 'Yes, remove' },
+  pickerDesk: { bn: 'আপনার ডেস্ক', en: 'Your desk' },
+  pickerDeskAll: { bn: 'সব চেম্বার', en: 'All chambers' },
+  pickerDeskChambers: { bn: 'এই ডেস্কের চেম্বার', en: "This desk's chambers" },
+  pickerOtherChambers: { bn: 'অন্য চেম্বার', en: 'Other chambers' },
   // CARD-B10-NOW (FR-ADM-12; plan R6).
   adminNowTitle: { bn: 'এখন হাসপাতালে', en: 'The hospital now' },
   adminNowDoctors: { bn: 'আজকের ডাক্তার', en: "Today's doctors" },

@@ -615,6 +615,19 @@ const KEPT: Readonly<Record<string, Kept>> = {
   'GET /admin/export': { by: 'principal' },
   'GET /hospital/setup': { by: 'principal', own: () => ({ path: '/hospital/setup' }) },
   'GET /hospital/brand': { by: 'principal', own: () => ({ path: '/hospital/brand' }) },
+  // Reception desks (FR-REC-32, plan R4): the hospital comes off the principal;
+  // a desk id that is not this hospital's is not found. A doctor of another
+  // hospital named in the body is refused (`hospitalDesks.routes.test.ts`).
+  'GET /hospital/desks': { by: 'principal', own: () => ({ path: '/hospital/desks' }) },
+  'POST /hospital/desks': { by: 'principal' },
+  'PATCH /hospital/desks/:id': {
+    by: 'row',
+    other: () => ({ path: `/hospital/desks/${randomUUID()}`, body: { nameEn: 'Matrix' } }),
+  },
+  'DELETE /hospital/desks/:id': {
+    by: 'row',
+    other: () => ({ path: `/hospital/desks/${randomUUID()}` }),
+  },
   'GET /hospital/messages': { by: 'principal', own: () => ({ path: '/hospital/messages' }) },
   'PATCH /hospital/profile': { by: 'principal' },
   'PATCH /hospital/rules': { by: 'principal' },

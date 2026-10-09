@@ -34,6 +34,10 @@ export const AUDIT_CHANGES = [
   'ward_added',
   'ward_changed',
   'ward_removed',
+  // Reception desks (FR-REC-32, plan R4).
+  'desk_added',
+  'desk_changed',
+  'desk_removed',
   'beds_added',
   'bed_changed',
   'bed_removed',
