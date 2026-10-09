@@ -9,7 +9,7 @@
     "@platform/domain": "workspace:*",
     "@platform/i18n": "workspace:*",
     "@platform/ui": "workspace:*",
-    "next": "^16.3.5",
+    "next": "16.3.8",
     "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
