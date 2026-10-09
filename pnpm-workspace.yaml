@@ -23,3 +23,12 @@ packages:
 allowBuilds:
   esbuild: true
   unrs-resolver: true
+
+# Security fixes in what Next.js pulls in (fix/next-security, 8 October): both
+# advisories are patched in a release inside the same major, and Next.js
+# 16.3.8 still asks for the older ones.
+#   sharp          GHSA (librsvg, CVE-2026-96889), fixed in 0.35.5
+#   source-map-js  event-loop denial of service, fixed in 1.2.2
+overrides:
+  sharp: ^0.35.5
+  source-map-js: ^1.2.2
