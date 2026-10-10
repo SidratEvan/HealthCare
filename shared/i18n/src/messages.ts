@@ -34,6 +34,68 @@ export interface Message {
  * what pressing it will do.
  */
 export const CONSOLE = {
+  accessRateLimited: {
+    bn: 'অনেকবার চেষ্টা হয়েছে। একটু পরে আবার চেষ্টা করুন।',
+    en: 'Too many attempts. Try again shortly.',
+  },
+  // Staff access and landing (FR-SEC-06/10, FR-ROLE-01, FR-REC-32).
+  accessHelpTitle: { bn: 'লগ ইন ও কাজ বেছে নেওয়া', en: 'Sign-in and workspace Help' },
+  accessHelpCredentials: {
+    bn: 'নিজের ইমেইল ও পাসওয়ার্ড দিন। পাসওয়ার্ড ভুলে গেলে প্রশাসককে বলুন।',
+    en: 'Use your own email and password. Ask your administrator if you forgot your password.',
+  },
+  accessHelpMfa: {
+    bn: 'প্রয়োজন হলে নিজের পাসওয়ার্ড বদলান ও দুই ধাপের যাচাই শেষ করুন।',
+    en: 'Complete the required password change and two-step verification.',
+  },
+  accessHelpShared: {
+    bn: 'ভাগ করা কম্পিউটারে কাজ শেষে লগ আউট করুন। সাহায্য বন্ধ করলে লেখা রয়ে যাবে।',
+    en: 'Sign out when leaving a shared computer. Closing Help keeps your form.',
+  },
+  accessSharedComputer: {
+    bn: 'অন্যের সঙ্গে ভাগ করা কম্পিউটারে কাজ শেষে লগ আউট করুন।',
+    en: 'Sign out when leaving a shared computer.',
+  },
+  accessShowPassword: { bn: 'দেখান', en: 'Show' },
+  accessHidePassword: { bn: 'লুকান', en: 'Hide' },
+  accessSteps: { bn: 'লগ ইনের ধাপ', en: 'Sign-in steps' },
+  accessPasswordStep: { bn: 'নিজের পাসওয়ার্ড', en: 'Your password' },
+  accessMfaStep: { bn: 'দুই ধাপের যাচাই', en: 'Two-step verification' },
+  accessWorkspaceStep: { bn: 'কাজ বেছে নিন', en: 'Choose work' },
+  accessLoading: { bn: 'আপনার কাজের অনুমতি যাচাই হচ্ছে…', en: 'Checking your workspace access…' },
+  accessChooseRole: { bn: 'কোন কাজটি খুলবেন?', en: 'Which work are you opening?' },
+  accessChooseDesk: { bn: 'কোন ডেস্কে কাজ করবেন?', en: 'Which desk are you working at?' },
+  accessChooseChamber: { bn: 'চেম্বার বেছে নিন', en: 'Choose a chamber' },
+  accessDoctorChoice: {
+    bn: 'হাসপাতালের অনুমোদিত চেম্বারগুলো দেখানো হচ্ছে। নিজের নাম দেখে বেছে নিন।',
+    en: 'Showing the hospital’s permitted chambers. Choose the chamber by your own name.',
+  },
+  accessCommonDesk: {
+    bn: 'নির্দিষ্ট ডেস্কে নিয়োগ নেই — হাসপাতালের অনুমোদিত চেম্বারগুলো দেখানো হচ্ছে।',
+    en: 'No assigned desk — showing this hospital’s permitted chambers.',
+  },
+  accessNoChamber: {
+    bn: 'এই কাজের জন্য খোলা চেম্বার নেই। প্রয়োজনে হাসপাতালের প্রশাসককে বলুন।',
+    en: 'No chamber is available for this work. Ask your hospital administrator if needed.',
+  },
+  accessNoWork: {
+    bn: 'এই লগ ইনে কোনো কাজ এখন খোলা নেই। প্রশাসককে বলুন।',
+    en: 'No workspace is currently available for this sign-in. Ask your administrator.',
+  },
+  accessDenied: {
+    bn: 'এই কাজ বা চেম্বার এখন আপনার জন্য খোলা নয়। অনুমোদিত কাজ বেছে নিন।',
+    en: 'This workspace or chamber is not currently available to you. Choose permitted work.',
+  },
+  accessLoadFailed: {
+    bn: 'কাজের অনুমতি যাচাই করা যায়নি। আবার চেষ্টা করুন।',
+    en: 'Could not check workspace access. Try again.',
+  },
+  accessOfflineSelection: {
+    bn: 'নতুন কাজ বেছে নিতে সংযোগ দরকার। আগে খোলা কাজ অফলাইনে চলতে পারে।',
+    en: 'A connection is needed to choose new work. Already-open work may continue offline.',
+  },
+  accessChangeChoice: { bn: 'অন্য কাজ বেছে নিন', en: 'Choose different work' },
+  accessAllChambers: { bn: 'সব অনুমোদিত চেম্বার', en: 'All permitted chambers' },
   // Approved console foundation (GR-03, GR-06); no clinical help invented.
   foundationSkip: { bn: 'মূল কাজে যান', en: 'Skip to workspace' },
   foundationNavigation: { bn: 'কাজের তালিকা', en: 'Workspaces' },

@@ -686,6 +686,8 @@ Accessed at `console.[domain]`. Designed for 1280px+ monitors, mouse and keyboar
 
 ## B0. Console authentication
 
+> **Phase 8B Batch 2 (10 October 2026):** approved staff-access presentation now uses the shared console foundation. After required password/MFA steps, current `/staff/me` permissions, module configuration and actual desk/chamber assignments determine landing. A single unambiguous facility workspace opens directly; multiple roles/desks require selection. A single reception desk covering several chambers still requires a chamber choice. Doctors always choose explicitly until a real account mapping is approved. Existing server guards, hospital-code flow, optional MFA, refresh/revocation and scoped explicit queue reads remain intact. Details and verification: `docs/design/console-access/README.md`. Patient Registration and clinical/administrative workspace redesigns are excluded.
+
 ### `S-B-00` Staff login
 
 | Element | ID | Wiring |

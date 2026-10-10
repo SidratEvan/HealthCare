@@ -18,8 +18,12 @@
  * administrator without one gets a session that opens only `S-B-00d`.
  */
 
+import { ownerOfToken } from '@platform/client';
+
 import { clearDemoSession, readDemoSession, writeDemoSession, type DemoSession } from './demo';
 import { rememberDemonstration } from './deployment';
+
+import type { Desk } from './settings';
 
 const API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 
@@ -56,7 +60,13 @@ export type SignInOutcome =
   | {
       readonly ok: false;
       readonly reason:
-        'invalid' | 'locked' | 'hospital_required' | 'no_roles' | 'offline' | 'failed';
+        | 'invalid'
+        | 'locked'
+        | 'hospital_required'
+        | 'no_roles'
+        | 'offline'
+        | 'failed'
+        | 'rate_limited';
       readonly until?: string;
     };
 
@@ -138,6 +148,7 @@ export async function signIn(input: {
     };
   }
   if (code === 'AUTH_HOSPITAL_REQUIRED') return { ok: false, reason: 'hospital_required' };
+  if (response.status === 429) return { ok: false, reason: 'rate_limited' };
   if (code === 'AUTH_FORBIDDEN_SCOPE') return { ok: false, reason: 'no_roles' };
   return { ok: false, reason: 'failed' };
 }
@@ -159,17 +170,25 @@ export function adoptStaffSession(
   payload: StaffSessionPayload,
   previous: DemoSession | null = null,
 ): DemoSession {
+  // Never carry another account/hospital's chosen chamber into a new session.
+  const retained =
+    previous !== null &&
+    previous.hospitalId === (payload.hospital?.id ?? null) &&
+    ownerOfToken(previous.token) === payload.staff.id
+      ? previous
+      : null;
   const role =
-    previous?.role !== undefined && payload.roles.includes(previous.role)
-      ? previous.role
+    retained?.role !== undefined && payload.roles.includes(retained.role)
+      ? retained.role
       : (ROLE_ORDER.find((candidate) => payload.roles.includes(candidate)) ??
         payload.roles[0] ??
         '');
   const session: DemoSession = {
-    ...(previous ?? {}),
+    ...(retained ?? {}),
     token: payload.access,
     hospitalId: payload.hospital?.id ?? null,
     staffName: payload.staff.fullName,
+    staffId: payload.staff.id,
     role,
     roles: payload.roles,
     ...(payload.hospital === null
@@ -224,7 +243,7 @@ const RENEW_BEFORE_MS = 2 * 60_000;
  * Returns the function that stops it. `onEnded` is called when the server
  * refuses the refresh — the console then shows `S-B-00`.
  */
-export function keepSessionFresh(onEnded: () => void): () => void {
+export function keepSessionFresh(onEnded: () => void, onChanged?: () => void): () => void {
   let running = false;
   const tick = async (): Promise<void> => {
     const session = readDemoSession();
@@ -233,6 +252,7 @@ export function keepSessionFresh(onEnded: () => void): () => void {
     running = true;
     try {
       if (!(await refreshStaffSession())) onEnded();
+      else if (readDemoSession()?.token !== session.token) onChanged?.();
     } finally {
       running = false;
     }
@@ -435,6 +455,8 @@ export async function askDemoMode(onWaking: () => void): Promise<boolean | null>
 
 /** A chamber as `GET /staff/chambers` lists it — the picker's card shape. */
 export interface StaffChamber {
+  readonly hospitalId: string;
+  readonly doctorId: string;
   readonly id: string;
   readonly doctorNameBn: string;
   readonly doctorNameEn: string;
@@ -448,6 +470,136 @@ export interface StaffChamber {
   readonly plannedStart: string;
   readonly waiting: number;
   readonly total: number;
+}
+
+/** Existing APIs only. /staff/me is read first so stale browser labels never
+ * decide roles or hospital scope. National principals have no chamber read.
+ */
+export type StaffProfile = Omit<StaffSessionPayload, 'access' | 'accessExpiresAt' | 'refresh'>;
+export interface StaffWorkspaceContext {
+  readonly readableSessionId?: string;
+  readonly profile: StaffProfile;
+  readonly chambers: readonly StaffChamber[];
+  readonly desks: readonly Desk[];
+  readonly modulesOff: readonly string[];
+}
+export type StaffContextOutcome =
+  | { readonly kind: 'ready'; readonly context: StaffWorkspaceContext }
+  | { readonly kind: 'restricted' }
+  | { readonly kind: 'ended' }
+  | { readonly kind: 'offline' | 'failed' };
+
+/** Validate an explicit existing queue URL through its unchanged read guard.
+ * This preserves permitted ended/historical reads without using remembered
+ * selections as authority or patient values as landing metadata.
+ */
+export async function checkStaffQueueRead(sessionId: string): Promise<boolean> {
+  const session = readDemoSession();
+  if (session?.authKind !== 'staff') return false;
+  try {
+    const response = await fetch(`${API}/sessions/${encodeURIComponent(sessionId)}/queue`, {
+      headers: { authorization: `Bearer ${session.token}` },
+      signal: AbortSignal.timeout(20_000),
+    });
+    await response.body?.cancel();
+    return response.ok && readDemoSession()?.token === session.token;
+  } catch {
+    return false;
+  }
+}
+export async function loadStaffWorkspaceContext(): Promise<StaffContextOutcome> {
+  let session = readDemoSession();
+  if (session?.authKind !== 'staff') return { kind: 'ended' };
+  if (isOffline()) return { kind: 'offline' };
+  try {
+    const get = (path: string, token: string): Promise<Response> =>
+      fetch(`${API}${path}`, {
+        headers: { authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(20_000),
+      });
+    let response = await get('/staff/me', session.token);
+    if (readDemoSession()?.token !== session.token) return { kind: 'failed' };
+    if (response.status === 401 && session.refresh !== undefined) {
+      if (!(await refreshStaffSession())) return { kind: 'ended' };
+      session = readDemoSession();
+      if (session?.authKind !== 'staff') return { kind: 'ended' };
+      response = await get('/staff/me', session.token);
+    }
+    if (readDemoSession()?.token !== session.token) return { kind: 'failed' };
+    if (response.status === 401 || response.status === 403) {
+      clearDemoSession();
+      return { kind: 'ended' };
+    }
+    if (!response.ok) return { kind: 'failed' };
+    const { data: profile } = (await response.json()) as { data: StaffProfile };
+    if (readDemoSession()?.token !== session.token) return { kind: 'failed' }; // stale response after another sign-in/refresh
+    // Preserve a workspace selected while the identity read was in flight.
+    const latestSession = readDemoSession();
+    if (latestSession === null) return { kind: 'ended' };
+    session = latestSession;
+    const sameHospital = session.hospitalId === (profile.hospital?.id ?? null);
+    writeDemoSession({
+      ...(sameHospital
+        ? session
+        : {
+            token: session.token,
+            staffName: session.staffName,
+            hospitalId: session.hospitalId,
+            role: session.role,
+            authKind: 'staff' as const,
+            ...(session.refresh === undefined ? {} : { refresh: session.refresh }),
+            ...(session.accessExpiresAt === undefined
+              ? {}
+              : { accessExpiresAt: session.accessExpiresAt }),
+          }),
+      hospitalId: profile.hospital?.id ?? null,
+      staffId: profile.staff.id,
+      staffName: profile.staff.fullName,
+      roles: profile.roles,
+      ...(profile.hospital === null
+        ? {}
+        : { hospitalNameBn: profile.hospital.nameBn, hospitalNameEn: profile.hospital.nameEn }),
+      mustChangePassword: profile.mustChangePassword,
+      twoFactor: profile.twoFactor,
+    });
+    if (profile.mustChangePassword || (profile.twoFactor.required && !profile.twoFactor.enabled))
+      return { kind: 'restricted' };
+    if (profile.hospital === null)
+      return { kind: 'ready', context: { profile, chambers: [], desks: [], modulesOff: [] } };
+    const roster = await get('/staff/chambers', session.token);
+    if (readDemoSession()?.token !== session.token) return { kind: 'failed' };
+    if (roster.status === 401 || roster.status === 403) {
+      clearDemoSession();
+      return { kind: 'ended' };
+    }
+    if (!roster.ok) return { kind: 'failed' };
+    const { data } = (await roster.json()) as {
+      data: { chambers: StaffChamber[]; modulesOff: string[] };
+    };
+    let desks: readonly Desk[] = [];
+    if (profile.roles.includes('receptionist')) {
+      const deskRead = await get('/hospital/desks', session.token);
+      if (readDemoSession()?.token !== session.token) return { kind: 'failed' };
+      if (deskRead.status === 401 || deskRead.status === 403) {
+        clearDemoSession();
+        return { kind: 'ended' };
+      }
+      if (!deskRead.ok) return { kind: 'failed' };
+      desks = ((await deskRead.json()) as { data: { desks: Desk[] } }).data.desks;
+    }
+    if (readDemoSession()?.token !== session.token) return { kind: 'failed' };
+    return {
+      kind: 'ready',
+      context: {
+        profile,
+        chambers: data.chambers.filter((chamber) => chamber.hospitalId === profile.hospital?.id),
+        desks,
+        modulesOff: data.modulesOff,
+      },
+    };
+  } catch {
+    return { kind: isOffline() ? 'offline' : 'failed' };
+  }
 }
 
 /** `GET /staff/chambers`. Null when the server could not be asked. */

@@ -15,6 +15,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 
+import { accessScreenshot } from './support/accessScreenshots.js';
 import { DEMO_PASSWORD, seededReceptionist, staffWithTemporaryPassword } from './support/staff.js';
 
 const CONSOLE = 'http://localhost:3100';
@@ -71,6 +72,11 @@ test.describe('staff sign-in (S-B-00)', () => {
     await page.goto(`${CONSOLE}/?login=1`);
     await signIn(page, staff.email, temporary);
     await expect(page.getByTestId('change-password')).toBeVisible();
+    await accessScreenshot(page, 'password-change-bn', [
+      'password-current',
+      'password-new',
+      'password-repeat',
+    ]);
 
     await page.getByTestId('password-current').fill(temporary);
     await page.getByTestId('password-new').fill(own);

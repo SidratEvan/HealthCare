@@ -1,6 +1,6 @@
 'use client';
 
-/** Future workspace adapter (FR-BRD-12, FR-ROLE-01). Not mounted by V1 yet.
+/** Shared workspace adapter (FR-BRD-12, FR-ROLE-01), used by staff landing.
  * Receives the existing authenticated session; does not alter login or routing.
  * The shared shell only displays the permitted choices supplied by its caller.
  */

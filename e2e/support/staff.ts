@@ -18,6 +18,39 @@ import { E2E_DATABASE_URL, assertLocalDatabase } from './database.js';
 /** `DEMO_STAFF_PASSWORD` in `database/seeds/lib/demo.ts`. */
 export const DEMO_PASSWORD = 'demo-password-2026';
 
+/** Synthetic accounts for the access redesign, with actual server-issued sessions. */
+export async function staffWithRoles(
+  code: string | null,
+  roles: readonly string[],
+  password = DEMO_PASSWORD,
+): Promise<{ id: string; email: string; hospitalId: string | null }> {
+  const hash = await hashPassword(password);
+  return await withClient(async (client) => {
+    const hospitalId =
+      code === null
+        ? null
+        : ((
+            await client.query<{ id: string }>(
+              'SELECT id FROM hospitals WHERE code=$1 AND deleted_at IS NULL',
+              [code],
+            )
+          ).rows[0]?.id ?? null);
+    if (code !== null && hospitalId === null) throw new Error('Missing seeded hospital');
+    const id = randomUUID();
+    const email = `access-${id.slice(0, 8)}@demo.invalid`;
+    await client.query(
+      "INSERT INTO staff_users (id,hospital_id,full_name,email,password_hash,must_change_password) VALUES ($1,$2,'Access review (Demo)',$3,$4,false)",
+      [id, hospitalId, email, hash],
+    );
+    for (const role of roles)
+      await client.query(
+        'INSERT INTO staff_roles (staff_user_id,hospital_id,role) VALUES ($1,$2,$3::staff_role)',
+        [id, hospitalId, role],
+      );
+    return { id, email, hospitalId };
+  });
+}
+
 async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
   assertLocalDatabase();
   const client = new Client({

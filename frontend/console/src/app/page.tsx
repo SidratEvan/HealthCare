@@ -43,6 +43,7 @@ import { PharmacyConsole } from '@/components/PharmacyConsole';
 import { PlatformConsole } from '@/components/PlatformConsole';
 import { ReceptionConsole } from '@/components/ReceptionConsole';
 import { RegistrationConsole } from '@/components/RegistrationConsole';
+import { StaffEntry } from '@/components/StaffEntry';
 import { StaffLogin } from '@/components/StaffLogin';
 import { TwoFactorSetup } from '@/components/TwoFactorSetup';
 import { WardBoard } from '@/components/WardBoard';
@@ -121,6 +122,10 @@ export default function Page(): ReactNode {
   const sessionChanged = useCallback(() => {
     setSessionVersion((version) => version + 1);
   }, []);
+  const staffEnded = useCallback(() => {
+    setEnded(true);
+    sessionChanged();
+  }, [sessionChanged]);
 
   // Read after mount: the server has no `location` and no `sessionStorage`,
   // and reading either during render makes the first client render disagree
@@ -142,7 +147,7 @@ export default function Page(): ReactNode {
       keepSessionFresh(() => {
         setEnded(true);
         sessionChanged();
-      }),
+      }, sessionChanged),
     [sessionChanged],
   );
 
@@ -250,6 +255,48 @@ export default function Page(): ReactNode {
   // exists only where the demo does.
   if (session === null && demoMode === null) {
     return <ConsoleStarting waking={statusWaking} failed={statusFailed} onRetry={askStatus} />;
+  }
+
+  if (staff && session !== null) {
+    const body =
+      view === 'ward' ? (
+        <WardBoard />
+      ) : view === 'er' ? (
+        <EmergencyConsole />
+      ) : view === 'lab' ? (
+        <LabConsole />
+      ) : view === 'pharmacy' ? (
+        <PharmacyConsole />
+      ) : view === 'admin' ? (
+        <AdminDashboard />
+      ) : view === 'settings' ? (
+        <HospitalSettings />
+      ) : view === 'imports' ? (
+        <HospitalImport />
+      ) : view === 'registration' ? (
+        <RegistrationConsole />
+      ) : view === 'platform' ? (
+        <PlatformConsole />
+      ) : view === 'gov' ? (
+        <GovDashboard />
+      ) : sessionId !== null && session.role === 'doctor' ? (
+        <DoctorConsole />
+      ) : sessionId !== null && session.role === 'receptionist' ? (
+        <ReceptionConsole />
+      ) : null;
+    return (
+      <StaffEntry
+        session={session}
+        view={view}
+        sessionId={sessionId}
+        onChosen={chosen}
+        onChanged={sessionChanged}
+        onEnded={staffEnded}
+        onSignedOut={signedOut}
+      >
+        {body}
+      </StaffEntry>
+    );
   }
 
   // The ward board opens on a hospital, with no chamber (`S-B-06`).

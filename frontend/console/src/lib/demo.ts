@@ -13,6 +13,10 @@
 
 /** Where the token comes from today. Replaced wholesale by Supabase Auth. */
 export interface DemoSession {
+  /** Real sign-in identity, supplied by /staff/login or /staff/me; not a clinician mapping. */
+  readonly staffId?: string;
+  /** Last validated facility view, for an already-open offline continuation only. */
+  readonly workspaceView?: string | null;
   readonly token: string;
   /**
    * Null for the national console (`S-B-13`): a government viewer works for

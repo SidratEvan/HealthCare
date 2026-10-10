@@ -13,7 +13,8 @@
     "./styles.css": "./src/styles.css",
     "./tokens.css": "./src/tokens/tokens.css",
     "./patient.css": "./src/tokens/patient.css",
-    "./console.css": "./src/console/foundation.css"
+    "./console.css": "./src/console/foundation.css",
+    "./console-access.css": "./src/console/access.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
