@@ -31,6 +31,7 @@
 
 import { createHash } from 'node:crypto';
 
+
 import {
   type BrandTheme,
   BED_UNCONFIRMED_REASON,
@@ -65,6 +66,7 @@ import {
 
 import { hashPassword, temporaryPassword } from '../config/password.js';
 import { AppError, notFound, validationFailed } from '../errors/AppError.js';
+import { dropHospitalSockets } from '../realtime/auth.js';
 import * as repo from '../repositories/hospitalSettings.repo.js';
 import * as platformRepo from '../repositories/platform.repo.js';
 import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
@@ -761,17 +763,23 @@ export async function addDesk(actor: Actor, body: DeskBody): Promise<{ deskId: s
   if (await repo.deskNameTaken(actor.hospitalId, body.nameEn, null)) throw duplicate('nameEn');
   await assertOwnDoctors(actor.hospitalId, body.doctorIds);
   await assertOwnReceptionists(actor.hospitalId, body.staffIds);
-  return await change(actor, { table: 'reception_desks', change: 'desk_added' }, async (trx) => {
-    const deskId = await repo.createDesk(trx, {
-      hospitalId: actor.hospitalId,
-      nameBn: body.nameBn,
-      nameEn: body.nameEn,
-      createdBy: actor.staffId,
-    });
-    await repo.setDeskDoctors(trx, actor.hospitalId, deskId, body.doctorIds);
-    await repo.setDeskStaff(trx, actor.hospitalId, deskId, body.staffIds);
-    return { result: { deskId }, subjectId: deskId };
-  });
+  const result = await change(
+    actor,
+    { table: 'reception_desks', change: 'desk_added' },
+    async (trx) => {
+      const deskId = await repo.createDesk(trx, {
+        hospitalId: actor.hospitalId,
+        nameBn: body.nameBn,
+        nameEn: body.nameEn,
+        createdBy: actor.staffId,
+      });
+      await repo.setDeskDoctors(trx, actor.hospitalId, deskId, body.doctorIds);
+      await repo.setDeskStaff(trx, actor.hospitalId, deskId, body.staffIds);
+      return { result: { deskId }, subjectId: deskId };
+    },
+  );
+  dropHospitalSockets(actor.hospitalId);
+  return result;
 }
 
 export async function updateDesk(actor: Actor, deskId: string, body: DeskPatchBody): Promise<void> {
@@ -795,6 +803,7 @@ export async function updateDesk(actor: Actor, deskId: string, body: DeskPatchBo
     }
     return { result: undefined, subjectId: deskId };
   });
+  dropHospitalSockets(actor.hospitalId);
 }
 
 export async function removeDesk(actor: Actor, deskId: string): Promise<void> {
@@ -802,4 +811,5 @@ export async function removeDesk(actor: Actor, deskId: string): Promise<void> {
     if (!(await repo.removeDesk(trx, actor.hospitalId, deskId))) throw notFound('desk');
     return { result: undefined, subjectId: deskId };
   });
+  dropHospitalSockets(actor.hospitalId);
 }

@@ -300,9 +300,8 @@ export async function callNext(input: {
  * `SLOT_OFFERED` names an `offerId`, and the log must never contain a fact
  * about nothing — the same reason `createWalkinBooking` runs before
  * `WALKIN_ADDED`. The difference is that this one is in the *same*
- * transaction: a walk-in's booking is worth keeping even if the event fails,
- * because a patient is standing at the counter, while an offer nobody was told
- * about is only a row that will expire quietly and block the chair meanwhile.
+ * transaction. Walk-in creation also uses one guarded transaction so a failed
+ * event cannot leave an unissued booking behind (FR-REC-14, FR-QUE-51).
  *
  * ## Why the next standby patient is chosen under the lock
  *
@@ -1635,6 +1634,87 @@ export async function createWalkinBooking(input: {
       feePoisha: input.feePoisha,
       createdByStaffId: input.staffUserId,
     });
+  });
+}
+
+/** Issue one walk-in under the session lock (FR-REC-14, FR-QUE-51).
+ * Replay is checked again inside that lock before allocation. Booking, event,
+ * projection and queued notifications commit together; publishing stays after
+ * commit. The receipt identifies this booking, even after later arrivals.
+ */
+export async function addWalkin(input: {
+  readonly sessionId: string;
+  readonly patientId: string;
+  readonly position: 'end' | 'index';
+  readonly index: number | null;
+  readonly reason: string | null;
+  readonly actor: QueueActor & { readonly kind: 'staff' };
+  readonly clientEventId: string | null;
+  readonly clientTs: string | null;
+}): Promise<
+  AppendEventResult & { readonly walkin: { readonly bookingId: string; readonly serial: number } }
+> {
+  return await asQueue(async () => {
+    const issued = await committed(async (trx) => {
+      const session = await lockSession(trx, input.sessionId);
+      const before = await loadState(trx, session);
+      const stored =
+        input.clientEventId === null
+          ? null
+          : await eventRepo.findByClientEventId(input.clientEventId, trx);
+      if (stored !== null) {
+        if (
+          stored.sessionId !== input.sessionId ||
+          stored.type !== 'WALKIN_ADDED' ||
+          stored.actor.kind !== 'staff' ||
+          stored.actor.staffUserId !== input.actor.staffUserId
+        )
+          throw new AppError('QUEUE_CONFLICT');
+        const entry = before.entries.find((row) => row.bookingId === stored.payload.bookingId);
+        if (
+          entry?.patientId !== input.patientId ||
+          stored.payload.position !== input.position ||
+          stored.payload.index !== input.index ||
+          stored.payload.reason !== input.reason
+        )
+          throw new AppError('QUEUE_CONFLICT');
+        return {
+          result: {
+            state: before,
+            etas: computeEtas(before, nowTs()),
+            seq: stored.seq,
+            duplicate: true,
+            serverTs: stored.serverTs,
+            walkin: { bookingId: entry.bookingId, serial: entry.serial },
+          },
+          batch: null,
+        };
+      }
+      const guard = canAddWalkin(before, input.position, input.reason);
+      if (!guard.ok) throw guardFailed(guard.code, guard.detail);
+      const roster = await bookingRepo.rosterFor(session.id, trx);
+      const serial = roster.reduce((max, booking) => Math.max(max, booking.serial), 0) + 1;
+      const bookingId = await bookingRepo.insertWalkin(trx, {
+        sessionId: session.id,
+        patientId: input.patientId,
+        serial,
+        feePoisha: session.feePoisha,
+        createdByStaffId: input.actor.staffUserId,
+      });
+      const withBooking = await loadState(trx, session);
+      const applied = await applyOne(trx, session, withBooking, {
+        sessionId: session.id,
+        type: 'WALKIN_ADDED',
+        payload: { bookingId, position: input.position, index: input.index, reason: input.reason },
+        actor: input.actor,
+        clientEventId: input.clientEventId,
+        clientTs: input.clientTs,
+      });
+      const settled = await settle(trx, session, applied.state, [applied.event]);
+      return { result: { ...settled.result, walkin: { bookingId, serial } }, batch: settled.batch };
+    });
+    if (issued.batch !== null) await notifications.dispatch(issued.batch);
+    return issued.result;
   });
 }
 

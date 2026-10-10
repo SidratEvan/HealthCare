@@ -12,7 +12,7 @@
  * reading of the state.
  */
 
-import { measuredConsultSeconds, time, UNDO_WINDOW_SECONDS } from '@platform/domain';
+import { id, measuredConsultSeconds, time, UNDO_WINDOW_SECONDS } from '@platform/domain';
 import type { QueueActor } from '@platform/domain';
 
 import { AppError, forbiddenScope, notFound } from '../errors/AppError.js';
@@ -292,7 +292,7 @@ export async function reinstate(req: Request, res: Response): Promise<void> {
 /** `POST /sessions/:id/walkin` (`FR-REC-13`, `FR-REC-14`). */
 export async function addWalkin(req: Request, res: Response): Promise<void> {
   const sessionId = param(req, 'id');
-  const session = await assertSessionScope(req, sessionId);
+  await assertSessionScope(req, sessionId);
   const body = req.body as {
     patientId: string;
     position: 'end' | 'index';
@@ -303,35 +303,15 @@ export async function addWalkin(req: Request, res: Response): Promise<void> {
   const principal = req.principal;
   if (principal?.kind !== 'staff') throw forbiddenScope({ reason: 'staff_only' });
 
-  // A counter that lost the answer sends the walk-in again with the same key.
-  // `appendEvent` would recognise the event — but only after a second booking
-  // had been made for it, a serial nobody holds. So a replay is answered
-  // before anything is written (`FR-QUE-51`, pilot step 23).
-  const replayed = await queueService.findReplay(envelope(req).clientEventId);
-  if (replayed !== null) {
-    send(res, replayed);
-    return;
-  }
-
-  const bookingId = await queueService.createWalkinBooking({
-    sessionId,
-    patientId: body.patientId,
-    feePoisha: session.feePoisha,
-    staffUserId: principal.id,
-  });
-
   send(
     res,
-    await queueService.appendEvent({
+    await queueService.addWalkin({
       sessionId,
-      type: 'WALKIN_ADDED',
-      payload: {
-        bookingId,
-        position: body.position,
-        index: body.index,
-        reason: body.reason,
-      },
-      actor: actorOf(req),
+      patientId: body.patientId,
+      position: body.position,
+      index: body.index,
+      reason: body.reason,
+      actor: { kind: 'staff', staffUserId: id(principal.id), role: 'receptionist' },
       ...envelope(req),
     }),
   );
@@ -492,7 +472,12 @@ function param(req: Request, name: string): string {
 }
 
 /** The success envelope from BACKEND.md §7, plus the freshness stamp. */
-function send(res: Response, result: AppendEventResult): void {
+function send(
+  res: Response,
+  result: AppendEventResult & {
+    readonly walkin?: { readonly bookingId: string; readonly serial: number };
+  },
+): void {
   res.json({
     ok: true,
     data: {
@@ -501,6 +486,7 @@ function send(res: Response, result: AppendEventResult): void {
       seq: result.seq,
       duplicate: result.duplicate,
       serverTs: result.serverTs,
+      ...(result.walkin === undefined ? {} : { walkin: result.walkin }),
     },
   });
 }

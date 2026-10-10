@@ -606,8 +606,9 @@ export async function chambers(hospitalId: string): Promise<chamberRepo.ChamberR
 /** Today's chambers this member of staff may open: a desk's only, for a receptionist at one. */
 export async function chambersFor(
   principal: Principal & { readonly kind: 'staff' },
+  includeEnded = false,
 ): Promise<chamberRepo.ChamberRow[]> {
-  const all = await chamberRepo.todaysChambers(principal.hospitalId);
+  const all = await chamberRepo.todaysChambers(principal.hospitalId, includeEnded);
   const allowed = await deskLimit(principal);
   return allowed === null ? all : all.filter((chamber) => allowed.has(chamber.doctorId));
 }
