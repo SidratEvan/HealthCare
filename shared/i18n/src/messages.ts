@@ -34,6 +34,66 @@ export interface Message {
  * what pressing it will do.
  */
 export const CONSOLE = {
+  // Approved console foundation (GR-03, GR-06); no clinical help invented.
+  foundationSkip: { bn: 'মূল কাজে যান', en: 'Skip to workspace' },
+  foundationNavigation: { bn: 'কাজের তালিকা', en: 'Workspaces' },
+  foundationHelp: { bn: 'সাহায্য', en: 'Help' },
+  foundationClose: { bn: 'বন্ধ করুন', en: 'Close' },
+  foundationGoBack: { bn: 'ফিরে যান', en: 'Go back' },
+  foundationWait: {
+    bn: 'কাজ শেষ হওয়া পর্যন্ত অপেক্ষা করুন।',
+    en: 'Wait for the action to finish.',
+  },
+  foundationHelpKeepsWork: {
+    bn: 'সাহায্য বন্ধ করলে আগের কাজেই ফিরবেন।',
+    en: 'Close Help to return to your work.',
+  },
+  foundationEmpty: { bn: 'দেখানোর মতো কিছু নেই', en: 'Nothing to show' },
+  foundationPreview: { bn: 'কনসোলের নতুন নকশা', en: 'Console design foundation' },
+  foundationPreviewNote: {
+    bn: 'স্থানীয় নকশা যাচাই — কোনো রোগীর তথ্য বা সার্ভারের কাজ নেই।',
+    en: 'Local design review — no patient data or server operations.',
+  },
+  foundationControls: { bn: 'ফর্ম ও বোতাম', en: 'Forms and actions' },
+  foundationFeedback: { bn: 'অবস্থা ও বার্তা', en: 'States and feedback' },
+  foundationExampleField: { bn: 'নকশা যাচাইয়ের লেখা', en: 'Design review text' },
+  foundationFieldHelp: {
+    bn: 'লেখা রেখে সাহায্য খুলে দেখুন।',
+    en: 'Type something, then open Help.',
+  },
+  foundationPreviewAction: { bn: 'বার্তা দেখুন', en: 'Show feedback' },
+  foundationPreviewBlocked: { bn: 'এখন করা যাবে না', en: 'Currently unavailable' },
+  foundationPreviewBlockedReason: {
+    bn: 'এটি বন্ধ থাকা বোতামের উদাহরণ।',
+    en: 'This demonstrates a disabled control.',
+  },
+  foundationPreviewConfirm: { bn: 'নিশ্চিত করার উদাহরণ', en: 'Confirmation example' },
+  foundationPreviewConfirmTitle: { bn: 'উদাহরণের লেখা মুছবেন?', en: 'Clear the example text?' },
+  foundationPreviewConfirmDescription: {
+    bn: 'শুধু এই নকশা যাচাইয়ের লেখা মুছবে। কোনো রেকর্ড বদলাবে না।',
+    en: 'Only the local review text will clear. No record changes.',
+  },
+  foundationPreviewClear: { bn: 'হ্যাঁ, লেখা মুছুন', en: 'Yes, clear text' },
+  foundationPreviewSuccess: { bn: 'উদাহরণের বার্তা দেখানো হয়েছে', en: 'Example feedback shown' },
+  foundationPreviewError: { bn: 'ব্যর্থতার বার্তার উদাহরণ', en: 'Example error feedback' },
+  foundationPreviewReady: { bn: 'প্রস্তুত', en: 'Ready' },
+  foundationPreviewInformation: { bn: 'তথ্য', en: 'Information' },
+  foundationPreviewCaution: { bn: 'খেয়াল করুন', en: 'Needs attention' },
+  foundationPreviewAlert: { bn: 'সতর্কতা', en: 'Alert' },
+  foundationPreviewNeutral: { bn: 'অজানা', en: 'Unknown' },
+  foundationHelpTopic: { bn: 'ফর্মে কাজ করা', en: 'Working with forms' },
+  foundationHelpStepOne: {
+    bn: 'ঘরের নাম দেখে তথ্য লিখুন। ভুল হলে ঘরের নিচের নির্দেশ পড়ুন।',
+    en: 'Read the field label. If there is an error, read the guidance below it.',
+  },
+  foundationHelpStepTwo: {
+    bn: 'বাংলা ও ইংরেজির বোতাম দিয়ে ভাষা বদলাতে পারেন।',
+    en: 'Use the Bangla and English controls to change language.',
+  },
+  foundationHelpStepThree: {
+    bn: 'সাহায্য বন্ধ করুন বা Esc চাপুন। আগের ফর্মের লেখা রয়ে যাবে।',
+    en: 'Close Help or press Esc. The underlying form stays in place.',
+  },
   // --- Navigation rail (B1.1) ---------------------------------------------
   navQueue: { bn: 'সিরিয়াল', en: 'Queue' },
   // Beneath the hospital's own name on every console (FR-BRD-12, plan K4).

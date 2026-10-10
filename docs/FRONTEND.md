@@ -11,6 +11,8 @@
 
 ## 0. The standard we are building to
 
+> **Console redesign foundation, 10 October 2026 (Phase 8B Batch 1).** The founder-approved eleven standalone prototypes now govern the new console visual direction. Their shared cool surfaces, compact navigation and bilingual controls are implemented as opt-in `ConsoleTheme` / `@platform/ui/console.css` and shared React components; see `docs/design/console-foundation/README.md`. Existing V1 screens and the patient app keep their current styles and behaviour until separately approved migration batches. Hospital branding still uses the six permitted tokens; status colours stay fixed. This supersedes the warm-console composition and tablet restriction below only for the opt-in foundation. It adds no domain workflow, permission or API change.
+
 ### 0.1 What "premium" means here
 
 Premium is not decoration. In this product it means four things:

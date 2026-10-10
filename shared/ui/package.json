@@ -12,7 +12,8 @@
     },
     "./styles.css": "./src/styles.css",
     "./tokens.css": "./src/tokens/tokens.css",
-    "./patient.css": "./src/tokens/patient.css"
+    "./patient.css": "./src/tokens/patient.css",
+    "./console.css": "./src/console/foundation.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

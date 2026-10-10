@@ -119,3 +119,29 @@ export {
 export { LOCALE_STORAGE_KEY, setLocale, useLocale } from './locale/store.js';
 export { LanguageSwitch, type LanguageSwitchProps } from './locale/LanguageSwitch.js';
 export { LocaleDocument, type LocaleDocumentProps } from './locale/LocaleDocument.js';
+
+// Opt-in approved console foundation; import @platform/ui/console.css locally.
+export {
+  ConsoleTheme,
+  consoleNavigationFor,
+  consoleBrandStyle,
+  BilingualLabel,
+  ConsoleAction,
+  ConsoleInput,
+  ConsoleHeader,
+  ConsoleShell,
+  ConsolePageHeader,
+  ConsolePanel,
+  ConsoleStatus,
+  ConsoleFeedback,
+  ConsoleState,
+  ConsoleHelp,
+  ConsoleConfirmation,
+  type ConsoleActionProps,
+  type ConsoleBrandColors,
+  type ConsoleBrandToken,
+  type ConsoleHelpTopic,
+  type ConsoleNavigationItem,
+  type ConsoleWorkspaceChoice,
+  type ConsoleTone,
+} from './console/ConsoleFoundation.js';
