@@ -2834,6 +2834,116 @@ export const CONSOLE = {
   settingsSaveRoles: { bn: 'দায়িত্ব সংরক্ষণ করুন', en: 'Save roles' },
 
   // --- Counter registration and walk-ins (S-B-03, MOD-B02-WALKIN, pilot step 23) --
+  regAccess: {
+    bn: 'আপনার অনুমতি বদলেছে। কাজের জায়গা আবার বেছে নিন। সার্ভার এই কাজটি গ্রহণ করেনি।',
+    en: 'Your access has changed. Choose your workspace again. The server refused this action.',
+  },
+  regPaused: { bn: 'বিরতি চলছে', en: 'Paused' },
+  regStepPhone: { bn: 'মোবাইল নম্বর', en: 'Mobile number' },
+  regStepPatient: { bn: 'রোগী', en: 'Patient' },
+  regStepDoctor: { bn: 'ডাক্তার / চেম্বার', en: 'Doctor / chamber' },
+  regStepSerial: { bn: 'সিরিয়াল নিশ্চিত', en: 'Serial confirmation' },
+  regAutoSearch: {
+    bn: 'সঠিক মোবাইল নম্বর হলে নিজে থেকে খোঁজা হবে।',
+    en: 'A valid mobile number is searched automatically.',
+  },
+  regIdentityCheck: {
+    bn: 'এক নম্বরে পরিবারের একাধিক ব্যক্তি থাকতে পারেন। নাম, বয়স ও লিঙ্গ মিলিয়ে রোগীকে জিজ্ঞেস করে নিশ্চিত করুন।',
+    en: 'A household may share a number. Ask the patient and check the name, age and sex before confirming.',
+  },
+  regConfirmPatient: { bn: 'এই রোগী নিশ্চিত করুন', en: 'Confirm this patient' },
+  regNotListed: { bn: 'এই তালিকায় নেই — নতুন রোগী', en: 'Not listed — new patient' },
+  regNameTaken: {
+    bn: 'এই নামের রেকর্ড আছে। নতুন করে তৈরি না করে সঠিক রোগী নিশ্চিত করুন। একই নামের ভিন্ন ব্যক্তি হলে এখানে থামুন; পরিচয় যাচাইয়ের সহায়তা নিন।',
+    en: 'A record with this name exists. Confirm the correct patient instead of creating another. For a different person with the same name, stop and seek identity-verification help.',
+  },
+  regAmbiguous: {
+    bn: 'এই তথ্য দিয়ে ব্যক্তিদের আলাদা করা যাচ্ছে না। এগোবেন না; পরিচয় যাচাইয়ের সহায়তা নিন।',
+    en: 'These details cannot distinguish the people. Stop and seek identity-verification help.',
+  },
+  regExisting: { bn: 'আগে নিবন্ধিত', en: 'Existing patient' },
+  regNew: { bn: 'নতুন রোগীর রেকর্ড তৈরি হয়েছে', en: 'New patient record created' },
+  regNameError: {
+    bn: 'রোগীর নাম দিন, সর্বোচ্চ ১২০ অক্ষর।',
+    en: 'Enter the patient’s name, up to 120 characters.',
+  },
+  regAgeError: {
+    bn: 'বয়স ০ থেকে ১৩০ পূর্ণ বছর দিন।',
+    en: 'Enter a whole-number age from 0 to 130.',
+  },
+  regSexError: { bn: 'লিঙ্গ বেছে নিন।', en: 'Choose the sex.' },
+  regUncertain: {
+    bn: 'সার্ভারের ফল নিশ্চিত নয়। কাজটি হয়ে থাকতে পারে। একই অনুরোধ আবার পাঠিয়ে ফল যাচাই করুন; নতুন করে শুরু করবেন না।',
+    en: 'The result is uncertain. Registration may already have completed. Check its result before starting again.',
+  },
+  regRetrySame: { bn: 'ফল যাচাই করুন', en: 'Check result' },
+  regGiveSerial: { bn: 'সিরিয়াল দিন', en: 'Give serial' },
+  regServerOnly: {
+    bn: 'নিশ্চিত করার পর সার্ভার সিরিয়াল দেবে। রোগী সারির শেষে যোগ হবেন।',
+    en: 'The server issues the serial after submission. The patient joins the end of the queue.',
+  },
+  regNextPatient: { bn: 'পরের রোগী', en: 'Next patient' },
+  regBackQueue: { bn: 'এই ডাক্তারদের সারিতে ফিরুন', en: 'Return to this chamber’s queue' },
+  regTellSerial: { bn: 'রোগীকে এই নম্বরটি বলে দিন', en: 'Tell the patient this number' },
+  regStartOver: { bn: 'নতুন করে শুরু', en: 'Start over' },
+  regLeaveTitle: { bn: 'অসম্পূর্ণ কাজ ছেড়ে যাবেন?', en: 'Leave unfinished registration?' },
+  regLeaveBody: {
+    bn: 'এখানে লেখা তথ্য মুছে যাবে। ইতিমধ্যে তৈরি রোগীর রেকর্ড মুছবে না। অনিশ্চিত ফল থাকলে আগে একই অনুরোধ যাচাই করুন।',
+    en: 'Entered information will be cleared. Any patient record already created remains. Resolve an uncertain result by checking the same request first.',
+  },
+  regDiscard: { bn: 'লেখা ছেড়ে এগিয়ে যান', en: 'Leave entered information' },
+  regSummary: { bn: 'সিরিয়াল দেওয়ার আগে দেখুন', en: 'Review before giving a serial' },
+  regFromQueue: {
+    bn: 'রোগী এই চেম্বার থেকে এসেছেন। ডাক্তার আগে থেকেই বাছাই করা আছে।',
+    en: 'Started from this queue. Its doctor is preselected.',
+  },
+  regUnavailableContext: {
+    bn: 'যে চেম্বার থেকে এসেছেন তা এখানে অনুমোদিত বা উপলব্ধ নয়। ভুল চেম্বারে যোগ না করে সারিতে ফিরে যান।',
+    en: 'The originating chamber is not authorised or available here. Return to Reception before choosing another chamber.',
+  },
+  regPreserved: {
+    bn: 'আপনার লেখা রাখা আছে। সংযোগ ফিরলে চালিয়ে যান।',
+    en: 'Your entered information is retained. Continue when the connection returns.',
+  },
+  regPending: {
+    bn: 'সার্ভারের ফলের অপেক্ষায় — আবার চাপবেন না।',
+    en: 'Waiting for the server — do not submit again.',
+  },
+  regCreatedNoSerial: {
+    bn: 'রোগীর রেকর্ড আছে। চেম্বারে যোগ না করা পর্যন্ত সিরিয়াল নেই।',
+    en: 'The patient record exists. There is no serial until they are added to a chamber.',
+  },
+  regListRead: { bn: 'চেম্বারের তালিকা পড়ার সময়', en: 'Chamber list read time' },
+  regHelpPhone: {
+    bn: 'মোবাইল নম্বর দিন। বাংলা সংখ্যা বা +৮৮০ নম্বরও ব্যবহার করা যায়। সঠিক নম্বরে নিজে থেকে খোঁজা হবে।',
+    en: 'Enter a mobile number. Bangla digits and +880 numbers are supported. Valid numbers are searched automatically.',
+  },
+  regHelpPatient: {
+    bn: 'এক নম্বরে সবাই একই ব্যক্তি নন। রোগীর নাম, বয়স ও লিঙ্গ যাচাই করে নিশ্চিত করুন। একই নামের দ্বিধা থাকলে থামুন।',
+    en: 'People sharing a number are separate people. Check and confirm the patient’s name, age and sex. Stop when a same-name identity is ambiguous.',
+  },
+  regHelpDoctor: {
+    bn: 'নিজের ডেস্কের চেম্বার বেছে নিন। বন্ধ চেম্বারে যোগ করা যাবে না। সারির মাঝখানে বসাতে ওই সারির ওয়াক-ইন ব্যবহার করুন।',
+    en: 'Choose a chamber for your desk. Closed chambers cannot accept patients. Use that queue’s walk-in flow for insertion within the queue.',
+  },
+  regHelpSerial: {
+    bn: 'সার্ভার নিশ্চিত করলে বড় সিরিয়ালটি রোগীকে বলুন। পরের রোগী বা ওই ডাক্তারদের সারিতে ফিরুন।',
+    en: 'After the server confirms, tell the patient the large serial. Register the next patient or return to that queue.',
+  },
+  regHelpNetwork: {
+    bn: 'সংযোগ না থাকলে লেখা রাখুন। ফল অনিশ্চিত হলে একই অনুরোধ যাচাই করুন। নতুন করে জমা দিলে ভুল হতে পারে।',
+    en: 'Keep the form during an outage. If the outcome is uncertain, check the same request. A fresh submission can cause mistakes.',
+  },
+  regReused: {
+    bn: 'সার্ভার আগে থাকা রেকর্ড ফিরিয়েছে। লেখা তথ্যের বদলে নিচের সংরক্ষিত পরিচয় দেখে নিশ্চিত করুন।',
+    en: 'The server returned an existing record. Check the stored identity below before confirming, rather than assuming it matches what you typed.',
+  },
+  regSelectDoctor: { bn: 'ডাক্তার / চেম্বার বেছে নিন', en: 'Choose a doctor / chamber' },
+  regClosed: {
+    bn: 'বন্ধ চেম্বার — নতুন রোগী নেওয়া যাবে না',
+    en: 'Closed chamber — no new patients',
+  },
+  regSerialIssued: { bn: 'সার্ভার সিরিয়াল নিশ্চিত করেছে', en: 'Serial confirmed by the server' },
   counterPhone: { bn: 'রোগীর মোবাইল নম্বর', en: "Patient's mobile number" },
   counterFind: { bn: 'খুঁজুন', en: 'Find' },
   counterPhoneInvalid: {

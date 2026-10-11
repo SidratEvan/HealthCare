@@ -428,7 +428,7 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/standby/:token/leave` | the token | off the list; a prepayment is marked owed (`standby_unseated`) |
 | POST | `/offers/:id/accept` | receptionist | a yes rung in to the counter (`FR-REC-30`) — see §7.4 |
 | GET | `/registration/patients?phone=` | receptionist | pilot step 23 (`FR-REC-20`). Everybody the number reaches — through the guest identity or account it owns, or as a patient's own contact number — for the counter to pick the person standing there. The phone is normalised (`DB-P6`) or refused. One `RECORD_VIEW` audit row per patient shown (`DB-P7`) |
-| POST | `/registration/patients` | receptionist | `{phone, fullName, ageYears, sex}` → a guest identity for the phone and a patient under it, as a guest booking makes (`FR-GST-13`: no account). The same name under the same number is the same person. Idempotency-Key required. The serial is then `POST /sessions/:id/walkin` |
+| POST | `/registration/patients` | receptionist | `{phone, fullName, ageYears, sex}` → a guest identity and patient (`FR-GST-13`: no account). V1 reuses an exact guest phone/name match; this storage rule is not proof of identity and does not overwrite demographics. Additive receipt: `patientId`, `phone`, `created`, `ambiguous`, and canonical `patient` identity fields matching the lookup. Reuse is audited before returning identity. Household upsert locking serializes creation/reuse; no new identity or generic idempotency table. Idempotency-Key required. A serial is a separate `POST /sessions/:id/walkin` receipt. |
 
 ### 7.4 Queue (console)
 

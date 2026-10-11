@@ -629,11 +629,13 @@ export async function fetchStaffModulesOff(): Promise<readonly string[]> {
   }
 }
 
-export async function fetchStaffChambers(): Promise<readonly StaffChamber[] | null> {
+export async function fetchStaffChambers(
+  includeEnded = false,
+): Promise<readonly StaffChamber[] | null> {
   const session = readDemoSession();
   if (session === null) return null;
   try {
-    const response = await fetch(`${API}/staff/chambers`, {
+    const response = await fetch(`${API}/staff/chambers${includeEnded ? '?includeEnded=1' : ''}`, {
       headers: { authorization: `Bearer ${session.token}` },
       signal: AbortSignal.timeout(20_000),
     });

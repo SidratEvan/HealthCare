@@ -520,6 +520,15 @@ function ReceptionQueue(props: ReceptionQueueProps): ReactNode {
                 })}
             onClick={() => setWalkingIn(true)}
           />
+          {!ended ? (
+            <a
+              className="cf-reg-queue-link"
+              data-testid={testId('registration-desk')}
+              href={`/?view=registration&from=${encodeURIComponent(sessionId)}`}
+            >
+              {t('registrationTitle', locale)}
+            </a>
+          ) : null}
           {ended ? (
             <ConsoleAction
               label={CONSOLE.callNext}

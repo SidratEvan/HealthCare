@@ -13,7 +13,7 @@
  * channel like every other change.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   format,
@@ -21,6 +21,7 @@ import {
   numeralsFor,
   t,
   toLatinDigits,
+  CONSOLE,
   type ConsoleKey,
 } from '@platform/i18n';
 import {
@@ -31,6 +32,7 @@ import {
   SheetActions,
   useLocale,
   ConsoleHelp,
+  ConsoleConfirmation,
 } from '@platform/ui';
 
 import { FAILURE_KEY, PatientFinder, type ChosenPatient } from '@/components/PatientFinder';
@@ -61,6 +63,16 @@ export function WalkInSheet({
   const [place, setPlace] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const [finderDirty, setFinderDirty] = useState(false);
+  const [finderPending, setFinderPending] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const sending = useRef(false);
+  const restoreFocus = useRef<HTMLElement | null>(null);
+  const onFinderDirty = useCallback((dirty: boolean, pending: boolean) => {
+    setFinderDirty(dirty);
+    setFinderPending(pending);
+  }, []);
   const [error, setError] = useState<ConsoleKey | null>(null);
   const attempt = useRef<{
     readonly signature: string;
@@ -76,6 +88,10 @@ export function WalkInSheet({
     setPlace('');
     setReason('');
     setError(null);
+    setUncertain(false);
+    setClosing(false);
+    setFinderDirty(false);
+    setFinderPending(false);
     attempt.current = null;
   }, [open]);
 
@@ -90,7 +106,8 @@ export function WalkInSheet({
       reason.trim() !== '');
 
   async function confirm(): Promise<void> {
-    if (patient === null || !positionReady || busy) return;
+    if (patient === null || (!positionReady && !uncertain) || sending.current || !online) return;
+    sending.current = true;
     setBusy(true);
     setError(null);
     const signature = JSON.stringify({
@@ -111,8 +128,10 @@ export function WalkInSheet({
       attempt.current,
     );
     setBusy(false);
+    sending.current = false;
     if (!result.ok) {
       setError(FAILURE_KEY[result.failure]);
+      setUncertain(uncertain || result.failure === 'uncertain');
       return;
     }
     onAdded(
@@ -127,16 +146,35 @@ export function WalkInSheet({
     ? t('walkInOffline', locale)
     : patient === null
       ? t('registrationChooseFirst', locale)
-      : positionReady
+      : positionReady || uncertain
         ? null
         : t('walkInNeedReason', locale);
 
+  function requestClose(): void {
+    if (busy || uncertain || finderPending) {
+      setError('regUncertain');
+      return;
+    }
+    if (finderDirty || patient !== null || place !== '' || reason !== '') {
+      restoreFocus.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setClosing(true);
+    } else onClose();
+  }
+  useEffect(() => {
+    const guard = (event: BeforeUnloadEvent): void => {
+      if (open && (finderDirty || patient !== null || uncertain || finderPending))
+        event.preventDefault();
+    };
+    globalThis.addEventListener('beforeunload', guard);
+    return () => globalThis.removeEventListener('beforeunload', guard);
+  }, [open, finderDirty, patient, uncertain, finderPending]);
   return (
     <Sheet
       console
       open={open}
       onOpenChange={(next) => {
-        if (!next && !busy) onClose();
+        if (!next) requestClose();
       }}
       variant="modal"
       title={t('addWalkin', locale)}
@@ -158,7 +196,14 @@ export function WalkInSheet({
           }}
         />
         {patient === null ? (
-          <PatientFinder online={online} onChosen={setPatient} />
+          <PatientFinder
+            online={online}
+            onChosen={(chosen) => {
+              setPatient(chosen);
+              setFinderPending(false);
+            }}
+            onDirty={onFinderDirty}
+          />
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-brand-100 px-4 py-3">
             <p className="text-body-md font-semibold" data-testid="walkin-patient">
@@ -166,6 +211,9 @@ export function WalkInSheet({
             </p>
             <Button
               variant="quiet"
+              {...(busy || uncertain
+                ? { disabled: true, disabledReason: t('regUncertain', locale) }
+                : {})}
               onClick={() => {
                 setPatient(null);
               }}
@@ -176,7 +224,7 @@ export function WalkInSheet({
         )}
 
         {patient === null ? null : (
-          <fieldset className="flex flex-col gap-3">
+          <fieldset className="flex flex-col gap-3" disabled={busy || uncertain}>
             <legend className="mb-2 text-body-sm text-ink-secondary">
               {t('walkInWhere', locale)}
             </legend>
@@ -234,12 +282,12 @@ export function WalkInSheet({
         )}
 
         <SheetActions>
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={requestClose}>
             {t('checkInCancel', locale)}
           </Button>
           {blocked === null ? (
             <Button loading={busy} onClick={() => void confirm()} data-testid="walkin-confirm">
-              {t('walkInConfirm', locale)}
+              {t(uncertain ? 'regRetrySame' : 'walkInConfirm', locale)}
             </Button>
           ) : (
             <Button disabled disabledReason={blocked} data-testid="walkin-confirm">
@@ -247,6 +295,21 @@ export function WalkInSheet({
             </Button>
           )}
         </SheetActions>
+        <ConsoleConfirmation
+          open={closing}
+          onOpenChange={(next) => {
+            setClosing(next);
+            if (!next) globalThis.requestAnimationFrame(() => restoreFocus.current?.focus());
+          }}
+          trigger={<button type="button" hidden aria-label={t('regLeaveTitle', locale)} />}
+          title={CONSOLE.regLeaveTitle}
+          description={CONSOLE.regLeaveBody}
+          confirmLabel={CONSOLE.regDiscard}
+          onConfirm={() => {
+            setClosing(false);
+            onClose();
+          }}
+        />
       </div>
     </Sheet>
   );

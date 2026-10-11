@@ -1,39 +1,66 @@
 'use client';
 
-/**
- * `S-B-03` Registration (pilot step 23, `APP_FLOW.md` B1.6, `FR-REC-20`,
- * `FR-GST-13`).
- *
- * "phone-first search → existing patient or create → save → immediate booking
- * option." The immediate booking is a place in one of today's chambers at
- * this facility, given as a walk-in (`FR-REC-14`), so the serial is the
- * chamber's next and the queue on every screen gains the row at once.
- *
- * Opened from the rail's রেজিস্ট্রেশন. It is the same finder the walk-in
- * modal on `S-B-02` uses; this screen is for a registration desk that serves
- * every chamber rather than one.
- *
- * ## The four states (`GR-03`)
- *
- * Today's chambers load with the screen: a skeleton while they do, a sentence
- * when there are none, the failure with a retry, and — offline — the finder
- * and the chamber buttons switched off with the reason, since a serial cannot
- * be issued without the server (`lib/registration.ts`).
+/** Four-step authorised Registration desk (S-B-03, FR-REC-14/20/32).
+ * A patient profile and an issued queue serial are separate server receipts.
+ * Keep the original attempt during uncertain outcomes; never predict a serial.
  */
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { deskChambers } from '@platform/client';
+import {
+  CONSOLE,
+  format,
+  formatClock,
+  formatNumber,
+  formatSerial,
+  localName,
+  numeralsFor,
+  t,
+  type ConsoleKey,
+} from '@platform/i18n';
+import {
+  BilingualLabel,
+  ConsoleAction,
+  ConsoleConfirmation,
+  ConsoleHelp,
+  ConsolePageHeader,
+  ConsoleState,
+  ConsoleStatus,
+  FreshnessLine,
+  ToastProvider,
+  useLocale,
+} from '@platform/ui';
 
-import { format, formatNumber, formatSerial, localName, numeralsFor, t } from '@platform/i18n';
-import { Button, Card, ToastProvider, useLocale, useToast } from '@platform/ui';
-
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
-import { ConsoleRail } from '@/components/ConsoleRail';
+import { ConsoleWorkspaceFrame } from '@/components/ConsoleWorkspaceFrame';
 import { DemoBanner } from '@/components/DemoBanner';
 import { FAILURE_KEY, PatientFinder, type ChosenPatient } from '@/components/PatientFinder';
+import { useStaffWorkspace } from '@/components/StaffEntry';
+import { readDemoSession } from '@/lib/demo';
 import { addWalkIn } from '@/lib/registration';
 import { fetchStaffChambers, type StaffChamber } from '@/lib/staffAuth';
+import '@platform/ui/console-registration.css';
 
-type ChamberLoad = 'loading' | 'ready' | 'failed';
+const STEPS = ['regStepPhone', 'regStepPatient', 'regStepDoctor', 'regStepSerial'] as const;
+const STATUS: Readonly<Record<string, ConsoleKey>> = {
+  scheduled: 'sessionScheduled',
+  running: 'sessionRunning',
+  paused: 'regPaused',
+  ended: 'chamberEnded',
+  cancelled: 'receptionChamberCancelled',
+};
+const closed = (chamber: StaffChamber): boolean =>
+  chamber.status === 'ended' || chamber.status === 'cancelled';
+interface Issued {
+  readonly serial: number;
+  readonly patient: ChosenPatient;
+  readonly chamber: StaffChamber;
+}
+interface Attempt {
+  readonly key: string;
+  readonly at: string;
+  readonly patient: ChosenPatient;
+  readonly chamber: StaffChamber;
+}
 
 export function RegistrationConsole(): ReactNode {
   return (
@@ -42,194 +69,535 @@ export function RegistrationConsole(): ReactNode {
     </ToastProvider>
   );
 }
-
 function RegistrationBody(): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
-  const { show } = useToast();
+  const session = readDemoSession();
+  const context = useStaffWorkspace();
+  const [from, setFrom] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
   const [chambers, setChambers] = useState<readonly StaffChamber[]>([]);
-  const [load, setLoad] = useState<ChamberLoad>('loading');
+  const [load, setLoad] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [readAt, setReadAt] = useState<Date | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const [patient, setPatient] = useState<ChosenPatient | null>(null);
-  const [adding, setAdding] = useState<string | null>(null);
-  /** The finder is remounted for the next patient, so it forgets the last. */
+  const [phoneReady, setPhoneReady] = useState(false);
   const [round, setRound] = useState(0);
-
-  const loadChambers = useCallback(async () => {
-    setLoad('loading');
-    const answer = await fetchStaffChambers();
+  const [finderDirty, setFinderDirty] = useState(false);
+  const [finderUnresolved, setFinderUnresolved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const [error, setError] = useState<ConsoleKey | null>(null);
+  const [issued, setIssued] = useState<Issued | null>(null);
+  const [destination, setDestination] = useState<string | null>(null);
+  const sending = useRef(false);
+  const original = useRef<Attempt | null>(null);
+  const allowExit = useRef(false);
+  const restoreFocus = useRef<HTMLElement | null>(null);
+  const readVersion = useRef(0);
+  const dirty = issued === null && (finderDirty || patient !== null);
+  const locked = busy || uncertain || finderUnresolved;
+  const queueUrl = (id: string): string => `/?session=${encodeURIComponent(id)}`;
+  const reset = (): void => {
+    setSelected(from);
+    setPatient(null);
+    setIssued(null);
+    setRound((old) => old + 1);
+    setFinderDirty(false);
+    setFinderUnresolved(false);
+    setPhoneReady(false);
+    setError(null);
+    setUncertain(false);
+    original.current = null;
+  };
+  const navigate = (target: string): void => {
+    if (locked) {
+      setError('regUncertain');
+      return;
+    }
+    if (dirty) {
+      restoreFocus.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setDestination(target);
+    } else if (target === 'reset') reset();
+    else {
+      allowExit.current = true;
+      globalThis.location.assign(target);
+    }
+  };
+  useEffect(() => {
+    const id = new URLSearchParams(globalThis.location.search).get('from');
+    setFrom(id);
+    setSelected(id);
+    setOnline(globalThis.navigator.onLine);
+  }, []);
+  const loadChambers = useCallback(async (): Promise<void> => {
+    const version = ++readVersion.current;
+    if (!globalThis.navigator.onLine) return;
+    const answer = await fetchStaffChambers(true);
+    if (version !== readVersion.current) return;
     if (answer === null) {
       setLoad('failed');
       return;
     }
-    // A chamber that has ended or was cancelled takes nobody.
     setChambers(
-      answer.filter((chamber) => chamber.status !== 'ended' && chamber.status !== 'cancelled'),
+      context === null
+        ? answer
+        : deskChambers(
+            answer,
+            context.desks,
+            context.profile.staff.id,
+            readDemoSession()?.receptionDeskId ?? null,
+          ),
     );
     setLoad('ready');
-  }, []);
-
+    setReadAt(new Date());
+  }, [context]);
   useEffect(() => {
-    setOnline(globalThis.navigator.onLine);
     void loadChambers();
     const up = (): void => {
       setOnline(true);
       void loadChambers();
     };
-    const down = (): void => {
-      setOnline(false);
-    };
+    const down = (): void => setOnline(false);
+    const timer = globalThis.setInterval(() => {
+      setNow(new Date());
+      void loadChambers();
+    }, 30_000);
     globalThis.addEventListener('online', up);
     globalThis.addEventListener('offline', down);
     return () => {
+      readVersion.current += 1;
+      globalThis.clearInterval(timer);
       globalThis.removeEventListener('online', up);
       globalThis.removeEventListener('offline', down);
     };
   }, [loadChambers]);
-
-  async function addTo(chamber: StaffChamber): Promise<void> {
-    if (patient === null || adding !== null) return;
-    setAdding(chamber.id);
-    const result = await addWalkIn(chamber.id, patient.patientId, { kind: 'end' });
-    setAdding(null);
+  useEffect(() => {
+    const before = (event: BeforeUnloadEvent): void => {
+      if (dirty && !allowExit.current) {
+        event.preventDefault();
+      }
+    };
+    const link = (event: MouseEvent): void => {
+      const target =
+        event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null;
+      if (
+        !dirty ||
+        allowExit.current ||
+        target === null ||
+        target.target === '_blank' ||
+        target.hasAttribute('download') ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      event.preventDefault();
+      if (locked) setError('regUncertain');
+      else {
+        restoreFocus.current = target;
+        setDestination(target.href);
+      }
+    };
+    globalThis.addEventListener('beforeunload', before);
+    document.addEventListener('click', link, true);
+    return () => {
+      globalThis.removeEventListener('beforeunload', before);
+      document.removeEventListener('click', link, true);
+    };
+  }, [dirty, locked]);
+  const onFinderDirty = useCallback((value: boolean, pending: boolean) => {
+    setFinderDirty(value);
+    setFinderUnresolved(pending);
+  }, []);
+  const chamber = chambers.find((entry) => entry.id === selected) ?? null;
+  const invalidFrom =
+    from !== null && load === 'ready' && !chambers.some((entry) => entry.id === from);
+  async function submit(): Promise<void> {
+    if (sending.current || !online || finderUnresolved) return;
+    if (
+      !uncertain &&
+      (patient === null || chamber === null || closed(chamber) || invalidFrom || load !== 'ready')
+    )
+      return;
+    if (!uncertain) {
+      if (patient === null || chamber === null) return;
+      if (
+        original.current?.patient.patientId !== patient.patientId ||
+        original.current.chamber.id !== chamber.id
+      )
+        original.current = {
+          key: crypto.randomUUID(),
+          at: new Date().toISOString(),
+          patient,
+          chamber,
+        };
+    }
+    const saved = original.current;
+    if (saved === null) return;
+    sending.current = true;
+    setBusy(true);
+    setError(null);
+    const result = await addWalkIn(
+      saved.chamber.id,
+      saved.patient.patientId,
+      { kind: 'end' },
+      saved,
+    );
+    sending.current = false;
+    setBusy(false);
     if (!result.ok) {
-      if (result.failure === 'offline') setOnline(false);
-      show({ title: t(FAILURE_KEY[result.failure], locale), tone: 'alert' });
+      setError(FAILURE_KEY[result.failure]);
+      setUncertain(uncertain || result.failure === 'uncertain');
+      void loadChambers();
       return;
     }
-    show({
-      title: format('walkInAdded', locale, {
-        name: patient.fullName,
-        serial: formatSerial(result.value, numerals),
-      }),
-      description: localName(locale, chamber.doctorNameBn, chamber.doctorNameEn),
-      tone: 'positive',
-    });
-    setPatient(null);
-    setRound((value) => value + 1);
-    void loadChambers();
+    setUncertain(false);
+    setIssued({ serial: result.value, patient: saved.patient, chamber: saved.chamber });
   }
-
-  const chamberReason = !online
-    ? t('walkInOffline', locale)
-    : patient === null
-      ? t('registrationChooseFirst', locale)
-      : null;
-
+  if (session === null) return null;
+  const step = issued !== null ? 4 : patient !== null ? 3 : phoneReady ? 2 : 1;
+  const selectedDesk = context?.desks.find((desk) => desk.id === session.receptionDeskId);
+  const back = issued?.chamber.id ?? from ?? selected;
+  const reason = !online
+    ? 'walkInOffline'
+    : invalidFrom
+      ? 'regUnavailableContext'
+      : patient === null
+        ? 'registrationChooseFirst'
+        : chamber === null
+          ? 'regSelectDoctor'
+          : closed(chamber)
+            ? 'regClosed'
+            : load !== 'ready'
+              ? 'registrationChambersFailed'
+              : null;
   return (
-    <div className="flex min-h-screen">
-      <ConsoleRail current="navRegistration" locale={locale} />
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
-        <DemoBanner />
-
-        <header className="flex items-center gap-3 border-b border-line bg-surface px-6 py-4">
-          <h1 className="min-w-0 flex-1 text-title-md font-bold">
-            {t('registrationTitle', locale)}
-          </h1>
-          <ConsoleLanguageSwitch />
-        </header>
-
-        <main className="grid flex-1 gap-6 p-6 lg:grid-cols-2" data-testid="registration-console">
-          <section className="flex flex-col gap-4">
-            <p className="text-body-md text-ink-secondary">{t('registrationIntro', locale)}</p>
-            {!online ? (
-              <p
-                role="status"
-                className="rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
-                data-testid="registration-offline"
+    <ConsoleWorkspaceFrame
+      session={session}
+      workspace={CONSOLE.registrationTitle}
+      navigation={[
+        {
+          id: 'queue',
+          label: CONSOLE.navQueue,
+          roles: ['receptionist'],
+          enabled: true,
+          onSelect: () => navigate('/?view=reception'),
+        },
+        {
+          id: 'registration',
+          label: CONSOLE.receptionRegister,
+          roles: ['receptionist'],
+          enabled: true,
+          current: true,
+          onSelect: () => globalThis.scrollTo(0, 0),
+        },
+      ]}
+      actions={
+        <>
+          <ConsoleHelp
+            topic={{
+              id: `registration-${step}`,
+              title: CONSOLE.registrationTitle,
+              steps: [
+                CONSOLE[
+                  (['regHelpPhone', 'regHelpPatient', 'regHelpDoctor', 'regHelpSerial'] as const)[
+                    step - 1
+                  ] ?? 'regHelpPhone'
+                ],
+                CONSOLE.regHelpNetwork,
+              ],
+            }}
+          />
+          <a className="cf-work-switch" href="/">
+            {t('changeConsole', locale)}
+          </a>
+        </>
+      }
+    >
+      <DemoBanner />
+      <div className="cf-registration cf-stack" data-testid="registration-console">
+        <ConsolePageHeader
+          title={CONSOLE.registrationTitle}
+          description={CONSOLE.registrationIntro}
+          actions={
+            <ConsoleAction
+              label={CONSOLE.regStartOver}
+              variant="secondary"
+              data-testid="registration-start-over"
+              onClick={() => navigate('reset')}
+              {...(locked ? { disabled: true, disabledReason: t('regUncertain', locale) } : {})}
+            />
+          }
+        />
+        <ol className="cf-reg-steps" aria-label={t('registrationTitle', locale)}>
+          {STEPS.map((key, index) => (
+            <li key={key} {...(step === index + 1 ? { 'aria-current': 'step' as const } : {})}>
+              {formatNumber(index + 1, numerals)} · <BilingualLabel label={CONSOLE[key]} />
+            </li>
+          ))}
+        </ol>
+        {!online ? (
+          <p
+            className="cf-feedback cf-tone-caution"
+            role="status"
+            data-testid="registration-offline"
+          >
+            {t('walkInOffline', locale)} {t('regPreserved', locale)}
+          </p>
+        ) : null}
+        {error === null ? null : (
+          <p className="cf-feedback cf-tone-alert" role="alert" data-testid="registration-error">
+            {t(error, locale)}
+          </p>
+        )}
+        {issued !== null ? (
+          <section
+            className="cf-reg-panel cf-reg-confirmed cf-stack"
+            data-testid="registration-confirmed"
+          >
+            <ConsoleStatus tone="positive" label={CONSOLE.regSerialIssued} />
+            <h2>{issued.patient.fullName}</h2>
+            <p>
+              {localName(locale, issued.chamber.doctorNameBn, issued.chamber.doctorNameEn)} ·{' '}
+              {issued.chamber.room ?? '—'}
+            </p>
+            <div className="cf-reg-serial">
+              <p>{t('regStepSerial', locale)}</p>
+              <strong data-testid="registration-serial">
+                {formatSerial(issued.serial, numerals)}
+              </strong>
+            </div>
+            <h3>{t('regTellSerial', locale)}</h3>
+            <p>{issued.patient.phone}</p>
+            <div className="cf-reg-actions">
+              <ConsoleAction
+                label={CONSOLE.regNextPatient}
+                data-testid="registration-next-patient"
+                onClick={reset}
+              />
+              <ConsoleAction
+                label={CONSOLE.regBackQueue}
+                variant="secondary"
+                data-testid="registration-return-queue"
+                onClick={() => navigate(queueUrl(issued.chamber.id))}
+              />
+            </div>
+          </section>
+        ) : (
+          <>
+            {from === null ? null : (
+              <div
+                className="cf-feedback cf-tone-information"
+                data-testid="registration-from-queue"
               >
-                {t('walkInOffline', locale)}
-              </p>
-            ) : null}
-            {patient === null ? (
-              <PatientFinder key={round} online={online} onChosen={setPatient} />
-            ) : (
-              <Card tone="brand" data-testid="registration-chosen">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-body-md font-semibold">{patient.fullName}</p>
-                  <Button
-                    variant="quiet"
-                    onClick={() => {
-                      setPatient(null);
-                      setRound((value) => value + 1);
-                    }}
-                  >
-                    {t('counterChangePatient', locale)}
-                  </Button>
+                <p>{t(invalidFrom ? 'regUnavailableContext' : 'regFromQueue', locale)}</p>
+                <ConsoleAction
+                  label={CONSOLE.regBackQueue}
+                  variant="secondary"
+                  onClick={() => navigate(queueUrl(from))}
+                />
+              </div>
+            )}
+            <div className="cf-reg-grid">
+              <div>
+                <div hidden={patient !== null}>
+                  <PatientFinder
+                    key={round}
+                    online={online}
+                    onChosen={setPatient}
+                    onDirty={onFinderDirty}
+                    onProgress={setPhoneReady}
+                  />
                 </div>
-              </Card>
-            )}
-          </section>
-
-          <section className="flex flex-col gap-3" data-testid="registration-chambers">
-            <h2 className="text-title-sm">{t('registrationChambers', locale)}</h2>
-            {load === 'loading' ? (
-              <div
-                className="flex flex-col gap-3"
-                aria-busy="true"
-                data-testid="registration-chambers-loading"
-              >
-                <div className="h-20 rounded-md bg-sunken" />
-                <div className="h-20 rounded-md bg-sunken" />
-              </div>
-            ) : load === 'failed' ? (
-              <div
-                role="alert"
-                className="flex flex-col items-start gap-3 rounded-md bg-alert-100 p-4"
-              >
-                <p className="text-body-md text-alert-700">
-                  {t('registrationChambersFailed', locale)}
-                </p>
-                <Button variant="secondary" onClick={() => void loadChambers()}>
-                  {t('retry', locale)}
-                </Button>
-              </div>
-            ) : chambers.length === 0 ? (
-              <Card data-testid="registration-no-chambers">
-                <p className="text-body-md text-ink-secondary">
-                  {t('registrationNoChambers', locale)}
-                </p>
-              </Card>
-            ) : (
-              chambers.map((chamber) => (
-                <Card key={chamber.id} data-testid={`registration-chamber-${chamber.id}`}>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-body-md font-semibold">
-                        {localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)}
+                {patient === null ? null : (
+                  <section className="cf-reg-panel cf-stack" data-testid="registration-chosen">
+                    <h2>
+                      <span className="cf-reg-number">2</span>
+                      {t('regStepPatient', locale)}
+                    </h2>
+                    <div className="cf-reg-selected">
+                      <strong>{patient.fullName}</strong>
+                      <p>
+                        {patient.ageYears === null
+                          ? '—'
+                          : format('counterAgeYears', locale, {
+                              age: formatNumber(patient.ageYears, numerals),
+                            })}{' '}
+                        ·{' '}
+                        {t(
+                          ({ male: 'sexMale', female: 'sexFemale', other: 'sexOther' } as const)[
+                            patient.sex
+                          ],
+                          locale,
+                        )}{' '}
+                        · {patient.phone}
                       </p>
-                      <p className="text-body-sm text-ink-muted">
-                        {localName(locale, chamber.departmentNameBn, chamber.departmentNameEn)}
-                        {chamber.room === null ? null : ` · ${chamber.room}`}
-                        {` · ${format('registrationWaiting', locale, { count: formatNumber(chamber.waiting, numerals) })}`}
-                      </p>
+                      <ConsoleStatus
+                        tone="positive"
+                        label={CONSOLE[patient.origin === 'new' ? 'regNew' : 'regExisting']}
+                      />
                     </div>
-                    {chamberReason === null ? (
-                      <Button
-                        loading={adding === chamber.id}
-                        onClick={() => void addTo(chamber)}
-                        data-testid={`registration-add-${chamber.id}`}
-                      >
-                        {t('registrationAddHere', locale)}
-                      </Button>
-                    ) : (
-                      <Button
-                        disabled
-                        disabledReason={chamberReason}
-                        data-testid={`registration-add-${chamber.id}`}
-                      >
-                        {t('registrationAddHere', locale)}
-                      </Button>
-                    )}
+                    <p className="cf-secondary">{t('regCreatedNoSerial', locale)}</p>
+                    <ConsoleAction
+                      label={CONSOLE.counterChangePatient}
+                      variant="secondary"
+                      onClick={() => {
+                        setPatient(null);
+                        original.current = null;
+                      }}
+                      {...(locked
+                        ? { disabled: true, disabledReason: t('regUncertain', locale) }
+                        : {})}
+                    />
+                  </section>
+                )}
+              </div>
+              <section className="cf-reg-panel cf-stack" data-testid="registration-chambers">
+                <h2>
+                  <span className="cf-reg-number">3</span>
+                  {t('regStepDoctor', locale)}
+                </h2>
+                <p>
+                  {selectedDesk === undefined
+                    ? t('accessCommonDesk', locale)
+                    : localName(locale, selectedDesk.nameBn, selectedDesk.nameEn)}
+                </p>
+                <div className="cf-reg-read-time">
+                  <span className="cf-secondary">{t('regListRead', locale)}</span>
+                  <FreshnessLine
+                    asOf={readAt}
+                    now={now}
+                    labels={{
+                      justNow: t('updatedJustNow', locale),
+                      ago: t('updatedAgo', locale),
+                      never: t('neverSynced', locale),
+                      stale: t('staleWarning', locale),
+                    }}
+                    formatMinutes={(minutes) => formatNumber(minutes, numerals)}
+                  />
+                </div>
+                {load === 'loading' ? (
+                  <div data-testid="registration-chambers-loading">
+                    <ConsoleState kind="loading" description={CONSOLE.accessLoading} />
                   </div>
-                </Card>
-              ))
-            )}
-          </section>
-        </main>
+                ) : load === 'failed' ? (
+                  <ConsoleState
+                    kind="error"
+                    description={CONSOLE.registrationChambersFailed}
+                    onRetry={() => void loadChambers()}
+                  />
+                ) : chambers.length === 0 ? (
+                  <div data-testid="registration-no-chambers">
+                    <ConsoleState kind="empty" description={CONSOLE.registrationNoChambers} />
+                  </div>
+                ) : (
+                  (from === null ? chambers : chambers.filter((entry) => entry.id === from)).map(
+                    (entry) => (
+                      <div key={entry.id} data-testid={`registration-chamber-${entry.id}`}>
+                        <button
+                          type="button"
+                          className="cf-reg-chamber"
+                          data-testid={`registration-add-${entry.id}`}
+                          aria-pressed={selected === entry.id}
+                          disabled={closed(entry) || locked || !online}
+                          onClick={() => setSelected(entry.id)}
+                        >
+                          <span>
+                            <strong>
+                              {localName(locale, entry.doctorNameBn, entry.doctorNameEn)}
+                            </strong>
+                            <small>
+                              {localName(locale, entry.departmentNameBn, entry.departmentNameEn)} ·{' '}
+                              {entry.room ?? '—'} · {formatClock(entry.plannedStart, numerals)}
+                            </small>
+                            <ConsoleStatus
+                              tone={
+                                closed(entry)
+                                  ? 'neutral'
+                                  : entry.status === 'paused'
+                                    ? 'caution'
+                                    : 'positive'
+                              }
+                              label={CONSOLE[STATUS[entry.status] ?? 'sessionScheduled']}
+                            />
+                          </span>
+                          <span>
+                            {format('registrationWaiting', locale, {
+                              count: formatNumber(entry.waiting, numerals),
+                            })}
+                            <span aria-hidden="true">{selected === entry.id ? ' ✓' : ' ○'}</span>
+                          </span>
+                        </button>
+                        {closed(entry) ? (
+                          <p className="cf-secondary">{t('regClosed', locale)}</p>
+                        ) : null}
+                      </div>
+                    ),
+                  )
+                )}
+              </section>
+            </div>
+            <section
+              className="cf-reg-summary"
+              aria-label={t('regSummary', locale)}
+              data-testid="registration-summary"
+            >
+              <div>
+                <strong>
+                  {patient?.fullName ?? t('registrationChooseFirst', locale)} →{' '}
+                  {chamber === null
+                    ? t('regSelectDoctor', locale)
+                    : localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)}
+                </strong>
+                <p>{t('regServerOnly', locale)}</p>
+                {busy ? <p role="status">{t('regPending', locale)}</p> : null}
+              </div>
+              <ConsoleAction
+                label={CONSOLE[uncertain ? 'regRetrySame' : 'regGiveSerial']}
+                loading={busy}
+                data-testid="registration-submit"
+                onClick={() => void submit()}
+                {...((!uncertain && reason !== null) || !online || finderUnresolved
+                  ? { disabled: true, disabledReason: t(reason ?? 'regUncertain', locale) }
+                  : {})}
+              />
+            </section>
+          </>
+        )}
+        {back === null || issued !== null || from !== null ? null : (
+          <ConsoleAction
+            label={CONSOLE.regBackQueue}
+            variant="secondary"
+            onClick={() => navigate(queueUrl(back))}
+          />
+        )}
+        <ConsoleConfirmation
+          open={destination !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDestination(null);
+              globalThis.requestAnimationFrame(() => restoreFocus.current?.focus());
+            }
+          }}
+          trigger={<button type="button" hidden aria-label={t('regLeaveTitle', locale)} />}
+          title={CONSOLE.regLeaveTitle}
+          description={CONSOLE.regLeaveBody}
+          confirmLabel={CONSOLE.regDiscard}
+          onConfirm={() => {
+            const target = destination;
+            setDestination(null);
+            if (target === 'reset') reset();
+            else if (target !== null) {
+              allowExit.current = true;
+              globalThis.location.assign(target);
+            }
+          }}
+        />
       </div>
-    </div>
+    </ConsoleWorkspaceFrame>
   );
 }

@@ -1,22 +1,12 @@
 'use client';
 
-/**
- * Phone first, then the person (`S-B-03`, `MOD-B02-WALKIN`, pilot step 23,
- * `FR-REC-20`).
- *
- * The receptionist types the number the patient says; everybody registered
- * under it is listed — a household shares one phone — and the one standing
- * there is chosen with one tap. Nobody under it, or somebody new, is four
- * fields: name, age, sex, and the number already typed. "Register a new
- * patient in under 30 seconds" is the budget this is built to.
- *
- * Shared by the walk-in modal on `S-B-02` and the registration screen, so the
- * two cannot drift into two ways of finding the same person.
+/** Phone/person confirmation with stale-response and retry protection
+ * (FR-REC-20, FR-GST-13). Shared by Registration and positioned walk-ins.
  */
-
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import {
+  CONSOLE,
   format,
   formatNumber,
   numeralsFor,
@@ -24,7 +14,7 @@ import {
   toLatinDigits,
   type ConsoleKey,
 } from '@platform/i18n';
-import { Button, Card, Chip, FilterChip, Input, useLocale } from '@platform/ui';
+import { Button, Chip, ConsoleAction, FilterChip, Input, useLocale } from '@platform/ui';
 
 import {
   counterPhone,
@@ -33,31 +23,40 @@ import {
   type CounterFailure,
   type CounterPatient,
 } from '@/lib/registration';
+import '@platform/ui/console-registration.css';
 
 const SEX_KEY: Readonly<Record<CounterPatient['sex'], ConsoleKey>> = {
   male: 'sexMale',
   female: 'sexFemale',
   other: 'sexOther',
 };
-
 export const FAILURE_KEY: Readonly<Record<CounterFailure, ConsoleKey>> = {
   offline: 'walkInOffline',
   phone: 'counterPhoneInvalid',
   refused: 'counterRefused',
   failed: 'counterFailed',
+  uncertain: 'regUncertain',
+  access: 'regAccess',
 };
-
 export interface ChosenPatient {
   readonly patientId: string;
   readonly fullName: string;
+  readonly phone: string;
+  readonly ageYears: number | null;
+  readonly sex: CounterPatient['sex'];
+  readonly origin: 'new' | 'existing';
 }
-
+const nameKey = (name: string): string => name.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
 export function PatientFinder({
   online,
   onChosen,
+  onDirty,
+  onProgress,
 }: {
   readonly online: boolean;
   readonly onChosen: (patient: ChosenPatient) => void;
+  readonly onDirty?: (dirty: boolean, unresolved: boolean) => void;
+  readonly onProgress?: (searched: boolean) => void;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
@@ -65,210 +64,364 @@ export function PatientFinder({
   const [searched, setSearched] = useState<string | null>(null);
   const [found, setFound] = useState<readonly CounterPatient[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [unresolved, setUnresolved] = useState(false);
   const [error, setError] = useState<ConsoleKey | null>(null);
-
+  const [candidate, setCandidate] = useState<CounterPatient | null>(null);
+  const [reused, setReused] = useState(false);
+  const [ambiguousReceipt, setAmbiguousReceipt] = useState(false);
+  const [newForm, setNewForm] = useState(false);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<CounterPatient['sex'] | null>(null);
-
+  const [touched, setTouched] = useState({ name: false, age: false, sex: false, phone: false });
+  const version = useRef(0);
+  const lookupInFlight = useRef<string | null>(null);
+  const lastAutomatic = useRef<string | null>(null);
+  const writing = useRef(false);
+  const original = useRef<{
+    key: string;
+    body: { phone: string; fullName: string; ageYears: number; sex: CounterPatient['sex'] };
+  } | null>(null);
   const phone = counterPhone(typed);
   const ageYears = /^\d{1,3}$/.test(toLatinDigits(age).trim())
     ? Number(toLatinDigits(age).trim())
     : null;
-  const newReady =
-    searched !== null && name.trim() !== '' && ageYears !== null && ageYears <= 130 && sex !== null;
-  const offlineReason = online ? null : t('walkInOffline', locale);
-
-  async function search(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    if (phone === null) {
-      setError('counterPhoneInvalid');
+  const validName = name.trim().length > 0 && name.trim().length <= 120;
+  const validAge = ageYears !== null && ageYears <= 130;
+  const nameTaken = (found ?? []).some((person) => nameKey(person.fullName) === nameKey(name));
+  const dirty = typed !== '' || name !== '' || age !== '' || sex !== null;
+  useEffect(() => onDirty?.(dirty, unresolved || creating), [dirty, unresolved, creating, onDirty]);
+  useEffect(() => onProgress?.(searched !== null), [searched, onProgress]);
+  useEffect(
+    () => () => {
+      version.current += 1;
+    },
+    [],
+  );
+  const lookup = useCallback(
+    async (number: string): Promise<void> => {
+      if (!online || writing.current || lookupInFlight.current === number) return;
+      const request = ++version.current;
+      lookupInFlight.current = number;
+      lastAutomatic.current = number;
+      setBusy(true);
+      setError(null);
+      const result = await findByPhone(number);
+      if (request !== version.current) return;
+      lookupInFlight.current = null;
+      setBusy(false);
+      if (!result.ok) {
+        setError(FAILURE_KEY[result.failure]);
+        return;
+      }
+      setSearched(number);
+      setFound(result.value);
+      setCandidate(null);
+      setNewForm(result.value.length === 0);
+      setReused(false);
+      setAmbiguousReceipt(false);
+    },
+    [online],
+  );
+  useEffect(() => {
+    if (phone === null || !online || unresolved || creating || lastAutomatic.current === phone)
       return;
-    }
-    setBusy(true);
-    setError(null);
-    const result = await findByPhone(phone);
-    setBusy(false);
-    if (!result.ok) {
-      setError(FAILURE_KEY[result.failure]);
-      return;
-    }
-    setSearched(phone);
-    setFound(result.value);
+    const timer = globalThis.setTimeout(() => {
+      if (lastAutomatic.current !== phone) void lookup(phone);
+    }, 350);
+    return () => globalThis.clearTimeout(timer);
+  }, [phone, online, lookup, unresolved, creating]);
+  function choose(person: CounterPatient, origin: 'new' | 'existing', number = searched): void {
+    if (number === null) return;
+    onChosen({
+      patientId: person.patientId,
+      fullName: person.fullName,
+      ageYears: person.ageYears,
+      sex: person.sex,
+      phone: number,
+      origin,
+    });
   }
-
   async function register(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!newReady || searched === null || ageYears === null || sex === null) return;
-    setBusy(true);
+    setTouched({ name: true, age: true, sex: true, phone: true });
+    if (
+      !online ||
+      writing.current ||
+      (!unresolved &&
+        (!validName ||
+          !validAge ||
+          sex === null ||
+          searched !== phone ||
+          searched === null ||
+          nameTaken))
+    )
+      return;
+    if (!unresolved) {
+      if (searched === null || ageYears === null || sex === null) return;
+      const body = { phone: searched, fullName: name.trim(), ageYears, sex };
+      if (JSON.stringify(original.current?.body) !== JSON.stringify(body))
+        original.current = { key: crypto.randomUUID(), body };
+    }
+    const saved = original.current;
+    if (saved === null) return;
+    writing.current = true;
+    setCreating(true);
     setError(null);
-    const fullName = name.trim();
-    const result = await registerPatient({ phone: searched, fullName, ageYears, sex });
-    setBusy(false);
+    const result = await registerPatient(saved.body, saved.key);
+    writing.current = false;
+    setCreating(false);
     if (!result.ok) {
       setError(FAILURE_KEY[result.failure]);
+      setUnresolved(unresolved || result.failure === 'uncertain');
       return;
     }
-    onChosen({ patientId: result.value, fullName });
+    setUnresolved(false);
+    setSearched(result.value.phone);
+    if (result.value.created) {
+      choose(result.value.patient, 'new', result.value.phone);
+      return;
+    }
+    setCandidate(result.value.patient);
+    setReused(true);
+    setAmbiguousReceipt(result.value.ambiguous);
   }
-
+  const indistinguishable =
+    candidate !== null &&
+    (ambiguousReceipt ||
+      (found ?? []).filter(
+        (person) =>
+          nameKey(person.fullName) === nameKey(candidate.fullName) &&
+          person.ageYears === candidate.ageYears &&
+          person.sex === candidate.sex,
+      ).length > 1);
   return (
-    <div className="flex flex-col gap-4" data-testid="patient-finder">
-      <form
-        className="flex flex-wrap items-end gap-3"
-        noValidate
-        onSubmit={(event) => void search(event)}
-      >
-        <div className="min-w-56 flex-1">
+    <div className="cf-patient-finder cf-stack" data-testid="patient-finder">
+      <section className="cf-reg-panel">
+        <h2>
+          <span className="cf-reg-number">1</span>
+          {t('regStepPhone', locale)}
+        </h2>
+        <form
+          className="cf-reg-phone"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            setTouched((old) => ({ ...old, phone: true }));
+            if (phone === null) setError('counterPhoneInvalid');
+            else void lookup(phone);
+          }}
+        >
           <Input
             label={t('counterPhone', locale)}
+            helper={t('regAutoSearch', locale)}
             kind="phone"
             density="console"
             value={typed}
+            required
             autoFocus
+            readOnly={creating || unresolved}
+            {...(touched.phone && phone === null
+              ? { error: t('counterPhoneInvalid', locale) }
+              : {})}
             data-testid="finder-phone"
+            onBlur={() => setTouched((old) => ({ ...old, phone: true }))}
             onChange={(event) => {
               setTyped(event.target.value);
+              if (phone !== null && counterPhone(event.target.value) === phone) return;
+              version.current += 1;
+              lookupInFlight.current = null;
+              lastAutomatic.current = null;
+              setBusy(false);
               setSearched(null);
               setFound(null);
+              setCandidate(null);
+              setNewForm(false);
+              setError(null);
             }}
           />
-        </div>
-        {offlineReason === null ? (
-          <Button type="submit" variant="secondary" loading={busy} data-testid="finder-search">
-            {t('counterFind', locale)}
-          </Button>
-        ) : (
           <Button
             type="submit"
             variant="secondary"
-            disabled
-            disabledReason={offlineReason}
+            loading={busy}
+            {...(!online || creating || unresolved
+              ? {
+                  disabled: true,
+                  disabledReason: t(unresolved ? 'regUncertain' : 'walkInOffline', locale),
+                }
+              : {})}
             data-testid="finder-search"
           >
             {t('counterFind', locale)}
           </Button>
-        )}
-      </form>
-
+        </form>
+      </section>
       {error === null ? null : (
-        <p role="alert" className="text-body-sm text-alert-700" data-testid="finder-error">
+        <p role="alert" className="cf-feedback cf-tone-alert" data-testid="finder-error">
           {t(error, locale)}
         </p>
       )}
-
-      {found === null ? null : found.length === 0 ? (
-        <p className="text-body-sm text-ink-secondary" data-testid="finder-none">
-          {t('counterNoneFound', locale)}
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2" data-testid="finder-results">
-          <p className="text-body-sm text-ink-secondary">{t('counterFound', locale)}</p>
-          {found.map((patient) => (
-            <Card key={patient.patientId}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-body-md font-semibold">{patient.fullName}</p>
-                  <p className="text-body-sm text-ink-muted">
-                    {patient.ageYears === null
-                      ? t(SEX_KEY[patient.sex], locale)
-                      : `${format('counterAgeYears', locale, { age: formatNumber(patient.ageYears, numerals) })} · ${t(SEX_KEY[patient.sex], locale)}`}
-                  </p>
+      {searched === null ? null : (
+        <section className="cf-reg-panel cf-stack">
+          <h2>
+            <span className="cf-reg-number">2</span>
+            {t('regStepPatient', locale)}
+          </h2>
+          <p className="cf-secondary">{t('regIdentityCheck', locale)}</p>
+          {candidate !== null ? (
+            <div className="cf-reg-selected cf-stack" data-testid="finder-identity">
+              {reused ? <p>{t('regReused', locale)}</p> : null}
+              <strong>{candidate.fullName}</strong>
+              <p>
+                {candidate.ageYears === null
+                  ? '—'
+                  : format('counterAgeYears', locale, {
+                      age: formatNumber(candidate.ageYears, numerals),
+                    })}{' '}
+                · {t(SEX_KEY[candidate.sex], locale)} · {searched}
+              </p>
+              {indistinguishable ? (
+                <p role="alert">{t('regAmbiguous', locale)}</p>
+              ) : (
+                <ConsoleAction
+                  label={CONSOLE.regConfirmPatient}
+                  data-testid="finder-confirm-patient"
+                  onClick={() => choose(candidate, 'existing')}
+                />
+              )}
+              <ConsoleAction
+                label={CONSOLE.counterChangePatient}
+                variant="secondary"
+                onClick={() => {
+                  setCandidate(null);
+                  setAmbiguousReceipt(false);
+                }}
+              />
+            </div>
+          ) : (
+            <>
+              {found?.length === 0 ? (
+                <p data-testid="finder-none">{t('counterNoneFound', locale)}</p>
+              ) : (
+                <div className="cf-stack" data-testid="finder-results">
+                  <p>{t('counterFound', locale)}</p>
+                  {(found ?? []).map((person) => (
+                    <div className="cf-reg-person" key={person.patientId}>
+                      <div>
+                        <strong>{person.fullName}</strong>
+                        <p className="cf-secondary">
+                          {person.ageYears === null
+                            ? '—'
+                            : format('counterAgeYears', locale, {
+                                age: formatNumber(person.ageYears, numerals),
+                              })}{' '}
+                          · {t(SEX_KEY[person.sex], locale)}
+                        </p>
+                        {person.owner === 'account' ? (
+                          <Chip tone="positive">{t('counterAccount', locale)}</Chip>
+                        ) : null}
+                      </div>
+                      <Button
+                        aria-label={format('counterChooseNamed', locale, { name: person.fullName })}
+                        data-testid={`finder-choose-${person.patientId}`}
+                        {...(creating || unresolved
+                          ? { disabled: true, disabledReason: t('regPending', locale) }
+                          : {})}
+                        onClick={() => {
+                          setCandidate(person);
+                          setReused(false);
+                        }}
+                      >
+                        {t('counterChoose', locale)}
+                      </Button>
+                    </div>
+                  ))}
+                  {!newForm ? (
+                    <ConsoleAction
+                      label={CONSOLE.regNotListed}
+                      variant="secondary"
+                      onClick={() => setNewForm(true)}
+                    />
+                  ) : null}
                 </div>
-                <div className="flex items-center gap-2">
-                  {patient.owner === 'account' ? (
-                    <Chip tone="positive">{t('counterAccount', locale)}</Chip>
+              )}
+              {!newForm ? null : (
+                <form
+                  className="cf-reg-new cf-stack"
+                  noValidate
+                  onSubmit={(event) => void register(event)}
+                  data-testid="finder-new"
+                >
+                  <h3>{t('counterNewPatient', locale)}</h3>
+                  <Input
+                    label={t('counterName', locale)}
+                    required
+                    density="console"
+                    value={name}
+                    maxLength={120}
+                    readOnly={creating || unresolved}
+                    data-testid="finder-name"
+                    onChange={(event) => setName(event.target.value)}
+                    onBlur={() => setTouched((old) => ({ ...old, name: true }))}
+                    {...(touched.name && !validName ? { error: t('regNameError', locale) } : {})}
+                  />
+                  <Input
+                    label={t('counterAge', locale)}
+                    required
+                    kind="number"
+                    density="console"
+                    value={age}
+                    readOnly={creating || unresolved}
+                    data-testid="finder-age"
+                    onChange={(event) => setAge(event.target.value)}
+                    onBlur={() => setTouched((old) => ({ ...old, age: true }))}
+                    {...(touched.age && !validAge ? { error: t('regAgeError', locale) } : {})}
+                  />
+                  <fieldset disabled={creating || unresolved}>
+                    <legend>{t('counterSex', locale)} *</legend>
+                    <div className="cf-reg-actions">
+                      {(['female', 'male', 'other'] as const).map((value) => (
+                        <FilterChip
+                          key={value}
+                          selected={sex === value}
+                          onToggle={() => setSex(value)}
+                        >
+                          {t(SEX_KEY[value], locale)}
+                        </FilterChip>
+                      ))}
+                    </div>
+                    {touched.sex && sex === null ? (
+                      <p role="alert">{t('regSexError', locale)}</p>
+                    ) : null}
+                  </fieldset>
+                  {nameTaken ? (
+                    <p
+                      role="alert"
+                      className="cf-feedback cf-tone-caution"
+                      data-testid="finder-duplicate"
+                    >
+                      {t('regNameTaken', locale)}
+                    </p>
                   ) : null}
                   <Button
-                    variant="primary"
-                    aria-label={format('counterChooseNamed', locale, { name: patient.fullName })}
-                    data-testid={`finder-choose-${patient.patientId}`}
-                    onClick={() => {
-                      onChosen({ patientId: patient.patientId, fullName: patient.fullName });
-                    }}
+                    type="submit"
+                    loading={creating}
+                    {...(!online || nameTaken
+                      ? {
+                          disabled: true,
+                          disabledReason: t(nameTaken ? 'regNameTaken' : 'walkInOffline', locale),
+                        }
+                      : {})}
+                    data-testid="finder-register"
                   >
-                    {t('counterChoose', locale)}
+                    {t(unresolved ? 'regRetrySame' : 'counterRegister', locale)}
                   </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {searched === null ? null : (
-        <form
-          className="flex flex-col gap-3 rounded-md bg-sunken p-4"
-          noValidate
-          onSubmit={(event) => void register(event)}
-          data-testid="finder-new"
-        >
-          <p className="text-body-md font-semibold">{t('counterNewPatient', locale)}</p>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Input
-              label={t('counterName', locale)}
-              density="console"
-              required
-              value={name}
-              data-testid="finder-name"
-              onChange={(event) => {
-                setName(event.target.value);
-              }}
-            />
-            <Input
-              label={t('counterAge', locale)}
-              kind="number"
-              density="console"
-              required
-              value={age}
-              data-testid="finder-age"
-              onChange={(event) => {
-                setAge(event.target.value);
-              }}
-            />
-          </div>
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-body-sm text-ink-secondary">
-              {t('counterSex', locale)}
-            </legend>
-            <div className="flex flex-wrap gap-2">
-              {(['female', 'male', 'other'] as const).map((value) => (
-                <FilterChip
-                  key={value}
-                  selected={sex === value}
-                  onToggle={() => {
-                    setSex(value);
-                  }}
-                >
-                  {t(SEX_KEY[value], locale)}
-                </FilterChip>
-              ))}
-            </div>
-          </fieldset>
-          {offlineReason !== null ? (
-            <Button
-              type="submit"
-              disabled
-              disabledReason={offlineReason}
-              data-testid="finder-register"
-            >
-              {t('counterRegister', locale)}
-            </Button>
-          ) : newReady ? (
-            <Button type="submit" loading={busy} data-testid="finder-register">
-              {t('counterRegister', locale)}
-            </Button>
-          ) : (
-            <Button
-              type="submit"
-              disabled
-              disabledReason={t('counterNeedFields', locale)}
-              data-testid="finder-register"
-            >
-              {t('counterRegister', locale)}
-            </Button>
+                </form>
+              )}
+            </>
           )}
-        </form>
+        </section>
       )}
     </div>
   );

@@ -10,7 +10,7 @@ import { Client } from 'pg';
 
 import { CONSOLE as COPY } from '../shared/i18n/src/messages.js';
 
-import { adminToken } from './support/console.js';
+import { adminToken, createConsoleSession, hideFromPicker } from './support/console.js';
 import { E2E_DATABASE_URL, assertLocalDatabase } from './support/database.js';
 import { staffWithRoles, DEMO_PASSWORD } from './support/staff.js';
 import { completeSetup } from './support/twoFactor.js';
@@ -395,28 +395,73 @@ test('ordinary token refresh and focus checks preserve an open doctor draft', as
   const response = await page.request.get(`${API}/staff/chambers`, {
     headers: { authorization: `Bearer ${token}` },
   });
-  const data = (await response.json()) as { data: { chambers: { id: string; status: string }[] } };
+  const data = (await response.json()) as {
+    data: { chambers: { id: string; status: string; doctorId: string }[] };
+  };
   const running = data.data.chambers.find((chamber) => chamber.status === 'running');
   expect(running).toBeDefined();
-  await page.getByTestId(`open-doctor-${running!.id}`).click();
-  const note = page.getByTestId('visit-diagnosis');
-  await expect(note).toBeEnabled();
-  await note.fill('Unsaved local draft (Demo)');
-  // HS256 access tokens have second-resolution iat/exp. A same-second
-  // renewal can have identical bytes; exercise a later-second renewal.
-  const issuedAt = await page.evaluate((value) => {
-    const payload = JSON.parse(
-      atob(value.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/')),
-    ) as { iat: number };
-    return payload.iat;
-  }, token);
-  await expect.poll(() => Math.floor(Date.now() / 1000)).toBeGreaterThan(issuedAt + 1);
-  await page.evaluate((key) => {
-    const s = JSON.parse(sessionStorage.getItem(key) ?? '{}') as Record<string, unknown>;
-    s['accessExpiresAt'] = new Date(Date.now() - 1000).toISOString();
-    sessionStorage.setItem(key, JSON.stringify(s));
-    window.dispatchEvent(new Event('focus'));
-  }, KEY);
-  await expect.poll(() => apiToken(page)).not.toBe(token);
-  await expect(note).toHaveValue('Unsaved local draft (Demo)');
+  // Own a fresh canonical-fixture queue: this case tests a healthy refresh,
+  // independently of whichever mutable seeded chamber happened to be first.
+  const fixture = await createConsoleSession(3, 'in-chamber', {
+    hospitalId: staff.hospitalId!,
+    doctorId: running!.doctorId,
+    room: 'Access refresh (Demo)',
+  });
+  try {
+    await page.reload();
+    await page.getByTestId(`open-doctor-${fixture.sessionId}`).click();
+    const note = page.getByTestId('visit-diagnosis');
+    await expect(note).toBeEnabled();
+    await note.fill('Unsaved local draft (Demo)');
+    // HS256 access tokens have second-resolution iat/exp. A same-second
+    // renewal can have identical bytes; exercise a later-second renewal.
+    const issuedAt = await page.evaluate((value) => {
+      const payload = JSON.parse(
+        atob(value.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/')),
+      ) as { iat: number };
+      return payload.iat;
+    }, token);
+    await expect.poll(() => Math.floor(Date.now() / 1000)).toBeGreaterThan(issuedAt + 1);
+    await expect(note).toHaveValue('Unsaved local draft (Demo)');
+    await page.evaluate(() => {
+      (window as unknown as { refreshDiagnostic: Element | null }).refreshDiagnostic =
+        document.querySelector('[data-testid="visit-diagnosis"]');
+    });
+    const revalidated = page.waitForResponse(
+      (reply) =>
+        reply.url().endsWith('/staff/chambers') &&
+        reply.status() === 200 &&
+        reply.request().headers()['authorization'] !== `Bearer ${token}`,
+    );
+    await page.evaluate((key) => {
+      const s = JSON.parse(sessionStorage.getItem(key) ?? '{}') as Record<string, unknown>;
+      s['accessExpiresAt'] = new Date(Date.now() - 1000).toISOString();
+      sessionStorage.setItem(key, JSON.stringify(s));
+      window.dispatchEvent(new Event('focus'));
+    }, KEY);
+    await expect.poll(() => apiToken(page)).not.toBe(token);
+    await revalidated;
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolveFrame) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolveFrame())),
+        ),
+    );
+    const diagnostic = await page.evaluate(() => {
+      const stored = (window as unknown as { refreshDiagnostic?: Element | null })
+        .refreshDiagnostic;
+      return {
+        referencePresent: stored !== undefined,
+        sameElement: stored === document.querySelector('[data-testid="visit-diagnosis"]'),
+        originalStillMounted: stored?.isConnected ?? false,
+      };
+    });
+    await test.info().attach('refresh-mount-diagnostic', {
+      body: JSON.stringify(diagnostic),
+      contentType: 'application/json',
+    });
+    await expect(note).toHaveValue('Unsaved local draft (Demo)');
+  } finally {
+    await hideFromPicker([fixture.sessionId]);
+  }
 });

@@ -70,7 +70,10 @@ function allowed(
   sessionId: string | null,
   role: string,
 ): boolean {
-  if (view === 'reception' && !deskAllowed(context, readDemoSession()?.receptionDeskId))
+  if (
+    (view === 'reception' || view === 'registration') &&
+    !deskAllowed(context, readDemoSession()?.receptionDeskId)
+  )
     return false;
   const requestedRole = workspaceRoleFor(view, sessionId, role);
   if (
@@ -125,7 +128,9 @@ export function StaffEntry({
   const load = useCallback(async () => {
     const request = ++generation.current;
     setChecking(true);
-    const outcome = await loadStaffWorkspaceContext({ includeEnded: view === 'reception' });
+    const outcome = await loadStaffWorkspaceContext({
+      includeEnded: view === 'reception' || view === 'registration',
+    });
     if (request !== generation.current) return;
     if (outcome.kind !== 'ready') setChecking(false);
     if (outcome.kind === 'ended') {
@@ -165,10 +170,19 @@ export function StaffEntry({
       if (stored !== null && allowed(confirmed, view, sessionId, stored.role)) {
         const role = workspaceRoleFor(view, sessionId, stored.role);
         const chamber = confirmed.chambers.find((entry) => entry.id === sessionId);
+        // A permitted deep link may be absent from today's picker roster.
+        // Record the server-verified target for offline continuation, without
+        // borrowing the previous target's doctor label (FR-OFF-01/02).
+        const { chamber: previousChamber, ...withoutChamber } = stored;
         writeDemoSession({
-          ...stored,
+          ...withoutChamber,
+          ...((sessionId === null || stored.chamberSessionId === sessionId) &&
+          previousChamber !== undefined
+            ? { chamber: previousChamber }
+            : {}),
           ...(role === null ? {} : { role }),
           workspaceView: view,
+          ...(sessionId === null ? {} : { chamberSessionId: sessionId }),
           ...(chamber === undefined
             ? {}
             : {
@@ -193,10 +207,15 @@ export function StaffEntry({
       void load();
     };
     globalThis.addEventListener('focus', recheck);
-    const timer = view === 'reception' ? globalThis.setInterval(recheck, 30_000) : null;
+    globalThis.addEventListener('online', recheck);
+    const timer =
+      view === 'reception' || view === 'registration'
+        ? globalThis.setInterval(recheck, 30_000)
+        : null;
     return () => {
       generation.current += 1;
       globalThis.removeEventListener('focus', recheck);
+      globalThis.removeEventListener('online', recheck);
       if (timer !== null) globalThis.clearInterval(timer);
     };
   }, [load, session.token]);

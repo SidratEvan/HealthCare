@@ -13,7 +13,6 @@
 
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import { normaliseBdMobile } from '@platform/domain';
-import type { QueueState } from '@platform/domain';
 import { toLatinDigits } from '@platform/i18n';
 
 import { readDemoSession } from '@/lib/demo';
@@ -31,7 +30,7 @@ export interface CounterPatient {
 }
 
 /** Why a counter call failed, in the words the screen has copy for. */
-export type CounterFailure = 'offline' | 'phone' | 'refused' | 'failed';
+export type CounterFailure = 'offline' | 'phone' | 'refused' | 'failed' | 'uncertain' | 'access';
 
 export type CounterResult<T> =
   | { readonly ok: true; readonly value: T }
@@ -44,17 +43,26 @@ function client(): ApiClient {
 function failureOf(error: unknown): CounterFailure {
   if (error instanceof NetworkError) return 'offline';
   if (error instanceof ApiError) {
+    if (error.status === 401 || error.status === 403) return 'access';
     if (error.code === 'VALIDATION_FAILED') return 'phone';
     if (error.code === 'QUEUE_GUARD_FAILED' || error.code === 'QUEUE_CONFLICT') return 'refused';
   }
   return 'failed';
 }
 
-async function attempt<T>(call: () => Promise<T>): Promise<CounterResult<T>> {
+async function attempt<T>(call: () => Promise<T>, write = false): Promise<CounterResult<T>> {
   try {
     return { ok: true, value: await call() };
   } catch (error: unknown) {
-    return { ok: false, failure: failureOf(error) };
+    // A missing/invalid write response can follow a committed transaction.
+    // Reuse its attempt; a transport exception does not establish failure.
+    return {
+      ok: false,
+      failure:
+        write && !(error instanceof ApiError && error.status < 500)
+          ? 'uncertain'
+          : failureOf(error),
+    };
   }
 }
 
@@ -78,20 +86,33 @@ export async function findByPhone(
   });
 }
 
-export async function registerPatient(body: {
+export interface PatientRegistrationReceipt {
+  readonly patientId: string;
   readonly phone: string;
-  readonly fullName: string;
-  readonly ageYears: number;
-  readonly sex: 'male' | 'female' | 'other';
-}): Promise<CounterResult<string>> {
+  readonly created: boolean;
+  readonly ambiguous: boolean;
+  readonly patient: CounterPatient;
+}
+
+export async function registerPatient(
+  body: {
+    readonly phone: string;
+    readonly fullName: string;
+    readonly ageYears: number;
+    readonly sex: 'male' | 'female' | 'other';
+  },
+  requestKey: string = crypto.randomUUID(),
+): Promise<CounterResult<PatientRegistrationReceipt>> {
   return await attempt(async () => {
-    const data = await client().post<{ patientId: string }>(
+    const data = await client().post<PatientRegistrationReceipt>(
       '/registration/patients',
       body,
-      crypto.randomUUID(),
+      requestKey,
     );
-    return data.patientId;
-  });
+    if (data.patient?.patientId !== data.patientId || typeof data.created !== 'boolean')
+      throw new Error('Registration receipt missing; identity must be reconciled.');
+    return data;
+  }, true);
 }
 
 export type WalkInPosition =
@@ -113,7 +134,7 @@ export async function addWalkIn(
   },
 ): Promise<CounterResult<number>> {
   return await attempt(async () => {
-    const data = await client().post<{ state: QueueState; walkin?: { serial: number } }>(
+    const data = await client().post<{ walkin?: { serial: number } }>(
       `/sessions/${sessionId}/walkin`,
       {
         clientEventId: requestAttempt.key,
@@ -125,9 +146,9 @@ export async function addWalkIn(
       },
       requestAttempt.key,
     );
-    return (
-      data.walkin?.serial ??
-      data.state.entries.reduce((max, entry) => Math.max(max, entry.serial), 0)
-    );
-  });
+    const receipt = data.walkin;
+    if (receipt === undefined || !Number.isSafeInteger(receipt.serial) || receipt.serial < 1)
+      throw new Error('Walk-in receipt missing; retry the original attempt.');
+    return receipt.serial;
+  }, true);
 }

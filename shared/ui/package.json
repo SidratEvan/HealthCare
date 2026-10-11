@@ -15,7 +15,8 @@
     "./patient.css": "./src/tokens/patient.css",
     "./console.css": "./src/console/foundation.css",
     "./console-access.css": "./src/console/access.css",
-    "./console-reception.css": "./src/console/reception.css"
+    "./console-reception.css": "./src/console/reception.css",
+    "./console-registration.css": "./src/console/registration.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
