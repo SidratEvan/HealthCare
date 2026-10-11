@@ -1,8 +1,19 @@
-# frontend/site — Marketing website (Part C)
+# frontend/site — MedLiveBD company presentation
 
-Next.js, server-rendered for SEO. Pages: `docs/APP_FLOW.md` Part C (`S-C-01` … `S-C-08`).
+The accelerated completion brief authorizes a separate bilingual public company
+presentation with the existing logo and confirmed `sidrat@medlivebd.com` contact.
+The default entrance redirects to `/bn`; `/en` has its own server-rendered
+document language and metadata. No patient, hospital-login, inquiry backend or
+clinical API is connected to this site. Demonstration requests open email.
 
-The only route into the staff console for a hospital employee (`BTN-C02-LOGIN`),
-and the only staff-facing link the patient app ever shows (`BTN-A19-FORHOSPITAL`).
+Run `pnpm --filter @platform/site dev` for local development on port 3200.
+For a built preview, run `pnpm --filter @platform/site build`, then
+`pnpm --filter @platform/site start`. Run `pnpm --filter @platform/site test:smoke`
+against the built preview; the configuration can start it if needed.
 
-Scaffolded after the pilot demo exists; it sells something that has to work first.
+This delivers the company-presentation brief, not all historical Part C routes
+in APP_FLOW.md. Patient/console entrances, lead pipeline, brochure and separate
+policy pages remain outside this brief. There is no deployment configuration
+change, Site registration, publication or provider activation.
+
+Verification and representative captures: `docs/design/company-site/README.md`.
