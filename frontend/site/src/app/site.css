@@ -1,0 +1,1220 @@
+/* Company presentation tokens. Clinical app tokens remain untouched (S-C-01; GR-06). */
+:root {
+  --paper: #f8f9f6;
+  --ink: #101e2c;
+  --muted: #53616b;
+  --line: #d8deda;
+  --mint: #c9f1da;
+  --teal: #146c58;
+  --navy: #122430;
+  --dark-muted: #bbcad0;
+  --panel: #1a313e;
+  --dark-line: #3a525d;
+  --surface: #eef2ec;
+  --font-en: var(--font-latin), sans-serif;
+  --font-bn: var(--font-bangla), sans-serif;
+  --shell: 1320px;
+  --gutter: clamp(24px, 4.6vw, 76px);
+  --section: clamp(76px, 8vw, 132px);
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 34px;
+}
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-en);
+}
+.company-page[lang='bn'] {
+  font-family: var(--font-bn);
+  word-break: keep-all;
+  hyphens: none;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  font: inherit;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button,
+a {
+  touch-action: manipulation;
+}
+a:focus-visible,
+button:focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 5px;
+}
+.operations a:focus-visible,
+.operations button:focus-visible,
+.contact-section a:focus-visible {
+  outline-color: var(--mint);
+}
+button {
+  cursor: pointer;
+}
+::selection {
+  background: var(--mint);
+  color: var(--ink);
+}
+h1,
+h2,
+h3,
+p,
+figure {
+  margin: 0;
+}
+h1,
+h2,
+h3 {
+  font-weight: 500;
+}
+h2 {
+  white-space: pre-line;
+  font-size: clamp(32px, 4vw, 59px);
+  line-height: 1.13;
+  letter-spacing: -0.045em;
+}
+h3 {
+  font-size: 23px;
+  line-height: 1.35;
+  letter-spacing: -0.025em;
+}
+p {
+  line-height: 1.75;
+}
+.company-page[lang='bn'] h1,
+.company-page[lang='bn'] h2,
+.company-page[lang='bn'] h3 {
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+.company-page[lang='bn'] p,
+.company-page[lang='bn'] a,
+.company-page[lang='bn'] button {
+  line-height: 1.75;
+}
+.company-page[lang='bn'] .eyebrow {
+  letter-spacing: 0;
+  font-size: 15px;
+}
+.shell {
+  max-width: calc(var(--shell) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+.section-space {
+  padding-block: var(--section);
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.5;
+}
+.arrow {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+a:hover .arrow {
+  transform: translate(3px, -2px);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.skip-link {
+  position: absolute;
+  left: var(--gutter);
+  top: -100px;
+  z-index: 10;
+  background: var(--mint);
+  padding: 16px 24px;
+}
+.skip-link:focus {
+  top: 8px;
+}
+.site-header {
+  height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  position: relative;
+}
+.brand-link {
+  padding-block: 8px;
+}
+.brand-logo {
+  width: 100px;
+  height: auto;
+  display: block;
+  mix-blend-mode: multiply;
+}
+.desktop-nav {
+  display: flex;
+  gap: 28px;
+  margin-left: auto;
+  margin-right: auto;
+  font-size: 12px;
+  font-weight: 600;
+}
+.desktop-nav a {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.desktop-nav a::after {
+  content: '';
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  height: 1px;
+  width: 0;
+  background: var(--teal);
+  transition: width 0.2s;
+}
+.desktop-nav a:hover::after {
+  width: 100%;
+}
+.header-actions {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+.language-link {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  border-inline-end: 1px solid var(--line);
+  padding-inline-end: 22px;
+}
+.header-contact {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-height: 44px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.menu-toggle {
+  display: none;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  padding: 10px;
+}
+.menu-toggle span {
+  display: block;
+  height: 1px;
+  background: var(--ink);
+  margin-block: 7px;
+}
+.mobile-nav {
+  display: none;
+  position: absolute;
+  top: 90px;
+  left: var(--gutter);
+  right: var(--gutter);
+  z-index: 5;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 20px;
+  box-shadow: 0 20px 40px rgb(16 30 44 / 8%);
+}
+.mobile-nav a {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.hero {
+  display: grid;
+  grid-template-columns: 1.08fr 1fr;
+  gap: clamp(30px, 5vw, 80px);
+  align-items: center;
+  padding-top: 64px;
+  padding-bottom: 72px;
+}
+.hero .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--teal);
+  margin-bottom: 26px;
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--teal);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+h1 {
+  font-size: clamp(58px, 6.8vw, 104px);
+  line-height: 1.02;
+  letter-spacing: -0.07em;
+  font-weight: 500;
+}
+h1 span {
+  display: block;
+}
+.hero-accent {
+  color: var(--teal);
+}
+.company-page[lang='bn'] h1 {
+  font-size: clamp(50px, 5.8vw, 84px);
+  line-height: 1.35;
+}
+.hero-lead {
+  font-size: 16px;
+  max-width: 460px;
+  color: var(--muted);
+  margin-top: 30px;
+}
+.company-page[lang='bn'] .hero-lead {
+  font-size: 20px;
+}
+.hero-links {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  margin-top: 32px;
+  flex-wrap: wrap;
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  min-height: 54px;
+  padding: 15px 23px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+.button:hover {
+  transform: translateY(-2px);
+}
+.button-dark {
+  background: var(--ink);
+  color: var(--paper);
+}
+.button-dark:hover {
+  background: var(--teal);
+}
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  font-weight: 650;
+  min-height: 44px;
+}
+.company-page[lang='bn'] .button,
+.company-page[lang='bn'] .text-link,
+.company-page[lang='bn'] .header-contact {
+  font-size: 16px;
+}
+.hero-foot {
+  margin-top: 38px;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.fine-line {
+  width: 32px;
+  height: 1px;
+  background: var(--line);
+}
+.signal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  transform: translateY(10px);
+}
+.signal-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 24px 26px;
+  align-items: center;
+}
+.signal-head .eyebrow {
+  font-size: 9px;
+  margin: 0;
+  color: var(--muted);
+}
+.signal-dots {
+  display: flex;
+  gap: 5px;
+}
+.signal-dots i {
+  width: 3px;
+  height: 3px;
+  background: var(--muted);
+  border-radius: 50%;
+}
+.signal-map {
+  position: relative;
+  aspect-ratio: 500 / 425;
+}
+.signal-lines {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  position: absolute;
+  inset: 0;
+}
+.dot-field {
+  color: var(--line);
+  fill: var(--line);
+}
+.orbit {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 0.9;
+}
+.connection {
+  fill: none;
+  stroke: #98aea2;
+  stroke-width: 1.3;
+}
+.signal-trace {
+  stroke: var(--teal);
+  fill: none;
+  stroke-width: 2;
+  stroke-dasharray: 12 480;
+  animation: signal-flow 12s linear infinite;
+}
+.map-ring circle:first-child {
+  fill: var(--paper);
+  stroke: var(--teal);
+  stroke-width: 1.4;
+}
+.map-ring circle:last-child {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.hospital-glyph {
+  fill: none;
+  stroke: var(--teal);
+  stroke-width: 1.5;
+}
+.map-label {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  transform: translateX(-50%);
+}
+.hub {
+  top: 63%;
+  left: 50%;
+  width: 150px;
+  color: var(--teal);
+}
+.point {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  min-width: 108px;
+  min-height: 57px;
+  padding: 12px 10px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 3px 8px rgb(16 30 44 / 3%);
+}
+.point-mark {
+  height: 6px;
+  width: 6px;
+  border: 1px solid var(--teal);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.point-0 {
+  left: 50%;
+  top: 12%;
+}
+.point-1 {
+  left: 19%;
+  top: 31%;
+}
+.point-2 {
+  left: 81%;
+  top: 31%;
+}
+.point-3 {
+  left: 27%;
+  top: 77%;
+}
+.point-4 {
+  left: 73%;
+  top: 77%;
+}
+.signal figcaption {
+  padding: 26px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 9px;
+  color: var(--muted);
+}
+.signal-caption-title {
+  font-size: 15px;
+  color: var(--ink);
+}
+.company-page[lang='bn'] .map-label {
+  font-size: 14px;
+}
+.company-page[lang='bn'] .signal figcaption {
+  font-size: 13px;
+}
+.company-page[lang='bn'] .signal-caption-title {
+  font-size: 20px;
+}
+.principle-strip {
+  display: flex;
+  border-block: 1px solid var(--line);
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 27px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.principle-strip > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.strip-symbol {
+  color: var(--teal);
+  font-size: 25px;
+  font-weight: 400;
+}
+.intro,
+.about {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 50px;
+}
+.section-label {
+  padding-top: 10px;
+  color: var(--teal);
+}
+.body-large {
+  font-size: 19px;
+  color: var(--muted);
+  max-width: 690px;
+  margin-top: 32px;
+}
+.intro-note {
+  margin-top: 25px;
+  font-size: 12px;
+  color: var(--teal);
+}
+.operations {
+  background: var(--navy);
+  color: var(--paper);
+  position: relative;
+  overflow: hidden;
+}
+.operations::before {
+  content: '';
+  position: absolute;
+  height: 620px;
+  width: 620px;
+  border: 1px solid var(--dark-line);
+  border-radius: 50%;
+  top: -390px;
+  right: -150px;
+  pointer-events: none;
+}
+.operations-heading {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 100px;
+  align-items: end;
+  margin-bottom: 52px;
+  position: relative;
+}
+.operations .eyebrow {
+  color: var(--mint);
+  margin-bottom: 24px;
+}
+.operations-heading > p {
+  color: var(--dark-muted);
+  max-width: 430px;
+  font-size: 15px;
+}
+.workflow-explorer {
+  display: grid;
+  grid-template-columns: 0.75fr 1.6fr;
+  gap: 48px;
+  position: relative;
+}
+.workflow-select {
+  padding-top: 4px;
+}
+.workflow-select button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 0;
+  border-bottom: 1px solid var(--dark-line);
+  color: var(--dark-muted);
+  background: transparent;
+  padding: 25px 4px;
+  min-height: 65px;
+  text-align: start;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+.workflow-select button .arrow {
+  opacity: 0.5;
+}
+.workflow-select button[aria-pressed='true'] {
+  color: var(--mint);
+  border-bottom-color: var(--mint);
+}
+.workflow-select button[aria-pressed='true'] .arrow {
+  opacity: 1;
+  transform: rotate(-35deg);
+}
+.workflow-select button:hover {
+  color: var(--paper);
+}
+.workflow-view {
+  background: var(--panel);
+  border: 1px solid var(--dark-line);
+  padding: 34px 36px 0;
+  border-radius: 5px;
+}
+.workflow-description .eyebrow {
+  font-size: 9px;
+  margin-bottom: 18px;
+}
+.workflow-description h3 {
+  font-size: 30px;
+  margin-bottom: 14px;
+}
+.workflow-description p {
+  font-size: 13px;
+  color: var(--dark-muted);
+  max-width: 520px;
+  min-height: 69px;
+}
+.journey {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  margin: 36px 0;
+  gap: 14px;
+}
+.journey-line {
+  position: absolute;
+  top: 24px;
+  inset-inline: 12%;
+  height: 1px;
+  background: var(--dark-line);
+}
+.journey-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  font-size: 10px;
+  position: relative;
+  flex: 1;
+  text-align: center;
+  color: var(--dark-muted);
+}
+.stage-node {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid var(--dark-line);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.stage-node > span {
+  height: 8px;
+  width: 8px;
+  border-radius: 50%;
+  background: var(--mint);
+}
+.journey-stage:last-child .stage-node {
+  border-color: var(--mint);
+  background: var(--mint);
+  color: var(--navy);
+}
+.stage-node svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.workflow-foot {
+  border-top: 1px solid var(--dark-line);
+  display: flex;
+  gap: 16px;
+  padding-block: 18px;
+  color: var(--dark-muted);
+}
+.workflow-foot p {
+  font-size: 11px;
+  line-height: 1.7;
+}
+.small-glyph {
+  font-size: 22px;
+  color: var(--mint);
+}
+.workflow-caption {
+  grid-column: 2;
+  font-size: 10px;
+  color: var(--dark-muted);
+  margin-top: -30px;
+}
+.company-page[lang='bn'] .operations-heading > p,
+.company-page[lang='bn'] .workflow-select button {
+  font-size: 19px;
+}
+.company-page[lang='bn'] .workflow-description p {
+  font-size: 17px;
+  min-height: 90px;
+}
+.company-page[lang='bn'] .workflow-foot p,
+.company-page[lang='bn'] .journey-stage,
+.company-page[lang='bn'] .workflow-caption {
+  font-size: 14px;
+}
+.hospital-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 100px;
+}
+.hospital-heading .eyebrow {
+  color: var(--teal);
+  margin-bottom: 28px;
+}
+.hospital-heading > p:not(.eyebrow) {
+  margin-top: 30px;
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 440px;
+}
+.hospital-heading .text-link {
+  margin-top: 24px;
+}
+.onboarding {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  align-self: center;
+}
+.onboarding li {
+  display: flex;
+  gap: 28px;
+  padding-block: 29px;
+  border-top: 1px solid var(--line);
+}
+.onboarding li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.step-number {
+  color: var(--teal);
+  font-size: 12px;
+  padding-top: 5px;
+}
+.onboarding p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 12px;
+  max-width: 410px;
+}
+.advantages {
+  background: var(--surface);
+  border-block: 1px solid var(--line);
+}
+.advantages-heading {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 50px;
+  align-items: start;
+}
+.advantages-heading .eyebrow {
+  color: var(--teal);
+  padding-top: 10px;
+}
+.advantage-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 52px;
+  margin-top: 60px;
+}
+.advantage-list article {
+  border-top: 1px solid #bccbc0;
+  padding-top: 26px;
+}
+.advantage-icon {
+  display: inline-flex;
+  height: 52px;
+  width: 52px;
+  margin-bottom: 24px;
+}
+.advantage-icon svg {
+  width: 48px;
+  height: 48px;
+  stroke: var(--teal);
+  stroke-width: 1.2;
+  fill: none;
+}
+.advantage-list p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 16px;
+}
+.about-signature {
+  display: inline-block;
+  margin-top: 34px;
+  border-bottom: 1px solid var(--teal);
+  padding-bottom: 8px;
+  color: var(--teal);
+  font-size: 17px;
+}
+.contact-section {
+  background: var(--navy);
+  color: var(--paper);
+}
+.contact-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.contact-top .eyebrow {
+  color: var(--mint);
+}
+.contact-orbit {
+  height: 55px;
+  width: 55px;
+  border: 1px solid var(--dark-line);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 100px;
+  align-items: end;
+}
+.contact-grid h2 {
+  font-size: clamp(40px, 4.7vw, 70px);
+}
+.contact-grid > div > p {
+  margin-top: 25px;
+  color: var(--dark-muted);
+  font-size: 14px;
+  max-width: 450px;
+}
+.button-mint {
+  background: var(--mint);
+  color: var(--navy);
+  margin-top: 30px;
+}
+.button-mint:hover {
+  background: var(--paper);
+}
+.contact-email {
+  border-top: 1px solid var(--dark-line);
+  padding-top: 25px;
+}
+.contact-email > span {
+  color: var(--dark-muted);
+  font-size: 11px;
+}
+.contact-email > a {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: clamp(19px, 2vw, 29px);
+  padding-block: 16px;
+  letter-spacing: -0.03em;
+}
+.company-page[lang='bn'] .contact-email > a {
+  font-family: var(--font-en);
+}
+.contact-email > p {
+  font-size: 11px !important;
+  max-width: 360px !important;
+}
+.site-footer {
+  padding-block: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 24px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.site-footer .brand-logo {
+  width: 85px;
+  margin-bottom: 18px;
+}
+.site-footer > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+.company-page[lang='bn'] .body-large {
+  font-size: 23px;
+}
+.company-page[lang='bn'] .principle-strip,
+.company-page[lang='bn'] .intro-note,
+.company-page[lang='bn'] .onboarding p,
+.company-page[lang='bn'] .advantage-list p,
+.company-page[lang='bn'] .hospital-heading > p:not(.eyebrow),
+.company-page[lang='bn'] .contact-grid > div > p {
+  font-size: 18px;
+}
+.company-page[lang='bn'] .contact-email > p {
+  font-size: 15px !important;
+}
+.company-page[lang='bn'] .site-footer,
+.company-page[lang='bn'] .hero-foot,
+.company-page[lang='bn'] .contact-email > span {
+  font-size: 14px;
+}
+@keyframes signal-flow {
+  to {
+    stroke-dashoffset: -984;
+  }
+}
+@media (min-width: 1600px) {
+  .hero {
+    padding-top: 100px;
+    padding-bottom: 110px;
+  }
+}
+@media (max-width: 1100px) {
+  .desktop-nav {
+    gap: 20px;
+    font-size: 11px;
+  }
+  .header-contact {
+    display: none;
+  }
+  .hero {
+    gap: 38px;
+  }
+  .hero-links {
+    gap: 12px;
+  }
+  .point {
+    min-width: 90px;
+    padding: 10px 6px;
+    font-size: 9px;
+  }
+  .company-page[lang='bn'] .map-label {
+    font-size: 12px;
+  }
+  .operations-heading,
+  .hospital-section,
+  .contact-grid {
+    gap: 50px;
+  }
+  .workflow-explorer {
+    gap: 28px;
+  }
+  .workflow-view {
+    padding-inline: 24px;
+  }
+  .advantage-list {
+    gap: 30px;
+  }
+}
+@media (max-width: 760px) {
+  .mobile-nav:not([hidden]) {
+    display: block;
+  }
+  :root {
+    --gutter: 24px;
+    --section: 72px;
+  }
+  .site-header {
+    height: 90px;
+    gap: 12px;
+  }
+  .brand-logo {
+    width: 85px;
+  }
+  .desktop-nav {
+    display: none;
+  }
+  .header-actions {
+    gap: 12px;
+  }
+  .language-link {
+    padding-inline-end: 16px;
+  }
+  .menu-toggle {
+    display: block;
+  }
+  .hero {
+    grid-template-columns: 1fr;
+    padding-top: 38px;
+    padding-bottom: 48px;
+    gap: 40px;
+  }
+  h1 {
+    font-size: clamp(58px, 13vw, 90px);
+  }
+  .company-page[lang='bn'] h1 {
+    font-size: clamp(47px, 11vw, 72px);
+  }
+  .hero .eyebrow {
+    font-size: 9px;
+    margin-bottom: 24px;
+  }
+  .hero-lead {
+    max-width: 480px;
+    font-size: 15px;
+    margin-top: 24px;
+  }
+  .hero-links {
+    gap: 22px;
+  }
+  .hero-foot {
+    margin-top: 28px;
+  }
+  .signal {
+    transform: none;
+    max-width: 520px;
+    width: 100%;
+    justify-self: center;
+  }
+  .signal-head {
+    padding: 18px;
+  }
+  .point {
+    min-width: 96px;
+  }
+  .signal figcaption {
+    padding: 20px;
+  }
+  .principle-strip {
+    flex-direction: column;
+    gap: 13px;
+    padding-block: 22px;
+  }
+  .principle-strip > div {
+    font-size: 11px;
+    gap: 12px;
+  }
+  .strip-symbol {
+    width: 25px;
+    font-size: 22px;
+  }
+  .intro,
+  .about,
+  .advantages-heading {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+  .body-large {
+    font-size: 17px;
+    margin-top: 24px;
+  }
+  .operations-heading {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin-bottom: 30px;
+  }
+  .operations-heading > p {
+    max-width: none;
+  }
+  .operations::before {
+    right: -490px;
+  }
+  .workflow-explorer {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .workflow-select {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 18px;
+  }
+  .workflow-select button {
+    font-size: 11px;
+    min-height: 68px;
+    padding-block: 14px;
+    gap: 8px;
+  }
+  .workflow-select button .arrow {
+    width: 16px;
+    height: 16px;
+  }
+  .workflow-view {
+    padding: 26px 22px 0;
+  }
+  .workflow-description h3 {
+    font-size: 26px;
+  }
+  .workflow-description p {
+    min-height: 110px;
+  }
+  .journey {
+    gap: 4px;
+  }
+  .journey-stage {
+    font-size: 9px;
+  }
+  .workflow-caption {
+    grid-column: 1;
+    margin-top: -8px;
+  }
+  .company-page[lang='bn'] .workflow-select button {
+    font-size: 16px;
+  }
+  .hospital-section {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .hospital-heading > p:not(.eyebrow) {
+    max-width: none;
+  }
+  .onboarding li {
+    padding-block: 24px;
+    gap: 24px;
+  }
+  .advantage-list {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    margin-top: 36px;
+  }
+  .advantage-list article {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    gap: 12px 20px;
+  }
+  .advantage-icon {
+    width: 42px;
+    height: 42px;
+    margin: 0;
+    grid-row: span 2;
+  }
+  .advantage-icon svg {
+    width: 42px;
+    height: 42px;
+  }
+  .advantage-list p {
+    margin: 0;
+  }
+  .contact-grid {
+    grid-template-columns: 1fr;
+    gap: 44px;
+  }
+  .contact-grid h2 {
+    font-size: 44px;
+  }
+  .contact-grid > div > p {
+    max-width: none;
+  }
+  .contact-top {
+    margin-bottom: 20px;
+  }
+  .contact-orbit {
+    height: 44px;
+    width: 44px;
+  }
+  .contact-email > a {
+    font-size: clamp(19px, 5.8vw, 28px);
+  }
+  .site-footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    padding-block: 32px;
+  }
+  .site-footer > div {
+    grid-column: 1 / -1;
+  }
+  .site-footer > a {
+    justify-self: end;
+  }
+}
+@media (max-width: 360px) {
+  :root {
+    --gutter: 18px;
+  }
+  h1 {
+    font-size: 54px;
+  }
+  .company-page[lang='bn'] h1 {
+    font-size: 44px;
+  }
+  .point {
+    min-width: 83px;
+    font-size: 8px;
+  }
+  .company-page[lang='bn'] .map-label {
+    font-size: 11px;
+  }
+  .company-page[lang='bn'] .journey-stage {
+    font-size: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
