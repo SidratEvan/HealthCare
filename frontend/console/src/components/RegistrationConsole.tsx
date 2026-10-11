@@ -279,6 +279,7 @@ function RegistrationBody(): ReactNode {
     <ConsoleWorkspaceFrame
       session={session}
       workspace={CONSOLE.registrationTitle}
+      rail="navRegistration"
       navigation={[
         {
           id: 'queue',

@@ -60,7 +60,9 @@ async function openImport(page: Page, facility: NewFacility): Promise<void> {
   await page.getByTestId('login-password').fill(PASSWORD);
   await page.getByTestId('login-submit').click();
   await passSecondFactor(page, facility.adminEmail);
-  await page.getByTestId(`open-admin-${facility.hospitalId}`).click();
+  // This new facility has one role; let the role picker finish its automatic
+  // handoff to Admin before opening Settings.
+  await expect(page.getByTestId('admin-dashboard')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('admin-open-settings').click();
   await page.getByTestId('settings-open-import').click();
   await expect(page.getByTestId('hospital-import')).toBeVisible({ timeout: 30_000 });

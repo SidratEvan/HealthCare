@@ -183,10 +183,10 @@ test.describe('what was done to a hospital (FR-ONB-07)', () => {
     const trail = page.getByTestId('platform-trail-list');
     await expect(trail).toBeVisible();
     // How it was brought on: approved by the platform, set up by its own administrator.
-    await expect(trail.locator('[data-change="workspace_approve"]')).toContainText('প্ল্যাটফর্ম');
     // The oldest lines are a tap away, not drawn until asked for.
     await expect(trail.locator('[data-change="workspace_created"]')).toHaveCount(0);
     await page.getByTestId('platform-trail-more').click();
+    await expect(trail.locator('[data-change="workspace_approve"]')).toContainText('প্ল্যাটফর্ম');
     await expect(trail.locator('[data-change="workspace_created"]')).toBeVisible();
     await expect(trail.locator('[data-change="department_added"]')).toContainText('হাসপাতাল');
 

@@ -402,6 +402,7 @@ function ImportScreen(): ReactNode {
       <ConsoleWorkspaceFrame
         session={session}
         workspace={CONSOLE.importTitle}
+        rail="navDashboard"
         navigation={[
           {
             id: 'import',

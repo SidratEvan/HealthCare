@@ -70,6 +70,7 @@ async function openDashboard(browser: Browser): Promise<Page> {
 
 /** The recovered tile, read back into poisha. */
 async function recoveredPoisha(dashboard: Page): Promise<number> {
+  await dashboard.getByRole('button', { name: /Reports/ }).click();
   await dashboard.getByTestId('admin-tab-loss').click();
   const text = await dashboard.getByTestId('admin-recovered-value').innerText();
   const taka = Number(latin(text).replace(/[^\d.]/g, ''));

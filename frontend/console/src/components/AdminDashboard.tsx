@@ -100,6 +100,7 @@ function AdminWorkspace({ legacySettings }: { readonly legacySettings: boolean }
         session={session}
         {...(brandRead === undefined ? {} : { refreshKey: brandRead })}
         workspace={CONSOLE.adminTitle}
+        rail="navDashboard"
         navigation={ENTRIES.map((entry) => ({
           ...entry,
           icon: (

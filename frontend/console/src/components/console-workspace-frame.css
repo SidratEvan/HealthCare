@@ -1,0 +1,67 @@
+.console-workspace-layout {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+.console-workspace-layout > .console-rail {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow-y: auto;
+}
+
+.console-workspace-layout > .cf-shell {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .console-workspace-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .console-workspace-layout > .console-rail {
+    align-items: center;
+    width: 100%;
+    min-height: 0;
+    max-width: 100%;
+    flex-direction: row;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem;
+  }
+
+  .console-workspace-layout > .console-rail > div:first-child {
+    flex: 0 0 auto;
+    max-width: 10rem;
+    padding: 0;
+  }
+
+  .console-workspace-layout > .console-rail > ul {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: row;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+  }
+
+  .console-workspace-layout > .console-rail > ul > li {
+    flex: 0 0 auto;
+  }
+
+  .console-workspace-layout > .console-rail > ul [data-testid^='rail-'] {
+    width: auto;
+    min-height: 2.75rem;
+    white-space: nowrap;
+  }
+
+  .console-workspace-layout > .console-rail > div:last-child {
+    flex: 0 0 auto;
+    flex-direction: row;
+    gap: 0.25rem;
+    margin: 0 0 0 auto;
+  }
+}

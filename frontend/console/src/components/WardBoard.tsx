@@ -203,6 +203,7 @@ function BoardBody(): ReactNode {
       <ConsoleWorkspaceFrame
         session={session}
         workspace={COPY.title}
+        rail="navBeds"
         navigation={[
           {
             id: 'beds',

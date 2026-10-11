@@ -21,7 +21,7 @@
 import { useEffect, type ReactNode } from 'react';
 
 import { tp } from '@platform/i18n';
-import { LocaleDocument } from '@platform/ui';
+import { useLocale } from '@platform/ui';
 
 import { useDeployment } from '@/hooks/useDeployment';
 import { logoUrl } from '@/lib/api';
@@ -31,9 +31,22 @@ const PLATFORM_ICON = '/icon.svg';
 
 export function PortalDocument(): ReactNode {
   const scope = useDeployment()?.scope ?? null;
+  const locale = useLocale();
 
   useEffect(() => {
     const head = globalThis.document.head;
+    const title =
+      scope === null ? tp('appName', locale) : locale === 'bn' ? scope.nameBn : scope.nameEn;
+    const updateDocument = (): void => {
+      globalThis.document.documentElement.lang = locale;
+      if (globalThis.document.title !== title) globalThis.document.title = title;
+    };
+    updateDocument();
+    // Next's metadata reconciler can write the static layout title after this
+    // client component hydrates. Keep the scoped title authoritative when it
+    // does, and follow locale changes through the effect dependencies.
+    const observer = new MutationObserver(updateDocument);
+    observer.observe(head, { childList: true, subtree: true, characterData: true });
 
     const manifest = head.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     if (manifest !== null) {
@@ -52,15 +65,8 @@ export function PortalDocument(): ReactNode {
       icon.href =
         scope?.logoVersion == null ? PLATFORM_ICON : logoUrl(scope.hospitalId, scope.logoVersion);
     }
-  }, [scope]);
+    return () => observer.disconnect();
+  }, [locale, scope]);
 
-  return (
-    <LocaleDocument
-      title={
-        scope === null
-          ? { bn: tp('appName', 'bn'), en: tp('appName', 'en') }
-          : { bn: scope.nameBn, en: scope.nameEn }
-      }
-    />
-  );
+  return null;
 }

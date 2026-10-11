@@ -144,7 +144,7 @@ test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
     await callInTheGuest();
     // The call reaches this screen over the socket. Until it has, the panel is
     // still on serial 1, and a visit signed now would land on that booking.
-    await expect(doctor.getByTestId('patient-panel')).toContainText(GUEST_NAME);
+    await expect(doctor.getByTestId('doctor-patient-identity')).toContainText(GUEST_NAME);
     await expect(doctor.getByTestId('visit-diagnosis')).toHaveValue('');
 
     await doctor.getByTestId('visit-diagnosis').fill(ASSESSMENT.diagnosisBn);
@@ -241,7 +241,7 @@ test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
     const doctor = await context.newPage();
     await enterConsole(doctor, demo.doctorToken, 'doctor', `${CONSOLE}/?session=${demo.sessionId}`);
     await callInTheGuest();
-    await expect(doctor.getByTestId('patient-panel')).toContainText(GUEST_NAME);
+    await expect(doctor.getByTestId('doctor-patient-identity')).toContainText(GUEST_NAME);
     await doctor.getByTestId('visit-diagnosis').fill(ASSESSMENT.diagnosisBn);
     await doctor.getByTestId('visit-tests').getByRole('button').first().click();
     await doctor.getByTestId('sign-and-next').click();
@@ -436,20 +436,34 @@ test.describe('redesigned lab and pharmacy safeguards', () => {
     const order = orders.find((entry) => entry.state === 'processing' && entry.report === null);
     expect(order).toBeDefined();
     const id = order!.id;
-    const keys: string[] = [];
-    await page.route(`**/test-orders/${id}/report`, async (route) => {
-      keys.push(route.request().headers()['idempotency-key'] ?? '');
-      if (keys.length === 1)
-        await route.fulfill({
-          status: 503,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            ok: false,
-            error: { code: 'REPORT_STORAGE_FAILED', message: 'Synthetic rejection' },
-          }),
-        });
-      else await route.continue();
-    });
+    await page.addInitScript((orderId) => {
+      const nativeFetch = globalThis.fetch.bind(globalThis);
+      globalThis.fetch = async (input, init) => {
+        const url = new URL(
+          typeof input === 'string' ? input : input.url,
+          globalThis.location.href,
+        );
+        if (init?.method !== 'POST' || !url.pathname.endsWith(`/test-orders/${orderId}/report`))
+          return await nativeFetch(input, init);
+
+        const attempts = Number(sessionStorage.getItem('lab-report-attempts') ?? '0');
+        sessionStorage.setItem('lab-report-attempts', String(attempts + 1));
+        const keys = JSON.parse(sessionStorage.getItem('lab-report-keys') ?? '[]') as string[];
+        keys.push(new Headers(init.headers).get('idempotency-key') ?? '');
+        sessionStorage.setItem('lab-report-keys', JSON.stringify(keys));
+        if (attempts === 0)
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: { code: 'REPORT_STORAGE_FAILED', message: 'Synthetic rejection' },
+            }),
+            { status: 503, headers: { 'content-type': 'application/json' } },
+          );
+        return await nativeFetch(input, init);
+      };
+    }, id);
+    await page.reload();
+    await expect(page.getByTestId('lab-console')).toBeVisible();
     await page.getByTestId(`lab-upload-${id}`).click();
     await page.getByTestId(`lab-report-file-${id}`).setInputFiles({
       name: 'synthetic-report.pdf',
@@ -464,10 +478,16 @@ test.describe('redesigned lab and pharmacy safeguards', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toContainText('synthetic-report.pdf');
     await page.getByTestId(`lab-report-submit-${id}`).click();
+    await expect
+      .poll(() => page.evaluate(() => sessionStorage.getItem('lab-report-attempts')))
+      .toBe('1');
     await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
     await expect(page.getByRole('dialog')).toContainText('synthetic-report.pdf');
     await page.getByTestId(`lab-report-submit-${id}`).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    const keys = await page.evaluate(
+      () => JSON.parse(sessionStorage.getItem('lab-report-keys') ?? '[]') as string[],
+    );
     expect(keys).toHaveLength(2);
     expect(keys[0]).not.toBe('');
     expect(keys[1]).toBe(keys[0]);

@@ -218,6 +218,7 @@ function ConsoleBody(): ReactNode {
       <ConsoleWorkspaceFrame
         session={session}
         workspace={COPY.title}
+        rail="navEmergency"
         navigation={[
           {
             id: 'emergency',

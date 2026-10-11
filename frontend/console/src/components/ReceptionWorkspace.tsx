@@ -219,6 +219,7 @@ export function ReceptionWorkspace({
     <ConsoleWorkspaceFrame
       session={session}
       workspace={CONSOLE.roleReceptionist}
+      rail="navQueue"
       navigation={navigation}
       actions={
         <>

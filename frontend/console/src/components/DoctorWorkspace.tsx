@@ -185,6 +185,7 @@ export function DoctorWorkspace({
       <ConsoleWorkspaceFrame
         session={session}
         workspace={CONSOLE.doctorConsole}
+        rail="navQueue"
         navigation={[]}
         actions={
           <>

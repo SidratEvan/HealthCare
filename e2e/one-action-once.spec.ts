@@ -94,6 +94,8 @@ test.describe('one action, shown once (SY-08)', () => {
 
     await page.getByRole('button', { name: 'দেরি ঘোষণা' }).click();
 
+    await page.getByTestId('doctor-confirm-delay').click();
+
     // The server has it, and has said so on the socket.
     await expect.poll(async () => (await eventTypes(demo.sessionId)).at(-1)).toBe('DELAY_DECLARED');
     await expect(page.getByText('দেরিতে চলছে · ৩০ মিনিট')).toBeVisible();

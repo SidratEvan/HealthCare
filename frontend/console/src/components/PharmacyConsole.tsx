@@ -167,6 +167,7 @@ function PharmacyBody(): ReactNode {
     <ConsoleWorkspaceFrame
       session={session}
       workspace={CLINICAL.pharmacy}
+      rail="navPharmacy"
       navigation={[
         {
           id: 'pharmacy',
@@ -292,7 +293,7 @@ function PharmacyBody(): ReactNode {
                     trigger={
                       <button
                         type="button"
-                        className="min-h-touch rounded-sm bg-brand-600 px-4 text-on-brand"
+                        className="min-h-touch rounded-sm bg-brand-600 px-4 text-white"
                         disabled={bulkReason !== null}
                         title={bulkReason ?? undefined}
                         data-testid="pharmacy-confirm-all"

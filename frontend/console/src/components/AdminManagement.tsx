@@ -335,11 +335,11 @@ export function AdminManagement({
             ))}
             {!snapshot.hospital.modulesOff.includes('import') ? (
               <a
-                href="/?view=import"
+                href="/?view=imports"
                 data-testid="settings-open-import"
                 onClick={(event) => {
                   event.preventDefault();
-                  navigate(() => globalThis.location.assign('/?view=import'));
+                  navigate(() => globalThis.location.assign('/?view=imports'));
                 }}
               >
                 {t('moduleImport', locale)} →

@@ -16,10 +16,23 @@ export async function reviewWorkspace(page: Page, relativePath: string): Promise
     (
       await (
         window as unknown as {
-          axe: { run: (root: Document) => Promise<{ violations: { id: string }[] }> };
+          axe: {
+            run: (root: Document) => Promise<{
+              violations: {
+                id: string;
+                nodes: { target: string[]; failureSummary?: string | null }[];
+              }[];
+            }>;
+          };
         }
       ).axe.run(document)
-    ).violations.map((item) => item.id),
+    ).violations.map((item) => ({
+      id: item.id,
+      nodes: item.nodes.map((node) => ({
+        target: node.target,
+        failureSummary: node.failureSummary,
+      })),
+    })),
   );
   expect(violations).toEqual([]);
   const path = resolve(relativePath);

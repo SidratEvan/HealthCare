@@ -298,6 +298,7 @@ function LabBody(): ReactNode {
     <ConsoleWorkspaceFrame
       session={session}
       workspace={CLINICAL.lab}
+      rail="navTests"
       navigation={[
         {
           id: 'lab',
@@ -651,7 +652,7 @@ function UploadReview({
       trigger={
         <button
           type="button"
-          className="rounded-sm bg-brand-600 min-h-touch px-3 text-on-brand"
+          className="rounded-sm bg-brand-600 min-h-touch px-3 text-white"
           disabled={reason !== null}
           title={reason ?? undefined}
           data-testid={`lab-upload-${order.id}`}

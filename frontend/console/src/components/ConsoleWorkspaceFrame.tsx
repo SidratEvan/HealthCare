@@ -12,11 +12,14 @@ import {
   ConsoleShell,
   ConsoleTheme,
   consoleNavigationFor,
+  useLocale,
   type ConsoleWorkspaceChoice,
 } from '@platform/ui';
 import '@platform/ui/console.css';
 
+import { ConsoleRail, type ConsoleNavKey } from '@/components/ConsoleRail';
 import { brandKept, loadBrand, logoOf, type WorkspaceBrand } from '@/lib/brand';
+import './console-workspace-frame.css';
 
 import type { DemoSession } from '@/lib/demo';
 import type { ReactNode } from 'react';
@@ -27,6 +30,7 @@ export function ConsoleWorkspaceFrame({
   navigation,
   actions,
   refreshKey,
+  rail,
   children,
 }: {
   readonly session: DemoSession;
@@ -34,6 +38,8 @@ export function ConsoleWorkspaceFrame({
   readonly navigation: readonly ConsoleWorkspaceChoice[];
   readonly actions?: ReactNode;
   readonly refreshKey?: string;
+  /** Cross-workspace navigation for a hospital console. */
+  readonly rail?: ConsoleNavKey;
   readonly children: ReactNode;
 }): ReactNode {
   const { hospitalId, token } = session;
@@ -68,21 +74,25 @@ export function ConsoleWorkspaceFrame({
         };
   const roles = session.roles ?? [session.role];
   const permitted = consoleNavigationFor(navigation, roles, limited);
+  const locale = useLocale();
   return (
     <ConsoleTheme brand={brand?.theme?.colors ?? null}>
-      <ConsoleShell
-        navigation={permitted}
-        header={
-          <ConsoleHeader
-            identity={identity}
-            logo={logoOf(brand)}
-            workspace={workspace}
-            actions={actions}
-          />
-        }
-      >
-        {children}
-      </ConsoleShell>
+      <div className={rail === undefined ? '' : 'console-workspace-layout'}>
+        {rail === undefined ? null : <ConsoleRail current={rail} locale={locale} />}
+        <ConsoleShell
+          navigation={permitted}
+          header={
+            <ConsoleHeader
+              identity={identity}
+              logo={logoOf(brand)}
+              workspace={workspace}
+              actions={actions}
+            />
+          }
+        >
+          {children}
+        </ConsoleShell>
+      </div>
     </ConsoleTheme>
   );
 }
