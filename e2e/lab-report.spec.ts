@@ -23,6 +23,9 @@
  * with the freshness of the claim beside it.
  */
 
+import { mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
 import { expect, test, type Page } from '@playwright/test';
 
 import { DEMO_ASSESSMENTS } from '../database/seeds/data/reference.js';
@@ -178,14 +181,14 @@ test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
       .toBe('processing');
 
     // The upload is a real file through the real input.
-    await bench
-      .getByTestId(`lab-upload-${ordered?.id ?? ''}`)
-      .locator('input[type="file"]')
-      .setInputFiles({
-        name: 'report.pdf',
-        mimeType: 'application/pdf',
-        buffer: Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n', 'latin1'),
-      });
+    await bench.getByTestId(`lab-upload-${ordered?.id ?? ''}`).click();
+    await bench.getByTestId(`lab-report-file-${ordered?.id ?? ''}`).setInputFiles({
+      name: 'report.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n', 'latin1'),
+    });
+
+    await bench.getByTestId(`lab-report-submit-${ordered?.id ?? ''}`).click();
 
     // Uploading *is* delivering: the order ends delivered and the report row
     // carries the stamp, in one act (`FR-LAB-03`).
@@ -322,7 +325,178 @@ test.describe('the pharmacy shelf is what the public is told (FR-PHR-02)', () =>
     // The commonest and most valuable thing done at this counter: nothing
     // changed, and saying so is what keeps the flags standing (`FR-PHR-02`).
     await page.getByTestId('pharmacy-confirm-all').click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: /পুরো তালিকা ঠিক আছে/ })
+      .click();
     await expect(page.getByTestId('pharmacy-console')).toBeVisible();
     await expect(page.getByTestId('pharmacy-failed')).toHaveCount(0);
+  });
+});
+
+interface ShelfRow {
+  medicineId: string;
+  inStock: boolean;
+  updatedAt: string;
+  genericName: string;
+}
+test.describe('redesigned lab and pharmacy safeguards', () => {
+  test('whole-list review confirms hidden source rows with their exact versions', async ({
+    page,
+  }) => {
+    await enterConsole(page, lab.pharmacyToken, 'pharmacy', `${CONSOLE}/?view=pharmacy`);
+    await expect(page.getByTestId('pharmacy-confirm-all')).toBeEnabled();
+    const response = await page.request.get(
+      `http://localhost:4000/api/v1/hospitals/${demo.hospitalId}/pharmacy-stock`,
+      { headers: { Authorization: `Bearer ${lab.pharmacyToken}` } },
+    );
+    const source = ((await response.json()) as { data: { rows: ShelfRow[] } }).data.rows;
+    expect(source.length).toBeGreaterThan(1);
+    await page.getByTestId('pharmacy-search').fill(source[0]!.genericName);
+    expect(await page.locator('.pharmacy-list > li').count()).toBeLessThan(source.length);
+    await page.getByTestId('pharmacy-confirm-all').click();
+    const request = page.waitForRequest(
+      (entry) => entry.method() === 'PUT' && entry.url().endsWith('/pharmacy-stock'),
+    );
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: /পুরো তালিকা ঠিক আছে|The whole list is correct/ })
+      .click();
+    const flags = (await request).postDataJSON() as {
+      flags: { medicineId: string; inStock: boolean; expectedUpdatedAt: string }[];
+    };
+    expect(flags.flags).toHaveLength(source.length);
+    for (const row of source)
+      expect(flags.flags).toContainEqual({
+        medicineId: row.medicineId,
+        inStock: row.inStock,
+        expectedUpdatedAt: row.updatedAt,
+      });
+    await expect(page.getByTestId('pharmacy-confirm-all')).toBeEnabled();
+  });
+
+  test('a stale staff tab reloads instead of overwriting another stock decision', async ({
+    page,
+  }) => {
+    await enterConsole(page, lab.pharmacyToken, 'pharmacy', `${CONSOLE}/?view=pharmacy`);
+    await expect(page.getByTestId('pharmacy-confirm-all')).toBeEnabled();
+    const url = `http://localhost:4000/api/v1/hospitals/${demo.hospitalId}/pharmacy-stock`;
+    const response = await page.request.get(url, {
+      headers: { Authorization: `Bearer ${lab.pharmacyToken}` },
+    });
+    const source = ((await response.json()) as { data: { rows: ShelfRow[] } }).data.rows;
+    const row = source[0]!;
+    const key = crypto.randomUUID();
+    const changed = await page.request.put(url, {
+      headers: { Authorization: `Bearer ${lab.pharmacyToken}`, 'Idempotency-Key': key },
+      data: {
+        flags: [
+          { medicineId: row.medicineId, inStock: !row.inStock, expectedUpdatedAt: row.updatedAt },
+        ],
+        idempotencyKey: key,
+      },
+    });
+    expect(changed.status()).toBe(200);
+    const refusal = page.waitForResponse(
+      (entry) => entry.request().method() === 'PUT' && entry.url() === url,
+    );
+    await page.getByTestId(`stock-${row.inStock ? 'in' : 'out'}-${row.medicineId}`).click();
+    expect((await refusal).status()).toBe(409);
+    await expect(page.getByTestId(`stock-${row.medicineId}`)).toHaveAttribute(
+      'data-answer',
+      row.inStock ? 'out_of_stock' : 'in_stock',
+    );
+    const after = await page.request.get(url, {
+      headers: { Authorization: `Bearer ${lab.pharmacyToken}` },
+    });
+    expect(
+      ((await after.json()) as { data: { rows: ShelfRow[] } }).data.rows.find(
+        (entry) => entry.medicineId === row.medicineId,
+      )?.inStock,
+    ).toBe(!row.inStock);
+  });
+
+  test('upload review keeps the selected file and upload key through Help and rejection', async ({
+    page,
+  }) => {
+    await enterConsole(page, lab.labToken, 'lab', `${CONSOLE}/?view=lab`);
+    await expect(page.getByTestId('lab-console')).toBeVisible();
+    const response = await page.request.get(
+      `http://localhost:4000/api/v1/hospitals/${demo.hospitalId}/test-orders?state=open&days=30`,
+      { headers: { Authorization: `Bearer ${lab.labToken}` } },
+    );
+    const orders = (
+      (await response.json()) as {
+        data: { orders: { id: string; state: string; report: unknown }[] };
+      }
+    ).data.orders;
+    const order = orders.find((entry) => entry.state === 'processing' && entry.report === null);
+    expect(order).toBeDefined();
+    const id = order!.id;
+    const keys: string[] = [];
+    await page.route(`**/test-orders/${id}/report`, async (route) => {
+      keys.push(route.request().headers()['idempotency-key'] ?? '');
+      if (keys.length === 1)
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: false,
+            error: { code: 'REPORT_STORAGE_FAILED', message: 'Synthetic rejection' },
+          }),
+        });
+      else await route.continue();
+    });
+    await page.getByTestId(`lab-upload-${id}`).click();
+    await page.getByTestId(`lab-report-file-${id}`).setInputFiles({
+      name: 'synthetic-report.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n%%EOF\n'),
+    });
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: /সাহায্য|Help/ })
+      .click();
+    await expect(page.locator('[data-help-topic="lab-upload"]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toContainText('synthetic-report.pdf');
+    await page.getByTestId(`lab-report-submit-${id}`).click();
+    await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('dialog')).toContainText('synthetic-report.pdf');
+    await page.getByTestId(`lab-report-submit-${id}`).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).not.toBe('');
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  test('representative bilingual tablet workspaces remain usable offline', async ({
+    page,
+    context,
+  }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    const directory = resolve('docs/design/console-lab-pharmacy/screenshots');
+    await mkdir(directory, { recursive: true });
+    for (const [role, token] of [
+      ['lab', lab.labToken],
+      ['pharmacy', lab.pharmacyToken],
+    ] as const) {
+      await enterConsole(page, token, role, `${CONSOLE}/?view=${role}`);
+      await expect(page.getByTestId(`${role}-console`)).toBeVisible();
+      await expect(page.getByTestId(`${role}-loading`)).toHaveCount(0);
+      await expect(page.getByTestId(`${role}-failed`)).toHaveCount(0);
+      await page.getByTestId('language-bn').click();
+      await page.screenshot({ path: resolve(directory, `${role}-bn-tablet.png`), fullPage: true });
+      await page.getByTestId('language-en').click();
+      await page.screenshot({ path: resolve(directory, `${role}-en-tablet.png`), fullPage: true });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= globalThis.innerWidth),
+      ).toBe(true);
+      await context.setOffline(true);
+      if (role === 'pharmacy')
+        await expect(page.getByTestId('pharmacy-confirm-all')).toBeDisabled();
+      else await expect(page.locator('[data-testid^="lab-collect-"]').first()).toBeDisabled();
+      await context.setOffline(false);
+    }
   });
 });
