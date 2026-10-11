@@ -2,19 +2,11 @@
  * The pharmacy: what is on the shelf, and what a family searching is told
  * (BACKEND.md §7.6; `FR-PHR-02`).
  *
- * ## `FR-PHR-01` is not implemented in this version, and this is why
+ * ## V1 scope
  *
- * "Dispense against a prescription QR; partial dispensing supported" is
- * downstream of `FR-DOC-04`, which the owner removed from this version on
- * 2026-09-19 (`PRD.md` §9). No code path and no seed creates a `prescriptions`
- * row, so `POST /prescriptions/:id/dispense` would guard a table that is
- * always empty and `S-B-09`'s scanner would scan nothing. Building it would be
- * a screen demonstrating a flow the demo cannot reach.
- *
- * So it follows prescribing out of scope, in the same way and for the same
- * reason — and `FR-PHR-02`, which needs no prescription, is built in full.
- * The requirement stays in `PRD.md`; it is simply not this version's, and
- * `docs/STATUS.md` records it under the open decisions.
+ * Prescribing is implemented. Prescription QR scanning and dispensing
+ * (`FR-PHR-01`) remain outside the current availability workflow; no
+ * inventory, catalogue administration, billing or dispensing is added here.
  *
  * ## What is built
  *
@@ -84,7 +76,11 @@ export async function shelf(
 export async function setFlags(
   input: {
     readonly hospitalId: string;
-    readonly flags: readonly { medicineId: string; inStock: boolean }[];
+    readonly flags: readonly {
+      medicineId: string;
+      inStock: boolean;
+      expectedUpdatedAt: string | null;
+    }[];
   },
   actor: LabActor,
 ): Promise<{ rows: StockRow[]; written: number; serverTs: string }> {

@@ -15,7 +15,7 @@ import { sql } from 'kysely';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { time } from '@platform/domain';
+import { time, MAX_IMPORT_BYTES } from '@platform/domain';
 
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
@@ -552,4 +552,344 @@ describe('set A, then B, then C — and undoing them (FR-IMP-01…07)', () => {
       .set('Authorization', bearer(token));
     expect((history.body.data.batches as unknown[]).length).toBeGreaterThanOrEqual(6);
   });
+});
+
+describe('persisted undo protection (FR-IMP-07)', () => {
+  async function department(ref: string, name: string, code = ref): Promise<string> {
+    const checked = await upload(
+      'structure',
+      [
+        STRUCTURE_HEADER,
+        structureRow({ type: 'department', ref, code, name_bn: name, name_en: name }),
+      ].join('\n'),
+    );
+    expect(checked.status).toBe(200);
+    const id = checked.body.data.id as string;
+    expect((await act(id, 'commit')).status).toBe(200);
+    return id;
+  }
+
+  it('restores an unchanged update, retaining the original identifier', async () => {
+    await department('SAFE', 'Before (Demo)');
+    const updated = await department('SAFE', 'After (Demo)');
+    expect((await act(updated, 'undo')).status).toBe(200);
+    const row = await sql<{
+      name_en: string;
+      deleted_at: string | null;
+    }>`SELECT d.name_en, d.deleted_at FROM departments d JOIN external_refs r ON r.entity_id=d.id WHERE r.hospital_id=${hospitalId} AND r.external_ref='SAFE'`.execute(
+      db,
+    );
+    expect(row.rows).toEqual([{ name_en: 'Before (Demo)', deleted_at: null }]);
+  });
+
+  it('adopts an existing code as an update and never deletes the original department', async () => {
+    await department('ADOPT-ORIGINAL', 'Original (Demo)', 'ADOPT');
+    const adopted = await department('ADOPT-ALIAS', 'Renamed (Demo)', 'ADOPT');
+    const undo = await act(adopted, 'undo');
+    expect(undo.status).toBe(200);
+    const rows = await sql<{
+      name_en: string;
+      deleted_at: string | null;
+    }>`SELECT name_en, deleted_at FROM departments WHERE hospital_id=${hospitalId} AND code='ADOPT'`.execute(
+      db,
+    );
+    expect(rows.rows).toEqual([{ name_en: 'Original (Demo)', deleted_at: null }]);
+  });
+
+  it('blocks the entire batch after a later edit, preserving its other row', async () => {
+    const checked = await upload(
+      'structure',
+      [
+        STRUCTURE_HEADER,
+        ...['LATER-A', 'LATER-B'].map((ref) =>
+          structureRow({ type: 'department', ref, code: ref, name_bn: 'Demo', name_en: 'Demo' }),
+        ),
+      ].join('\n'),
+    );
+    const batch = checked.body.data.id as string;
+    expect((await act(batch, 'commit')).status).toBe(200);
+    await sql`UPDATE departments SET name_en='Colleague (Demo)' WHERE hospital_id=${hospitalId} AND code='LATER-A'`.execute(
+      db,
+    );
+    const undo = await act(batch, 'undo');
+    expect(undo.status).toBe(409);
+    expect(undo.body.error.code).toBe('IMPORT_UNDO_BLOCKED');
+    const rows = await sql<{
+      name_en: string;
+      deleted_at: string | null;
+    }>`SELECT name_en, deleted_at FROM departments WHERE hospital_id=${hospitalId} AND code IN ('LATER-A','LATER-B') ORDER BY code`.execute(
+      db,
+    );
+    expect(rows.rows).toEqual([
+      { name_en: 'Colleague (Demo)', deleted_at: null },
+      { name_en: 'Demo', deleted_at: null },
+    ]);
+    expect(
+      (
+        await request(app)
+          .get(`${BASE}/hospital/imports/${batch}`)
+          .set('Authorization', bearer(token))
+      ).body.data.state,
+    ).toBe('committed');
+  });
+
+  it('refuses legacy batches without after-state evidence', async () => {
+    const batch = await department('LEGACY', 'Legacy (Demo)');
+    await sql`UPDATE import_rows SET previous=previous-'__importUndo' WHERE batch_id=${batch}`.execute(
+      db,
+    );
+    expect((await act(batch, 'undo')).status).toBe(409);
+    expect(
+      await count(
+        sql<{
+          n: number;
+        }>`SELECT count(*)::int AS n FROM departments WHERE hospital_id=${hospitalId} AND code='LEGACY' AND deleted_at IS NULL`,
+      ),
+    ).toBe(1);
+  });
+
+  it('restores a replacement schedule and its existing external reference together', async () => {
+    const scheduleFile = (capacity: string) =>
+      [
+        STRUCTURE_HEADER,
+        structureRow({
+          type: 'schedule',
+          ref: 'SAFE-SCHED',
+          doctor_ref: 'DR-1',
+          weekday: String(tomorrowWeekday),
+          start: '09:00',
+          end: '11:00',
+          serials: capacity,
+        }),
+      ].join('\n');
+    const first = await upload('structure', scheduleFile('20'));
+    expect((await act(first.body.data.id as string, 'commit')).status).toBe(200);
+    const original = (
+      await sql<{
+        entity_id: string;
+      }>`SELECT entity_id FROM external_refs WHERE hospital_id=${hospitalId} AND external_ref='SAFE-SCHED'`.execute(
+        db,
+      )
+    ).rows[0]?.entity_id;
+    const second = await upload('structure', scheduleFile('21'));
+    const batch = second.body.data.id as string;
+    expect((await act(batch, 'commit')).status).toBe(200);
+    expect((await act(batch, 'undo')).status).toBe(200);
+    const restored = await sql<{
+      entity_id: string;
+      deleted_at: string | null;
+      capacity: number;
+    }>`SELECT r.entity_id,t.deleted_at,t.capacity FROM external_refs r JOIN session_templates t ON t.id=r.entity_id WHERE r.hospital_id=${hospitalId} AND r.external_ref='SAFE-SCHED'`.execute(
+      db,
+    );
+    expect(restored.rows).toEqual([{ entity_id: original, deleted_at: null, capacity: 20 }]);
+  });
+
+  it('blocks a schedule undo after a chamber starts, even with no bookings', async () => {
+    const checked = await upload(
+      'structure',
+      [
+        STRUCTURE_HEADER,
+        structureRow({
+          type: 'schedule',
+          ref: 'USED-SCHED',
+          doctor_ref: 'DR-1',
+          weekday: String(tomorrowWeekday),
+          start: '11:00',
+          end: '12:00',
+          serials: '20',
+        }),
+      ].join('\n'),
+    );
+    const batch = checked.body.data.id as string;
+    expect((await act(batch, 'commit')).status).toBe(200);
+    await sql`UPDATE sessions SET status='running', actual_start=now() WHERE template_id IN (SELECT entity_id FROM external_refs WHERE hospital_id=${hospitalId} AND external_ref='USED-SCHED')`.execute(
+      db,
+    );
+    expect((await act(batch, 'undo')).status).toBe(409);
+    expect(
+      (
+        await request(app)
+          .get(`${BASE}/hospital/imports/${batch}`)
+          .set('Authorization', bearer(token))
+      ).body.data.state,
+    ).toBe('committed');
+  });
+
+  it('preserves imported staff permissions by refusing incomplete role restoration', async () => {
+    const checked = await upload(
+      'structure',
+      [
+        STRUCTURE_HEADER,
+        structureRow({
+          type: 'staff',
+          ref: 'ST-1',
+          name_bn: 'Updated Demo',
+          role: 'ward',
+          email: `imported-${suffix}@import.demo.invalid`,
+        }),
+      ].join('\n'),
+    );
+    const batch = checked.body.data.id as string;
+    expect((await act(batch, 'commit')).status).toBe(200);
+    expect((await act(batch, 'undo')).status).toBe(409);
+    const roles = await sql<{
+      role: string;
+    }>`SELECT r.role::text AS role FROM staff_roles r JOIN external_refs e ON e.entity_id=r.staff_user_id WHERE e.hospital_id=${hospitalId} AND e.external_ref='ST-1' AND r.deleted_at IS NULL`.execute(
+      db,
+    );
+    expect(roles.rows).toEqual([{ role: 'ward' }]);
+  });
+
+  it('recognises an already-linked doctor as an update and preserves that membership', async () => {
+    const checked = await upload(
+      'structure',
+      [
+        STRUCTURE_HEADER,
+        structureRow({
+          type: 'doctor',
+          ref: 'DR-ALIAS',
+          name_bn: 'Demo',
+          name_en: 'Demo',
+          bmdc_number: bmdc,
+          department_ref: 'D-1',
+          fee_taka: '950',
+          room: '12',
+        }),
+      ].join('\n'),
+    );
+    const batch = checked.body.data.id as string;
+    expect((await act(batch, 'commit')).status).toBe(200);
+    expect(
+      (
+        await sql<{
+          action: string;
+        }>`SELECT action FROM import_rows WHERE batch_id=${batch}`.execute(db)
+      ).rows,
+    ).toEqual([{ action: 'update' }]);
+    expect((await act(batch, 'undo')).status).toBe(409);
+    expect(
+      await count(
+        sql<{
+          n: number;
+        }>`SELECT count(*)::int AS n FROM doctor_hospitals WHERE hospital_id=${hospitalId} AND deleted_at IS NULL`,
+      ),
+    ).toBe(1);
+  });
+
+  it('serializes a concurrent alias import and Undo without a reference to a deleted membership', async () => {
+    const doctor = (ref: string) =>
+      structureRow({
+        type: 'doctor',
+        ref,
+        name_bn: 'Demo',
+        name_en: 'Demo',
+        bmdc_number: bmdc,
+        department_ref: 'RACE-D',
+        fee_taka: '950',
+        room: '12',
+      });
+    const original = await upload(
+      'structure',
+      [
+        STRUCTURE_HEADER,
+        structureRow({
+          type: 'department',
+          ref: 'RACE-D',
+          code: 'RACE',
+          name_bn: 'Demo',
+          name_en: 'Demo',
+        }),
+        doctor('RACE-DR'),
+      ].join('\n'),
+    );
+    const first = original.body.data.id as string;
+    expect((await act(first, 'commit')).status).toBe(200);
+    const alias = await upload('structure', [STRUCTURE_HEADER, doctor('RACE-ALIAS')].join('\n'));
+    const second = alias.body.data.id as string;
+    const results = await asOwner(async (owner) => {
+      await sql`SELECT pg_advisory_lock(hashtextextended(${`import:${hospitalId}`}, 0))`.execute(
+        owner,
+      );
+      const work = Promise.all([act(second, 'commit'), act(first, 'undo')]);
+      try {
+        await expect
+          .poll(
+            async () =>
+              (
+                await sql<{
+                  n: number;
+                }>`SELECT count(*)::int AS n FROM pg_stat_activity WHERE wait_event='advisory' AND query LIKE '%pg_advisory_xact_lock%'`.execute(
+                  owner,
+                )
+              ).rows[0]?.n ?? 0,
+            { timeout: 5000 },
+          )
+          .toBeGreaterThanOrEqual(2);
+      } finally {
+        await sql`SELECT pg_advisory_unlock(hashtextextended(${`import:${hospitalId}`}, 0))`.execute(
+          owner,
+        );
+      }
+      return await work;
+    });
+    expect(results.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(
+      await count(
+        sql<{
+          n: number;
+        }>`SELECT count(*)::int AS n FROM external_refs r JOIN doctor_hospitals d ON d.id=r.entity_id WHERE r.hospital_id=${hospitalId} AND r.kind='doctor' AND d.deleted_at IS NOT NULL`,
+      ),
+    ).toBe(0);
+  });
+});
+
+describe('all CSV doors enforce actual UTF-8, after authentication (FR-IMP-09/22)', () => {
+  it.each(['', '/analyse', '/mapped'])(
+    'accepts the larger envelope at %s without the global 256KiB rejection',
+    async (path) => {
+      const csv = 'ref,full_name,sex\n' + ' '.repeat(270 * 1024);
+      const response = await request(app)
+        .post(`${BASE}/hospital/imports${path}`)
+        .set('Authorization', bearer(token))
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          set: 'patients',
+          csv,
+          ...(path === '/analyse' ? {} : { fileName: 'envelope.csv' }),
+          ...(path === '/mapped'
+            ? { mapping: { rowType: null, fields: { ref: 0, full_name: 1, sex: 2 } } }
+            : {}),
+        });
+      expect(response.status).not.toBe(413);
+      expect(response.status).toBeLessThan(500);
+      expect([200, 201, 422]).toContain(response.status);
+    },
+  );
+
+  it.each(['', '/analyse', '/mapped'])('rejects oversized multibyte CSV at %s', async (path) => {
+    const csv = 'ক'.repeat(Math.floor(MAX_IMPORT_BYTES / 3) + 1);
+    const response = await request(app)
+      .post(`${BASE}/hospital/imports${path}`)
+      .set('Authorization', bearer(token))
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        set: 'patients',
+        csv,
+        ...(path === '/analyse' ? {} : { fileName: 'too-big.csv' }),
+        ...(path === '/mapped' ? { mapping: { rowType: null, fields: {} } } : {}),
+      });
+    expect(response.status).toBe(400);
+  });
+
+  it.each(['', '/analyse', '/mapped'])(
+    'rejects an unauthenticated invalid large body before parsing at %s',
+    async (path) => {
+      const response = await request(app)
+        .post(`${BASE}/hospital/imports${path}`)
+        .set('Content-Type', 'application/json')
+        .send('x'.repeat(270 * 1024));
+      expect(response.status).toBe(401);
+    },
+  );
 });

@@ -69,6 +69,7 @@ const BODY_LIMIT = '256kb';
 const OWN_BODY_LIMIT: readonly RegExp[] = [
   /^\/api\/v1\/test-orders\/[^/]+\/report$/,
   /^\/api\/v1\/hospital\/imports$/,
+  /^\/api\/v1\/hospital\/imports\/(?:analyse|mapped)$/,
   /^\/api\/v1\/hospital\/logo$/,
   // A patient's own old paper, up to 8 MB (`FR-PAT-62`, plan R3; `clinical.routes.ts`).
   /^\/api\/v1\/me\/documents$/,
