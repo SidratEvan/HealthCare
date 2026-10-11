@@ -360,7 +360,13 @@ export const deskPatchBody = z
     nameEn: name.optional(),
     doctorIds: z.array(z.string().uuid()).max(200).optional(),
     staffIds: z.array(z.string().uuid()).max(200).optional(),
+    /** FR-REC-32, DB-P1: refuse replacing a desk edited since it was read.
+     * Optional for existing callers; the management workspace always supplies it. */
+    expected: deskBody.optional(),
   })
-  .refine((body) => Object.keys(body).length > 0, 'change at least one field');
+  .refine(
+    (body) => Object.keys(body).some((key) => key !== 'expected'),
+    'change at least one field',
+  );
 
 export type DeskPatchBody = z.infer<typeof deskPatchBody>;

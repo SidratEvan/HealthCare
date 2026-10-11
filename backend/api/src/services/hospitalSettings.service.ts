@@ -791,6 +791,21 @@ export async function updateDesk(actor: Actor, deskId: string, body: DeskPatchBo
   if (body.doctorIds !== undefined) await assertOwnDoctors(actor.hospitalId, body.doctorIds);
   if (body.staffIds !== undefined) await assertOwnReceptionists(actor.hospitalId, body.staffIds);
   await change(actor, { table: 'reception_desks', change: 'desk_changed' }, async (trx) => {
+    // Compare under the same row lock as every PATCH, not a frontend-only read
+    // check (FR-REC-32, DB-P1). Multiple desks still have separate receipts.
+    const current = await repo.deskForUpdate(trx, actor.hospitalId, deskId);
+    if (current === null) throw notFound('desk');
+    const expected = body.expected;
+    const membersEqual = (a: readonly string[], b: readonly string[]): boolean =>
+      [...new Set(a)].sort().join(',') === [...new Set(b)].sort().join(',');
+    if (
+      expected !== undefined &&
+      (current.nameBn !== expected.nameBn ||
+        current.nameEn !== expected.nameEn ||
+        !membersEqual(current.doctorIds, expected.doctorIds) ||
+        !membersEqual(current.staffIds, expected.staffIds))
+    )
+      throw notAllowed('desk_changed');
     // Renaming nothing still finds the desk, so an unknown one is a 404.
     const found = await repo.renameDesk(trx, actor.hospitalId, deskId, body);
     if (!found) throw notFound('desk');
