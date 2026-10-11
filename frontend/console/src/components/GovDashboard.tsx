@@ -35,11 +35,19 @@
  * Empty is per section and says what would fill it.
  */
 
-import { useCallback, useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import {
   bedKindName,
+  CONSOLE,
   BED_KIND_NAMES,
   districtName,
   divisionName,
@@ -55,9 +63,18 @@ import {
   formatAge,
   numeralsFor,
 } from '@platform/i18n';
-import { Button, Card, Chip, FreshnessLine, useLocale } from '@platform/ui';
+import {
+  Button,
+  Card,
+  Chip,
+  ConsoleHelp,
+  ConsolePageHeader,
+  FreshnessLine,
+  useLocale,
+} from '@platform/ui';
 
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
+import { ConsoleWorkspaceFrame } from '@/components/ConsoleWorkspaceFrame';
+import './reporting-workspace.css';
 import { DemoBanner } from '@/components/DemoBanner';
 import { failureOf } from '@/lib/admin';
 import { readDemoSession } from '@/lib/demo';
@@ -124,14 +141,17 @@ export function GovDashboard(): ReactNode {
   const [now, setNow] = useState(() => new Date());
 
   const token = readDemoSession()?.token ?? '';
+  const sequence = useRef(0);
 
   const load = useCallback(async () => {
+    const request = ++sequence.current;
     const [capacity, er, signals, benchmarks] = await Promise.allSettled([
       govApi.capacity(token),
       govApi.erLoad(token),
       govApi.signals(token),
       govApi.benchmarks(token),
     ]);
+    if (request !== sequence.current) return;
 
     // A section that failed keeps what it last had: an aggregate that is ten
     // minutes old and says so beats an empty tab.
@@ -157,6 +177,7 @@ export function GovDashboard(): ReactNode {
     }, POLL_MS);
     return () => {
       clearInterval(timer);
+      ++sequence.current;
     };
   }, [load]);
 
@@ -213,6 +234,16 @@ export function GovDashboard(): ReactNode {
       ) : null}
 
       <Tabs selected={tab} onSelect={setTab} />
+
+      {failures[tab] !== null && data[tab] !== null ? (
+        <div role="alert" className="reporting-read-warning" data-testid="gov-refresh-failed">
+          <p>
+            {t(failures[tab] === 'offline' ? 'govOfflineStale' : 'govLoadFailed', locale)}{' '}
+            {t('staleWarning', locale)}
+          </p>
+          {retry}
+        </div>
+      ) : null}
 
       <div role="tabpanel" id={`gov-panel-${tab}`} aria-labelledby={`gov-tab-${tab}`}>
         <SectionOrFailure
@@ -330,6 +361,7 @@ function CapacitySection({
   const locale = useLocale();
   const { num, freeOfTotal, bedKind } = formattersFor(locale);
   const totals = data.totals;
+  const [focused, setFocused] = useState('');
 
   return (
     <Section testId="gov-section-capacity" asOf={totals.bedsAsOf} now={now}>
@@ -399,15 +431,32 @@ function CapacitySection({
       ) : null}
 
       <h2 className="text-title-sm">{t('govByDistrict', locale)}</h2>
+      <label className="reporting-filter">
+        {t('govDistrict', locale)}
+        <select
+          value={focused}
+          onChange={(event) => setFocused(event.target.value)}
+          data-testid="gov-district-filter"
+        >
+          <option value="">{t('govNational', locale)}</option>
+          {data.districts.map((district) => (
+            <option key={district.district} value={district.district}>
+              {districtName(district.district, locale)}
+            </option>
+          ))}
+        </select>
+      </label>
       {data.districts.length === 0 ? (
         <Empty />
       ) : (
         <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3" data-testid="gov-districts">
-          {data.districts.map((district) => (
-            <li key={`${district.division}/${district.district}`}>
-              <DistrictTile district={district} now={now} />
-            </li>
-          ))}
+          {data.districts
+            .filter((district) => focused === '' || district.district === focused)
+            .map((district) => (
+              <li key={`${district.division}/${district.district}`}>
+                <DistrictTile district={district} now={now} />
+              </li>
+            ))}
         </ul>
       )}
     </Section>
@@ -475,6 +524,7 @@ const HEAT_CLASS: Readonly<Record<0 | 1 | 2 | 3 | 4, string>> = {
 
 function ErSection({ data, now }: { readonly data: ErLoad; readonly now: Date }): ReactNode {
   const locale = useLocale();
+  const [selectedCell, setSelectedCell] = useState<{ district: string; hour: string } | null>(null);
   const { num } = formattersFor(locale);
   const numerals = numeralsFor(locale);
   const asOf = data.districts.reduce<string | null>(
@@ -518,7 +568,9 @@ function ErSection({ data, now }: { readonly data: ErLoad; readonly now: Date })
                     >
                       {/* Every third hour is labelled: twenty-four clock times
                           in a row are unreadable at this size. */}
-                      {index % 3 === 0 ? formatClock(hour, numerals) : ''}
+                      <span className={index % 3 === 0 ? undefined : 'sr-only'}>
+                        {formatClock(hour, numerals)}
+                      </span>
                     </th>
                   ))}
                 </tr>
@@ -547,7 +599,23 @@ function ErSection({ data, now }: { readonly data: ErLoad; readonly now: Date })
                             red: num(cell.red),
                           })}
                         >
-                          {cell.cases > 0 ? num(cell.cases) : ''}
+                          <button
+                            type="button"
+                            className="reporting-heat-cell"
+                            aria-label={format('govErCell', locale, {
+                              district: districtName(district.district, locale),
+                              hour: formatClock(hour, numerals),
+                              cases: num(cell.cases),
+                              red: num(cell.red),
+                            })}
+                            aria-pressed={
+                              selectedCell?.district === district.district &&
+                              selectedCell.hour === hour
+                            }
+                            onClick={() => setSelectedCell({ district: district.district, hour })}
+                          >
+                            {cell.cases > 0 ? num(cell.cases) : num(0)}
+                          </button>
                         </td>
                       );
                     })}
@@ -556,6 +624,23 @@ function ErSection({ data, now }: { readonly data: ErLoad; readonly now: Date })
               </tbody>
             </table>
           </div>
+          {selectedCell === null ? null : (
+            <p role="status" data-testid="gov-hour-detail" className="reporting-hour-detail">
+              {(() => {
+                const cell = data.districts.find(
+                  (district) => district.district === selectedCell.district,
+                )?.hourly[data.hours.indexOf(selectedCell.hour)];
+                return cell === undefined
+                  ? t('adminNothingYet', locale)
+                  : format('govErCell', locale, {
+                      district: districtName(selectedCell.district, locale),
+                      hour: formatClock(selectedCell.hour, numerals),
+                      cases: num(cell.cases),
+                      red: num(cell.red),
+                    });
+              })()}
+            </p>
+          )}
         </Card>
       )}
     </Section>
@@ -840,37 +925,53 @@ function formattersFor(locale: Locale) {
 
 function Shell({ children }: { readonly children: ReactNode }): ReactNode {
   const locale = useLocale();
-  const staffName = readDemoSession()?.staffName ?? null;
+  const session = readDemoSession();
+  if (session === null) return null;
 
   return (
-    <div className="min-h-screen">
-      {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
-      <DemoBanner className="print:hidden" />
+    <div className="reporting-workspace national-workspace">
+      <ConsoleWorkspaceFrame
+        session={session}
+        workspace={CONSOLE.govTitle}
+        navigation={[
+          {
+            id: 'national',
+            onSelect: () => undefined,
+            label: CONSOLE.govWorkspaceLabel,
+            current: true,
+            roles: ['gov_viewer'],
+            enabled: true,
+          },
+        ]}
+        actions={
+          <ConsoleHelp
+            topic={{
+              id: 'national',
+              title: CONSOLE.govTitle,
+              steps: [
+                CONSOLE.govAggregateOnly,
+                CONSOLE.govUnrecordedWhy,
+                CONSOLE.govErLegend,
+                CONSOLE.govSignalsSource,
+              ],
+            }}
+          />
+        }
+      >
+        {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
+        <DemoBanner className="print:hidden" />
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-5 p-6" data-testid="gov-dashboard">
-        <header className="flex flex-wrap items-baseline justify-between gap-3">
-          <div>
-            <h1 className="text-title-lg">{t('govTitle', locale)}</h1>
-            {staffName === null ? null : <p className="text-body-sm text-ink-muted">{staffName}</p>}
-          </div>
-          <div className="flex items-center gap-3 print:hidden">
-            <ConsoleLanguageSwitch className="" />
-            <a
-              href="/"
-              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
-            >
-              {t('changeConsole', locale)}
-            </a>
-          </div>
-        </header>
+        <div className="reporting-content" data-testid="gov-dashboard">
+          <ConsolePageHeader title={CONSOLE.govTitle} />
 
-        {/* FR-GOV-06, said where it is true: nothing below names anybody. */}
-        <p className="text-body-sm text-ink-secondary" data-testid="gov-aggregate-only">
-          {t('govAggregateOnly', locale)}
-        </p>
+          {/* FR-GOV-06, said where it is true: nothing below names anybody. */}
+          <p className="text-body-sm text-ink-secondary" data-testid="gov-aggregate-only">
+            {t('govAggregateOnly', locale)}
+          </p>
 
-        {children}
-      </main>
+          {children}
+        </div>
+      </ConsoleWorkspaceFrame>
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
   randomTag,
   type WardFixture,
 } from './support/ward.js';
+import { reviewWorkspace } from './support/workspaceReview.js';
 
 const CONSOLE = 'http://localhost:3100';
 const PATIENT = 'http://localhost:3000';
@@ -71,6 +72,7 @@ async function admitAtDesk(page: Page, label: string, name: string): Promise<voi
   await page.getByTestId('admit-age').fill('61');
   await page.getByTestId('admit-sex-male').click();
   await page.getByTestId('admit-confirm').click();
+  await page.getByTestId('admit-submit-review').click();
 }
 
 async function publishedGeneralFree(page: Page): Promise<number> {
@@ -137,6 +139,85 @@ test.describe('the mirror matches what the public is shown (FR-BED-06)', () => {
 });
 
 test.describe('S-B-06 the bed controls (APP_FLOW.md B3)', () => {
+  test('bilingual tablet board and Help retain the chosen filter', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await openWardBoard(page);
+    await page.getByTestId('ward-filter-free').click();
+    for (const locale of ['bn', 'en']) {
+      await page.getByTestId(`language-${locale}`).click();
+      await reviewWorkspace(page, `docs/design/console-ward-emergency/ward-${locale}-tablet.png`);
+      await page.locator('.cf-help-button').click();
+      await expect(page.locator('[data-help-topic="ward-board"]')).toBeVisible();
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: locale === 'bn' ? 'বন্ধ করুন' : 'Close', exact: true })
+        .click();
+      await expect(page.getByTestId('ward-filter-free')).toHaveAttribute('aria-pressed', 'true');
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  });
+  test('admission review makes no write and refuses a changed bed even when still admissible', async ({
+    page,
+    browser,
+  }) => {
+    await openWardBoard(page);
+    await page.getByTestId(`bed-tile-${bed(0).label}`).click();
+    await page.getByTestId('action-admit').click();
+    await page.getByTestId('admit-name').fill('Admission review (Demo)');
+    await page.getByTestId('admit-phone').fill(phone());
+    await page.getByTestId('admit-age').fill('42');
+    await page.getByTestId('admit-sex-male').click();
+    await page.getByTestId('admit-confirm').click();
+    await expect(page.getByTestId('admit-review')).toContainText('Admission review (Demo)');
+    expect(await bedState(bed(0).id)).toBe('free');
+    expect(await admissionsIn(bed(0).id)).toBe(0);
+
+    const second = await browser.newContext();
+    const otherDesk = await second.newPage();
+    await openWardBoard(otherDesk);
+    await otherDesk.getByTestId(`bed-tile-${bed(0).label}`).click();
+    await otherDesk.getByTestId('action-reserve-60').click();
+    await expect(page.getByTestId(`bed-tile-${bed(0).label}`)).toHaveAttribute(
+      'data-state',
+      'reserved',
+    );
+    // An unbound held bed normally allows admission. Review must still be repeated after this change.
+    await expect(page.getByTestId('admit-submit-review')).toBeDisabled();
+    expect(await admissionsIn(bed(0).id)).toBe(0);
+  });
+
+  test('state filters retain the full board and arbitrary expected-discharge dates survive reload', async ({
+    page,
+  }) => {
+    await openWardBoard(page);
+    await admitAtDesk(page, bed(0).label, 'Forecast patient (Demo)');
+    await expect(page.getByTestId(`bed-tile-${bed(0).label}`)).toHaveAttribute(
+      'data-state',
+      'occupied',
+    );
+    await page.getByTestId('ward-filter-free').click();
+    await expect(page.getByTestId(`bed-tile-${bed(0).label}`)).toHaveCount(0);
+    await expect(page.getByTestId(`bed-tile-${bed(1).label}`)).toBeVisible();
+    await page.getByTestId('ward-filter-free').click();
+    await expect(page.getByTestId(`bed-tile-${bed(0).label}`)).toBeVisible();
+
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() + 17);
+    const future = date.toISOString().slice(0, 10);
+    await page.getByTestId('expected-discharge').fill(future);
+    const saved = page.waitForResponse(
+      (response) =>
+        response.url().includes(`/beds/${bed(0).id}/expected-discharge`) && response.ok(),
+    );
+    await page.getByTestId('save-forecast').click();
+    await saved;
+    await page.reload();
+    await page.getByTestId(`bed-tile-${bed(0).label}`).click();
+    await expect(page.getByTestId('expected-discharge')).toHaveValue(future);
+  });
+
   test('a discharge goes to cleaning, and only "cleaning done" makes the bed free', async ({
     page,
   }) => {

@@ -1,44 +1,11 @@
 'use client';
 
-/**
- * The lab — `S-B-08` (`APP_FLOW.md` B5, `FR-LAB-01`…`04`).
- *
- * Laid out like the ward board and the ER so a hospital's staff learn one
- * shape: navigation rail and connection block on the left, the queue in the
- * middle, and a right column carrying the turnaround figures.
- *
- * ## The queue is sorted by how long somebody has been waiting
- *
- * Open orders first, oldest first, by `sortLabQueue` in `shared/domain` — the
- * same function the API sorts with, so a bench and a server never disagree
- * about what is most urgent. A turnaround clock is running on every open row
- * (`FR-LAB-04`), and the one that has been waiting longest is the one about
- * to embarrass the hospital.
- *
- * ## The patient's name is not on the row
- *
- * A queue lists the test, its state and its age. The name is one tap away and
- * that tap is a request the server records (`DB-P7`, `FR-SEC-03`) — the same
- * arrangement the ward board's bed panel has. A bench calling somebody to a
- * counter needs it; a screen left open on a shared desk does not.
- *
- * ## Uploading is delivering
- *
- * `FR-LAB-03`: a report "auto-delivers to the patient wallet and the ordering
- * doctor". There is no separate *send* button, because there is no separate
- * act — the file reaching the store, the order closing and the patient's app
- * getting it happen in one transaction, and the button says so.
- *
- * ## The four states (`GR-03`)
- *
- * Loading is the shape of the queue, not a spinner. An error says what failed
- * and offers the retry. An empty bench says nothing is waiting and where work
- * comes from — never an empty box. Offline keeps the queue on screen with its
- * freshness ageing honestly, and says the buttons need a connection rather
- * than failing on a tap.
+/** Laboratory workbench (S-B-08, FR-LAB-01..04). Lifecycle rules remain in
+ * shared/domain. Names stay behind a separate scoped online read (DB-P7).
+ * Identifying reads are durably audited before the server returns them.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import {
   applyLocalLabChange,
@@ -64,7 +31,13 @@ import {
   labTestName,
 } from '@platform/i18n';
 import {
-  Button,
+  ConsoleHelp,
+  ConsolePageHeader,
+  ConsoleState,
+  ConsoleConfirmation,
+  Sheet,
+  SheetClose,
+  BilingualLabel,
   Card,
   Chip,
   FilterChip,
@@ -75,14 +48,16 @@ import {
 } from '@platform/ui';
 
 import { ActionButton } from '@/components/ActionButton';
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
-import { ConsoleRail } from '@/components/ConsoleRail';
+import { ConsoleWorkspaceFrame } from '@/components/ConsoleWorkspaceFrame';
 import { DemoBanner } from '@/components/DemoBanner';
 import { OfflineBlock } from '@/components/OfflineBlock';
+import { matchingLabOrders } from '@/lib/clinicalWorkspace';
+import { CLINICAL } from '@/lib/clinicalWorkspaceMessages';
 import { readDemoSession } from '@/lib/demo';
 import { failureOf, labApi, readReportFile, type LabQueueResponse } from '@/lib/lab';
+import '@platform/ui/console-lab.css';
 
-/** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
+/** The demo principal (CLAUDE.md §4.1). Existing authenticated session supplies this token. */
 function readToken(): string | null {
   return readDemoSession()?.token ?? null;
 }
@@ -125,23 +100,29 @@ function LabBody(): ReactNode {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [filter, setFilter] = useState<'open' | 'reported' | 'all'>('open');
+  const [search, setSearch] = useState('');
+  const [stage, setStage] = useState<TestState | 'all'>('all');
   const [now, setNow] = useState(() => new Date());
   const [online, setOnline] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   /** Names fetched on request, never with the queue (`DB-P7`). */
   const [names, setNames] = useState<ReadonlyMap<string, string>>(new Map());
+  const loadSequence = useRef(0);
+  const writing = useRef(false);
 
   const load = useCallback(async (): Promise<void> => {
     if (hospitalId === '') return;
+    const sequence = ++loadSequence.current;
     setFailed(false);
     try {
       const result = await api.queue(hospitalId, filter);
+      if (sequence !== loadSequence.current) return;
       setQueue(result);
       setOrders(sortLabQueue(result.orders));
     } catch {
-      setFailed(true);
+      if (sequence === loadSequence.current) setFailed(true);
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, [api, hospitalId, filter]);
 
@@ -176,12 +157,15 @@ function LabBody(): ReactNode {
   /** Applies a state button: optimistic first, then the server's own row. */
   const advance = useCallback(
     async (order: TestOrderView, action: LabAction): Promise<void> => {
+      if (writing.current || !online) return;
       const guard = canActOnTestOrder(order, action);
       if (!guard.ok) {
         show({ title: guard.detail, tone: 'caution' });
         return;
       }
 
+      writing.current = true;
+      ++loadSequence.current;
       const at = new Date().toISOString() as Timestamp;
       // The state machine from `shared/domain`, not a copy of it: whatever the
       // server decides, the screen has already decided the same way.
@@ -210,49 +194,85 @@ function LabBody(): ReactNode {
           tone: 'caution',
         });
       } finally {
+        writing.current = false;
         setBusyId(null);
       }
     },
-    [api, load, show, locale],
+    [api, load, show, locale, online],
   );
 
-  /** `FR-LAB-03`. One act: stored, closed, delivered. */
+  /** File/key kept for retry; uncertain delivery is read back (FR-LAB-03). */
   const upload = useCallback(
-    async (order: TestOrderView, file: File): Promise<void> => {
-      const read = await readReportFile(file);
-      if (!read.ok) {
-        show({
-          title: t(read.reason === 'size' ? 'labFileTooBig' : 'labFileWrongType', locale),
-          tone: 'caution',
-        });
-        return;
-      }
-
-      setBusyId(order.id);
+    async (order: TestOrderView, file: File, attemptId: string): Promise<boolean> => {
+      if (writing.current || !online) return false;
+      writing.current = true;
+      ++loadSequence.current;
       try {
-        const result = await api.upload(order.id, { type: read.type, base64: read.base64 });
-        setOrders((current) =>
-          sortLabQueue(current.map((entry) => (entry.id === order.id ? result.order : entry))),
-        );
-        show({
-          title: t(order.visitId === null ? 'labDeliveredToPatient' : 'labUploaded', locale),
-          tone: 'positive',
-        });
-      } catch (error: unknown) {
-        const failure = failureOf(error);
-        show({
-          title: failure.kind === 'offline' ? t('offline', locale) : t('labUploadFailed', locale),
-          tone: 'caution',
-        });
+        const read = await readReportFile(file);
+        if (!read.ok) {
+          show({
+            title:
+              read.reason === 'empty'
+                ? CLINICAL.fileEmpty[locale]
+                : t(read.reason === 'size' ? 'labFileTooBig' : 'labFileWrongType', locale),
+            tone: 'caution',
+          });
+          return false;
+        }
+        if (!online) return false;
+        setBusyId(order.id);
+        try {
+          const result = await api.upload(
+            order.id,
+            { type: read.type, base64: read.base64 },
+            attemptId,
+          );
+          setOrders((current) =>
+            sortLabQueue(current.map((entry) => (entry.id === order.id ? result.order : entry))),
+          );
+          show({
+            title: t(order.visitId === null ? 'labDeliveredToPatient' : 'labUploaded', locale),
+            tone: 'positive',
+          });
+          return true;
+        } catch (error: unknown) {
+          const failure = failureOf(error);
+          if (failure.kind === 'offline') {
+            show({ title: CLINICAL.uploadUncertain[locale], tone: 'caution' });
+            try {
+              const result = await api.queue(hospitalId, 'all');
+              const stored = result.orders.find((entry) => entry.id === order.id);
+              if (stored !== undefined && stored.report !== null) {
+                setOrders((current) =>
+                  sortLabQueue(current.map((entry) => (entry.id === order.id ? stored : entry))),
+                );
+                show({
+                  title: t(
+                    stored.visitId === null ? 'labDeliveredToPatient' : 'labDeliveredTo',
+                    locale,
+                  ),
+                  tone: 'positive',
+                });
+                return true;
+              }
+            } catch {
+              /* Keep same file/key. A lost reply is not a failed commit. */
+            }
+          } else show({ title: t('labUploadFailed', locale), tone: 'caution' });
+          return false;
+        } finally {
+          setBusyId(null);
+        }
       } finally {
-        setBusyId(null);
+        writing.current = false;
       }
     },
-    [api, show, locale],
+    [api, hospitalId, show, locale, online],
   );
 
   const reveal = useCallback(
     async (orderId: string): Promise<void> => {
+      if (!online) return;
       try {
         const label = await api.patientLabel(orderId);
         setNames((current) => new Map(current).set(orderId, label ?? '—'));
@@ -260,7 +280,7 @@ function LabBody(): ReactNode {
         show({ title: t('loadFailed', locale), tone: 'caution' });
       }
     },
-    [api, show, locale],
+    [api, show, locale, online],
   );
 
   const freshness = {
@@ -271,143 +291,188 @@ function LabBody(): ReactNode {
   };
   const minutes = (value: number): string => formatAge(value, locale, numerals);
 
-  if (hospitalId === '') return <Notice>{t('noSession', locale)}</Notice>;
-
-  if (loading) {
-    // GR-03 loading: the shape of the queue.
-    return (
-      <div className="flex min-h-screen gap-6 p-6" aria-busy="true" data-testid="lab-loading">
-        <div className="w-52 shrink-0 rounded-md bg-sunken" />
-        <div className="flex flex-1 flex-col gap-3">
-          {Array.from({ length: 8 }, (_, index) => (
-            <div key={index} className="h-20 rounded-md bg-sunken" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (failed || queue === null) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <p role="alert" className="text-body-lg text-ink-secondary" data-testid="lab-failed">
-          {t('labLoadFailed', locale)}
-        </p>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            void load();
-          }}
-        >
-          {t('retry', locale)}
-        </Button>
-      </div>
-    );
-  }
-
+  if (session === null || hospitalId === '') return <Notice>{t('noSession', locale)}</Notice>;
   const openCount = orders.filter((order) => isOpenTestOrder(order.state)).length;
-
+  const visible = matchingLabOrders(orders, search, stage);
   return (
-    <div className="flex min-h-screen" data-testid="lab-console">
-      {/* --- navigation rail ------------------------------------------------- */}
-      <ConsoleRail current="navTests" locale={locale}>
+    <ConsoleWorkspaceFrame
+      session={session}
+      workspace={CLINICAL.lab}
+      navigation={[
+        {
+          id: 'lab',
+          label: { bn: t('navTests', 'bn'), en: t('navTests', 'en') },
+          current: true,
+          roles: ['lab', 'hospital_admin'],
+          enabled: true,
+          onSelect: () => {
+            setStage('all');
+            setSearch('');
+          },
+        },
+        {
+          id: 'switch',
+          label: CLINICAL.switchConsole,
+          roles: [session.role],
+          enabled: true,
+          onSelect: () => globalThis.location.assign('/'),
+        },
+      ]}
+      actions={
+        <>
+          <span className={`cf-status cf-tone-${online ? 'positive' : 'caution'}`}>
+            {t(online ? 'online' : 'offline', locale)}
+          </span>
+          <ConsoleHelp
+            topic={{
+              id: 'lab',
+              title: CLINICAL.lab,
+              steps: [CLINICAL.labHelp, CLINICAL.uploadReview, CLINICAL.fileHint],
+            }}
+          />
+        </>
+      }
+    >
+      <div className="lab-workspace" data-testid="lab-console">
+        <DemoBanner />
+        <ConsolePageHeader
+          title={CLINICAL.lab}
+          description={CLINICAL.labIntro}
+          actions={
+            queue === null ? undefined : (
+              <FreshnessLine
+                asOf={new Date(queue.serverTs)}
+                now={now}
+                labels={freshness}
+                formatMinutes={minutes}
+              />
+            )
+          }
+        />
         <OfflineBlock
           connected={online}
           pendingCount={0}
-          lastServerTs={queue.serverTs}
+          lastServerTs={queue?.serverTs ?? null}
           stuckCount={0}
           locale={locale}
           now={now}
         />
-      </ConsoleRail>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
-        <DemoBanner />
-
-        <header className="flex items-center gap-4 border-b border-line px-6 py-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="font-reading text-title-lg text-ink">{t('labTitle', locale)}</h1>
-            <p className="text-body-sm text-ink-muted">
-              {format('labOpenCount', locale, { count: formatNumber(openCount, numerals) })}
-            </p>
+        {loading ? (
+          <div data-testid="lab-loading">
+            <ConsoleState kind="loading" description={CLINICAL.labIntro} />
           </div>
-          <FreshnessLine
-            asOf={new Date(queue.serverTs)}
-            now={now}
-            labels={freshness}
-            formatMinutes={minutes}
-          />
-          <ConsoleLanguageSwitch className="" />
-        </header>
-
-        <div className="flex min-h-0 flex-1 gap-6 p-6">
-          <main className="flex min-w-0 flex-1 flex-col gap-3">
-            <div
-              className="flex gap-2"
-              role="group"
-              aria-label={t('labTitle', locale)}
-              data-testid="lab-filters"
-            >
-              {(['open', 'reported', 'all'] as const).map((value) => (
-                <FilterChip
-                  key={value}
-                  selected={filter === value}
-                  onToggle={() => {
-                    setFilter(value);
-                  }}
-                >
-                  {t(
-                    value === 'open'
-                      ? 'labQueueOpen'
-                      : value === 'reported'
-                        ? 'labQueueReported'
-                        : 'labQueueAll',
-                    locale,
-                  )}
-                </FilterChip>
-              ))}
-            </div>
-
-            {orders.length === 0 ? (
-              // GR-03 empty: what this means and where work comes from.
-              <Card data-testid="lab-empty">
-                <p className="text-body-lg text-ink">{t('labEmpty', locale)}</p>
-                <p className="mt-1 text-body-sm text-ink-muted">{t('labEmptyHint', locale)}</p>
-              </Card>
-            ) : (
-              <ul className="flex flex-col gap-3">
-                {orders.map((order) => (
-                  <li key={order.id}>
-                    <OrderRow
-                      order={order}
-                      now={now}
-                      locale={locale}
-                      busy={busyId === order.id}
-                      online={online}
-                      name={names.get(order.id) ?? null}
-                      onReveal={() => {
-                        void reveal(order.id);
-                      }}
-                      onAdvance={(action) => {
-                        void advance(order, action);
-                      }}
-                      onUpload={(file) => {
-                        void upload(order, file);
-                      }}
-                    />
-                  </li>
+        ) : failed || queue === null ? (
+          <div data-testid="lab-failed">
+            <ConsoleState
+              kind="error"
+              description={CLINICAL.labIntro}
+              onRetry={() => {
+                void load();
+              }}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="lab-toolbar">
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label={t('labTitle', locale)}
+                data-testid="lab-filters"
+              >
+                {(['open', 'reported', 'all'] as const).map((value) => (
+                  <FilterChip
+                    key={value}
+                    selected={filter === value}
+                    onToggle={() => {
+                      setFilter(value);
+                      setStage('all');
+                    }}
+                  >
+                    {t(
+                      value === 'open'
+                        ? 'labQueueOpen'
+                        : value === 'reported'
+                          ? 'labQueueReported'
+                          : 'labQueueAll',
+                      locale,
+                    )}
+                  </FilterChip>
                 ))}
-              </ul>
-            )}
-          </main>
-
-          <aside className="w-80 shrink-0">
-            <Turnaround rows={queue.turnaround} locale={locale} />
-          </aside>
-        </div>
+              </div>
+              <input
+                className="lab-search"
+                type="search"
+                value={search}
+                aria-label={CLINICAL.searchTests[locale]}
+                placeholder={CLINICAL.searchTests[locale]}
+                data-testid="lab-search"
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <div className="lab-layout">
+              <section>
+                <div className="lab-stages">
+                  {(['ordered', 'sample_collected', 'processing'] as const).map((value) => (
+                    <button
+                      type="button"
+                      key={value}
+                      aria-pressed={stage === value}
+                      onClick={() => setStage(stage === value ? 'all' : value)}
+                      data-testid={`lab-stage-${value}`}
+                    >
+                      <strong>
+                        {formatNumber(
+                          orders.filter((order) => order.state === value).length,
+                          numerals,
+                        )}
+                      </strong>
+                      {t(STATE_LABEL[value], locale)}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-body-sm text-ink-muted">
+                  {format('labOpenCount', locale, { count: formatNumber(openCount, numerals) })}
+                </p>
+                {orders.length === 0 ? (
+                  <Card data-testid="lab-empty">
+                    <p>{t('labEmpty', locale)}</p>
+                    <p>{t('labEmptyHint', locale)}</p>
+                  </Card>
+                ) : visible.length === 0 ? (
+                  <Card data-testid="lab-no-matches">{CLINICAL.noMatches[locale]}</Card>
+                ) : (
+                  <ul className="lab-orders">
+                    {visible.map((order) => (
+                      <li key={order.id}>
+                        <OrderRow
+                          order={order}
+                          now={now}
+                          locale={locale}
+                          busy={busyId !== null}
+                          online={online}
+                          name={names.get(order.id) ?? null}
+                          onReveal={() => {
+                            void reveal(order.id);
+                          }}
+                          onAdvance={(action) => {
+                            void advance(order, action);
+                          }}
+                          onUpload={(file, key) => upload(order, file, key)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+              <aside className="lab-turnaround">
+                <Turnaround rows={queue.turnaround} locale={locale} />
+              </aside>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </ConsoleWorkspaceFrame>
   );
 }
 
@@ -431,8 +496,9 @@ function OrderRow({
   readonly name: string | null;
   readonly onReveal: () => void;
   readonly onAdvance: (action: LabAction) => void;
-  readonly onUpload: (file: File) => void;
+  readonly onUpload: (file: File, attemptId: string) => Promise<boolean>;
 }): ReactNode {
+  const [cancelOpen, setCancelOpen] = useState(false);
   const next = NEXT_ACTION[order.state];
   const waiting = openForSeconds(order, now.toISOString() as Timestamp);
   const open = isOpenTestOrder(order.state);
@@ -441,85 +507,106 @@ function OrderRow({
   const offReason = !online ? t('offline', locale) : busy ? t('actionSending', locale) : null;
 
   return (
-    <Card data-testid={`lab-order-${order.id}`}>
-      <div className="flex items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="font-reading text-title-sm text-ink">
-            {labTestName(order.testCode, locale, order.testName)}
-          </p>
-          <p className="mt-1 text-body-sm text-ink-muted">
-            {format('labOrderedAt', locale, { time: clock(order.orderedAt, locale) })}
-            {waiting === null
-              ? ''
-              : ` · ${format('labWaitingFor', locale, { duration: duration(waiting, locale) })}`}
-          </p>
+    <div className="lab-order" data-testid={`lab-order-${order.id}`}>
+      <div className="min-w-0 flex-1">
+        <p className="font-reading text-title-sm text-ink">
+          {labTestName(order.testCode, locale, order.testName)}
+        </p>
+        <p className="lab-reference">
+          {CLINICAL.reference[locale]}
+          {' \u00b7 '}
+          {order.id}
+          {' \u00b7 '}
+          {(order.visitId === null ? CLINICAL.noDoctor : CLINICAL.byDoctor)[locale]}
+        </p>
+        <p className="mt-1 text-body-sm text-ink-muted">
+          {format('labOrderedAt', locale, { time: clock(order.orderedAt, locale) })}
+          {waiting === null
+            ? ''
+            : ` · ${format('labWaitingFor', locale, { duration: duration(waiting, locale) })}`}
+        </p>
 
-          {/* `DB-P7`: the name is a separate, recorded read. */}
-          <p className="mt-2 text-body-sm text-ink-secondary">
-            {name !== null && <span data-testid={`lab-patient-${order.id}`}>{name}</span>}
-            {name === null && (
+        {/* `DB-P7`: the name is a separate scoped read. */}
+        <p className="lab-name text-body-sm text-ink-secondary">
+          {name !== null && <span data-testid={`lab-patient-${order.id}`}>{name}</span>}
+          {name === null && (
+            <button
+              type="button"
+              className="min-h-touch underline"
+              disabled={offReason !== null}
+              title={offReason ?? undefined}
+              onClick={onReveal}
+              data-testid={`lab-reveal-${order.id}`}
+            >
+              {t('labShowPatient', locale)}
+            </button>
+          )}
+        </p>
+      </div>
+
+      <div className="lab-order-actions">
+        <Chip tone={open ? 'caution' : order.state === 'cancelled' ? 'neutral' : 'positive'}>
+          {t(STATE_LABEL[order.state], locale)}
+        </Chip>
+
+        {next !== undefined ? (
+          <ActionButton
+            size="sm"
+            variant="primary"
+            reason={offReason}
+            onClick={() => {
+              onAdvance(next.action);
+            }}
+            testId={`lab-${next.action}-${order.id}`}
+          >
+            {t(next.key, locale)}
+          </ActionButton>
+        ) : null}
+
+        {order.state === 'processing' ? (
+          <UploadReview
+            order={order}
+            locale={locale}
+            reason={offReason}
+            name={name}
+            onReveal={onReveal}
+            onSubmit={onUpload}
+          />
+        ) : null}
+
+        {open ? (
+          <ConsoleConfirmation
+            open={cancelOpen}
+            onOpenChange={setCancelOpen}
+            pending={busy}
+            title={CLINICAL.cancelTitle}
+            description={CLINICAL.cancelHint}
+            confirmLabel={{ bn: t('labCancel', 'bn'), en: t('labCancel', 'en') }}
+            trigger={
               <button
                 type="button"
-                className="min-h-touch underline"
-                onClick={onReveal}
-                data-testid={`lab-reveal-${order.id}`}
+                disabled={offReason !== null}
+                title={offReason ?? undefined}
+                data-testid={`lab-cancel-${order.id}`}
               >
-                {t('labShowPatient', locale)}
+                {t('labCancel', locale)}
               </button>
-            )}
+            }
+            onConfirm={() => {
+              if (offReason !== null) return;
+              setCancelOpen(false);
+              onAdvance('cancel');
+            }}
+          />
+        ) : null}
+
+        {order.report !== null && order.report.deliveredToWalletAt !== null ? (
+          <p className="text-caption text-ok-700">
+            {t(order.visitId === null ? 'labDeliveredToPatient' : 'labDeliveredTo', locale)}
           </p>
-        </div>
-
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <Chip tone={open ? 'caution' : order.state === 'cancelled' ? 'neutral' : 'positive'}>
-            {t(STATE_LABEL[order.state], locale)}
-          </Chip>
-
-          {next !== undefined ? (
-            <ActionButton
-              size="sm"
-              variant="primary"
-              reason={offReason}
-              onClick={() => {
-                onAdvance(next.action);
-              }}
-              testId={`lab-${next.action}-${order.id}`}
-            >
-              {t(next.key, locale)}
-            </ActionButton>
-          ) : null}
-
-          {order.state === 'processing' ? (
-            <UploadButton
-              orderId={order.id}
-              locale={locale}
-              reason={offReason}
-              onChoose={onUpload}
-            />
-          ) : null}
-
-          {open ? (
-            <ActionButton
-              size="sm"
-              variant="quiet"
-              reason={offReason}
-              onClick={() => {
-                onAdvance('cancel');
-              }}
-              testId={`lab-cancel-${order.id}`}
-            >
-              {t('labCancel', locale)}
-            </ActionButton>
-          ) : null}
-
-          {order.report !== null && order.report.deliveredToWalletAt !== null ? (
-            <p className="text-caption text-ok-700">
-              {t(order.visitId === null ? 'labDeliveredToPatient' : 'labDeliveredTo', locale)}
-            </p>
-          ) : null}
-        </div>
+        ) : null}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -530,48 +617,125 @@ function OrderRow({
  * clicks one: a screen reader announces the label, the keyboard reaches it,
  * and the browser's own picker is what opens (`A11Y` in FRONTEND.md §7).
  */
-function UploadButton({
-  orderId,
+function UploadReview({
+  order,
   locale,
   reason,
-  onChoose,
+  name,
+  onReveal,
+  onSubmit,
 }: {
-  readonly orderId: string;
+  readonly order: TestOrderView;
   readonly locale: Locale;
-  /** Why it is off, or null when it is live (§5.1). */
   readonly reason: string | null;
-  readonly onChoose: (file: File) => void;
+  readonly name: string | null;
+  readonly onReveal: () => void;
+  readonly onSubmit: (file: File, attemptId: string) => Promise<boolean>;
 }): ReactNode {
-  const disabled = reason !== null;
+  const [open, setOpen] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   return (
-    <label
-      className="inline-flex min-h-touch cursor-pointer items-center rounded-sm bg-brand-600 px-3 text-body-sm font-semibold text-on-brand aria-disabled:opacity-50"
-      aria-disabled={disabled}
-      title={reason ?? undefined}
-      data-testid={`lab-upload-${orderId}`}
+    <Sheet
+      console
+      variant="modal"
+      open={open}
+      onOpenChange={(value) => {
+        if (sending) return;
+        setOpen(value);
+      }}
+      title={CLINICAL.uploadTitle[locale]}
+      description={CLINICAL.uploadReview[locale]}
+      trigger={
+        <button
+          type="button"
+          className="rounded-sm bg-brand-600 min-h-touch px-3 text-on-brand"
+          disabled={reason !== null}
+          title={reason ?? undefined}
+          data-testid={`lab-upload-${order.id}`}
+        >
+          <BilingualLabel label={{ bn: t('labUpload', 'bn'), en: t('labUpload', 'en') }} />
+        </button>
+      }
     >
-      {t('labUpload', locale)}
-      <input
-        type="file"
-        className="sr-only"
-        accept="application/pdf,image/jpeg,image/png,image/webp"
-        disabled={disabled}
-        aria-describedby={disabled ? `lab-upload-why-${orderId}` : undefined}
-        onChange={(event) => {
-          const input = event.currentTarget;
-          const file = input.files?.[0];
-          if (file !== undefined) onChoose(file);
-          // Cleared so that choosing the same file twice fires again — a
-          // bench re-uploading a corrected scan of the same name is common.
-          input.value = '';
+      <ConsoleHelp
+        topic={{
+          id: 'lab-upload',
+          title: CLINICAL.uploadTitle,
+          steps: [CLINICAL.uploadReview, CLINICAL.labHelp],
         }}
       />
-      {disabled ? (
-        <span id={`lab-upload-why-${orderId}`} className="sr-only">
-          {reason}
-        </span>
+      <p>
+        {CLINICAL.reference[locale]}
+        {' \u00b7 '}
+        {order.id}
+      </p>
+      <p className="font-semibold">{labTestName(order.testCode, locale, order.testName)}</p>
+      <p>{name ?? t('labShowPatient', locale)}</p>
+      {name === null ? (
+        <button
+          type="button"
+          disabled={reason !== null}
+          title={reason ?? undefined}
+          onClick={onReveal}
+        >
+          {t('labShowPatient', locale)}
+        </button>
       ) : null}
-    </label>
+      <label className="lab-file">
+        <span>{CLINICAL.chooseFile[locale]}</span>
+        <input
+          data-testid={`lab-report-file-${order.id}`}
+          type="file"
+          accept="application/pdf,image/jpeg,image/png,image/webp"
+          disabled={sending}
+          onChange={(event) => {
+            const chosen = event.currentTarget.files?.[0] ?? null;
+            setFile(chosen);
+            setAttemptId(chosen === null ? null : crypto.randomUUID());
+            setError(null);
+          }}
+        />
+        <span>{file?.name ?? CLINICAL.fileHint[locale]}</span>
+      </label>
+      {error === null ? null : (
+        <p role="alert" className="text-warn-700">
+          {error}
+        </p>
+      )}
+      <div className="cf-confirm-actions">
+        <SheetClose asChild>
+          <button type="button" disabled={sending}>
+            {CLINICAL.back[locale]}
+          </button>
+        </SheetClose>
+        <ActionButton
+          size="md"
+          variant="primary"
+          reason={reason ?? (file === null ? CLINICAL.chooseFile[locale] : null)}
+          testId={`lab-report-submit-${order.id}`}
+          onClick={() => {
+            if (sending || reason !== null || file === null || attemptId === null) return;
+            setSending(true);
+            void onSubmit(file, attemptId)
+              .then((ok) => {
+                if (ok) {
+                  setOpen(false);
+                  setFile(null);
+                  setAttemptId(null);
+                  setError(null);
+                } else setError(CLINICAL.retryUpload[locale]);
+              })
+              .catch(() => setError(CLINICAL.retryUpload[locale]))
+              .finally(() => setSending(false));
+          }}
+        >
+          {CLINICAL.uploadTitle[locale]}
+        </ActionButton>
+      </div>
+    </Sheet>
   );
 }
 

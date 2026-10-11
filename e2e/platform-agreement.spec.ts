@@ -20,6 +20,7 @@ import { Client } from 'pg';
 
 import { signToken } from '../backend/api/src/config/jwt.js';
 
+import { approveManagementWrites } from './support/adminManagement.js';
 import { E2E_DATABASE_URL, assertLocalDatabase } from './support/database.js';
 
 const CONSOLE = 'http://localhost:3100';
@@ -83,12 +84,14 @@ test.afterEach(async () => {
 async function openPlatform(page: Page): Promise<void> {
   await page.goto(CONSOLE);
   await expect(page.getByTestId('console-picker')).toBeVisible({ timeout: 45_000 });
+  await approveManagementWrites(page);
   await page.getByTestId('open-platform').click();
   await expect(page.getByTestId('platform-console')).toBeVisible({ timeout: 30_000 });
 }
 
 async function openWorkspace(page: Page, code: string): Promise<void> {
   await page.getByTestId(`platform-row-${code}`).click();
+  await page.getByTestId('platform-section-access').click();
   await expect(page.getByTestId('platform-agreement')).toBeVisible();
 }
 

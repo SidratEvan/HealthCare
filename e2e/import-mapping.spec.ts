@@ -259,10 +259,10 @@ test.describe('S-B-14: a hospital’s own export, mapped (FR-IMP-13 to FR-IMP-20
       await route.fulfill({ response, json: body });
     });
 
-    let confirmedBody: { suggestedByModel?: string[] } | null = null;
+    const confirmedBody: { value: { suggestedByModel?: string[] } | null } = { value: null };
     page.on('request', (request) => {
       if (request.url().endsWith('/hospital/imports/mapped')) {
-        confirmedBody = request.postDataJSON() as { suggestedByModel?: string[] };
+        confirmedBody.value = request.postDataJSON() as { suggestedByModel?: string[] };
       }
     });
 
@@ -304,8 +304,8 @@ test.describe('S-B-14: a hospital’s own export, mapped (FR-IMP-13 to FR-IMP-20
     await expect(page.getByTestId('import-count-error')).toContainText('০');
 
     // The audit is told which fields still hold what the model suggested.
-    expect(confirmedBody).not.toBeNull();
-    expect([...(confirmedBody?.suggestedByModel ?? [])].sort()).toEqual([
+    expect(confirmedBody.value).not.toBeNull();
+    expect([...(confirmedBody.value?.suggestedByModel ?? [])].sort()).toEqual([
       'age_years',
       'full_name',
       'ref',

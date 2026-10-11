@@ -1,0 +1,167 @@
+/* S-B-06, FR-BED-01..07: scoped presentation, no patient-app tokens. */
+.ward-workspace .ward-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+  gap: var(--cf-space-5);
+}
+.ward-workspace .ward-board-content,
+.ward-workspace .ward-sidebar {
+  min-width: 0;
+}
+.ward-workspace .ward-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cf-space-4);
+}
+.ward-workspace .ward-sidebar > section,
+.ward-workspace [data-testid='pending-admissions'],
+.ward-workspace [data-testid='bed-panel'] {
+  border-radius: var(--cf-radius-lg);
+}
+.ward-workspace .ward-counts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--cf-space-2);
+  margin-bottom: var(--cf-space-4);
+}
+.ward-workspace .ward-counts button {
+  min-height: var(--cf-touch);
+  padding: var(--cf-space-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-md);
+  background: var(--bg-surface);
+  color: var(--ink-secondary);
+  text-align: left;
+}
+.ward-workspace .ward-counts strong {
+  display: block;
+  font-size: 24px;
+  line-height: 1.4;
+}
+.ward-workspace .ward-counts button[aria-pressed='true'] {
+  outline: 2px solid var(--brand-600);
+  outline-offset: 1px;
+}
+.ward-workspace .ward-attention {
+  display: grid;
+  gap: var(--cf-space-2);
+  margin-bottom: var(--cf-space-5);
+}
+.ward-workspace .ward-attention h2,
+.ward-workspace .ward-admit-review h3 {
+  font-size: 18px;
+  font-weight: 700;
+}
+.ward-workspace .ward-attention > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--cf-space-3);
+  padding: var(--cf-space-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-md);
+  background: var(--bg-surface);
+}
+.ward-workspace .ward-group h2 {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--cf-space-2);
+  margin-bottom: var(--cf-space-3);
+  font-weight: 700;
+}
+.ward-workspace .ward-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
+  gap: var(--cf-space-3);
+}
+.ward-workspace .ward-tiles > button {
+  min-height: 110px;
+  padding: var(--cf-space-3);
+  border-radius: var(--cf-radius-md);
+}
+.ward-workspace .ward-tiles [data-state='free'] {
+  color: var(--positive-700);
+  background: var(--positive-100);
+  border-color: var(--positive-700);
+}
+.ward-workspace .ward-tiles [data-state='reserved'] {
+  color: var(--cf-info);
+  background: var(--cf-info-bg);
+  border-color: var(--cf-info);
+}
+.ward-workspace .ward-tiles [data-state='cleaning'] {
+  color: var(--warn-700);
+  background: var(--warn-100);
+  border-color: var(--warn-border);
+}
+.ward-workspace .ward-tiles button > span:last-child {
+  -webkit-line-clamp: unset;
+  white-space: normal;
+}
+.ward-workspace .ward-empty-filter {
+  padding: var(--cf-space-3);
+  color: var(--ink-muted);
+}
+.ward-workspace .ward-connection {
+  width: 220px;
+  font-size: 12px;
+}
+.ward-workspace .ward-connection section {
+  padding: var(--cf-space-2) var(--cf-space-3);
+  border-radius: var(--cf-radius-md);
+}
+.ward-workspace .ward-connection p {
+  margin-top: var(--cf-space-1);
+}
+.ward-workspace .ward-admit-review {
+  display: grid;
+  gap: var(--cf-space-3);
+}
+.ward-workspace .ward-admit-review dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--cf-space-2);
+  padding: var(--cf-space-3);
+  border-radius: var(--cf-radius-md);
+  background: var(--bg-sunken);
+}
+.ward-workspace .ward-admit-review dt {
+  color: var(--ink-muted);
+}
+.ward-workspace button {
+  scroll-margin-top: 180px;
+}
+.ward-workspace #ward-waiting,
+.ward-workspace #ward-tiles {
+  scroll-margin-top: 180px;
+}
+@media (max-width: 1150px) {
+  .ward-workspace .ward-layout {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+  .ward-workspace .ward-counts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .ward-workspace .ward-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ward-workspace .ward-sidebar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ward-workspace [data-testid='bed-panel'] {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 600px) {
+  .ward-workspace .ward-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ward-workspace .ward-attention > div {
+    align-items: start;
+    flex-direction: column;
+  }
+}

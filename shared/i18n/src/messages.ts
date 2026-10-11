@@ -3558,6 +3558,11 @@ export const CONSOLE = {
   importBy: { bn: '{name}-এর আমদানি, {when}', en: 'Imported by {name}, {when}' },
   importStateChecked: { bn: 'যাচাই হয়েছে, অনুমোদন বাকি', en: 'Checked, awaiting approval' },
   importStateCommitted: { bn: 'সংরক্ষিত', en: 'Saved' },
+  govWorkspaceLabel: { bn: 'জাতীয়', en: 'National' },
+  importUndoProtected: {
+    bn: 'আমদানিতে কর্মী বা ডাক্তারের তথ্য বদলালে এখানে তা ফিরিয়ে নেওয়া যাবে না। সেটিংসে তথ্য ও অনুমতি পর্যালোচনা করুন। পরবর্তী কাজ বা পরিবর্তন থাকা অন্য সারিও ফিরিয়ে নেওয়া যাবে না।',
+    en: 'Imported staff or doctor updates cannot be undone here. Review their details and permissions in Settings. Other rows with later work or changes also cannot be undone.',
+  },
   importStateUndone: { bn: 'ফিরিয়ে নেওয়া', en: 'Taken back' },
   importStateDiscarded: { bn: 'বাতিল', en: 'Discarded' },
   importOffline: { bn: 'আমদানি করতে ইন্টারনেট সংযোগ লাগবে', en: 'Importing needs a connection' },

@@ -18,7 +18,11 @@
     "./console-reception.css": "./src/console/reception.css",
     "./console-registration.css": "./src/console/registration.css",
     "./console-doctor.css": "./src/console/doctor.css",
-    "./console-admin.css": "./src/console/admin.css"
+    "./console-admin.css": "./src/console/admin.css",
+    "./console-ward.css": "./src/console/ward.css",
+    "./console-emergency.css": "./src/console/emergency.css",
+    "./console-lab.css": "./src/console/lab.css",
+    "./console-pharmacy.css": "./src/console/pharmacy.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

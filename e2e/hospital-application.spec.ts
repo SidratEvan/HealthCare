@@ -144,6 +144,7 @@ test.describe('a hospital applies by itself (FR-ONB-09)', () => {
     ).toHaveCount(0);
 
     await row.click();
+    await platform.getByTestId('platform-section-access').click();
     await expect(platform.getByTestId('platform-workspace')).toHaveAttribute(
       'data-lifecycle',
       'setup',

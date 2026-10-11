@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto';
 
 import { expect, test, type Page } from '@playwright/test';
 
+import { approveManagementWrites } from './support/adminManagement.js';
 import { adminToken } from './support/console.js';
 import { hospitalIdByCode, removeFacility } from './support/facility.js';
 
@@ -76,6 +77,7 @@ async function hospitalSetsUpAndAsks(): Promise<void> {
 async function openPlatform(page: Page): Promise<void> {
   await page.goto(CONSOLE);
   await expect(page.getByTestId('console-picker')).toBeVisible();
+  await approveManagementWrites(page);
   await page.getByTestId('open-platform').click();
   await expect(page.getByTestId('platform-console')).toBeVisible();
   await expect(page.getByTestId('platform-list')).toBeVisible();
@@ -129,6 +131,7 @@ test('a hospital goes from nothing to live to suspended, on screens (FR-ONB-01, 
   await expect(page.getByTestId('platform-created')).toBeVisible();
   const temporary = (await page.getByTestId('platform-temp-password').textContent())?.trim() ?? '';
   expect(temporary.length).toBeGreaterThanOrEqual(10);
+  await page.getByTestId('platform-password-handed').check();
   await page.getByTestId('platform-created-done').click();
 
   const workspace = page.getByTestId('platform-workspace');
