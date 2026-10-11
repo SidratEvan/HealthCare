@@ -170,9 +170,13 @@ test.describe('the hospital’s own settings follow (FR-BRD-11)', () => {
     await expect(said).toContainText('বেড');
     await expect(said).toContainText('ফার্মেসি');
     // Beds are off: no wards-and-beds tab. Emergency is on: its tab is there.
-    await expect(page.getByTestId('settings-tab-beds')).toHaveCount(0);
-    await expect(page.getByTestId('settings-tab-capabilities')).toBeVisible();
-    await expect(page.getByTestId('settings-tab-doctors')).toBeVisible();
+    await expect(page.getByTestId('settings-group-beds')).toHaveCount(0);
+    await expect(page.getByTestId('settings-group-capabilities')).toBeVisible();
+    await expect(
+      page
+        .locator('.cf-nav')
+        .getByRole('button', { name: /Doctors|\u099a\u09bf\u0995\u09bf\u09ce\u09b8\u0995/ }),
+    ).toBeVisible();
   });
 
   test('where the dashboard is off, the administrator still opens settings', async ({ page }) => {
@@ -185,6 +189,11 @@ test.describe('the hospital’s own settings follow (FR-BRD-11)', () => {
     await expect(page.getByTestId('hospital-settings')).toBeVisible({ timeout: 30_000 });
     // No way from here into what is off.
     await expect(page.getByTestId('settings-back')).toHaveCount(0);
+    await expect(
+      page.locator('.cf-nav').getByRole('button', {
+        name: /Today|Reports|\u0986\u099c|\u09b0\u09bf\u09aa\u09cb\u09b0\u09cd\u099f/,
+      }),
+    ).toHaveCount(0);
     await expect(page.getByTestId('settings-open-import')).toHaveCount(0);
     await expect(page.getByTestId('settings-modules-off')).toContainText('ড্যাশবোর্ড');
   });

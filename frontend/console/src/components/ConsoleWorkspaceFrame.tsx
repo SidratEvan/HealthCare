@@ -26,12 +26,14 @@ export function ConsoleWorkspaceFrame({
   workspace,
   navigation,
   actions,
+  refreshKey,
   children,
 }: {
   readonly session: DemoSession;
   readonly workspace: Message;
   readonly navigation: readonly ConsoleWorkspaceChoice[];
   readonly actions?: ReactNode;
+  readonly refreshKey?: string;
   readonly children: ReactNode;
 }): ReactNode {
   const { hospitalId, token } = session;
@@ -42,13 +44,13 @@ export function ConsoleWorkspaceFrame({
   useEffect(() => {
     if (hospitalId === null || limited) return;
     let cancelled = false;
-    void loadBrand(hospitalId, token).then((brand) => {
+    void loadBrand(hospitalId, token, refreshKey !== undefined).then((brand) => {
       if (!cancelled && brand !== null) setLoaded({ hospitalId, brand });
     });
     return () => {
       cancelled = true;
     };
-  }, [hospitalId, token, limited]);
+  }, [hospitalId, token, limited, refreshKey]);
   // Never draw a previous hospital's resolved brand during a context change.
   const brand =
     hospitalId === null || limited

@@ -499,9 +499,12 @@ test('Staff & Desks, Doctors and Settings open their working V1 panes', async ({
       .getByRole('button', { name: new RegExp(label.replace('&', '&')) })
       .click();
     await expect(page.getByTestId('hospital-settings')).toBeVisible();
-    await expect(page.getByTestId('settings-tab-' + tab)).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#settings-panel-' + tab)).toBeVisible();
-    await page.getByTestId('settings-back').click();
+    await expect(
+      page.locator('.cf-nav').getByRole('button', { name: new RegExp(label) }),
+    ).toHaveAttribute('aria-current', 'page');
+    if (tab === 'profile') await expect(page.getByTestId('settings-group-profile')).toBeVisible();
+    else await expect(page.getByTestId('management-search')).toBeVisible();
+    await page.locator('.cf-nav').getByRole('button', { name: /Today/ }).click();
     await expect(page.getByTestId('admin-dashboard')).toBeVisible();
   }
 });

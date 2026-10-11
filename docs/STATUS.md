@@ -7,7 +7,15 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Latest work — Administration Today and Reports (11 October 2026)
+## Latest work — accelerated console and company-site completion (11 October 2026)
+
+The founder has approved all eleven standalone designs and explicitly authorized autonomous implementation, parallel worktrees and local checkpoint commits. This supersedes historical module-by-module stop instructions below. No pushes, protected-branch merges, deployments or real hospital data/infrastructure changes are authorized by this workstream. Focused verification runs per module; one consolidated full repository/build/browser gate follows integration.
+
+Administration Staff & Desks, Doctors and Settings are implemented on `feat/console-redesign-admin-management`, preserving all V1 settings operations and the existing Today/Reports. Conditional desk replacement safety is committed separately as `9b2337e`. Focused original facility setup, publishing, SMS and two-factor browser regression passed **8/8 (3.9 minutes)**. New management cases cover bilingual responsive navigation, partial desk writes/reconciliation, invalid/offline saves and newer-read protection. Earlier full verification passed **164 files / 8,027 tests** before final navigation/helper refinements; it is not the final consolidated gate. [Administration evidence](design/console-admin-management/README.md).
+
+The public company site, Ward/Emergency and Laboratory/Pharmacy proceed in isolated branches/worktrees. Platform/onboarding, Import and National reporting follow on the console integration branch. [Current ownership, dependencies, verification and continuation instructions](design/CONSOLE_REDESIGN_CHECKPOINT.md).
+
+## Previous work — Administration Today and Reports (11 October 2026)
 
 **Phase 8B Batch 5A is implemented locally on `feat/console-redesign-admin-dashboard`, from `dba5e19b9b49bdbe92eb1b925e9cfe9cc5a669c3`. The founder explicitly approved the integrated Doctor Console and authorized this batch. Stop for founder review before Batch 5B. Nothing is pushed, merged or deployed. This is not a full-application release or clinical-use approval.**
 

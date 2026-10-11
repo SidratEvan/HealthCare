@@ -17,6 +17,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { accessScreenshot } from './support/accessScreenshots.js';
+import { approveManagementWrites } from './support/adminManagement.js';
 import {
   addStaffMember,
   newFacility,
@@ -158,7 +159,12 @@ test.describe('anybody else may turn it on, and an administrator resets it (S-B-
       await expect(admin.getByTestId('admin-dashboard')).toBeVisible({ timeout: 30_000 });
       await admin.getByTestId('admin-open-settings').click();
       await expect(admin.getByTestId('hospital-settings')).toBeVisible({ timeout: 30_000 });
-      await admin.getByTestId('settings-tab-staff').click();
+      await approveManagementWrites(admin);
+      await admin
+        .locator('.cf-nav')
+        .getByRole('button', { name: /Staff|\u0995\u09b0\u09cd\u09ae\u09c0/ })
+        .click();
+      await admin.getByTestId(`management-change-${reception.id}`).click();
 
       const card = admin.getByTestId(`settings-staff-${reception.id}`);
       await expect(card).toContainText('দুই ধাপ চালু');

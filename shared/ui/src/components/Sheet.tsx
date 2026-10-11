@@ -32,6 +32,10 @@ import { cx } from './cx.js';
 import type { ReactNode } from 'react';
 
 export interface SheetProps {
+  /** Optional workspace layout; the shared dialog behavior remains unchanged. */
+  readonly className?: string;
+  /** For a workspace list that opens a panel without a single static trigger. */
+  readonly restoreFocusTo?: () => HTMLElement | null;
   /** Explicit opt-in; existing patient/other workspace dialogs retain V1. */
   readonly console?: boolean;
   readonly open: boolean;
@@ -63,6 +67,8 @@ export interface SheetProps {
 }
 
 export function Sheet({
+  className,
+  restoreFocusTo,
   console: consoleScope = false,
   open,
   onOpenChange,
@@ -91,6 +97,17 @@ export function Sheet({
         />
 
         <Dialog.Content
+          onCloseAutoFocus={
+            restoreFocusTo === undefined
+              ? undefined
+              : (event) => {
+                  const target = restoreFocusTo();
+                  if (target?.isConnected) {
+                    event.preventDefault();
+                    target.focus();
+                  }
+                }
+          }
           style={consoleScope ? brandStyle : undefined}
           onKeyDown={(event) => {
             if (consoleScope) event.stopPropagation();
@@ -103,7 +120,7 @@ export function Sheet({
           }}
           className={
             consoleScope
-              ? 'console-foundation cf-dialog cf-reception-dialog'
+              ? cx('console-foundation cf-dialog cf-reception-dialog', className)
               : cx(
                   'fixed z-50 bg-surface shadow-2 focus:outline-none',
                   variant === 'sheet'
