@@ -62,6 +62,23 @@ function chokesOn(keys: readonly string[], status: number): PushTransport {
 }
 
 describe('queuing while offline', () => {
+  it('retrying a chamber never requeues another chamber’s stuck actions', async () => {
+    const store = createMemoryStore();
+    const queue = new OfflineQueue(store);
+    await store.put({
+      ...action('here', 'PATIENT_CALLED', 1),
+      attempts: 8,
+      stuck: { code: 'INTERNAL' },
+    });
+    await store.put({
+      ...action('elsewhere', 'PATIENT_CALLED', 1, 'other-session'),
+      attempts: 8,
+      stuck: { code: 'INTERNAL' },
+    });
+    await queue.retryStuck(SESSION);
+    expect((await queue.pending()).map((event) => event.clientEventId)).toEqual(['here']);
+    expect((await queue.stuck()).map((event) => event.clientEventId)).toEqual(['elsewhere']);
+  });
   it('keeps actions in the order they were taken', async () => {
     const queue = makeQueue();
 

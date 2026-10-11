@@ -3,7 +3,7 @@
 /** Current server-confirmed staff entry (FR-ROLE-01, FR-REC-32, FR-SEC-06/10).
  * This is a presentation boundary; every API retains its own permission guard.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   assignedDesks,
@@ -42,6 +42,7 @@ const LABEL: Readonly<Record<WorkspaceRole, ConsoleKey>> = {
   gov_viewer: 'govSection',
 };
 const KIND: Readonly<Record<string, Exclude<ConsoleChoice['kind'], 'chamber'>>> = {
+  reception: 'reception',
   ward: 'ward',
   er: 'emergency',
   lab: 'lab',
@@ -51,12 +52,26 @@ const KIND: Readonly<Record<string, Exclude<ConsoleChoice['kind'], 'chamber'>>> 
   platform: 'platform',
   gov: 'gov',
 };
+const StaffWorkspace = createContext<StaffWorkspaceContext | null>(null);
+export function useStaffWorkspace(): StaffWorkspaceContext | null {
+  return useContext(StaffWorkspace);
+}
+function deskAllowed(context: StaffWorkspaceContext, deskId: string | null | undefined): boolean {
+  const own = assignedDesks(context.desks, context.profile.staff.id);
+  return deskId == null
+    ? own.length === 0 ||
+        context.profile.roles.includes('doctor') ||
+        context.profile.roles.includes('hospital_admin')
+    : own.some((desk) => desk.id === deskId);
+}
 function allowed(
   context: StaffWorkspaceContext,
   view: string | null,
   sessionId: string | null,
   role: string,
 ): boolean {
+  if (view === 'reception' && !deskAllowed(context, readDemoSession()?.receptionDeskId))
+    return false;
   const requestedRole = workspaceRoleFor(view, sessionId, role);
   if (
     view === null &&
@@ -110,7 +125,7 @@ export function StaffEntry({
   const load = useCallback(async () => {
     const request = ++generation.current;
     setChecking(true);
-    const outcome = await loadStaffWorkspaceContext();
+    const outcome = await loadStaffWorkspaceContext({ includeEnded: view === 'reception' });
     if (request !== generation.current) return;
     if (outcome.kind !== 'ready') setChecking(false);
     if (outcome.kind === 'ended') {
@@ -178,9 +193,11 @@ export function StaffEntry({
       void load();
     };
     globalThis.addEventListener('focus', recheck);
+    const timer = view === 'reception' ? globalThis.setInterval(recheck, 30_000) : null;
     return () => {
       generation.current += 1;
       globalThis.removeEventListener('focus', recheck);
+      if (timer !== null) globalThis.clearInterval(timer);
     };
   }, [load, session.token]);
 
@@ -205,7 +222,7 @@ export function StaffEntry({
       allowed(context, view, sessionId, session.role)) ||
       cachedContinuation)
   )
-    return children;
+    return <StaffWorkspace.Provider value={context}>{children}</StaffWorkspace.Provider>;
 
   if (context === null || (requested && validatedTarget !== target && checking))
     return (
@@ -334,6 +351,15 @@ function StaffWorkspacePicker({
       const fresh = result.context;
       onContext(fresh);
       const targetView = workspaceView(chosenRole, fresh.modulesOff);
+      if (chosenRole === 'receptionist') {
+        const stored = readDemoSession();
+        if (stored === null || !deskAllowed(fresh, deskId)) {
+          setFailed(true);
+          setBusy(false);
+          return;
+        }
+        writeDemoSession({ ...stored, receptionDeskId: deskId });
+      }
       if (!allowed(fresh, targetView, id, chosenRole)) {
         setFailed(true);
         setBusy(false);
@@ -342,6 +368,7 @@ function StaffWorkspacePicker({
       }
       if (
         chosenRole === 'receptionist' &&
+        targetView === null &&
         deskId !== null &&
         !deskChambers(fresh.chambers, fresh.desks, fresh.profile.staff.id, deskId).some(
           (entry) => entry.id === id,
@@ -393,9 +420,8 @@ function StaffWorkspacePicker({
       needsDesk
     )
       return;
-    if (role === 'receptionist' && offered.length !== 1) return;
     auto.current = true;
-    void open(role, role === 'receptionist' ? (offered[0]?.id ?? null) : null, true);
+    void open(role, null, true);
   }, [denied, needsDesk, offered, open, role, roles.length]);
 
   const session = readDemoSession();
@@ -491,7 +517,7 @@ function StaffWorkspacePicker({
           {role === 'receptionist' && desks.length === 0 ? (
             <p>{t('accessCommonDesk', locale)}</p>
           ) : null}
-          {role !== null && (role === 'doctor' || role === 'receptionist') && !needsDesk ? (
+          {role === 'doctor' && !needsDesk ? (
             <>
               {offered.length === 0 ? (
                 <p data-testid="picker-no-chambers">{t('accessNoChamber', locale)}</p>
@@ -519,7 +545,7 @@ function StaffWorkspacePicker({
               </div>
             </>
           ) : null}
-          {role !== null && role !== 'doctor' && role !== 'receptionist' ? (
+          {role !== null && role !== 'doctor' && !needsDesk ? (
             <ConsoleAction
               label={CONSOLE[LABEL[role]]}
               loading={busy}

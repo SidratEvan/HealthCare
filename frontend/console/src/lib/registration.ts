@@ -100,27 +100,34 @@ export type WalkInPosition =
 
 /**
  * `POST /sessions/:id/walkin` (`FR-REC-14`). Answers with the serial issued:
- * the highest in the chamber, because a walk-in is always the newest booking
- * even when it is seated earlier in the line.
+ * the receipt names the booking issued by this attempt. The original serial
+ * survives a lost-answer retry after other patients have joined.
  */
 export async function addWalkIn(
   sessionId: string,
   patientId: string,
   position: WalkInPosition,
+  requestAttempt: { readonly key: string; readonly at: string } = {
+    key: crypto.randomUUID(),
+    at: new Date().toISOString(),
+  },
 ): Promise<CounterResult<number>> {
   return await attempt(async () => {
-    const data = await client().post<{ state: QueueState }>(
+    const data = await client().post<{ state: QueueState; walkin?: { serial: number } }>(
       `/sessions/${sessionId}/walkin`,
       {
-        clientEventId: crypto.randomUUID(),
-        clientTs: new Date().toISOString(),
+        clientEventId: requestAttempt.key,
+        clientTs: requestAttempt.at,
         patientId,
         position: position.kind,
         index: position.kind === 'index' ? position.index : null,
         reason: position.kind === 'index' ? position.reason : null,
       },
-      crypto.randomUUID(),
+      requestAttempt.key,
     );
-    return data.state.entries.reduce((max, entry) => Math.max(max, entry.serial), 0);
+    return (
+      data.walkin?.serial ??
+      data.state.entries.reduce((max, entry) => Math.max(max, entry.serial), 0)
+    );
   });
 }

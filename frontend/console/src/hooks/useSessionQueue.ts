@@ -131,6 +131,7 @@ export interface SessionQueue {
   readonly isStale: boolean;
   readonly lastServerTs: string | null;
   readonly pendingCount: number;
+  readonly pendingBookingIds: ReadonlySet<string>;
   /**
    * Actions the server answered and could not take. Set aside so they stop
    * blocking the ones behind them, kept until somebody decides (`FR-OFF-05`).
@@ -196,12 +197,17 @@ export interface SessionQueueOptions {
   readonly apiBaseUrl: string;
   readonly socketUrl: string;
   readonly getToken: () => string | null;
+  /** Multi-chamber Reception mounts one owner per session; each sends its own
+   * work only. Legacy single-session workspaces still recover other sessions.
+   */
+  readonly flushOtherSessions?: boolean;
   /** Injected by the tests; the browser uses the real thing. */
   readonly now?: () => Date;
 }
 
 export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
   const { sessionId, apiBaseUrl, socketUrl } = options;
+  const flushOtherSessions = options.flushOtherSessions !== false;
 
   /**
    * Callbacks live in refs, and never in a dependency array.
@@ -403,7 +409,7 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
       // by this same person. It goes now. Anything refused there is dropped,
       // because nobody is looking at that queue to be told.
       for (const other of await queue.sessions()) {
-        if (other !== sessionId) await queue.flush(other, transport);
+        if (flushOtherSessions && other !== sessionId) await queue.flush(other, transport);
       }
 
       await refreshPending();
@@ -415,7 +421,7 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     } finally {
       flushesRef.current.delete(run);
     }
-  }, [sessionId, transport, refreshPending]);
+  }, [sessionId, transport, refreshPending, flushOtherSessions]);
 
   // --- the session channel -------------------------------------------------
   useEffect(() => {
@@ -622,10 +628,10 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
   );
 
   const retryStuck = useCallback(async () => {
-    await queueRef.current?.retryStuck();
+    await queueRef.current?.retryStuck(flushOtherSessions ? undefined : sessionId);
     await refreshPending();
     await flush();
-  }, [refreshPending, flush]);
+  }, [refreshPending, flush, flushOtherSessions, sessionId]);
 
   const discardStuck = useCallback(async () => {
     const queue = queueRef.current;
@@ -694,6 +700,16 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
   // Both have to agree before the console claims it is connected. Either one
   // saying otherwise is enough to say so on screen.
   const connected = snapshot.connected && browserOnline;
+  const pendingBookingIds = useMemo(
+    () =>
+      new Set(
+        pending.flatMap((event) => {
+          const booking = event.payload['bookingId'];
+          return typeof booking === 'string' ? [booking] : [];
+        }),
+      ),
+    [pending],
+  );
 
   // --- and again, by itself, while something is still waiting ----------------
   //
@@ -724,6 +740,7 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     isStale: snapshot.lastServerTs === null,
     lastServerTs: snapshot.lastServerTs,
     pendingCount: pending.length,
+    pendingBookingIds,
     stuckCount: stuck.length,
     retryStuck,
     discardStuck,

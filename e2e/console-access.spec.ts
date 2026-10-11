@@ -154,13 +154,9 @@ test('one assigned desk with one chamber lands there; changing assignment denies
   );
   const assigned = await desk(staff.id, staff.hospitalId!, [chamber.doctor_id]);
   await login(page, staff.email);
-  // One doctor may sit more than one chamber; choose only if ambiguous.
-  const option = page.getByTestId(`open-receptionist-${chamber.id}`);
-  await expect
-    .poll(async () => page.url().includes('session=') || (await option.isVisible()))
-    .toBe(true);
-  if (await option.isVisible()) await option.click();
-  await expect(page).toHaveURL(/session=/);
+  // Batch 3A opens the desk as one workspace containing its permitted chambers.
+  await expect(page).toHaveURL(/view=reception/);
+  await expect(page.getByTestId(`reception-chamber-${chamber.id}`)).toBeVisible();
   const used = page.url();
   await owner(async (client) => {
     await client.query('DELETE FROM reception_desk_staff WHERE desk_id=$1 AND staff_user_id=$2', [
@@ -171,7 +167,7 @@ test('one assigned desk with one chamber lands there; changing assignment denies
   await desk(staff.id, staff.hospitalId!, []);
   await page.goto(used);
   await expect(page.getByTestId('console-picker')).toBeVisible();
-  await expect(page.getByTestId('chamber-title')).toHaveCount(0);
+  await expect(page.locator('[data-session-id]')).toHaveCount(0);
 });
 test('no assigned desk keeps V1 common access; doctors still choose a chamber explicitly', async ({
   page,
@@ -406,6 +402,15 @@ test('ordinary token refresh and focus checks preserve an open doctor draft', as
   const note = page.getByTestId('visit-diagnosis');
   await expect(note).toBeEnabled();
   await note.fill('Unsaved local draft (Demo)');
+  // HS256 access tokens have second-resolution iat/exp. A same-second
+  // renewal can have identical bytes; exercise a later-second renewal.
+  const issuedAt = await page.evaluate((value) => {
+    const payload = JSON.parse(
+      atob(value.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/')),
+    ) as { iat: number };
+    return payload.iat;
+  }, token);
+  await expect.poll(() => Math.floor(Date.now() / 1000)).toBeGreaterThan(issuedAt + 1);
   await page.evaluate((key) => {
     const s = JSON.parse(sessionStorage.getItem(key) ?? '{}') as Record<string, unknown>;
     s['accessExpiresAt'] = new Date(Date.now() - 1000).toISOString();

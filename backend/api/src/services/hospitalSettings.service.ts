@@ -31,7 +31,6 @@
 
 import { createHash } from 'node:crypto';
 
-
 import {
   type BrandTheme,
   BED_UNCONFIRMED_REASON,

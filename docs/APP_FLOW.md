@@ -757,6 +757,8 @@ Shown when a user holds multiple roles or the hospital has multiple counters.
 
 ## B1. Reception console — `S-B-02`
 
+> **Phase 8B Batch 3A (10 October 2026):** Reception now opens an authorised desk as an expandable multi-chamber workspace (`?view=reception`), while existing `?session=` links remain compatible. Each card retains its own V1 queue state, pending/rejected actions, undo and forms; collapse does not unmount it. One selected expanded queue owns N/Space, A, P, W and queue Ctrl+Z; editors, composing/repeated keys, dialogs/Help and native button Space remain protected. Secondary row/session actions use visible More menus. Add Patient uses the existing registration finder and the selected card's actual session. The server issues the serial; the same attempt key and original booking receipt are used after an uncertain reply. Current hospital/role/module/desk rules are revalidated, and finished/cancelled chambers stay read-only. The normal work picker still omits ended chambers; Reception opts into their scoped roster read. Details, comparison and evidence: `docs/design/console-reception/README.md`. Full Registration and Doctor redesigns remain outside this batch; Doctor C1/C2 protection remains a critical clinical-release dependency.
+
 The highest-traffic screen in the system. Every primary action must be reachable by keyboard.
 
 ### B1.1 Layout

@@ -45,8 +45,7 @@ test.describe('staff sign-in (S-B-00)', () => {
     await expect(page.getByTestId('login-error')).toContainText('ইমেইল বা পাসওয়ার্ড মেলেনি');
 
     await signIn(page, reception.email, DEMO_PASSWORD);
-    await expect(page.getByTestId('console-picker')).toBeVisible();
-    await expect(page.getByTestId('picker-signed-in')).toBeVisible();
+    await expect(page.getByTestId('reception-workspace')).toBeVisible();
     // No hospital to choose: the person works at one.
     await expect(page.locator('[data-testid^="pick-hospital-"]')).toHaveCount(0);
 
@@ -55,9 +54,10 @@ test.describe('staff sign-in (S-B-00)', () => {
     await expect(open).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('[data-testid^="open-doctor-"]')).toHaveCount(0);
     await open.click();
-    await expect(page.getByTestId('chamber-title')).toBeVisible();
+    await expect(page.locator('[data-testid^="chamber-title-"]').first()).toBeVisible();
 
-    await page.getByTestId('rail-sign-out').click();
+    await page.goto(CONSOLE);
+    await page.getByTestId('picker-sign-out').click();
     await expect(page.getByTestId('console-picker')).toBeVisible();
     await expect(page.getByTestId('picker-login-link')).toBeVisible();
   });
@@ -86,10 +86,10 @@ test.describe('staff sign-in (S-B-00)', () => {
 
     await page.getByTestId('password-repeat').fill(own);
     await page.getByTestId('password-submit').click();
-    await expect(page.getByTestId('console-picker')).toBeVisible();
-    await expect(page.getByTestId('picker-signed-in')).toBeVisible();
+    await expect(page.getByTestId('reception-workspace')).toBeVisible();
 
     // The temporary password no longer opens anything; the person's own does.
+    await page.goto(CONSOLE);
     await page.getByTestId('picker-sign-out').click();
     // Signing out returns to the demo picker; wait for it, so the next
     // navigation does not race the one signing out started.
@@ -98,14 +98,14 @@ test.describe('staff sign-in (S-B-00)', () => {
     await signIn(page, staff.email, temporary);
     await expect(page.getByTestId('login-error')).toBeVisible();
     await signIn(page, staff.email, own);
-    await expect(page.getByTestId('console-picker')).toBeVisible();
+    await expect(page.getByTestId('reception-workspace')).toBeVisible();
   });
 
   test('a session the server stops accepting returns to sign-in and says why', async ({ page }) => {
     const reception = await seededReceptionist(FACILITY);
     await page.goto(`${CONSOLE}/?login=1`);
     await signIn(page, reception.email, DEMO_PASSWORD);
-    await expect(page.getByTestId('console-picker')).toBeVisible();
+    await expect(page.getByTestId('reception-workspace')).toBeVisible();
 
     // The access token is due and the refresh token is one the server never
     // issued — what a revoked session looks like from this side.

@@ -30,6 +30,10 @@ const BRAND_KEYS: readonly ConsoleBrandToken[] = [
   'brand-border',
 ];
 const BrandContext = createContext<CSSProperties>({});
+/** Existing dialog portals can opt into their caller's console branding. */
+export function useConsoleBrandStyle(): CSSProperties {
+  return useContext(BrandContext);
+}
 
 /** Only the existing six permitted brand colours enter the scoped theme.
  * The CSS token file owns the default and all immutable status colours.

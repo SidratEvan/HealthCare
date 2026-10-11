@@ -192,6 +192,7 @@ type NationalRole = 'gov_viewer' | 'platform_admin';
  * chamber (`S-B-06`), so it is chosen beside the chambers rather than on one.
  */
 export type ConsoleChoice =
+  | { readonly kind: 'reception' }
   | { readonly kind: 'chamber'; readonly sessionId: string }
   | { readonly kind: 'ward' }
   | { readonly kind: 'emergency' }

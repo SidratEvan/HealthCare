@@ -507,7 +507,9 @@ export async function checkStaffQueueRead(sessionId: string): Promise<boolean> {
     return false;
   }
 }
-export async function loadStaffWorkspaceContext(): Promise<StaffContextOutcome> {
+export async function loadStaffWorkspaceContext(
+  options: { readonly includeEnded?: boolean } = {},
+): Promise<StaffContextOutcome> {
   let session = readDemoSession();
   if (session?.authKind !== 'staff') return { kind: 'ended' };
   if (isOffline()) return { kind: 'offline' };
@@ -566,7 +568,10 @@ export async function loadStaffWorkspaceContext(): Promise<StaffContextOutcome> 
       return { kind: 'restricted' };
     if (profile.hospital === null)
       return { kind: 'ready', context: { profile, chambers: [], desks: [], modulesOff: [] } };
-    const roster = await get('/staff/chambers', session.token);
+    const roster = await get(
+      options.includeEnded ? '/staff/chambers?includeEnded=1' : '/staff/chambers',
+      session.token,
+    );
     if (readDemoSession()?.token !== session.token) return { kind: 'failed' };
     if (roster.status === 401 || roster.status === 403) {
       clearDemoSession();

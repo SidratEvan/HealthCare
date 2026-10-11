@@ -13,7 +13,7 @@
  * channel like every other change.
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   format,
@@ -23,7 +23,15 @@ import {
   toLatinDigits,
   type ConsoleKey,
 } from '@platform/i18n';
-import { Button, FilterChip, Input, Sheet, SheetActions, useLocale } from '@platform/ui';
+import {
+  Button,
+  FilterChip,
+  Input,
+  Sheet,
+  SheetActions,
+  useLocale,
+  ConsoleHelp,
+} from '@platform/ui';
 
 import { FAILURE_KEY, PatientFinder, type ChosenPatient } from '@/components/PatientFinder';
 import { addWalkIn } from '@/lib/registration';
@@ -33,6 +41,7 @@ export function WalkInSheet({
   open,
   online,
   waiting,
+  chamberName,
   onAdded,
   onClose,
 }: {
@@ -41,6 +50,7 @@ export function WalkInSheet({
   readonly online: boolean;
   /** How many are waiting, so a position can be no further back than the end. */
   readonly waiting: number;
+  readonly chamberName?: string;
   readonly onAdded: (message: string) => void;
   readonly onClose: () => void;
 }): ReactNode {
@@ -52,6 +62,11 @@ export function WalkInSheet({
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ConsoleKey | null>(null);
+  const attempt = useRef<{
+    readonly signature: string;
+    readonly key: string;
+    readonly at: string;
+  } | null>(null);
 
   // Every opening starts from the phone.
   useEffect(() => {
@@ -61,6 +76,7 @@ export function WalkInSheet({
     setPlace('');
     setReason('');
     setError(null);
+    attempt.current = null;
   }, [open]);
 
   const placeNumber = /^\d{1,3}$/.test(toLatinDigits(place).trim())
@@ -77,12 +93,22 @@ export function WalkInSheet({
     if (patient === null || !positionReady || busy) return;
     setBusy(true);
     setError(null);
+    const signature = JSON.stringify({
+      sessionId,
+      patientId: patient.patientId,
+      atPosition,
+      placeNumber,
+      reason,
+    });
+    if (attempt.current?.signature !== signature)
+      attempt.current = { signature, key: crypto.randomUUID(), at: new Date().toISOString() };
     const result = await addWalkIn(
       sessionId,
       patient.patientId,
       atPosition && placeNumber !== null
         ? { kind: 'index', index: placeNumber - 1, reason: reason.trim() }
         : { kind: 'end' },
+      attempt.current,
     );
     setBusy(false);
     if (!result.ok) {
@@ -107,15 +133,30 @@ export function WalkInSheet({
 
   return (
     <Sheet
+      console
       open={open}
       onOpenChange={(next) => {
-        if (!next) onClose();
+        if (!next && !busy) onClose();
       }}
       variant="modal"
       title={t('addWalkin', locale)}
-      description={t('walkInDescription', locale)}
+      description={
+        chamberName === undefined
+          ? t('walkInDescription', locale)
+          : `${chamberName} · ${t('walkInDescription', locale)}`
+      }
     >
       <div className="flex flex-col gap-4" data-testid="walkin-sheet">
+        <ConsoleHelp
+          topic={{
+            id: 'reception-add',
+            title: { bn: t('addWalkin', 'bn'), en: t('addWalkin', 'en') },
+            steps: [
+              { bn: t('receptionHelpAdd', 'bn'), en: t('receptionHelpAdd', 'en') },
+              { bn: t('receptionHelpOffline', 'bn'), en: t('receptionHelpOffline', 'en') },
+            ],
+          }}
+        />
         {patient === null ? (
           <PatientFinder online={online} onChosen={setPatient} />
         ) : (

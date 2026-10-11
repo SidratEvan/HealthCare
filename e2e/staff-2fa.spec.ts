@@ -141,6 +141,8 @@ test.describe('anybody else may turn it on, and an administrator resets it (S-B-
 
     // Not asked for one, but offered it — and free to leave.
     await signIn(page, reception.email);
+    await expect(page.getByTestId('reception-workspace')).toBeVisible({ timeout: 30_000 });
+    await page.goto(CONSOLE);
     await expect(page.getByTestId('console-picker')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('picker-tfa-setup').click();
     await expect(page.getByTestId('tfa-setup-cancel')).toBeVisible({ timeout: 30_000 });
@@ -172,6 +174,8 @@ test.describe('anybody else may turn it on, and an administrator resets it (S-B-
     try {
       const again = await next.newPage();
       await signIn(again, reception.email);
+      await expect(again.getByTestId('reception-workspace')).toBeVisible({ timeout: 30_000 });
+      await again.goto(CONSOLE);
       await expect(again.getByTestId('console-picker')).toBeVisible({ timeout: 30_000 });
       await expect(again.getByTestId('picker-tfa-setup')).toBeVisible();
     } finally {

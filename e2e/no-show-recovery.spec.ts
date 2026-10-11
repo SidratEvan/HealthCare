@@ -97,6 +97,7 @@ test.describe('a freed chair, recovered (FR-QUE-30, FR-REC-30, FR-ADM-03)', () =
     await expect(reception.getByTestId('standby-waiting')).toContainText(bengali(2));
 
     // Serial 2 never came. Their grace period ran out an hour ago.
+    await reception.getByTestId('row-more-2').click();
     await reception.getByTestId('queue-row-2').getByRole('button', { name: 'অনুপস্থিত' }).click();
 
     // The chair appears on the card, and its button goes live once the
@@ -137,6 +138,7 @@ test.describe('a freed chair, recovered (FR-QUE-30, FR-REC-30, FR-ADM-03)', () =
 
     // Nothing is free and nobody waits, so there is no card at all yet.
     await expect(reception.getByTestId('standby-card')).toHaveCount(0);
+    await reception.getByTestId('row-more-2').click();
 
     await reception.getByTestId('queue-row-2').getByRole('button', { name: 'অনুপস্থিত' }).click();
 

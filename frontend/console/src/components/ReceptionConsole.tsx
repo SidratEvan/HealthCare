@@ -6,8 +6,8 @@
  * "The highest-traffic screen in the system. Every primary action must be
  * reachable by keyboard."
  *
- * Layout is B1.1 exactly: navigation rail left, session bar top, queue table
- * centre, now-serving and counters right, offline block bottom-left.
+ * Batch 3A uses the approved desk overview and expandable chamber cards.
+ * Each chamber retains V1's controller, replay and guarded actions.
  *
  * ## `BTN-B02-NEXT` carries the product
  *
@@ -26,7 +26,7 @@
  * arrive back on the session channel.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   clampConsultSeconds,
@@ -46,28 +46,32 @@ import {
   formatNumber,
   formatSerial,
   t,
+  CONSOLE,
   formatAge,
   numeralsFor,
   localName,
 } from '@platform/i18n';
 import {
   Button,
-  Card,
+  BilingualLabel,
+  ConsoleAction,
+  ConsoleStatus,
   FreshnessLine,
   Sheet,
   SheetActions,
   ToastProvider,
   useToast,
   useLocale,
-  useWindowKeydown,
 } from '@platform/ui';
 
 import { CheckInSheet } from '@/components/CheckInSheet';
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
-import { ConsoleRail } from '@/components/ConsoleRail';
-import { DemoBanner } from '@/components/DemoBanner';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { QueueTable } from '@/components/QueueTable';
+import {
+  ReceptionWorkspace,
+  type ReceptionQueueProps,
+  type ReceptionCommands,
+} from '@/components/ReceptionWorkspace';
 import { StandbyCard } from '@/components/StandbyCard';
 import { WalkInSheet } from '@/components/WalkInSheet';
 import { useSessionQueue, type QueueAction, type UndoOutcome } from '@/hooks/useSessionQueue';
@@ -106,17 +110,18 @@ export function ReceptionConsole(): ReactNode {
   return (
     // Bottom-right on the console, not bottom-centre (FRONTEND.md §5.7).
     <ToastProvider placement="console">
-      <ConsoleBody />
+      <ReceptionWorkspace renderQueue={(props) => <ReceptionQueue {...props} />} />
     </ToastProvider>
   );
 }
 
-function ConsoleBody(): ReactNode {
+function ReceptionQueue(props: ReceptionQueueProps): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
   const { show } = useToast();
 
-  const sessionId = useSessionId();
+  const urlSessionId = useSessionId();
+  const sessionId = props.chamber.id || urlSessionId;
   const [now, setNow] = useState(() => new Date());
   /** The row `MOD-B02-CHECKIN` is open for (`FR-REC-18`). */
   const [checkingIn, setCheckingIn] = useState<QueueEntry | null>(null);
@@ -140,6 +145,7 @@ function ConsoleBody(): ReactNode {
     apiBaseUrl: API_BASE,
     socketUrl: process.env['NEXT_PUBLIC_SOCKET_URL'] ?? 'http://localhost:4000',
     getToken: readToken,
+    flushOtherSessions: !props.multi,
   });
 
   // A conflict is surfaced once, as a sentence. A receptionist mid-shift needs
@@ -154,7 +160,23 @@ function ConsoleBody(): ReactNode {
   const serving = state === null ? null : nowServing(state);
   const counts = state === null ? null : queueCounts(state);
   const waiting = state === null ? [] : waitingQueue(state);
-  const chamber = readDemoSession()?.chamber ?? null;
+  const chamber = props.chamber;
+  const testId = (name: string): string => (props.multi ? `${name}-${sessionId ?? ''}` : name);
+  useEffect(() => {
+    props.onReport(props.chamber.id, {
+      state: queue.state,
+      connected: queue.connected,
+      pendingCount: queue.pendingCount,
+      lastServerTs: queue.lastServerTs,
+    });
+  }, [
+    props.onReport,
+    props.chamber.id,
+    queue.state,
+    queue.connected,
+    queue.pendingCount,
+    queue.lastServerTs,
+  ]);
 
   /**
    * Names beside the serials (`B1.4`). Re-read whenever the queue holds
@@ -220,8 +242,14 @@ function ConsoleBody(): ReactNode {
       return;
     }
     // And one that has ended takes nothing at all (`BTN-B02-END`).
-    if (state.status === 'ended') {
-      show({ title: t('chamberHasEnded', locale), tone: 'caution' });
+    if (state.status === 'ended' || state.status === 'cancelled') {
+      show({
+        title: t(
+          state.status === 'cancelled' ? 'receptionChamberCancelled' : 'chamberHasEnded',
+          locale,
+        ),
+        tone: 'caution',
+      });
       return;
     }
 
@@ -305,33 +333,42 @@ function ConsoleBody(): ReactNode {
   // P pauses and resumes. The console is operated at speed by people who are
   // not looking at the mouse — so a key is answered by the queue as it is on
   // the screen, never by the one before the last redraw (`useWindowKeydown`).
-  useWindowKeydown((event) => {
-    if (event.target instanceof HTMLInputElement) return;
-    if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
-      event.preventDefault();
-      void undo();
-      return;
-    }
-    // Every other key here is a bare letter. With a modifier held it is the
-    // browser's — Ctrl+P prints, Ctrl+W closes the tab — not the counter's.
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
-    if (event.key === 'p' || event.key === 'P') {
-      event.preventDefault();
-      togglePause();
-    }
-    if (event.key === 'n' || event.key === 'N' || event.code === 'Space') {
-      event.preventDefault();
-      void callNext();
-    }
-    // B1.2: W opens the walk-in modal — online only, like the button.
-    if ((event.key === 'w' || event.key === 'W') && queue.connected && sessionStatus !== 'ended') {
-      event.preventDefault();
-      setWalkingIn(true);
-    }
-    if ((event.key === 'a' || event.key === 'A') && sessionStatus !== 'ended') {
-      void queue.act('DOCTOR_ARRIVED', arrivalNow(state?.plan.plannedStart ?? null));
-    }
-  });
+  // Stable registration reads the functions from the current render. Waiting
+  // for an effect after a pause/resume redraw leaves the keyboard one state
+  // behind the screen (A11Y-05, FR-REC-05).
+  const liveCommands = useRef<ReceptionCommands | null>(null);
+  liveCommands.current =
+    state === null
+      ? null
+      : {
+          next: () => {
+            void callNext();
+          },
+          pause: togglePause,
+          undo: () => {
+            void undo();
+          },
+          arrived: () => {
+            if (sessionStatus !== 'ended' && sessionStatus !== 'cancelled')
+              void queue.act('DOCTOR_ARRIVED', arrivalNow(state.plan.plannedStart));
+          },
+          walkIn: () => {
+            if (queue.connected && sessionStatus !== 'ended' && sessionStatus !== 'cancelled')
+              setWalkingIn(true);
+          },
+        };
+  const hasState = state !== null;
+  useEffect(() => {
+    if (sessionId === null || !hasState) return;
+    props.onCommands(sessionId, {
+      next: () => liveCommands.current?.next(),
+      pause: () => liveCommands.current?.pause(),
+      undo: () => liveCommands.current?.undo(),
+      arrived: () => liveCommands.current?.arrived(),
+      walkIn: () => liveCommands.current?.walkIn(),
+    });
+    return () => props.onCommands(sessionId, null);
+  }, [sessionId, hasState, props.onCommands]);
 
   if (sessionId === null) {
     return <Notice>{t('noSession', locale)}</Notice>;
@@ -340,7 +377,12 @@ function ConsoleBody(): ReactNode {
   if (queue.loading) {
     // GR-03: loading is a designed state. A skeleton mirrors the layout rather
     // than covering it with a spinner (FRONTEND.md §5.9).
-    return <Notice>{t('loading', locale)}</Notice>;
+    return (
+      <div className="cf-reception-loading">
+        <h2>{localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)}</h2>
+        <p role="status">{t('loading', locale)}</p>
+      </div>
+    );
   }
 
   if (state === null) {
@@ -355,447 +397,458 @@ function ConsoleBody(): ReactNode {
     );
   }
 
-  const pendingBookingIds = new Set<string>();
+  const pendingBookingIds = queue.pendingBookingIds;
   const paused = state.status === 'paused';
-  const ended = state.status === 'ended';
+  const ended = state.status === 'ended' || state.status === 'cancelled';
   const unseen = unseenAtEnd(state);
   /** An ended chamber takes no action; a tap on a row says so instead of trying. */
   const afterEnd = (): boolean => {
     if (!ended) return false;
-    show({ title: t('chamberHasEnded', locale), tone: 'caution' });
+    show({
+      title: t(
+        state.status === 'cancelled' ? 'receptionChamberCancelled' : 'chamberHasEnded',
+        locale,
+      ),
+      tone: 'caution',
+    });
     return true;
   };
 
+  const arrived = state.entries.filter(
+    (entry) => entry.status === 'waiting' && entry.arrivedAt !== null,
+  ).length;
+  const primaryLabel =
+    state.status === 'scheduled'
+      ? CONSOLE.doctorArrived
+      : paused
+        ? CONSOLE.resume
+        : serving !== null && waiting.length === 0
+          ? CONSOLE.markDone
+          : serving === null
+            ? CONSOLE.callNext
+            : CONSOLE.finishAndCallNext;
   return (
-    <div className="flex min-h-screen">
-      {/* --- navigation rail (B1.1) ---------------------------------------- */}
-      <ConsoleRail current="navQueue" locale={locale}>
+    <article
+      data-session-status={state.status}
+      className="cf-reception-chamber"
+      data-testid={`reception-chamber-${sessionId}`}
+      data-session-id={sessionId}
+      data-active={props.active ? 'true' : 'false'}
+      onFocusCapture={props.onActivate}
+      onClickCapture={props.onActivate}
+    >
+      <header className="cf-reception-summary">
+        <div className="cf-reception-identity">
+          <h2>
+            <button
+              type="button"
+              className="cf-reception-expand"
+              aria-expanded={props.expanded}
+              aria-controls={`queue-${sessionId}`}
+              data-testid={props.multi ? `open-receptionist-${sessionId}` : 'chamber-toggle'}
+              onClick={props.onToggle}
+            >
+              <span data-testid={testId('chamber-title')}>
+                {localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)}
+              </span>
+              <span aria-hidden="true">{props.expanded ? '⌃' : '⌄'}</span>
+            </button>
+          </h2>
+          <p className="cf-secondary">
+            {localName(locale, chamber.departmentNameBn, chamber.departmentNameEn)}
+            {chamber.room === null ? '' : ` · ${chamber.room}`} ·{' '}
+            {formatClock(state.plan.plannedStart, numerals)} –{' '}
+            {formatClock(state.plan.plannedEnd, numerals)}
+          </p>
+          <ConsoleStatus
+            tone={
+              ended
+                ? 'neutral'
+                : paused
+                  ? 'caution'
+                  : state.status === 'running'
+                    ? 'positive'
+                    : 'information'
+            }
+            label={
+              ended
+                ? state.status === 'cancelled'
+                  ? CONSOLE.receptionChamberCancelled
+                  : CONSOLE.chamberEnded
+                : paused
+                  ? CONSOLE.pause
+                  : state.status === 'running'
+                    ? CONSOLE.actualStart
+                    : CONSOLE.notStarted
+            }
+          />
+        </div>
+        <div className="cf-reception-current">
+          <strong data-testid={serving === null ? undefined : testId('now-serving')}>
+            {serving === null ? '—' : formatSerial(serving.serial, numerals)}
+          </strong>
+          <div>
+            <small>{t('nowServing', locale)}</small>
+            <p data-testid={testId('now-serving-name')}>
+              {serving === null
+                ? t('nobodyInChamber', locale)
+                : (names.get(serving.patientId) ?? '—')}
+            </p>
+          </div>
+        </div>
+        <div className="cf-reception-counts">
+          <p>
+            <strong data-testid={testId('count-waiting')}>
+              {formatNumber(waiting.length, numerals)}
+            </strong>{' '}
+            {t('countWaiting', locale)}
+          </p>
+          <p className="cf-secondary">
+            {formatNumber(arrived, numerals)} · {t('statusArrived', locale)}
+          </p>
+        </div>
+        <div className="cf-reception-actions">
+          <ConsoleAction
+            label={CONSOLE.addWalkin}
+            variant="secondary"
+            data-testid={testId('add-walkin')}
+            {...(queue.connected && !ended
+              ? {}
+              : {
+                  disabled: true,
+                  disabledReason: t(ended ? 'chamberHasEnded' : 'walkInOffline', locale),
+                })}
+            onClick={() => setWalkingIn(true)}
+          />
+          {ended ? (
+            <ConsoleAction
+              label={CONSOLE.callNext}
+              variant="secondary"
+              data-testid={testId('call-next')}
+              disabled
+              disabledReason={t('chamberHasEnded', locale)}
+            />
+          ) : (
+            <ConsoleAction
+              label={primaryLabel}
+              data-testid={testId(paused ? 'resume-primary' : 'call-next')}
+              {...(state.status === 'running' && waiting.length === 0 && serving === null
+                ? { disabled: true, disabledReason: t('emptyQueue', locale) }
+                : {})}
+              onClick={() => {
+                if (state.status === 'scheduled')
+                  void queue.act('DOCTOR_ARRIVED', arrivalNow(state.plan.plannedStart));
+                else if (paused) togglePause();
+                else void callNext();
+              }}
+            />
+          )}
+        </div>
+      </header>
+      <div className="cf-reception-freshness">
+        <FreshnessLine
+          asOf={queue.lastServerTs === null ? null : new Date(queue.lastServerTs)}
+          now={now}
+          labels={{
+            justNow: t('updatedJustNow', locale),
+            ago: t('updatedAgo', locale),
+            never: t('neverSynced', locale),
+            stale: t('staleWarning', locale),
+          }}
+          formatMinutes={(value) => formatAge(value, locale, numerals)}
+        />
+        {queue.pendingCount > 0 ? (
+          <span role="status">
+            {formatNumber(queue.pendingCount, numerals)} · {t('pendingToSync', locale)}
+          </span>
+        ) : null}
+      </div>
+      <div id={`queue-${sessionId}`} hidden={!props.expanded} className="cf-reception-expanded">
+        {paused ? (
+          <p role="status" data-testid={testId('paused-banner')}>
+            {t('pausedResumeFirst', locale)}
+          </p>
+        ) : null}
+        {ended ? (
+          <p role="status" data-testid={testId('ended-banner')}>
+            {t('chamberEnded', locale)}{' '}
+            <a href="/" data-testid={testId('back-to-chambers')}>
+              {t('backToChambers', locale)}
+            </a>
+          </p>
+        ) : null}
+        <div className="cf-reception-toolbar">
+          <dl className="cf-reception-statistics">
+            <Counter
+              name="seen"
+              label={t('countSeen', locale)}
+              value={counts?.done ?? 0}
+              scope={props.multi ? sessionId : null}
+            />
+            <Counter
+              name="late"
+              label={t('countLate', locale)}
+              value={counts?.late ?? 0}
+              scope={props.multi ? sessionId : null}
+            />
+            <Counter
+              name="no-show"
+              label={t('countNoShow', locale)}
+              value={counts?.noShow ?? 0}
+              scope={props.multi ? sessionId : null}
+            />
+          </dl>
+          <div className="cf-reception-actions">
+            {paused ? (
+              <ConsoleAction
+                label={CONSOLE.callNext}
+                variant="secondary"
+                data-testid={testId('call-next')}
+                disabled
+                disabledReason={t('pausedResumeFirst', locale)}
+              />
+            ) : null}
+            {!ended ? (
+              <ConsoleAction
+                label={paused ? CONSOLE.resume : CONSOLE.pause}
+                variant="secondary"
+                data-testid={testId(paused ? 'resume-session' : 'pause-session')}
+                {...(paused || state.status === 'running'
+                  ? {}
+                  : { disabled: true, disabledReason: t('pauseNeedsRunning', locale) })}
+                onClick={togglePause}
+              />
+            ) : null}
+            <details className="cf-reception-menu">
+              <summary data-testid={testId('chamber-more')}>
+                <BilingualLabel label={CONSOLE.receptionMore} />
+              </summary>
+              <div className="cf-stack">
+                <ConsoleAction
+                  label={CONSOLE.undo}
+                  variant="secondary"
+                  onClick={() => void undo()}
+                />
+                <p className="cf-secondary">{t('receptionUndoHelp', locale)}</p>
+                {!ended ? (
+                  <ConsoleAction
+                    label={CONSOLE.endChamber}
+                    variant="secondary"
+                    data-testid={testId('end-chamber')}
+                    {...(serving !== null || !queue.connected
+                      ? {
+                          disabled: true,
+                          disabledReason: t(
+                            serving !== null ? 'endPatientInChamber' : 'endNeedsConnection',
+                            locale,
+                          ),
+                        }
+                      : {})}
+                    onClick={() => {
+                      setEndAcknowledged(false);
+                      setEnding(true);
+                    }}
+                  />
+                ) : null}
+              </div>
+            </details>
+          </div>
+        </div>
+        {serving === null ? null : (
+          <section className="cf-reception-patient" data-testid={testId('now-serving-card')}>
+            <div>
+              <strong>{formatSerial(serving.serial, numerals)}</strong>
+              <h3>{names.get(serving.patientId) ?? '—'}</h3>
+              <p>{t('nowServing', locale)}</p>
+            </div>
+            <ConsoleAction
+              label={CONSOLE.markDone}
+              variant="secondary"
+              onClick={() => {
+                if (!afterEnd())
+                  void queue.act('PATIENT_DONE', {
+                    bookingId: serving.bookingId,
+                    consultSeconds: elapsedSeconds(serving, now),
+                  });
+              }}
+            />
+          </section>
+        )}
+        <QueueTable
+          state={state}
+          locale={locale}
+          pendingBookingIds={pendingBookingIds}
+          patientNames={names}
+          scope={props.multi ? sessionId : null}
+          ended={ended}
+          onDone={(entry) => {
+            if (!afterEnd())
+              void queue.act('PATIENT_DONE', {
+                bookingId: entry.bookingId,
+                consultSeconds: elapsedSeconds(entry, now),
+              });
+          }}
+          onLate={(entry) => {
+            if (!afterEnd())
+              void queue.act('PATIENT_LATE', {
+                bookingId: entry.bookingId,
+                expectedMinutes: 20,
+                reinsertAfter: 3,
+              });
+          }}
+          onNoShow={(entry) => {
+            if (!afterEnd())
+              void queue.act('PATIENT_NO_SHOW', {
+                bookingId: entry.bookingId,
+                graceUsedMinutes: 15,
+              });
+          }}
+          onReinstate={(entry) => {
+            if (!afterEnd())
+              void queue.act('PATIENT_REINSERTED', { bookingId: entry.bookingId, newPosition: 0 });
+          }}
+          onCheckIn={(entry) => {
+            if (!afterEnd()) setCheckingIn(entry);
+          }}
+        />
         <OfflineBlock
           connected={queue.connected}
           pendingCount={queue.pendingCount}
           lastServerTs={queue.lastServerTs}
           stuckCount={queue.stuckCount}
-          onRetryStuck={() => {
-            void queue.retryStuck();
-          }}
-          onDiscardStuck={() => {
-            void queue.discardStuck();
-          }}
+          onRetryStuck={() => void queue.retryStuck()}
+          onDiscardStuck={() => void queue.discardStuck()}
           durable={queue.durable}
           locale={locale}
           now={now}
+          scope={props.multi ? sessionId : null}
         />
-      </ConsoleRail>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
-        <DemoBanner />
-
-        {/* --- session bar (B1.2) ------------------------------------------ */}
-        {/* Whose chamber, then when: the doctor's name is what a receptionist
-            and a patient at the counter both check first. Times through
-            `formatClock`, in the reading language's day periods and digits —
-            never sliced out of the ISO string, which is UTC (`DB-P4`) and once
-            put an 18:00 Dhaka chamber on this line as 12:00. */}
-        <header className="flex items-center gap-3 border-b border-line bg-surface px-6 py-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-title-md font-bold" data-testid="chamber-title">
-              {chamber === null
-                ? t('navQueue', locale)
-                : `${localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)} · ${localName(
-                    locale,
-                    chamber.departmentNameBn,
-                    chamber.departmentNameEn,
-                  )}`}
-            </h1>
-            <p className="text-body-sm text-ink-secondary tabular-nums">
-              {t('chamberHours', locale)} {formatClock(state.plan.plannedStart, numerals)} –{' '}
-              {formatClock(state.plan.plannedEnd, numerals)} ·{' '}
-              {state.doctorArrivedAt === null
-                ? t('notStarted', locale)
-                : `${t('actualStart', locale)} ${formatClock(state.doctorArrivedAt, numerals)}`}
-            </p>
-          </div>
-
-          <Button
-            variant="secondary"
-            onClick={() => {
-              if (afterEnd()) return;
-              void queue.act('DOCTOR_ARRIVED', arrivalNow(state.plan.plannedStart));
-            }}
-          >
-            {t('doctorArrived', locale)}
-          </Button>
-
-          {paused ? (
-            <Button data-testid="resume-session" onClick={togglePause}>
-              {t('resume', locale)}
-            </Button>
-          ) : state.status === 'running' ? (
-            <Button variant="secondary" data-testid="pause-session" onClick={togglePause}>
-              {t('pause', locale)}
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              data-testid="pause-session"
-              disabled
-              disabledReason={t('pauseNeedsRunning', locale)}
-            >
-              {t('pause', locale)}
-            </Button>
-          )}
-
-          {/* BTN-B02-WALKIN (pilot step 23). A serial needs the server, so
-              offline it says so instead of queueing a number two counters
-              could both hand out (lib/registration.ts). */}
-          {queue.connected && !ended ? (
-            <Button
-              variant="secondary"
-              data-testid="add-walkin"
-              onClick={() => {
-                setWalkingIn(true);
-              }}
-            >
-              {t('addWalkin', locale)}
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              data-testid="add-walkin"
-              disabled
-              disabledReason={t(ended ? 'chamberHasEnded' : 'walkInOffline', locale)}
-            >
-              {t('addWalkin', locale)}
-            </Button>
-          )}
-
-          {/* BTN-B02-END. Off, with its reason, while it would leave somebody
-              in the chamber, and while the server cannot be told. Gone once
-              the chamber has ended: there is nothing left to end. */}
-          {ended ? null : serving !== null || !queue.connected ? (
-            <Button
-              variant="secondary"
-              data-testid="end-chamber"
-              disabled
-              disabledReason={t(
-                serving !== null ? 'endPatientInChamber' : 'endNeedsConnection',
-                locale,
-              )}
-            >
-              {t('endChamber', locale)}
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              data-testid="end-chamber"
-              onClick={() => {
-                setEndAcknowledged(false);
-                setEnding(true);
-              }}
-            >
-              {t('endChamber', locale)}
-            </Button>
-          )}
-
-          {/* The single most-used control in the system (B1.3). Off during a
-              break, and it says why (FRONTEND.md §5.1). */}
-          {paused || ended ? (
-            <Button
-              size="lg"
-              data-testid="call-next"
-              disabled
-              disabledReason={t(ended ? 'chamberHasEnded' : 'pausedResumeFirst', locale)}
-            >
-              {serving === null ? t('callNext', locale) : t('finishAndCallNext', locale)}
-            </Button>
-          ) : (
-            <Button
-              size="lg"
-              data-testid="call-next"
-              onClick={() => {
-                void callNext();
-              }}
-            >
-              {serving === null ? t('callNext', locale) : t('finishAndCallNext', locale)}
-            </Button>
-          )}
-
-          <ConsoleLanguageSwitch />
-        </header>
-
-        {/* A break is a state of the whole chamber, so it is said across the
-            whole screen and stays until it ends (FR-REC-05). */}
-        {paused && state.pausedAt !== null ? (
+        <StandbyCard
+          sessionId={sessionId}
+          state={state}
+          connected={queue.connected}
+          pendingCount={queue.pendingCount}
+          locale={locale}
+          apiBaseUrl={API_BASE}
+          getToken={readToken}
+        />
+      </div>
+      <Sheet
+        console
+        open={ending}
+        onOpenChange={(open) => {
+          if (!open && !endBusy) setEnding(false);
+        }}
+        variant="modal"
+        dismissible={false}
+        title={t('endChamberTitle', locale)}
+        // Which chamber: the doctor, and the day it belongs to.
+        description={`${
+          chamber === null
+            ? t('navQueue', locale)
+            : localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)
+        } · ${formatDateTime(state.plan.plannedStart, numerals)}`}
+      >
+        <div className="flex flex-col gap-4" data-testid={testId('end-chamber-sheet')}>
           <p
-            role="status"
-            data-testid="paused-banner"
-            className="border-b border-line bg-warn-100 px-6 py-3 text-body-md text-warn-700"
+            className="text-body-md"
+            data-testid={testId('end-unseen')}
+            data-unseen={String(unseen)}
           >
-            {format('sessionPausedSince', locale, {
-              time: formatClock(state.pausedAt, numerals),
-            })}
+            {unseen > 0
+              ? format('endChamberUnseen', locale, { count: formatNumber(unseen, numerals) })
+              : t('endChamberNobodyLeft', locale)}{' '}
+            {t('endChamberConsequence', locale)}
           </p>
-        ) : null}
 
-        {/* An ended chamber says so across the screen, and offers the way back
-            to the chambers that can still be worked (`S-B-01`). */}
-        {ended ? (
-          <p
-            role="status"
-            data-testid="ended-banner"
-            className="border-b border-line bg-warn-100 px-6 py-3 text-body-md text-warn-700"
-          >
-            {t('chamberEnded', locale)}{' '}
-            <a href="/" className="font-bold underline" data-testid="back-to-chambers">
-              {t('backToChambers', locale)}
-            </a>
-          </p>
-        ) : null}
-
-        {/* MOD-B02-END. Not dismissed by a stray tap on the backdrop: the
-            answer matters (FRONTEND.md §5.6). */}
-        <Sheet
-          open={ending}
-          onOpenChange={(open) => {
-            if (!open && !endBusy) setEnding(false);
-          }}
-          variant="modal"
-          dismissible={false}
-          title={t('endChamberTitle', locale)}
-          // Which chamber: the doctor, and the day it belongs to.
-          description={`${
-            chamber === null
-              ? t('navQueue', locale)
-              : localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)
-          } · ${formatDateTime(state.plan.plannedStart, numerals)}`}
-        >
-          <div className="flex flex-col gap-4" data-testid="end-chamber-sheet">
-            <p className="text-body-md" data-testid="end-unseen" data-unseen={String(unseen)}>
-              {unseen > 0
-                ? format('endChamberUnseen', locale, { count: formatNumber(unseen, numerals) })
-                : t('endChamberNobodyLeft', locale)}{' '}
-              {t('endChamberConsequence', locale)}
-            </p>
-
-            {/* Patients left unseen: a deliberate tick, not a second tap in
+          {/* Patients left unseen: a deliberate tick, not a second tap in
                 the same place (owner's decision, 2026-10-05). */}
-            {unseen > 0 ? (
-              <label className="flex min-h-touch items-center gap-3 text-body-md">
-                <input
-                  type="checkbox"
-                  checked={endAcknowledged}
-                  data-testid="end-acknowledge"
-                  onChange={(event) => {
-                    setEndAcknowledged(event.target.checked);
-                  }}
-                />
-                {t('endChamberAcknowledge', locale)}
-              </label>
-            ) : null}
+          {unseen > 0 ? (
+            <label className="flex min-h-touch items-center gap-3 text-body-md">
+              <input
+                type="checkbox"
+                checked={endAcknowledged}
+                data-testid="end-acknowledge"
+                onChange={(event) => {
+                  setEndAcknowledged(event.target.checked);
+                }}
+              />
+              {t('endChamberAcknowledge', locale)}
+            </label>
+          ) : null}
 
-            {/* GR-01: the safe option on the left. */}
-            <SheetActions destructive>
-              {unseen > 0 && !endAcknowledged ? (
-                <Button
-                  variant="danger-quiet"
-                  data-testid="end-confirm"
-                  disabled
-                  disabledReason={t('endChamberAcknowledge', locale)}
-                >
-                  {t('endChamberConfirm', locale)}
-                </Button>
-              ) : (
-                <Button
-                  variant="danger-quiet"
-                  data-testid="end-confirm"
-                  loading={endBusy}
-                  onClick={() => {
-                    void confirmEnd();
-                  }}
-                >
-                  {t('endChamberConfirm', locale)}
-                </Button>
-              )}
+          {/* GR-01: the safe option on the left. */}
+          <SheetActions destructive>
+            {unseen > 0 && !endAcknowledged ? (
               <Button
-                variant="secondary"
-                data-testid="end-keep"
+                variant="danger-quiet"
+                data-testid={testId('end-confirm')}
+                disabled
+                disabledReason={t('endChamberAcknowledge', locale)}
+              >
+                {t('endChamberConfirm', locale)}
+              </Button>
+            ) : (
+              <Button
+                variant="danger-quiet"
+                data-testid={testId('end-confirm')}
+                loading={endBusy}
                 onClick={() => {
-                  setEnding(false);
+                  void confirmEnd();
                 }}
               >
-                {t('endChamberKeep', locale)}
+                {t('endChamberConfirm', locale)}
               </Button>
-            </SheetActions>
-          </div>
-        </Sheet>
-
-        {/* --- queue table (B1.4) ------------------------------------------ */}
-        <main className="flex min-h-0 flex-1 gap-5 p-5">
-          <div className="min-w-0 flex-1 overflow-auto rounded-lg border border-line bg-surface">
-            <QueueTable
-              state={state}
-              locale={locale}
-              pendingBookingIds={pendingBookingIds}
-              patientNames={names}
-              onDone={(entry) => {
-                if (afterEnd()) return;
-                void queue.act('PATIENT_DONE', {
-                  bookingId: entry.bookingId,
-                  consultSeconds: elapsedSeconds(entry, now),
-                });
+            )}
+            <Button
+              variant="secondary"
+              data-testid={testId('end-keep')}
+              onClick={() => {
+                setEnding(false);
               }}
-              onLate={(entry) => {
-                if (afterEnd()) return;
-                void queue.act('PATIENT_LATE', {
-                  bookingId: entry.bookingId,
-                  expectedMinutes: 20,
-                  reinsertAfter: 3,
-                });
-              }}
-              onNoShow={(entry) => {
-                if (afterEnd()) return;
-                void queue.act('PATIENT_NO_SHOW', {
-                  bookingId: entry.bookingId,
-                  graceUsedMinutes: 15,
-                });
-              }}
-              onReinstate={(entry) => {
-                if (afterEnd()) return;
-                void queue.act('PATIENT_REINSERTED', {
-                  bookingId: entry.bookingId,
-                  newPosition: 0,
-                });
-              }}
-              onCheckIn={(entry) => {
-                if (afterEnd()) return;
-                setCheckingIn(entry);
-              }}
-            />
-
-            <WalkInSheet
-              sessionId={sessionId}
-              open={walkingIn}
-              online={queue.connected}
-              waiting={waiting.length}
-              onAdded={(message) => {
-                setWalkingIn(false);
-                show({ title: message, tone: 'positive' });
-              }}
-              onClose={() => {
-                setWalkingIn(false);
-              }}
-            />
-
-            {/* MOD-B02-CHECKIN. The suggestion is the queue's own estimate, the
-                same function the patient's phone counts down from. */}
-            <CheckInSheet
-              serial={checkingIn?.serial ?? null}
-              suggested={
-                checkingIn === null
-                  ? null
-                  : suggestedQuote(state, checkingIn.bookingId, time.fromDate(now))
-              }
-              locale={locale}
-              onClose={() => {
-                setCheckingIn(null);
-              }}
-              onConfirm={(quotedWaitMinutes) => {
-                const entry = checkingIn;
-                setCheckingIn(null);
-                if (entry === null) return;
-                void queue.act('PATIENT_ARRIVED', {
-                  bookingId: entry.bookingId,
-                  quotedWaitMinutes,
-                });
-                show({
-                  title: format('checkedIn', locale, {
-                    serial: formatSerial(entry.serial, numerals),
-                    minutes: formatNumber(quotedWaitMinutes, numerals),
-                  }),
-                  tone: 'positive',
-                });
-              }}
-            />
-          </div>
-
-          {/* --- right column (B1.5) ---------------------------------------- */}
-          <aside className="w-80 shrink-0 space-y-4">
-            {/* The chamber, in the institution's colour: the number and the
-                person, large, because this is what reception is asked about
-                all evening (the `Reception` artboard, FRONTEND.md §0.4). */}
-            <section
-              className="rounded-lg bg-brand-700 p-5 text-ink-inverse"
-              data-testid="now-serving-card"
             >
-              <p className="text-body-sm text-brand-100">{t('nowServing', locale)}</p>
-              {serving === null ? (
-                <p className="mt-2 text-body-md">{t('nobodyInChamber', locale)}</p>
-              ) : (
-                <>
-                  <p className="text-display-lg font-bold tabular-nums" data-testid="now-serving">
-                    {formatNumber(serving.serial, numerals)}
-                  </p>
-                  <p className="mt-1 text-body-lg" data-testid="now-serving-name">
-                    {names.get(serving.patientId) ?? ''}
-                  </p>
-                </>
-              )}
-              <p className="mt-3 text-body-sm text-brand-100">
-                {format('waitingCount', locale, {
-                  count: formatNumber(waiting.length, numerals),
-                })}
-              </p>
-            </section>
+              {t('endChamberKeep', locale)}
+            </Button>
+          </SheetActions>
+        </div>
+      </Sheet>
 
-            <div className="px-1">
-              {/*
-                CLAUDE.md §5.8: every live figure renders <FreshnessLine>.
-                This is the figure the whole product is about, so it is the one
-                that must never appear without saying how old it is.
-              */}
-              <FreshnessLine
-                asOf={queue.lastServerTs === null ? null : new Date(queue.lastServerTs)}
-                now={now}
-                labels={{
-                  justNow: t('updatedJustNow', locale),
-                  ago: t('updatedAgo', locale),
-                  never: t('neverSynced', locale),
-                  stale: t('staleWarning', locale),
-                }}
-                formatMinutes={(value) => formatAge(value, locale, numerals)}
-              />
-            </div>
-
-            <Card>
-              <p className="text-caption text-ink-muted">{t('countersToday', locale)}</p>
-              <dl className="mt-2 grid grid-cols-2 gap-2 text-body-sm">
-                <Counter name="seen" label={t('countSeen', locale)} value={counts?.done ?? 0} />
-                <Counter name="waiting" label={t('countWaiting', locale)} value={waiting.length} />
-                <Counter name="late" label={t('countLate', locale)} value={counts?.late ?? 0} />
-                <Counter
-                  name="no-show"
-                  label={t('countNoShow', locale)}
-                  value={counts?.noShow ?? 0}
-                />
-              </dl>
-            </Card>
-
-            {/* BTN-B02-OFFER: a freed chair goes to the standby list, and the
-                acceptance is recorded here (FR-REC-30). */}
-            <StandbyCard
-              sessionId={sessionId}
-              state={state}
-              connected={queue.connected}
-              pendingCount={queue.pendingCount}
-              locale={locale}
-              apiBaseUrl={API_BASE}
-              getToken={readToken}
-            />
-          </aside>
-        </main>
-      </div>
-    </div>
+      <WalkInSheet
+        sessionId={sessionId}
+        open={walkingIn}
+        online={queue.connected && !ended}
+        waiting={waiting.length}
+        chamberName={localName(locale, chamber.doctorNameBn, chamber.doctorNameEn)}
+        onAdded={(message) => {
+          setWalkingIn(false);
+          show({ title: message, tone: 'positive' });
+        }}
+        onClose={() => setWalkingIn(false)}
+      />
+      <CheckInSheet
+        serial={checkingIn?.serial ?? null}
+        suggested={
+          checkingIn === null
+            ? null
+            : suggestedQuote(state, checkingIn.bookingId, time.fromDate(now))
+        }
+        locale={locale}
+        onClose={() => setCheckingIn(null)}
+        onConfirm={(quotedWaitMinutes) => {
+          const entry = checkingIn;
+          setCheckingIn(null);
+          if (entry === null || afterEnd()) return;
+          void queue.act('PATIENT_ARRIVED', { bookingId: entry.bookingId, quotedWaitMinutes });
+          show({
+            title: format('checkedIn', locale, {
+              serial: formatSerial(entry.serial, numerals),
+              minutes: formatNumber(quotedWaitMinutes, numerals),
+            }),
+            tone: 'positive',
+          });
+        }}
+      />
+    </article>
   );
 }
 
@@ -803,18 +856,23 @@ function Counter({
   name,
   label,
   value,
+  scope,
 }: {
   /** What a test reads it by: the figures a counter checks its paper list against. */
   readonly name: string;
   readonly label: string;
   readonly value: number;
+  readonly scope: string | null;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
   return (
     <div>
       <dt className="text-caption text-ink-muted">{label}</dt>
-      <dd className="text-title-sm tabular-nums" data-testid={`count-${name}`}>
+      <dd
+        className="text-title-sm tabular-nums"
+        data-testid={scope === null ? `count-${name}` : `count-${name}-${scope}`}
+      >
         {formatNumber(value, numerals)}
       </dd>
     </div>
@@ -823,7 +881,7 @@ function Counter({
 
 function Notice({ children }: { readonly children: ReactNode }): ReactNode {
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="cf-reception-loading">
       <p className="text-body-lg text-ink-muted">{children}</p>
     </div>
   );

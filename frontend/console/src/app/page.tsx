@@ -78,6 +78,7 @@ const HOSPITAL_ROLES = new Set([
  * of routing to `undefined`.
  */
 const VIEW_OF: Readonly<Record<Exclude<ConsoleChoice['kind'], 'chamber'>, string>> = {
+  reception: 'reception',
   ward: 'ward',
   emergency: 'er',
   lab: 'lab',
@@ -259,7 +260,9 @@ export default function Page(): ReactNode {
 
   if (staff && session !== null) {
     const body =
-      view === 'ward' ? (
+      view === 'reception' ? (
+        <ReceptionConsole />
+      ) : view === 'ward' ? (
         <WardBoard />
       ) : view === 'er' ? (
         <EmergencyConsole />

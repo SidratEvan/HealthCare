@@ -1,0 +1,224 @@
+/* Reception-only presentation over the approved foundation (FR-REC-32). */
+.console-foundation .cf-reception-workspace {
+  max-width: 1500px;
+  margin: auto;
+  padding-bottom: 130px;
+}
+.console-foundation .cf-reception-chamber,
+.console-foundation .cf-reception-loading {
+  background: var(--bg-surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-lg);
+  padding: var(--cf-space-5);
+  box-shadow: var(--cf-shadow);
+}
+.console-foundation .cf-reception-chamber[data-active='true'] {
+  border-color: var(--brand-300);
+}
+.console-foundation .cf-reception-chamber[data-session-status='ended'],
+.console-foundation .cf-reception-chamber[data-session-status='cancelled'] {
+  background: var(--bg-sunken);
+}
+.console-foundation .cf-reception-summary {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.3fr) minmax(160px, 1fr) minmax(100px, 0.65fr) auto;
+  gap: var(--cf-space-5);
+  align-items: center;
+}
+.console-foundation .cf-reception-identity h2 {
+  font-size: 23px;
+  margin: 0;
+}
+.console-foundation .cf-reception-expand {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: var(--cf-space-3);
+  align-items: center;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--ink-primary);
+  font-weight: 700;
+  min-height: var(--cf-touch);
+  padding: 0;
+}
+.console-foundation .cf-reception-current {
+  display: flex;
+  gap: var(--cf-space-3);
+  align-items: center;
+}
+.console-foundation .cf-reception-current > strong {
+  display: grid;
+  place-items: center;
+  min-width: 56px;
+  min-height: 64px;
+  border-radius: var(--cf-radius-md);
+  background: var(--positive-100);
+  color: var(--positive-700);
+  font-size: 30px;
+}
+.console-foundation .cf-reception-current p {
+  font-weight: 700;
+}
+.console-foundation .cf-reception-current small {
+  color: var(--ink-muted);
+}
+.console-foundation .cf-reception-counts strong {
+  font-size: 26px;
+}
+.console-foundation .cf-reception-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cf-space-3);
+  align-items: center;
+}
+.console-foundation .cf-reception-actions > button {
+  min-width: 120px;
+}
+.console-foundation .cf-reception-freshness {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cf-space-4);
+  margin-top: var(--cf-space-3);
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+.console-foundation .cf-reception-expanded {
+  border-top: 1px solid var(--line-soft);
+  padding-top: var(--cf-space-5);
+  margin-top: var(--cf-space-5);
+}
+.console-foundation .cf-reception-toolbar {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--cf-space-4);
+  margin-bottom: var(--cf-space-5);
+}
+.console-foundation .cf-reception-statistics {
+  display: flex;
+  gap: var(--cf-space-5);
+}
+.console-foundation .cf-reception-patient {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--cf-space-5);
+  align-items: center;
+  background: var(--positive-100);
+  border: 1px solid var(--positive-700);
+  border-radius: var(--cf-radius-md);
+  padding: var(--cf-space-5);
+  margin-bottom: var(--cf-space-5);
+}
+.console-foundation .cf-reception-patient strong {
+  font-size: 32px;
+  color: var(--positive-700);
+}
+.console-foundation .cf-reception-row {
+  display: grid;
+  grid-template-columns: 64px minmax(160px, 1fr) minmax(120px, 0.6fr) auto;
+  gap: var(--cf-space-4);
+  align-items: center;
+  padding: var(--cf-space-4);
+  border-bottom: 1px solid var(--line-soft);
+}
+.console-foundation .cf-reception-row[data-status='in_chamber'] {
+  background: var(--positive-100);
+}
+.console-foundation .cf-reception-row > strong {
+  font-size: 23px;
+  color: var(--brand-700);
+}
+.console-foundation .cf-reception-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.console-foundation .cf-reception-row td {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.console-foundation .cf-reception-row td:nth-child(3) > span {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.console-foundation .cf-reception-row td:first-child {
+  font-size: 23px;
+  color: var(--brand-700);
+}
+.console-foundation .cf-reception-row > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.console-foundation .cf-reception-row .cf-secondary {
+  font-size: 14px;
+}
+.console-foundation .cf-reception-menu summary {
+  min-height: var(--cf-touch);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--cf-radius-md);
+  cursor: pointer;
+  padding: var(--cf-space-2) var(--cf-space-4);
+  color: var(--ink-primary);
+}
+.console-foundation .cf-reception-menu > div {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-md);
+  padding: var(--cf-space-3);
+  margin-top: var(--cf-space-2);
+  max-width: 300px;
+  background: var(--bg-surface);
+}
+.console-foundation .cf-reception-dialog {
+  overflow-y: auto;
+  max-height: 90dvh;
+}
+.console-foundation .cf-work-switch {
+  min-height: var(--cf-touch);
+  display: inline-flex;
+  align-items: center;
+  padding: var(--cf-space-2) var(--cf-space-3);
+  color: var(--brand-700);
+  text-decoration: underline;
+}
+@media (max-width: 1200px) {
+  .console-foundation .cf-reception-summary {
+    grid-template-columns: minmax(220px, 1fr) minmax(150px, 1fr) minmax(90px, 0.5fr);
+  }
+  .console-foundation .cf-reception-summary > .cf-reception-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+@media (max-width: 850px) {
+  .console-foundation .cf-reception-summary {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .console-foundation .cf-reception-identity {
+    grid-column: 1 / -1;
+  }
+  .console-foundation .cf-reception-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+  .console-foundation .cf-reception-row > .cf-reception-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+  .console-foundation .cf-reception-row td:nth-child(3) {
+    grid-column: 2;
+  }
+  .console-foundation .cf-reception-patient {
+    flex-wrap: wrap;
+  }
+  .console-foundation .cf-reception-chamber {
+    padding: var(--cf-space-4);
+  }
+}
+@media (max-width: 500px) {
+  .console-foundation .cf-reception-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .console-foundation .cf-reception-actions > button {
+    flex: 1;
+  }
+}

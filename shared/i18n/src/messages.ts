@@ -34,6 +34,51 @@ export interface Message {
  * what pressing it will do.
  */
 export const CONSOLE = {
+  receptionToday: { bn: 'আজকের চেম্বার', en: "Today's chambers" },
+  receptionChambers: { bn: 'চেম্বার', en: 'chambers' },
+  receptionMore: { bn: 'আরও', en: 'More' },
+  receptionNotArrived: { bn: 'এখনও আসেননি', en: 'Not arrived' },
+  receptionRegister: { bn: 'নিবন্ধন', en: 'Register' },
+  receptionChamberCancelled: {
+    bn: 'এই চেম্বার বাতিল করা হয়েছে।',
+    en: 'This chamber has been cancelled.',
+  },
+  receptionCountsLoading: {
+    bn: 'প্রতিটি চেম্বারের সর্বশেষ তথ্য নেওয়া হচ্ছে…',
+    en: 'Loading the latest information for each chamber…',
+  },
+  receptionChooseQueue: {
+    bn: 'আগে যে ডাক্তারের সিরিয়ালে কাজ করবেন, সেটি খুলে বেছে নিন।',
+    en: 'Open and select the doctor’s queue before using a shortcut.',
+  },
+  receptionKeyboardHint: {
+    bn: 'শর্টকাট শুধু বেছে নেওয়া খোলা সিরিয়ালে কাজ করে। N: পরের রোগী, A: ডাক্তার এসেছেন, P: বিরতি, W: রোগী যোগ।',
+    en: 'Shortcuts act only on the selected open queue. N: next, A: doctor arrived, P: pause/resume, W: add patient.',
+  },
+  receptionHelpAdd: {
+    bn: 'সঠিক ডাক্তারের রোগী যোগ বোতাম চাপুন। ফোন দিয়ে পরিবারের সঠিক মানুষটি বেছে নিন। সার্ভার নম্বর দেওয়ার পরেই সিরিয়াল বলুন।',
+    en: 'Use Add patient for the correct doctor. Find the phone’s household and choose the right person. Give the serial only after the server issues it.',
+  },
+  receptionHelpNext: {
+    bn: 'ডাক্তারের নাম ও বর্তমানে চেম্বারে থাকা রোগী দেখুন। পরের রোগী ডাকলে বর্তমান রোগীর দেখা শেষও নথিভুক্ত হয়।',
+    en: 'Check the doctor and current patient. Calling the next patient also records the current patient as finished.',
+  },
+  receptionHelpArrival: {
+    bn: 'ডাক্তার এলে ডাক্তার এসেছেন চাপুন। রোগী কাউন্টারে এলে তাঁর সারিতে এসেছেন চাপুন এবং যে অপেক্ষা বলেছেন তা লিখুন।',
+    en: 'Record Doctor arrived when the doctor arrives. Check in the patient on their row and enter the wait you quoted.',
+  },
+  receptionUndoHelp: {
+    bn: 'ভুল হলে একই চেম্বারে ফিরিয়ে নিন ব্যবহার করুন—সাধারণত ১০ সেকেন্ডের মধ্যে। সব কাজ ফেরানো যায় না; অন্য পরিবর্তন হলে সার্ভার বাধা দিতে পারে।',
+    en: 'Use Undo in the same chamber, normally within 10 seconds. Some actions cannot be undone; later changes can make the server refuse.',
+  },
+  receptionHelpPause: {
+    bn: 'বিরতি দিলে নতুন রোগী ডাকা ও অনুপস্থিত করা বন্ধ থাকে। কাজ শুরু হলে আবার শুরু চাপুন।',
+    en: 'During a pause, next-patient and no-show actions are blocked. Resume when work starts again.',
+  },
+  receptionHelpOffline: {
+    bn: 'সংযোগ না থাকলে সমর্থিত কাজ এই কম্পিউটারে পাঠানোর অপেক্ষায় থাকে। প্রতিটি চেম্বারের সময় ও অপাঠানো কাজ দেখুন। নতুন সিরিয়াল দিতে সংযোগ লাগে।',
+    en: 'Supported offline actions wait on this computer to be sent. Check each chamber’s timestamp and unsent actions. Issuing a new serial requires a connection.',
+  },
   accessRateLimited: {
     bn: 'অনেকবার চেষ্টা হয়েছে। একটু পরে আবার চেষ্টা করুন।',
     en: 'Too many attempts. Try again shortly.',

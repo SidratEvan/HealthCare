@@ -43,6 +43,7 @@ export function workspaceRoles(
 export function workspaceView(role: WorkspaceRole, off: readonly string[]): string | null {
   switch (role) {
     case 'receptionist':
+      return 'reception';
     case 'doctor':
       return null;
     case 'emergency':
@@ -71,6 +72,7 @@ export function workspaceRoleFor(
         ? 'receptionist'
         : null;
   const byView: Readonly<Record<string, WorkspaceRole>> = {
+    reception: 'receptionist',
     ward: 'ward',
     er: 'emergency',
     lab: 'lab',

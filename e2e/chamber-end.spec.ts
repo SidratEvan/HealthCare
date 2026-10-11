@@ -66,6 +66,8 @@ test.describe('ending a chamber (BTN-B02-END)', () => {
     await openConsole(page, demo);
     await expect(page.getByTestId('now-serving')).toHaveCount(0);
 
+    if (!(await page.getByTestId('end-chamber').isVisible()))
+      await page.getByTestId('chamber-more').click();
     await page.getByTestId('end-chamber').click();
     await expect(page.getByTestId('end-chamber-sheet')).toBeVisible();
     // Nobody is waiting, so there is nothing to acknowledge: the consequence
@@ -134,6 +136,8 @@ test.describe('ending a chamber (BTN-B02-END)', () => {
     await expect(page.getByTestId('end-chamber')).toBeEnabled();
 
     // So, as far as this screen knows, the chamber is empty and may be ended.
+    if (!(await page.getByTestId('end-chamber').isVisible()))
+      await page.getByTestId('chamber-more').click();
     await page.getByTestId('end-chamber').click();
     await page.getByTestId('end-acknowledge').check();
     await page.getByTestId('end-confirm').click();
@@ -157,6 +161,8 @@ test.describe('ending a chamber (BTN-B02-END)', () => {
     await openConsole(page, demo);
     const before = await chamberRecord(demo.sessionId);
 
+    if (!(await page.getByTestId('end-chamber').isVisible()))
+      await page.getByTestId('chamber-more').click();
     await page.getByTestId('end-chamber').click();
     await expect(page.getByTestId('end-unseen')).toContainText('৩ জন রোগীকে দেখা হয়নি।');
     await expect(page.getByTestId('end-unseen')).toContainText(
@@ -170,6 +176,8 @@ test.describe('ending a chamber (BTN-B02-END)', () => {
     await expect(page.getByTestId('end-chamber-sheet')).toBeHidden();
     expect((await chamberRecord(demo.sessionId)).status).toBe('running');
 
+    if (!(await page.getByTestId('end-chamber').isVisible()))
+      await page.getByTestId('chamber-more').click();
     await page.getByTestId('end-chamber').click();
     await expect(page.getByTestId('end-acknowledge')).not.toBeChecked();
     await expect(page.getByTestId('end-confirm')).toBeDisabled();
@@ -236,6 +244,8 @@ test.describe("yesterday's chamber and today's (S-B-01, FR-QUE-06)", () => {
       timeout: 15_000,
     });
 
+    if (!(await page.getByTestId('end-chamber').isVisible()))
+      await page.getByTestId('chamber-more').click();
     await page.getByTestId('end-chamber').click();
     await expect(page.getByTestId('end-unseen')).toHaveAttribute('data-unseen', '1');
     await page.getByTestId('end-acknowledge').check();
