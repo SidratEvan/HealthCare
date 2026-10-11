@@ -1,5 +1,19 @@
 # Accelerated completion checkpoint
 
+## 11 October 2026 follow-on completion
+
+This section supersedes the unfinished-gate list below for the work completed after the original handover. The original logs and status remain as historical evidence.
+
+- All 11 approved console designs and the bilingual company site are integrated on `feat/console-redesign-platform-import-national`. Company-site branch `ef089c5` was consolidated by local merge `5b3c304`; browser-regression corrections are in `1d2b7eb`.
+- Lab/Pharmacy (`2224e4c`) and Ward/Emergency (`d623c07`) worktrees are clean and retained. Their workspace changes are already present in the root feature branch; their branch tips predate the later shared-rail and browser-test corrections, so merging those tips would reintroduce stale files. No branch or worktree was deleted.
+- Current `pnpm verify --maxWorkers=1` passed: 168 files, 8,081 tests, typecheck, ESLint, and Prettier; exit 0. The first attempt exited 134 when ESLint exhausted the default Node heap. Re-running with `NODE_OPTIONS=--max-old-space-size=3072` passed.
+- Current `pnpm build` passed for API, workers, database, shared packages, patient app, console, and the merged site; exit 0.
+- Current `pnpm audit --prod --audit-level=high` found no known vulnerabilities; exit 0.
+- The 344-case browser run in `accelerated-completion-e2e-final.log` predates commit `1d2b7eb`: 326 passed and 18 failed. The 18 affected cases were corrected and passed in focused browser runs after that commit. The full 344-case browser suite was not repeated; the focused results do not claim a post-fix full-suite pass. Built and production browser modes were not run.
+- Verification logs and exit files remain in the repository root as local artifacts. Browser screenshots and existing untracked files remain untouched. Do not stage them wholesale.
+
+Root is at `5b3c304` on the feature branch. Company-site, Lab/Pharmacy, and Ward/Emergency worktrees are intact and clean. No push, protected-branch merge, or deployment occurred. This completes local redesign integration and the available verification gates; it does not certify production readiness. Preserve the explicit pilot launch gates and limitations below, including hospital-wide doctor scope, small-cohort privacy, provider/infrastructure validation, and hospital rehearsal.
+
 Updated 11 October 2026: usage-limit preservation handover. **Do not start another expensive verification in this session.** Approved implementation can resume without intermediate founder reviews in a new conversation. Everything stays local: no push, merge or deployment; synthetic localhost data only. Preserve clinical/security guards and existing work.
 
 CLAUDE.md, Phase 8A plan `docs/reports/MEDLIVEBD_CONSOLE_REDESIGN_IMPLEMENTATION_PLAN.md`, STATUS, previous checkpoint and the attached accelerated brief were read before editing. No applicable AGENTS.md found. Current user authorization supersedes historical module review stops. The plan/reports were pre-existing untracked material; preserve them without automatically staging.
