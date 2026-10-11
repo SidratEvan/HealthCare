@@ -117,3 +117,4 @@ export {
   type WorkspaceDesk,
   type WorkspaceChamber,
 } from './workspaces.js';
+export { customFollowUpDays, followUpDateIn, followUpDateLabel } from './doctor/followUp.js';

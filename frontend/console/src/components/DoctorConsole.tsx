@@ -44,18 +44,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { customFollowUpDays, followUpDateIn, followUpDateLabel } from '@platform/client';
 import {
   nowServing,
   outstandingDelayMinutes,
   queueCounts,
   readMedicineRows,
-  SYMPTOM_SIGNALS,
   time,
-  waitingQueue,
 } from '@platform/domain';
-import type { MedicineRow, MedicineRowProblems, QueueEntry } from '@platform/domain';
+import type { QueueEntry } from '@platform/domain';
 import {
   format,
+  CONSOLE,
   formatClock,
   formatNumber,
   formatTaka,
@@ -70,21 +70,21 @@ import {
   Button,
   Card,
   Chip,
-  FilterChip,
   FreshnessLine,
-  Input,
   ToastProvider,
   useToast,
   useLocale,
   usePrintSheet,
+  ConsoleAction,
+  ConsoleStatus,
+  Sheet,
 } from '@platform/ui';
 
 import { ConsentScan } from '@/components/ConsentScan';
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
-import { MedicineRows } from '@/components/MedicineRows';
+import { DoctorRecord } from '@/components/DoctorRecord';
+import { DoctorWorkspace } from '@/components/DoctorWorkspace';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { PatientPanel } from '@/components/PatientPanel';
-import { WorkspaceBrandMark } from '@/components/WorkspaceBrandMark';
 import { useSessionQueue } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 import {
@@ -98,12 +98,10 @@ import {
   saveVisit,
   type CatalogueTest,
   type VisitDraft,
+  type PatientRecords,
 } from '@/lib/visits';
 
 import type { ReactNode } from 'react';
-
-/** `SEL-B05-FOLLOWUP`: "7/14/30 days or date". */
-const FOLLOW_UP_CHOICES = [7, 14, 30] as const;
 
 function readToken(): string | null {
   return readDemoSession()?.token ?? null;
@@ -111,7 +109,7 @@ function readToken(): string | null {
 
 export function DoctorConsole(): ReactNode {
   return (
-    <ToastProvider placement="console">
+    <ToastProvider placement="console" viewportClassName="doc-toast-viewport">
       <DoctorBody />
     </ToastProvider>
   );
@@ -174,10 +172,20 @@ function DoctorBody(): ReactNode {
   const state = queue.state;
   const liveServing = state === null ? null : nowServing(state);
   const counts = state === null ? null : queueCounts(state);
-  const waiting = state === null ? [] : waitingQueue(state);
 
   // --- the note being written ----------------------------------------------
   const [draft, setDraft] = useState<VisitDraft>(emptyDraft);
+  const [signOpen, setSignOpen] = useState(false);
+  const [signFollowUpDate, setSignFollowUpDate] = useState<string | null>(null);
+  const [delayOpen, setDelayOpen] = useState(false);
+  const [patientRead, setPatientRead] = useState<{
+    bookingId: string;
+    records: PatientRecords;
+  } | null>(null);
+  const receiveRecords = useCallback(
+    (bookingId: string, records: PatientRecords) => setPatientRead({ bookingId, records }),
+    [],
+  );
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [catalogue, setCatalogue] = useState<readonly CatalogueTest[]>([]);
@@ -199,6 +207,9 @@ function DoctorBody(): ReactNode {
   } | null>(null);
   const serving = editor?.entry ?? null;
   const servingBookingId = serving?.bookingId ?? null;
+  const records = patientRead?.bookingId === servingBookingId ? patientRead.records : null;
+  const invalidFollowUp =
+    draft.customFollowUp !== undefined && customFollowUpDays(draft.customFollowUp) === null;
   const changed = editor !== null && liveServing?.bookingId !== servingBookingId;
   const editorRef = useRef(editor);
   editorRef.current = editor;
@@ -291,14 +302,15 @@ function DoctorBody(): ReactNode {
         editorRef.current?.saved === false ||
         busyRef.current ||
         attempt.current !== null ||
-        testRetries.length > 0
+        testRetries.length > 0 ||
+        invalidFollowUp
       ) {
         event.preventDefault();
       }
     };
     window.addEventListener('beforeunload', protect);
     return () => window.removeEventListener('beforeunload', protect);
-  }, [testRetries]);
+  }, [testRetries, invalidFollowUp]);
 
   // The catalogue is the hospital's and does not change during a session, so
   // it is fetched once. A failure leaves it empty and the chips absent, which
@@ -373,7 +385,7 @@ function DoctorBody(): ReactNode {
   }, [lastSigned, print, show, locale]);
 
   const submit = useCallback(
-    async (sign: boolean) => {
+    async (sign: boolean, reviewedFollowUpDate?: string | null) => {
       if (
         busyRef.current ||
         editor === null ||
@@ -383,6 +395,7 @@ function DoctorBody(): ReactNode {
       )
         return;
       if (sign && changed && attempt.current === null) return;
+      if (sign && invalidFollowUp && attempt.current === null) return;
       if (attempt.current !== null && attempt.current.sign !== sign) return;
       // The screen holds the buttons while a row is wrong; this is the same rule.
       if (medicines.problems.size > 0) return;
@@ -401,12 +414,10 @@ function DoctorBody(): ReactNode {
         draft: {
           ...draft,
           followUpDate:
-            draft.followUpDate ??
-            (draft.followUpDays === null
-              ? null
-              : time.toDhakaDate(
-                  time.fromDate(new Date(Date.now() + draft.followUpDays * 86_400_000)),
-                )),
+            sign && reviewedFollowUpDate !== undefined
+              ? reviewedFollowUpDate
+              : (draft.followUpDate ??
+                (draft.followUpDays === null ? null : followUpDateIn(draft.followUpDays))),
         },
         medicines: medicines.body,
         sign,
@@ -435,6 +446,9 @@ function DoctorBody(): ReactNode {
           show({ title: t('consultationSignedConflict', locale), tone: 'caution' });
           return;
         }
+        // FR-DOC-07/08: keep the acknowledged calendar date exact across
+        // Dhaka midnight. A relative preview must not drift while labelled saved.
+        setDraft(sent.draft);
 
         // `APP_FLOW.md` B2: the ticked chips go to the lab queue on save, and
         // only once the visit exists — the order is attached to it.
@@ -469,7 +483,11 @@ function DoctorBody(): ReactNode {
         }
 
         if (!result.signed) {
-          if (testsSent) show({ title: t('draftSaved', locale), tone: 'positive' });
+          if (testsSent)
+            show({
+              title: t(invalidFollowUp ? 'doctorSavedWithoutFollowUp' : 'draftSaved', locale),
+              tone: invalidFollowUp ? 'caution' : 'positive',
+            });
           return;
         }
 
@@ -528,6 +546,7 @@ function DoctorBody(): ReactNode {
       editor,
       changed,
       queue.refresh,
+      invalidFollowUp,
     ],
   );
 
@@ -535,85 +554,159 @@ function DoctorBody(): ReactNode {
     return <p className="p-6 text-body-md text-ink-muted">{t('loading', locale)}</p>;
   }
 
+  const disabled =
+    serving === null || busy || editor?.loaded !== true || editor.signed || uncertainSign;
+  const disabledReason =
+    busy || editor?.loaded !== true
+      ? t('loading', locale)
+      : uncertainSign
+        ? t('consultationCheckSign', locale)
+        : editor.signed
+          ? t('consultationSigned', locale)
+          : t('nobodyToSee', locale);
+  const signReason = disabled
+    ? disabledReason
+    : changed
+      ? t('consultationChanged', locale)
+      : editor?.conflict
+        ? t('consultationConflict', locale)
+        : failed && attempt.current !== null && !attempt.current.sign
+          ? t('doctorDraftRetryFirst', locale)
+          : medicines.problems.size > 0
+            ? t('rxFixFirst', locale)
+            : invalidFollowUp
+              ? t('doctorFollowUpInvalid', locale)
+              : !canSign
+                ? t('needSomethingToSign', locale)
+                : null;
+  const excluded = editor?.saved === true && invalidFollowUp && !failed && !busy;
+  const statusKey = busy
+    ? attempt.current?.sign
+      ? 'doctorSigning'
+      : 'doctorSaving'
+    : uncertainSign
+      ? 'doctorSaveFailed'
+      : editor?.signed
+        ? editor.conflict
+          ? 'consultationSignedConflict'
+          : 'consultationSigned'
+        : failed
+          ? 'doctorSaveFailed'
+          : excluded
+            ? 'doctorSavedWithoutFollowUp'
+            : editor?.saved && editor.revision !== null
+              ? 'draftSaved'
+              : 'doctorNotSaved';
   return (
-    <div className="flex min-h-screen flex-col bg-canvas">
-      <SessionHeader
-        counts={counts}
-        delayMinutes={state === null ? 0 : outstandingDelayMinutes(state, time.fromDate(now))}
-        avgConsultSeconds={state?.rate.currentSeconds ?? null}
-        plannedStart={state?.plan.plannedStart ?? null}
-        plannedEnd={state?.plan.plannedEnd ?? null}
-        feePoisha={feePoisha}
-        lastServerTs={queue.lastServerTs}
-        now={now}
-        onDelay={() => {
-          void queue.act('DELAY_DECLARED', { minutes: 30, reason: null, declaredBy: 'doctor' });
-          show({ title: t('declareDelay', locale), tone: 'positive' });
-        }}
-        busy={queue.loading}
-      />
-
-      <main className="mx-auto grid w-full max-w-[1400px] flex-1 gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-        {/* Left: who is here, and everything known about them. */}
-        <div className="flex min-w-0 flex-col gap-5">
-          {serving === null ? (
-            <Card>
-              <p className="text-body-md text-ink-secondary">{t('nobodyToSee', locale)}</p>
-            </Card>
-          ) : (
-            <PatientPanel entry={serving} />
-          )}
-
-          {/* Keyed on who is in the chamber, so a consented history never
-              outlives the patient it belongs to. And not shown until the
-              queue has said who that is: drawn before, it was keyed "nobody",
-              then remounted when the first state arrived — and a code typed
-              in that moment was gone, with the button back to disabled. */}
-          {state === null ? null : <ConsentScan key={servingBookingId ?? 'nobody'} />}
-
-          <UpNext waiting={waiting} />
-        </div>
-
-        {/* Right: the record, and the one button that files it. */}
-        <div className="flex min-w-0 flex-col gap-5">
-          <VisitNote
-            disabled={
-              serving === null || busy || editor?.loaded !== true || editor.signed || uncertainSign
-            }
-            disabledReason={
-              busy || editor?.loaded !== true
-                ? t('loading', locale)
-                : uncertainSign
-                  ? t('consultationCheckSign', locale)
-                  : editor.signed
-                    ? t('consultationSigned', locale)
-                    : t('nobodyToSee', locale)
-            }
-            catalogue={catalogue}
-            draft={draft}
-            onChange={(next) => {
-              setDraft(next);
-              if (editor !== null) setEditor({ ...editor, saved: false });
-              attempt.current = null;
-            }}
-            canSign={canSign && !changed && editor?.conflict !== true}
-            signBlockedReason={
-              changed
-                ? t('consultationChanged', locale)
-                : editor?.conflict
-                  ? t('consultationConflict', locale)
-                  : null
-            }
-            medicineProblems={medicines.problems}
-            failed={failed}
-            onDraft={() => {
-              void submit(false);
-            }}
-            onSign={() => {
-              void submit(true);
-            }}
+    <DoctorWorkspace
+      queue={queue}
+      sessionId={sessionId}
+      patient={serving}
+      records={records}
+      status={
+        <ConsoleStatus
+          tone={
+            failed || excluded || uncertainSign || editor?.conflict
+              ? 'caution'
+              : editor?.signed || (editor?.saved && editor.revision !== null)
+                ? 'positive'
+                : 'neutral'
+          }
+          label={CONSOLE[statusKey]}
+        />
+      }
+      sessionHeader={
+        <>
+          <SessionHeader
+            counts={counts}
+            delayMinutes={state === null ? 0 : outstandingDelayMinutes(state, time.fromDate(now))}
+            avgConsultSeconds={state?.rate.currentSeconds ?? null}
+            plannedStart={state?.plan.plannedStart ?? null}
+            plannedEnd={state?.plan.plannedEnd ?? null}
+            feePoisha={feePoisha}
+            lastServerTs={queue.lastServerTs}
+            now={now}
+            onDelay={() => setDelayOpen(true)}
+            busy={queue.loading}
           />
-
+          <Sheet
+            console
+            open={delayOpen}
+            onOpenChange={setDelayOpen}
+            title={t('doctorDelayTitle', locale)}
+            description={t('doctorDelayEffect', locale)}
+            dismissible={false}
+          >
+            <div className="cf-confirm-actions">
+              <ConsoleAction
+                label={CONSOLE.foundationGoBack}
+                variant="secondary"
+                onClick={() => setDelayOpen(false)}
+              />
+              <ConsoleAction
+                label={CONSOLE.declareDelay}
+                data-testid="doctor-confirm-delay"
+                onClick={() => {
+                  setDelayOpen(false);
+                  void queue.act('DELAY_DECLARED', {
+                    minutes: 30,
+                    reason: null,
+                    declaredBy: 'doctor',
+                  });
+                  show({ title: t('doctorDelayQueued', locale), tone: 'neutral' });
+                }}
+              />
+            </div>
+          </Sheet>
+        </>
+      }
+      information={
+        <div data-help-topic="history">
+          {serving === null ? null : (
+            <PatientPanel
+              key={`patient-${servingBookingId}`}
+              entry={serving}
+              compact
+              onRecords={receiveRecords}
+            />
+          )}
+          {state === null ? null : <ConsentScan key={`consent-${servingBookingId ?? 'nobody'}`} />}{' '}
+          <OfflineBlock
+            connected={queue.connected}
+            pendingCount={queue.pendingCount}
+            lastServerTs={queue.lastServerTs}
+            stuckCount={queue.stuckCount}
+            onRetryStuck={() => {
+              void queue.retryStuck();
+            }}
+            onDiscardStuck={() => {
+              void queue.discardStuck();
+            }}
+            durable={queue.durable}
+            locale={locale}
+            now={now}
+          />
+        </div>
+      }
+      record={
+        <DoctorRecord
+          disabled={disabled}
+          catalogue={catalogue}
+          draft={draft}
+          now={now}
+          medicineProblems={medicines.problems}
+          failed={failed}
+          excluded={excluded}
+          onChange={(next) => {
+            setDraft(next);
+            if (editor !== null) setEditor({ ...editor, saved: false });
+            attempt.current = null;
+          }}
+        />
+      }
+      recovery={
+        <div>
+          {' '}
           {editor === null ? null : (
             <Card>
               <p data-testid="consultation-identity">
@@ -669,14 +762,31 @@ function DoctorBody(): ReactNode {
                   variant="secondary"
                   data-testid="consultation-switch"
                   onClick={() => {
-                    if (!editor.saved && !window.confirm(t('consultationDiscardConfirm', locale)))
+                    if (
+                      (!editor.saved || invalidFollowUp) &&
+                      !window.confirm(
+                        t(
+                          editor.saved && invalidFollowUp
+                            ? 'doctorDiscardFollowUpConfirm'
+                            : 'consultationDiscardConfirm',
+                          locale,
+                        ),
+                      )
+                    )
                       return;
                     attempt.current = null;
                     setEditor(null);
                     setDraft(emptyDraft());
                   }}
                 >
-                  {t(editor.saved ? 'consultationContinue' : 'consultationDiscard', locale)}
+                  {t(
+                    editor.saved && invalidFollowUp
+                      ? 'doctorDiscardFollowUp'
+                      : editor.saved
+                        ? 'consultationContinue'
+                        : 'consultationDiscard',
+                    locale,
+                  )}
                 </Button>
               ) : null}
             </Card>
@@ -709,7 +819,12 @@ function DoctorBody(): ReactNode {
               </Button>
             </Card>
           ))}
-
+          {sheet}
+        </div>
+      }
+      printLast={
+        <div>
+          {' '}
           {lastSigned === null ? null : (
             <Card>
               <Button
@@ -724,26 +839,119 @@ function DoctorBody(): ReactNode {
               </Button>
             </Card>
           )}
-          {sheet}
-
-          <OfflineBlock
-            connected={queue.connected}
-            pendingCount={queue.pendingCount}
-            lastServerTs={queue.lastServerTs}
-            stuckCount={queue.stuckCount}
-            onRetryStuck={() => {
-              void queue.retryStuck();
-            }}
-            onDiscardStuck={() => {
-              void queue.discardStuck();
-            }}
-            durable={queue.durable}
-            locale={locale}
-            now={now}
-          />
         </div>
-      </main>
-    </div>
+      }
+      footer={
+        <>
+          <p className="doc-footer-status" role="status" data-help-topic="draft">
+            {t(statusKey, locale)}
+            {signReason === null ? '' : ' · ' + signReason}
+          </p>
+          <div className="doc-footer-actions">
+            <ConsoleAction
+              label={CONSOLE.saveDraft}
+              variant="secondary"
+              data-testid="save-draft"
+              {...(disabled || medicines.problems.size > 0
+                ? {
+                    disabled: true as const,
+                    disabledReason: disabled ? disabledReason : t('rxFixFirst', locale),
+                  }
+                : {})}
+              onClick={() => {
+                void submit(false);
+              }}
+            />
+            <Sheet
+              console
+              open={signOpen}
+              onOpenChange={setSignOpen}
+              title={t('doctorSignTitle', locale)}
+              description={t('doctorSignEffect', locale)}
+              dismissible={false}
+              trigger={
+                <ConsoleAction
+                  label={CONSOLE.doctorSignAndNext}
+                  data-testid="sign-and-next"
+                  {...(signReason !== null
+                    ? { disabled: true as const, disabledReason: signReason }
+                    : {})}
+                  onClick={() => {
+                    // FR-DOC-07/08: the reviewed calendar date must remain
+                    // exact if Bangladesh midnight passes before confirmation.
+                    setSignFollowUpDate(
+                      draft.followUpDate ??
+                        (draft.followUpDays === null ? null : followUpDateIn(draft.followUpDays)),
+                    );
+                    setSignOpen(true);
+                  }}
+                />
+              }
+            >
+              <div data-testid="doctor-sign-summary">
+                <h3>
+                  {format('doctorRecordFor', locale, {
+                    serial: serving === null ? '?' : formatNumber(serving.serial, numerals),
+                  })}
+                </h3>
+                <strong>{records?.patient.fullName ?? t('patientPanel', locale)}</strong>
+                <dl>
+                  <dt>{t('diagnosis', locale)}</dt>
+                  <dd>{draft.diagnosisText || t('noneDeclared', locale)}</dd>
+                  <dt>{t('rxTitle', locale)}</dt>
+                  <dd>
+                    {draft.medicines
+                      .filter((m) => m.name.trim() !== '')
+                      .map((m) => m.name)
+                      .join(', ') || t('rxNone', locale)}
+                  </dd>
+                  <dt>{t('orderTests', locale)}</dt>
+                  <dd>
+                    {draft.testCodes
+                      .map((code) => catalogue.find((c) => c.code === code))
+                      .map((c) => (c === undefined ? '?' : localName(locale, c.nameBn, c.nameEn)))
+                      .join(', ') || t('noneDeclared', locale)}
+                  </dd>
+                  <dt>{t('adviceBn', locale)}</dt>
+                  <dd>{draft.adviceTextBn || t('noneDeclared', locale)}</dd>
+                  <dt>{t('followUp', locale)}</dt>
+                  <dd data-testid="doctor-sign-follow-up">
+                    {signFollowUpDate === null
+                      ? t('followUpNone', locale)
+                      : followUpDateLabel(signFollowUpDate, locale)}
+                  </dd>
+                  <dt>{t('visitSignal', locale)}</dt>
+                  <dd>
+                    {draft.symptomSignal === null
+                      ? t('visitSignalNone', locale)
+                      : symptomSignalName(draft.symptomSignal, locale)}
+                  </dd>
+                </dl>
+              </div>
+              {signReason === null ? null : <p role="alert">{signReason}</p>}
+              <div className="cf-confirm-actions">
+                <ConsoleAction
+                  label={CONSOLE.doctorBackToRecord}
+                  variant="secondary"
+                  onClick={() => setSignOpen(false)}
+                />
+                <ConsoleAction
+                  label={CONSOLE.doctorSignConfirm}
+                  data-testid="doctor-confirm-sign"
+                  {...(signReason !== null
+                    ? { disabled: true as const, disabledReason: signReason }
+                    : {})}
+                  onClick={() => {
+                    setSignOpen(false);
+                    void submit(true, signFollowUpDate);
+                  }}
+                />
+              </div>
+            </Sheet>
+          </div>
+        </>
+      }
+    />
   );
 }
 
@@ -783,12 +991,9 @@ function SessionHeader({
   const late = delayMinutes > 0;
 
   return (
-    <header className="border-b border-line bg-surface">
-      <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-3 p-5">
-        {/* FR-BRD-12 (plan K4): the hospital's own, powered by MedLiveBD. */}
-        <WorkspaceBrandMark locale={locale} />
+    <header className="doc-session">
+      <div className="doc-session">
         <div className="min-w-0">
-          <h1 className="font-reading text-title-md">{t('doctorConsole', locale)}</h1>
           <p className="text-body-sm tabular-nums text-ink-muted">
             {plannedStart === null || plannedEnd === null
               ? t('notStarted', locale)
@@ -845,7 +1050,6 @@ function SessionHeader({
           <Button variant="secondary" size="sm" onClick={onDelay} loading={busy}>
             {t('declareDelay', locale)}
           </Button>
-          <ConsoleLanguageSwitch className="" />
         </div>
       </div>
     </header>
@@ -871,306 +1075,6 @@ function Stat({
         {unit === undefined || value === null ? '' : ` ${unit}`}
       </dd>
     </div>
-  );
-}
-
-/**
- * `INP-B05-DX`, `INP-B05-ADVICE`, `SEL-B05-FOLLOWUP`, and the two buttons.
- *
- * The primary is never silently disabled (`FRONTEND.md` §5.1): when there is
- * nothing to sign it carries the reason, so a doctor is told what is missing
- * rather than left tapping a dead control.
- */
-function VisitNote({
-  disabled,
-  disabledReason,
-  catalogue,
-  draft,
-  onChange,
-  canSign,
-  signBlockedReason,
-  medicineProblems,
-  failed,
-  onDraft,
-  onSign,
-}: {
-  readonly disabled: boolean;
-  readonly disabledReason: string;
-  /** The hospital's test catalogue; empty means no chips (`BTN-B05-TEST`). */
-  readonly catalogue: readonly CatalogueTest[];
-  readonly draft: VisitDraft;
-  readonly onChange: (draft: VisitDraft) => void;
-  readonly canSign: boolean;
-  readonly signBlockedReason: string | null;
-  /** Rows of `TBL-B05-RX` that are not right yet; the save waits for them. */
-  readonly medicineProblems: ReadonlyMap<string, MedicineRowProblems>;
-  readonly failed: boolean;
-  readonly onDraft: () => void;
-  readonly onSign: () => void;
-}): ReactNode {
-  const locale = useLocale();
-  const numerals = numeralsFor(locale);
-  return (
-    <Card>
-      <div className="flex flex-col gap-4">
-        <h2 className="font-reading text-title-sm">{t('visitNote', locale)}</h2>
-
-        {failed ? (
-          <p
-            role="alert"
-            data-testid="visit-failed"
-            className="rounded-sm bg-alert-100 px-3 py-2 text-body-sm text-alert-700"
-          >
-            {t('visitSaveFailed', locale)}
-          </p>
-        ) : null}
-
-        <Input
-          label={t('diagnosis', locale)}
-          helper={t('diagnosisHint', locale)}
-          density="console"
-          data-testid="visit-diagnosis"
-          value={draft.diagnosisText}
-          disabled={disabled}
-          onChange={(event) => {
-            onChange({ ...draft, diagnosisText: event.target.value });
-          }}
-        />
-
-        {/* A textarea rather than an Input: advice runs to several sentences and
-            a single-line field would hide most of what the patient will read. */}
-        <div className="flex flex-col gap-2">
-          <label htmlFor="advice" className="font-ui text-body-sm font-semibold text-ink">
-            {t('adviceBn', locale)}
-          </label>
-          <textarea
-            id="advice"
-            data-testid="visit-advice"
-            rows={4}
-            value={draft.adviceTextBn}
-            disabled={disabled}
-            onChange={(event) => {
-              onChange({ ...draft, adviceTextBn: event.target.value });
-            }}
-            className="w-full rounded-md border border-line-strong bg-surface p-3 text-body-md text-ink disabled:opacity-60"
-          />
-          <p className="text-caption text-ink-muted">{t('adviceHint', locale)}</p>
-        </div>
-
-        {/* `TBL-B05-RX`, `BTN-B05-ADDRX` (`FR-DOC-04`, plan R2). */}
-        <MedicineRows
-          rows={draft.medicines}
-          problems={medicineProblems}
-          disabled={disabled}
-          onChange={(rows: readonly MedicineRow[]) => {
-            onChange({ ...draft, medicines: rows });
-          }}
-        />
-
-        {/* `BTN-B05-TEST` (`FR-DOC-06`). Absent when the hospital has no
-            catalogue, rather than an empty box. */}
-        {catalogue.length > 0 ? (
-          <fieldset className="flex flex-col gap-2" data-testid="visit-tests">
-            <legend className="font-ui text-body-sm font-semibold text-ink">
-              {t('orderTests', locale)}
-            </legend>
-            <div className="flex flex-wrap gap-2">
-              {catalogue.map((test) => {
-                const ticked = draft.testCodes.includes(test.code);
-                return (
-                  <FilterChip
-                    key={test.code}
-                    selected={ticked}
-                    onToggle={() => {
-                      if (disabled) return;
-                      onChange({
-                        ...draft,
-                        testCodes: ticked
-                          ? draft.testCodes.filter((code) => code !== test.code)
-                          : [...draft.testCodes, test.code],
-                      });
-                    }}
-                  >
-                    {localName(locale, test.nameBn, test.nameEn)}
-                  </FilterChip>
-                );
-              })}
-            </div>
-            <p className="text-caption text-ink-muted">
-              {draft.testCodes.length === 0
-                ? t('orderTestsHint', locale)
-                : format('orderTestsCount', locale, {
-                    count: formatNumber(draft.testCodes.length, numerals),
-                  })}
-            </p>
-          </fieldset>
-        ) : null}
-
-        {/* `CHIP-B05-SIGNAL` (`FR-GOV-03`): the one thing about this visit the
-            district counts. Optional and single — most consultations are none
-            of the three, and "none" is the first choice so that is the easy
-            tap. It is a reporting flag, not a diagnosis: the text above stays
-            the record, and the patient's wallet does not show this. */}
-        <fieldset className="flex flex-col gap-2" data-testid="visit-signal">
-          <legend className="font-ui text-body-sm font-semibold text-ink">
-            {t('visitSignal', locale)}
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            <FollowUpChoice
-              label={t('visitSignalNone', locale)}
-              active={draft.symptomSignal === null}
-              disabled={disabled}
-              testId="visit-signal-none"
-              onSelect={() => {
-                onChange({ ...draft, symptomSignal: null });
-              }}
-            />
-            {SYMPTOM_SIGNALS.map((signal) => (
-              <FollowUpChoice
-                key={signal}
-                label={symptomSignalName(signal, locale)}
-                active={draft.symptomSignal === signal}
-                disabled={disabled}
-                testId={`visit-signal-${signal}`}
-                onSelect={() => {
-                  onChange({ ...draft, symptomSignal: signal });
-                }}
-              />
-            ))}
-          </div>
-          <p className="text-caption text-ink-muted">{t('visitSignalHint', locale)}</p>
-        </fieldset>
-
-        <fieldset className="flex flex-col gap-2">
-          <legend className="font-ui text-body-sm font-semibold text-ink">
-            {t('followUp', locale)}
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            <FollowUpChoice
-              label={t('followUpNone', locale)}
-              active={draft.followUpDays === null && draft.followUpDate == null}
-              disabled={disabled}
-              onSelect={() => {
-                onChange({ ...draft, followUpDays: null, followUpDate: null });
-              }}
-            />
-            {FOLLOW_UP_CHOICES.map((days) => (
-              <FollowUpChoice
-                key={days}
-                label={t('followUpDays', locale).replace('{days}', formatNumber(days, numerals))}
-                active={draft.followUpDays === days}
-                disabled={disabled}
-                onSelect={() => {
-                  onChange({ ...draft, followUpDays: days, followUpDate: null });
-                }}
-              />
-            ))}
-          </div>
-          {draft.followUpDate == null ? null : (
-            <p>{format('consultationFollowUpDate', locale, { date: draft.followUpDate })}</p>
-          )}
-        </fieldset>
-
-        <div className="flex flex-wrap gap-3">
-          {/*
-            `ButtonProps` is a discriminated union: disabling requires a reason
-            (§5.1), so `disabled={someBoolean}` does not compile and every
-            branch below carries the sentence a doctor should read instead of a
-            dead control.
-          */}
-          {disabled || medicineProblems.size > 0 ? (
-            <Button
-              variant="secondary"
-              size="lg"
-              disabled
-              disabledReason={disabled ? disabledReason : t('rxFixFirst', locale)}
-              data-testid="save-draft"
-            >
-              {t('saveDraft', locale)}
-            </Button>
-          ) : (
-            <Button variant="secondary" size="lg" data-testid="save-draft" onClick={onDraft}>
-              {t('saveDraft', locale)}
-            </Button>
-          )}
-
-          {disabled || !canSign || medicineProblems.size > 0 ? (
-            <Button
-              size="lg"
-              disabled
-              disabledReason={
-                disabled
-                  ? disabledReason
-                  : medicineProblems.size > 0
-                    ? t('rxFixFirst', locale)
-                    : (signBlockedReason ?? t('needSomethingToSign', locale))
-              }
-              data-testid="sign-and-next"
-            >
-              {t('signAndNext', locale)}
-            </Button>
-          ) : (
-            <Button size="lg" data-testid="sign-and-next" onClick={onSign}>
-              {t('signAndNext', locale)}
-            </Button>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function FollowUpChoice({
-  label,
-  active,
-  disabled,
-  onSelect,
-  testId,
-}: {
-  readonly label: string;
-  readonly active: boolean;
-  readonly disabled: boolean;
-  readonly onSelect: () => void;
-  readonly testId?: string;
-}): ReactNode {
-  return (
-    <button
-      type="button"
-      // A radio group in behaviour, so the choice is announced as one.
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={onSelect}
-      data-testid={testId}
-      className={`min-h-touch rounded-pill border px-4 text-body-sm ${
-        active
-          ? 'border-brand-600 bg-brand-100 font-semibold text-brand-700'
-          : 'border-line-strong bg-surface text-ink'
-      } disabled:opacity-60`}
-    >
-      {label}
-    </button>
-  );
-}
-
-/** Who the doctor sees after this one. Three is enough to pace a chamber. */
-function UpNext({ waiting }: { readonly waiting: readonly QueueEntry[] }): ReactNode {
-  const locale = useLocale();
-  const numerals = numeralsFor(locale);
-  if (waiting.length === 0) return null;
-
-  return (
-    <Card>
-      <div className="flex flex-col gap-3">
-        <h2 className="text-title-sm">{t('waitingNext', locale)}</h2>
-        <ul className="flex flex-wrap gap-2">
-          {waiting.slice(0, 3).map((entry) => (
-            <li key={entry.bookingId}>
-              <Chip tone="neutral">{formatNumber(entry.serial, numerals)}</Chip>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </Card>
   );
 }
 

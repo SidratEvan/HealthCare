@@ -929,6 +929,113 @@ export const CONSOLE = {
     bn: 'এই নোট সিরিয়াল {serial}-এর রোগীর জন্য।',
     en: 'Editing the patient with serial {serial}.',
   },
+  doctorQueue: { bn: 'রোগীর সারি', en: 'Patient queue' },
+  doctorSignAndNext: { bn: 'রেকর্ড দিন ও পরবর্তী', en: 'Sign & Next' },
+  doctorDraftRetryFirst: {
+    bn: 'স্বাক্ষরের আগে অনিশ্চিত খসড়া সেভটি আবার যাচাই করুন।',
+    en: 'Retry the uncertain draft save before signing.',
+  },
+  doctorIntakeTitle: { bn: 'রোগী যা জানিয়েছেন', en: 'What the patient told us' },
+  doctorTestsUnavailable: {
+    bn: 'পরীক্ষার তালিকা এখন পাওয়া যায়নি।',
+    en: 'The test catalogue is currently unavailable.',
+  },
+  doctorQueueHere: { bn: 'এখন চেম্বারে', en: 'In the chamber now' },
+  doctorQueueWaiting: { bn: 'অপেক্ষায়', en: 'Waiting' },
+  doctorQueueSeen: { bn: 'এই চেম্বারে দেখা হয়েছে', en: 'Seen in this chamber' },
+  doctorQueueReadOnly: {
+    bn: 'রিসেপশন সারি চালায়। এই তালিকা থেকে রোগী ডাকা বা ক্রম বদলানো যায় না।',
+    en: 'Reception manages the queue. This list does not call patients or change their order.',
+  },
+  doctorQueueNamesMissing: {
+    bn: 'নাম নিশ্চিত করা যায়নি। সার্ভারের সিরিয়াল ও অবস্থা দেখানো হচ্ছে।',
+    en: 'Names could not be confirmed. Server serials and states are shown.',
+  },
+  doctorRecordFor: {
+    bn: 'সিরিয়াল {serial} — এই রোগীর রেকর্ড',
+    en: 'Serial {serial} — this patient’s record',
+  },
+  doctorNotSaved: { bn: 'এখনও সার্ভারে রাখা হয়নি', en: 'Not saved to the server yet' },
+  doctorSaving: { bn: 'খসড়া রাখা হচ্ছে…', en: 'Saving draft…' },
+  doctorSigning: { bn: 'স্বাক্ষরের ফলের অপেক্ষায়…', en: 'Waiting for signing confirmation…' },
+  doctorSaveFailed: {
+    bn: 'সেভের ফল নিশ্চিত নয় — লেখা আছে',
+    en: 'Save outcome unconfirmed — writing retained',
+  },
+  doctorSavedWithoutFollowUp: {
+    bn: 'খসড়া রাখা হয়েছে — ফলো-আপ ছাড়া',
+    en: 'Draft saved — without follow-up',
+  },
+  doctorFollowUpCustom: { bn: 'নিজের মতো', en: 'Custom' },
+  doctorDiscardFollowUp: {
+    bn: 'অসংরক্ষিত ফলো-আপ বাদ দিয়ে বর্তমান রোগী খুলুন',
+    en: 'Discard unsaved follow-up and open current patient',
+  },
+  doctorDiscardFollowUpConfirm: {
+    bn: 'অন্য নোট খসড়ায় রাখা আছে। ভুল ফলো-আপ শুধু এই স্ক্রিনে আছে। এটি বাদ দিয়ে বর্তমান রোগী খুলবেন?',
+    en: 'Other notes are saved as a draft. This invalid follow-up exists only on screen. Discard it and open the current patient?',
+  },
+  doctorFollowUpDays: { bn: 'কত দিন পরে (১–৩৬৫)', en: 'Days from today (1–365)' },
+  doctorFollowUpInvalid: {
+    bn: '১ থেকে ৩৬৫-এর পূর্ণ সংখ্যা দিন। এই মান ঠিক না হলে স্বাক্ষর করা যাবে না; অন্য নোট খসড়ায় রাখা যাবে, ফলো-আপ ছাড়া।',
+    en: 'Enter a whole number from 1 to 365. Fix this before signing; other notes can be saved as a draft without follow-up.',
+  },
+  doctorFollowUpExcluded: {
+    bn: 'শেষ খসড়ায় এই ফলো-আপ রাখা হয়নি। আগের সংরক্ষিত ফলো-আপও সরেছে।',
+    en: 'This follow-up was excluded from the last draft. Any previously saved follow-up was cleared too.',
+  },
+  doctorFollowUpNoAppointment: {
+    bn: 'এটি শুধু দেখানোর তারিখ। অ্যাপয়েন্টমেন্ট বা রিমাইন্ডার তৈরি হয় না।',
+    en: 'This is a follow-up date only. No appointment or reminder is created.',
+  },
+  doctorSignTitle: { bn: 'এই রোগীর রেকর্ড নিশ্চিত করুন', en: 'Confirm this patient’s record' },
+  doctorSignEffect: {
+    bn: 'এই রেকর্ড স্বাক্ষরিত হলে আর বদলানো যাবে না। সার্ভার এই রোগী শেষ করে পরের রোগী ডাকতে পারে। রিসেপশন সারি বদলালে ফল আলাদা হবে; নির্দিষ্ট পরের রোগী নিশ্চিত নয়।',
+    en: 'Signing makes this record final. The backend may finish this encounter and call the next patient. Reception can change the queue; a specific next patient is not guaranteed.',
+  },
+  doctorSignConfirm: { bn: 'হ্যাঁ, এই রেকর্ড দিন', en: 'Yes, file this record' },
+  doctorBackToRecord: { bn: 'রেকর্ডে ফিরুন', en: 'Back to record' },
+  doctorDelayTitle: { bn: '৩০ মিনিট দেরি জানান?', en: 'Announce a 30-minute delay?' },
+  doctorDelayEffect: {
+    bn: 'এই চেম্বারের দেরিতে ৩০ মিনিট যোগ হবে। সারির আপডেট ও পাঠানোর অপেক্ষার অবস্থা দেখুন। এটি রোগীর অ্যাপয়েন্টমেন্ট বদলায় না।',
+    en: 'Add 30 minutes to this chamber’s delay. Check queue confirmation and any pending work. This does not reschedule appointments.',
+  },
+  doctorDelayQueued: {
+    bn: '৩০ মিনিটের দেরি পাঠানোর কাজ নেওয়া হয়েছে। সারির নিশ্চিত ফল দেখুন।',
+    en: 'The 30-minute delay action was submitted. Check the confirmed queue outcome.',
+  },
+  doctorHelpIdentity: {
+    bn: 'উপরে নাম ও সিরিয়াল মিলিয়ে রোগী নিশ্চিত করুন। রিসেপশন অন্য রোগী ডাকলেও আপনার নোট এই রোগীরই থাকে।',
+    en: 'Confirm the name and serial at the top. Your note stays with this patient if reception calls someone else.',
+  },
+  doctorHelpHistory: {
+    bn: 'এই হাসপাতালের ইতিহাস দেখুন। অন্য হাসপাতালের তথ্যের জন্য রোগীর বৈধ কোড লাগে; রোগী বদলালে খোলা তথ্য বন্ধ হয়।',
+    en: 'Review this hospital’s history. Other-hospital records need the patient’s valid code; open records close when the patient changes.',
+  },
+  doctorHelpNotes: {
+    bn: 'রোগ নির্ণয়, ওষুধ ও পরামর্শ লিখুন। ওষুধের নাম নিজে লেখা যায়; সকাল+দুপুর+রাত ও কত দিন ঠিক করুন।',
+    en: 'Write diagnosis, medicines and advice. Free-text medicine names are allowed; check the schedule and duration.',
+  },
+  doctorHelpDraft: {
+    bn: 'খসড়া রাখুন চাপুন এবং নিশ্চিত ফল দেখুন। খসড়া রোগীকে দেওয়া চূড়ান্ত রেকর্ড নয়। অসংরক্ষিত লেখা ব্রাউজার বন্ধ করলে হারাতে পারে।',
+    en: 'Press Save draft and check the confirmed outcome. A draft is not a final patient record. Closing the browser can lose unsaved writing.',
+  },
+  doctorHelpTests: {
+    bn: 'পরীক্ষা বেছে নিয়ে খসড়া রাখলে বা স্বাক্ষর করলে বর্তমান নিয়মে অর্ডার পাঠানো হয়। ব্যর্থ অর্ডার একই রোগীর জন্য আবার পাঠান।',
+    en: 'Selected tests are ordered when saving a draft or signing under V1 rules. Retry failed orders for their original patient.',
+  },
+  doctorHelpFollowUp: {
+    bn: '৭, ১৪, ৩০ দিন বা ১–৩৬৫ দিনের নিজের মতো মান দিন। ভুল মানে স্বাক্ষর বন্ধ; খসড়ায় অন্য নোট রাখা যায়, ফলো-আপ বাদ দিয়ে।',
+    en: 'Choose 7, 14, 30 or a custom 1–365 days. Invalid input blocks signing; a draft can save other notes without follow-up.',
+  },
+  doctorHelpSign: {
+    bn: 'স্বাক্ষরের আগে নাম, সিরিয়াল ও সারাংশ মিলিয়ে দেখুন। নিশ্চিত ফল না পাওয়া পর্যন্ত লেখা আছে; ফল অনিশ্চিত হলে যাচাই করুন।',
+    en: 'Review name, serial and summary before signing. Writing remains until confirmation; check the result after an uncertain reply.',
+  },
+  doctorHelpErrors: {
+    bn: 'ব্যর্থ সেভ বা সারি বদলালে লেখা বাদ দেবেন না। পুরনো রোগীর খসড়া রাখুন, অথবা সার্ভারের রেকর্ড দেখে স্পষ্টভাবে সিদ্ধান্ত নিন।',
+    en: 'Keep your writing after a failed save or queue change. Save the old patient’s draft or review the server record before making an explicit decision.',
+  },
   consultationFollowUpDate: {
     bn: 'সংরক্ষিত ফলো-আপের তারিখ: {date}',
     en: 'Saved follow-up date: {date}',

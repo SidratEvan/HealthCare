@@ -20,6 +20,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { createConsoleSession, type ConsoleSession } from './support/console.js';
 import { bengali } from './support/digits.js';
+import { signAndNext } from './support/doctor.js';
 
 const CONSOLE = 'http://localhost:3100';
 
@@ -108,12 +109,12 @@ test.describe('signing files the record and advances the queue (FR-DOC-08)', () 
 
     await page.getByTestId('visit-diagnosis').fill('উচ্চ রক্তচাপ');
     await page.getByTestId('visit-advice').fill('লবণ কমান। এক মাস পর আবার দেখাবেন।');
-    await page.getByTestId('sign-and-next').click();
+    await signAndNext(page);
 
     // `FR-DOC-08`: equivalent to reception's *done*. Serial 2 is now in the
     // chamber, and the note has been cleared for them — a new patient is a new
     // note, and a diagnosis left on screen would be the previous person's.
-    await expect(page.getByTestId('patient-panel')).toContainText(bengali(2));
+    await expect(page.getByTestId('doctor-patient-identity')).toContainText(bengali(2));
     await expect(page.getByTestId('visit-diagnosis')).toHaveValue('');
 
     // And the record exists for the *first* patient: the panel for serial 2
@@ -145,7 +146,7 @@ test.describe('signing files the record and advances the queue (FR-DOC-08)', () 
     await page.getByTestId('save-draft').click();
 
     // Still serial 1: a draft is a note, not a decision.
-    await expect(page.getByTestId('patient-panel')).toContainText(bengali(1));
+    await expect(page.getByTestId('doctor-patient-identity')).toContainText(bengali(1));
     await expect(page.getByTestId('visit-diagnosis')).toHaveValue('পরীক্ষা বাকি');
   });
 });
@@ -185,8 +186,8 @@ test.describe('prescribing (FR-DOC-04, FR-DOC-05, FR-DOC-07; plan R2)', () => {
     await page.getByTestId('rx-days-0').fill('3');
     await page.getByTestId('rx-instruction-0').fill('খাবারের পরে');
     await expect(page.getByTestId('sign-and-next')).toBeEnabled();
-    await page.getByTestId('sign-and-next').click();
-    await expect(page.getByTestId('patient-panel')).toContainText(bengali(2));
+    await signAndNext(page);
+    await expect(page.getByTestId('doctor-patient-identity')).toContainText(bengali(2));
 
     // The record carries the medicine as written, tied to the formulary.
     const records = await page.request.get(

@@ -16,6 +16,8 @@ export interface VisitDraft {
   readonly followUpDays: number | null;
   /** A hydrated date stays exact through reconnect/retry (FR-DOC-08). */
   readonly followUpDate?: string | null;
+  /** Raw custom days remain local on invalid-draft save; never a server field. */
+  readonly customFollowUp?: string | undefined;
   /** `BTN-B05-TEST`: the chips ticked, by catalogue code (`FR-DOC-06`). */
   readonly testCodes: readonly string[];
   /**

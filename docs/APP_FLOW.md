@@ -847,6 +847,12 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 ## B2. Doctor console — `S-B-05`
 
+**Phase 8B Batch 4B presentation:** the real workspace uses the shared hospital-branded header, compact read-only chamber queue (a drawer on tablets), pinned patient identity/allergy strip, history beside numbered consultation sections, and persistent Save Draft / Sign & Next controls. Bangla/English and contextual Help keep the same mounted editor. Queue identity and ordering come from existing authorised reads; the patient strip and history describe the encounter being edited even when Reception has moved the live queue. Unknown allergies are distinct from declared none.
+
+Follow-up offers none, 7/14/30 days and Custom (1–365 whole days, Bangla or Latin numerals). The preview is a Bangladesh calendar date, persisted through the existing date-only visit field. After acknowledgement the exact stored date stays visible; sign review and server-record printing use that date. Invalid custom input blocks signing but other valid notes can be saved: the follow-up date is cleared, its exclusion is disclosed, and the raw invalid input remains locally visible. Leaving that input for a new patient requires explicit discard. No appointment or reminder is created. Saving/signing/failed/unsaved/excluded/signed states are distinguished; an uncertain draft save must be retried before signing.
+
+Sign & Next opens a confirmation of the pinned patient, encounter and record. It captures the reviewed calendar date so crossing Bangladesh midnight before confirmation cannot change the filed follow-up. A queue change during review blocks a fresh confirmation. The dialog describes the conditional queue effect without promising a particular next patient; only backend receipts establish signature and queue outcomes. The existing 30-minute delay now asks for confirmation; no arbitrary duration is added. See the [integrated Doctor review](design/console-doctor/README.md) and [retained safety contract](design/console-doctor-safety/README.md).
+
 > **Built in this version:** the session header, `BTN-B05-DELAY`, the patient
 > panel, `INP-B05-DX`, `INP-B05-ADVICE`, `SEL-B05-FOLLOWUP`, `BTN-B05-DRAFT`,
 > `BTN-B05-SIGN`, `BTN-B05-TEST` (step 17), and since plan R2 `TBL-B05-RX`,
@@ -888,7 +894,7 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 | Test chips | `BTN-B05-TEST` | Adds test orders → pushed to lab queue on save (`FR-DOC-06`). The chips are the hospital's own catalogue (`GET /lab/catalogue`), so the name and price a doctor ticks are the ones the lab and the wallet show. Ticking writes nothing: the orders go with the record, because an order hangs off the visit and there is no visit until it is filed |
 | Advice box | `INP-B05-ADVICE` | Printed in Bangla for the patient (`FR-DOC-07`) |
 | Public health signal | `CHIP-B05-SIGNAL` | কোনোটি নয় / ডেঙ্গু / ডায়রিয়া / জ্বর — one or none, "none" first and selected by default. Filed with the visit as `visits.symptom_signal` and counted by district only (`FR-GOV-03`, `v_gov_symptom_daily`). Not a diagnosis and not shown in the patient's wallet: `INP-B05-DX` stays the record. Added at step 20, because a spike needs a category to count and nothing else in the product records one |
-| Follow-up | `SEL-B05-FOLLOWUP` | 7/14/30 days or date → schedules patient reminder (`FR-PAT-80`) |
+| Follow-up | `SEL-B05-FOLLOWUP` | None, 7/14/30 days or Custom 1–365 → Bangladesh calendar date in the existing visit field; invalid custom blocks signing and is explicitly excluded/cleared on draft save. V1 creates no reminder (`FR-PAT-80` remains unbuilt) or appointment |
 | খসড়া রাখুন | `BTN-B05-DRAFT` | Saves without finishing the consultation |
 | **রেকর্ড দিন ও পরবর্তী** | `BTN-B05-SIGN` | Signs the visit and its medicines → writes the record to the patient wallet → `EVT-PATIENT_DONE` + `EVT-PATIENT_CALLED` for the next patient (`FR-DOC-08`) |
 | শেষ প্রেসক্রিপশন প্রিন্ট | `BTN-B05-PRINT` | The visit last signed here, read back from the server → the Bangla sheet → the browser's print (`FR-DOC-07`, plan R2) |

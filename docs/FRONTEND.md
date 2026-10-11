@@ -641,6 +641,8 @@ A screen cannot merge until every line passes.
 
 ## 14. Handover notes for implementation
 
+Phase 8B's integrated Doctor workspace composes `ConsoleWorkspaceFrame`, shared theme/header/Help/status/actions and Sheet with opt-in `@platform/ui/console-doctor.css`. `DoctorConsole` retains the encounter/revision/replay controller; `DoctorWorkspace` presents its pinned identity and authorised read-only queue, and `DoctorRecord` arranges existing fields. Desktop uses bounded independent history/record scrolling; tablets open the queue in a shared focus-managed drawer, portrait stacks the content, and a short CSS viewport keeps actions at the bottom. Toast placement is opt-in. See [the review and actual React captures](design/console-doctor/README.md); no prototype state machine or patient-app style change is introduced.
+
 1. Build `shared/ui` first: tokens, then Button/Input/Card/Chip/Sheet/Toast, then the signature components in §6. Nothing else starts until these exist, or the design will fragment.
 2. Build `S-A-08 LiveSerial` and `S-B-02 Reception` next, together, on two devices. They are the product; everything else is supporting cast.
 3. Treat the existing design canvas as the visual reference for layout and tone, not as final markup — it was drawn to communicate, and production components are built to these specs.

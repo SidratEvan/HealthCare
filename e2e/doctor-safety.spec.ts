@@ -2,6 +2,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { createConsoleSession, type ConsoleSession } from './support/console.js';
+import { signAndNext } from './support/doctor.js';
 import { registrationDatabase } from './support/registration.js';
 import { DEMO_PASSWORD } from './support/staff.js';
 
@@ -186,7 +187,7 @@ test('lost successful sign reply is checked with the original key and cannot fin
     } else await route.fulfill({ response });
   });
   await page.getByTestId('visit-diagnosis').fill('Synthetic lost sign');
-  await page.getByTestId('sign-and-next').click();
+  await signAndNext(page);
   await expect(page.getByTestId('consultation-retry-sign')).toBeVisible();
   await expect(page.getByTestId('visit-diagnosis')).toHaveValue('Synthetic lost sign');
   expect((await persisted())[0]?.signed_at).not.toBeNull();
@@ -226,7 +227,7 @@ test('delayed signing and repeated clicks cannot replace newer queue state or fi
     await route.fulfill({ response });
   });
   await page.getByTestId('visit-diagnosis').fill('Synthetic delayed sign');
-  await page.getByTestId('sign-and-next').dblclick();
+  await signAndNext(page, true);
   await written;
   await next(page);
   await expect(page.getByTestId('consultation-changed')).toBeVisible();
@@ -307,7 +308,7 @@ test('a conflicting device signature preserves the unsigned local writing for ex
     const response = await route.fetch();
     await route.fulfill({ response });
   });
-  await page.getByTestId('sign-and-next').click();
+  await signAndNext(page);
   await submittedSign;
   const key = crypto.randomUUID();
   const other = await page.request.post(`${API}/visits`, {
@@ -446,7 +447,7 @@ test('failed test orders stay bound to the signed encounter after opening the ne
       await route.abort('failed');
     } else await route.fulfill({ response });
   });
-  await page.getByTestId('sign-and-next').click();
+  await signAndNext(page);
   await expect(page.getByTestId('consultation-retry-tests')).toBeVisible();
   await expect(page.getByTestId('consultation-switch')).toBeVisible();
   await page.getByTestId('consultation-switch').click();
