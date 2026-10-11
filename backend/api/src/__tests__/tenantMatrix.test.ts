@@ -399,6 +399,10 @@ const KEPT: Readonly<Record<string, Kept>> = {
       }),
     ],
   },
+  'GET /visits/booking/:id': {
+    by: 'row',
+    other: (_mine, theirs) => ({ path: `/visits/booking/${theirs.bookingIds[0]}` }),
+  },
   // The code is the patient's to give, and names the patient; the hospital it
   // opens the record to is the doctor's own.
   'POST /consents/qr': {

@@ -212,6 +212,8 @@ async function afterSessionEnded(type: QueueEventType, sessionId: string): Promi
  */
 export async function callNext(input: {
   readonly sessionId: string;
+  /** FR-DOC-08/FR-QUE-53: signing may finish only this encounter. */
+  readonly expectedBookingId?: string;
   readonly actor: QueueActor;
   readonly clientEventId?: string | null;
   readonly clientTs?: string | null;
@@ -230,9 +232,35 @@ export async function callNext(input: {
     let state = await loadState(trx, session);
     const events: QueueEvent[] = [];
 
+    // FR-QUE-51: a concurrent retry may have committed while we waited for
+    // the lock. Recognise it before comparing the now-changed consultation.
+    const replay =
+      original === null
+        ? null
+        : ((await eventRepo.findByClientEventId(String(derive(original, 'c')), trx)) ??
+          (await eventRepo.findByClientEventId(String(derive(original, 'd')), trx)));
+    if (replay !== null) {
+      return {
+        result: {
+          state,
+          etas: computeEtas(state, nowTs()),
+          seq: state.lastSeq,
+          duplicate: true,
+          serverTs: nowTs(),
+        },
+        batch: notifications.NOTHING,
+      };
+    }
+
     // Everything below reads `state`, which is re-bound after each append, so
     // the second decision is made against the result of the first.
     const serving = nowServing(state);
+    if (input.expectedBookingId !== undefined && serving?.bookingId !== input.expectedBookingId) {
+      throw guardFailed(
+        'CONSULTATION_CHANGED',
+        'The signed encounter is no longer in the chamber.',
+      );
+    }
     if (serving !== null) {
       const applied = await applyOne(trx, session, state, {
         sessionId: input.sessionId,

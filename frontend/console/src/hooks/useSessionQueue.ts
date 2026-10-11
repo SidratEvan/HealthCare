@@ -176,6 +176,8 @@ export interface SessionQueue {
    * The answer is shown from the answer itself, as a push's is.
    */
   readonly end: () => Promise<EndOutcome>;
+  /** FR-DOC-08: reconcile a separate clinical write without waiting for sockets. */
+  readonly refresh: () => Promise<void>;
   readonly loading: boolean;
 }
 
@@ -664,6 +666,11 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
    */
   const lastSeqRef = useRef(0);
   lastSeqRef.current = snapshot.lastSeq;
+  const refresh = useCallback(async () => {
+    const truth = await pull(sessionId, lastSeqRef.current);
+    const channel = channelRef.current;
+    if (truth !== null && channel?.sessionId === sessionId) channel.fold(truth);
+  }, [sessionId, pull]);
   const end = useCallback(async (): Promise<EndOutcome> => {
     const show = (update: QueueUpdatedMessage): void => {
       const channel = channelRef.current;
@@ -754,6 +761,7 @@ export function useSessionQueue(options: SessionQueueOptions): SessionQueue {
     undo,
     undoLast,
     end,
+    refresh,
     // Waiting for a server that cannot be reached is not loading. With no
     // network and nothing kept for this chamber the screen says so instead
     // (`ReceptionConsole`), and opens by itself when the connection returns.

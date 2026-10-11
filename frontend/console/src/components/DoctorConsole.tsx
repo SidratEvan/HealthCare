@@ -42,7 +42,7 @@
  * failure leaves every field exactly as typed.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   nowServing,
@@ -89,6 +89,9 @@ import { useSessionQueue } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
 import {
   fetchRecords,
+  fetchConsultation,
+  consultationDraft,
+  RequestFailed,
   fetchSessionFee,
   fetchTestCatalogue,
   orderTests,
@@ -169,7 +172,7 @@ function DoctorBody(): ReactNode {
   }, [sessionId]);
 
   const state = queue.state;
-  const serving = state === null ? null : nowServing(state);
+  const liveServing = state === null ? null : nowServing(state);
   const counts = state === null ? null : queueCounts(state);
   const waiting = state === null ? [] : waitingQueue(state);
 
@@ -183,28 +186,119 @@ function DoctorBody(): ReactNode {
    * same order rather than making a second set (`orderTests`).
    */
   const [testKey, setTestKey] = useState(() => crypto.randomUUID());
-
-  /**
-   * A new patient in the chamber is a new note.
-   *
-   * Keyed on the booking, so the fields clear exactly when the person changes
-   * and never while the doctor is typing about the same one — a re-render from a
-   * socket message must not wipe a half-written diagnosis.
-   *
-   * Cleared in the render that brings the new patient, not in an effect after
-   * it. An effect runs once the fields are already enabled and on screen, and
-   * whatever was typed in between was wiped with the previous person's note:
-   * a diagnosis entered as the queue arrived was gone, and the sign button was
-   * back to disabled.
-   */
+  // FR-DOC-08: the editor owns its encounter independently of the live queue.
+  // Sensitive unsaved writing stays in memory; only explicit Save writes it.
+  const [editor, setEditor] = useState<{
+    entry: QueueEntry;
+    sessionId: string;
+    revision: string | null;
+    loaded: boolean;
+    saved: boolean;
+    signed: boolean;
+    conflict: boolean;
+  } | null>(null);
+  const serving = editor?.entry ?? null;
   const servingBookingId = serving?.bookingId ?? null;
-  const [noteFor, setNoteFor] = useState<string | null>(servingBookingId);
-  if (noteFor !== servingBookingId) {
-    setNoteFor(servingBookingId);
+  const changed = editor !== null && liveServing?.bookingId !== servingBookingId;
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+  const busyRef = useRef(false);
+  const completedBooking = useRef<string | null>(null);
+  const operationVersion = useRef(0);
+  const [reload, setReload] = useState(0);
+  const attempt = useRef<Parameters<typeof saveVisit>[0] | null>(null);
+  const [uncertainSign, setUncertainSign] = useState(false);
+  const [testRetries, setTestRetries] = useState<
+    readonly {
+      bookingId: string;
+      serial: number;
+      testCodes: readonly string[];
+      idempotencyKey: string;
+    }[]
+  >([]);
+
+  useEffect(() => {
+    if (
+      editor !== null ||
+      liveServing === null ||
+      sessionId === null ||
+      liveServing.bookingId === completedBooking.current
+    )
+      return;
     setDraft(emptyDraft());
     setFailed(false);
     setTestKey(crypto.randomUUID());
-  }
+    setEditor({
+      entry: liveServing,
+      sessionId,
+      revision: null,
+      loaded: false,
+      saved: true,
+      signed: false,
+      conflict: false,
+    });
+  }, [editor, liveServing, sessionId]);
+
+  useEffect(() => {
+    if (servingBookingId === null) return;
+    let cancelled = false;
+    const version = operationVersion.current;
+    void fetchConsultation({
+      apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
+      token: readToken(),
+      bookingId: servingBookingId,
+    })
+      .then((result) => {
+        if (
+          cancelled ||
+          version !== operationVersion.current ||
+          editorRef.current?.entry.bookingId !== servingBookingId
+        )
+          return;
+        const current = editorRef.current;
+        if (
+          result.patientId !== current.entry.patientId ||
+          result.sessionId !== current.sessionId
+        ) {
+          setFailed(true);
+          return;
+        }
+        if (!current.loaded) {
+          setDraft(result.visit === null ? emptyDraft() : consultationDraft(result.visit));
+          setEditor({
+            ...current,
+            loaded: true,
+            saved: true,
+            revision: result.visit?.revision ?? null,
+            signed: result.visit?.signedAt != null,
+          });
+        } else if (current.revision !== (result.visit?.revision ?? null) && !busyRef.current) {
+          // A reconnect checks the server but never hydrates over local writing.
+          setEditor({ ...current, conflict: true });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [servingBookingId, queue.connected, reload]);
+
+  useEffect(() => {
+    const protect = (event: BeforeUnloadEvent) => {
+      if (
+        editorRef.current?.saved === false ||
+        busyRef.current ||
+        attempt.current !== null ||
+        testRetries.length > 0
+      ) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', protect);
+    return () => window.removeEventListener('beforeunload', protect);
+  }, [testRetries]);
 
   // The catalogue is the hospital's and does not change during a session, so
   // it is fetched once. A failure leaves it empty and the chips absent, which
@@ -235,6 +329,7 @@ function DoctorBody(): ReactNode {
       draft.diagnosisText.trim() !== '' ||
       draft.adviceTextBn.trim() !== '' ||
       draft.followUpDays !== null ||
+      draft.followUpDate != null ||
       medicines.body.length > 0,
     [draft, medicines],
   );
@@ -279,21 +374,67 @@ function DoctorBody(): ReactNode {
 
   const submit = useCallback(
     async (sign: boolean) => {
-      if (servingBookingId === null || serving === null) return;
+      if (
+        busyRef.current ||
+        editor === null ||
+        servingBookingId === null ||
+        serving === null ||
+        !editor.loaded
+      )
+        return;
+      if (sign && changed && attempt.current === null) return;
+      if (attempt.current !== null && attempt.current.sign !== sign) return;
       // The screen holds the buttons while a row is wrong; this is the same rule.
       if (medicines.problems.size > 0) return;
 
+      busyRef.current = true;
+      operationVersion.current += 1;
       setBusy(true);
       setFailed(false);
+      const sent = attempt.current ?? {
+        apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
+        token: readToken(),
+        bookingId: servingBookingId,
+        patientId: serving.patientId,
+        sessionId: editor.sessionId,
+        expectedRevision: editor.revision,
+        draft: {
+          ...draft,
+          followUpDate:
+            draft.followUpDate ??
+            (draft.followUpDays === null
+              ? null
+              : time.toDhakaDate(
+                  time.fromDate(new Date(Date.now() + draft.followUpDays * 86_400_000)),
+                )),
+        },
+        medicines: medicines.body,
+        sign,
+        idempotencyKey: crypto.randomUUID(),
+      };
+      attempt.current = sent;
       try {
-        const result = await saveVisit({
-          apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
-          token: readToken(),
-          bookingId: servingBookingId,
-          draft,
-          medicines: medicines.body,
-          sign,
+        const result = await saveVisit({ ...sent, token: readToken() });
+        if (editorRef.current?.entry.bookingId !== sent.bookingId) return;
+        const current = editorRef.current;
+        setEditor({
+          ...current,
+          revision: result.revision,
+          saved: result.contentMatches,
+          signed: result.signed,
+          conflict: !result.contentMatches,
         });
+        attempt.current = result.queueOutcome === 'retry_needed' ? sent : null;
+        setUncertainSign(result.queueOutcome === 'retry_needed');
+        if (sent.sign) await queue.refresh();
+        if (!result.contentMatches) {
+          // Another device signed different content. Its signature is final,
+          // but this device's clinical writing has not been filed or discarded.
+          attempt.current = null;
+          setUncertainSign(false);
+          show({ title: t('consultationSignedConflict', locale), tone: 'caution' });
+          return;
+        }
 
         // `APP_FLOW.md` B2: the ticked chips go to the lab queue on save, and
         // only once the visit exists — the order is attached to it.
@@ -303,22 +444,31 @@ function DoctorBody(): ReactNode {
         // doctor is told which half failed and the chips stay ticked, so
         // saving again replays the same key and orders nothing twice.
         let testsSent = true;
-        if (draft.testCodes.length > 0) {
+        if (sent.draft.testCodes.length > 0) {
           try {
             await orderTests({
               apiBaseUrl: process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
               token: readToken(),
-              bookingId: servingBookingId,
-              testCodes: draft.testCodes,
+              bookingId: sent.bookingId,
+              testCodes: sent.draft.testCodes,
               idempotencyKey: testKey,
             });
           } catch {
             testsSent = false;
+            setTestRetries((previous) => [
+              ...previous.filter((p) => p.idempotencyKey !== testKey),
+              {
+                bookingId: sent.bookingId,
+                serial: serving.serial,
+                testCodes: sent.draft.testCodes,
+                idempotencyKey: testKey,
+              },
+            ]);
             show({ title: t('testsNotSent', locale), tone: 'caution' });
           }
         }
 
-        if (!sign) {
+        if (!result.signed) {
           if (testsSent) show({ title: t('draftSaved', locale), tone: 'positive' });
           return;
         }
@@ -326,32 +476,59 @@ function DoctorBody(): ReactNode {
         // The visit just signed is the one offered for printing, if it has
         // medicines; one signed without them takes the offer away.
         setLastSigned(
-          medicines.body.length > 0
-            ? { patientId: serving.patientId, bookingId: servingBookingId }
+          sent.medicines.length > 0
+            ? { patientId: sent.patientId, bookingId: sent.bookingId }
             : null,
         );
 
         // The queue came back with the record, so the screen already knows who
         // is next without waiting for the socket to say so.
-        const called = result.queue?.state.entries.find((entry) => entry.status === 'in_chamber');
         show({
-          title:
-            called === undefined
-              ? t('signedNobodyLeft', locale)
-              : t('signedAndCalled', locale).replace(
-                  '{serial}',
-                  formatNumber(called.serial, numerals),
-                ),
+          title: t(
+            result.queueOutcome === 'changed'
+              ? 'consultationSignedChanged'
+              : result.queueOutcome === 'retry_needed'
+                ? 'consultationSignedRetry'
+                : 'consultationSigned',
+            locale,
+          ),
           tone: 'positive',
         });
-      } catch {
+        // Only a confirmed complete outcome can release this editor. A newer
+        // socket state already held by the hook wins over any delayed receipt.
+        if (result.queueOutcome === 'advanced' && testsSent) {
+          completedBooking.current = sent.bookingId;
+          setEditor(null);
+          setDraft(emptyDraft());
+        }
+      } catch (error) {
         // B2's failure rule: not marked done, draft preserved, retry offered.
         setFailed(true);
+        // A received server refusal has a known outcome. Network failures
+        // freeze the sign body for result checking, including after reconnect.
+        const refused = error instanceof RequestFailed && error.status < 500;
+        if (refused) attempt.current = null;
+        setUncertainSign(sent.sign && !refused);
+        if (refused && editorRef.current !== null)
+          setEditor({ ...editorRef.current, conflict: true });
       } finally {
+        operationVersion.current += 1;
+        busyRef.current = false;
         setBusy(false);
       }
     },
-    [servingBookingId, serving, draft, medicines, testKey, show, locale],
+    [
+      servingBookingId,
+      serving,
+      draft,
+      medicines,
+      testKey,
+      show,
+      locale,
+      editor,
+      changed,
+      queue.refresh,
+    ],
   );
 
   if (sessionId === null) {
@@ -400,11 +577,33 @@ function DoctorBody(): ReactNode {
         {/* Right: the record, and the one button that files it. */}
         <div className="flex min-w-0 flex-col gap-5">
           <VisitNote
-            disabled={serving === null || busy}
+            disabled={
+              serving === null || busy || editor?.loaded !== true || editor.signed || uncertainSign
+            }
+            disabledReason={
+              busy || editor?.loaded !== true
+                ? t('loading', locale)
+                : uncertainSign
+                  ? t('consultationCheckSign', locale)
+                  : editor.signed
+                    ? t('consultationSigned', locale)
+                    : t('nobodyToSee', locale)
+            }
             catalogue={catalogue}
             draft={draft}
-            onChange={setDraft}
-            canSign={canSign}
+            onChange={(next) => {
+              setDraft(next);
+              if (editor !== null) setEditor({ ...editor, saved: false });
+              attempt.current = null;
+            }}
+            canSign={canSign && !changed && editor?.conflict !== true}
+            signBlockedReason={
+              changed
+                ? t('consultationChanged', locale)
+                : editor?.conflict
+                  ? t('consultationConflict', locale)
+                  : null
+            }
             medicineProblems={medicines.problems}
             failed={failed}
             onDraft={() => {
@@ -414,6 +613,102 @@ function DoctorBody(): ReactNode {
               void submit(true);
             }}
           />
+
+          {editor === null ? null : (
+            <Card>
+              <p data-testid="consultation-identity">
+                {format('consultationEditing', locale, {
+                  serial: formatNumber(editor.entry.serial, numerals),
+                })}
+              </p>
+              {changed ? (
+                <p role="alert" data-testid="consultation-changed">
+                  {t('consultationChanged', locale)}
+                </p>
+              ) : null}
+              {editor.conflict ? <p role="alert">{t('consultationConflict', locale)}</p> : null}
+              {editor.signed ? <p>{t('consultationSigned', locale)}</p> : null}
+              {editor.loaded ? null : (
+                <Button variant="secondary" onClick={() => setReload((n) => n + 1)}>
+                  {t('retry', locale)}
+                </Button>
+              )}
+              {uncertainSign || (editor.signed && !changed) ? (
+                <Button
+                  data-testid="consultation-retry-sign"
+                  loading={busy}
+                  onClick={() => {
+                    void submit(true);
+                  }}
+                >
+                  {t('consultationCheckSign', locale)}
+                </Button>
+              ) : null}
+              {editor.conflict || failed ? (
+                <Button
+                  variant="secondary"
+                  data-testid="consultation-review"
+                  onClick={() => {
+                    if (
+                      busyRef.current ||
+                      uncertainSign ||
+                      !window.confirm(t('consultationReloadConfirm', locale))
+                    )
+                      return;
+                    attempt.current = null;
+                    operationVersion.current += 1;
+                    setEditor({ ...editor, loaded: false, saved: false, conflict: false });
+                    setReload((n) => n + 1);
+                  }}
+                >
+                  {t('consultationReview', locale)}
+                </Button>
+              ) : null}
+              {changed && !busy && !uncertainSign ? (
+                <Button
+                  variant="secondary"
+                  data-testid="consultation-switch"
+                  onClick={() => {
+                    if (!editor.saved && !window.confirm(t('consultationDiscardConfirm', locale)))
+                      return;
+                    attempt.current = null;
+                    setEditor(null);
+                    setDraft(emptyDraft());
+                  }}
+                >
+                  {t(editor.saved ? 'consultationContinue' : 'consultationDiscard', locale)}
+                </Button>
+              ) : null}
+            </Card>
+          )}
+          {testRetries.map((testRetry) => (
+            <Card key={testRetry.idempotencyKey}>
+              <p data-testid="consultation-test-identity">
+                {`${t('orderTests', locale)} · ${t('colSerial', locale)} ${formatNumber(testRetry.serial, numerals)}`}
+              </p>
+              <p>{t('testsNotSent', locale)}</p>
+              <Button
+                variant="secondary"
+                data-testid="consultation-retry-tests"
+                onClick={() => {
+                  void orderTests({
+                    apiBaseUrl:
+                      process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1',
+                    token: readToken(),
+                    ...testRetry,
+                  })
+                    .then(() =>
+                      setTestRetries((previous) =>
+                        previous.filter((p) => p.idempotencyKey !== testRetry.idempotencyKey),
+                      ),
+                    )
+                    .catch(() => show({ title: t('testsNotSent', locale), tone: 'caution' }));
+                }}
+              >
+                {t('retry', locale)}
+              </Button>
+            </Card>
+          ))}
 
           {lastSigned === null ? null : (
             <Card>
@@ -588,21 +883,25 @@ function Stat({
  */
 function VisitNote({
   disabled,
+  disabledReason,
   catalogue,
   draft,
   onChange,
   canSign,
+  signBlockedReason,
   medicineProblems,
   failed,
   onDraft,
   onSign,
 }: {
   readonly disabled: boolean;
+  readonly disabledReason: string;
   /** The hospital's test catalogue; empty means no chips (`BTN-B05-TEST`). */
   readonly catalogue: readonly CatalogueTest[];
   readonly draft: VisitDraft;
   readonly onChange: (draft: VisitDraft) => void;
   readonly canSign: boolean;
+  readonly signBlockedReason: string | null;
   /** Rows of `TBL-B05-RX` that are not right yet; the save waits for them. */
   readonly medicineProblems: ReadonlyMap<string, MedicineRowProblems>;
   readonly failed: boolean;
@@ -683,6 +982,7 @@ function VisitNote({
                     key={test.code}
                     selected={ticked}
                     onToggle={() => {
+                      if (disabled) return;
                       onChange({
                         ...draft,
                         testCodes: ticked
@@ -748,10 +1048,10 @@ function VisitNote({
           <div className="flex flex-wrap gap-2">
             <FollowUpChoice
               label={t('followUpNone', locale)}
-              active={draft.followUpDays === null}
+              active={draft.followUpDays === null && draft.followUpDate == null}
               disabled={disabled}
               onSelect={() => {
-                onChange({ ...draft, followUpDays: null });
+                onChange({ ...draft, followUpDays: null, followUpDate: null });
               }}
             />
             {FOLLOW_UP_CHOICES.map((days) => (
@@ -761,11 +1061,14 @@ function VisitNote({
                 active={draft.followUpDays === days}
                 disabled={disabled}
                 onSelect={() => {
-                  onChange({ ...draft, followUpDays: days });
+                  onChange({ ...draft, followUpDays: days, followUpDate: null });
                 }}
               />
             ))}
           </div>
+          {draft.followUpDate == null ? null : (
+            <p>{format('consultationFollowUpDate', locale, { date: draft.followUpDate })}</p>
+          )}
         </fieldset>
 
         <div className="flex flex-wrap gap-3">
@@ -780,7 +1083,7 @@ function VisitNote({
               variant="secondary"
               size="lg"
               disabled
-              disabledReason={disabled ? t('nobodyToSee', locale) : t('rxFixFirst', locale)}
+              disabledReason={disabled ? disabledReason : t('rxFixFirst', locale)}
               data-testid="save-draft"
             >
               {t('saveDraft', locale)}
@@ -797,10 +1100,10 @@ function VisitNote({
               disabled
               disabledReason={
                 disabled
-                  ? t('nobodyToSee', locale)
+                  ? disabledReason
                   : medicineProblems.size > 0
                     ? t('rxFixFirst', locale)
-                    : t('needSomethingToSign', locale)
+                    : (signBlockedReason ?? t('needSomethingToSign', locale))
               }
               data-testid="sign-and-next"
             >

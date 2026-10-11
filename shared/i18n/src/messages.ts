@@ -925,6 +925,56 @@ export const CONSOLE = {
 
   saveDraft: { bn: 'খসড়া রাখুন', en: 'Save draft' },
   draftSaved: { bn: 'খসড়া রাখা হয়েছে', en: 'Draft saved' },
+  consultationEditing: {
+    bn: 'এই নোট সিরিয়াল {serial}-এর রোগীর জন্য।',
+    en: 'Editing the patient with serial {serial}.',
+  },
+  consultationFollowUpDate: {
+    bn: 'সংরক্ষিত ফলো-আপের তারিখ: {date}',
+    en: 'Saved follow-up date: {date}',
+  },
+  consultationSignedConflict: {
+    bn: 'অন্য ডিভাইসে ভিন্ন লেখা স্বাক্ষরিত হয়েছে। আপনার লেখা জমা হয়নি এবং এখানেই আছে। স্বাক্ষরিত রেকর্ড দেখে সিদ্ধান্ত নিন।',
+    en: 'Another device signed different content. Your writing was not filed and remains here. Review the signed record before deciding what to discard.',
+  },
+  consultationChanged: {
+    bn: 'রিসেপশনের রোগী বদলেছে। এই নোট আগের রোগীরই আছে। খসড়া রাখুন অথবা নিশ্চিত করে বাদ দিন, তারপর বর্তমান রোগী খুলুন।',
+    en: 'Reception changed the queue. This note still belongs to the original patient. Save the draft or confirm discarding it before opening the current patient.',
+  },
+  consultationConflict: {
+    bn: 'অন্য ডিভাইসে রেকর্ড বদলেছে অথবা এই কাজ প্রত্যাখ্যাত হয়েছে। আপনার লেখা আছে। সার্ভারের খসড়া দেখে সিদ্ধান্ত নিন।',
+    en: 'Another device changed the record or this operation was refused. Your writing is retained. Review the server draft before continuing.',
+  },
+  consultationSigned: {
+    bn: 'সার্ভারে এই রোগীর রেকর্ড স্বাক্ষরিত হয়েছে।',
+    en: 'The backend confirmed this patient’s signed record.',
+  },
+  consultationSignedChanged: {
+    bn: 'রেকর্ড স্বাক্ষরিত হয়েছে। রিসেপশনের রোগী বদলেছে; এই স্বাক্ষর নতুন রোগীকে শেষ করেনি।',
+    en: 'Record signed. The queue changed; this sign did not finish the new patient.',
+  },
+  consultationSignedRetry: {
+    bn: 'রেকর্ড স্বাক্ষরিত হয়েছে। পরের রোগী ডাকার ফল নিশ্চিত নয়। ফল যাচাই করুন।',
+    en: 'Record signed. Queue advancement needs result checking.',
+  },
+  consultationCheckSign: {
+    bn: 'স্বাক্ষর ও সারির ফল যাচাই করুন',
+    en: 'Check signing and queue result',
+  },
+  consultationReview: { bn: 'সার্ভারের খসড়া খুলুন', en: 'Open server draft' },
+  consultationReloadConfirm: {
+    bn: 'আপনার বর্তমান লেখা বাদ দিয়ে এই রোগীর সার্ভারের খসড়া খুলবেন? আগে প্রয়োজনীয় লেখা সংরক্ষণ করুন।',
+    en: 'Replace your current writing with this patient’s server draft? Preserve any needed writing before confirming.',
+  },
+  consultationContinue: { bn: 'বর্তমান রোগী খুলুন', en: 'Open current patient' },
+  consultationDiscard: {
+    bn: 'নোট বাদ দিয়ে বর্তমান রোগী খুলুন',
+    en: 'Discard note and open current patient',
+  },
+  consultationDiscardConfirm: {
+    bn: 'এই রোগীর অসংরক্ষিত নোট বাদ দেবেন? এটি আর ফেরত পাওয়া যাবে না।',
+    en: 'Discard this patient’s unsaved note? It cannot be recovered.',
+  },
   signAndNext: { bn: 'রেকর্ড দিন ও পরবর্তী', en: 'Save record and next' },
   signedAndCalled: {
     bn: 'রেকর্ড জমা হয়েছে। সিরিয়াল {serial} ডাকা হয়েছে।',
@@ -937,8 +987,8 @@ export const CONSOLE = {
   // APP_FLOW.md B2: "if the prescription fails to save, the consultation is
   // **not** marked done… with the draft preserved locally".
   visitSaveFailed: {
-    bn: 'রেকর্ড জমা হয়নি, তাই রোগী শেষ করা হয়নি। যা লিখেছেন তা রয়ে গেছে — আবার চেষ্টা করুন।',
-    en: 'The record did not save, so the consultation was not closed. What you wrote is still here — try again.',
+    bn: 'সার্ভারের ফল নিশ্চিত করা যায়নি। আপনার লেখা রয়ে গেছে। স্বাক্ষর পাঠিয়ে থাকলে ফল যাচাই করুন; নইলে আবার খসড়া রাখুন।',
+    en: 'The server outcome could not be confirmed. Your writing is retained. Check the result if signing was sent; otherwise retry saving the draft.',
   },
   needSomethingToSign: {
     bn: 'রোগ নির্ণয়, পরামর্শ বা ফলো-আপ — অন্তত একটি লিখুন',

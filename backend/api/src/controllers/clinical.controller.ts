@@ -78,6 +78,13 @@ export async function createVisit(req: Request, res: Response): Promise<void> {
   res.status(201).json({ ok: true, data: result });
 }
 
+/** FR-DOC-08/FR-DOC-10: separate from patient-visible signed history. */
+export async function getConsultation(req: Request, res: Response): Promise<void> {
+  const { id } = idParams.parse(req.params);
+  if (req.principal === undefined) throw authRequired();
+  res.json({ ok: true, data: await clinical.consultation(req.principal, id) });
+}
+
 /** `GET /formulary?q=` — `TBL-B05-RX`'s suggestions as a doctor types (`FR-DOC-05`). */
 export async function searchFormulary(req: Request, res: Response): Promise<void> {
   const { q } = formularyQuery.parse(req.query);
