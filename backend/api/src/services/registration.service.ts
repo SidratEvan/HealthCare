@@ -56,26 +56,50 @@ export async function lookup(
 }
 
 /**
- * A patient for this phone and name. The same name under the same number is
- * the same person, so registering twice finds the first record rather than
- * making a second (`FR-REC-20`).
+ * V1 reuses an exact guest phone/name match (`FR-REC-20`). That is a storage
+ * rule, not proof of identity. Report reuse and the stored demographics so
+ * the counter can require explicit confirmation; do not overwrite the person.
  */
 export async function register(
   body: RegisterPatientBody,
-): Promise<{ patientId: string; phone: string }> {
+  actor: CounterActor,
+): Promise<{
+  patientId: string;
+  phone: string;
+  created: boolean;
+  ambiguous: boolean;
+  patient: registrationRepo.CounterPatient;
+}> {
   const phone = phoneOf(body.phone);
-  const patientId = await withTransaction(async (trx) => {
+  return await withTransaction(async (trx) => {
     const guestId = await guestRepo.findOrCreateIdentity(trx, {
       phone,
       displayName: body.fullName,
     });
-    return await guestRepo.findOrCreatePatient(trx, {
+    // The identity upsert above retains its row lock until commit, so these
+    // reads and the existing creation operation serialize concurrent counters.
+    const existing = await registrationRepo.guestNameCount(trx, guestId, body.fullName);
+    const patientId = await guestRepo.findOrCreatePatient(trx, {
       guestId,
       fullName: body.fullName,
       ageYears: body.ageYears,
       sex: body.sex,
       phone,
     });
+    if (existing > 0)
+      await registrationRepo.recordLookup(trx, {
+        actorStaffId: actor.staffId,
+        hospitalId: actor.hospitalId,
+        patientIds: [patientId],
+        ip: actor.ip,
+        userAgent: actor.userAgent,
+      });
+    return {
+      patientId,
+      phone,
+      created: existing === 0,
+      ambiguous: existing > 1,
+      patient: await registrationRepo.registeredPatient(trx, patientId),
+    };
   });
-  return { patientId, phone };
 }

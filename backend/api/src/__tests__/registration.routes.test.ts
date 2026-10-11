@@ -12,13 +12,14 @@ import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { StaffRole } from '@platform/domain';
 
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
+import * as registrationRepo from '../repositories/registration.repo.js';
 
 import { createQueueFixture, type QueueFixture } from './support/queueFixture.js';
 import { bearer, nationalToken, patientToken } from './support/tokens.js';
@@ -87,6 +88,86 @@ describe('who may register at the counter (FR-ROLE-01)', () => {
 });
 
 describe('phone first (FR-REC-20)', () => {
+  it('refuses exposing a reused canonical identity when its required audit fails', async () => {
+    const phone = spokenPhone();
+    const body = {
+      phone: phone.typed,
+      fullName: 'Audited receipt (Demo)',
+      ageYears: 27,
+      sex: 'female',
+    };
+    const first = await register(body);
+    const fail = vi
+      .spyOn(registrationRepo, 'recordLookup')
+      .mockRejectedValue(new Error('synthetic audit failure'));
+    try {
+      const answer = await register(body);
+      expect(answer.status).toBe(500);
+      expect(answer.body.data).toBeUndefined();
+    } finally {
+      fail.mockRestore();
+    }
+    const again = await register(body);
+    expect(again.body.data.patientId).toBe(first.body.data.patientId);
+    const rows = await sql<{ n: number }>`SELECT count(*)::int AS n FROM audit_log
+      WHERE actor_staff_id=${fixture.receptionistId} AND patient_id=${first.body.data.patientId as string}
+      AND meta->>'purpose'='registration_lookup'`.execute(db);
+    expect(rows.rows[0]?.n).toBe(1);
+    expect((await lookup(phone.typed)).body.data.patients).toHaveLength(1);
+  });
+  it('returns canonical identity when a retry finds an existing name, without overwriting it', async () => {
+    const phone = spokenPhone();
+    const body = {
+      phone: phone.typed,
+      fullName: 'Receipt patient (Demo)',
+      ageYears: 41,
+      sex: 'female',
+    };
+    const first = await register(body);
+    const again = await register({ ...body, ageYears: 12, sex: 'male' });
+    expect(first.body.data.created).toBe(true);
+    expect(again.body.data.created).toBe(false);
+    expect(again.body.data.patientId).toBe(first.body.data.patientId);
+    expect(again.body.data.patient).toMatchObject({
+      patientId: first.body.data.patientId,
+      fullName: body.fullName,
+      ageYears: 41,
+      sex: 'female',
+    });
+    expect((await lookup(phone.typed)).body.data.patients).toHaveLength(1);
+  });
+
+  it('serializes concurrent profile creation and reports which receipt reused the profile', async () => {
+    const phone = spokenPhone();
+    const body = {
+      phone: phone.typed,
+      fullName: 'Concurrent patient (Demo)',
+      ageYears: 27,
+      sex: 'male',
+    };
+    const replies = await Promise.all([register(body), register(body)]);
+    expect(replies.map((reply) => reply.status)).toEqual([200, 200]);
+    expect(new Set(replies.map((reply) => reply.body.data.patientId as string)).size).toBe(1);
+    expect(replies.map((reply) => reply.body.data.created as boolean).sort()).toEqual([
+      false,
+      true,
+    ]);
+    expect((await lookup(phone.typed)).body.data.patients).toHaveLength(1);
+  });
+
+  it('reports existing same-name ambiguity rather than certifying a new identity', async () => {
+    const phone = spokenPhone();
+    const body = { phone: phone.typed, fullName: 'Same name (Demo)', ageYears: 27, sex: 'male' };
+    const first = await register(body);
+    await sql`INSERT INTO patients(owner_guest_id,full_name,age_years,sex,phone,relationship,is_primary)
+      SELECT owner_guest_id,full_name,age_years,sex,phone,'other',false FROM patients
+      WHERE id=${first.body.data.patientId as string}`.execute(db);
+    const again = await register(body);
+    expect(again.body.data.created).toBe(false);
+    expect(again.body.data.ambiguous).toBe(true);
+    expect((await lookup(phone.typed)).body.data.patients).toHaveLength(2);
+  });
+
   it('refuses a number that cannot be a Bangladeshi mobile', async () => {
     const response = await lookup('12345');
     expect(response.status).toBe(400);

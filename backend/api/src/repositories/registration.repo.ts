@@ -30,6 +30,39 @@ export interface CounterPatient {
   readonly owner: 'account' | 'guest' | 'hospital';
 }
 
+/** Canonical counter receipt inside the existing locked household transaction
+ * (FR-REC-20). No identity inference from the submitted demographic fields.
+ */
+export async function guestNameCount(trx: Tx, guestId: string, fullName: string): Promise<number> {
+  const result = await sql<{ n: number }>`SELECT count(*)::int AS n FROM patients
+    WHERE owner_guest_id=${guestId} AND full_name=${fullName} AND deleted_at IS NULL`.execute(trx);
+  return result.rows[0]?.n ?? 0;
+}
+export async function registeredPatient(trx: Tx, patientId: string): Promise<CounterPatient> {
+  const result = await sql<{
+    id: string;
+    full_name: string;
+    age_years: number | null;
+    sex: string;
+    relationship: string;
+    is_primary: boolean;
+  }>`SELECT id, full_name, coalesce(age_years,date_part('year',age(date_of_birth))::int) AS age_years,
+    sex::text AS sex,relationship,is_primary FROM patients WHERE id=${patientId} AND deleted_at IS NULL`.execute(
+    trx,
+  );
+  const row = result.rows[0];
+  if (row === undefined) throw new Error('Registered patient receipt missing.');
+  return {
+    patientId: row.id,
+    fullName: row.full_name,
+    ageYears: row.age_years,
+    sex: row.sex,
+    relationship: row.relationship,
+    isPrimary: row.is_primary,
+    owner: 'guest',
+  };
+}
+
 /**
  * A patient another hospital imported is that hospital's alone (`FR-IMP-10`),
  * so only this facility's own imported patients are ever shown here.
