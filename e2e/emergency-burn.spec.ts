@@ -68,6 +68,23 @@ test.afterEach(async ({ browser, context }) => {
   await closeOtherContexts(browser, context);
 });
 
+test('unsupported browser audio is stated while visual alerts still arrive', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(globalThis, 'AudioContext', { value: undefined, configurable: true });
+    Object.defineProperty(globalThis, 'webkitAudioContext', {
+      value: undefined,
+      configurable: true,
+    });
+  });
+  await openErConsole(page, shapla);
+  await expect(page.getByTestId('er-sound-unavailable')).toBeVisible();
+  await expect(page.getByTestId('er-sound-on')).toHaveCount(0);
+  const alert = await sendAlert(shapla.hospitalId, 'cardiac');
+  await expect(page.getByTestId(`er-inbound-${alert.caseId}`)).toBeVisible({
+    timeout: ALERT_BUDGET_MS,
+  });
+});
+
 test.describe('the burn scenario (PRD.md §24 step 7)', () => {
   // The first test to open the results page and the ER console in a run: both
   // dev servers compile a screen they have not served yet, at the same moment.
@@ -263,6 +280,11 @@ test.describe('the ER hands a case to the ward (BTN-B07-ADMIT, FR-BED-07)', () =
     await board.getByTestId('admit-name').fill('রাবেয়া খাতুন (ডেমো)');
     await board.getByTestId('admit-phone').fill('01799887766');
     await board.getByTestId('admit-confirm').click();
+    // Review is not an admission or an ER bed reservation (FR-BED-07).
+    await expect(board.getByTestId('admit-review')).toBeVisible();
+    await expect(board.getByTestId(`bed-tile-${bed.label}`)).toHaveAttribute('data-state', 'free');
+    await expect(page.getByTestId(`er-row-${walkIn.caseId}`)).toBeVisible();
+    await board.getByTestId('admit-submit-review').click();
 
     await expect.poll(async () => await bedState(bed.id)).toBe('occupied');
     await expect.poll(async () => (await caseState(walkIn.caseId)).state).toBe('admitted');

@@ -1,0 +1,163 @@
+/* S-B-07, FR-EMG-04..09: status tokens remain independent of branding. */
+.er-workspace .er-load-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cf-space-4);
+  margin-bottom: var(--cf-space-5);
+  padding: var(--cf-space-5);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-lg);
+  background: var(--bg-surface);
+}
+.er-workspace .er-total {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-space-3);
+}
+.er-workspace .er-total > strong {
+  font-size: 36px;
+  line-height: 1.4;
+}
+.er-workspace .er-total > span {
+  max-width: 230px;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+.er-workspace .er-load-counts,
+.er-workspace .er-load-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cf-space-3);
+}
+.er-workspace .er-load-counts > span {
+  padding: var(--cf-space-2) var(--cf-space-3);
+  border-radius: var(--cf-radius-md);
+  background: var(--bg-sunken);
+  font-weight: 600;
+}
+.er-workspace .er-load-counts .er-red-count {
+  color: var(--alert-700);
+  background: var(--alert-100);
+}
+.er-workspace .er-load-actions {
+  margin-left: auto;
+}
+.er-workspace .er-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(290px, 320px);
+  gap: var(--cf-space-5);
+}
+.er-workspace .er-main-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cf-space-5);
+  min-width: 0;
+}
+.er-workspace .er-main-content section > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cf-space-2);
+  font-weight: 700;
+}
+.er-workspace .er-main-content article {
+  background: var(--bg-surface);
+  border-radius: var(--cf-radius-lg);
+  padding: var(--cf-space-4);
+}
+.er-workspace .er-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cf-space-4);
+  min-width: 0;
+}
+.er-workspace .er-sidebar > section {
+  border-radius: var(--cf-radius-lg);
+}
+.er-workspace .er-table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-lg);
+  background: var(--bg-surface);
+}
+.er-workspace [data-testid='er-triage'] {
+  min-width: 710px;
+}
+.er-workspace [data-testid='er-triage'] th {
+  font-weight: 600;
+  background: var(--bg-sunken);
+}
+.er-workspace [data-testid='er-triage'] td:first-child {
+  font-weight: 700;
+}
+.er-workspace .er-sort-note {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+.er-workspace .er-connection {
+  width: 220px;
+  font-size: 12px;
+}
+.er-workspace .er-connection section {
+  padding: var(--cf-space-2) var(--cf-space-3);
+  border-radius: var(--cf-radius-md);
+}
+.er-workspace .er-connection p {
+  margin-top: var(--cf-space-1);
+}
+.er-workspace .er-triage-shape {
+  display: inline-block;
+  margin-right: var(--cf-space-1);
+}
+.er-workspace [data-testid^='er-triage-red-'] {
+  color: var(--alert-700);
+  background: var(--alert-100);
+  border-color: var(--alert-700);
+}
+.er-workspace [data-testid^='er-triage-yellow-'] {
+  color: var(--warn-700);
+  background: var(--warn-100);
+  border-color: var(--warn-700);
+}
+.er-workspace [data-testid^='er-triage-green-'] {
+  color: var(--positive-700);
+  background: var(--positive-100);
+  border-color: var(--positive-700);
+}
+.er-workspace [data-testid^='er-triage-'][aria-pressed='true'] {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+.er-workspace [data-testid='er-handed-off'] {
+  display: block;
+  max-width: 210px;
+}
+@media (max-width: 1150px) {
+  .er-workspace .er-layout {
+    grid-template-columns: minmax(0, 1fr) 290px;
+  }
+  .er-workspace .er-load-actions {
+    margin-left: 0;
+  }
+  .er-workspace .er-main-content ul.grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 900px) {
+  .er-workspace .er-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .er-workspace .er-sidebar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .er-workspace .er-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .er-workspace .er-load-strip {
+    padding: var(--cf-space-3);
+  }
+}
