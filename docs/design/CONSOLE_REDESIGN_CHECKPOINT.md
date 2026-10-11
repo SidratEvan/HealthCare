@@ -1,27 +1,123 @@
 # Accelerated completion checkpoint
 
-Updated 11 October 2026. User authorises the approved accelerated plan without intermediate reviews. Keep everything local: no push, merge or deployment. Preserve pre-existing reports/settings/prototypes and synthetic-only data. No AGENTS.md found. CLAUDE.md, Phase 8A plan, latest STATUS and original attached brief read.
+Updated 11 October 2026: usage-limit preservation handover. **Do not start another expensive verification in this session.** Approved implementation can resume without intermediate founder reviews in a new conversation. Everything stays local: no push, merge or deployment; synthetic localhost data only. Preserve clinical/security guards and existing work.
 
-## Completed before this resume
+CLAUDE.md, Phase 8A plan `docs/reports/MEDLIVEBD_CONSOLE_REDESIGN_IMPLEMENTATION_PLAN.md`, STATUS, previous checkpoint and the attached accelerated brief were read before editing. No applicable AGENTS.md found. Current user authorization supersedes historical module review stops. The plan/reports were pre-existing untracked material; preserve them without automatically staging.
 
-Foundation, Access, Reception/Registration C3/C4, Doctor C1/C2, Admin Today/Reports and Admin management. Root started at b20ffd9 on feat/console-redesign-platform-import-national. Historic gate: 164 files / 8,027 tests; latest original Admin browser 8/8. Do not restart these modules or repeat historical suites per module.
+## Repository and worktree anchors
 
-## Current work and evidence
+Root resumed from `b20ffd9` on `feat/console-redesign-platform-import-national`, preserving predecessor dirty Platform work. Local source commits:
 
-- Separate company site: D:/Projects/HealthCare-company-site, feat/medlivebd-company-site, clean ef089c5. Bilingual premium site, genuine logo/contact, server language metadata, mobile menu. Type/lint/format/build pass; six browser checks pass, axe desktop/mobile/reduced-motion. Local preview http://localhost:3200/bn and /en, hidden PID 22268. See company-site/README.md. Stays separate from console repo integration.
-- Ward/Emergency: D:/Projects/HealthCare-ward-emergency, clean d623c07. Shared workspace redesigns, admission/ER review guards, Help and bilingual reminders. 89 focused tests and static checks pass. Explicit 14 source/test/doc paths copied to root; UI exports unioned. Browser/captures pending integrated gate.
-- Lab/Pharmacy: D:/Projects/HealthCare-lab-pharmacy, clean 2224e4c (clinical b40a2c6). C5 durable RECORD_VIEW, C6 canonical bytes/MIME/10MiB/order-owned replay, C7 exact-version atomic stock lists; no migration/new dependency. 53 API + 33 unit tests and static checks pass. Explicit 17 paths copied to root; UI exports unioned. Browser/captures pending integrated gate. Existing 200-row ceiling and orphan-object cleanup limit documented.
-- Platform: predecessor dirty redesign preserved and completed. Focused type/lint originally pass. Original browser 21/25, 16.5m: global first-load/form resource delays, health test assumed Meghna had sent messages (actual seeded DB has zero), domain failure alert hidden inside Readiness while editing Access. Domain alert moved outside tabs; health assertion will compare actual DB count; application switches to Access before application receipt. Corrected browser pending; no retry settings changed.
-- Import/National: shared frame/Help, import stage guide and file/mapping preservation, authoritative reconciliation after uncertain writes, retained failed-refresh warnings; National district filter and keyboard-selectable hour cells, no identity drill-down. Initial type errors (required nav callback) corrected; console, E2E and root tooling type checks passed.
-- C8: all three file paths exempt global 256KiB parser; authenticate before bounded JSON parser and validate actual UTF-8 <=5MiB. Undo stores persisted after-state digests, locks templates then sessions/targets, checks changed targets/dependencies before any write, refuses legacy batches, classifies adopted rows as updates, restores replaced schedule reference, protects later aliases. Doctor/staff updates refuse whole-batch Undo because linked preimages are incomplete. This conservative limit must be visible in final report. Corrected focused Import API 52/52 and UTF-8 unit 6/6 pass; expanded Import persisted-state 29/29 pass; coordinated alias/Undo case passes. Commit dea893f isolates clinical C5-C8 integration.
-- Known existing tooling errors fixed: Import closure inference and Vitest passWithNoTests moved to supported top-level. Final consolidated verification pending.
+- `dea893fda73fcc1c487c06127ea961ed44222db2`: isolated C5-C8 API/domain safety integration, 14 explicit paths. Focused checks passed; consolidated clinical/browser release verification incomplete.
+- `9afb1d8`: 49 console/UI/tooling/browser/docs paths, remaining workspace implementations and reporting captures. Its completion title describes implementation, **not a fully verified release**; commit body leaves consolidated gates pending.
+- Subsequent docs-only handover commit records this checkpoint/STATUS. Find its hash with `git log -3 --oneline`; functional source remains `9afb1d8`.
 
-## Resume next
+No merges/cherry-picks/pushes. Ward/ER and Lab/Pharmacy integrated by explicit owned-file copies; shared exports unioned to retain Admin exports. Company site remains separate.
 
-1. Finish focused Import persisted-state coverage; complete new Platform/Import/National Help, unsaved/reconcile, responsive accessibility browser cases.
-2. Run integrated clinical browser selection and original corrected Platform/Import/National regressions, one runtime only on 3000/3100/4000. Never concurrent reset against healthcare_dev; API tests use separate healthcare_api_test.
-3. Record representative visual captures and inspect; finish static checks and local scoped commits with source commit provenance.
-4. One consolidated full verify, API/frontend builds and production/built browser security/offline gates. Report actual failures/limits; never label unrun checks green.
-5. Update STATUS/checkpoint and leave separate feature branches local. Do not stage pre-existing docs/reports, batch5b exit artifacts or ignored local settings.
+| Worktree | Branch | Implementation commit | Current state |
+| --- | --- | --- | --- |
+| D:/Projects/HealthCare | feat/console-redesign-platform-import-national | 9afb1d8 + handover docs | Source committed; PNGs/baseline artifacts below remain |
+| D:/Projects/HealthCare-company-site | feat/medlivebd-company-site | ef089c5f243017507f547e36a25a9d6ec5551099 | Clean |
+| D:/Projects/HealthCare-lab-pharmacy | feat/console-redesign-lab-pharmacy | 2224e4c; safety b40a2c6 | Clean |
+| D:/Projects/HealthCare-ward-emergency | feat/console-redesign-ward-emergency | d623c07 | Clean |
 
-Docker healthcare-db is healthy localhost:5432. Test defaults are synthetic local-only. Heavy browser/build/API jobs are serialised because host RAM is 8GB. Preserve initial red logs; corrected runs use new log names. Current root focused API is released. Full development browser gate (344 tests) is running: accelerated-completion-e2e-full.log. Trace-heavy initial gate was stopped for measured host memory pressure; restart uses --trace=off, no retries/assertion/coverage changes. Four new workspace browser cases pass (2.4m); representative Platform/Import/National captures reviewed. Root verify/build/built/prod gates are next, not yet green. No production readiness, provider activation or hospital rehearsal implied.
+Other unchanged local branch tips: `demo`/`main` 99e4c5e; `mvp` ca88c47; `feat/console-redesign-foundation` 8d81ce8; access 4e1da68; reception 5f6e440; registration ec9cbf2; doctor dba5e19; admin-dashboard ca15cd6; admin-management b20ffd9 (these use the same feature prefix); `fix/console-doctor-consultation-safety` 7033db6.
+
+Exact root uncommitted files after the docs handover commit:
+
+```text
+ M docs/design/console-admin-management/staff-desktop-bn.png
+ M docs/design/console-reporting/import-tablet-preview.png
+ M docs/design/console-reporting/national-tablet-hour.png
+ M docs/design/console-reporting/platform-tablet-draft.png
+?? batch5b-checkpoint-format.exit
+?? batch5b-checkpoint-typecheck.exit
+?? docs/reports/MEDLIVEBD_INFRASTRUCTURE_COST_AUDIT.md
+?? docs/reports/MEDLIVEBD_CONSOLE_REDESIGN_IMPLEMENTATION_PLAN.md
+```
+
+Four PNGs were regenerated by the interrupted browser gate. Earlier reporting captures are committed in 9afb1d8; inspect latest PNGs before a later evidence commit. Do not discard or blanket-stage baseline reports/exit artifacts/ignored local settings. Ignored `accelerated-*.log` files retain local test evidence for the next conversation.
+
+## Complete before resume: do not restart
+
+Foundation, Access, Reception/Registration C3/C4, Doctor C1/C2 and redesign, Admin Today/Reports and Admin management are implemented with historical evidence in STATUS/design reports. Historical gate: 164 files / 8,027 tests; original Admin browser 8/8. These results predate this candidate and do not verify new integration. Existing prototypes and clinical/queue/consent/tenant/offline protections preserved.
+
+## Implemented now and precise verification boundary
+
+- **Public landing/company site:** complete separately, genuine logo/contact sidrat@medlivebd.com, English/Bangla, SSR language metadata/mobile navigation. Type/lint/format/build passed; **6/6 browser**, desktop/mobile/reduced-motion axe. See its `docs/design/company-site/README.md`. Local preview http://localhost:3200/bn and /en, hidden PID 22268. Do not rerun unchanged site suites.
+- **Ward/Emergency:** implemented/integrated frame/Help, admission/version review, ward filters/attention, triage/referral arrival review and truthful unsupported audio. **89 focused tests** and package static checks passed. Integrated browser/axe/captures still pending; `docs/design/console-ward-emergency/CHECKPOINT.md` retains details. No backend clinical transitions changed.
+- **Lab/Pharmacy:** implemented/integrated. C5 identifying labels await durable RECORD_VIEW; C6 canonical base64/nonempty exact10MiB/MIME/order-owned replay; digest object paths protect raced overwrite. C7 exact six-digit timestamps and serialized atomic whole-list versions; 200-row cap never split. **53 API + 33 unit tests** and package static checks passed in originating worktree; root final static checks passed. Integrated browser/captures/compiled gates pending. Orphan-object cleanup remains an operational limit; API/client version rollout must be coordinated. Stock flags are catalogue operations, not dispensing.
+- **Platform:** preserved/completed predecessor redesign, frame/Help, filters/four sections, scoped confirmations, draft guard and once-only credentials handover. Uncertain create uses authoritative lookup; lost password response cannot recover password. Domain errors moved outside hidden sections. Original browser **21/25**, four unresolved original regressions below; corrected original cases pending verification.
+- **Import/National:** frame/Help/stages/file/mapping retention and authoritative uncertain-write reconciliation. Lost NetworkError now consults browser connectivity so readback works. District filtering preserves national totals; keyboard hour cells/current details/nonempty headers; tablet document overflow corrected. Four new focused browser cases passed. No new identity drill-down/geography/feeds.
+- **C8:** all three CSV doors authenticate before bounded route JSON; actual UTF-8 <=5MiB; exemption from global256KiB parser. Full persisted after-state SHA256 metadata; per-hospital import serialization; templates before session/target locks; active adopted-target checks; dependencies/aliases/after-state validated before any Undo write. Later clinical use checks also cover updated targets. Legacy/missing evidence/later edits/use/aliases refuse entire Undo. Adopted rows classify update; replaced schedule restores original reference. **Doctor/staff updates deliberately refuse Undo** because linked chamber/role preimages are incomplete, explained bilingually. Conservative timestamps can keep older batches blocked after later restoration. No generic rollback/production readiness claim.
+- Import closure inference and Vitest passWithNoTests typing fixed without removing assertions. No dependency/migration added.
+
+## Actual evidence, failures and interrupted gates
+
+| Evidence | Actual result |
+| --- | --- |
+| accelerated-handover-import-focused.log / accelerated-handover-import-focused-exit.log | **30/30 passed, 20.34s, exit0 on final safety source**; last running targeted check completed before handover |
+| accelerated-resume-import-api-corrected.log | 52/52 Import/mapping before final lock refinements |
+| accelerated-resume-import-safety-final.log | 29/29 expanded Import before final serialization/active-target refinements |
+| accelerated-resume-import-concurrency.log | Coordinated alias commit versus Undo passed, 1 selected/29 deselected via -t; no new skip |
+| accelerated-resume-import-limits.log | UTF-8 6/6 passed |
+| accelerated-resume-workspaces-browser-corrected.log | **4/4, 2.4m, zero retries**: Help/draft retention, national filter/hour/freshness, committed lost-reply readback, axe/tablet captures |
+| accelerated-handover-api-type.log, accelerated-handover-console-type.log, accelerated-handover-e2e-type.log and respective -exit.log | Final affected-source TypeScript all exit0 |
+| accelerated-handover-lint.log / -exit.log | All changed TS/TSX since b20ffd9, zero warnings, exit0 |
+| accelerated-resume-tooling-corrected-type.log | Root tsconfig.json passed; earlier nonexistent tsconfig.tooling.json was a command/path error |
+| accelerated-completion-source-format.log | Targeted changed-source formatting passed; full formatting pending final verify |
+| accelerated-resume-platform-browser-ready.log | Original Platform-related browser **21 passed/4 failed**, 16.5m; retained red evidence |
+| accelerated-completion-e2e-full-trace-aborted.log | 344-case development gate deliberately stopped for measured 8GB RAM pressure after **11 recorded passes**, no test failure before interruption; terminated exit -1 |
+| accelerated-completion-e2e-full.log | Trace-off restart deliberately stopped per latest usage-limit instruction after **6 recorded passes** (4 workspace+2 Admin), no test failure before interruption; terminated exit -1. **Incomplete, not green** |
+
+Original four Platform failures: first hospital-list read failed; hospital application form exceeded10s wait despite appearing in snapshot (startup/resource pressure suspected, not proven resolved); health expected Meghna sent>0 although authoritative seeded DB count0 (assertion corrected to actual count, other positive checks retained); domain error hidden in Readiness while Access active (alert moved outside). Hospital-application selects Access before receipt assertion. Corrected originals remain unverified; no retries/timeouts/coverage weakened. First bootstrap failed with Docker off, no tests, in accelerated-resume-platform-browser.log.
+
+Initial focused workspace failures (empty hour headers and online state stuck after lost reply) corrected and 4/4 passed. Final visual/copy refinements also passed those four in partial full gate. Red logs retained. Consolidated verify/build/development/built/production gates remain unfinished; historical gates do not cover current candidate.
+
+## Runtime and remaining tasks
+
+At handover no active test process. Owned Playwright/server trees stopped; ports3000/3100/4000 free. Only site3200/PID22268 still running; do not kill unrelated editors/site. Docker healthcare-db healthy localhost5432. Browser fixtures use disposable healthcare_dev; API tests separate healthcare_api_test; production harness guarded local test DB/limited role. Never concurrent resets. Host8GB: expensive gates serial.
+
+1. Read state/instructions first; inspect retained four PNGs. Finish integrated Ward/ER/Lab/Pharmacy browser/axe/captures and corrected original Platform/Import/National regressions. Do not restart modules or rerun unchanged company-site checks.
+2. Fix only actual failures with focused evidence, preserving clinical/security/queue/audit/version/replay/offline safeguards. Inspect representative real clinical screens, bilingual tablet Help/navigation state; add meaningful missing coverage where original cases do not exercise redesign.
+3. Once stable, run one consolidated repository/build/development/built/production gate serially. Mandatory queue latency/security/offline cases retained, no new retries/skips/exclusions. No expensive full gate in this preservation session.
+4. Record results/limits and scoped local commits; update STATUS/checkpoint/reports. No founder review required for approved implementation; no push/merge/deploy.
+
+### Exact next commands (not executed at handover)
+
+```powershell
+Set-Location D:\Projects\HealthCare
+git status --short
+git log -5 --oneline
+git worktree list
+Get-Content CLAUDE.md
+Get-Content docs/design/CONSOLE_REDESIGN_CHECKPOINT.md
+Get-Content docs/STATUS.md -First 35
+Get-Content docs/reports/MEDLIVEBD_CONSOLE_REDESIGN_IMPLEMENTATION_PLAN.md
+```
+
+Suggested focused integration browser command, one runtime only:
+
+```powershell
+$env:E2E_ALLOW_REMOTE_DATABASE='false'
+pnpm.cmd test:e2e e2e/ward-board.spec.ts e2e/emergency-burn.spec.ts e2e/referral.spec.ts e2e/lab-report.spec.ts e2e/data-import.spec.ts e2e/import-mapping.spec.ts e2e/gov-dashboard.spec.ts e2e/hospital-application.spec.ts e2e/platform-health.spec.ts e2e/portal-address.spec.ts --trace=off *> accelerated-resume-clinical-browser.log
+$LASTEXITCODE | Set-Content accelerated-resume-clinical-browser-exit.log
+```
+
+Final commands AFTER focused fixes. Execute each separately; inspect log/exit and stop on nonzero before next. All pending on this candidate:
+
+```powershell
+$env:DATABASE_URL='postgresql://healthcare:healthcare@localhost:5432/healthcare_dev'
+pnpm.cmd verify --maxWorkers=1 *> accelerated-completion-verify.log
+$LASTEXITCODE | Set-Content accelerated-completion-verify-exit.log
+pnpm.cmd build *> accelerated-completion-build.log
+$LASTEXITCODE | Set-Content accelerated-completion-build-exit.log
+pnpm.cmd test:e2e --trace=off *> accelerated-completion-e2e-final.log
+$LASTEXITCODE | Set-Content accelerated-completion-e2e-final-exit.log
+pnpm.cmd test:e2e:built --trace=off *> accelerated-completion-e2e-built.log
+$LASTEXITCODE | Set-Content accelerated-completion-e2e-built-exit.log
+pnpm.cmd test:e2e:prod --trace=off *> accelerated-completion-e2e-prod.log
+$LASTEXITCODE | Set-Content accelerated-completion-e2e-prod-exit.log
+```
+
+Trace-off reduces trace cost only. Production harness still rebuilds/rejects inappropriate port reuse. C9 hospital-wide Doctor scope, same-name identity decisions, C10 small-cohort privacy, real provider/infrastructure validation and hospital rehearsal remain explicit launch gates. Current work is not clinical production approval.
