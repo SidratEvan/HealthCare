@@ -28,7 +28,7 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
-          include: ['shared/*/src/**/*.{test,spec}.ts'],
+          include: ['shared/*/src/**/*.{test,spec}.ts', 'frontend/console/src/lib/**/*.test.ts'],
           environment: 'node',
           globals: false,
           restoreMocks: true,

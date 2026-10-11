@@ -859,6 +859,118 @@ export const CONSOLE = {
   pickerOtherChambers: { bn: 'অন্য চেম্বার', en: 'Other chambers' },
   // CARD-B10-NOW (FR-ADM-12; plan R6).
   adminNowTitle: { bn: 'এখন হাসপাতালে', en: 'The hospital now' },
+  adminNavToday: { bn: 'আজ', en: 'Today' },
+  adminNavReports: { bn: 'রিপোর্ট', en: 'Reports' },
+  adminNavStaff: { bn: 'কর্মী ও ডেস্ক', en: 'Staff & Desks' },
+  adminNavDoctors: { bn: 'ডাক্তার', en: 'Doctors' },
+  adminNavSettings: { bn: 'সেটিংস', en: 'Settings' },
+  adminTodayDescription: {
+    bn: 'আজকের হাসপাতালের কার্যক্রম ও নজর দেওয়ার বিষয়।',
+    en: 'Hospital activity today and items to check.',
+  },
+  adminReportsDescription: {
+    bn: 'শুধু এই হাসপাতালের হিসাব ও কার্যক্রমের সারসংক্ষেপ। রোগীর ব্যক্তিগত তথ্য নেই।',
+    en: 'Activity and financial summaries for this hospital. No patient records.',
+  },
+  adminDhakaTime: { bn: 'বাংলাদেশ সময়', en: 'Bangladesh time' },
+  adminPollingNotice: {
+    bn: 'প্রতি মিনিটে নতুন তথ্য আনা হয়। এটি সরাসরি লাইভ সংযোগ নয়। অপেক্ষার সংখ্যায় আগাম বুকিংও থাকে।',
+    en: 'Refreshed every minute; this is a polling snapshot. Waiting includes booked patients who may not have arrived.',
+  },
+  adminSnapshotOld: {
+    bn: 'আগের তথ্য দেখানো হচ্ছে। নতুন তথ্যের জন্য আবার চেষ্টা করুন।',
+    en: 'Showing older information. Retry to fetch current information.',
+  },
+  adminAttentionTitle: { bn: 'নজর দেওয়া দরকার', en: 'Needs attention' },
+  adminAttentionNone: {
+    bn: 'দেখানো চেম্বারে এখন কোনো পরিচিত সতর্কতা নেই।',
+    en: 'No recorded attention signals in the chambers shown.',
+  },
+  adminAttentionContact: {
+    bn: 'সংশ্লিষ্ট রিসেপশন ডেস্কের সঙ্গে কথা বলুন। এখান থেকে চেম্বার বদলানো যায় না।',
+    en: 'Contact the reception desk. Chamber operations cannot be changed here.',
+  },
+  adminAttentionOverdue: {
+    bn: 'নির্ধারিত সময় পেরিয়েছে; চেম্বার এখনও শুরু হয়নি।',
+    en: 'The planned start has passed; the chamber has not started.',
+  },
+  adminAttentionPaused: {
+    bn: 'চেম্বারে বিরতি চলছে এবং রোগী অপেক্ষায় আছেন।',
+    en: 'The chamber is paused with patients waiting.',
+  },
+  adminAttentionRoom: { bn: 'কক্ষের তথ্য দেওয়া নেই।', en: 'No room has been recorded.' },
+  adminAttentionDesk: {
+    bn: 'এই ডাক্তারের সঙ্গে কোনো রিসেপশন ডেস্ক যুক্ত নেই।',
+    en: 'This doctor has no assigned reception desk.',
+  },
+  adminAttentionBeds: {
+    bn: 'বেডের তথ্য পাঁচ মিনিটের বেশি আগের বা কখন লেখা হয়েছে জানা নেই। ওয়ার্ডের সঙ্গে যাচাই করুন।',
+    en: 'The last bed record is over five minutes old or has no timestamp. Check with the ward.',
+  },
+  adminBedsUnavailable: { bn: 'বেডের সংখ্যা জানা নেই', en: 'Bed count unavailable' },
+  adminBedsUnavailableNote: {
+    bn: 'বেড সেবা নেই বা প্রকাশিত হিসাব নেই।',
+    en: 'No bed service or published count is available.',
+  },
+  adminInspectChamber: { bn: 'চেম্বারের তথ্য দেখুন', en: 'View chamber details' },
+  adminViewExistingSetup: { bn: 'বিদ্যমান সেটিংস খুলুন', en: 'Open existing settings' },
+  adminChambersTitle: { bn: 'আজকের চেম্বার', en: "Today's chambers" },
+  adminChambersDescription: {
+    bn: 'ডেস্ক অনুযায়ী চেম্বার। একাধিক ডেস্কে যুক্ত ডাক্তার একাধিকবার দেখা যেতে পারেন; ওপরের মোট সংখ্যায় পুনরাবৃত্তি নেই।',
+    en: 'Chambers grouped by desk. Doctors assigned to several desks appear in each group; headline totals are not duplicated.',
+  },
+  adminChambersTruncated: {
+    bn: 'প্রথম ২৫০টি চেম্বার দেখানো হচ্ছে। নজর দেওয়ার তালিকাও এই চেম্বারগুলোর জন্য; ওপরের মোট সংখ্যায় পুরো হাসপাতাল আছে।',
+    en: 'Showing the first 250 chambers. Attention signals cover these chambers only; headline totals cover the full hospital.',
+  },
+  adminChambersEmpty: {
+    bn: 'আজ কোনো চেম্বার নথিভুক্ত নেই।',
+    en: 'No chambers are recorded for today.',
+  },
+  adminNoDesk: { bn: 'ডেস্ক যুক্ত নেই', en: 'No desk assigned' },
+  adminRoom: { bn: 'কক্ষ', en: 'Room' },
+  adminChamberStatus: { bn: 'অবস্থা', en: 'Status' },
+  adminChamberTime: { bn: 'নির্ধারিত / শুরু', en: 'Planned / started' },
+  adminChamberWaiting: { bn: 'অপেক্ষায়', en: 'Waiting' },
+  adminChamberSeen: { bn: 'দেখা হয়েছে', en: 'Seen' },
+  adminChamberNoShows: { bn: 'আসেননি', en: 'No-shows' },
+  adminChamberScheduled: { bn: 'শুরু হয়নি', en: 'Not started' },
+  adminChamberRunning: { bn: 'চলছে', en: 'Running' },
+  adminChamberPaused: { bn: 'বিরতি', en: 'Paused' },
+  adminChamberEnded: { bn: 'শেষ', en: 'Ended' },
+  adminChamberCancelled: { bn: 'বাতিল', en: 'Cancelled' },
+  adminDeclaredDelay: {
+    bn: 'মোট ঘোষিত বিলম্ব: {minutes} মিনিট',
+    en: 'Total declared delay: {minutes} min',
+  },
+  adminChamberCountsNote: {
+    bn: 'দেখা হয়েছে ও আসেননি সংখ্যায় বুকিংয়ের নথিভুক্ত অবস্থা ব্যবহার করা হয়েছে। শেষ বা বাতিল চেম্বারের অবশিষ্ট বুকিং ওপরের অপেক্ষার মোট সংখ্যায় নেই।',
+    en: 'Seen and no-shows use recorded booking states. Remaining bookings in ended or cancelled chambers are excluded from the headline waiting count.',
+  },
+  adminTodayFigures: { bn: 'আজকের হিসাব', en: "Today's figures" },
+  adminLoadedRange: { bn: 'দেখানো হিসাবের সময়সীমা:', en: 'Figures shown for:' },
+  adminRangeLoading: { bn: 'নতুন সময়সীমার হিসাব আনা হচ্ছে।', en: 'Loading the requested period.' },
+  adminExportBreakdown: { bn: 'CSV-এর বিভাগ', en: 'CSV breakdown' },
+  adminReportFreshness: {
+    bn: 'প্রতিটি রিপোর্টে তার নিজস্ব তথ্যের সময় আছে। সারসংক্ষেপ সর্বোচ্চ পাঁচ মিনিট আগের হতে পারে; অন্য হিসাব পড়ার সময় নেওয়া হয়। রেফারেল ও মতামতের সময় শেষ নথির সময়।',
+    en: 'Each report has its own timestamp. Daily summaries may be up to five minutes old; other figures are read on request. Referral and feedback timestamps describe the newest record.',
+  },
+  adminHelpToday: {
+    bn: 'আজকের সংখ্যাগুলো প্রতি মিনিটে আনা হয়। সময় দেখুন; সংযোগ না থাকলে আগের তথ্য থেকে যায়। রোগীর নাম বা চিকিৎসার তথ্য এখানে নেই।',
+    en: 'Today refreshes every minute. Check the timestamps; a failed read retains older information. No patient names or clinical details are shown.',
+  },
+  adminHelpChambers: {
+    bn: 'চেম্বারের অবস্থা ও সংখ্যা নথিভুক্ত তথ্য। নজর দেওয়ার বিষয় যাচাই করতে ডেস্কের সঙ্গে কথা বলুন; চেম্বারের তথ্যের লিংক একই পাতার সারিতে নিয়ে যায়।',
+    en: 'Chamber states and counts are recorded information. Contact the desk to verify an attention signal; View chamber details takes you to its row on this page.',
+  },
+  adminHelpReports: {
+    bn: 'চারটি সময়সীমা ও নয়টি রিপোর্ট আছে। CSV নির্বাচিত রিপোর্ট ও দেখানো সময়সীমার জন্য; আয় রিপোর্টের চারটি CSV বিভাগ আছে। প্রিন্টে নির্বাচিত রিপোর্ট ও তার সময় থাকবে।',
+    en: 'Choose one of four periods and nine reports. CSV uses the selected report and displayed dates; Revenue offers four CSV breakdowns. Print includes the selected report and its timestamps.',
+  },
+  adminHelpUnavailable: {
+    bn: 'শূন্য মানে নথিতে সংখ্যা শূন্য। ড্যাশ বা সেবা নেই লেখা থাকলে তথ্য জানা নেই। রেফারেল ও মতামতের সময় শেষ নথির সময়, সংযোগের অবস্থা নয়।',
+    en: 'Zero is a recorded zero. A dash or an absent service means information is unavailable. Referral and feedback ages describe the newest record, not connection health.',
+  },
   adminNowDoctors: { bn: 'আজকের ডাক্তার', en: "Today's doctors" },
   adminNowDoctorsNote: { bn: 'এখন বসছেন / আজ চেম্বার আছে', en: 'sitting now / scheduled today' },
   adminNowWaiting: { bn: 'অপেক্ষায় রোগী', en: 'Patients waiting' },

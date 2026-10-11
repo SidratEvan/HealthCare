@@ -169,6 +169,12 @@ function SettingsScreen(): ReactNode {
   const [state, setState] = useState<LoadState>('loading');
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const [tab, setTab] = useState<Tab>('profile');
+  // Batch 5A links into the existing V1 panes; no settings writes change.
+  useEffect(() => {
+    const requested = new URLSearchParams(globalThis.location.search).get('tab');
+    const entry = TABS.find((item) => item.id === requested);
+    if (entry !== undefined) setTab(entry.id);
+  }, []);
   const [now, setNow] = useState(() => new Date());
   /** Reads in a row that could not reach the server; spaces out the next one. */
   const [unreached, setUnreached] = useState(0);

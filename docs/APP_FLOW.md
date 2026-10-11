@@ -1072,10 +1072,14 @@ Signing freezes identity/body/key, blocks overlapping submissions, and checks th
 
 ## B6. Hospital admin — `S-B-10`
 
+**Phase 8B Batch 5A:** the shared branded workspace has five entries: Today, Reports, Staff & Desks, Doctors and Settings. Today opens first with five operational tiles, recorded attention signals, today's chambers grouped by existing desks, and today's V1 figures. `GET /admin/overview` now adds up to 250 chambers in one set-based query under the existing hospital-admin/own-hospital gate; no patient names or clinical details. Cancelled/ended states remain visible, multi-desk membership is explained, and truncation is explicit. Snapshot time and one-minute polling are visible; failed reads keep older information with a warning. Attention explains overdue starts, paused queues, missing room/desk assignments and old bed information; links inspect a row or open existing settings, without intervention APIs.
+
+Reports retains all nine V1 categories and Today / 7 / 30 / 90-day inclusive Bangladesh periods (30 days initially). Every metric, original snapshot/live-read distinction, unavailable value and report limitation is retained. The displayed period describes loaded data even when another period fails. CSV exports that period, with all four Revenue breakdowns accessible; print includes only the selected report, period and timestamps. Both date bounds use one captured clock. Staff & Desks, Doctors and Settings open the existing `S-B-11` panes (`tab=staff`, `doctors`, `profile`) without changing writes; their redesign waits for Batch 5B. See [the actual React review package](design/console-admin/README.md).
+
 | Section | Controls | Wiring |
 |---|---|---|
 | Now | `CARD-B10-NOW` | Above everything else (`FR-ADM-12`, plan R6): five tiles — doctors (sitting of scheduled), waiting, appointments (seen of booked), beds (free of in service, with the ward's age), emergency (on the way · in the ER). `GET /admin/overview`, read on opening and every minute; one freshness line for the panel, the beds' own age under their tile; a tile with nothing to know says so |
-| Today | Date range selector, department filter | Live KPIs (`FR-ADM-01`) |
+| Overview report | Date range selector | Existing daily snapshot KPIs (`FR-ADM-01`); no unsupported department filter |
 | Trends | Wait-time chart with adoption marker | `FR-ADM-02` |
 | Loss & recovery | No-show taka value, recovered value | `FR-ADM-03` |
 | Revenue | By doctor / department / service / method | `FR-ADM-04` |

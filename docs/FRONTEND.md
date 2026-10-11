@@ -601,6 +601,8 @@ Font subsetting is mandatory: full Bengali Anek is large; subset to the ranges a
 
 ## 12. Accessibility
 
+Phase 8B Batch 5A Administration uses the Batch 1 `ConsoleWorkspaceFrame`, hospital theme/header/navigation, language controls and contextual `ConsoleHelp`. `AdminDashboard` switches Today/Reports; `AdminNow` owns the aggregate polling/chamber board and attention; `AdminReports` preserves the nine V1 sections and renders the daily figures with a Today-only period. Its scoped `@platform/ui/console-admin.css` styles summary tiles, grouped tables, report controls, tablet scrolling and selected-report printing. No patient or other console selectors change. Staff & Desks / Doctors / Settings navigate into existing V1 settings panes. See [Administration review and verification](design/console-admin/README.md).
+
 - `A11Y-01` Real semantic elements: `<button>`, `<a href>`, `<input>` + `<label>`. Never a clickable `div` (`FR-LOC-06`).
 - `A11Y-02` Visible focus ring on every interactive element; never `outline: none` without a replacement.
 - `A11Y-03` Colour never carries meaning alone — every state has a text label or icon.

@@ -1,0 +1,247 @@
+/* Opt-in Administration Today / Reports (Batch 5A, GR-06, FR-ADM-12).
+ * Legacy settings and other consoles retain their own styles and behavior.
+ */
+.admin-workspace .cf-main {
+  max-width: 1600px;
+  padding: 28px 32px 48px;
+}
+.admin-workspace .cf-nav {
+  --cf-rail: 104px;
+}
+.admin-workspace .cf-nav svg {
+  display: block;
+}
+.admin-workspace .cf-header small,
+.admin-workspace .admin-notice,
+.admin-workspace .admin-report-note {
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+.admin-workspace .admin-snapshot,
+.admin-workspace .admin-board-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.admin-workspace .admin-snapshot {
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+.admin-workspace .admin-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+.admin-workspace .admin-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-md);
+  background: var(--bg-surface);
+}
+.admin-workspace .admin-tile dt {
+  color: var(--ink-secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+.admin-workspace .admin-tile dd {
+  font-size: 27px;
+  color: var(--brand-700);
+  line-height: 1.5;
+}
+.admin-workspace .admin-tile p,
+.admin-workspace .admin-tile [data-testid='freshness'] {
+  font-size: 12px;
+}
+.admin-workspace .admin-tile:last-child dd {
+  font-size: 18px;
+}
+.admin-workspace .admin-attention ul {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.admin-workspace .admin-attention li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.admin-workspace .admin-attention li > div {
+  flex: 1 1 380px;
+}
+.admin-workspace .admin-attention small {
+  color: var(--ink-muted);
+}
+.admin-workspace .admin-attention a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: var(--cf-radius-sm);
+  color: var(--brand-700);
+  font-weight: 600;
+  font-size: 13px;
+}
+.admin-workspace .admin-old {
+  padding: 10px 14px;
+  border: 1px solid var(--warn-border);
+  border-radius: var(--cf-radius-sm);
+  color: var(--warn-700);
+  background: var(--warn-100);
+}
+.admin-workspace .admin-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.admin-workspace .admin-desk-group h3 {
+  font-size: 15px;
+  font-weight: 700;
+  padding: 10px 0;
+}
+.admin-workspace .admin-table-scroll {
+  margin-top: 12px;
+  max-width: 100%;
+  overflow: auto;
+}
+.admin-workspace .admin-reports .admin-table-scroll table {
+  min-width: 650px;
+}
+.admin-workspace .admin-reports .admin-table-scroll th,
+.admin-workspace .admin-reports .admin-table-scroll td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.admin-workspace .admin-board table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+.admin-workspace .admin-board thead th {
+  background: var(--bg-sunken);
+  color: var(--ink-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.admin-workspace .admin-board th,
+.admin-workspace .admin-board td {
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+}
+.admin-workspace .admin-board tbody th {
+  min-width: 150px;
+  max-width: 250px;
+}
+.admin-workspace .admin-board small {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.admin-workspace .admin-board tr[id] {
+  scroll-margin-top: 160px;
+}
+.admin-workspace .admin-board tr:target {
+  background: var(--brand-100);
+}
+.admin-workspace .admin-reports {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.admin-workspace .admin-now + .admin-reports {
+  margin-top: 28px;
+}
+.admin-workspace .admin-report-controls,
+.admin-workspace [role='tablist'] {
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-md);
+  background: var(--bg-surface);
+}
+.admin-workspace .admin-range-label {
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+.admin-workspace .admin-export-select {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+.admin-workspace .admin-export-select select {
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--cf-radius-sm);
+  color: var(--ink-primary);
+  background: var(--bg-surface);
+}
+@media (max-width: 1100px) {
+  .admin-workspace .cf-main {
+    padding: 20px;
+  }
+  .admin-workspace .admin-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 800px) {
+  .admin-workspace .cf-main {
+    padding: 16px;
+  }
+  .admin-workspace .admin-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-workspace .admin-reports .grid-cols-3,
+  .admin-workspace .admin-reports .grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media print {
+  .admin-workspace .admin-attention ul {
+    max-height: none;
+    overflow: visible;
+  }
+  .admin-workspace .cf-header,
+  .admin-workspace .cf-nav,
+  .admin-workspace .cf-skip,
+  .admin-workspace .admin-report-controls,
+  .admin-workspace [role='tablist'],
+  .admin-workspace button,
+  .admin-workspace .admin-attention a {
+    display: none !important;
+  }
+  .admin-workspace .cf-main {
+    max-width: none;
+    padding: 0;
+  }
+  .admin-workspace .admin-table-scroll {
+    overflow: visible;
+  }
+  .admin-workspace .admin-reports .admin-table-scroll table {
+    min-width: 0;
+    font-size: 11px;
+  }
+  .admin-workspace .console-foundation,
+  .admin-workspace .cf-shell,
+  .admin-workspace .cf-body {
+    min-height: 0;
+    background: var(--bg-surface);
+  }
+  .admin-workspace section {
+    break-inside: auto;
+  }
+}

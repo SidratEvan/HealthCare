@@ -1,0 +1,813 @@
+{
+  "schemaVersion": 1,
+  "capturedUtc": "2026-10-11T09:27:11.677831+00:00",
+  "branch": "feat/console-redesign-admin-dashboard",
+  "baseCommit": "dba5e19b9b49bdbe92eb1b925e9cfe9cc5a669c3",
+  "backendAndFixtureCommits": [
+    "0cfce0408d079eef75b3d35d2360557d17e9397b test(admin): keep chamber fixtures inside bounded board (FR-ADM-12, DB-P1)",
+    "2db64a21a23bdbc0893a2d75ebe05d8e0659f29a feat(admin): add bounded hospital chamber summary (FR-ADM-12, FR-SEC-11, DB-P1)"
+  ],
+  "uiCommitLocation": "The local commit containing this manifest; omitted here to avoid a self-referential hash.",
+  "sourceSnapshot": "verification-source.json",
+  "sourceFiles": [
+    {
+      "path": "backend/api/src/repositories/adminChambers.repo.ts",
+      "sha256": "620a27b3e5b8df4779c5b58e8091bbe4a5f14bbd9b9462c71d0a83f00f4ac686",
+      "preRunSha256": "620a27b3e5b8df4779c5b58e8091bbe4a5f14bbd9b9462c71d0a83f00f4ac686",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "backend/api/src/services/admin.service.ts",
+      "sha256": "3279dd367ed31b073473cbae34d4a910bb1991274d5eed5d078ce2aa8fe89ead",
+      "preRunSha256": "3279dd367ed31b073473cbae34d4a910bb1991274d5eed5d078ce2aa8fe89ead",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "backend/api/src/__tests__/adminChambers.routes.test.ts",
+      "sha256": "20bd7099b4bd0442211f23aa65b8c66b749d0eb55a163fd64b299a2d0c871886",
+      "preRunSha256": "20bd7099b4bd0442211f23aa65b8c66b749d0eb55a163fd64b299a2d0c871886",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "frontend/console/src/components/AdminDashboard.tsx",
+      "sha256": "9dedd66b2796c3d3901936e45aed781a11e8f8d1cdffcd646136aa11d02878dc",
+      "preRunSha256": "9dedd66b2796c3d3901936e45aed781a11e8f8d1cdffcd646136aa11d02878dc",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "frontend/console/src/components/AdminReports.tsx",
+      "sha256": "55831cdb6c0e9dc2de1a8dbba563790ed34efb30cecacd098f0c078781255bc2",
+      "preRunSha256": "55831cdb6c0e9dc2de1a8dbba563790ed34efb30cecacd098f0c078781255bc2",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "frontend/console/src/components/AdminNow.tsx",
+      "sha256": "e400a4be37b80e1781726eb2977c3bd23608fb4da690d0e3987c4d7c5e2c906d",
+      "preRunSha256": "e400a4be37b80e1781726eb2977c3bd23608fb4da690d0e3987c4d7c5e2c906d",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "frontend/console/src/components/HospitalSettings.tsx",
+      "sha256": "edbbd46bb14fc906f07314606b694b8184040f0455f323b707d1caca78b0c498",
+      "preRunSha256": "edbbd46bb14fc906f07314606b694b8184040f0455f323b707d1caca78b0c498",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "frontend/console/src/lib/admin.ts",
+      "sha256": "e345efc4f9d0aa87192bcdfd93ec85372b348ca54ace6acbaee1cb6db9952c81",
+      "preRunSha256": "e345efc4f9d0aa87192bcdfd93ec85372b348ca54ace6acbaee1cb6db9952c81",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "frontend/console/src/lib/adminBoard.ts",
+      "sha256": "b59fbf07e04d2ac4afe75f3dd16ab89b4ccab296855c6d27655f6779037af3e1",
+      "preRunSha256": "b59fbf07e04d2ac4afe75f3dd16ab89b4ccab296855c6d27655f6779037af3e1",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "frontend/console/src/lib/__tests__/adminPresentation.test.ts",
+      "sha256": "b62f3789e413c9e804e6b30af4af8aa0bea6d83b3310ee2d0f62944998d62a37",
+      "preRunSha256": "b62f3789e413c9e804e6b30af4af8aa0bea6d83b3310ee2d0f62944998d62a37",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "e2e/admin-dashboard.spec.ts",
+      "sha256": "c02439947890c5d05285d6a7fe7911601444a8f982db79dfcb4d415fadae36ba",
+      "preRunSha256": "c02439947890c5d05285d6a7fe7911601444a8f982db79dfcb4d415fadae36ba",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "e2e/admin-workspace.spec.ts",
+      "sha256": "3bf353e3251d02b88fa913193a0cdbcdff38174746652ba4a9a2739c5aec6ae1",
+      "preRunSha256": "3bf353e3251d02b88fa913193a0cdbcdff38174746652ba4a9a2739c5aec6ae1",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "e2e/production/admin-workspace.prod.spec.ts",
+      "sha256": "16131ecb4efbaabf4c90a2d31dc5f1c287bda58d9ad39642dd1df3417b57ad99",
+      "preRunSha256": "16131ecb4efbaabf4c90a2d31dc5f1c287bda58d9ad39642dd1df3417b57ad99",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "shared/i18n/src/messages.ts",
+      "sha256": "ff81d3bd2f73eb44b71776d1d984e653defb163ec39b5cbe2298b4dd1bd47514",
+      "preRunSha256": "ff81d3bd2f73eb44b71776d1d984e653defb163ec39b5cbe2298b4dd1bd47514",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "shared/ui/package.json",
+      "sha256": "a36db6d151414b27b617f59cef7641c082f1b8c2309cdf6ef64f0e5b6c326315",
+      "preRunSha256": "6ca14703dbd7c3abf955ed19571e946db624d82f10b89bea1c44b79b038f0608",
+      "matchesPreRun": false,
+      "postRunDifference": "Only restore original package-description punctuation. Tested exports and runtime source are unchanged; formatting checked afterward."
+    },
+    {
+      "path": "shared/ui/src/console/admin.css",
+      "sha256": "66bdc87142d548c484205ecb78b521f4543f43d0228b0f042aae7e1e98ec85e2",
+      "preRunSha256": "66bdc87142d548c484205ecb78b521f4543f43d0228b0f042aae7e1e98ec85e2",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    },
+    {
+      "path": "vitest.config.ts",
+      "sha256": "34cd7893318402482997d1a80f3b474e06ced7b254038a3815496ab1de8bfe73",
+      "preRunSha256": "34cd7893318402482997d1a80f3b474e06ced7b254038a3815496ab1de8bfe73",
+      "matchesPreRun": true,
+      "postRunDifference": null
+    }
+  ],
+  "productionBuilds": {
+    "capturedUtc": "2026-10-11T09:17:19.1740053Z",
+    "console": "ikNq1cOx-G-hHr4zgVahe",
+    "patient": "-rIrRegoaVc6Tkn4CGRrG",
+    "apiSha256": "8329d249b2936a7ebab55cc7cd56d9aafb0584713987dffe5134cf5a47be9fd0"
+  },
+  "fullGate": {
+    "exitCode": 0,
+    "files": 162,
+    "tests": 7861,
+    "durationSeconds": 805.81,
+    "command": "pnpm.cmd verify --maxWorkers=1"
+  },
+  "browserCommands": {
+    "broaderProduction": "pnpm.cmd exec playwright test -c playwright.prod.config.ts e2e/production/admin-workspace.prod.spec.ts e2e/production/reception-workspace.prod.spec.ts e2e/production/registration-workspace.prod.spec.ts e2e/production/doctor-workspace.prod.spec.ts e2e/production/doctor-safety.prod.spec.ts e2e/production/doctor-midnight.prod.spec.ts e2e/production/two-device-queue.prod.spec.ts",
+    "finalProduction": "pnpm.cmd exec playwright test -c playwright.prod.config.ts e2e/production/admin-workspace.prod.spec.ts e2e/production/two-device-queue.prod.spec.ts",
+    "originalAdministration": "pnpm.cmd exec playwright test e2e/admin-dashboard.spec.ts"
+  },
+  "additionalTypeScript": {
+    "e2e": {
+      "command": "pnpm.cmd exec tsc --noEmit -p e2e/tsconfig.json",
+      "exitCode": 2,
+      "remainingError": "Unchanged e2e/import-mapping.spec.ts:308 suggestedByModel on never"
+    },
+    "tooling": {
+      "command": "pnpm.cmd exec tsc --noEmit -p tsconfig.json",
+      "exitCode": 2,
+      "remainingErrors": "Existing vitest.config.ts:36,59,94,107 project-level passWithNoTests"
+    }
+  },
+  "csv": {
+    "downloads": 12,
+    "checks": [
+      "Authorized backend byte-for-byte equality for loaded range",
+      "V1 header order",
+      "Filename/range",
+      "All four revenue breakdowns",
+      "Overview seen count agrees with dashboard"
+    ]
+  },
+  "print": {
+    "reports": 9,
+    "pdfs": 9,
+    "checks": [
+      "Real window.print called",
+      "Only selected report rendered",
+      "Loaded range retained",
+      "Navigation/export controls hidden",
+      "Valid PDF and A4 page boxes"
+    ],
+    "independentPdfTextExtraction": false
+  },
+  "captures": [
+    {
+      "path": "docs/design/console-admin/print-beds-en.pdf",
+      "sha256": "c112a294b78c99378e24078e347ad15e736cacaccd4b9deb74e03a8705eb8c77",
+      "bytes": 74449,
+      "lastWriteUtc": "2026-10-11T09:14:24.950404+00:00",
+      "pages": 1,
+      "mediaBoxes": [
+        "0 0 595.91998 842.88"
+      ]
+    },
+    {
+      "path": "docs/design/console-admin/print-beds-en.png",
+      "sha256": "5ffa8f110435c0cde17917482ab6ce5635c3b19c2c3c5769ddec0957d6e5d142",
+      "bytes": 37791,
+      "lastWriteUtc": "2026-10-11T09:14:24.884889+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/print-feedback-en.pdf",
+      "sha256": "2531979c3bf58c05540912d5fe4ca06ce962f41946341cf76d2e0390c54b0d2d",
+      "bytes": 82894,
+      "lastWriteUtc": "2026-10-11T09:14:27.491937+00:00",
+      "pages": 1,
+      "mediaBoxes": [
+        "0 0 595.91998 842.88"
+      ]
+    },
+    {
+      "path": "docs/design/console-admin/print-feedback-en.png",
+      "sha256": "672be7e7b2ba681c199c32d38402f8ac51a053880ba7025b4adfe517501c6ee8",
+      "bytes": 44939,
+      "lastWriteUtc": "2026-10-11T09:14:27.423725+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/print-forecast-en.pdf",
+      "sha256": "cd7ceface7803ac1da339bafb22c069919ff5a7d85d842d626d1975f3e1420df",
+      "bytes": 79758,
+      "lastWriteUtc": "2026-10-11T09:14:28.648385+00:00",
+      "pages": 1,
+      "mediaBoxes": [
+        "0 0 595.91998 842.88"
+      ]
+    },
+    {
+      "path": "docs/design/console-admin/print-forecast-en.png",
+      "sha256": "91d65e840f69508772acef85a6c0b49b7de1127ae494dacc6579f6d92a7ff0d6",
+      "bytes": 47885,
+      "lastWriteUtc": "2026-10-11T09:14:28.584089+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/print-loss-en.pdf",
+      "sha256": "8c2735d49e30a526efab66b2e5fd8c3d4d03b4ecdb4e97ac84eb121d2322e5a0",
+      "bytes": 101082,
+      "lastWriteUtc": "2026-10-11T09:14:16.828586+00:00",
+      "pages": 1,
+      "mediaBoxes": [
+        "0 0 595.91998 842.88"
+      ]
+    },
+    {
+      "path": "docs/design/console-admin/print-loss-en.png",
+      "sha256": "ffb197b379fd2dd49958c7bbe67a01a196471e256bff6badf702393855cedc16",
+      "bytes": 65965,
+      "lastWriteUtc": "2026-10-11T09:14:16.664386+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/print-referrals-en.pdf",
+      "sha256": "87725e08165bd86a2b5f31440593b98bf918decbe1dd23ce3557d10b2e5d2892",
+      "bytes": 75605,
+      "lastWriteUtc": "2026-10-11T09:14:26.160213+00:00",
+      "pages": 1,
+      "mediaBoxes": [
+        "0 0 595.91998 842.88"
+      ]
+    },
+    {
+      "path": "docs/design/console-admin/print-referrals-en.png",
+      "sha256": "0d678a36d8c9ef94eda9c23d381405cfc4db1080a9d82cdffb258c61c4cafcff",
+      "bytes": 42799,
+      "lastWriteUtc": "2026-10-11T09:14:26.094619+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/print-revenue-en.pdf",
+      "sha256": "18e61878765302f05857d4eecbecd6382de6ed2adb2e0cb47cccb03d560452de",
+      "bytes": 121573,
+      "lastWriteUtc": "2026-10-11T09:14:22.104778+00:00",
+      "pages": 2,
+      "mediaBoxes": [
+        "0 0 595.91998 842.88"
+      ]
+    },
+    {
+      "path": "docs/design/console-admin/print-revenue-en.png",
+      "sha256": "04a844b5297d8e008f9c609ce1d61acd73df9b3a0aed270678bdbd4249b17b73",
+      "bytes": 104266,
+      "lastWriteUtc": "2026-10-11T09:14:21.958207+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/print-staff-en.pdf",
+      "sha256": "180f68d68c377b80a0aa1445420c7a8896cdd32d29ec198ebf79c8056609dcca",
+      "bytes": 88864,
+      "lastWriteUtc": "2026-10-11T09:14:23.540467+00:00",
+      "pages": 1,
+      "mediaBoxes": [
+        "0 0 595.91998 842.88"
+      ]
+    },
+    {
+      "path": "docs/design/console-admin/print-staff-en.png",
+      "sha256": "ae03711e80a336c320009085f984b8cffc6cf0ed38ef306efed45f8ffa6fb861",
+      "bytes": 72047,
+      "lastWriteUtc": "2026-10-11T09:14:23.456398+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/print-today-en.pdf",
+      "sha256": "4a29dd06c7a862ee2688bcfbfb6dc02348d3e7254b18fd0b5b75cde82b5aac3b",
+      "bytes": 78607,
+      "lastWriteUtc": "2026-10-11T09:14:12.913434+00:00",
+      "pages": 1,
+      "mediaBoxes": [
+        "0 0 595.91998 842.88"
+      ]
+    },
+    {
+      "path": "docs/design/console-admin/print-today-en.png",
+      "sha256": "20a08ce4e6efd731b7bbd148bb90ebe6a864d203df907450bff6f46f3f7741df",
+      "bytes": 53857,
+      "lastWriteUtc": "2026-10-11T09:14:12.510444+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/print-trend-en.pdf",
+      "sha256": "70a29597e39bda08941406d79bd321f7ddbfa4ed2792ba6e516e279022de4904",
+      "bytes": 70889,
+      "lastWriteUtc": "2026-10-11T09:14:14.717647+00:00",
+      "pages": 1,
+      "mediaBoxes": [
+        "0 0 595.91998 842.88"
+      ]
+    },
+    {
+      "path": "docs/design/console-admin/print-trend-en.png",
+      "sha256": "a0551da8cea94b5663b37ef7d6077ced7de860a8de94fcb11851dfbf0b4db621",
+      "bytes": 46253,
+      "lastWriteUtc": "2026-10-11T09:14:14.557166+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-beds-bn.png",
+      "sha256": "325e534062267a1224168685fe729bf9033175f3768c6901c5fe7cdb679356b0",
+      "bytes": 106837,
+      "lastWriteUtc": "2026-10-11T09:13:32.490944+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-beds-en.png",
+      "sha256": "8ce6e37625199b206d91413577e163d9b2f0cf1e07bfdc5dc7a4d454e820efb4",
+      "bytes": 94171,
+      "lastWriteUtc": "2026-10-11T09:13:58.590656+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-feedback-bn.png",
+      "sha256": "f7755f8e9a4275d828c04106aff6376325c3e678600c1a8f3498e8f70687a4e2",
+      "bytes": 111719,
+      "lastWriteUtc": "2026-10-11T09:13:33.852284+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-feedback-en.png",
+      "sha256": "07b4eb286528223070613fe9808158a39a93f2783c6241d0c29a9b1d0e3fe7f3",
+      "bytes": 102622,
+      "lastWriteUtc": "2026-10-11T09:13:59.615174+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-forecast-bn.png",
+      "sha256": "0265b535338b24c5b445846091c1ef00af00288883a3f2d735ee56a13f137b47",
+      "bytes": 113830,
+      "lastWriteUtc": "2026-10-11T09:13:34.475232+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-forecast-en.png",
+      "sha256": "9dba16b88f1f2ac145fcae1689441d75faa36d0ddf7d54ec638b4b0e8dcb42d8",
+      "bytes": 106147,
+      "lastWriteUtc": "2026-10-11T09:14:00.118090+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-help-bn.png",
+      "sha256": "c35a7e6d7f5917edd13c99e7f2cc74dabbabec4736b93bf123020713cd6f32b2",
+      "bytes": 202277,
+      "lastWriteUtc": "2026-10-11T09:13:40.204424+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-help-en.png",
+      "sha256": "6454898b3ec758d4f5d5826b68f7864df2d0f872a8d022e497e434485e2b0340",
+      "bytes": 187086,
+      "lastWriteUtc": "2026-10-11T09:14:04.085270+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-landscape-bn.png",
+      "sha256": "e54c94adc54501ec098a72a2067b7b14d4eb1933e9c9a8e6c158479b56a29f44",
+      "bytes": 113763,
+      "lastWriteUtc": "2026-10-11T09:13:34.861490+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-landscape-en.png",
+      "sha256": "01dc300f836d1e88b765308c4745e534177f9183fe2175a292e79dfa218fe05c",
+      "bytes": 98978,
+      "lastWriteUtc": "2026-10-11T09:14:00.402496+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-loading-en.png",
+      "sha256": "890679567ad8c8c682ce1d07d6a7c66f65c81405fefcc42eecd97ecac61e2f2c",
+      "bytes": 45511,
+      "lastWriteUtc": "2026-10-11T09:14:44.128436+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-loss-bn.png",
+      "sha256": "7dd253cc8988a5b545622a7a30e9c96e45bee56d989c614fb9bd47f5067ca8f5",
+      "bytes": 137680,
+      "lastWriteUtc": "2026-10-11T09:13:29.893297+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-loss-en.png",
+      "sha256": "f24390791df8c89bcc20906156e9ee8fe1741836377359bcad0047408b69f29b",
+      "bytes": 123086,
+      "lastWriteUtc": "2026-10-11T09:13:56.776255+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-offline-en.png",
+      "sha256": "62cd7ccfa322ea4839fac37002478efe8b40136bef0bce896cd2f283f8b28284",
+      "bytes": 94276,
+      "lastWriteUtc": "2026-10-11T09:14:37.670266+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-portrait-bn.png",
+      "sha256": "ae908292835e90001e5fed9e0154d68258f146a56d81f74ca553643012bac49c",
+      "bytes": 120590,
+      "lastWriteUtc": "2026-10-11T09:13:37.160649+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-portrait-en.png",
+      "sha256": "ba45a3b98f37b20cc521a27252c52886c6388c32e5fd8326c219b78bc50f147c",
+      "bytes": 102794,
+      "lastWriteUtc": "2026-10-11T09:14:01.872679+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-referrals-bn.png",
+      "sha256": "442dd75aa5defb26aae779a755e0076c283439d7fc62d23e936c05789b53b9be",
+      "bytes": 108256,
+      "lastWriteUtc": "2026-10-11T09:13:33.155668+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-referrals-en.png",
+      "sha256": "f5d740b55965e6c40225e9dfa29c3a2aa0ea3b1734cfe08c2e198a56611db21c",
+      "bytes": 97562,
+      "lastWriteUtc": "2026-10-11T09:13:59.119411+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-retained-error-en.png",
+      "sha256": "0f659c25a8986a6c417e51f01766a9a7a5e82faa6287bec6113941297fa6d748",
+      "bytes": 90338,
+      "lastWriteUtc": "2026-10-11T09:14:37.349234+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-revenue-bn.png",
+      "sha256": "e20003ebd900ba248e131b8ec1e3896c472211ad1133865c33e92e71ef47a1e5",
+      "bytes": 194638,
+      "lastWriteUtc": "2026-10-11T09:13:31.023401+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-revenue-en.png",
+      "sha256": "a60df822759b2ceafe9540b9009980ff86b92dc7ac9a9bb6b2d6fa0087881e9d",
+      "bytes": 170092,
+      "lastWriteUtc": "2026-10-11T09:13:57.724912+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-scale-200-bn.png",
+      "sha256": "eaf1260e65b44524fccf2aed02a97d1f21daffe9c98b4274f01c1cce3fa82b54",
+      "bytes": 117600,
+      "lastWriteUtc": "2026-10-11T09:13:40.873586+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-scale-200-en.png",
+      "sha256": "cc50414afce31724ebc2248a6c956220bd62de7247b59ca742237bd3dfdd0e01",
+      "bytes": 113145,
+      "lastWriteUtc": "2026-10-11T09:14:04.561501+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-staff-bn.png",
+      "sha256": "ab60dfa75d7bf3414868e4d677b343aa47d1d83c18ac3a6a0c2bed0274d1a3a3",
+      "bytes": 157121,
+      "lastWriteUtc": "2026-10-11T09:13:31.833163+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-staff-en.png",
+      "sha256": "473a17fe09b1ffd924dec8cafa23e963b4bbc6d379e771d262897b6fa38fd603",
+      "bytes": 135104,
+      "lastWriteUtc": "2026-10-11T09:13:58.170430+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-today-bn.png",
+      "sha256": "c59c595326b2d1ba73dff01608ce57fca476042fc28de4567373be9819985b5e",
+      "bytes": 128920,
+      "lastWriteUtc": "2026-10-11T09:13:27.676612+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-today-en.png",
+      "sha256": "237f0fe4ceb0e39e43e7f11bdb5e63a5ed1d7fb342919fe28773075fa8c69d19",
+      "bytes": 108835,
+      "lastWriteUtc": "2026-10-11T09:13:55.198813+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-trend-bn.png",
+      "sha256": "b350e66ae406f653fcfd8db0a3060526af61017ad073ce30f901d1f0227b3233",
+      "bytes": 110610,
+      "lastWriteUtc": "2026-10-11T09:13:28.618889+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/reports-trend-en.png",
+      "sha256": "b9e6087cfb8789f426a21db9437e9d4b62b017f90951f93eb02fcdbd7173772b",
+      "bytes": 102005,
+      "lastWriteUtc": "2026-10-11T09:13:55.932731+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-desktop-bn.png",
+      "sha256": "61405b47d59a8e602507995bef15e99b6a17ca1a81f82f21698aec93f2442912",
+      "bytes": 136274,
+      "lastWriteUtc": "2026-10-11T09:13:21.777711+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-desktop-en.png",
+      "sha256": "82ae14b29e64540729ec1e6a1f8cef941eb347ed5a6d42742ba814afb0fbc89e",
+      "bytes": 121527,
+      "lastWriteUtc": "2026-10-11T09:13:50.125281+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-empty-en.png",
+      "sha256": "a7c9ebb102734ea75bd97f430eb7c267b1ef08e018c8b1cd1a46f4d94faeb2de",
+      "bytes": 100619,
+      "lastWriteUtc": "2026-10-11T09:14:43.378710+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-error-en.png",
+      "sha256": "cc4a6f0f09e9b056a365d48cdb90fa28ceea47526df893b0990854a7ff3eed37",
+      "bytes": 91982,
+      "lastWriteUtc": "2026-10-11T09:14:43.908796+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-full-bn.png",
+      "sha256": "66d6bfb7f084857944c9ffa0d3392d39276d88bc5261ff42cd8624ccf6bfb565",
+      "bytes": 438576,
+      "lastWriteUtc": "2026-10-11T09:13:23.387253+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-full-en.png",
+      "sha256": "7a73deae169180e51ad6e106c0c44c817ea1b079ccd8b71a3ddcb2e2684d0f23",
+      "bytes": 458612,
+      "lastWriteUtc": "2026-10-11T09:13:51.577929+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-help-bn.png",
+      "sha256": "220aadf51f10aee2c6fb9a4493dc7b96e30aa2124dbbe2dd53e6bcbc050bfeab",
+      "bytes": 193953,
+      "lastWriteUtc": "2026-10-11T09:13:26.529802+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-help-en.png",
+      "sha256": "1fb90f8f72c19022e90ec1fd213e16c6fb5d898231c72db9c7acc6b51f1792b5",
+      "bytes": 181963,
+      "lastWriteUtc": "2026-10-11T09:13:54.468171+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-landscape-bn.png",
+      "sha256": "1e4e909e90fb8ba8e6dc8240a0c6d0ce71daf5bce47fd6222dbfd40c7957f9af",
+      "bytes": 101826,
+      "lastWriteUtc": "2026-10-11T09:13:22.084128+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-landscape-en.png",
+      "sha256": "89b5c1a12cbac48d39ab9fae41befbc7099c8b8100497d9ee9a5581f3944c66e",
+      "bytes": 90135,
+      "lastWriteUtc": "2026-10-11T09:13:50.389412+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-portrait-bn.png",
+      "sha256": "6eb0fcdf2caae46c263778da4fe81913f83be350cb69335e3d1e01ee6e26f765",
+      "bytes": 100071,
+      "lastWriteUtc": "2026-10-11T09:13:22.358843+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-portrait-en.png",
+      "sha256": "2dc3cb702ef4ec2578b05a639aec41002a167e4a19d7bc4a7750ea7cc505a8f8",
+      "bytes": 88837,
+      "lastWriteUtc": "2026-10-11T09:13:50.670626+00:00"
+    },
+    {
+      "path": "docs/design/console-admin/today-stale-en.png",
+      "sha256": "cc4a6f0f09e9b056a365d48cdb90fa28ceea47526df893b0990854a7ff3eed37",
+      "bytes": 91982,
+      "lastWriteUtc": "2026-10-11T09:14:43.659979+00:00"
+    }
+  ],
+  "logs": [
+    {
+      "path": "batch5a-backend-final.log",
+      "sha256": "e8b7fb30edf05e2bef95d8900e6712988d9fcf06278bc867ad6106c01dd22fed",
+      "bytes": 370,
+      "exitCode": 0,
+      "outcome": "Twelve chamber API tests passed before later bounded-fixture refinement"
+    },
+    {
+      "path": "batch5a-backend-lint.log",
+      "sha256": "1164bbcba031477fc7e0c75c47180bab35b2a1446079d5dc8e35e407b8a94246",
+      "bytes": 942,
+      "exitCode": null,
+      "outcome": "Implementation-stage log retained; not relied on as final verification"
+    },
+    {
+      "path": "batch5a-backend-tests.log",
+      "sha256": "34dcde3cd646febeb835e24932be94a60b59f64c8af8cd8de8c4308fae2bd936",
+      "bytes": 370,
+      "exitCode": 0,
+      "outcome": "Three files, 44 tests passed"
+    },
+    {
+      "path": "batch5a-backend-typecheck.log",
+      "sha256": "0aaeb5defac18960c4858a6c1d3d9cb64476688bd119c3612f8dc0a0b276ae8f",
+      "bytes": 630,
+      "exitCode": 0,
+      "outcome": "API workspace TypeScript passed"
+    },
+    {
+      "path": "batch5a-baseline-browser.log",
+      "sha256": "cb1000f4bdbdaa2cb658b790ac5bb1b0561f1a82bad1278969b3198d5a6e4f72",
+      "bytes": 14916,
+      "exitCode": 0,
+      "outcome": "Seven unchanged Administration browser cases passed in 5.2m"
+    },
+    {
+      "path": "batch5a-baseline-format.log",
+      "sha256": "3c16103b393e54c5dcbf66c0213f3de62aa5aa02abe026246bb56ebebaf0e1d5",
+      "bytes": 750,
+      "exitCode": 0,
+      "outcome": "Root format baseline passed"
+    },
+    {
+      "path": "batch5a-baseline-lint.log",
+      "sha256": "c12aaa52da6613da52b4dee1355bb523795e5b50bdacdfd219e535e61451b818",
+      "bytes": 626,
+      "exitCode": 0,
+      "outcome": "Root lint baseline passed"
+    },
+    {
+      "path": "batch5a-baseline-tests.log",
+      "sha256": "c005c5ca2223574b3e23da87b9e56ac3e02d5845031ff53b4a6706f5c43f4707",
+      "bytes": 370,
+      "exitCode": 0,
+      "outcome": "Five API/domain files, 63 tests passed"
+    },
+    {
+      "path": "batch5a-baseline-typecheck.log",
+      "sha256": "ddf245586af4f59e43ed6efc670fb5255070583f7fafc0d44a05cb4dbfc6ce1e",
+      "bytes": 1896,
+      "exitCode": 0,
+      "outcome": "All-workspace TypeScript baseline passed"
+    },
+    {
+      "path": "batch5a-bounded-fixture-tests.log",
+      "sha256": "e29f27a0075afa0de24247adc326ada71374a43ff8f79137b3597afae7f43811",
+      "bytes": 370,
+      "exitCode": 0,
+      "outcome": "Twelve chamber API tests passed after bounded-fixture refinement, 48.38s"
+    },
+    {
+      "path": "batch5a-calculation-preservation-corrected.log",
+      "sha256": "87e92e749ffce04e5700653c12e393533a5acbbf24aa55ad8af28b0ef744e0d2",
+      "bytes": 200,
+      "exitCode": 0,
+      "outcome": "V1 calculation/content block equal after whitespace and table-presentation normalization"
+    },
+    {
+      "path": "batch5a-calculation-preservation.log",
+      "sha256": "e5d50524256641e1e1337cfc55966974da35577f506db3b447b9a51a8fcbcfa8",
+      "bytes": 942,
+      "exitCode": null,
+      "outcome": "Comparison script initially omitted original mt-3 table spacing classes; no calculation discrepancy established",
+      "exitCodeNote": "Failure recorded; exact enclosing shell exit was not retained. Not used as a passing check."
+    },
+    {
+      "path": "batch5a-console-typecheck-final.log",
+      "sha256": "87ae773008f3de1abf183c54773c3c7eb7d2f6ef2278eba11dc468a1181d2253",
+      "bytes": 638,
+      "exitCode": 0,
+      "outcome": "Console TypeScript passed after accessibility markup correction"
+    },
+    {
+      "path": "batch5a-demo-final.log",
+      "sha256": "1db61e52a6c695cd9a93947af1c72021edbd85e5896706ed9ce5d90e6952e28b",
+      "bytes": 14882,
+      "exitCode": 0,
+      "outcome": "Original Administration browser regression: seven passes, 5.1m"
+    },
+    {
+      "path": "batch5a-e2e-typecheck-corrected.log",
+      "sha256": "3e5bb08cce79c69995b748e23c7e0453f8a2c023afb2890a0252321c72c54004",
+      "bytes": 760,
+      "exitCode": 2,
+      "outcome": "Only unchanged Import suggestedByModel error remains"
+    },
+    {
+      "path": "batch5a-e2e-typecheck-final.log",
+      "sha256": "3e5bb08cce79c69995b748e23c7e0453f8a2c023afb2890a0252321c72c54004",
+      "bytes": 760,
+      "exitCode": 2,
+      "outcome": "Only unchanged Import suggestedByModel error remains"
+    },
+    {
+      "path": "batch5a-e2e-typecheck-latest.log",
+      "sha256": "3e5bb08cce79c69995b748e23c7e0453f8a2c023afb2890a0252321c72c54004",
+      "bytes": 760,
+      "exitCode": 2,
+      "outcome": "Only unchanged Import suggestedByModel error remains"
+    },
+    {
+      "path": "batch5a-e2e-typecheck.log",
+      "sha256": "bf332a650e9bda2ed659eee61f09096a8fd0658d9e2f2e2f99693e7e7d5237a6",
+      "bytes": 4154,
+      "exitCode": 2,
+      "outcome": "Initial test-helper types and pre-existing Import error, corrected helper types"
+    },
+    {
+      "path": "batch5a-presentation-tests.log",
+      "sha256": "f53b72d31535339f542c97be1d7e9571d7fee784ee4ee949e83a807ee1bfcf43",
+      "bytes": 366,
+      "exitCode": 0,
+      "outcome": "Thirteen presentation/date/signal tests passed"
+    },
+    {
+      "path": "batch5a-production-corrected.log",
+      "sha256": "075a8091e07e1660cdb36b7338f94e69741966e9332f77ecf49463038b228b3a",
+      "bytes": 20504,
+      "exitCode": 0,
+      "outcome": "Fresh compiled/built production Administration and canary: 12 passes, 7.2m"
+    },
+    {
+      "path": "batch5a-production-final.log",
+      "sha256": "5e5d725c33cf44d4ecc84af923b2cc8f279f204dad1376588b0bb6906392e667",
+      "bytes": 54412,
+      "exitCode": 1,
+      "outcome": "Completed broader production run: 53 passes, four Administration failures, 21.9m; all 51 unaffected regression cases passed"
+    },
+    {
+      "path": "batch5a-production-first.log",
+      "sha256": "eb63a21ba0d4cbe159bd705b40542ffe026054b1a9f8d3ddb77a288567d5fad7",
+      "bytes": 19008,
+      "exitCode": 1,
+      "outcome": "Incomplete production attempt, explicitly stopped after two transient-picker setup timeouts"
+    },
+    {
+      "path": "batch5a-targeted-tests.log",
+      "sha256": "a89e40cd44844f677c220e0f69ba1eaa4556dae131e0b8303ad7d765276f783b",
+      "bytes": 434,
+      "exitCode": 0,
+      "outcome": "Nine files, 4340 tests passed"
+    },
+    {
+      "path": "batch5a-test-lint.log",
+      "sha256": "6901c3b733b4f4053482b013090672fc46cf7039f5d67c38ab90164fde8244cc",
+      "bytes": 2134,
+      "exitCode": null,
+      "outcome": "Initial shared-to-app restricted imports and regex lint issue, corrected",
+      "exitCodeNote": "Failure recorded; exact enclosing shell exit was not retained. Not used as a passing check."
+    },
+    {
+      "path": "batch5a-tooling-typecheck.log",
+      "sha256": "24316b6ab0ca0e741192f4355f2aa369512687f13b61cf3900a051748e3f46f2",
+      "bytes": 15240,
+      "exitCode": 2,
+      "outcome": "Four pre-existing project-level Vitest passWithNoTests type errors"
+    },
+    {
+      "path": "batch5a-ui-typecheck-corrected.log",
+      "sha256": "f375ca7f78d2b91672846aa8a50c120401bebb7a220e27edf75a31fe5be265aa",
+      "bytes": 682,
+      "exitCode": 0,
+      "outcome": "Corrected console TypeScript passed"
+    },
+    {
+      "path": "batch5a-ui-typecheck.log",
+      "sha256": "b4bb9cc7b00e7ed269c53d7c8329594b987db56f12fdbc7cbc451a0d79872599",
+      "bytes": 5824,
+      "exitCode": null,
+      "outcome": "Initial Date-versus-string formatting errors, corrected",
+      "exitCodeNote": "Failure recorded; exact enclosing shell exit was not retained. Not used as a passing check."
+    },
+    {
+      "path": "batch5a-verify-final.log",
+      "sha256": "009c81a03cb8ef0db87d2c8999a947c7cdeed78ee3c06e29cee21bdb1a2afecb",
+      "bytes": 10308,
+      "exitCode": 1,
+      "outcome": "Explicitly cancelled: bounded-fixture failures, then invalidated by accidental overlapping API database setup; discarded"
+    },
+    {
+      "path": "batch5a-verify-first.log",
+      "sha256": "26ba0a9b55beb023044d132123327a23b1970a0af7751c2c6de97117c218a86d",
+      "bytes": 2610,
+      "exitCode": 1,
+      "outcome": "Abandoned first gate failed parsing a browser file during editing"
+    },
+    {
+      "path": "batch5a-verify-isolated.log",
+      "sha256": "4ebf4f684e04ef56df2af4c3def683a339ef40df817a40f8a97f19eb2d2cab00",
+      "bytes": 2822,
+      "exitCode": 0,
+      "outcome": "Completed isolated full gate: 162 files / 7861 tests, 805.81s; workspace TypeScript, lint, format passed"
+    }
+  ],
+  "modifiedFileInventory": {
+    "path": "modified-files.txt",
+    "sha256": "5d4bbe92be75f604452ef9199a39556ac12ad9198d50c4687ae79de8e1661b51",
+    "files": 85
+  },
+  "scopeNotes": [
+    "Synthetic localhost records only",
+    "No push, merge or deployment",
+    "Batch 5B not started",
+    "Original prototypes and pre-existing reports/local settings untouched",
+    "Earlier batch screenshots restored",
+    "No new privilege, dependency or schema change",
+    "No general application release certification"
+  ],
+  "hashConvention": "SHA-256 of raw local working-file bytes at collection. Git may normalize text line endings; these source hashes describe the actual tested Windows files. Binary capture/PDF hashes are unchanged by Git."
+}
