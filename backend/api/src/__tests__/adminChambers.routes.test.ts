@@ -18,6 +18,11 @@ import { bearer, nationalToken, patientToken, staffToken } from './support/token
 let fixture: QueueFixture;
 beforeEach(async () => {
   fixture = await createQueueFixture(3);
+  // The full suite appends hundreds of today's sessions. Put this fixture
+  // inside the ordered board window; truncation is asserted separately.
+  await sql`UPDATE sessions
+    SET planned_start = date_trunc('day', now() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka'
+    WHERE id = ${fixture.sessionId}::uuid`.execute(db);
 });
 afterEach(() => {
   vi.useRealTimers();
