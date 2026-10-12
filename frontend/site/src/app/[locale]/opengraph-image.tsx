@@ -36,11 +36,11 @@ export default function OpengraphImage(): ImageResponse {
         MedLiveBD
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', fontSize: 92, fontWeight: 700, lineHeight: 1.02 }}>
-          A clearer picture of care.
+        <div style={{ display: 'flex', fontSize: 68, fontWeight: 700, lineHeight: 1.08 }}>
+          A Connected Healthcare Ecosystem for a Healthier Bangladesh
         </div>
         <div style={{ display: 'flex', marginTop: 28, fontSize: 32, color: TEAL }}>
-          Live hospital operations, connected to the patient · Bangladesh
+          Live hospital operations for Bangladesh
         </div>
       </div>
     </div>,

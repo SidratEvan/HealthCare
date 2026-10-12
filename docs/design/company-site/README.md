@@ -1,70 +1,68 @@
-# MedLiveBD company presentation — local checkpoint
+# MedLiveBD company site — premium redesign
 
-Updated 11 October 2026. Worktree `D:\Projects\HealthCare-company-site`, branch
-`feat/medlivebd-company-site`, base `9b2337e`.
+Updated 12 October 2026. Worktree `D:\Projects\HealthCare-site-mvp`, branch
+`feat/site-premium`, cut from `feat/company-site`. Site-only: nothing outside
+`frontend/site`, `pnpm-lock.yaml` and this folder changes.
 
-The original accelerated brief authorizes this independent company site and
-confirms `sidrat@medlivebd.com`. Existing page/copy/assets are retained. No
-clinical app, API, database, deployment or provider configuration is changed.
-The logo is byte-identical to the approved patient logo.
+## What the page argues, in order
 
-Implemented: server-rendered document language through locale root layouts,
-Bangla display leading/word breaks, responsive menu closure and truthful scoped
-README. Added six isolated browser cases covering languages/metadata, complete
-page content, real email contact, workflows, keyboard/mobile/tablet behavior,
-security headers, axe, reduced motion and 320-pixel overflow.
+| Section | Job |
+|---|---|
+| Hero | Main line (owner, 12 October): *A Connected Healthcare Ecosystem for a Healthier Bangladesh* / *সুস্থ বাংলাদেশের জন্য একটি সংযুক্ত স্বাস্থ্যসেবা ইকোসিস্টেম*. Beside it, the product's promise **drawn in code**: reception presses *Call next*, the patient's phone moves (6 → 9, then "your turn"). It plays by itself, can be paused, and the visitor can press the button. |
+| Modules band | Breadth: every workspace by name. |
+| Why live matters | Without / with, five rows. |
+| How it works (dark) | Four steps, one diagram: reception → live queue → phones, doctor, administration; the last step shows the honest-degradation rule (offline, figure age). |
+| Product | The six **real captured screens** (`public/screens`, demonstration data) behind an accessible tab list. Console screens are cropped past the repeated side rail. |
+| For hospital teams | Seven cards, each with a small CSS-driven picture: reception, beds, emergency, lab, doctor, offline, branding. |
+| For patients | The real patient screen and five things a patient can do. |
+| Network | Hospital A/B/C (never a real or seeded name) — what is shared, what stays inside. |
+| Trust (dark) | Six rules the platform enforces. |
+| Getting started | Configure → import → rehearse → go live. |
+| Questions | Six, answered as the platform stands today (including "not in this version"). |
+| Contact (dark) | `support@medlivebd.com`, copy button, the synthetic-data note. |
 
-Complete locally. Current focused results, all exit 0:
+Nothing invented: no customers, partners, figures, testimonials or
+certifications. Illustrations say they are illustrations; every screen says it
+is demonstration data.
 
-- `pnpm --filter @platform/site typecheck`
-- `pnpm exec eslint frontend/site/src frontend/site/tests frontend/site/next.config.mjs --max-warnings 0`
-- `pnpm exec prettier --check frontend/site`
-- `pnpm --filter @platform/site build` — static `/`, `/bn` and `/en` built.
-- `$env:SITE_CAPTURE='1'; pnpm --filter @platform/site test:smoke` — **6/6 passed,
-  1.0 minute**, one worker, zero retries. Axe WCAG 2 A/AA and 2.1 AA passed in
-  both languages at desktop and mobile. No browser page errors were observed.
-- `git diff --check`
+## Design system
 
-Initial test TypeScript failures were corrected. A typecheck started during
-the build encountered stale prior-session Next dev declarations; the build
-regenerated production declarations and the final package typecheck passed.
-No previous session result or failed run is counted as passing evidence.
+Tokens are all in `src/app/site.css` `:root`: logo blue for action, navy for
+words, teal only as the live signal. Type: Geist (English), Geist Mono (small
+live labels), Anek Bangla (Bangla; never tracked, headings ≥ 1.36 leading,
+body 1.72, Bengali numerals throughout). The logo master has a white ground,
+so it only ever sits on light surfaces; dark sections are inset panels.
 
-Scope: premium bilingual company presentation, platform workflows, hospital
-onboarding explanation and email demonstration/contact links. No invented
-customers, statistics, testimonials, clinical content or availability. Figures
-are illustrative and marked accordingly. Historical Part C's application
-entrances, lead pipeline, brochure and policy pages are not part of this brief.
+## Motion
 
-Representative captures, inspected after the passing run:
+Framer Motion `12.43.0` (owner's request), loaded through `LazyMotion` with
+its features fetched after first paint; the hero text animates in CSS so the
+first paint never waits for it. Loops run only on screen and in a visible tab,
+stop when paused (WCAG 2.2.2), and do not run under reduced motion. Without
+script, every section is visible (`<noscript>` style in the layout).
 
-- [English desktop, 1440 pixels](en-desktop.png)
-- [Bangla mobile, 375 pixels](bn-mobile.png)
+## Checks (12 October)
 
-No further screen inventory or repeated suites were generated. Browser checks
-also cover 1024-pixel tablet and 320-pixel small-phone layouts.
+- `pnpm --filter @platform/site typecheck`, eslint on `frontend/site`,
+  `prettier --check frontend/site` — exit 0.
+- `pnpm --filter @platform/site build` and `SITE_EXPORT=1` build — both clean;
+  no `localhost` address outside `_next` (a share-image link on the privacy
+  pages used to resolve to localhost; fixed in the locale layout).
+- `SITE_CAPTURE=1 pnpm --filter @platform/site test:smoke` against the
+  production build — **12/12 passed**: headers and entrance, every section
+  in both languages, the real contact only, keyboard (skip link, tab list
+  arrows/Home, steps, questions), the illustration's button and pause, mobile
+  menu and language switch keeping the reader's place, 1024 px and 320 px
+  without overflow, reduced motion, no-script, privacy notice, screens with
+  demonstration-data alt text, and axe WCAG 2.1 AA on desktop and mobile in
+  both languages.
 
-Built local preview: **http://localhost:3200/bn** and
-**http://localhost:3200/en**, HTTP 200 verified. Hidden owned Node process
-**22268** remains running for the owner; its PID is also in ignored
-`preview-pid.local`. To stop this specific preview after review, run
-`Stop-Process -Id 22268` while that PID still belongs to this site's Next server.
-Restart from this checkout with `pnpm --filter @platform/site start`.
+Captures from that run: [English desktop](en-desktop.png),
+[Bangla mobile](bn-mobile.png).
 
-All dependencies reuse existing monorepo versions; the lockfile diff contains
-only the new site importer entries. No packages were downloaded/installed.
+## Not done here
 
-The original approved brief is
-`C:\Users\sidra\.codex\attachments\989e288f-30a1-47c9-b2ac-13432dadb846\Pasted text.txt`.
-The user's accelerated local-only policy overrides the historical Part C scope
-and CLAUDE.md's intermediate reviews/release workflow for this task.
-
-Verification limits: this is the isolated public company site, not clinical
-certification, email-delivery verification or a hosted release. Email CTAs open
-the visitor's mail client; no inquiry is stored and no message was sent.
-Historical Part C policy/application routes remain outside the approved brief.
-There is no unresolved local site blocker from the performed checks.
-
-No push, merge, deployment, external connector, real data or clinical API/database
-operation was performed. The site remains separately reviewable on its feature
-branch; the console integration is owned by the root workstream.
+- The product screens are the 11 October captures (pre-console-redesign).
+  Recapturing from the redesigned consoles needs the local capture database
+  (`scripts/capture-screens.mjs`, Docker Postgres); Docker was stopped.
+- Not merged, pushed or deployed. DNS and Cloudflare untouched.

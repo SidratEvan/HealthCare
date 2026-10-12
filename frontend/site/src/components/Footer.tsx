@@ -1,0 +1,64 @@
+import { contactEmail, copy, demoHref } from '@/content/copy';
+
+import { fmt } from './format';
+import { LanguageSwitch, Mark } from './Header';
+import { Icon } from './icons';
+
+import type { Locale } from '@/content/copy';
+import type { ReactNode } from 'react';
+
+export function Footer({
+  locale,
+  path = '',
+}: {
+  readonly locale: Locale;
+  /** The page's path after the locale, so the language switch stays on the same page. */
+  readonly path?: string;
+}): ReactNode {
+  const t = copy[locale];
+  const home = `/${locale}`;
+  return (
+    <footer className="site-footer">
+      <div className="shell footer-grid">
+        <div className="footer-brand">
+          <Mark />
+          <p>{t.footer}</p>
+          <p className="footer-tagline">{t.aboutFoot}</p>
+        </div>
+        <nav aria-label={t.footerProduct}>
+          <h2>{t.footerProduct}</h2>
+          {t.footerLinks.product.map((link) => (
+            <a key={link.id} href={`${home}#${link.id}`}>
+              {link.label}
+            </a>
+          ))}
+        </nav>
+        <nav aria-label={t.footerCompany}>
+          <h2>{t.footerCompany}</h2>
+          {t.footerLinks.company.map((link) => (
+            <a key={link.id} href={`${home}#${link.id}`}>
+              {link.label}
+            </a>
+          ))}
+          <a href={`${home}/privacy`}>{t.privacy}</a>
+        </nav>
+        <div>
+          <h2>{t.footerContact}</h2>
+          <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
+          <a href={demoHref}>{t.demo}</a>
+          <h2 className="footer-subhead">{t.footerLanguage}</h2>
+          <LanguageSwitch locale={locale} path={path} />
+        </div>
+      </div>
+      <div className="shell footer-bottom">
+        <span>
+          © {fmt(new Date().getFullYear(), locale)} {t.copyright}
+        </span>
+        <a href="#top">
+          {t.backTop}
+          <Icon name="diagonal" className="arrow arrow-up" />
+        </a>
+      </div>
+    </footer>
+  );
+}

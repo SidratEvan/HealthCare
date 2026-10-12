@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 
-import { Footer, Mark } from '@/components/Landing';
+import { Footer } from '@/components/Footer';
+import { LanguageSwitch, Mark } from '@/components/Header';
 import { copy } from '@/content/copy';
 import { SITE_ORIGIN } from '@/content/site';
 
@@ -41,22 +42,19 @@ export default async function PrivacyPage({
   const t = copy[locale];
   return (
     <div className="company-page" lang={locale} id="top">
-      <header className="site-header shell">
-        <a className="brand-link" href={`/${locale}`} aria-label="MedLiveBD">
-          <Mark />
-        </a>
-        <a
-          className="language-link"
-          href={`/${locale === 'bn' ? 'en' : 'bn'}/privacy`}
-          lang={locale === 'bn' ? 'en' : 'bn'}
-          hrefLang={locale === 'bn' ? 'en' : 'bn'}
-        >
-          {locale === 'bn' ? 'EN' : 'বাংলা'}
-        </a>
+      <header className="site-header" data-scrolled="true">
+        <div className="shell header-inner">
+          <a className="brand-link" href={`/${locale}`} aria-label="MedLiveBD">
+            <Mark priority />
+          </a>
+          <div className="header-actions">
+            <LanguageSwitch locale={locale} path="/privacy" />
+          </div>
+        </div>
       </header>
       <main id="main" className="shell legal">
         <a className="text-link" href={`/${locale}`}>
-          ← {t.privacyBack}
+          <span aria-hidden="true">←</span> {t.privacyBack}
         </a>
         <h1>{t.privacyTitle}</h1>
         <p className="legal-updated">{t.privacyUpdated}</p>
@@ -67,7 +65,7 @@ export default async function PrivacyPage({
           </section>
         ))}
       </main>
-      <Footer locale={locale} />
+      <Footer locale={locale} path="/privacy" />
     </div>
   );
 }
