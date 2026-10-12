@@ -1,5 +1,5 @@
 /** Local presentation copy: GR-06; truthful S-C-01/02/04/05, FR-SEC-08. */
-export const contactEmail = 'sidrat@medlivebd.com';
+export const contactEmail = 'support@medlivebd.com';
 export const demoHref = `mailto:${contactEmail}?subject=${encodeURIComponent('MedLiveBD — Hospital demonstration request')}`;
 export type Locale = 'bn' | 'en';
 
@@ -141,7 +141,7 @@ const en = {
     },
     {
       heading: 'If you email us',
-      body: 'Links on this site open your own email program. If you write to sidrat@medlivebd.com, we use your name, address and message only to reply and to arrange what you asked about. We do not sell or share it for marketing.',
+      body: 'Links on this site open your own email program. If you write to support@medlivebd.com, we use your name, address and message only to reply and to arrange what you asked about. We do not sell or share it for marketing.',
     },
     {
       heading: 'Hosting',
@@ -157,7 +157,7 @@ const en = {
     },
     {
       heading: 'Questions',
-      body: 'Write to sidrat@medlivebd.com about anything in this notice, including a request to delete correspondence you sent us.',
+      body: 'Write to support@medlivebd.com about anything in this notice, including a request to delete correspondence you sent us.',
     },
   ],
 };
@@ -276,7 +276,7 @@ const bn: typeof en = {
     },
     {
       heading: 'আপনি ইমেইল করলে',
-      body: 'এই সাইটের লিংক আপনার নিজের ইমেইল প্রোগ্রাম খোলে। sidrat@medlivebd.com-এ লিখলে আপনার নাম, ঠিকানা ও বার্তা শুধু উত্তর দিতে ও আপনার অনুরোধ অনুযায়ী ব্যবস্থা করতে ব্যবহার করি। বিপণনের জন্য বিক্রি বা শেয়ার করি না।',
+      body: 'এই সাইটের লিংক আপনার নিজের ইমেইল প্রোগ্রাম খোলে। support@medlivebd.com-এ লিখলে আপনার নাম, ঠিকানা ও বার্তা শুধু উত্তর দিতে ও আপনার অনুরোধ অনুযায়ী ব্যবস্থা করতে ব্যবহার করি। বিপণনের জন্য বিক্রি বা শেয়ার করি না।',
     },
     {
       heading: 'হোস্টিং',
@@ -292,7 +292,7 @@ const bn: typeof en = {
     },
     {
       heading: 'প্রশ্ন',
-      body: 'এই নীতি নিয়ে যেকোনো প্রশ্ন, বা আপনার পাঠানো চিঠিপত্র মুছে ফেলার অনুরোধ, sidrat@medlivebd.com-এ লিখুন।',
+      body: 'এই নীতি নিয়ে যেকোনো প্রশ্ন, বা আপনার পাঠানো চিঠিপত্র মুছে ফেলার অনুরোধ, support@medlivebd.com-এ লিখুন।',
     },
   ],
 };
