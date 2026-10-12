@@ -6,14 +6,17 @@ export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
 // The image renderer cannot read CSS custom properties, so the card carries
-// site.css's --navy, --paper and --mint by value.
-const NAVY = '#122430';
-const PAPER = '#f8f9f6';
-const MINT = '#c9f1da';
+// site.css's --ink, --paper and --teal by value.
+const INK = '#0b1a33';
+const PAPER = '#ffffff';
+const TEAL = '#01ceb8';
 
 export function generateStaticParams(): { locale: string }[] {
   return [{ locale: 'bn' }, { locale: 'en' }];
 }
+
+/** Built once into a file, so a static host can serve it (`SITE_EXPORT`). */
+export const dynamic = 'force-static';
 
 export default function OpengraphImage(): ImageResponse {
   return new ImageResponse(
@@ -25,7 +28,7 @@ export default function OpengraphImage(): ImageResponse {
         flexDirection: 'column',
         justifyContent: 'space-between',
         padding: 80,
-        background: NAVY,
+        background: INK,
         color: PAPER,
       }}
     >
@@ -36,7 +39,7 @@ export default function OpengraphImage(): ImageResponse {
         <div style={{ display: 'flex', fontSize: 92, fontWeight: 700, lineHeight: 1.02 }}>
           A clearer picture of care.
         </div>
-        <div style={{ display: 'flex', marginTop: 28, fontSize: 32, color: MINT }}>
+        <div style={{ display: 'flex', marginTop: 28, fontSize: 32, color: TEAL }}>
           Live hospital operations, connected to the patient · Bangladesh
         </div>
       </div>
