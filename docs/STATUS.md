@@ -7,6 +7,15 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
+## Web architecture and releases (11 October 2026, proposed — awaiting the owner)
+
+- **Live:** `medlivebd.com` = company site, Cloudflare Pages *Direct Upload*, contact `support@medlivebd.com` (Email Routing forwards it). `www.medlivebd.com` has **no DNS record**. The site links to no app yet.
+- **Deployed apps are the demo only** (`main` = `99e4c5e`, 9 October, *before* the console redesign): patient `healthcare-patient-zeta.vercel.app`, consoles `healthcare-console.vercel.app`, API `healthcare-api-m9ke.onrender.com` (Render free: ~70 s cold start), Supabase Singapore, `DEMO_MODE=true`. The demo accepts **any** phone number and stores it in Singapore, so a public "Book a doctor" link to it would invite real patient data (`FR-SEC-07/08`). No real-data deployment exists yet.
+- **Target:** `medlivebd.com` (site, Pages) · `app.` patient · `console.` staff · `api.` — all three on the Bangladesh server via Caddy (`deploy/Caddyfile` already uses `APP_ORIGIN`/`CONSOLE_ORIGIN`/`API_ORIGIN`), Cloudflare DNS-only (grey cloud) so patient traffic is not proxied abroad · `<code>.medlivebd.com` hospital portals (`RESERVED_PORTAL_LABELS` already holds www/app/api/console/admin/staff/status/mail; **add `demo` before any `demo.` subdomain**) · optionally `demo.`/`demo-console.` CNAMEs to the Vercel demo.
+- **Site links, proposed:** "See the live demo" (hospital audience, labelled fictional, "do not enter real details") once the demo refuses non-demo phone numbers or the owner accepts the risk; "Patient app" and "Staff sign in" only when `app.`/`console.` serve the Bangladesh deployment.
+- **Releasing the site:** `pnpm --filter @platform/site deploy:preview` / `deploy:production -- --confirm=<project>` (`frontend/site/scripts/deploy-pages.mjs`, Wrangler 4.140.0 via `pnpm dlx`, token in ignored `.env.deploy.local`). Not run: no token is configured.
+- **Merging:** site-only branch `feat/company-site` (worktree `D:\Projects\HealthCare-site-mvp`) = `mvp` + the five site commits, site files identical to the live build, only `pnpm-lock.yaml` outside `frontend/site`. It can merge into `mvp` on its own once its build and smoke run there. The hospital branch merges into `mvp` only after the full development, built and production browser gates are green; `mvp` → `main` (which redeploys the public demo) only on the owner's word (§4.6).
+
 ## Latest work — independent release audit (11 October 2026, Claude)
 
 Branch `fix/release-audit-2026-10-11`, off `97f578c`. Local only: nothing pushed, merged into `mvp`/`main`/`demo`, or deployed.
