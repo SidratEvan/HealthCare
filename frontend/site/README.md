@@ -1,15 +1,16 @@
 # frontend/site — MedLiveBD company website
 
-The company presentation for **medlivebd.com**. The current cinematic candidate
-is local only on `feat/site-cinematic-connected-care`. It tells a connected-care
-story through original synthetic Bangladeshi healthcare scenes, hospital and
-patient perspectives and an accurately sourced Bangladesh vision. Demonstration
-requests open email to `support@medlivebd.com`; public patient booking is not open.
-Bangla at `/bn` (the default), English at `/en`, privacy and asset credits at
-`/{bn,en}/privacy` and `/{bn,en}/credits`. No operational software screens are used
-on the homepage. See `docs/design/site-cinematic/README.md` for review evidence.
+The company presentation for **medlivebd.com**: the founder-approved final design
+of 12 October 2026 (`docs/design/site-final/README.md`), released from `mvp`
+with Wrangler (below). It tells a connected-care story through original synthetic
+Bangladeshi healthcare scenes (`docs/design/site-cinematic/ASSETS.md`).
+**For Hospitals** opens `/{bn,en}/hospitals`; **For Patients** opens the patient
+demo (`healthcare-patient-zeta.vercel.app`, new tab, marked Demo); demonstration
+requests open email to `support@medlivebd.com`. Bangla at `/bn` (the default),
+English at `/en`, privacy and asset credits at `/{bn,en}/privacy` and
+`/{bn,en}/credits`. The staff console is never linked.
 
-No patient, hospital-login, inquiry backend or clinical API is connected. There
+The site itself calls no API and holds no patient data. There
 are no forms, cookies, analytics or trackers; the privacy notice says exactly
 that, so adding any of them means changing the notice in the same change.
 

@@ -54,7 +54,15 @@ export default async function CreditsPage({
           <h2>{t.assetsTitle}</h2>
           <p>{t.assetsIntro}</p>
           <ul className="credit-list">
-            {(['hero', 'team', 'patient', 'atmosphere'] as const).map((key, index) => (
+            {(
+              [
+                'hero-collaboration',
+                'team',
+                'patient',
+                'atmosphere',
+                'hospital-operations',
+              ] as const
+            ).map((key, index) => (
               <li key={key}>
                 <CampaignImage name={key} alt="" sizes="120px" className="credit-thumb" />
                 <span>

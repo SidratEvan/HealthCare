@@ -7,7 +7,15 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Company site — final premium redesign (12 October 2026, awaiting the owner's review)
+## Company site — release candidate (12 October 2026; not merged, pushed or deployed)
+
+Branch `fix/site-mobile-menu` in `D:\Projects\HealthCare-site-cinematic`, on the founder-approved `cbd1d7f` (`fix/site-image-refinements`: the redesign below plus Codex's two image commits). Design unchanged; three release fixes only:
+- **Mobile menu**: the solid header's `backdrop-filter` made the fixed panel 1px tall, so no link could be tapped (since `01c79a8`). Explicit height in `medlive.css`; a browser test measures the panel and taps a link at 390px and 768px (it failed 4/4 before the fix).
+- **Credits** list the five photographs shown (`hero-collaboration`, `team`, `patient`, `atmosphere`, `hospital-operations`); `hero` is no longer displayed. Provenance from the Codex session log and a pixel match: `docs/design/site-cinematic/ASSETS.md`, originals and prompts beside it.
+- **Merge**: website-only, linear on `mvp` (`frontend/site`, `docs/design`, this file, `pnpm-lock.yaml`). `main` stays `99e4c5e`: a push to `main` redeploys Vercel and Render and is not how the site is released. Site release: `deploy:preview`, then `deploy:production -- --confirm=medlivebd` (README); no `.env.deploy.local` exists yet. `www.medlivebd.com` is now attached to the Pages project (the note of 11 October below predates it).
+- **Open, owner — the patient demo stores whatever number is typed.** The site links it with a warning, and the warning is not protection. Smallest server-side guard: with `DEMO_MODE=true`, the API accepts only the seed's reserved demo block for any phone from outside, and the patient app pre-fills one. That is backend and patient-app work on its own branch, documents first, strict gate, and live only after a `main` release. Until then a typed number sits in Supabase (Singapore) until the next daily refresh; the SMS log adapter records no number or text.
+
+## Company site — final premium redesign (12 October 2026, approved by the founder)
 
 Branch `feat/site-final-premium-redesign` in `D:\Projects\HealthCare-site-cinematic`, off `feat/site-audience-gateway` (`0720a73`). Owner's brief: redesign the whole site, not repair it. New design system (`frontend/site/src/app/medlive.css`, replaces `site.css` and `cinematic.css`), new components, new pages. Codex's four photographs kept byte-identical and each shown once on the homepage. Navy header logo derived from the supplied logo's dark panel (`scripts/prepare-logo.mjs`). Record and screenshots: `docs/design/site-final/README.md`.
 - **For Hospitals** → `/{bn,en}/hospitals`, a page of this site. The password-less staff console is never linked.

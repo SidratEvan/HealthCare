@@ -210,6 +210,7 @@ const en = {
     'Hospital teamwork',
     'A clearer patient journey',
     'Dhaka-inspired evening',
+    'Hospital operations',
   ],
   creditsMap: 'Map data',
   creditsSource: 'Source',
@@ -411,7 +412,13 @@ const bn: Copy = {
   assetsTitle: 'এই সাইটের জন্য তৈরি ছবি',
   assetsIntro:
     '২০২৬ সালের ১২ অক্টোবর OpenAI-এর ইমেজ জেনারেশন দিয়ে এই সাইটের জন্য দৃশ্যগুলো তৈরি করা হয়েছে। মানুষ ও পরিবেশগুলো কৃত্রিম দৃষ্টান্ত, MedLiveBD-এর প্রকৃত কর্মী, গ্রাহক বা হাসপাতালের ছবি নয়। এগুলো কোনো সমর্থন বা বর্তমান কভারেজ বোঝায় না।',
-  assetNames: ['চিকিৎসকদের সংযোগ', 'হাসপাতালের দল', 'রোগীর সহজতর যাত্রা', 'ঢাকাকে ঘিরে সন্ধ্যা'],
+  assetNames: [
+    'চিকিৎসকদের সংযোগ',
+    'হাসপাতালের দল',
+    'রোগীর সহজতর যাত্রা',
+    'ঢাকাকে ঘিরে সন্ধ্যা',
+    'হাসপাতালের কার্যক্রম',
+  ],
   creditsMap: 'মানচিত্রের তথ্য',
   creditsSource: 'উৎস',
   back: 'MedLiveBD-তে ফিরে যান',

@@ -583,9 +583,12 @@ a.lang-option:hover {
   transform: translateY(-4px) rotate(-45deg);
 }
 
+/* The solid header's backdrop-filter is this panel's containing block, so
+   `bottom: 0` would collapse it to 1px; an explicit height fills the screen. */
 .mobile-menu {
   position: fixed;
-  inset: var(--header) 0 0;
+  inset: var(--header) 0 auto;
+  height: calc(100dvh - var(--header));
   overflow-y: auto;
   background: var(--midnight);
   border-top: 1px solid var(--hair);

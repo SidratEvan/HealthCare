@@ -252,6 +252,44 @@ for (const locale of ['en', 'bn'] as const) {
   });
 
   for (const [width, height] of [
+    [390, 844],
+    [768, 1024],
+  ] as const) {
+    // toBeVisible() passes for a 1px panel; measure it and tap where a finger would.
+    test(`${locale}: mobile menu panel is usable at ${String(width)}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await page.goto(`/${locale}`);
+      await page.locator('.menu-toggle').click();
+      const menu = page.locator('#mobile-menu');
+      await expect(menu).toBeVisible();
+      await page.waitForTimeout(500);
+      const panel = await menu.boundingBox();
+      const header = await page.locator('.header-bar').boundingBox();
+      expect(panel?.y).toBeCloseTo((header?.y ?? 0) + (header?.height ?? 0), 0);
+      expect((panel?.y ?? 0) + (panel?.height ?? 0)).toBeGreaterThanOrEqual(height - 1);
+      const links = menu.locator('a');
+      expect(await links.count()).toBeGreaterThanOrEqual(5);
+      for (const link of await links.all()) {
+        await link.scrollIntoViewIfNeeded();
+        const hit = await link.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          return top !== null && el.contains(top);
+        });
+        expect(hit, (await link.getAttribute('href')) ?? '').toBe(true);
+      }
+      const about = menu.locator(`a[href="/${locale}/about"]`);
+      await about.scrollIntoViewIfNeeded();
+      const box = await about.boundingBox();
+      await page.mouse.click(
+        (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        (box?.y ?? 0) + (box?.height ?? 0) / 2,
+      );
+      await expect(page).toHaveURL(new RegExp(`/${locale}/about$`));
+    });
+  }
+
+  for (const [width, height] of [
     [360, 740],
     [390, 844],
     [768, 1024],
@@ -319,7 +357,7 @@ for (const locale of ['en', 'bn'] as const) {
       await accessible(page);
       if (path === 'credits') {
         await expect(page.locator('main')).toContainText(t.assetsIntro);
-        expect(await page.locator('.credit-list img').count()).toBe(4);
+        expect(await page.locator('.credit-list img').count()).toBe(5);
         await expect(page.locator('main')).toContainText('CC0 1.0');
       } else await expect(page.locator('main')).toContainText(contactEmail);
       await page.setViewportSize({ width: 360, height: 800 });
