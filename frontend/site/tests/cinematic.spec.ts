@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import axe from 'axe-core';
 
 import { cinematic } from '../src/content/cinematic';
-import { contactEmail, copy, demoHref } from '../src/content/copy';
+import { contactEmail, copy, demoHref, patientAppHref } from '../src/content/copy';
 import { founders } from '../src/content/founders';
 
 import type { Page } from '@playwright/test';
@@ -76,7 +76,7 @@ for (const locale of ['en', 'bn'] as const) {
     await page.goto(`/${locale}`);
     await expect(page).toHaveTitle(copy[locale].title);
     await expect(page.locator('h1')).toHaveText(copy[locale].hero.map((p) => p.text).join(''));
-    await expect(page.locator('#patients')).toContainText(cinematic[locale].patientStatus);
+    await expect(page.locator('#patients')).toContainText(cinematic[locale].demoNotice);
     await expect(page.locator('#bangladesh')).toContainText(cinematic[locale].mapNote);
     for (const [title] of [
       ...cinematic[locale].hospitalFeatures,
@@ -91,13 +91,16 @@ for (const locale of ['en', 'bn'] as const) {
     }
     await expect(page.locator('.closing-founders')).toHaveAttribute('href', `/${locale}/founders`);
     expect(await page.locator('form, iframe, canvas').count()).toBe(0);
-    expect(
-      await page
-        .locator('a')
-        .evaluateAll((links: HTMLAnchorElement[]) =>
-          links.filter((a) => /vercel|onrender|demo\.|patient\./.test(a.href)).map((a) => a.href),
-        ),
-    ).toEqual([]);
+    const outbound = await page
+      .locator('a')
+      .evaluateAll((links: HTMLAnchorElement[]) =>
+        links
+          .map((a) => a.href.replace(/\/$/, ''))
+          .filter((h) => /vercel|onrender|console/.test(h)),
+      );
+    // The staff console is never linked; the patient app only ever as itself.
+    expect(outbound.every((h) => h === patientAppHref)).toBe(true);
+    expect(outbound.length).toBeGreaterThan(0);
     const images = page.locator('main picture img');
     expect(await images.count()).toBe(4);
     for (const [index, image] of (await images.all()).entries()) {
@@ -132,18 +135,19 @@ for (const locale of ['en', 'bn'] as const) {
     await expect(toggle).toBeFocused();
     await toggle.click();
     await expect(nav.locator(`a[href="/${locale}/founders"]`)).toBeVisible();
-    await nav.locator('a[href="#patients"]').click();
-    await expect(page).toHaveURL(/#patients$/);
+    await expect(nav.locator(`a[href="${patientAppHref}"]`)).toHaveAttribute('target', '_blank');
+    await nav.locator('a[href="#bangladesh"]').click();
+    await expect(page).toHaveURL(/#bangladesh$/);
     await expect(nav).toBeHidden();
     await page.waitForTimeout(900);
     // The anchor lands just below the compact header, never under it.
     const header = await page.locator('.site-header').boundingBox();
-    const anchor = await page.locator('#patients').boundingBox();
+    const anchor = await page.locator('#bangladesh').boundingBox();
     expect(anchor?.y).toBeGreaterThanOrEqual((header?.height ?? 0) - 1);
     expect(anchor?.y).toBeLessThan(170);
     await accessible(page);
     await page.locator('.site-header .language-link').click();
-    await expect(page).toHaveURL(new RegExp(`/${locale === 'en' ? 'bn' : 'en'}#patients$`));
+    await expect(page).toHaveURL(new RegExp(`/${locale === 'en' ? 'bn' : 'en'}#bangladesh$`));
     await expect(page.locator('html')).toHaveAttribute('lang', locale === 'en' ? 'bn' : 'en');
     await toggle.click();
     await page.setViewportSize({ width: 1024, height: 768 });
@@ -321,61 +325,68 @@ test('scroll draws the thread and the map, and scrolling back undraws them', asy
   await noOverflow(page);
 });
 
+/* Owner, 12 October 2026: two buttons, two real destinations, no scrolling. */
 for (const locale of ['en', 'bn'] as const) {
-  test(`${locale}: the hero doors and the navigation lead to each experience`, async ({ page }) => {
+  test(`${locale}: For Hospitals and For Patients open their destinations`, async ({ page }) => {
     const t = cinematic[locale];
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${locale}`);
-    const doors = page.getByRole('navigation', { name: t.choose }).first();
-    await expect(doors.getByRole('link')).toHaveCount(2);
-    await doors.locator('a[href="#patients"]').focus();
-    await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/#patients$/);
-    await page.waitForTimeout(700);
-    const heading = await page.locator('#patient-title').boundingBox();
-    expect(heading?.y).toBeGreaterThan(0);
-    expect(heading?.y).toBeLessThan(900);
-    await page.locator('.desktop-nav a[href="#hospitals"]').click();
-    await expect(page).toHaveURL(/#hospitals$/);
-    await page.waitForTimeout(700);
-    expect((await page.locator('#hospital-title').boundingBox())?.y).toBeLessThan(900);
-    // Each experience has its own action: a demonstration, or the patient information.
+    const doors = page.locator('.hero-doors a');
+    await expect(doors).toHaveCount(2);
+    await expect(doors.nth(0)).toContainText(t.doorHospital);
+    await expect(doors.nth(0)).toHaveAttribute('href', demoHref);
+    await expect(doors.nth(1)).toContainText(t.doorPatient);
+    await expect(doors.nth(1)).toHaveAttribute('href', patientAppHref);
+    await expect(doors.nth(1)).toHaveAttribute('target', '_blank');
+    await expect(doors.nth(1)).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(doors.nth(1).locator('.demo-tag')).toBeVisible();
+    await expect(page.locator('.hero-demo-note')).toHaveText(t.demoNotice);
+    const nav = page.locator('.desktop-nav');
+    await expect(nav.locator(`a[href="${demoHref}"]`)).toContainText(
+      copy[locale].nav[1]?.label ?? '',
+    );
+    await expect(nav.locator(`a[href="${patientAppHref}"]`)).toContainText(
+      copy[locale].nav[2]?.label ?? '',
+    );
+    await expect(nav.locator(`a[href="${patientAppHref}"] .demo-tag`)).toBeVisible();
+    await expect(page.locator('#patients .button-light')).toHaveAttribute('href', patientAppHref);
+    await expect(page.locator('#patients .button-light')).toContainText(t.openPatientApp);
     await expect(
       page.locator('#hospitals').getByRole('link', { name: copy[locale].demo }),
     ).toHaveAttribute('href', demoHref);
-    await page.locator('#patients').getByRole('link', { name: t.patientCta }).click();
-    await expect(page).toHaveURL(/#patient-experience$/);
-    await expect(page.locator('#patient-experience')).toContainText(t.comingSoon);
-    expect(await page.locator('.audience-controls, [aria-pressed]').count()).toBe(0);
-    await expect(page.locator('.audience-switch')).toBeHidden();
+    // No link anywhere scrolls to the audience scenes.
+    expect(
+      await page
+        .locator('a[href="#hospitals"], a[href="#patients"], a[href="#patient-experience"]')
+        .count(),
+    ).toBe(0);
+    expect(await page.locator('.audience-switch, .audience-controls, [aria-pressed]').count()).toBe(
+      0,
+    );
+    // Keyboard: both buttons are reachable and show their focus.
+    await doors.nth(0).focus();
+    await expect(doors.nth(0)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(doors.nth(1)).toBeFocused();
+    expect(await doors.nth(1).evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('solid');
+    // The patient button really opens the app, in a new tab.
+    const [tab] = await Promise.all([page.context().waitForEvent('page'), doors.nth(1).click()]);
+    await tab.waitForLoadState('domcontentloaded');
+    expect(tab.url().replace(/\/$/, '')).toBe(patientAppHref);
+    await tab.close();
   });
 
-  test(`${locale}: on a phone the patient experience is one tap away`, async ({ page }) => {
+  test(`${locale}: on a phone both buttons are on the first screen and easy to tap`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/${locale}`);
-    await expect(page.locator('.hero-doors a[href="#patients"]')).toBeInViewport();
-    const audience = await page
-      .locator('#experiences')
-      .evaluate((el) => el.getBoundingClientRect().top + scrollY);
-    await jump(page, audience + 300);
-    const selector = page.locator('.audience-switch');
-    await expect(selector).toBeVisible();
-    await expect(selector.locator('a[href="#hospitals"]')).toHaveAttribute(
-      'aria-current',
-      'location',
-    );
-    await selector.locator('a[href="#patients"]').click();
-    await page.waitForTimeout(900);
-    await expect(selector).toBeInViewport();
-    await expect(selector.locator('a[href="#patients"]')).toHaveAttribute(
-      'aria-current',
-      'location',
-    );
-    await expect(page.locator('#patient-title')).toBeInViewport();
-    // The selector never covers the scene it led to.
-    const bar = await selector.boundingBox();
-    const scene = await page.locator('#patients .audience-scene').boundingBox();
-    expect(scene?.y).toBeGreaterThanOrEqual((bar?.y ?? 0) + (bar?.height ?? 0) - 1);
+    for (const door of await page.locator('.hero-doors a').all()) {
+      await expect(door).toBeInViewport();
+      const box = await door.boundingBox();
+      expect(box?.height).toBeGreaterThanOrEqual(56);
+      expect(await door.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+    }
     await noOverflow(page);
   });
 }

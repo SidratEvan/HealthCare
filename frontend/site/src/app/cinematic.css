@@ -185,67 +185,109 @@
   line-height: 1.7;
   margin-block: 28px 32px;
 }
-/* Two doors: a visitor chooses the hospital or the patient experience at once. */
+/* Two real destinations: the hospital demonstration and the patient app. */
 .hero-doors {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 280px));
+  grid-template-columns: repeat(2, minmax(0, 250px));
   gap: 14px;
 }
 .hero-door {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-height: 96px;
-  padding: 18px 52px 18px 20px;
+  justify-content: center;
+  gap: 4px;
+  min-height: 84px;
+  padding: 16px 56px 16px 22px;
   border-radius: 16px;
-  border: 1px solid rgb(255 255 255 / 0.18);
-  background: rgb(7 26 38 / 0.6);
+  border: 1px solid rgb(255 255 255 / 0.28);
+  background: rgb(7 26 38 / 0.55);
   transition:
     background 0.25s,
     border-color 0.25s,
-    translate 0.25s var(--ease);
+    translate 0.25s var(--ease),
+    box-shadow 0.25s;
 }
 .hero-door:hover {
   translate: 0 -2px;
-  border-color: rgb(255 255 255 / 0.4);
+  border-color: var(--cinema-signal);
+  background: rgb(7 26 38 / 0.8);
+}
+.hero-door:focus-visible {
+  outline: 3px solid var(--cinema-signal);
+  outline-offset: 3px;
 }
 .door-hospital {
   background: var(--blue);
   border-color: var(--blue);
+  box-shadow: 0 16px 34px -18px rgb(0 102 221 / 0.9);
 }
 .door-hospital:hover {
   background: var(--blue-deep);
   border-color: var(--blue-deep);
 }
-.door-kicker {
-  font-size: 12px;
+.door-title {
+  font-size: 20px;
   font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--cinema-signal);
-}
-.door-hospital .door-kicker {
+  letter-spacing: -0.01em;
   color: var(--paper);
 }
-.door-line {
-  font-size: 16px;
-  line-height: 1.35;
-  font-weight: 500;
-  color: var(--paper);
+.door-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: rgb(255 255 255 / 0.92);
 }
 .door-arrow {
   position: absolute;
-  right: 18px;
-  bottom: 20px;
-  rotate: 90deg;
+  right: 20px;
+  top: calc(50% - 10px);
+  width: 20px;
+  height: 20px;
+  transition: translate 0.25s var(--ease);
 }
-.company-page[lang='bn'] .door-kicker {
+.hero-door:hover .door-arrow {
+  translate: 2px -2px;
+}
+/* Every link to the patient app says it is a demonstration. */
+.demo-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+.door-patient .demo-tag {
+  color: var(--cinema-signal);
+}
+.nav-demo-tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--blue-deep);
+}
+.site-footer .nav-demo-tag {
+  color: var(--muted);
+}
+.hero-demo-note {
+  max-width: 520px;
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--cinema-muted);
+}
+.company-page[lang='bn'] .door-title {
+  font-size: 19px;
   letter-spacing: normal;
-  font-size: 14px;
 }
-.company-page[lang='bn'] .door-line {
-  line-height: 1.65;
+.company-page[lang='bn'] .demo-tag {
+  letter-spacing: normal;
+  font-size: 12px;
 }
 /* The care thread begins at the foot of the hero, under the photograph. */
 .hero-stem {
@@ -339,10 +381,6 @@
 .audience-heading h2 {
   font-size: clamp(25px, 2.5vw, 36px);
   font-weight: 400;
-}
-/* The selector shows only when the scenes are stacked (below). */
-.audience-switch {
-  display: none;
 }
 .audience-panorama {
   position: relative;
@@ -928,42 +966,6 @@
   .audience-scene img {
     object-position: center 20%;
   }
-  /* Stacked: both experiences stay one tap away while the visitor is here. */
-  .audience-switch {
-    position: sticky;
-    top: var(--header);
-    z-index: 5;
-    display: block;
-    margin-bottom: 14px;
-    padding: 10px var(--gutter);
-    background: var(--cinema-night);
-  }
-  .audience-switch-inner {
-    display: flex;
-    gap: 4px;
-    padding: 4px;
-    border-radius: 999px;
-    border: 1px solid var(--cinema-line);
-  }
-  .audience-switch a {
-    flex: 1;
-    display: grid;
-    place-items: center;
-    min-height: 44px;
-    border-radius: 999px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--cinema-muted);
-  }
-  .audience-switch a[href='#hospitals'][aria-current] {
-    background: var(--cinema-blue);
-    color: var(--cinema-night);
-  }
-  .audience-switch a[href='#patients'][aria-current] {
-    background: var(--cinema-signal);
-    color: var(--cinema-night);
-  }
-  /* ...and, when stacked, room for the selector pinned beneath it. */
   .audience-column,
   #patient-experience {
     scroll-margin-top: 66px;
@@ -1055,21 +1057,25 @@
     gap: 10px;
   }
   .hero-door {
-    min-height: 0;
-    padding: 14px 14px 42px;
+    min-height: 76px;
+    padding: 14px 40px 14px 16px;
     border-radius: 14px;
   }
-  .door-line {
-    font-size: 14px;
+  .door-title {
+    font-size: 16px;
   }
-  .door-kicker {
-    font-size: 10px;
-    letter-spacing: 0.1em;
+  .door-sub {
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    font-size: 12px;
   }
   .door-arrow {
-    left: 14px;
-    right: auto;
-    bottom: 14px;
+    right: 14px;
+    width: 18px;
+    height: 18px;
+  }
+  .company-page[lang='bn'] .door-title {
+    font-size: 16px;
   }
   .pulse-hero {
     min-height: 800px;

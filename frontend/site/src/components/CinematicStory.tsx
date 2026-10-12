@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { MAP_CITIES, MAP_DIVISIONS, MAP_OUTLINE, MAP_VIEWBOX } from '@/content/bangladesh-map';
 import { cinematic } from '@/content/cinematic';
-import { contactEmail, copy, demoHref } from '@/content/copy';
+import { contactEmail, copy, demoHref, patientAppHref } from '@/content/copy';
 
 import { CampaignImage } from './CampaignImage';
 import { Icon } from './icons';
@@ -101,18 +101,29 @@ export function HumanHero({ locale }: { readonly locale: Locale }): ReactNode {
           ))}
         </h1>
         <p className="pulse-lead">{t.lead}</p>
+        {/* Two real destinations (owner, 12 October 2026), never homepage anchors. */}
         <nav className="hero-doors" aria-label={t.choose}>
-          <a href="#hospitals" className="hero-door door-hospital">
-            <span className="door-kicker">{t.hospital}</span>
-            <span className="door-line">{t.hospitalDoor}</span>
-            <Icon name="arrow" className="arrow door-arrow" />
+          <a href={demoHref} className="hero-door door-hospital">
+            <span className="door-title">{t.doorHospital}</span>
+            <span className="door-sub">{t.doorHospitalSub}</span>
+            <Icon name="diagonal" className="arrow door-arrow" />
           </a>
-          <a href="#patients" className="hero-door door-patient">
-            <span className="door-kicker">{t.patient}</span>
-            <span className="door-line">{t.patientDoor}</span>
-            <Icon name="arrow" className="arrow door-arrow" />
+          <a
+            href={patientAppHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hero-door door-patient"
+          >
+            <span className="door-title">{t.doorPatient}</span>
+            <span className="door-sub">
+              {t.doorPatientSub}
+              <span className="demo-tag">{t.demoTag}</span>
+            </span>
+            <span className="sr-only">{t.newTab}</span>
+            <Icon name="diagonal" className="arrow door-arrow" />
           </a>
         </nav>
+        <p className="hero-demo-note">{t.demoNotice}</p>
       </div>
       <span className="hero-stem" aria-hidden="true" />
       <div className="shell hero-foot">
@@ -176,35 +187,11 @@ function Features({
   );
 }
 
-/** Which audience is in the middle of the screen — for the stacked selector only. */
-function useCurrentAudience(): 'hospital' | 'patient' {
-  const [current, setCurrent] = useState<'hospital' | 'patient'>('hospital');
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries)
-          if (entry.isIntersecting)
-            setCurrent(entry.target.id === 'patients' ? 'patient' : 'hospital');
-      },
-      { rootMargin: '-45% 0px -45% 0px' },
-    );
-    for (const id of ['hospitals', 'patients']) {
-      const element = document.getElementById(id);
-      if (element) observer.observe(element);
-    }
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-  return current;
-}
-
 /**
  * The audience gateway (owner, 12 October 2026), on Codex's panorama: two
  * unmistakable experiences side by side, each photograph shown once, each with
  * its own heading, colour and action. The MedLiveBD node joins them in the gap
- * between the photographs, never across a face or a line of text. Stacked on a
- * phone, a selector keeps both one tap away. Unpinned: the scenes converge and
+ * between the photographs, never across a face or a line of text. Unpinned: the scenes converge and
  * the bridge draws as they arrive.
  */
 export function AudienceStage({ locale }: { readonly locale: Locale }): ReactNode {
@@ -212,7 +199,6 @@ export function AudienceStage({ locale }: { readonly locale: Locale }): ReactNod
   const target = useRef<HTMLElement>(null);
   const enabled = useDesktopCinema();
   const lines = useMotionWelcome();
-  const current = useCurrentAudience();
   const { scrollYProgress: p } = useScroll({ target, offset: ['start 0.85', 'start 0.12'] });
   const left = useTransform(p, [0, 1], ['5%', '0%']);
   const right = useTransform(p, [0, 1], ['-5%', '0%']);
@@ -231,16 +217,6 @@ export function AudienceStage({ locale }: { readonly locale: Locale }): ReactNod
       <div className="shell audience-heading">
         <h2 id="audience-title">{t.experiences}</h2>
       </div>
-      <nav className="audience-switch" aria-label={t.choose}>
-        <div className="audience-switch-inner">
-          <a href="#hospitals" aria-current={current === 'hospital' ? 'location' : undefined}>
-            {t.hospital}
-          </a>
-          <a href="#patients" aria-current={current === 'patient' ? 'location' : undefined}>
-            {t.patient}
-          </a>
-        </div>
-      </nav>
       <div className="audience-panorama">
         <div id="hospitals" className="audience-column">
           <m.article
@@ -288,9 +264,16 @@ export function AudienceStage({ locale }: { readonly locale: Locale }): ReactNod
               <p className="pulse-kicker">{t.patient}</p>
               <h3 id="patient-title">{t.patientTitle}</h3>
               <p>{t.patientBody}</p>
-              <a className="button button-light" href="#patient-experience">
-                {t.patientCta}
-                <Icon name="arrow" className="arrow" />
+              <a
+                className="button button-light"
+                href={patientAppHref}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t.openPatientApp}
+                <span className="demo-tag">{t.demoTag}</span>
+                <span className="sr-only">{t.newTab}</span>
+                <Icon name="diagonal" className="arrow" />
               </a>
             </div>
           </m.article>
@@ -298,7 +281,7 @@ export function AudienceStage({ locale }: { readonly locale: Locale }): ReactNod
             <Features points={t.patientFeatures} />
             <div className="patient-status">
               <strong>{t.comingSoon}</strong>
-              <p>{t.patientStatus}</p>
+              <p>{t.demoNotice}</p>
             </div>
           </div>
         </div>

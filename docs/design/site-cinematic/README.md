@@ -73,3 +73,20 @@ read as two unmistakable experiences. Nothing else changed.
 
 Evidence in `gateway/`: before/after on desktop and Bangla mobile, real
 clicks and taps. Smoke 35/35 on the static export.
+
+## Real destinations (12 October 2026, owner)
+
+For Hospitals and For Patients are links, never anchors. Hero buttons, header
+(desktop and mobile), footer and the two-photo scene all use the same pair:
+
+- For Hospitals → `mailto:support@medlivebd.com` (demonstration request); no
+  secure hospital entrance exists yet and the password-less console is never
+  linked.
+- For Patients → `https://healthcare-patient-zeta.vercel.app` (new tab), always
+  tagged Demo, with a notice not to enter real personal information. The app
+  shows its own demo banner. This overrides the earlier no-demo-link rule
+  (`docs/STATUS.md`, FR-SEC-08) on the owner's instruction; that note needs
+  updating when the site is released.
+
+The mobile Hospitals | Patients selector was removed (it only scrolled).
+Evidence in `navigation/`.

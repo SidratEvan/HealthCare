@@ -10,6 +10,20 @@
  */
 export const contactEmail = 'support@medlivebd.com';
 export const demoHref = `mailto:${contactEmail}?subject=${encodeURIComponent('MedLiveBD — Hospital demonstration request')}`;
+/**
+ * The patient web app (demo, `DEMO_MODE=true`, docs/STATUS.md). Owner, 12 October
+ * 2026: "For Patients" opens it directly, always marked as a demo.
+ */
+export const patientAppHref = 'https://healthcare-patient-zeta.vercel.app';
+/**
+ * The two audience destinations — real links, never homepage anchors. Hospitals
+ * get the demonstration request until a secure hospital entrance exists (the
+ * staff console is password-less in its demo and is never linked publicly).
+ */
+export const audienceHref: Readonly<Record<string, string>> = {
+  hospitals: demoHref,
+  patients: patientAppHref,
+};
 export type Locale = 'bn' | 'en';
 
 interface TitledText {
@@ -26,12 +40,14 @@ const en = {
   close: 'Close menu',
   nav: [
     { id: 'vision', label: 'Vision' },
-    { id: 'hospitals', label: 'For hospitals' },
-    { id: 'patients', label: 'For patients' },
+    { id: 'hospitals', label: 'For Hospitals' },
+    { id: 'patients', label: 'For Patients' },
     { id: 'bangladesh', label: 'Bangladesh' },
     { id: 'founders', label: 'Founders' },
   ],
   otherLanguageLabel: 'বাংলায় পড়ুন',
+  navDemo: 'Demo',
+  newTab: '(opens in a new tab)',
   demo: 'Request a Demo',
   demoPrivate: 'Request a private demo',
   pause: 'Pause the illustration',
@@ -221,8 +237,8 @@ const en = {
   footerLanguage: 'Language',
   footerLinks: [
     { id: 'vision', label: 'Our vision' },
-    { id: 'hospitals', label: 'For hospitals' },
-    { id: 'patients', label: 'For patients' },
+    { id: 'hospitals', label: 'For Hospitals' },
+    { id: 'patients', label: 'For Patients' },
     { id: 'bangladesh', label: 'Connected Bangladesh' },
   ],
   footerFounders: 'Founders',
@@ -286,11 +302,13 @@ const bn: Copy = {
   nav: [
     { id: 'vision', label: 'লক্ষ্য' },
     { id: 'hospitals', label: 'হাসপাতালের জন্য' },
-    { id: 'patients', label: 'রোগীর জন্য' },
+    { id: 'patients', label: 'রোগীদের জন্য' },
     { id: 'bangladesh', label: 'বাংলাদেশ' },
     { id: 'founders', label: 'প্রতিষ্ঠাতা' },
   ],
   otherLanguageLabel: 'Read in English',
+  navDemo: 'ডেমো',
+  newTab: '(নতুন ট্যাবে খুলবে)',
   demo: 'ডেমো দেখুন',
   demoPrivate: 'ব্যক্তিগত ডেমোর অনুরোধ',
   pause: 'দৃষ্টান্ত থামান',
@@ -458,7 +476,7 @@ const bn: Copy = {
   footerLinks: [
     { id: 'vision', label: 'আমাদের লক্ষ্য' },
     { id: 'hospitals', label: 'হাসপাতালের জন্য' },
-    { id: 'patients', label: 'রোগীর জন্য' },
+    { id: 'patients', label: 'রোগীদের জন্য' },
     { id: 'bangladesh', label: 'সংযুক্ত বাংলাদেশ' },
   ],
   footerFounders: 'প্রতিষ্ঠাতা',

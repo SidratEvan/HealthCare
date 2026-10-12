@@ -3,7 +3,7 @@
 import { m, useScroll, useSpring } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 
-import { copy, demoHref } from '@/content/copy';
+import { audienceHref, copy, demoHref } from '@/content/copy';
 
 import { Icon } from './icons';
 import { EASE } from './motion';
@@ -63,8 +63,22 @@ export function LanguageSwitch({
   return <div className="lang-switch">{items}</div>;
 }
 
+const NEW_TAB = { target: '_blank', rel: 'noopener noreferrer' } as const;
+
+/** The patient app is a demonstration: every link to it says so (owner, 12 October 2026). */
+export function PatientAppTag({ locale }: { readonly locale: Locale }): ReactNode {
+  return (
+    <>
+      <span className="demo-tag nav-demo-tag">{copy[locale].navDemo}</span>
+      <span className="sr-only">{copy[locale].newTab}</span>
+    </>
+  );
+}
+
 /** Where a navigation item leads: a scene of the home page, or the founders page (S-C-01). */
 function navHref(locale: Locale, id: string, onHome: boolean): string {
+  const audience = audienceHref[id];
+  if (audience !== undefined) return audience;
   if (id === 'founders') return `/${locale}/founders`;
   return onHome ? `#${id}` : `/${locale}#${id}`;
 }
@@ -141,9 +155,11 @@ export function Header({
               <a
                 key={link.id}
                 href={navHref(locale, link.id, onHome)}
+                {...(link.id === 'patients' ? NEW_TAB : {})}
                 aria-current={link.id === page ? 'page' : undefined}
               >
                 {link.label}
+                {link.id === 'patients' ? <PatientAppTag locale={locale} /> : null}
               </a>
             ))}
           </nav>
@@ -182,6 +198,7 @@ export function Header({
               <m.a
                 key={link.id}
                 href={navHref(locale, link.id, onHome)}
+                {...(link.id === 'patients' ? NEW_TAB : {})}
                 variants={{
                   hidden: { opacity: 0, y: 16 },
                   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
@@ -191,6 +208,7 @@ export function Header({
                 }}
               >
                 {link.label}
+                {link.id === 'patients' ? <PatientAppTag locale={locale} /> : null}
                 <Icon name="arrow" className="arrow" />
               </m.a>
             ))}

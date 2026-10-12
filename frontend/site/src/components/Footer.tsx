@@ -1,8 +1,8 @@
 import { cinematic } from '@/content/cinematic';
-import { contactEmail, copy, demoHref } from '@/content/copy';
+import { audienceHref, contactEmail, copy, demoHref } from '@/content/copy';
 
 import { fmt } from './format';
-import { LanguageSwitch, Mark } from './Header';
+import { LanguageSwitch, Mark, PatientAppTag } from './Header';
 import { Icon } from './icons';
 
 import type { Locale } from '@/content/copy';
@@ -28,8 +28,13 @@ export function Footer({
         <nav aria-label={t.footerExplore}>
           <h2>{t.footerExplore}</h2>
           {t.footerLinks.map((link) => (
-            <a key={link.id} href={`${home}#${link.id}`}>
+            <a
+              key={link.id}
+              href={audienceHref[link.id] ?? `${home}#${link.id}`}
+              {...(link.id === 'patients' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            >
               {link.label}
+              {link.id === 'patients' ? <PatientAppTag locale={locale} /> : null}
             </a>
           ))}
         </nav>
