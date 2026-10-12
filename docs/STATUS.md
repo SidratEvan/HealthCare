@@ -7,7 +7,39 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Latest work — accelerated console and company-site completion (11 October 2026)
+## Latest work — independent release audit (11 October 2026, Claude)
+
+Branch `fix/release-audit-2026-10-11`, off `97f578c`. Local only: nothing pushed, merged into `mvp`/`main`/`demo`, or deployed.
+
+**What the handoff did not say.** A Codex session (VS Code extension) built worktree `D:\Projects\HealthCare-independent-audit-97f578c` and, from 18:28, ran the full development browser suite on `97f578c` — the post-fix run the readiness report says was never done. It holds ports 3000/3100/4000 while it runs; a browser test started from this checkout meanwhile hits *its* servers. Its log is UTF-16 (`audit-browser-full.log`). Its probes (`audit-probes/`) target the lab lost-upload case and national small-cohort privacy.
+
+**That run disproves "all 18 fixed, nothing else broken".** It finished **329 passed / 15 failed (1.2 h)**. The original 18 pass, except one standby case; new failures appeared, nearly all (13) from one regression in `1d2b7eb`: the rail's desktop `position: sticky; height: 100dvh` was never reset at ≤900 px, so on a tablet the rail is a full-screen band covering Reception, Doctor and Administration (pointer interception; Reception cases burn their 3-minute timeout). The one other failure was the demo picker choosing a test-created platform admin by name.
+
+**Fixed on this branch:**
+
+- `f2ce354` rail on tablets (CSS reset).
+- `e15143a` Lab: after a lost upload reply the console took *any* report on the order as proof of its own file. It now replays the same attempt and key; the server answers its own commit as duplicate, or refuses when a different report is there, which the console says while keeping the file. Two browser cases added.
+- `e3c905a` demo picker opens the seeded demo account first (role scope `{"demo": true}`), hospital and national.
+- `e1d4617` Doctor workspace on tablets: with the rail now a band, its one-screen shell pushed Save draft / Sign & Next below the clipped edge; the shell now takes the remaining height. The Lab refusal message no longer claims the file is kept (the dialog closes once another report is delivered).
+- `8e95d98` e2e fails closed (below).
+
+**Verification on this branch (focused, not the full suite):** the 15 cases that failed in the Codex run, plus the whole lab, ward, platform-health, standby, rail, doctor-workspace and reception/registration-workspace specs and the two-device canary: 68/71, then the three remaining (Doctor tablet ×2, my own Lab fixture) fixed and rerun green — doctor-workspace 15/15, lab-report 12/12, console-rail green; `demo.routes` API 24/24. Not run: the full 344-case suite after these fixes, and the built/production browser modes.
+
+**Company site (time-boxed improvement, owner's decision of 11 October):** brand palette (logo blue/ink/teal) replacing the off-brand green; real product screens in the hero and a six-workspace switcher, captured by `frontend/site/scripts/capture-screens.mjs` from seeded demo data in `healthcare_capture`; Bangla mobile page 7,406 → 5,358 px; reveal and live-dot motion off under reduced motion; full footer; factual privacy notice at `/{bn,en}/privacy` (no cookies, analytics, forms or trackers — adding any means changing the notice). Smoke 9/9 (axe WCAG 2.1 AA both languages, 320 px–desktop, reduced motion). Static export (`SITE_EXPORT=1`) builds to `frontend/site/out`, 2.5 MB. Publishing steps: `frontend/site/README.md`. **Not published; DNS untouched.**
+
+Minor, recorded: when a dialog unmounts with its owner (Lab upload once the order is delivered), Radix leaves the toast region `aria-hidden`.
+
+**Fail-closed database guards (owner's instruction, 11 October).** The root `.env`'s `DATABASE_URL` is the **public Supabase demo**, so nothing may rely on overriding it by hand:
+
+- `playwright.config.ts` now calls `assertLocalDatabase()` before any server starts, and no longer reuses a server it did not start unless `E2E_REUSE_SERVERS=true`. Before, a hand-started `pnpm dev:api` (which reads `.env`) on :4000 would have been reused and received every write the specs make.
+- `frontend/site/scripts/capture-screens.mjs` runs only against a local database literally named `healthcare_capture` (checked from the URL and again by asking the server), refuses if anything listens on 3000/3100/4000, and starts its own servers bound to that database.
+- `pnpm db:migrate/seed/reset` were already guarded (`database/scripts/lib/env.ts`: a non-local host needs `ALLOW_REMOTE_DB=1`, destruction also `ALLOW_DESTRUCTIVE_DB=1`).
+
+**Site hosting facts (public DNS, read-only):** `medlivebd.com` is on Cloudflare DNS; mail is Cloudflare Email Routing (MX `route1-3.mx.cloudflare.net`, SPF, Brevo code). No A record yet. Any site cutover must leave MX/TXT untouched.
+
+**Recorded, not fixed (not pilot blockers):** registration phone lookup caps at 20 people without saying more exist (`registration.repo.ts`); national benchmark minimum is 5 observations, not a minimum number of facilities (C10); hospital-wide Doctor scope (C9) unchanged.
+
+## Previous work — accelerated console and company-site completion (11 October 2026)
 
 The founder has approved all eleven standalone designs and explicitly authorized autonomous implementation, parallel worktrees and local checkpoint commits. This supersedes historical module-by-module stop instructions below. No pushes, protected-branch merges, deployments or real hospital data/infrastructure changes are authorized by this workstream. Focused verification runs per module; one consolidated full repository/build/browser gate follows integration.
 

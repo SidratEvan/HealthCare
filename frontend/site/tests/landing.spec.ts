@@ -10,6 +10,16 @@ import type { Page } from '@playwright/test';
 import type { AxeResults } from 'axe-core';
 
 async function expectAccessible(page: Page): Promise<void> {
+  // Sections rise into place as they are reached; check them as a reader sees them.
+  await page.evaluate(() => {
+    for (const element of document.querySelectorAll('.reveal')) element.scrollIntoView();
+  });
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.reveal')].every((element) =>
+      element.classList.contains('is-visible'),
+    ),
+  );
+  await page.waitForTimeout(900);
   await page.evaluate(axe.source);
   const results = await page.evaluate(async () => {
     const context = window as unknown as Window & {
@@ -73,10 +83,12 @@ for (const locale of ['bn', 'en'] as const) {
     await expect(page.locator('#about')).toContainText(t.aboutBody);
     await expect(page.locator('#contact')).toContainText(t.contactNote);
     await expect(page.getByText(t.illustrative, { exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: contactEmail })).toHaveAttribute(
-      'href',
-      `mailto:${contactEmail}`,
-    );
+    await expect(
+      page.locator('#contact').getByRole('link', { name: contactEmail }),
+    ).toHaveAttribute('href', `mailto:${contactEmail}`);
+    await expect(
+      page.locator('.site-footer').getByRole('link', { name: contactEmail }),
+    ).toHaveAttribute('href', `mailto:${contactEmail}`);
     for (const link of await page.getByRole('link', { name: t.demo, exact: true }).all()) {
       await expect(link).toHaveAttribute('href', demoHref);
     }
@@ -143,7 +155,7 @@ test('reduced motion and readable Bangla display (GR-06)', async ({ page }) => {
     const style = getComputedStyle(heading);
     return {
       scroll: getComputedStyle(document.documentElement).scrollBehavior,
-      animation: getComputedStyle(document.querySelector('.signal-trace') ?? heading).animationName,
+      animation: getComputedStyle(document.querySelector('.live-badge') ?? heading).animationName,
       leading: Number.parseFloat(style.lineHeight) / Number.parseFloat(style.fontSize),
       spacing: style.letterSpacing,
     };
@@ -154,4 +166,45 @@ test('reduced motion and readable Bangla display (GR-06)', async ({ page }) => {
   expect(styles.spacing).toBe('normal');
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoOverflow(page);
+});
+
+for (const locale of ['bn', 'en'] as const) {
+  const t = copy[locale];
+  test(`${locale}: privacy notice is reachable from the footer and names the real contact`, async ({
+    page,
+  }) => {
+    await page.goto(`/${locale}`);
+    await page.locator('.site-footer').getByRole('link', { name: t.privacy }).click();
+    await expect(page).toHaveURL(new RegExp(`/${locale}/privacy$`));
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(t.privacyTitle);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    for (const section of t.privacySections) {
+      await expect(page.getByRole('heading', { level: 2, name: section.heading })).toBeVisible();
+    }
+    await expect(page.locator('main')).toContainText(contactEmail);
+    await expectAccessible(page);
+    await expectNoOverflow(page);
+  });
+}
+
+test('product screens load in both languages and say they are demonstration data', async ({
+  page,
+}) => {
+  for (const locale of ['bn', 'en'] as const) {
+    await page.goto(`/${locale}`);
+    for (const image of await page.locator('.stage img').all()) {
+      expect(
+        await image.evaluate((element: HTMLImageElement) => element.naturalWidth),
+      ).toBeGreaterThan(0);
+      expect(await image.getAttribute('alt')).toMatch(/demonstration data|ডেমো তথ্য/);
+    }
+    for (const feature of copy[locale].features) {
+      await page.getByRole('button', { name: feature.label, exact: true }).click();
+      const image = page.locator('#workflow-view img');
+      await expect(image).toHaveAttribute('alt', feature.alt);
+      await expect
+        .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+        .toBeGreaterThan(0);
+    }
+  }
 });

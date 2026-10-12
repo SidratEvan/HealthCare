@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { contactEmail, copy, demoHref } from '@/content/copy';
 
-import type { Locale } from '@/content/copy';
-import type { ReactNode } from 'react';
+import type { Feature, Locale } from '@/content/copy';
+import type { ReactNode, RefObject } from 'react';
 
 function Arrow({ diagonal = false }: { readonly diagonal?: boolean }): ReactNode {
   return (
@@ -15,7 +15,7 @@ function Arrow({ diagonal = false }: { readonly diagonal?: boolean }): ReactNode
   );
 }
 
-function Mark(): ReactNode {
+export function Mark(): ReactNode {
   return (
     <img
       className="brand-logo"
@@ -28,54 +28,79 @@ function Mark(): ReactNode {
   );
 }
 
-/** Presentation diagram, not a client for real hospital data (FR-SEC-08). */
-function Signal({ locale }: { readonly locale: Locale }): ReactNode {
+/** A captured screen of the real product on seeded demonstration data (FR-SEC-08, FR-DEM-07). */
+function screen(key: Feature['key'], locale: Locale): string {
+  return `/screens/${key}-${locale}.webp`;
+}
+
+/** A console screen in a plain browser frame. */
+function Browser({
+  src,
+  alt,
+  eager = false,
+}: {
+  readonly src: string;
+  readonly alt: string;
+  readonly eager?: boolean;
+}): ReactNode {
+  return (
+    <div className="browser">
+      <div className="browser-bar" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </div>
+      <img
+        src={src}
+        alt={alt}
+        width="1440"
+        height="900"
+        loading={eager ? 'eager' : 'lazy'}
+        decoding="async"
+      />
+    </div>
+  );
+}
+
+/** The patient app in a phone frame. */
+function Phone({
+  src,
+  alt,
+  eager = false,
+}: {
+  readonly src: string;
+  readonly alt: string;
+  readonly eager?: boolean;
+}): ReactNode {
+  return (
+    <div className="phone">
+      <img
+        src={src}
+        alt={alt}
+        width="390"
+        height="844"
+        loading={eager ? 'eager' : 'lazy'}
+        decoding="async"
+      />
+    </div>
+  );
+}
+
+function Stage({ locale }: { readonly locale: Locale }): ReactNode {
   const t = copy[locale];
   return (
-    <figure className="signal">
-      <div className="signal-head">
-        <span className="eyebrow">{t.signal}</span>
-        <span className="signal-dots" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-      </div>
-      <div className="signal-map">
-        <svg className="signal-lines" viewBox="0 0 500 480" aria-hidden="true">
-          <defs>
-            <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
-              <circle cx="1" cy="1" r="1" />
-            </pattern>
-          </defs>
-          <rect width="500" height="480" fill="url(#dots)" className="dot-field" />
-          <circle cx="250" cy="228" r="155" className="orbit" />
-          <circle cx="250" cy="228" r="105" className="orbit" />
-          <path
-            className="connection"
-            d="M250 226V78M250 226l-155-70M250 226l155-70M250 226l-115 122M250 226l115 122"
-          />
-          <path className="signal-trace" d="M95 156 250 226 250 78M250 226 365 348" />
-          <g className="map-ring">
-            <circle cx="250" cy="226" r="43" />
-            <circle cx="250" cy="226" r="49" />
-          </g>
-          <g className="hospital-glyph">
-            <path d="M228 247v-37h44v37m-30 0v-13h16v13m-26-26h7m22 0h7m-36 8h7m22 0h7m-22-24v-16m-8 8h16" />
-          </g>
-        </svg>
-        <span className="map-label hub">{t.signalLabels[0]}</span>
-        {t.signalLabels.slice(1).map((label, index) => (
-          <span key={label} className={`map-label point point-${String(index)}`}>
-            <span className="point-mark" aria-hidden="true" />
-            {label}
+    <figure className="stage">
+      <div className="stage-frames">
+        <Browser src={screen('reception', locale)} alt={t.heroAltConsole} eager />
+        <div className="stage-phone">
+          <Phone src={screen('patient', locale)} alt={t.heroAltPhone} eager />
+          <span className="live-badge" aria-hidden="true">
+            <span className="live-dot" />
+            {t.liveBadge}
           </span>
-        ))}
+        </div>
       </div>
-      <figcaption>
-        <span className="signal-caption-title">{t.signalTitle}</span>
-        <span>{t.illustrative}</span>
-      </figcaption>
+      <figcaption>{t.illustrative}</figcaption>
     </figure>
   );
 }
@@ -86,56 +111,115 @@ function Workflow({ locale }: { readonly locale: Locale }): ReactNode {
   const feature = t.features[selected] ?? t.features[0];
   if (!feature) return null;
   return (
-    <div className="workflow-explorer">
+    <div className="workflow">
       <div className="workflow-select" role="group" aria-label={t.featureLabel}>
         {t.features.map((item, index) => (
           <button
             type="button"
-            key={item.label}
+            key={item.key}
             aria-pressed={index === selected}
             aria-controls="workflow-view"
             onClick={() => {
               setSelected(index);
             }}
           >
-            <span>{item.label}</span>
-            <Arrow />
+            {item.label}
           </button>
         ))}
       </div>
-      <div id="workflow-view" className="workflow-view" aria-live="polite" aria-atomic="true">
-        <div className="workflow-description">
-          <span className="eyebrow">{t.example}</span>
+      <div id="workflow-view" className="workflow-view">
+        <div className="workflow-text" aria-live="polite" aria-atomic="true">
           <h3>{feature.title}</h3>
           <p>{feature.body}</p>
+          <p className="workflow-detail">
+            <span className="live-dot" aria-hidden="true" />
+            {feature.detail}
+          </p>
         </div>
-        <div className={`journey journey-${String(selected)}`} aria-hidden="true">
-          <span className="journey-line" />
-          {feature.stages.map((stage, index) => (
-            <div className="journey-stage" key={stage}>
-              <span className="stage-node">
-                {index === 2 ? (
-                  <svg viewBox="0 0 24 24">
-                    <path d="m6 12 4 4 8-8" />
-                  </svg>
-                ) : (
-                  <span />
-                )}
-              </span>
-              <span>{stage}</span>
-            </div>
-          ))}
-        </div>
-        <p className="sr-only">{feature.stages.join(' → ')}</p>
-        <div className="workflow-foot">
-          <span className="small-glyph" aria-hidden="true">
-            ↳
-          </span>
-          <p>{feature.detail}</p>
+        <div className={`workflow-screen screen-${feature.key}`} key={feature.key}>
+          {feature.key === 'patient' ? (
+            <Phone src={screen(feature.key, locale)} alt={feature.alt} />
+          ) : (
+            <Browser src={screen(feature.key, locale)} alt={feature.alt} />
+          )}
         </div>
       </div>
-      <p className="workflow-caption">{t.exampleCaption}</p>
     </div>
+  );
+}
+
+/** Sections rise into place once, as they are reached; nothing hides without script. */
+function useReveal(root: RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    const page = root.current;
+    if (page === null) return;
+    page.classList.add('reveal-ready');
+    const targets = page.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) {
+      targets.forEach((target) => target.classList.add('is-visible'));
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.08 },
+    );
+    targets.forEach((target) => observer.observe(target));
+    return () => {
+      observer.disconnect();
+    };
+  }, [root]);
+}
+
+export function Footer({ locale }: { readonly locale: Locale }): ReactNode {
+  const t = copy[locale];
+  const other = locale === 'bn' ? 'en' : 'bn';
+  return (
+    <footer className="site-footer">
+      <div className="shell footer-grid">
+        <div className="footer-brand">
+          <Mark />
+          <p>{t.footer}</p>
+          <p className="footer-tagline">{t.aboutFoot}</p>
+        </div>
+        <nav aria-label={t.footerCompany}>
+          <h2>{t.footerCompany}</h2>
+          <a href={`/${locale}#platform`}>{t.nav[0]}</a>
+          <a href={`/${locale}#hospitals`}>{t.nav[1]}</a>
+          <a href={`/${locale}#about`}>{t.nav[2]}</a>
+          <a href={`/${locale}/privacy`}>{t.privacy}</a>
+        </nav>
+        <div>
+          <h2>{t.footerContact}</h2>
+          <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
+          <a href={demoHref}>{t.demo}</a>
+        </div>
+        <div>
+          <h2>{t.footerLanguage}</h2>
+          <a href={`/${other}`} lang={other} hrefLang={other}>
+            {other === 'en' ? 'English' : 'বাংলা'}
+          </a>
+        </div>
+      </div>
+      <div className="shell footer-bottom">
+        <span>
+          ©{' '}
+          {new Date()
+            .getFullYear()
+            .toLocaleString(locale === 'bn' ? 'bn-BD' : 'en-US', { useGrouping: false })}{' '}
+          {t.copyright}
+        </span>
+        <a href="#top">
+          {t.backTop}
+          <Arrow diagonal />
+        </a>
+      </div>
+    </footer>
   );
 }
 
@@ -143,7 +227,9 @@ export function Landing({ locale }: { readonly locale: Locale }): ReactNode {
   const t = copy[locale];
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
+  const page = useRef<HTMLDivElement>(null);
   const navItems = ['platform', 'hospitals', 'about', 'contact'];
+  useReveal(page);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -170,7 +256,7 @@ export function Landing({ locale }: { readonly locale: Locale }): ReactNode {
   }, []);
 
   return (
-    <div className="company-page" lang={locale} id="top">
+    <div className="company-page" lang={locale} id="top" ref={page}>
       <a className="skip-link" href="#main">
         {t.skip}
       </a>
@@ -197,7 +283,6 @@ export function Landing({ locale }: { readonly locale: Locale }): ReactNode {
           </a>
           <a className="header-contact" href={demoHref}>
             {t.demo}
-            <Arrow diagonal />
           </a>
           <button
             className="menu-toggle"
@@ -237,7 +322,7 @@ export function Landing({ locale }: { readonly locale: Locale }): ReactNode {
         <section className="hero shell" aria-labelledby="hero-heading">
           <div className="hero-copy">
             <p className="eyebrow">
-              <span className="status-dot" aria-hidden="true" />
+              <span className="live-dot" aria-hidden="true" />
               {t.eyebrow}
             </p>
             <h1 id="hero-heading">
@@ -249,7 +334,7 @@ export function Landing({ locale }: { readonly locale: Locale }): ReactNode {
             </h1>
             <p className="hero-lead">{t.lead}</p>
             <div className="hero-links">
-              <a className="button button-dark" href={demoHref}>
+              <a className="button button-primary" href={demoHref}>
                 {t.demo}
                 <Arrow diagonal />
               </a>
@@ -258,169 +343,83 @@ export function Landing({ locale }: { readonly locale: Locale }): ReactNode {
                 <Arrow />
               </a>
             </div>
-            <p className="hero-foot">
-              <span className="fine-line" aria-hidden="true" />
-              {t.heroFoot}
-            </p>
           </div>
-          <Signal locale={locale} />
+          <Stage locale={locale} />
         </section>
-        <div className="principle-strip shell">
-          {t.strip.map((line, index) => (
-            <div key={line}>
-              <span className="strip-symbol" aria-hidden="true">
-                {['↗', '⊞', '↔'][index]}
-              </span>
-              {line}
+        <section className="platform section-space" id="platform" aria-labelledby="intro-heading">
+          <div className="shell">
+            <div className="section-head reveal">
+              <p className="eyebrow">{t.introLabel}</p>
+              <h2 id="intro-heading">{t.introTitle}</h2>
+              <p className="body-large">{t.intro}</p>
             </div>
-          ))}
-        </div>
-        <section
-          className="intro shell section-space"
-          id="platform"
-          aria-labelledby="intro-heading"
-        >
-          <p className="eyebrow section-label">{t.introLabel}</p>
-          <div>
-            <h2 id="intro-heading">{t.introTitle}</h2>
-            <p className="body-large">{t.intro}</p>
-            <p className="intro-note">{t.introSmall}</p>
-          </div>
-        </section>
-        <section className="operations" aria-labelledby="flow-heading">
-          <div className="shell section-space">
-            <div className="operations-heading">
-              <div>
-                <p className="eyebrow">{t.flowLabel}</p>
-                <h2 id="flow-heading">{t.flowTitle}</h2>
-              </div>
-              <p>{t.flowBody}</p>
+            <div className="reveal">
+              <Workflow locale={locale} />
             </div>
-            <Workflow locale={locale} />
           </div>
         </section>
         <section
-          className="hospital-section shell section-space"
+          className="hospitals shell section-space"
           id="hospitals"
           aria-labelledby="hospital-heading"
         >
-          <div className="hospital-heading">
+          <div className="section-head reveal">
             <p className="eyebrow">{t.hospitalLabel}</p>
             <h2 id="hospital-heading">{t.hospitalTitle}</h2>
-            <p>{t.hospitalBody}</p>
-            <a className="text-link" href={demoHref}>
-              {t.demo}
-              <Arrow diagonal />
-            </a>
+            <p className="body-large">{t.hospitalBody}</p>
           </div>
-          <ol className="onboarding">
+          <ol className="steps reveal">
             {t.steps.map((step, index) => (
               <li key={step.title}>
                 <span className="step-number" aria-hidden="true">
                   {locale === 'bn' ? ['০১', '০২', '০৩'][index] : ['01', '02', '03'][index]}
                 </span>
-                <div>
-                  <h3>{step.title}</h3>
-                  <p>{step.body}</p>
-                </div>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
               </li>
             ))}
           </ol>
         </section>
-        <section className="advantages" aria-labelledby="advantages-heading">
-          <div className="shell section-space">
-            <div className="advantages-heading">
-              <p className="eyebrow">{t.advantagesLabel}</p>
-              <h2 id="advantages-heading">{t.advantagesTitle}</h2>
+        <section className="about section-space" id="about" aria-labelledby="about-heading">
+          <div className="shell about-grid">
+            <div className="reveal">
+              <p className="eyebrow">{t.aboutLabel}</p>
+              <h2 id="about-heading">{t.aboutTitle}</h2>
+              <p className="body-large">{t.aboutBody}</p>
             </div>
-            <div className="advantage-list">
-              {t.advantages.map((item, index) => (
-                <article key={item.title}>
-                  <span className="advantage-icon" aria-hidden="true">
-                    <svg viewBox="0 0 48 48">
-                      {index === 0 ? (
-                        <>
-                          <path d="M10 14h28v22H10zM17 8v12m14-12v12M17 28h14" />
-                          <circle cx="33" cy="34" r="8" />
-                          <path d="m30 34 2 2 4-5" />
-                        </>
-                      ) : index === 1 ? (
-                        <>
-                          <circle cx="24" cy="24" r="6" />
-                          <circle cx="24" cy="7" r="3" />
-                          <circle cx="8" cy="35" r="3" />
-                          <circle cx="40" cy="35" r="3" />
-                          <path d="M24 10v8M11 33l8-6m10 0 8 6" />
-                        </>
-                      ) : (
-                        <>
-                          <path d="M10 9h28v30H10zM17 17h14m-14 7h14m-14 7h7" />
-                          <path d="m29 34 4 4 8-10" />
-                        </>
-                      )}
-                    </svg>
-                  </span>
+            <ul className="principles reveal">
+              {t.principles.map((item) => (
+                <li key={item.title}>
                   <h3>{item.title}</h3>
                   <p>{item.body}</p>
-                </article>
+                </li>
               ))}
-            </div>
-          </div>
-        </section>
-        <section className="about shell section-space" id="about" aria-labelledby="about-heading">
-          <p className="eyebrow section-label">{t.aboutLabel}</p>
-          <div>
-            <h2 id="about-heading">{t.aboutTitle}</h2>
-            <p className="body-large">{t.aboutBody}</p>
-            <p className="about-signature">{t.aboutFoot}</p>
+            </ul>
           </div>
         </section>
         <section className="contact-section" id="contact" aria-labelledby="contact-heading">
-          <div className="shell section-space">
-            <div className="contact-top">
+          <div className="shell section-space contact-grid reveal">
+            <div>
               <p className="eyebrow">{t.contactLabel}</p>
-              <span className="contact-orbit" aria-hidden="true">
+              <h2 id="contact-heading">{t.contactTitle}</h2>
+              <p>{t.contactBody}</p>
+              <a className="button button-light" href={demoHref}>
+                {t.demo}
                 <Arrow diagonal />
-              </span>
+              </a>
             </div>
-            <div className="contact-grid">
-              <div>
-                <h2 id="contact-heading">{t.contactTitle}</h2>
-                <p>{t.contactBody}</p>
-                <a className="button button-mint" href={demoHref}>
-                  {t.demo}
-                  <Arrow diagonal />
-                </a>
-              </div>
-              <div className="contact-email">
-                <span>{t.emailLabel}</span>
-                <a href={`mailto:${contactEmail}`}>
-                  {contactEmail}
-                  <Arrow diagonal />
-                </a>
-                <p>{t.contactNote}</p>
-              </div>
+            <div className="contact-email">
+              <span>{t.emailLabel}</span>
+              <a href={`mailto:${contactEmail}`}>
+                {contactEmail}
+                <Arrow diagonal />
+              </a>
+              <p>{t.contactNote}</p>
             </div>
           </div>
         </section>
       </main>
-      <footer className="site-footer shell">
-        <div>
-          <Mark />
-          <p>{t.footer}</p>
-        </div>
-        <span>
-          ©{' '}
-          {new Date()
-            .getFullYear()
-            .toLocaleString(locale === 'bn' ? 'bn-BD' : 'en-US', { useGrouping: false })}{' '}
-          {t.copyright}
-        </span>
-        <a href="#top">
-          {t.backTop}
-          <Arrow diagonal />
-        </a>
-      </footer>
+      <Footer locale={locale} />
     </div>
   );
 }
