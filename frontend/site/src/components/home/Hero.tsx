@@ -26,7 +26,12 @@ export function Hero({ locale }: { readonly locale: Locale }): ReactNode {
   return (
     <section className="hero" aria-labelledby="hero-title">
       <m.div className="hero-media" style={cinema ? { y, scale } : {}}>
-        <CampaignImage name="hero" alt={t.hero.alt} priority sizes="100vw" />
+        <CampaignImage
+          name="hero-collaboration"
+          alt={t.hero.alt}
+          priority
+          sizes="(max-width: 719px) 140svh, (max-width: 1023px) and (orientation: portrait) 135svh, 100vw"
+        />
       </m.div>
       <div className="hero-shade" aria-hidden="true" />
       <div className="shell hero-inner">

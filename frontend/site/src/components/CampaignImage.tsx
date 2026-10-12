@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
-export type CampaignAsset = 'hero' | 'team' | 'patient' | 'atmosphere';
+export type CampaignAsset =
+  'hero' | 'hero-collaboration' | 'hospital-operations' | 'team' | 'patient' | 'atmosphere';
 export function CampaignImage({
   name,
   alt,
@@ -25,7 +26,9 @@ export function CampaignImage({
         srcSet={set('webp')}
         sizes={sizes}
         width={1920}
-        height={name === 'hero' || name === 'atmosphere' ? 828 : 1280}
+        height={
+          name === 'hero' || name === 'hero-collaboration' || name === 'atmosphere' ? 828 : 1280
+        }
         alt={alt}
         loading={priority ? 'eager' : 'lazy'}
         fetchPriority={priority ? 'high' : 'auto'}

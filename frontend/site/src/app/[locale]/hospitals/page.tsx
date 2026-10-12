@@ -56,7 +56,13 @@ export default async function HospitalsPage({
             </div>
           </div>
         </div>
-        <DriftImage name="team" alt={t.alt} priority sizes="100vw" className="page-band" />
+        <DriftImage
+          name="hospital-operations"
+          alt={t.alt}
+          priority
+          sizes="100vw"
+          className="page-band"
+        />
       </section>
 
       <section className="hp-section" aria-labelledby="capabilities-title">

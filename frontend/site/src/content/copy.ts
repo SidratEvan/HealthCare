@@ -134,7 +134,7 @@ const en = {
     label: 'For Hospitals',
     heading: 'Help your hospital work as one connected team.',
     lead: 'MedLiveBD brings reception, doctors, wards, emergency and the laboratory onto one shared, live picture of the day — and keeps the patients who are waiting informed.',
-    alt: 'Illustrative scene: three Bangladeshi doctors reviewing notes together at a hospital ward desk.',
+    alt: 'Illustrative scene: Bangladeshi nursing, medical and administrative staff coordinating at a hospital workstation, with wards beyond.',
     capabilitiesTitle: 'What changes for your hospital',
     capabilities: [
       [
@@ -349,7 +349,7 @@ const bn: Copy = {
     label: 'হাসপাতালের জন্য',
     heading: 'আপনার হাসপাতাল চলুক একটি সংযুক্ত দল হিসেবে।',
     lead: 'MedLiveBD রিসেপশন, চিকিৎসক, ওয়ার্ড, জরুরি বিভাগ ও ল্যাবকে দিনের একই লাইভ চিত্রে আনে — আর অপেক্ষায় থাকা রোগীদের রাখে অবগত।',
-    alt: 'দৃষ্টান্তমূলক দৃশ্য: হাসপাতালের ওয়ার্ড ডেস্কে তিনজন বাংলাদেশি চিকিৎসক একসঙ্গে নোট দেখছেন।',
+    alt: 'দৃষ্টান্তমূলক দৃশ্য: বাংলাদেশের একটি হাসপাতালের ওয়ার্কস্টেশনে নার্স, চিকিৎসক ও প্রশাসনিক কর্মী একসঙ্গে কাজ করছেন, পেছনে ওয়ার্ড দেখা যাচ্ছে।',
     capabilitiesTitle: 'আপনার হাসপাতালে যা বদলাবে',
     capabilities: [
       [
