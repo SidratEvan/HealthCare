@@ -1,18 +1,16 @@
 import { notFound } from 'next/navigation';
 
 import { CampaignImage } from '@/components/CampaignImage';
-import { Footer } from '@/components/Footer';
-import { LanguageSwitch, Mark } from '@/components/Header';
-import { cinematic } from '@/content/cinematic';
+import { Page } from '@/components/Page';
 import { copy } from '@/content/copy';
-import { SITE_ORIGIN } from '@/content/site';
+import { LOCALES, pageMetadata } from '@/content/site';
 
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
-/** Who made each photograph and map layer, and the licence it is used under. */
+/** Where each image and map layer came from, and the licence it is used under. */
 export function generateStaticParams(): { locale: string }[] {
-  return [{ locale: 'bn' }, { locale: 'en' }];
+  return LOCALES;
 }
 
 export async function generateMetadata({
@@ -23,15 +21,7 @@ export async function generateMetadata({
   const { locale } = await params;
   if (locale !== 'bn' && locale !== 'en') return {};
   const t = copy[locale];
-  return {
-    metadataBase: new URL(SITE_ORIGIN),
-    title: `${t.creditsTitle} — MedLiveBD`,
-    description: t.creditsIntro,
-    alternates: {
-      canonical: `/${locale}/credits`,
-      languages: { bn: '/bn/credits', en: '/en/credits' },
-    },
-  };
+  return pageMetadata(locale, '/credits', `${t.creditsTitle} — MedLiveBD`, t.creditsIntro);
 }
 
 const MAP_SOURCES = [
@@ -53,40 +43,26 @@ export default async function CreditsPage({
   if (locale !== 'bn' && locale !== 'en') notFound();
   const t = copy[locale];
   return (
-    <div className="company-page" lang={locale} id="top">
-      <header className="site-header" data-scrolled="true">
-        <div className="shell header-inner">
-          <a className="brand-link" href={`/${locale}`} aria-label="MedLiveBD">
-            <Mark priority />
-          </a>
-          <div className="header-actions">
-            <LanguageSwitch locale={locale} path="/credits" />
-          </div>
-        </div>
-      </header>
-      <main id="main" className="shell legal credits">
+    <Page locale={locale} page="credits">
+      <article className="shell legal">
         <a className="text-link" href={`/${locale}`}>
-          <span aria-hidden="true">←</span> {t.creditsBack}
+          <span aria-hidden="true">←</span> {t.back}
         </a>
-        <h1>{t.creditsTitle}</h1>
+        <h1 className="display-m">{t.creditsTitle}</h1>
         <p className="legal-updated">{t.creditsIntro}</p>
         <section>
-          <h2>{cinematic[locale].assetsTitle}</h2>
-          <p>{cinematic[locale].assetsIntro}</p>
+          <h2>{t.assetsTitle}</h2>
+          <p>{t.assetsIntro}</p>
           <ul className="credit-list">
-            {(['hero', 'team', 'patient', 'atmosphere'] as const).map((key, index) => {
-              return (
-                <li key={key}>
-                  <CampaignImage name={key} alt="" sizes="96px" className="credit-thumb" />
-                  <span>
-                    <strong>{cinematic[locale].assetNames[index]}</strong>
-                    <span>
-                      <a href={`/campaign/${key}-1920.webp`}>{t.creditsSource}</a>{' '}
-                    </span>
-                  </span>
-                </li>
-              );
-            })}
+            {(['hero', 'team', 'patient', 'atmosphere'] as const).map((key, index) => (
+              <li key={key}>
+                <CampaignImage name={key} alt="" sizes="120px" className="credit-thumb" />
+                <span>
+                  <strong>{t.assetNames[index]}</strong>
+                  <a href={`/campaign/${key}-1920.webp`}>{t.creditsSource}</a>
+                </span>
+              </li>
+            ))}
           </ul>
         </section>
         <section>
@@ -111,8 +87,7 @@ export default async function CreditsPage({
             ))}
           </ul>
         </section>
-      </main>
-      <Footer locale={locale} path="/credits" />
-    </div>
+      </article>
+    </Page>
   );
 }

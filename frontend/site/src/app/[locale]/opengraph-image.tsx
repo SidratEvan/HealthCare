@@ -6,10 +6,10 @@ export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
 // The image renderer cannot read CSS custom properties, so the card carries
-// site.css's --ink, --paper and --teal by value.
-const INK = '#0b1a33';
+// medlive.css's --midnight, --text and --teal by value.
+const INK = '#040b16';
 const PAPER = '#ffffff';
-const TEAL = '#01ceb8';
+const TEAL = '#2fe0bd';
 
 export function generateStaticParams(): { locale: string }[] {
   return [{ locale: 'bn' }, { locale: 'en' }];
@@ -40,7 +40,7 @@ export default function OpengraphImage(): ImageResponse {
           A Connected Healthcare Ecosystem for a Healthier Bangladesh
         </div>
         <div style={{ display: 'flex', marginTop: 28, fontSize: 32, color: TEAL }}>
-          Live hospital operations for Bangladesh
+          Connecting hospitals, healthcare professionals and patients
         </div>
       </div>
     </div>,

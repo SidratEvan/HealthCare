@@ -1,267 +1,228 @@
 /**
  * Company-site copy: GR-06; truthful S-C-01/02/04/05, FR-SEC-08.
  *
- * The public site sells the experience, not the implementation (owner,
- * 12 October 2026): who MedLiveBD is, why connected care matters, what
- * hospitals and patients gain. Detailed workflows belong in a private
- * demonstration. No customers, partners, figures, testimonials or
- * certifications; product glimpses and the map are labelled as illustrations;
- * the patient app is described as not yet open to the public.
+ * The site sells the idea, not the implementation (owner, 12 October 2026):
+ * what MedLiveBD is, who it serves, where each audience goes next. Detailed
+ * workflows belong in a private demonstration. No customers, partners,
+ * figures, testimonials or certifications; the map is a vision, never
+ * coverage; the patient app is always named as a demonstration.
  */
 export const contactEmail = 'support@medlivebd.com';
-export const demoHref = `mailto:${contactEmail}?subject=${encodeURIComponent('MedLiveBD — Hospital demonstration request')}`;
+export const demoHref = `mailto:${contactEmail}?subject=${encodeURIComponent(
+  'MedLiveBD — Hospital demonstration request',
+)}&body=${encodeURIComponent('Hospital or clinic:\nCity:\nYour name and role:\nPhone:\n\n')}`;
 /**
  * The patient web app (demo, `DEMO_MODE=true`, docs/STATUS.md). Owner, 12 October
- * 2026: "For Patients" opens it directly, always marked as a demo.
+ * 2026: "For Patients" opens it directly, always marked as a demo. The same
+ * address in both languages; the app chooses its own language.
  */
 export const patientAppHref = 'https://healthcare-patient-zeta.vercel.app';
 /**
- * The two audience destinations — real links, never homepage anchors. Hospitals
- * get the demonstration request until a secure hospital entrance exists (the
- * staff console is password-less in its demo and is never linked publicly).
+ * "For Hospitals" is a page of this site. The staff console's demo is
+ * password-less, so it is never linked publicly (FR-SEC-08).
  */
-export const audienceHref: Readonly<Record<string, string>> = {
-  hospitals: demoHref,
-  patients: patientAppHref,
-};
+export const hospitalsHref = (locale: Locale): string => `/${locale}/hospitals`;
+export const aboutHref = (locale: Locale): string => `/${locale}/about`;
 export type Locale = 'bn' | 'en';
 
-interface TitledText {
-  readonly title: string;
-  readonly body: string;
-}
+/** A title and its one-line explanation. */
+type Point = readonly [title: string, body: string];
 
 const en = {
   title: 'MedLiveBD — A Connected Healthcare Ecosystem for a Healthier Bangladesh',
   description:
-    'MedLiveBD brings hospitals and the people they care for onto one connected platform, so hospital teams work in step and patients always know where they stand. Designed in Bangladesh, in Bangla and English.',
+    'MedLiveBD connects hospitals, healthcare professionals and patients through technology designed for Bangladesh.',
   skip: 'Skip to content',
   menu: 'Menu',
   close: 'Close menu',
-  nav: [
-    { id: 'vision', label: 'Vision' },
-    { id: 'hospitals', label: 'For Hospitals' },
-    { id: 'patients', label: 'For Patients' },
-    { id: 'bangladesh', label: 'Bangladesh' },
-    { id: 'founders', label: 'Founders' },
-  ],
+  mainNav: 'Main',
+  nav: { hospitals: 'For Hospitals', patients: 'For Patients', about: 'About Us' },
   otherLanguageLabel: 'বাংলায় পড়ুন',
-  navDemo: 'Demo',
-  newTab: '(opens in a new tab)',
+  language: 'Language',
   demo: 'Request a Demo',
-  demoPrivate: 'Request a private demo',
-  pause: 'Pause the illustration',
-  play: 'Play the illustration',
+  demoTag: 'Demo',
+  newTab: '(opens in a new tab)',
+  emailHint: 'Opens your email app',
+  demoNotice:
+    'The patient app is a demonstration with sample data. Please do not enter real personal information.',
 
-  eyebrow: 'Healthcare technology · Made for Bangladesh',
-  /** The main line (owner, 12 October 2026); the accented part carries the brand gradient. */
-  hero: [
-    { text: 'A Connected Healthcare Ecosystem for a ', accent: false },
-    { text: 'Healthier Bangladesh', accent: true },
-  ],
-  lead: 'MedLiveBD brings hospitals and the people they care for onto one connected platform — so hospital teams work in step, and patients always know where they stand.',
-  discover: 'Discover MedLiveBD',
-  heroPoints: ['Designed in Bangladesh', 'Bangla and English', 'Private by design'],
-  heroVisual: {
-    alt: 'The Padma Bridge stretching across the Padma River in the morning light',
-    hospital: 'Hospital',
-    hospitalState: 'Today, in step',
-    inSession: 'In session',
-    patient: 'Patient',
-    yourSerial: 'Your serial',
-    ahead: 'ahead of you',
-    updated: 'Updated just now',
-    caption: 'Padma Bridge · product glimpses are illustrations on demonstration data',
+  hero: {
+    /** The main line (owner, 12 October 2026); the accented part carries the brand gradient. */
+    title: [
+      { text: 'A Connected Healthcare Ecosystem for a ', accent: false },
+      { text: 'Healthier Bangladesh', accent: true },
+    ],
+    lead: 'Connecting hospitals, healthcare professionals and patients through technology designed for Bangladesh.',
+    choose: 'Choose where to go',
+    hospitals: 'For Hospitals',
+    hospitalsSub: 'Explore Hospital Solutions',
+    patients: 'For Patients',
+    patientsSub: 'Open Patient App',
+    alt: 'Illustrative scene: a Bangladeshi doctor and a colleague in hijab reviewing a tablet together in a hospital.',
   },
 
-  visionLabel: 'Our vision',
-  vision:
-    'Bangladesh has skilled doctors, dedicated hospitals and patients who reach for their phones first. What has been missing is the connection between them. MedLiveBD exists to build it.',
-  visionAlt: 'Dhaka seen from above at sunset, rooftops stretching towards the horizon',
-  visionPlace: 'Dhaka',
-  pillars: [
-    {
-      title: 'Connected teams',
-      body: 'Every desk in a hospital working from the same picture of the day.',
-    },
-    {
-      title: 'Visible care',
-      body: 'Waiting, beds and progress shown as they are — with how current they are.',
-    },
-    {
-      title: 'Care within reach',
-      body: 'Clear information for patients, in Bangla and English, on the phone they already carry.',
-    },
-  ] satisfies readonly TitledText[],
-
-  experiencesLabel: 'One ecosystem',
-  experiencesTitle:
-    'One connected healthcare ecosystem.\nTwo experiences designed for different needs.',
-  experiences: {
-    hospitals: {
-      chip: 'For hospitals',
-      title: 'A hospital that works in step.',
-      points: ['Coordinated teams', 'Live operational visibility', 'A modern patient experience'],
-      cta: 'Explore for hospitals',
-      alt: 'A gloved hand holding a pipette over sample tubes on a laboratory bench in Bangladesh',
-    },
-    patients: {
-      chip: 'For patients',
-      title: 'Care that is easier to find and follow.',
-      points: ['Find the right care', 'Simpler serials', 'Know your place in the queue'],
-      cta: 'Explore for patients',
-      alt: 'A farmer planting rice seedlings in a green paddy field in Chattogram',
-    },
-    connector: 'One platform',
+  idea: {
+    label: 'One connected ecosystem',
+    statement: 'Better connected hospitals. A clearer journey for patients.',
+    body: 'When everyone inside a hospital works from the same live picture of the day, the people waiting for care can see it too. MedLiveBD connects both sides.',
+    hospitals: 'Hospitals',
+    hospitalsParts: 'Reception · Doctors · Beds · Emergency · Laboratory',
+    patients: 'Patients',
+    patientsParts: 'Find · Book · Follow',
   },
 
-  hospitalsLabel: 'For hospitals',
-  hospitalsTitle: 'Run a more connected hospital.',
-  hospitalsBody:
-    'MedLiveBD gives every team — from the front desk to the ward — one shared, live view of the day. It is designed so that staff spend less time chasing information, and patients spend less time wondering.',
-  hospitalsAlt: 'Nurses in white caps attending a training session at a hospital in Bangladesh',
-  hospitalBenefits: [
-    {
-      title: 'Teams in step',
-      body: 'Reception, doctors, wards, emergency and laboratory work from one picture of the day.',
-    },
-    {
-      title: 'Clear visibility',
-      body: 'See how the day is unfolding as it happens, not after it ends.',
-    },
-    { title: 'Simple for staff', body: 'Calm, bilingual screens designed around each role.' },
-    {
-      title: 'Better for patients',
-      body: 'Patients wait with information instead of uncertainty.',
-    },
-    {
-      title: 'Fits how you work',
-      body: 'Begins alongside your current processes, with your existing lists brought in carefully.',
-    },
-    {
-      title: 'Your name, your colours',
-      body: 'Presented to your patients under your hospital’s own brand.',
-    },
-  ] satisfies readonly TitledText[],
-  hospitalsNote: 'Private demonstrations use synthetic data — never real patient information.',
-  glimpse: {
-    today: 'Today',
-    live: 'Live',
-    beds: 'Beds',
-    fresh: 'Updated 2 min ago',
-    illustrative: 'Illustration',
+  forHospitals: {
+    label: 'For Hospitals',
+    title: 'Help your hospital work as one connected team.',
+    body: 'Bring greater visibility and coordination to everyday hospital operations.',
+    points: [
+      [
+        'Live queues and appointment coordination',
+        'Serials called in order, with every waiting patient kept informed.',
+      ],
+      ['Beds and emergency visibility', 'Ward, ICU and emergency capacity in one current view.'],
+      [
+        'Connected hospital teams',
+        'Reception, doctors, wards and the laboratory working from one picture.',
+      ],
+      [
+        'Information that helps staff act with clarity',
+        'Every figure shows how recent it is. Nothing is guessed.',
+      ],
+    ] as readonly Point[],
+    explore: 'Explore Hospital Solutions',
+    alt: 'Illustrative scene: three Bangladeshi doctors reviewing notes together at a hospital ward desk.',
   },
 
-  patientsLabel: 'For patients',
-  patientsTitle: 'Healthcare that is easier to find, and easier to follow.',
-  patientsBody:
-    'A calmer, clearer journey — from finding the right doctor to knowing when it is your turn.',
-  patientsAlt: 'Tea gardens on the green hills near Srimangal, Sylhet, in soft evening light',
-  patientBenefits: [
-    {
-      title: 'Find the right care',
-      body: 'Search doctors, specialties and hospitals, and see who is available.',
-    },
-    {
-      title: 'Simpler serials',
-      body: 'Take a serial in a few steps, without paperwork or repeated calls.',
-    },
-    {
-      title: 'Know where you stand',
-      body: 'Follow the queue as it moves, and arrive when it matters.',
-    },
-    { title: 'Information you can trust', body: 'Every live update shows how recent it is.' },
-    { title: 'In your language', body: 'Bangla and English, on the phone you already have.' },
-  ] satisfies readonly TitledText[],
-  comingSoon: 'Coming soon',
-  patientsStatus:
-    'The MedLiveBD patient app opens hospital by hospital, as each one goes live in Bangladesh. It is not yet open to the public.',
-  patientsHospitalAsk: 'Want it for your patients?',
-  phone: {
-    title: 'My serial',
-    hospital: 'Your hospital',
-    yourSerial: 'Your serial',
-    nowServing: 'Now serving',
-    ahead: 'Ahead of you',
-    updated: 'Updated just now',
-    steps: ['Booked', 'Waiting', 'Your turn'],
+  forPatients: {
+    label: 'For Patients',
+    title: 'Finding care should feel simpler.',
+    body: 'Discover healthcare services, book serials and stay informed about your place in line.',
+    steps: [
+      ['Find care', 'Doctors, specialties and hospitals in one search.'],
+      ['Book a serial', 'From the phone you already carry.'],
+      ['Follow live progress', 'See how many are ahead and when it is your turn.'],
+    ] as readonly Point[],
+    open: 'Open Patient App',
+    alt: 'Illustrative scene: a young man showing his father a phone in a hospital waiting area.',
   },
 
-  mapLabel: 'Connected Bangladesh',
-  mapTitle: 'A vision that reaches\nevery division.',
-  mapBody:
-    'We are building MedLiveBD so that any hospital, in any part of the country, can join one connected ecosystem — and any patient can find care with confidence, from Rangpur to Chattogram.',
-  mapConcept: 'Concept illustration',
-  mapLegend:
-    'The eight divisions of Bangladesh and our vision of connected care. It does not show current hospitals, customers or coverage.',
-  mapCredit:
-    'Boundaries: geoBoundaries (CC0). District lines: Bangladesh Bureau of Statistics and OCHA ROAP (CC BY 3.0 IGO).',
-  mapAria:
-    'Map of Bangladesh with its eight divisions. Lines from Dhaka to each division headquarters illustrate the vision of connected care; it is a concept, not current coverage.',
-  mapDivisions: 'divisions',
+  vision: {
+    label: 'Our Bangladesh vision',
+    title: 'Built for Bangladesh.',
+    body: 'Designed around the realities of local healthcare, with a vision for a more connected future.',
+    points: [
+      'Bangla first, with English alongside',
+      'Made for the phones people already use',
+      'Each hospital’s information in its own private workspace',
+    ],
+    note: 'A vision of connected care across the eight divisions — not current hospital coverage.',
+    alt: 'Outline of Bangladesh with its eight divisions. Lines from Dhaka to each division headquarters illustrate a vision, not active hospitals or coverage.',
+    credit: 'Boundaries: geoBoundaries (CC0)',
+  },
 
-  trustLabel: 'Trust & responsibility',
-  trustTitle: 'Responsible by design.',
-  trust: [
-    {
-      title: 'Private by hospital',
-      body: 'Each hospital’s information stays in its own workspace.',
-    },
-    {
-      title: 'Consent first',
-      body: 'A patient’s records reach another hospital only with their consent.',
-    },
-    {
-      title: 'Honest information',
-      body: 'Live figures show how recent they are. Missing data is never guessed.',
-    },
-    { title: 'People decide care', body: 'MedLiveBD does not make clinical decisions.' },
-  ] satisfies readonly TitledText[],
+  people: {
+    label: 'The people behind MedLiveBD',
+    title: 'Technology leadership and on-the-ground operations, working as one.',
+    more: 'About us',
+  },
 
-  contactLabel: 'Let’s talk',
-  contactTitle: 'Let’s build connected care, together.',
-  contactBody:
-    'If you lead a hospital or clinic in Bangladesh, we would be glad to show you MedLiveBD in a private demonstration.',
-  contactAlt: 'Boats crossing the Buriganga River in Dhaka at sunset, in silhouette',
-  emailLabel: 'Email the MedLiveBD team',
-  copy: 'Copy address',
-  copied: 'Copied',
-  contactNote:
-    'Demonstrations use synthetic data. Hospital deployment, provider connections and commercial terms are discussed directly.',
+  closing: {
+    title: 'Let’s build more connected care, together.',
+    body: 'Discover how MedLiveBD can support your hospital’s next step.',
+    alt: 'Illustrative scene: a Dhaka-inspired neighbourhood at blue hour, warm lights among the rooftops.',
+  },
 
-  footer: 'A connected healthcare ecosystem for a healthier Bangladesh.',
-  aboutFoot: 'Care today. Healthy tomorrow.',
-  footerExplore: 'Explore',
-  footerCompany: 'Company',
-  footerContact: 'Contact',
-  footerLanguage: 'Language',
-  footerLinks: [
-    { id: 'vision', label: 'Our vision' },
-    { id: 'hospitals', label: 'For Hospitals' },
-    { id: 'patients', label: 'For Patients' },
-    { id: 'bangladesh', label: 'Connected Bangladesh' },
-  ],
-  footerFounders: 'Founders',
-  trustLink: 'Trust & responsibility',
-  credits: 'Image credits',
-  privacy: 'Privacy notice',
-  backTop: 'Back to top',
-  copyright: 'MedLiveBD',
-  photoCredit: 'Photo',
+  hospitalsPage: {
+    title: 'For Hospitals — MedLiveBD',
+    description:
+      'MedLiveBD helps hospitals in Bangladesh work as one connected team: live queues, beds and emergency visibility, and clear information for staff.',
+    label: 'For Hospitals',
+    heading: 'Help your hospital work as one connected team.',
+    lead: 'MedLiveBD brings reception, doctors, wards, emergency and the laboratory onto one shared, live picture of the day — and keeps the patients who are waiting informed.',
+    alt: 'Illustrative scene: three Bangladeshi doctors reviewing notes together at a hospital ward desk.',
+    capabilitiesTitle: 'What changes for your hospital',
+    capabilities: [
+      [
+        'Live queues and serials',
+        'Reception calls the next patient, and everyone waiting sees it on their phone.',
+      ],
+      [
+        'Beds and emergency visibility',
+        'Ward, ICU and emergency capacity, each figure with how recent it is.',
+      ],
+      [
+        'One connected team',
+        'Reception, doctors, wards, emergency and the laboratory work from the same picture.',
+      ],
+      ['Clear for every role', 'Calm screens in Bangla and English, designed around each job.'],
+      [
+        'Your hospital’s own presence',
+        'Patients meet your hospital under its own name, logo and colours.',
+      ],
+      [
+        'Starts where you are',
+        'Begin alongside how you work today, with your existing lists brought in carefully.',
+      ],
+    ] as readonly Point[],
+    trustTitle: 'Responsible by design',
+    trust: [
+      ['Private by hospital', 'Each hospital’s information stays in its own workspace.'],
+      ['Consent first', 'A patient’s records reach another hospital only with their consent.'],
+      [
+        'Honest information',
+        'Live figures show how recent they are. Missing data is never guessed.',
+      ],
+      ['People decide care', 'MedLiveBD supports coordination. It makes no clinical decisions.'],
+    ] as readonly Point[],
+    stepsTitle: 'How we begin',
+    steps: [
+      ['A conversation', 'Tell us about your hospital and what you would like to improve.'],
+      [
+        'A private demonstration',
+        'See MedLiveBD on synthetic data, shaped around your departments.',
+      ],
+      ['A careful start', 'Set up with your team and begin alongside how you work today.'],
+    ] as readonly Point[],
+    ctaTitle: 'See MedLiveBD for your hospital.',
+    ctaBody: 'Demonstrations use synthetic data — never real patient information.',
+  },
+
+  aboutPage: {
+    title: 'About Us — MedLiveBD',
+    label: 'About us',
+  },
+
+  footer: {
+    line: 'A connected healthcare ecosystem for a healthier Bangladesh.',
+    explore: 'Explore',
+    company: 'Company',
+    contact: 'Contact',
+    privacy: 'Privacy notice',
+    credits: 'Image credits',
+    backTop: 'Back to top',
+    synthetic:
+      'Photographs are AI-generated illustrative scenes — not actual staff, patients or partner hospitals.',
+  },
 
   creditsTitle: 'Image and map credits',
   creditsIntro:
-    'Original AI-generated campaign scenes and openly licensed geographic data. All assets are served locally from this website.',
-  creditsPhotos: 'Photographs',
+    'Original AI-generated campaign scenes and openly licensed geographic data. All assets are served from this website.',
+  assetsTitle: 'Original campaign imagery',
+  assetsIntro:
+    'These scenes were generated with OpenAI image generation for this website on 12 October 2026. The people and settings are synthetic illustrations, not photographs of MedLiveBD staff, customers or hospitals. They do not imply endorsement or actual coverage.',
+  assetNames: [
+    'Connected clinicians',
+    'Hospital teamwork',
+    'A clearer patient journey',
+    'Dhaka-inspired evening',
+  ],
   creditsMap: 'Map data',
-  creditsBy: 'by',
   creditsSource: 'Source',
-  creditsLicence: 'Licence',
-  creditsBack: 'Back to MedLiveBD',
+  back: 'Back to MedLiveBD',
 
   privacyTitle: 'Privacy notice',
   privacyUpdated: 'Last updated 12 October 2026',
-  privacyBack: 'Back to MedLiveBD',
   privacySections: [
     {
       heading: 'This website',
@@ -277,7 +238,7 @@ const en = {
     },
     {
       heading: 'Demonstrations',
-      body: 'MedLiveBD demonstrations use synthetic data. The healthcare and city scenes on this website are AI-generated illustrations. They do not depict actual MedLiveBD staff, patients or customers. No real patient information is shown.',
+      body: 'MedLiveBD demonstrations use synthetic data. The patient app linked from this site is a demonstration with sample data: please do not enter real personal information in it. The healthcare and city scenes on this website are AI-generated illustrations and do not depict actual MedLiveBD staff, patients or customers.',
     },
     {
       heading: 'The MedLiveBD platform',
@@ -295,215 +256,184 @@ export type Copy = typeof en;
 const bn: Copy = {
   title: 'MedLiveBD — সুস্থ বাংলাদেশের জন্য একটি সংযুক্ত স্বাস্থ্যসেবা ইকোসিস্টেম',
   description:
-    'MedLiveBD হাসপাতাল আর তার সেবা নেওয়া মানুষদের এক সংযুক্ত প্ল্যাটফর্মে আনে — যাতে হাসপাতালের দল একসঙ্গে কাজ করে, আর রোগী সবসময় জানেন তিনি কোথায় আছেন। বাংলাদেশে নকশা করা, বাংলা ও ইংরেজিতে।',
+    'বাংলাদেশের জন্য তৈরি প্রযুক্তিতে MedLiveBD হাসপাতাল, স্বাস্থ্যসেবা পেশাজীবী ও রোগীদের যুক্ত করে।',
   skip: 'মূল বিষয়বস্তুতে যান',
   menu: 'মেনু',
   close: 'মেনু বন্ধ করুন',
-  nav: [
-    { id: 'vision', label: 'লক্ষ্য' },
-    { id: 'hospitals', label: 'হাসপাতালের জন্য' },
-    { id: 'patients', label: 'রোগীদের জন্য' },
-    { id: 'bangladesh', label: 'বাংলাদেশ' },
-    { id: 'founders', label: 'প্রতিষ্ঠাতা' },
-  ],
+  mainNav: 'প্রধান',
+  nav: { hospitals: 'হাসপাতালের জন্য', patients: 'রোগীদের জন্য', about: 'আমাদের সম্পর্কে' },
   otherLanguageLabel: 'Read in English',
-  navDemo: 'ডেমো',
+  language: 'ভাষা',
+  demo: 'ডেমোর অনুরোধ',
+  demoTag: 'ডেমো',
   newTab: '(নতুন ট্যাবে খুলবে)',
-  demo: 'ডেমো দেখুন',
-  demoPrivate: 'ব্যক্তিগত ডেমোর অনুরোধ',
-  pause: 'দৃষ্টান্ত থামান',
-  play: 'দৃষ্টান্ত চালান',
+  emailHint: 'আপনার ইমেইল অ্যাপ খুলবে',
+  demoNotice:
+    'পেশেন্ট অ্যাপটি নমুনা তথ্যে চলা একটি ডেমো। অনুগ্রহ করে প্রকৃত ব্যক্তিগত তথ্য দেবেন না।',
 
-  eyebrow: 'স্বাস্থ্যসেবা প্রযুক্তি · বাংলাদেশের জন্য',
-  hero: [
-    { text: 'সুস্থ বাংলাদেশের', accent: true },
-    { text: ' জন্য একটি সংযুক্ত স্বাস্থ্যসেবা ইকোসিস্টেম', accent: false },
-  ],
-  lead: 'MedLiveBD হাসপাতাল আর তার সেবা নেওয়া মানুষদের এক সংযুক্ত প্ল্যাটফর্মে আনে — যাতে হাসপাতালের দল একসঙ্গে কাজ করে, আর রোগী সবসময় জানেন তিনি কোথায় আছেন।',
-  discover: 'MedLiveBD সম্পর্কে জানুন',
-  heroPoints: ['বাংলাদেশে নকশা করা', 'বাংলা ও ইংরেজি', 'গোপনীয়তা নকশাতেই'],
-  heroVisual: {
-    alt: 'সকালের আলোয় পদ্মা নদীর ওপর বিস্তৃত পদ্মা সেতু',
-    hospital: 'হাসপাতাল',
-    hospitalState: 'আজ, একসঙ্গে',
-    inSession: 'চলছে',
-    patient: 'রোগী',
-    yourSerial: 'আপনার সিরিয়াল',
-    ahead: 'জন আগে',
-    updated: 'এইমাত্র হালনাগাদ',
-    caption: 'পদ্মা সেতু · প্রোডাক্টের ঝলকগুলো ডেমো তথ্যে আঁকা দৃষ্টান্ত',
+  hero: {
+    title: [
+      { text: 'সুস্থ বাংলাদেশের', accent: true },
+      { text: ' জন্য একটি সংযুক্ত স্বাস্থ্যসেবা ইকোসিস্টেম', accent: false },
+    ],
+    lead: 'বাংলাদেশের জন্য তৈরি প্রযুক্তিতে হাসপাতাল, স্বাস্থ্যসেবা পেশাজীবী ও রোগীদের এক সূত্রে যুক্ত করছি।',
+    choose: 'কোথায় যেতে চান',
+    hospitals: 'হাসপাতালের জন্য',
+    hospitalsSub: 'হাসপাতালের সমাধান দেখুন',
+    patients: 'রোগীদের জন্য',
+    patientsSub: 'পেশেন্ট অ্যাপে যান',
+    alt: 'দৃষ্টান্তমূলক দৃশ্য: হাসপাতালে একজন বাংলাদেশি চিকিৎসক ও হিজাব পরা সহকর্মী একসঙ্গে ট্যাবলেট দেখছেন।',
   },
 
-  visionLabel: 'আমাদের লক্ষ্য',
-  vision:
-    'বাংলাদেশে আছেন দক্ষ চিকিৎসক, নিবেদিত হাসপাতাল, আর এমন রোগী যাঁরা আগে হাতে নেন ফোন। যা ছিল না, তা হলো এঁদের মাঝের সংযোগ। MedLiveBD সেই সংযোগ গড়ে তুলছে।',
-  visionAlt: 'সূর্যাস্তে ওপর থেকে দেখা ঢাকা, দিগন্ত পর্যন্ত ছাদের সারি',
-  visionPlace: 'ঢাকা',
-  pillars: [
-    { title: 'সংযুক্ত দল', body: 'হাসপাতালের প্রতিটি ডেস্ক কাজ করে দিনের একই ছবি দেখে।' },
-    {
-      title: 'দৃশ্যমান সেবা',
-      body: 'অপেক্ষা, শয্যা আর অগ্রগতি যেমন আছে তেমনই — কতটা হালনাগাদ, তা-সহ।',
-    },
-    {
-      title: 'হাতের নাগালে সেবা',
-      body: 'রোগীর জন্য স্পষ্ট তথ্য, বাংলা ও ইংরেজিতে, নিজের ফোনেই।',
-    },
-  ],
-
-  experiencesLabel: 'এক ইকোসিস্টেম',
-  experiencesTitle: 'একটি সংযুক্ত স্বাস্থ্যসেবা ইকোসিস্টেম।\nভিন্ন প্রয়োজনে দুটি অভিজ্ঞতা।',
-  experiences: {
-    hospitals: {
-      chip: 'হাসপাতালের জন্য',
-      title: 'যে হাসপাতাল একসঙ্গে চলে।',
-      points: ['সমন্বিত দল', 'কার্যক্রমের লাইভ চিত্র', 'রোগীর জন্য আধুনিক অভিজ্ঞতা'],
-      cta: 'হাসপাতালের জন্য দেখুন',
-      alt: 'বাংলাদেশের একটি ল্যাবরেটরিতে নমুনা টিউবের ওপর পিপেট হাতে দস্তানা পরা হাত',
-    },
-    patients: {
-      chip: 'রোগীর জন্য',
-      title: 'সেবা খোঁজা ও অনুসরণ করা সহজ।',
-      points: ['সঠিক সেবা খুঁজুন', 'সহজ সিরিয়াল', 'সিরিয়ালে নিজের অবস্থান জানুন'],
-      cta: 'রোগীর জন্য দেখুন',
-      alt: 'চট্টগ্রামের সবুজ ধানক্ষেতে চারা রোপণ করছেন একজন কৃষক',
-    },
-    connector: 'এক প্ল্যাটফর্ম',
+  idea: {
+    label: 'একটি সংযুক্ত ইকোসিস্টেম',
+    statement: 'আরও সংযুক্ত হাসপাতাল। রোগীর জন্য আরও স্পষ্ট পথ।',
+    body: 'হাসপাতালের ভেতরের সবাই যখন দিনের একই লাইভ চিত্র দেখে কাজ করেন, সেবার অপেক্ষায় থাকা মানুষও তখন তা দেখতে পান। MedLiveBD দুই পক্ষকেই যুক্ত করে।',
+    hospitals: 'হাসপাতাল',
+    hospitalsParts: 'রিসেপশন · চিকিৎসক · শয্যা · জরুরি বিভাগ · ল্যাব',
+    patients: 'রোগী',
+    patientsParts: 'খুঁজুন · বুক করুন · অনুসরণ করুন',
   },
 
-  hospitalsLabel: 'হাসপাতালের জন্য',
-  hospitalsTitle: 'আরও সংযুক্ত হাসপাতাল চালান।',
-  hospitalsBody:
-    'রিসেপশন থেকে ওয়ার্ড — প্রতিটি দল পায় দিনের একই লাইভ চিত্র। নকশাটাই এমন, যাতে কর্মীদের তথ্যের পেছনে কম ছুটতে হয়, আর রোগীদের কম অনিশ্চয়তায় থাকতে হয়।',
-  hospitalsAlt: 'বাংলাদেশের একটি হাসপাতালে প্রশিক্ষণে অংশ নিচ্ছেন সাদা টুপি পরা নার্সরা',
-  hospitalBenefits: [
-    {
-      title: 'দল একসঙ্গে',
-      body: 'রিসেপশন, চিকিৎসক, ওয়ার্ড, জরুরি বিভাগ ও ল্যাব দেখে দিনের একই ছবি।',
-    },
-    { title: 'স্পষ্ট চিত্র', body: 'দিন কেমন চলছে, দেখুন তখনই — দিন শেষে নয়।' },
-    { title: 'কর্মীদের জন্য সহজ', body: 'প্রতিটি ভূমিকার জন্য শান্ত, দ্বিভাষিক স্ক্রিন।' },
-    { title: 'রোগীর জন্য ভালো', body: 'রোগী অপেক্ষা করেন তথ্য নিয়ে, অনিশ্চয়তা নিয়ে নয়।' },
-    {
-      title: 'আপনার কাজের ধরনে',
-      body: 'শুরু হয় আপনার বর্তমান প্রক্রিয়ার পাশাপাশি; আপনার তালিকা আনা হয় যত্নের সঙ্গে।',
-    },
-    {
-      title: 'আপনার নাম, আপনার রং',
-      body: 'রোগীর কাছে উপস্থাপিত হয় আপনার হাসপাতালের নিজস্ব পরিচয়ে।',
-    },
-  ],
-  hospitalsNote: 'ব্যক্তিগত ডেমোতে শুধু কৃত্রিম তথ্য — কখনো প্রকৃত রোগীর তথ্য নয়।',
-  glimpse: {
-    today: 'আজ',
-    live: 'লাইভ',
-    beds: 'শয্যা',
-    fresh: '২ মিনিট আগে হালনাগাদ',
-    illustrative: 'দৃষ্টান্ত',
+  forHospitals: {
+    label: 'হাসপাতালের জন্য',
+    title: 'আপনার হাসপাতাল চলুক একটি সংযুক্ত দল হিসেবে।',
+    body: 'হাসপাতালের প্রতিদিনের কাজে আনুন আরও স্পষ্ট চিত্র ও সমন্বয়।',
+    points: [
+      [
+        'লাইভ কিউ ও অ্যাপয়েন্টমেন্ট সমন্বয়',
+        'ক্রম মেনে সিরিয়াল ডাকা, অপেক্ষায় থাকা প্রত্যেক রোগী থাকেন অবগত।',
+      ],
+      [
+        'শয্যা ও জরুরি বিভাগের চিত্র',
+        'ওয়ার্ড, আইসিইউ ও জরুরি বিভাগের সক্ষমতা, এক হালনাগাদ চিত্রে।',
+      ],
+      ['সংযুক্ত হাসপাতাল দল', 'রিসেপশন, চিকিৎসক, ওয়ার্ড ও ল্যাব কাজ করে একই চিত্র দেখে।'],
+      ['স্পষ্টভাবে কাজের জন্য তথ্য', 'প্রতিটি তথ্য জানায় তা কতটা সাম্প্রতিক। কিছুই অনুমান নয়।'],
+    ],
+    explore: 'হাসপাতালের সমাধান দেখুন',
+    alt: 'দৃষ্টান্তমূলক দৃশ্য: হাসপাতালের ওয়ার্ড ডেস্কে তিনজন বাংলাদেশি চিকিৎসক একসঙ্গে নোট দেখছেন।',
   },
 
-  patientsLabel: 'রোগীর জন্য',
-  patientsTitle: 'স্বাস্থ্যসেবা — খুঁজে পাওয়া সহজ, অনুসরণ করাও সহজ।',
-  patientsBody:
-    'সঠিক চিকিৎসক খোঁজা থেকে নিজের পালা জানা পর্যন্ত — আরও শান্ত, আরও স্পষ্ট এক যাত্রা।',
-  patientsAlt: 'সন্ধ্যার নরম আলোয় শ্রীমঙ্গল, সিলেটের সবুজ টিলায় চা-বাগান',
-  patientBenefits: [
-    { title: 'সঠিক সেবা খুঁজুন', body: 'চিকিৎসক, বিশেষজ্ঞতা ও হাসপাতাল খুঁজুন; কে আছেন দেখুন।' },
-    { title: 'সহজ সিরিয়াল', body: 'কাগজপত্র বা বারবার ফোন ছাড়াই কয়েক ধাপে সিরিয়াল।' },
-    { title: 'নিজের অবস্থান জানুন', body: 'সিরিয়াল এগোলে দেখুন, সময়মতো পৌঁছান।' },
-    { title: 'ভরসার তথ্য', body: 'প্রতিটি লাইভ তথ্য জানায় তা কতটা সাম্প্রতিক।' },
-    { title: 'নিজের ভাষায়', body: 'বাংলা ও ইংরেজি, নিজের ফোনেই।' },
-  ],
-  comingSoon: 'শিগগিরই আসছে',
-  patientsStatus:
-    'MedLiveBD রোগীর অ্যাপ চালু হবে হাসপাতাল ধরে ধরে, বাংলাদেশে প্রতিটি হাসপাতাল চালু হলে। এটি এখনো সবার জন্য উন্মুক্ত নয়।',
-  patientsHospitalAsk: 'আপনার রোগীদের জন্য চান?',
-  phone: {
-    title: 'আমার সিরিয়াল',
-    hospital: 'আপনার হাসপাতাল',
-    yourSerial: 'আপনার সিরিয়াল',
-    nowServing: 'এখন চলছে',
-    ahead: 'আপনার আগে',
-    updated: 'এইমাত্র হালনাগাদ',
-    steps: ['নেওয়া', 'অপেক্ষায়', 'আপনার পালা'],
+  forPatients: {
+    label: 'রোগীদের জন্য',
+    title: 'সেবা খুঁজে পাওয়া হোক আরও সহজ।',
+    body: 'স্বাস্থ্যসেবা খুঁজুন, সিরিয়াল বুক করুন, আর জেনে নিন লাইনে আপনার অবস্থান।',
+    steps: [
+      ['সেবা খুঁজুন', 'চিকিৎসক, বিশেষজ্ঞতা ও হাসপাতাল, এক খোঁজে।'],
+      ['সিরিয়াল বুক করুন', 'নিজের ফোন থেকেই।'],
+      ['লাইভ অগ্রগতি দেখুন', 'আগে কতজন আছেন, কখন আপনার পালা — জেনে নিন।'],
+    ],
+    open: 'পেশেন্ট অ্যাপে যান',
+    alt: 'দৃষ্টান্তমূলক দৃশ্য: হাসপাতালের অপেক্ষার জায়গায় এক তরুণ তাঁর বাবাকে ফোন দেখাচ্ছেন।',
   },
 
-  mapLabel: 'সংযুক্ত বাংলাদেশ',
-  mapTitle: 'যে লক্ষ্য পৌঁছায়\nপ্রতিটি বিভাগে।',
-  mapBody:
-    'আমরা MedLiveBD গড়ছি যাতে দেশের যেকোনো প্রান্তের যেকোনো হাসপাতাল এক সংযুক্ত ইকোসিস্টেমে যুক্ত হতে পারে — আর রংপুর থেকে চট্টগ্রাম, যেকোনো রোগী আস্থার সঙ্গে সেবা খুঁজে পান।',
-  mapConcept: 'ধারণাগত দৃষ্টান্ত',
-  mapLegend:
-    'বাংলাদেশের আটটি বিভাগ ও সংযুক্ত সেবার আমাদের লক্ষ্য। এটি বর্তমান হাসপাতাল, গ্রাহক বা বিস্তার দেখায় না।',
-  mapCredit:
-    'সীমানা: geoBoundaries (CC0)। জেলার রেখা: বাংলাদেশ পরিসংখ্যান ব্যুরো ও OCHA ROAP (CC BY 3.0 IGO)।',
-  mapAria:
-    'আটটি বিভাগসহ বাংলাদেশের মানচিত্র। ঢাকা থেকে প্রতিটি বিভাগীয় সদরে রেখাগুলো সংযুক্ত সেবার লক্ষ্য বোঝায়; এটি ধারণা, বর্তমান বিস্তার নয়।',
-  mapDivisions: 'বিভাগ',
+  vision: {
+    label: 'বাংলাদেশকে ঘিরে আমাদের লক্ষ্য',
+    title: 'বাংলাদেশের জন্য তৈরি।',
+    body: 'দেশের স্বাস্থ্যসেবার বাস্তবতাকে ঘিরে নকশা করা — আরও সংযুক্ত ভবিষ্যতের লক্ষ্যে।',
+    points: [
+      'বাংলা আগে, পাশে ইংরেজি',
+      'মানুষের হাতের ফোনের কথা ভেবে তৈরি',
+      'প্রতিটি হাসপাতালের তথ্য তার নিজস্ব সুরক্ষিত কর্মক্ষেত্রে',
+    ],
+    note: 'আটটি বিভাগজুড়ে সংযুক্ত সেবার আমাদের লক্ষ্য — বর্তমান হাসপাতাল কভারেজ নয়।',
+    alt: 'আটটি বিভাগসহ বাংলাদেশের সীমানা। ঢাকা থেকে প্রতিটি বিভাগীয় সদরের দিকে রেখাগুলো একটি লক্ষ্য বোঝায়, চালু হাসপাতাল বা কভারেজ নয়।',
+    credit: 'সীমানা: geoBoundaries (CC0)',
+  },
 
-  trustLabel: 'আস্থা ও দায়িত্ব',
-  trustTitle: 'দায়িত্ব, নকশাতেই।',
-  trust: [
-    {
-      title: 'হাসপাতালভিত্তিক গোপনীয়তা',
-      body: 'প্রতিটি হাসপাতালের তথ্য থাকে তার নিজস্ব কর্মক্ষেত্রে।',
-    },
-    { title: 'আগে সম্মতি', body: 'রোগীর রেকর্ড অন্য হাসপাতালে যায় শুধু তাঁর সম্মতিতে।' },
-    {
-      title: 'সৎ তথ্য',
-      body: 'লাইভ সংখ্যা জানায় তা কতটা সাম্প্রতিক। না-থাকা তথ্য কখনো অনুমান করা হয় না।',
-    },
-    { title: 'সিদ্ধান্ত মানুষের', body: 'MedLiveBD কোনো চিকিৎসা-সিদ্ধান্ত নেয় না।' },
-  ],
+  people: {
+    label: 'MedLiveBD-এর পেছনের মানুষ',
+    title: 'প্রযুক্তির নেতৃত্ব আর মাঠপর্যায়ের পরিচালনা, একসঙ্গে।',
+    more: 'আমাদের সম্পর্কে',
+  },
 
-  contactLabel: 'কথা বলুন',
-  contactTitle: 'চলুন, একসঙ্গে গড়ি সংযুক্ত সেবা।',
-  contactBody:
-    'আপনি যদি বাংলাদেশের কোনো হাসপাতাল বা ক্লিনিকের দায়িত্বে থাকেন, ব্যক্তিগত ডেমোতে MedLiveBD দেখাতে পেরে আমরা আনন্দিত হব।',
-  contactAlt: 'সূর্যাস্তে ঢাকার বুড়িগঙ্গা নদী পার হচ্ছে নৌকা, ছায়ামূর্তিতে',
-  emailLabel: 'MedLiveBD দলকে ইমেইল করুন',
-  copy: 'ঠিকানা কপি করুন',
-  copied: 'কপি হয়েছে',
-  contactNote:
-    'ডেমোতে কৃত্রিম তথ্য ব্যবহার করা হয়। হাসপাতালের ব্যবহার, সেবাদাতা সংযোগ ও বাণিজ্যিক শর্ত সরাসরি আলোচনা করা হয়।',
+  closing: {
+    title: 'আরও সংযুক্ত স্বাস্থ্যসেবা গড়ি, একসঙ্গে।',
+    body: 'আপনার হাসপাতালের পরবর্তী ধাপে MedLiveBD কীভাবে পাশে থাকতে পারে, জেনে নিন।',
+    alt: 'দৃষ্টান্তমূলক দৃশ্য: সন্ধ্যার নীল আলোয় ঢাকাকে ঘিরে একটি এলাকা, ছাদের সারিতে ঘরের উষ্ণ আলো।',
+  },
 
-  footer: 'সুস্থ বাংলাদেশের জন্য একটি সংযুক্ত স্বাস্থ্যসেবা ইকোসিস্টেম।',
-  aboutFoot: 'আজকের যত্ন। আগামী দিনের সুস্থতা।',
-  footerExplore: 'দেখুন',
-  footerCompany: 'প্রতিষ্ঠান',
-  footerContact: 'যোগাযোগ',
-  footerLanguage: 'ভাষা',
-  footerLinks: [
-    { id: 'vision', label: 'আমাদের লক্ষ্য' },
-    { id: 'hospitals', label: 'হাসপাতালের জন্য' },
-    { id: 'patients', label: 'রোগীদের জন্য' },
-    { id: 'bangladesh', label: 'সংযুক্ত বাংলাদেশ' },
-  ],
-  footerFounders: 'প্রতিষ্ঠাতা',
-  trustLink: 'আস্থা ও দায়িত্ব',
-  credits: 'ছবির কৃতজ্ঞতা',
-  privacy: 'গোপনীয়তা নীতি',
-  backTop: 'ওপরে ফিরে যান',
-  copyright: 'MedLiveBD',
-  photoCredit: 'ছবি',
+  hospitalsPage: {
+    title: 'হাসপাতালের জন্য — MedLiveBD',
+    description:
+      'MedLiveBD বাংলাদেশের হাসপাতালকে একটি সংযুক্ত দল হিসেবে কাজ করতে সাহায্য করে: লাইভ কিউ, শয্যা ও জরুরি বিভাগের চিত্র, আর কর্মীদের জন্য স্পষ্ট তথ্য।',
+    label: 'হাসপাতালের জন্য',
+    heading: 'আপনার হাসপাতাল চলুক একটি সংযুক্ত দল হিসেবে।',
+    lead: 'MedLiveBD রিসেপশন, চিকিৎসক, ওয়ার্ড, জরুরি বিভাগ ও ল্যাবকে দিনের একই লাইভ চিত্রে আনে — আর অপেক্ষায় থাকা রোগীদের রাখে অবগত।',
+    alt: 'দৃষ্টান্তমূলক দৃশ্য: হাসপাতালের ওয়ার্ড ডেস্কে তিনজন বাংলাদেশি চিকিৎসক একসঙ্গে নোট দেখছেন।',
+    capabilitiesTitle: 'আপনার হাসপাতালে যা বদলাবে',
+    capabilities: [
+      [
+        'লাইভ কিউ ও সিরিয়াল',
+        'রিসেপশন পরের রোগীকে ডাকলে অপেক্ষায় থাকা সবাই নিজের ফোনে দেখতে পান।',
+      ],
+      [
+        'শয্যা ও জরুরি বিভাগের চিত্র',
+        'ওয়ার্ড, আইসিইউ ও জরুরি বিভাগের সক্ষমতা — প্রতিটি সংখ্যা কতটা সাম্প্রতিক, তা-সহ।',
+      ],
+      ['একটি সংযুক্ত দল', 'রিসেপশন, চিকিৎসক, ওয়ার্ড, জরুরি বিভাগ ও ল্যাব কাজ করে একই চিত্র দেখে।'],
+      [
+        'প্রতিটি ভূমিকার জন্য স্পষ্ট',
+        'বাংলা ও ইংরেজিতে শান্ত স্ক্রিন, প্রতিটি কাজের কথা ভেবে নকশা করা।',
+      ],
+      ['আপনার হাসপাতালের নিজস্ব পরিচয়', 'রোগীরা আপনার হাসপাতালকে পান তার নিজের নাম, লোগো ও রঙে।'],
+      [
+        'যেখানে আছেন, সেখান থেকেই শুরু',
+        'আজকের কাজের ধরনের পাশাপাশি শুরু; আপনার বিদ্যমান তালিকা আনা হয় যত্নের সঙ্গে।',
+      ],
+    ],
+    trustTitle: 'দায়িত্ব, নকশাতেই',
+    trust: [
+      ['হাসপাতালভিত্তিক গোপনীয়তা', 'প্রতিটি হাসপাতালের তথ্য থাকে তার নিজস্ব কর্মক্ষেত্রে।'],
+      ['আগে সম্মতি', 'রোগীর রেকর্ড অন্য হাসপাতালে যায় শুধু তাঁর সম্মতিতে।'],
+      ['সৎ তথ্য', 'লাইভ সংখ্যা জানায় তা কতটা সাম্প্রতিক। না-থাকা তথ্য কখনো অনুমান করা হয় না।'],
+      ['সিদ্ধান্ত মানুষের', 'MedLiveBD সমন্বয়ে সহায়তা করে। কোনো চিকিৎসা-সিদ্ধান্ত নেয় না।'],
+    ],
+    stepsTitle: 'যেভাবে শুরু করি',
+    steps: [
+      ['একটি আলাপ', 'আপনার হাসপাতাল ও যা উন্নত করতে চান, সে সম্পর্কে আমাদের জানান।'],
+      ['একটি ব্যক্তিগত ডেমো', 'আপনার বিভাগগুলোর আদলে কৃত্রিম তথ্যে MedLiveBD দেখুন।'],
+      ['একটি যত্নশীল শুরু', 'আপনার দলের সঙ্গে প্রস্তুতি, আর আজকের কাজের ধরনের পাশাপাশি শুরু।'],
+    ],
+    ctaTitle: 'আপনার হাসপাতালের জন্য MedLiveBD দেখুন।',
+    ctaBody: 'ডেমোতে কৃত্রিম তথ্য ব্যবহার করা হয় — কখনো প্রকৃত রোগীর তথ্য নয়।',
+  },
+
+  aboutPage: {
+    title: 'আমাদের সম্পর্কে — MedLiveBD',
+    label: 'আমাদের সম্পর্কে',
+  },
+
+  footer: {
+    line: 'সুস্থ বাংলাদেশের জন্য একটি সংযুক্ত স্বাস্থ্যসেবা ইকোসিস্টেম।',
+    explore: 'দেখুন',
+    company: 'প্রতিষ্ঠান',
+    contact: 'যোগাযোগ',
+    privacy: 'গোপনীয়তা নীতি',
+    credits: 'ছবির কৃতজ্ঞতা',
+    backTop: 'ওপরে ফিরে যান',
+    synthetic:
+      'ছবিগুলো এআই দিয়ে তৈরি দৃষ্টান্তমূলক দৃশ্য — প্রকৃত কর্মী, রোগী বা সহযোগী হাসপাতাল নয়।',
+  },
 
   creditsTitle: 'ছবি ও মানচিত্রের কৃতজ্ঞতা',
   creditsIntro:
     'এই সাইটের জন্য এআই দিয়ে তৈরি দৃশ্য ও উন্মুক্ত লাইসেন্সের ভৌগোলিক তথ্য। সব ফাইল এই ওয়েবসাইট থেকেই সরবরাহ করা হয়।',
-  creditsPhotos: 'ছবি',
+  assetsTitle: 'এই সাইটের জন্য তৈরি ছবি',
+  assetsIntro:
+    '২০২৬ সালের ১২ অক্টোবর OpenAI-এর ইমেজ জেনারেশন দিয়ে এই সাইটের জন্য দৃশ্যগুলো তৈরি করা হয়েছে। মানুষ ও পরিবেশগুলো কৃত্রিম দৃষ্টান্ত, MedLiveBD-এর প্রকৃত কর্মী, গ্রাহক বা হাসপাতালের ছবি নয়। এগুলো কোনো সমর্থন বা বর্তমান কভারেজ বোঝায় না।',
+  assetNames: ['চিকিৎসকদের সংযোগ', 'হাসপাতালের দল', 'রোগীর সহজতর যাত্রা', 'ঢাকাকে ঘিরে সন্ধ্যা'],
   creditsMap: 'মানচিত্রের তথ্য',
-  creditsBy: '—',
   creditsSource: 'উৎস',
-  creditsLicence: 'লাইসেন্স',
-  creditsBack: 'MedLiveBD-তে ফিরে যান',
+  back: 'MedLiveBD-তে ফিরে যান',
 
   privacyTitle: 'গোপনীয়তা নীতি',
   privacyUpdated: 'সর্বশেষ হালনাগাদ ১২ অক্টোবর ২০২৬',
-  privacyBack: 'MedLiveBD-তে ফিরে যান',
   privacySections: [
     {
       heading: 'এই ওয়েবসাইট',
-      body: 'এটি MedLiveBD-এর প্রতিষ্ঠানিক ওয়েবসাইট। এখানে কোনো অ্যাকাউন্ট, ফর্ম, কুকি, অ্যানালিটিক্স বা বিজ্ঞাপনের ট্র্যাকার নেই, এবং আপনার ব্যক্তিগত তথ্য চাওয়া হয় না। এর ছবি, ফন্ট ও মানচিত্র এই সাইট থেকেই আসে।',
+      body: 'এটি MedLiveBD-এর প্রাতিষ্ঠানিক ওয়েবসাইট। এখানে কোনো অ্যাকাউন্ট, ফর্ম, কুকি, অ্যানালিটিক্স বা বিজ্ঞাপনের ট্র্যাকার নেই, এবং আপনার ব্যক্তিগত তথ্য চাওয়া হয় না। এর ছবি, ফন্ট ও মানচিত্র এই সাইট থেকেই আসে।',
     },
     {
       heading: 'আপনি ইমেইল করলে',
@@ -515,7 +445,7 @@ const bn: Copy = {
     },
     {
       heading: 'ডেমো',
-      body: 'MedLiveBD-এর ডেমোতে কৃত্রিম তথ্য ব্যবহার করা হয়। এই সাইটের স্বাস্থ্যসেবা ও শহরের দৃশ্যগুলো এআই দিয়ে তৈরি দৃষ্টান্ত। এগুলো MedLiveBD-এর প্রকৃত কর্মী, রোগী বা গ্রাহককে দেখায় না। কোনো প্রকৃত রোগীর তথ্য দেখানো হয় না।',
+      body: 'MedLiveBD-এর ডেমোতে কৃত্রিম তথ্য ব্যবহার করা হয়। এই সাইট থেকে যে পেশেন্ট অ্যাপ খোলে, সেটি নমুনা তথ্যে চলা একটি ডেমো: অনুগ্রহ করে সেখানে প্রকৃত ব্যক্তিগত তথ্য দেবেন না। এই সাইটের স্বাস্থ্যসেবা ও শহরের দৃশ্যগুলো এআই দিয়ে তৈরি দৃষ্টান্ত; এগুলো MedLiveBD-এর প্রকৃত কর্মী, রোগী বা গ্রাহককে দেখায় না।',
     },
     {
       heading: 'MedLiveBD প্ল্যাটফর্ম',

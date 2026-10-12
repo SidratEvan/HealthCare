@@ -1,4 +1,4 @@
-import '../site.css';
+import '../medlive.css';
 
 import type { ReactNode } from 'react';
 

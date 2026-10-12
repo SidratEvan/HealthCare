@@ -1,16 +1,15 @@
 import { notFound } from 'next/navigation';
 
-import { Footer } from '@/components/Footer';
-import { LanguageSwitch, Mark } from '@/components/Header';
+import { Page } from '@/components/Page';
 import { copy } from '@/content/copy';
-import { SITE_ORIGIN } from '@/content/site';
+import { LOCALES, pageMetadata } from '@/content/site';
 
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
 /** What this website does with personal information, and nothing it does not (S-C-01). */
 export function generateStaticParams(): { locale: string }[] {
-  return [{ locale: 'bn' }, { locale: 'en' }];
+  return LOCALES;
 }
 
 export async function generateMetadata({
@@ -21,15 +20,12 @@ export async function generateMetadata({
   const { locale } = await params;
   if (locale !== 'bn' && locale !== 'en') return {};
   const t = copy[locale];
-  return {
-    metadataBase: new URL(SITE_ORIGIN),
-    title: `${t.privacyTitle} — MedLiveBD`,
-    description: t.privacySections[0]?.body ?? t.description,
-    alternates: {
-      canonical: `/${locale}/privacy`,
-      languages: { bn: '/bn/privacy', en: '/en/privacy' },
-    },
-  };
+  return pageMetadata(
+    locale,
+    '/privacy',
+    `${t.privacyTitle} — MedLiveBD`,
+    t.privacySections[0]?.body ?? t.description,
+  );
 }
 
 export default async function PrivacyPage({
@@ -41,22 +37,12 @@ export default async function PrivacyPage({
   if (locale !== 'bn' && locale !== 'en') notFound();
   const t = copy[locale];
   return (
-    <div className="company-page" lang={locale} id="top">
-      <header className="site-header" data-scrolled="true">
-        <div className="shell header-inner">
-          <a className="brand-link" href={`/${locale}`} aria-label="MedLiveBD">
-            <Mark priority />
-          </a>
-          <div className="header-actions">
-            <LanguageSwitch locale={locale} path="/privacy" />
-          </div>
-        </div>
-      </header>
-      <main id="main" className="shell legal">
+    <Page locale={locale} page="privacy">
+      <article className="shell legal">
         <a className="text-link" href={`/${locale}`}>
-          <span aria-hidden="true">←</span> {t.privacyBack}
+          <span aria-hidden="true">←</span> {t.back}
         </a>
-        <h1>{t.privacyTitle}</h1>
+        <h1 className="display-m">{t.privacyTitle}</h1>
         <p className="legal-updated">{t.privacyUpdated}</p>
         {t.privacySections.map((section) => (
           <section key={section.heading}>
@@ -64,8 +50,7 @@ export default async function PrivacyPage({
             <p>{section.body}</p>
           </section>
         ))}
-      </main>
-      <Footer locale={locale} path="/privacy" />
-    </div>
+      </article>
+    </Page>
   );
 }

@@ -1,14 +1,14 @@
 import { notFound } from 'next/navigation';
 
-import { Landing } from '@/components/Landing';
+import { Home } from '@/components/home/Home';
 import { copy } from '@/content/copy';
-import { SITE_ORIGIN } from '@/content/site';
+import { LOCALES, pageMetadata } from '@/content/site';
 
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
 export function generateStaticParams(): { locale: string }[] {
-  return [{ locale: 'bn' }, { locale: 'en' }];
+  return LOCALES;
 }
 
 export async function generateMetadata({
@@ -18,26 +18,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   if (locale !== 'bn' && locale !== 'en') return {};
-  const t = copy[locale];
-  return {
-    metadataBase: new URL(SITE_ORIGIN),
-    title: t.title,
-    description: t.description,
-    alternates: {
-      canonical: `/${locale}`,
-      languages: { bn: '/bn', en: '/en', 'x-default': '/bn' },
-    },
-    openGraph: {
-      type: 'website',
-      siteName: 'MedLiveBD',
-      url: `/${locale}`,
-      title: t.title,
-      description: t.description,
-      locale: locale === 'bn' ? 'bn_BD' : 'en_US',
-      alternateLocale: locale === 'bn' ? 'en_US' : 'bn_BD',
-    },
-    twitter: { card: 'summary_large_image', title: t.title, description: t.description },
-  };
+  return pageMetadata(locale, '', copy[locale].title, copy[locale].description);
 }
 
 export default async function CompanyPage({
@@ -47,5 +28,5 @@ export default async function CompanyPage({
 }): Promise<ReactNode> {
   const { locale } = await params;
   if (locale !== 'bn' && locale !== 'en') notFound();
-  return <Landing locale={locale} />;
+  return <Home locale={locale} />;
 }

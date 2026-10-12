@@ -7,7 +7,16 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Company site — Codex's cinematic design, finished (12 October 2026, awaiting the owner's review)
+## Company site — final premium redesign (12 October 2026, awaiting the owner's review)
+
+Branch `feat/site-final-premium-redesign` in `D:\Projects\HealthCare-site-cinematic`, off `feat/site-audience-gateway` (`0720a73`). Owner's brief: redesign the whole site, not repair it. New design system (`frontend/site/src/app/medlive.css`, replaces `site.css` and `cinematic.css`), new components, new pages. Codex's four photographs kept byte-identical and each shown once on the homepage. Navy header logo derived from the supplied logo's dark panel (`scripts/prepare-logo.mjs`). Record and screenshots: `docs/design/site-final/README.md`.
+- **For Hospitals** → `/{bn,en}/hospitals`, a page of this site. The password-less staff console is never linked.
+- **For Patients** → `https://healthcare-patient-zeta.vercel.app`, new tab, always tagged Demo, with the "do not enter real personal information" notice.
+- **Request a Demo** → `mailto:support@medlivebd.com` with a prefilled subject.
+- `/founders` became `/about` (Cloudflare `_redirects` 301). Mayesha's personal address is not shown until confirmed active; Sidrat's is.
+- Site suite 26/26 on the static export; eslint, prettier, tsc clean. **Local only: not pushed, merged or deployed.** Open: Bangla copy confirmation; Mayesha's address; founder photographs if wanted.
+
+## Company site — Codex's cinematic design, finished (12 October 2026, superseded by the redesign above)
 
 Branch `feat/site-codex-final` in `D:ProjectsHealthCare-site-cinematic`, from Codex's exact work `8c563ec`. Codex's dark photographic design kept; each photograph shown once (hashes unchanged); concrete feature points; meaningful, visible lines; no pinned scroll; larger logo; founders page. Record and evidence: `docs/design/site-cinematic/README.md`. Smoke 31/31 on the static export. The owner rejected an earlier light-background refinement (`backup/claude-refine-f0d9b80`, unused). **Local only: not pushed, merged or deployed.** Open: Bangla copy and founders' Bangla spellings.
 

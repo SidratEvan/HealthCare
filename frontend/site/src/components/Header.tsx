@@ -1,25 +1,34 @@
 'use client';
 
-import { m, useScroll, useSpring } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 
-import { audienceHref, copy, demoHref } from '@/content/copy';
+import { aboutHref, copy, hospitalsHref, patientAppHref } from '@/content/copy';
 
 import { Icon } from './icons';
-import { EASE } from './motion';
+import { AudienceDoors, DemoButton, DemoTag, EmailLink, NEW_TAB } from './links';
 
 import type { Locale } from '@/content/copy';
 import type { MouseEvent, ReactNode } from 'react';
 
-export function Mark({ priority = false }: { readonly priority?: boolean }): ReactNode {
+export type PageKey = 'home' | 'hospitals' | 'about' | 'privacy' | 'credits';
+
+/** The path after the locale, so the language switch stays on the same page. */
+export const pagePath = (page: PageKey): string => (page === 'home' ? '' : `/${page}`);
+
+/**
+ * The navy lockup, derived from the supplied logo's dark panel
+ * (scripts/prepare-logo.mjs): the mark beside the wordmark, white and cyan.
+ */
+export function Logo({ priority = false }: { readonly priority?: boolean }): ReactNode {
   return (
     <img
-      className="brand-logo"
-      src="/brand/medlivebd-logo-480.webp"
-      width="480"
-      height="317"
+      className="logo"
+      src="/brand/medlivebd-lockup-dark.webp"
+      width="607"
+      height="112"
       alt="MedLiveBD"
       fetchPriority={priority ? 'high' : 'auto'}
+      decoding="async"
     />
   );
 }
@@ -31,76 +40,55 @@ function keepPlace(event: MouseEvent<HTMLAnchorElement>): void {
   link.href = `${link.pathname}${window.location.hash}`;
 }
 
-/** Both languages, the current one marked — the switch reads as part of the page. */
+/** Both languages, the current one marked; the other is a link to the same page (GR-06). */
 export function LanguageSwitch({
   locale,
-  path = '',
+  page,
 }: {
   readonly locale: Locale;
-  readonly path?: string;
+  readonly page: PageKey;
 }): ReactNode {
-  const other = locale === 'bn' ? 'en' : 'bn';
   const t = copy[locale];
-  const items = (['bn', 'en'] as const).map((code) =>
-    code === locale ? (
-      <span key={code} className="lang-option is-current" lang={code} aria-current="true">
-        {code === 'bn' ? 'বাংলা' : 'EN'}
-      </span>
-    ) : (
-      <a
-        key={code}
-        className="lang-option language-link"
-        href={`/${other}${path}`}
-        lang={other}
-        hrefLang={other}
-        aria-label={t.otherLanguageLabel}
-        onClick={keepPlace}
-      >
-        {code === 'bn' ? 'বাংলা' : 'EN'}
-      </a>
-    ),
-  );
-  return <div className="lang-switch">{items}</div>;
-}
-
-const NEW_TAB = { target: '_blank', rel: 'noopener noreferrer' } as const;
-
-/** The patient app is a demonstration: every link to it says so (owner, 12 October 2026). */
-export function PatientAppTag({ locale }: { readonly locale: Locale }): ReactNode {
   return (
-    <>
-      <span className="demo-tag nav-demo-tag">{copy[locale].navDemo}</span>
-      <span className="sr-only">{copy[locale].newTab}</span>
-    </>
+    <div className="lang-switch" role="group" aria-label={t.language}>
+      {(['bn', 'en'] as const).map((code) =>
+        code === locale ? (
+          <span key={code} className="lang-option" lang={code} aria-current="true">
+            {code === 'bn' ? 'বাংলা' : 'EN'}
+          </span>
+        ) : (
+          <a
+            key={code}
+            className="lang-option"
+            href={`/${code}${pagePath(page)}`}
+            lang={code}
+            hrefLang={code}
+            aria-label={t.otherLanguageLabel}
+            onClick={keepPlace}
+          >
+            {code === 'bn' ? 'বাংলা' : 'EN'}
+          </a>
+        ),
+      )}
+    </div>
   );
-}
-
-/** Where a navigation item leads: a scene of the home page, or the founders page (S-C-01). */
-function navHref(locale: Locale, id: string, onHome: boolean): string {
-  const audience = audienceHref[id];
-  if (audience !== undefined) return audience;
-  if (id === 'founders') return `/${locale}/founders`;
-  return onHome ? `#${id}` : `/${locale}#${id}`;
 }
 
 export function Header({
   locale,
-  page = 'home',
+  page,
 }: {
   readonly locale: Locale;
-  readonly page?: 'home' | 'founders';
+  readonly page: PageKey;
 }): ReactNode {
   const t = copy[locale];
-  const onHome = page === 'home';
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
-  const { scrollYProgress } = useScroll();
-  const progress = useSpring(scrollYProgress, { stiffness: 140, damping: 30, restDelta: 0.001 });
 
   useEffect(() => {
     const onScroll = (): void => {
-      setScrolled(window.scrollY > 8);
+      setScrolled(window.scrollY > 24);
     };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -133,7 +121,7 @@ export function Header({
   }, [open]);
 
   useEffect(() => {
-    const desktop = window.matchMedia('(min-width: 961px)');
+    const desktop = window.matchMedia('(min-width: 1024px)');
     const closeOnDesktop = (): void => {
       if (desktop.matches) setOpen(false);
     };
@@ -144,98 +132,63 @@ export function Header({
   }, []);
 
   return (
-    <>
-      <header className="site-header" data-scrolled={scrolled || open ? 'true' : 'false'}>
-        <div className="shell header-inner">
-          <a className="brand-link" href={`/${locale}`} aria-label="MedLiveBD">
-            <Mark priority />
-          </a>
-          <nav className="desktop-nav" aria-label={t.menu}>
-            {t.nav.map((link) => (
-              <a
-                key={link.id}
-                href={navHref(locale, link.id, onHome)}
-                {...(link.id === 'patients' ? NEW_TAB : {})}
-                aria-current={link.id === page ? 'page' : undefined}
-              >
-                {link.label}
-                {link.id === 'patients' ? <PatientAppTag locale={locale} /> : null}
-              </a>
-            ))}
-          </nav>
-          <div className="header-actions">
-            <LanguageSwitch locale={locale} path={onHome ? '' : `/${page}`} />
-            <a className="button button-primary button-small header-cta" href={demoHref}>
-              {t.demo}
-            </a>
-            <button
-              className="menu-toggle"
-              type="button"
-              ref={toggle}
-              onClick={() => {
-                setOpen(!open);
-              }}
-              aria-expanded={open}
-              aria-controls="mobile-navigation"
-              aria-label={open ? t.close : t.menu}
-            >
-              <span />
-              <span />
-            </button>
-          </div>
-        </div>
-        <m.div className="scroll-progress" style={{ scaleX: progress }} aria-hidden="true" />
-      </header>
-      <nav id="mobile-navigation" className="mobile-nav" aria-label={t.menu} hidden={!open}>
-        {open ? (
-          <m.div
-            className="mobile-nav-inner shell"
-            initial="hidden"
-            animate="show"
-            variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
+    <header
+      className="site-header"
+      data-solid={scrolled || open || page !== 'home' ? 'true' : 'false'}
+      data-open={open ? 'true' : 'false'}
+    >
+      <div className="shell header-bar">
+        <a className="brand" href={`/${locale}`} aria-label="MedLiveBD">
+          <Logo priority />
+        </a>
+        <nav className="primary-nav" aria-label={t.mainNav}>
+          <a
+            href={hospitalsHref(locale)}
+            aria-current={page === 'hospitals' ? 'page' : undefined}
+            data-door="hospitals"
           >
-            {t.nav.map((link) => (
-              <m.a
-                key={link.id}
-                href={navHref(locale, link.id, onHome)}
-                {...(link.id === 'patients' ? NEW_TAB : {})}
-                variants={{
-                  hidden: { opacity: 0, y: 16 },
-                  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
-                }}
-                onClick={() => {
-                  setOpen(false);
-                }}
-              >
-                {link.label}
-                {link.id === 'patients' ? <PatientAppTag locale={locale} /> : null}
-                <Icon name="arrow" className="arrow" />
-              </m.a>
-            ))}
-            <m.div
-              className="mobile-nav-foot"
-              variants={{
-                hidden: { opacity: 0 },
-                show: { opacity: 1, transition: { duration: 0.5, delay: 0.15 } },
-              }}
-            >
-              <a className="button button-primary" href={demoHref}>
-                {t.demo}
-                <Icon name="diagonal" className="arrow" />
-              </a>
-              <a
-                className="mobile-contact"
-                href={onHome ? '#contact' : `/${locale}#contact`}
-                onClick={() => {
-                  setOpen(false);
-                }}
-              >
-                {t.footerContact}
-              </a>
-            </m.div>
-          </m.div>
-        ) : null}
-      </nav>
-    </>
+            {t.nav.hospitals}
+          </a>
+          <a href={patientAppHref} {...NEW_TAB} data-door="patients">
+            {t.nav.patients}
+            <DemoTag locale={locale} />
+            <Icon name="external" className="icon nav-icon" />
+          </a>
+          <a href={aboutHref(locale)} aria-current={page === 'about' ? 'page' : undefined}>
+            {t.nav.about}
+          </a>
+        </nav>
+        <div className="header-end">
+          <LanguageSwitch locale={locale} page={page} />
+          <DemoButton locale={locale} className="header-demo" />
+          <button
+            className="menu-toggle"
+            type="button"
+            ref={toggle}
+            onClick={() => {
+              setOpen(!open);
+            }}
+            aria-expanded={open}
+            aria-controls="mobile-menu"
+            aria-label={open ? t.close : t.menu}
+          >
+            <span />
+            <span />
+          </button>
+        </div>
+      </div>
+      <div id="mobile-menu" className="mobile-menu" hidden={!open}>
+        <div className="shell mobile-menu-inner">
+          <AudienceDoors locale={locale} className="doors-stacked" />
+          <a className="mobile-link" href={aboutHref(locale)}>
+            {t.nav.about}
+            <Icon name="arrow" className="icon" />
+          </a>
+          <DemoButton locale={locale} className="mobile-demo" />
+          <EmailLink />
+          <LanguageSwitch locale={locale} page={page} />
+        </div>
+      </div>
+    </header>
   );
 }

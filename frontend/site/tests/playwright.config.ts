@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 /** Isolated company presentation: no API, database or clinical test setup. */
 export default defineConfig({
   testDir: '.',
-  testMatch: 'cinematic.spec.ts',
+  testMatch: 'site.spec.ts',
   outputDir: '../test-results',
   timeout: 60_000,
   expect: { timeout: 10_000 },

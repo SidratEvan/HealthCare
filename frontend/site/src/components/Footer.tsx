@@ -1,67 +1,69 @@
-import { cinematic } from '@/content/cinematic';
-import { audienceHref, contactEmail, copy, demoHref } from '@/content/copy';
+import {
+  aboutHref,
+  contactEmail,
+  copy,
+  demoHref,
+  hospitalsHref,
+  patientAppHref,
+} from '@/content/copy';
 
 import { fmt } from './format';
-import { LanguageSwitch, Mark, PatientAppTag } from './Header';
+import { LanguageSwitch, Logo } from './Header';
 import { Icon } from './icons';
+import { DemoTag, NEW_TAB } from './links';
 
+import type { PageKey } from './Header';
 import type { Locale } from '@/content/copy';
 import type { ReactNode } from 'react';
 
 export function Footer({
   locale,
-  path = '',
+  page,
 }: {
   readonly locale: Locale;
-  /** The page's path after the locale, so the language switch stays on the same page. */
-  readonly path?: string;
+  readonly page: PageKey;
 }): ReactNode {
   const t = copy[locale];
-  const home = `/${locale}`;
+  const f = t.footer;
   return (
     <footer className="site-footer">
       <div className="shell footer-grid">
         <div className="footer-brand">
-          <Mark />
-          <p>{t.footer}</p>
+          <a href={`/${locale}`} aria-label="MedLiveBD">
+            <Logo />
+          </a>
+          <p>{f.line}</p>
         </div>
-        <nav aria-label={t.footerExplore}>
-          <h2>{t.footerExplore}</h2>
-          {t.footerLinks.map((link) => (
-            <a
-              key={link.id}
-              href={audienceHref[link.id] ?? `${home}#${link.id}`}
-              {...(link.id === 'patients' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-            >
-              {link.label}
-              {link.id === 'patients' ? <PatientAppTag locale={locale} /> : null}
-            </a>
-          ))}
-        </nav>
-        <nav aria-label={t.footerCompany}>
-          <h2>{t.footerCompany}</h2>
-          <a href={`${home}/founders`}>{t.footerFounders}</a>
-          <a href={`${home}#trust`}>{t.trustLink}</a>
-          <a href={`${home}/privacy`}>{t.privacy}</a>
-          <a href={`${home}/credits`}>{t.credits}</a>
-        </nav>
-        <div>
-          <h2>{t.footerContact}</h2>
-          <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
+        <nav aria-label={f.explore} className="footer-col">
+          <h2>{f.explore}</h2>
+          <a href={hospitalsHref(locale)}>{t.nav.hospitals}</a>
+          <a href={patientAppHref} {...NEW_TAB}>
+            {t.nav.patients}
+            <DemoTag locale={locale} />
+          </a>
           <a href={demoHref}>{t.demo}</a>
-          <h2 className="footer-subhead">{t.footerLanguage}</h2>
-          <LanguageSwitch locale={locale} path={path} />
+        </nav>
+        <nav aria-label={f.company} className="footer-col">
+          <h2>{f.company}</h2>
+          <a href={aboutHref(locale)}>{t.nav.about}</a>
+          <a href={`/${locale}/privacy`}>{f.privacy}</a>
+          <a href={`/${locale}/credits`}>{f.credits}</a>
+        </nav>
+        <div className="footer-col">
+          <h2>{f.contact}</h2>
+          <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
+          <LanguageSwitch locale={locale} page={page} />
         </div>
       </div>
-      <p className="shell campaign-disclosure">{cinematic[locale].synthetic}</p>
-      <div className="shell footer-bottom">
-        <span>
-          © {fmt(new Date().getFullYear(), locale)} {t.copyright}
-        </span>
-        <a href="#top">
-          {t.backTop}
-          <Icon name="diagonal" className="arrow arrow-up" />
-        </a>
+      <div className="shell footer-base">
+        <p>{f.synthetic}</p>
+        <div className="footer-base-end">
+          <span>© {fmt(new Date().getFullYear(), locale)} MedLiveBD</span>
+          <a href="#top">
+            {f.backTop}
+            <Icon name="up" className="icon" />
+          </a>
+        </div>
       </div>
     </footer>
   );

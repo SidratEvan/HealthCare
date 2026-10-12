@@ -4,10 +4,9 @@ import { SITE_ORIGIN } from '@/content/site';
 
 import { fontVariables } from '../fonts';
 
-import '../site.css';
-import '../cinematic.css';
+import '../medlive.css';
 
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
 /**
@@ -15,6 +14,7 @@ import type { ReactNode } from 'react';
  * child page (the privacy notice) inherits the image with a localhost address.
  */
 export const metadata: Metadata = { metadataBase: new URL(SITE_ORIGIN) };
+export const viewport: Viewport = { themeColor: '#040b16', colorScheme: 'dark' };
 
 /** Server-rendered document language, including without JavaScript (GR-06). */
 export default async function LocaleLayout({
@@ -29,11 +29,11 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} className={fontVariables}>
       <body>
-        {/* Without script nothing animates, so nothing may wait hidden for it. */}
+        {/* Without script nothing moves, so nothing may wait hidden or dim for it. */}
         <noscript>
           <style>
             {
-              '[data-reveal]{opacity:1!important;transform:none!important;clip-path:none!important}.audience-controls,.menu-toggle{display:none!important}'
+              '[data-reveal],[data-scrub]{opacity:1!important;transform:none!important}.menu-toggle{display:none!important}'
             }
           </style>
         </noscript>
