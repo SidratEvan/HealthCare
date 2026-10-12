@@ -7,7 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Company site — cinematic candidate (12 October 2026, local review)
+## Company site — Codex's cinematic design, finished (12 October 2026, awaiting the owner's review)
+
+Branch `feat/site-codex-final` in `D:ProjectsHealthCare-site-cinematic`, from Codex's exact work `8c563ec`. Codex's dark photographic design kept; each photograph shown once (hashes unchanged); concrete feature points; meaningful, visible lines; no pinned scroll; larger logo; founders page. Record and evidence: `docs/design/site-cinematic/README.md`. Smoke 31/31 on the static export. The owner rejected an earlier light-background refinement (`backup/claude-refine-f0d9b80`, unused). **Local only: not pushed, merged or deployed.** Open: Bangla copy and founders' Bangla spellings.
+
+## Company site — cinematic candidate (12 October 2026, Codex's work as left)
 
 The owner's cinematic redesign supersedes the visual direction of the brand
 story below. Worktree `D:\Projects\HealthCare-site-cinematic`, branch

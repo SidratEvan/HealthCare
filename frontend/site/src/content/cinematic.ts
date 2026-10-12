@@ -1,4 +1,8 @@
 /** Public company narrative, S-C-01/02/04/05, GR-06, FR-SEC-08. */
+
+/** A title and its one-line explanation. */
+type Point = readonly [title: string, body: string];
+
 const en = {
   lead: 'Connecting hospital teams and the people they care for. Made for Bangladesh.',
   explore: 'Explore MedLiveBD',
@@ -18,18 +22,24 @@ const en = {
   focus: 'Choose your perspective',
   reset: 'See both',
   patientCta: 'Explore the patient experience',
-  hospitalDetail: 'More connection.\nMore room for care.',
-  hospitalDetailBody:
-    'A shared view of the day helps hospital teams spend less time chasing information.',
-  hospitalBenefits: [
-    ['Teams in step', 'Connect the front desk, clinical teams and hospital operations.'],
-    ['A clearer picture', 'See what is happening, with information that shows its age.'],
-    ['Built around your people', 'A focused workspace for each role, in Bangla and English.'],
-  ],
-  patientDetail: 'Less uncertainty.\nA clearer next step.',
-  patientDetailBody:
-    'From choosing a doctor to knowing when it is your turn. Healthcare information that feels closer, on the phone you already carry.',
-  patientBenefits: ['Find the right care', 'Plan your appointment', 'Follow your serial'],
+  hub: 'MedLiveBD',
+  /** What each audience gets, point by point (owner, 12 October 2026). */
+  hospitalFeatures: [
+    [
+      'Live queue and serials',
+      'Reception calls the next patient, and everyone waiting sees it on their phone.',
+    ],
+    ['Beds and emergency at a glance', 'Ward, ICU and emergency capacity in one shared view.'],
+    [
+      'Every role, one platform',
+      'Reception, doctors, wards, lab and administration — in Bangla and English.',
+    ],
+  ] as readonly Point[],
+  patientFeatures: [
+    ['Find the right care', 'Search doctors, specialties and hospitals.'],
+    ['Book a serial', 'Choose a doctor and a time, from the phone you already carry.'],
+    ['Follow your serial live', 'See how many are ahead of you, and when it is your turn.'],
+  ] as readonly Point[],
   comingSoon: 'Patient access is coming soon.',
   patientStatus: 'This is an introduction to the experience. Public booking is not open yet.',
   mapLabel: 'Our Bangladesh vision',
@@ -39,7 +49,7 @@ const en = {
     'From a single hospital to a more connected healthcare future. Technology shaped around our people, our language and the way care happens here.',
   mapNote: 'A vision of connectivity — not current hospital coverage.',
   mapAlt:
-    'Accurate outline of Bangladesh. Illustrative connecting lines represent an ambition, not active facilities or measured coverage.',
+    'Accurate outline of Bangladesh and its eight divisions. Lines from Dhaka to each division headquarters illustrate an ambition, not active facilities or measured coverage.',
   mapCredit: 'Country geometry: geoBoundaries · CC0',
   mapCaption: 'People. Hospitals. Possibility.',
   trustLabel: 'Trust is part of the connection',
@@ -58,6 +68,7 @@ const en = {
   contactTitle: 'Let’s build more\nconnected care, together.',
   contactBody: 'See what connected care could look like for your hospital.',
   emailHint: 'Opens your email app',
+  foundersLink: 'Meet the founders',
   synthetic: 'AI-generated illustrative scenes. Not actual staff, patients or partner hospitals.',
   heroAlt:
     'Illustrative Bangladeshi male physician and female physician wearing hijab collaborating in a hospital.',
@@ -98,20 +109,19 @@ const bn: CinematicCopy = {
   focus: 'আপনার অভিজ্ঞতা বেছে নিন',
   reset: 'দুটিই দেখুন',
   patientCta: 'রোগীর অভিজ্ঞতা জানুন',
-  hospitalDetail: 'আরও সংযোগ।\nসেবায় আরও মনোযোগ।',
-  hospitalDetailBody: 'দিনের কাজের একটি সমন্বিত চিত্র থাকলে তথ্য খোঁজার ব্যস্ততা কমে।',
-  hospitalBenefits: [
-    ['একসঙ্গে কাজ করে দল', 'ফ্রন্ট ডেস্ক, চিকিৎসক ও হাসপাতাল পরিচালনার মধ্যে সংযোগ।'],
-    ['দিনের পরিষ্কার চিত্র', 'কী ঘটছে দেখুন, তথ্য কতটা হালনাগাদ তা-সহ।'],
-    ['মানুষের কাজের উপযোগী', 'প্রতিটি ভূমিকার জন্য নির্দিষ্ট কর্মক্ষেত্র, বাংলা ও ইংরেজিতে।'],
+  hub: 'MedLiveBD',
+  hospitalFeatures: [
+    ['লাইভ কিউ ও সিরিয়াল', 'রিসেপশন পরের রোগীকে ডাকলেই অপেক্ষায় থাকা সবাই ফোনে দেখতে পান।'],
+    ['শয্যা ও জরুরি বিভাগ এক নজরে', 'ওয়ার্ড, আইসিইউ ও জরুরি বিভাগের সক্ষমতা একটি সমন্বিত চিত্রে।'],
+    [
+      'প্রতিটি ভূমিকা, একটি প্ল্যাটফর্ম',
+      'রিসেপশন, চিকিৎসক, ওয়ার্ড, ল্যাব ও প্রশাসন — বাংলা ও ইংরেজিতে।',
+    ],
   ],
-  patientDetail: 'অনিশ্চয়তা কমুক।\nপরের ধাপ হোক স্পষ্ট।',
-  patientDetailBody:
-    'চিকিৎসক বেছে নেওয়া থেকে নিজের পালা জানা পর্যন্ত। আপনার পরিচিত ফোনেই স্বাস্থ্যসেবার তথ্য থাকুক আরও কাছে।',
-  patientBenefits: [
-    'সঠিক সেবা খুঁজুন',
-    'অ্যাপয়েন্টমেন্টের পরিকল্পনা করুন',
-    'সিরিয়ালের অগ্রগতি জানুন',
+  patientFeatures: [
+    ['সঠিক সেবা খুঁজুন', 'চিকিৎসক, বিশেষজ্ঞতা ও হাসপাতাল খুঁজে নিন।'],
+    ['সিরিয়াল বুক করুন', 'চিকিৎসক ও সময় বেছে নিন, নিজের ফোন থেকেই।'],
+    ['লাইভ সিরিয়াল দেখুন', 'আপনার আগে কতজন আছেন আর কখন আপনার পালা, জেনে নিন।'],
   ],
   comingSoon: 'রোগীদের জন্য শিগগিরই আসছে।',
   patientStatus: 'এখানে অভিজ্ঞতার পরিচয় দেওয়া হয়েছে। জনসাধারণের বুকিং এখনো চালু হয়নি।',
@@ -122,7 +132,7 @@ const bn: CinematicCopy = {
     'একটি হাসপাতাল থেকে আরও সংযুক্ত স্বাস্থ্যসেবার ভবিষ্যৎ। আমাদের মানুষ, ভাষা আর সেবার বাস্তবতার সঙ্গে মানানসই প্রযুক্তি।',
   mapNote: 'সংযোগের ভবিষ্যৎ ভাবনা — বর্তমান হাসপাতাল কভারেজ নয়।',
   mapAlt:
-    'বাংলাদেশের নির্ভুল সীমানা। রেখাগুলো সংযোগের ভবিষ্যৎ ভাবনা বোঝায়, চালু হাসপাতাল বা বর্তমান কভারেজ নয়।',
+    'বাংলাদেশ ও এর আটটি বিভাগের নির্ভুল সীমানা। ঢাকা থেকে প্রতিটি বিভাগীয় সদরের দিকে রেখাগুলো সংযোগের ভবিষ্যৎ ভাবনা বোঝায়, চালু হাসপাতাল বা বর্তমান কভারেজ নয়।',
   mapCredit: 'দেশের সীমানা: geoBoundaries · CC0',
   mapCaption: 'মানুষ। হাসপাতাল। সম্ভাবনা।',
   trustLabel: 'সংযোগের সঙ্গে আস্থা',
@@ -135,6 +145,7 @@ const bn: CinematicCopy = {
   contactTitle: 'আরও সংযুক্ত স্বাস্থ্যসেবা\nগড়ি, একসঙ্গে।',
   contactBody: 'আপনার হাসপাতালের জন্য সংযুক্ত সেবার সম্ভাবনা দেখুন।',
   emailHint: 'আপনার ইমেইল অ্যাপ খুলবে',
+  foundersLink: 'প্রতিষ্ঠাতাদের সঙ্গে পরিচিত হোন',
   synthetic: 'দৃশ্যগুলো এআই দিয়ে তৈরি দৃষ্টান্ত। প্রকৃত কর্মী, রোগী বা সহযোগী হাসপাতাল নয়।',
   heroAlt:
     'দৃষ্টান্তমূলক বাংলাদেশি পুরুষ চিকিৎসক ও হিজাব পরা নারী চিকিৎসক হাসপাতালে একসঙ্গে কাজ করছেন।',

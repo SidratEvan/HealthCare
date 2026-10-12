@@ -11,6 +11,10 @@
   --cinema-shade: rgb(3 18 28 / 0.85);
   --map-fill: #0a2e3b;
   --map-fill-bright: #165464;
+  /* One stroke system for every connecting line on the page. */
+  --thread-width: 2px;
+  --thread: var(--cinema-signal);
+  --thread-track: rgb(124 229 217 / 0.16);
 }
 .cinematic-page {
   background: var(--cinema-night);
@@ -22,11 +26,56 @@
   background: var(--cinema-paper);
   backdrop-filter: none;
 }
-.cinematic-page .brand-logo {
-  width: 88px;
+/*
+ * The logo is large enough at the top of the page for its tagline to be read,
+ * and settles to a compact bar once the visitor scrolls. The header is fixed
+ * and the page reserves the tall height, so the change never moves content.
+ */
+.cinematic-page {
+  --header-tall: 124px;
+  --logo-tall: 168px;
+  --logo-compact: 104px;
+  --header: 80px;
+}
+.cinematic-page .site-header {
+  position: fixed;
+  inset: 0 0 auto;
+}
+.cinematic-page .header-inner {
+  height: var(--header-tall);
+  transition: height 0.45s var(--ease);
+}
+.cinematic-page .site-header[data-scrolled='true'] .header-inner {
+  height: var(--header);
+}
+.cinematic-page .brand-link {
+  width: var(--logo-tall);
+}
+.cinematic-page .site-header .brand-logo {
+  width: var(--logo-tall);
+  transform-origin: left center;
+  transition: transform 0.45s var(--ease);
+}
+.cinematic-page .site-header[data-scrolled='true'] .brand-logo {
+  transform: scale(calc(var(--logo-compact) / var(--logo-tall)));
+}
+.cinematic-page .desktop-nav a[aria-current='page'] {
+  color: var(--ink);
+  background: rgb(11 26 51 / 0.06);
+}
+.cinematic-page .mobile-nav {
+  top: var(--header);
+}
+.cinematic-page .footer-brand .brand-logo {
+  width: 200px;
 }
 .cinematic-page main {
+  padding-top: var(--header-tall);
   color: var(--paper);
+}
+.cinematic-page main h4 {
+  margin: 0;
+  color: inherit;
 }
 .cinematic-page h1,
 .cinematic-page h2,
@@ -38,9 +87,6 @@
 }
 .cinematic-page main :focus-visible {
   outline-color: var(--cinema-signal);
-}
-.cinematic-page .people-story :focus-visible {
-  outline-color: var(--blue);
 }
 .campaign-image {
   display: block;
@@ -87,7 +133,7 @@
 }
 .pulse-hero {
   position: relative;
-  min-height: min(810px, calc(100svh - var(--header)));
+  min-height: min(810px, calc(100svh - var(--header-tall)));
   isolation: isolate;
   display: flex;
   align-items: center;
@@ -139,27 +185,15 @@
   line-height: 1.7;
   margin-block: 28px 32px;
 }
-.hero-signal {
+/* The care thread begins at the foot of the hero, under the photograph. */
+.hero-stem {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-  pointer-events: none;
-}
-.signal-track {
-  fill: none;
-  stroke: var(--cinema-line);
-  stroke-width: 1;
-}
-.signal-stroke {
-  fill: none;
-  stroke: var(--cinema-signal);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-}
-.signal-point {
-  fill: var(--cinema-signal);
+  left: calc(50% - var(--thread-width) / 2);
+  bottom: 0;
+  width: var(--thread-width);
+  height: 64px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, transparent, var(--thread));
 }
 .hero-foot {
   position: absolute;
@@ -182,19 +216,33 @@
   padding-block: 110px 85px;
   text-align: center;
 }
-.connection-stem {
+.connection-stem,
+.token-stem,
+.token-arm {
   position: absolute;
-  width: 1px;
-  height: 65px;
-  background: var(--cinema-signal);
+  display: block;
+  background: var(--thread-track);
+  border-radius: 2px;
+}
+.connection-stem {
+  width: var(--thread-width);
+  height: 72px;
   top: 0;
-  left: 50%;
-  opacity: 0.6;
+  left: calc(50% - var(--thread-width) / 2);
 }
 .connection-stem-bottom {
   top: auto;
   bottom: 0;
-  height: 46px;
+  height: 64px;
+}
+.stem-ink,
+.arm-ink {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: inherit;
+  background: var(--thread);
+  transform-origin: top;
 }
 .connection-copy .pulse-kicker {
   justify-content: center;
@@ -217,15 +265,7 @@
 }
 .pulse-audiences {
   position: relative;
-  padding: 30px 0 55px;
-}
-.pulse-audiences[data-motion='true'] {
-  height: calc(100svh + 120px);
-  min-height: 980px;
-}
-.pulse-audiences[data-motion='true'] .audience-sticky {
-  position: sticky;
-  top: calc(var(--header) + 18px);
+  padding: 30px 0 40px;
 }
 .audience-heading {
   display: flex;
@@ -265,11 +305,11 @@
   padding-inline: max(var(--gutter), calc((100vw - 1380px) / 2));
   gap: 110px;
   isolation: isolate;
+  --card-h: max(540px, min(64svh, 650px));
 }
 .audience-scene {
   position: relative;
-  min-height: 540px;
-  height: min(64svh, 650px);
+  height: var(--card-h);
   isolation: isolate;
   overflow: hidden;
 }
@@ -327,178 +367,121 @@
   outline: 2px solid var(--cinema-signal);
   outline-offset: 5px;
 }
+/* The MedLiveBD node: the thread arrives from above and bridges into both scenes. */
 .connection-token {
   position: absolute;
-  width: 240px;
-  height: 340px;
+  top: 0;
   left: calc(50% - 120px);
-  top: 10%;
+  width: 240px;
+  height: var(--card-h);
   z-index: 2;
   pointer-events: none;
 }
-.token-lines {
-  position: absolute;
-  width: 100%;
-  height: 100%;
+.token-stem {
+  left: calc(50% - var(--thread-width) / 2);
+  top: 0;
+  width: var(--thread-width);
+  height: calc(50% - 12px);
 }
-.token-layer {
+.token-arm {
+  top: calc(50% - var(--thread-width) / 2);
+  height: var(--thread-width);
+  width: calc(50% - 12px);
+}
+.token-arm-left {
+  right: calc(50% + 12px);
+}
+.token-arm-right {
+  left: calc(50% + 12px);
+}
+.token-arm-left .arm-ink {
+  transform-origin: right;
+}
+.token-arm-right .arm-ink {
+  transform-origin: left;
+}
+/* Each arm ends in a point on the photograph it reaches. */
+.token-arm::after {
+  content: '';
   position: absolute;
-  width: 82px;
-  height: 112px;
-  border: 1px solid var(--cinema-signal);
+  top: -3px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  left: calc(50% - 41px);
-  top: calc(50% - 56px);
-  background: linear-gradient(150deg, rgb(124 229 217 / 0.12), transparent 65%);
-  box-shadow: inset 0 0 18px rgb(124 229 217 / 0.04);
+  background: var(--thread);
 }
-.layer-one {
-  translate: -12px -28px;
-  opacity: 0.55;
+.token-arm-left::after {
+  left: -4px;
 }
-.layer-two {
-  border-color: var(--cinema-blue);
-  rotate: 50deg;
-}
-.layer-three {
-  translate: 12px 28px;
-  opacity: 0.7;
+.token-arm-right::after {
+  right: -4px;
 }
 .token-point {
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 16px;
+  height: 16px;
   background: var(--paper);
+  border: 3px solid var(--thread);
   border-radius: 50%;
-  top: calc(50% - 4px);
-  left: calc(50% - 4px);
-  box-shadow: 0 0 20px 5px rgb(124 229 217 / 0.35);
+  top: calc(50% - 8px);
+  left: calc(50% - 8px);
+  box-shadow: 0 0 22px 6px rgb(124 229 217 / 0.35);
 }
-.audience-caption {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  margin-top: 22px;
+.token-label {
+  position: absolute;
+  top: calc(50% + 20px);
+  left: 0;
+  right: 0;
+  text-align: center;
   font-size: 12px;
-  color: var(--cinema-muted);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--paper);
 }
-.people-story {
-  position: relative;
-  padding-block: 105px;
-  color: var(--ink);
-  background: var(--cinema-paper);
+/* What each audience gets, under its own scene. */
+.audience-column > .benefit-lines,
+.audience-column #patient-points {
+  margin-top: 28px;
 }
-.people-story::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 50%;
-  width: 1px;
-  background: var(--cyan);
-  opacity: 0.16;
-  pointer-events: none;
-}
-.people-grid {
-  display: grid;
-  grid-template-columns: 1.08fr 1fr;
-  gap: clamp(40px, 7vw, 105px);
-  align-items: center;
-}
-.people-photo {
-  position: relative;
-}
-.people-photo .campaign-image {
-  aspect-ratio: 0.94;
-  overflow: hidden;
-}
-.people-photo img {
-  object-position: 48% 50%;
-}
-.photo-edge {
-  position: absolute;
-  inset: 20px -15px -20px 20px;
-  border: 1px solid var(--cyan);
-  opacity: 0.45;
-  pointer-events: none;
-}
-.people-copy .pulse-kicker {
-  color: var(--blue-deep);
-  margin-bottom: 24px;
-}
-.people-copy h2 {
-  font-size: clamp(34px, 3.8vw, 54px);
-  line-height: 1.12;
-  font-weight: 500;
-}
-.people-copy > p:not(.pulse-kicker) {
-  font-size: 16px;
-  color: var(--muted);
-  margin-top: 24px;
-  max-width: 440px;
-}
-.benefit-lines {
-  margin-block: 28px 32px;
-}
-.benefit-lines li {
+.pulse-audiences .benefit-lines li {
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  padding-block: 15px;
-  border-top: 1px solid var(--line-strong);
+  padding-block: 16px;
+  border-top: 1px solid var(--cinema-line);
 }
-.benefit-dot {
+.pulse-audiences .benefit-dot {
   display: inline-block;
   width: 7px;
   height: 7px;
-  border: 1px solid var(--blue);
+  border: 1px solid var(--cinema-signal);
   border-radius: 50%;
   flex-shrink: 0;
-  margin-top: 8px;
+  margin-top: 9px;
 }
-.benefit-lines h3 {
-  font-size: 16px;
+.pulse-audiences .benefit-lines h4 {
+  font-size: 17px;
+  font-weight: 500;
+}
+.pulse-audiences .benefit-lines p {
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--cinema-muted);
+  max-width: 440px;
+}
+.pulse-audiences .patient-status {
+  margin-top: 18px;
+  border-left: 2px solid var(--cinema-signal);
+  padding-left: 18px;
+}
+.pulse-audiences .patient-status strong {
+  font-size: 15px;
   font-weight: 600;
 }
-.benefit-lines p {
-  color: var(--muted);
+.pulse-audiences .patient-status p {
+  margin-top: 4px;
   font-size: 14px;
-  margin-top: 5px;
-  max-width: 350px;
-}
-.patient-story {
-  background: var(--cinema-mint);
-}
-.patient-story .people-grid {
-  grid-template-columns: 1fr 1.08fr;
-}
-.patient-story .people-photo .campaign-image {
-  aspect-ratio: 1.03;
-}
-.patient-story .people-photo img {
-  object-position: 65% center;
-}
-.patient-steps {
-  margin-block: 25px 30px;
-}
-.patient-steps li {
-  display: flex;
-  gap: 15px;
-  align-items: baseline;
-  padding-block: 10px;
-  font-size: 16px;
-}
-.patient-status {
-  border-left: 2px solid var(--blue);
-  padding-left: 18px;
-  max-width: 410px;
-}
-.patient-status strong {
-  font-size: 15px;
-}
-.patient-status p {
-  font-size: 14px;
-  color: var(--muted);
-  margin-top: 6px;
+  color: var(--cinema-muted);
 }
 .pulse-bangladesh {
   position: relative;
@@ -509,9 +492,9 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: center;
-  min-height: 840px;
+  min-height: 760px;
   gap: 50px;
-  padding-block: 75px;
+  padding-block: 60px 75px;
 }
 .bangladesh-copy .pulse-kicker {
   color: var(--cinema-signal);
@@ -551,36 +534,70 @@
   justify-self: end;
 }
 .country-map {
+  display: block;
   width: 100%;
-  max-height: 620px;
+  max-height: 640px;
   overflow: visible;
 }
 .country-base {
-  stroke: var(--cinema-line);
-  stroke-width: 2;
+  stroke: none;
+}
+/* Strokes keep their width whatever the map's scale (they were ~0.7 px before). */
+.country-outline,
+.country-division,
+.map-spoke {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .country-outline {
-  stroke: var(--cinema-signal);
-  stroke-width: 2.5;
-  fill: none;
+  stroke: var(--thread);
+  stroke-width: 1.5px;
 }
 .country-division {
-  fill: none;
-  stroke: var(--cinema-signal);
-  stroke-width: 0.7;
-  opacity: 0.2;
+  stroke: rgb(124 229 217 / 0.32);
+  stroke-width: 1px;
 }
-.country-connections {
-  fill: none;
-  stroke: var(--cinema-signal);
-  stroke-width: 1.6;
+.map-spoke {
+  stroke: var(--thread);
+  stroke-width: var(--thread-width);
 }
-.country-connections circle {
-  fill: var(--cinema-signal);
+.map-point {
+  fill: var(--cinema-night);
+  stroke: var(--thread);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
 }
-.country-connections .country-halo {
-  fill: none;
-  opacity: 0.4;
+.map-hub {
+  fill: var(--thread);
+}
+.map-hub-halo {
+  fill: rgb(124 229 217 / 0.12);
+  stroke: rgb(124 229 217 / 0.5);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+/* A halo in the night colour keeps a label legible where it crosses a line. */
+.map-label {
+  paint-order: stroke;
+  stroke: var(--cinema-night);
+  stroke-width: 10px;
+  stroke-linejoin: round;
+  fill: var(--cinema-muted);
+  font-size: 25px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.map-label-hub {
+  fill: var(--paper);
+  font-size: 28px;
+  font-weight: 600;
+}
+.company-page[lang='bn'] .map-label {
+  font-family: var(--font-bn);
+  font-size: 28px;
+  letter-spacing: normal;
 }
 .country-figure figcaption {
   text-align: center;
@@ -672,19 +689,18 @@
   color: var(--cinema-muted);
   margin-top: 12px;
 }
-.closing-signal {
-  width: 100%;
-  height: 1px;
-  margin-top: 60px;
-  background: linear-gradient(90deg, var(--cinema-signal), transparent 70%);
+.closing-founders {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin-top: 40px;
+  padding-top: 22px;
+  border-top: 1px solid rgb(255 255 255 / 0.18);
+  font-size: 15px;
 }
-.closing-signal span {
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--cinema-signal);
-  translate: 0 -2px;
+.closing-founders:hover {
+  color: var(--cinema-signal);
 }
 .cinematic-page .site-footer {
   background: var(--cinema-paper);
@@ -750,13 +766,20 @@
     flex-direction: column;
     align-items: flex-start;
   }
-  .audience-scene {
-    min-height: 480px;
+  .audience-panorama {
+    --card-h: max(480px, min(60svh, 600px));
+  }
+  .connection-token {
+    left: calc(50% - 100px);
+    width: 200px;
   }
 }
 @media (max-width: 960px) {
-  .people-story::before {
-    display: none;
+  .cinematic-page {
+    --header-tall: 100px;
+    --logo-tall: 128px;
+    --logo-compact: 88px;
+    --header: 68px;
   }
   .pulse-hero {
     min-height: 800px;
@@ -794,9 +817,6 @@
     margin-block: 20px 26px;
     max-width: 500px;
   }
-  .hero-signal {
-    opacity: 0.55;
-  }
   .hero-foot {
     bottom: 17px;
     font-size: 10px;
@@ -814,11 +834,8 @@
   }
   .audience-panorama {
     grid-template-columns: 1fr;
-    gap: 100px;
-  }
-  .audience-scene {
-    height: 590px;
-    min-height: 0;
+    gap: 0;
+    --card-h: 590px;
   }
   .audience-copy {
     bottom: 28px;
@@ -830,47 +847,23 @@
   .audience-scene img {
     object-position: center 20%;
   }
+  /* Stacked: the node sits in the flow between the two scenes. */
   .connection-token {
-    top: calc(50% - 100px);
-    width: 150px;
-    height: 200px;
-    left: calc(50% - 75px);
+    position: relative;
+    left: auto;
+    width: auto;
+    height: 150px;
   }
-  .token-layer {
-    width: 48px;
-    height: 68px;
-    left: calc(50% - 24px);
-    top: calc(50% - 34px);
+  .token-stem {
+    height: 100%;
   }
-  .layer-one {
-    translate: -12px -12px;
+  .token-arm {
+    display: none;
   }
-  .layer-three {
-    translate: 12px 12px;
-  }
-  .people-story {
-    padding-block: 75px;
-  }
-  .people-grid,
-  .patient-story .people-grid {
-    grid-template-columns: 1fr;
-    gap: 55px;
-  }
-  .people-photo .campaign-image,
-  .patient-story .people-photo .campaign-image {
-    aspect-ratio: 1.35;
-  }
-  .people-copy {
-    max-width: 650px;
-  }
-  .people-copy h2 {
-    font-size: 40px;
-  }
-  .patient-story .people-photo {
-    grid-row: 1;
-  }
-  .photo-edge {
-    inset: 12px -8px -12px 12px;
+  .token-label {
+    top: calc(50% - 7px);
+    left: calc(50% + 20px);
+    right: auto;
   }
   .bangladesh-layout {
     grid-template-columns: 1fr;
@@ -1004,8 +997,24 @@
     padding-inline: 7px;
     font-size: 11px;
   }
-  .audience-scene {
-    height: 550px;
+  .audience-panorama {
+    --card-h: 550px;
+  }
+  .cinematic-page {
+    --header-tall: 92px;
+    --logo-tall: 118px;
+    --logo-compact: 84px;
+    --header: 64px;
+  }
+  .map-label {
+    font-size: 36px;
+    stroke-width: 12px;
+  }
+  .map-label-hub {
+    font-size: 40px;
+  }
+  .company-page[lang='bn'] .map-label {
+    font-size: 40px;
   }
   .audience-copy {
     left: 18px;
@@ -1025,19 +1034,6 @@
   }
   .audience-scene img {
     object-position: 55% 20%;
-  }
-  .people-copy h2 {
-    font-size: 36px;
-  }
-  .people-copy > p:not(.pulse-kicker) {
-    font-size: 15px;
-  }
-  .people-photo .campaign-image,
-  .patient-story .people-photo .campaign-image {
-    aspect-ratio: 1.1;
-  }
-  .people-photo img {
-    object-position: 50% center;
   }
   .bangladesh-copy h2 {
     font-size: 38px;
@@ -1113,17 +1109,213 @@
     animation: none !important;
     transition: none !important;
   }
-  .pulse-audiences[data-motion='true'] {
-    height: auto;
-    min-height: 0;
-  }
-  .pulse-audiences .audience-sticky {
-    position: static !important;
-  }
   .hero-photograph,
   .audience-scene,
-  .token-layer,
   .country-map {
     transform: none !important;
   }
+}
+
+/* --- founders page: the same night atmosphere ------------------------------- */
+.founders-intro {
+  padding-block: 104px 72px;
+  background: radial-gradient(ellipse at 80% 20%, var(--cinema-deep), var(--cinema-night) 60%);
+}
+.founders-intro .pulse-kicker {
+  color: var(--cinema-signal);
+  margin-bottom: 28px;
+}
+.founders-intro h1 {
+  max-width: 900px;
+  font-size: clamp(38px, 4.6vw, 66px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  font-weight: 500;
+}
+.founders-lead {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(24px, 4vw, 64px);
+  max-width: 980px;
+  margin-top: 40px;
+  color: var(--cinema-muted);
+  font-size: 17px;
+  line-height: 1.7;
+}
+.founders-people {
+  padding-block: 24px 96px;
+}
+.founders-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(20px, 3vw, 40px);
+}
+.founder {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(28px, 3.2vw, 44px);
+  border-radius: 20px;
+  background: linear-gradient(160deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.02));
+  border: 1px solid var(--cinema-line);
+}
+.founder-head {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.founder-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, var(--blue), var(--teal));
+  color: var(--paper);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.founder h2 {
+  font-size: clamp(22px, 2vw, 28px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.founder-role {
+  margin-top: 6px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--cinema-muted);
+}
+.founder-focus {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--cinema-line);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cinema-signal);
+}
+.founder-bio {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--cinema-muted);
+}
+.founder-contact {
+  display: grid;
+  gap: 12px;
+  margin: auto 0 0;
+  padding-top: 30px;
+}
+.founder-contact > div {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cinema-line);
+}
+.founder-contact dt {
+  width: 64px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--cinema-muted);
+}
+.founder-contact dd {
+  margin: 0;
+}
+.founder-contact a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: 16px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.25);
+}
+.founder-contact a:hover {
+  color: var(--cinema-signal);
+  border-color: var(--cinema-signal);
+}
+.founders-vision {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding-block: 110px 120px;
+  border-top: 1px solid var(--cinema-line);
+}
+.founders-vision-inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(32px, 6vw, 96px);
+  align-items: start;
+}
+.founders-vision .pulse-kicker {
+  color: var(--cinema-signal);
+  margin-bottom: 24px;
+}
+.founders-vision h2 {
+  font-size: clamp(32px, 3.6vw, 52px);
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+.founders-vision-copy {
+  color: var(--cinema-muted);
+  font-size: 17px;
+  line-height: 1.7;
+}
+.founders-vision-close {
+  margin-top: 18px;
+  color: var(--paper);
+}
+.founders-cta {
+  margin-top: 44px;
+  padding-top: 30px;
+  border-top: 1px solid var(--cinema-line);
+}
+.founders-cta h3 {
+  font-size: 22px;
+  font-weight: 500;
+}
+.founders-cta > p {
+  margin-block: 10px 26px;
+}
+.company-page[lang='bn'] .founder-focus {
+  letter-spacing: normal;
+  font-size: 15px;
+}
+.company-page[lang='bn'] .founders-intro h1 {
+  line-height: 1.65;
+  letter-spacing: normal;
+}
+.company-page[lang='bn'] .pulse-audiences .benefit-lines p {
+  line-height: 1.75;
+}
+@media (max-width: 960px) {
+  .founders-intro {
+    padding-block: 72px 48px;
+  }
+  .founders-lead,
+  .founders-grid,
+  .founders-vision-inner {
+    grid-template-columns: 1fr;
+  }
+  .founders-lead {
+    gap: 16px;
+    font-size: 16px;
+  }
+  .founders-vision {
+    padding-block: 80px 90px;
+  }
+}
+
+/* The privacy and credits pages carry the same legible logo. */
+.company-page:not(.cinematic-page) .header-inner {
+  height: 100px;
+}
+.company-page:not(.cinematic-page) .site-header .brand-logo {
+  width: 124px;
 }

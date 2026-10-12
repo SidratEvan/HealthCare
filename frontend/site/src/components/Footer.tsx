@@ -24,7 +24,6 @@ export function Footer({
         <div className="footer-brand">
           <Mark />
           <p>{t.footer}</p>
-          <p className="footer-tagline">{t.aboutFoot}</p>
         </div>
         <nav aria-label={t.footerExplore}>
           <h2>{t.footerExplore}</h2>
@@ -36,6 +35,7 @@ export function Footer({
         </nav>
         <nav aria-label={t.footerCompany}>
           <h2>{t.footerCompany}</h2>
+          <a href={`${home}/founders`}>{t.footerFounders}</a>
           <a href={`${home}#trust`}>{t.trustLink}</a>
           <a href={`${home}/privacy`}>{t.privacy}</a>
           <a href={`${home}/credits`}>{t.credits}</a>
