@@ -57,6 +57,10 @@ export const CLINICAL = {
     bn: 'জমা হয়েছে কি না নিশ্চিত নয়। সার্ভারের অবস্থা যাচাই করা হচ্ছে।',
     en: 'The upload result is uncertain. Checking the server state.',
   },
+  uploadOtherReport: {
+    bn: 'এই অর্ডারে আগেই অন্য একটি রিপোর্ট জমা হয়েছে। আপনার ফাইলটি পাঠানো হয়নি, রাখা আছে। অর্ডারের রিপোর্ট দেখে মিলিয়ে নিন।',
+    en: 'A different report was already delivered on this order. Your file was not sent and is kept. Check the order’s report.',
+  },
   confirmTitle: { bn: 'পুরো তালিকা যাচাই করেছেন?', en: 'Checked the whole list?' },
   confirmHint: {
     bn: 'অনুসন্ধান বা ফিল্টারে লুকানো ওষুধসহ প্রতিটি চিহ্ন অপরিবর্তিত রেখে নতুন করে নিশ্চিত হবে। পুরোনো আছে চিহ্ন আবার রোগীর কাছে আছে হিসেবে দেখা যাবে। আগে তাক মিলিয়ে নিন।',

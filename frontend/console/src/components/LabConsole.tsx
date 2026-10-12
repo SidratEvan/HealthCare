@@ -239,24 +239,36 @@ function LabBody(): ReactNode {
           const failure = failureOf(error);
           if (failure.kind === 'offline') {
             show({ title: CLINICAL.uploadUncertain[locale], tone: 'caution' });
+            // FR-LAB-03: a report on the order is not proof it is *this* file —
+            // another bench may have uploaded one. Only the same key can say,
+            // so the same attempt is replayed: the server answers its own
+            // commit as a duplicate, and refuses if a different report is there.
             try {
-              const result = await api.queue(hospitalId, 'all');
-              const stored = result.orders.find((entry) => entry.id === order.id);
-              if (stored !== undefined && stored.report !== null) {
-                setOrders((current) =>
-                  sortLabQueue(current.map((entry) => (entry.id === order.id ? stored : entry))),
-                );
-                show({
-                  title: t(
-                    stored.visitId === null ? 'labDeliveredToPatient' : 'labDeliveredTo',
-                    locale,
-                  ),
-                  tone: 'positive',
-                });
-                return true;
+              const result = await api.upload(
+                order.id,
+                { type: read.type, base64: read.base64 },
+                attemptId,
+              );
+              setOrders((current) =>
+                sortLabQueue(
+                  current.map((entry) => (entry.id === order.id ? result.order : entry)),
+                ),
+              );
+              show({
+                title: t(
+                  result.order.visitId === null ? 'labDeliveredToPatient' : 'labDeliveredTo',
+                  locale,
+                ),
+                tone: 'positive',
+              });
+              return true;
+            } catch (replayError: unknown) {
+              const replay = failureOf(replayError);
+              if (replay.kind === 'refused' && replay.code === 'TEST_TRANSITION_INVALID') {
+                show({ title: CLINICAL.uploadOtherReport[locale], tone: 'caution' });
+                void load();
               }
-            } catch {
-              /* Keep same file/key. A lost reply is not a failed commit. */
+              /* Otherwise keep same file/key. A lost reply is not a failed commit. */
             }
           } else show({ title: t('labUploadFailed', locale), tone: 'caution' });
           return false;
@@ -267,7 +279,7 @@ function LabBody(): ReactNode {
         writing.current = false;
       }
     },
-    [api, hospitalId, show, locale, online],
+    [api, load, show, locale, online],
   );
 
   const reveal = useCallback(

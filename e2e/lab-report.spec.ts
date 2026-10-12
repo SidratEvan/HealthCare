@@ -27,6 +27,7 @@ import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { expect, test, type Page } from '@playwright/test';
+import { Client } from 'pg';
 
 import { DEMO_ASSESSMENTS } from '../database/seeds/data/reference.js';
 
@@ -36,6 +37,7 @@ import {
   signVisit,
   type ConsoleSession,
 } from './support/console.js';
+import { E2E_DATABASE_URL } from './support/database.js';
 import {
   labSession,
   ordersForBooking,
@@ -491,6 +493,135 @@ test.describe('redesigned lab and pharmacy safeguards', () => {
     expect(keys).toHaveLength(2);
     expect(keys[0]).not.toBe('');
     expect(keys[1]).toBe(keys[0]);
+  });
+
+  /**
+   * FR-LAB-03: a reply lost after the upload left. A report on the order is
+   * not proof it is the bench's own file — only the same key can say — so the
+   * console replays the same attempt and believes the server's answer to it.
+   */
+  async function processingOrderWithoutReport(page: Page): Promise<string> {
+    const response = await page.request.get(
+      `http://localhost:4000/api/v1/hospitals/${demo.hospitalId}/test-orders?state=open&days=30`,
+      { headers: { Authorization: `Bearer ${lab.labToken}` } },
+    );
+    const orders = (
+      (await response.json()) as {
+        data: { orders: { id: string; state: string; report: unknown }[] };
+      }
+    ).data.orders;
+    const order = orders.find((entry) => entry.state === 'processing' && entry.report === null);
+    expect(order).toBeDefined();
+    return order!.id;
+  }
+
+  async function reportKeys(orderId: string): Promise<string[]> {
+    const client = new Client({ connectionString: E2E_DATABASE_URL });
+    await client.connect();
+    try {
+      const rows = await client.query<{ idempotency_key: string }>(
+        'SELECT idempotency_key FROM reports WHERE test_order_id = $1',
+        [orderId],
+      );
+      return rows.rows.map((row) => row.idempotency_key);
+    } finally {
+      await client.end();
+    }
+  }
+
+  test('a lost reply to a committed upload is confirmed by replaying the same attempt', async ({
+    page,
+  }) => {
+    await enterConsole(page, lab.labToken, 'lab', `${CONSOLE}/?view=lab`);
+    const id = await processingOrderWithoutReport(page);
+    await page.addInitScript((orderId) => {
+      const nativeFetch = globalThis.fetch.bind(globalThis);
+      globalThis.fetch = async (input, init) => {
+        const url = new URL(
+          typeof input === 'string' ? input : input.url,
+          globalThis.location.href,
+        );
+        if (init?.method !== 'POST' || !url.pathname.endsWith(`/test-orders/${orderId}/report`))
+          return await nativeFetch(input, init);
+        const keys = JSON.parse(sessionStorage.getItem('lab-report-keys') ?? '[]') as string[];
+        keys.push(new Headers(init.headers).get('idempotency-key') ?? '');
+        sessionStorage.setItem('lab-report-keys', JSON.stringify(keys));
+        const response = await nativeFetch(input, init);
+        // The first upload commits; its answer never arrives.
+        if (keys.length === 1) throw new TypeError('Synthetic lost reply');
+        return response;
+      };
+    }, id);
+    await page.reload();
+    await expect(page.getByTestId('lab-console')).toBeVisible();
+    await page.getByTestId(`lab-upload-${id}`).click();
+    await page.getByTestId(`lab-report-file-${id}`).setInputFiles({
+      name: 'report-A.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n% synthetic report A\n%%EOF\n'),
+    });
+    await page.getByTestId(`lab-report-submit-${id}`).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    const keys = await page.evaluate(
+      () => JSON.parse(sessionStorage.getItem('lab-report-keys') ?? '[]') as string[],
+    );
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+    expect(await reportKeys(id)).toEqual([keys[0]]);
+  });
+
+  test('a lost reply is not confirmed by a different report on the same order', async ({
+    page,
+  }) => {
+    await enterConsole(page, lab.labToken, 'lab', `${CONSOLE}/?view=lab`);
+    const id = await processingOrderWithoutReport(page);
+    const otherKey = crypto.randomUUID();
+    const otherContent = Buffer.from('%PDF-1.4\n% synthetic report B\n%%EOF\n').toString('base64');
+    await page.addInitScript(
+      ({ orderId, otherKey, otherContent }) => {
+        const nativeFetch = globalThis.fetch.bind(globalThis);
+        globalThis.fetch = async (input, init) => {
+          const url = new URL(
+            typeof input === 'string' ? input : input.url,
+            globalThis.location.href,
+          );
+          if (init?.method !== 'POST' || !url.pathname.endsWith(`/test-orders/${orderId}/report`))
+            return await nativeFetch(input, init);
+          if (sessionStorage.getItem('lab-report-competed') !== null)
+            return await nativeFetch(input, init);
+          // Another bench's file B lands first; this bench's A is lost on the way.
+          const original = JSON.parse(init.body as string) as Record<string, unknown>;
+          const headers = new Headers(init.headers);
+          headers.set('Idempotency-Key', otherKey);
+          const competing = await nativeFetch(input, {
+            ...init,
+            headers,
+            body: JSON.stringify({ ...original, content: otherContent, idempotencyKey: otherKey }),
+          });
+          sessionStorage.setItem('lab-report-competed', String(competing.status));
+          throw new TypeError('Synthetic lost upload A');
+        };
+      },
+      { orderId: id, otherKey, otherContent },
+    );
+    await page.reload();
+    await expect(page.getByTestId('lab-console')).toBeVisible();
+    await page.getByTestId(`lab-upload-${id}`).click();
+    await page.getByTestId(`lab-report-file-${id}`).setInputFiles({
+      name: 'report-A.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n% synthetic report A\n%%EOF\n'),
+    });
+    await page.getByTestId(`lab-report-submit-${id}`).click();
+
+    await expect
+      .poll(() => page.evaluate(() => sessionStorage.getItem('lab-report-competed')))
+      .toBe('201');
+    await expect(page.getByText(/অন্য একটি রিপোর্ট|A different report/)).toBeVisible();
+    // Not told it was delivered: the bench's own file is still in hand.
+    await expect(page.getByRole('dialog')).toContainText('report-A.pdf');
+    expect(await reportKeys(id)).toEqual([otherKey]);
   });
 
   test('representative bilingual tablet workspaces remain usable offline', async ({
