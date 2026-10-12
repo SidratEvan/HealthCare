@@ -21,7 +21,11 @@
     flex-direction: column;
   }
 
+  /* A band above the workspace, not the desktop's full-height sticky column:
+     without resetting both, the band stays 100dvh tall and covers the page. */
   .console-workspace-layout > .console-rail {
+    position: static;
+    height: auto;
     align-items: center;
     width: 100%;
     min-height: 0;
