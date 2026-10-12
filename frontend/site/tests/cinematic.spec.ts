@@ -321,19 +321,80 @@ test('scroll draws the thread and the map, and scrolling back undraws them', asy
   await noOverflow(page);
 });
 
-test('keyboard focus on either audience (Codex focus controls)', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 960 });
+for (const locale of ['en', 'bn'] as const) {
+  test(`${locale}: the hero doors and the navigation lead to each experience`, async ({ page }) => {
+    const t = cinematic[locale];
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${locale}`);
+    const doors = page.getByRole('navigation', { name: t.choose }).first();
+    await expect(doors.getByRole('link')).toHaveCount(2);
+    await doors.locator('a[href="#patients"]').focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/#patients$/);
+    await page.waitForTimeout(700);
+    const heading = await page.locator('#patient-title').boundingBox();
+    expect(heading?.y).toBeGreaterThan(0);
+    expect(heading?.y).toBeLessThan(900);
+    await page.locator('.desktop-nav a[href="#hospitals"]').click();
+    await expect(page).toHaveURL(/#hospitals$/);
+    await page.waitForTimeout(700);
+    expect((await page.locator('#hospital-title').boundingBox())?.y).toBeLessThan(900);
+    // Each experience has its own action: a demonstration, or the patient information.
+    await expect(
+      page.locator('#hospitals').getByRole('link', { name: copy[locale].demo }),
+    ).toHaveAttribute('href', demoHref);
+    await page.locator('#patients').getByRole('link', { name: t.patientCta }).click();
+    await expect(page).toHaveURL(/#patient-experience$/);
+    await expect(page.locator('#patient-experience')).toContainText(t.comingSoon);
+    expect(await page.locator('.audience-controls, [aria-pressed]').count()).toBe(0);
+    await expect(page.locator('.audience-switch')).toBeHidden();
+  });
+
+  test(`${locale}: on a phone the patient experience is one tap away`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/${locale}`);
+    await expect(page.locator('.hero-doors a[href="#patients"]')).toBeInViewport();
+    const audience = await page
+      .locator('#experiences')
+      .evaluate((el) => el.getBoundingClientRect().top + scrollY);
+    await jump(page, audience + 300);
+    const selector = page.locator('.audience-switch');
+    await expect(selector).toBeVisible();
+    await expect(selector.locator('a[href="#hospitals"]')).toHaveAttribute(
+      'aria-current',
+      'location',
+    );
+    await selector.locator('a[href="#patients"]').click();
+    await page.waitForTimeout(900);
+    await expect(selector).toBeInViewport();
+    await expect(selector.locator('a[href="#patients"]')).toHaveAttribute(
+      'aria-current',
+      'location',
+    );
+    await expect(page.locator('#patient-title')).toBeInViewport();
+    // The selector never covers the scene it led to.
+    const bar = await selector.boundingBox();
+    const scene = await page.locator('#patients .audience-scene').boundingBox();
+    expect(scene?.y).toBeGreaterThanOrEqual((bar?.y ?? 0) + (bar?.height ?? 0) - 1);
+    await noOverflow(page);
+  });
+}
+
+test('the bridge stays in the gap between the photographs', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/en');
-  const stage = page.locator('#experiences');
-  const hospital = page.getByRole('button', { name: cinematic.en.hospital, exact: true });
-  await hospital.focus();
-  await page.keyboard.press('Enter');
-  await expect(stage).toHaveAttribute('data-focus', 'hospital');
-  await expect(hospital).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: cinematic.en.patient, exact: true }).click();
-  await expect(stage).toHaveAttribute('data-focus', 'patient');
-  await page.getByRole('button', { name: cinematic.en.reset }).click();
-  await expect(stage).toHaveAttribute('data-focus', 'both');
+  await jump(
+    page,
+    await page.locator('#experiences').evaluate((el) => el.getBoundingClientRect().top + scrollY),
+  );
+  await page.waitForTimeout(400);
+  const hospital = await page.locator('.audience-hospital').boundingBox();
+  const patient = await page.locator('.audience-patient').boundingBox();
+  for (const ink of await page.locator('.token-arm').all()) {
+    const arm = await ink.boundingBox();
+    expect(arm?.x).toBeGreaterThanOrEqual((hospital?.x ?? 0) + (hospital?.width ?? 0) - 1);
+    expect((arm?.x ?? 0) + (arm?.width ?? 0)).toBeLessThanOrEqual((patient?.x ?? 0) + 1);
+  }
 });
 
 test('the header logo is legible at the top and compact once scrolled', async ({ page }) => {

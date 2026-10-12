@@ -51,3 +51,25 @@ production build and served a blank white error page. Preview the export with
 Bangla copy for the new points and the founders page; Bangla spellings সিদরাত
 and মায়েশা; Mayesha's address is `mayesha@medlivebd.com` (the supplied link
 pointed to `sidrat@`).
+
+## Audience gateway (12 October 2026, `feat/site-audience-gateway`)
+
+Owner accepted the restored design and asked only that hospitals and patients
+read as two unmistakable experiences. Nothing else changed.
+
+- Hero: two doors, **For hospitals** (brand blue) and **For patients** (glass,
+  teal), replace Request a Demo and Explore. Request a Demo stays in the header.
+- Panorama: "See both" toggles removed. Larger headings, a colour of its own
+  per experience (blue / teal top edge, label and list markers), one action
+  each: Request a Demo (email) and Explore the patient experience (the patient
+  information under its scene, with the coming-soon note — never the demo).
+- The MedLiveBD bridge now lives in the gap between the photographs and stops
+  at their edges; it no longer crosses a face or text.
+- Three short benefits per experience; lines tightened.
+- Phone: both doors on the first screen; over the stacked scenes a pinned
+  Hospitals | Patients selector shows where you are and jumps either way.
+- Arriving at an experience from the navigation or a door gives it a brief
+  glow (not under reduced motion).
+
+Evidence in `gateway/`: before/after on desktop and Bangla mobile, real
+clicks and taps. Smoke 35/35 on the static export.

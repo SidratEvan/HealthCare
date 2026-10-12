@@ -185,6 +185,68 @@
   line-height: 1.7;
   margin-block: 28px 32px;
 }
+/* Two doors: a visitor chooses the hospital or the patient experience at once. */
+.hero-doors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 280px));
+  gap: 14px;
+}
+.hero-door {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 96px;
+  padding: 18px 52px 18px 20px;
+  border-radius: 16px;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  background: rgb(7 26 38 / 0.6);
+  transition:
+    background 0.25s,
+    border-color 0.25s,
+    translate 0.25s var(--ease);
+}
+.hero-door:hover {
+  translate: 0 -2px;
+  border-color: rgb(255 255 255 / 0.4);
+}
+.door-hospital {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+.door-hospital:hover {
+  background: var(--blue-deep);
+  border-color: var(--blue-deep);
+}
+.door-kicker {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cinema-signal);
+}
+.door-hospital .door-kicker {
+  color: var(--paper);
+}
+.door-line {
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 500;
+  color: var(--paper);
+}
+.door-arrow {
+  position: absolute;
+  right: 18px;
+  bottom: 20px;
+  rotate: 90deg;
+}
+.company-page[lang='bn'] .door-kicker {
+  letter-spacing: normal;
+  font-size: 14px;
+}
+.company-page[lang='bn'] .door-line {
+  line-height: 1.65;
+}
 /* The care thread begins at the foot of the hero, under the photograph. */
 .hero-stem {
   position: absolute;
@@ -278,34 +340,39 @@
   font-size: clamp(25px, 2.5vw, 36px);
   font-weight: 400;
 }
-.audience-controls {
-  display: flex;
-  border: 1px solid var(--cinema-line);
-  padding: 4px;
-  border-radius: 50px;
-  gap: 3px;
-}
-.audience-controls button {
-  min-height: 40px;
-  font-size: 12px;
-  border: 0;
-  background: transparent;
-  padding: 8px 14px;
-  border-radius: 50px;
-  white-space: nowrap;
-}
-.audience-controls button[aria-pressed='true'] {
-  background: var(--cinema-signal);
-  color: var(--cinema-night);
+/* The selector shows only when the scenes are stacked (below). */
+.audience-switch {
+  display: none;
 }
 .audience-panorama {
   position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
   padding-inline: max(var(--gutter), calc((100vw - 1380px) / 2));
-  gap: 110px;
+  --gap: 120px;
+  gap: var(--gap);
   isolation: isolate;
-  --card-h: max(540px, min(64svh, 650px));
+  --card-h: max(560px, min(70svh, 680px));
+}
+/* Each experience has its own colour: brand blue for hospitals, teal for patients. */
+/* The page already keeps jump targets clear of the header (scroll-padding); this adds only what the taller header needs. */
+.audience-column {
+  --accent: var(--cinema-blue);
+  scroll-margin-top: 12px;
+}
+#patients {
+  --accent: var(--cinema-signal);
+}
+#patient-experience {
+  scroll-margin-top: 12px;
+}
+.audience-scene::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  z-index: 1;
+  background: var(--accent);
 }
 .audience-scene {
   position: relative;
@@ -337,17 +404,19 @@
 }
 .audience-copy {
   position: absolute;
-  left: 30px;
+  left: clamp(24px, 2.6vw, 40px);
   right: 24px;
-  bottom: 26px;
+  bottom: clamp(26px, 2.6vw, 38px);
 }
 .audience-copy .pulse-kicker {
-  color: var(--cinema-signal);
-  margin-bottom: 14px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
 }
 .audience-copy h3 {
-  font-size: clamp(26px, 2.5vw, 36px);
-  line-height: 1.12;
+  font-size: clamp(30px, 3.1vw, 46px);
+  line-height: 1.1;
   font-weight: 500;
   white-space: pre-line;
   letter-spacing: -0.025em;
@@ -358,21 +427,30 @@
   max-width: 330px;
   font-size: 15px;
 }
-.pulse-audiences[data-focus='hospital'] .audience-hospital .campaign-image,
-.pulse-audiences[data-focus='patient'] .audience-patient .campaign-image {
-  scale: 1.06;
+/* Arriving from the navigation or a door, the chosen experience answers with a brief glow. */
+@media (prefers-reduced-motion: no-preference) {
+  .audience-column:target .audience-scene {
+    animation: audience-arrive 1.8s var(--ease);
+  }
 }
-.pulse-audiences[data-focus='hospital'] .audience-hospital,
-.pulse-audiences[data-focus='patient'] .audience-patient {
-  outline: 2px solid var(--cinema-signal);
-  outline-offset: 5px;
+@keyframes audience-arrive {
+  from {
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  to {
+    box-shadow: 0 0 0 3px transparent;
+  }
 }
-/* The MedLiveBD node: the thread arrives from above and bridges into both scenes. */
+/*
+ * The MedLiveBD node lives in the gap between the photographs: the thread
+ * arrives from above and its bridge stops at each photograph's edge, so it
+ * never crosses a face or a line of text.
+ */
 .connection-token {
   position: absolute;
   top: 0;
-  left: calc(50% - 120px);
-  width: 240px;
+  left: calc(50% - var(--gap) / 2);
+  width: var(--gap);
   height: var(--card-h);
   z-index: 2;
   pointer-events: none;
@@ -400,7 +478,7 @@
 .token-arm-right .arm-ink {
   transform-origin: left;
 }
-/* Each arm ends in a point on the photograph it reaches. */
+/* Each arm ends in a point at the edge of the photograph it reaches. */
 .token-arm::after {
   content: '';
   position: absolute;
@@ -411,10 +489,10 @@
   background: var(--thread);
 }
 .token-arm-left::after {
-  left: -4px;
+  left: 0;
 }
 .token-arm-right::after {
-  right: -4px;
+  right: 0;
 }
 .token-point {
   position: absolute;
@@ -440,28 +518,32 @@
 }
 /* What each audience gets, under its own scene. */
 .audience-column > .benefit-lines,
-.audience-column #patient-points {
-  margin-top: 28px;
+.audience-column #patient-experience {
+  margin-top: 30px;
 }
 .pulse-audiences .benefit-lines li {
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  padding-block: 16px;
+  padding-block: 18px;
   border-top: 1px solid var(--cinema-line);
+}
+.pulse-audiences .benefit-lines li:last-child {
+  border-bottom: 1px solid var(--cinema-line);
 }
 .pulse-audiences .benefit-dot {
   display: inline-block;
   width: 7px;
   height: 7px;
-  border: 1px solid var(--cinema-signal);
+  border: 2px solid var(--accent);
   border-radius: 50%;
   flex-shrink: 0;
   margin-top: 9px;
 }
 .pulse-audiences .benefit-lines h4 {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 500;
+  letter-spacing: -0.01em;
 }
 .pulse-audiences .benefit-lines p {
   margin-top: 4px;
@@ -769,9 +851,8 @@
   .audience-panorama {
     --card-h: max(480px, min(60svh, 600px));
   }
-  .connection-token {
-    left: calc(50% - 100px);
-    width: 200px;
+  .audience-panorama {
+    --gap: 96px;
   }
 }
 @media (max-width: 960px) {
@@ -846,6 +927,46 @@
   }
   .audience-scene img {
     object-position: center 20%;
+  }
+  /* Stacked: both experiences stay one tap away while the visitor is here. */
+  .audience-switch {
+    position: sticky;
+    top: var(--header);
+    z-index: 5;
+    display: block;
+    margin-bottom: 14px;
+    padding: 10px var(--gutter);
+    background: var(--cinema-night);
+  }
+  .audience-switch-inner {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 999px;
+    border: 1px solid var(--cinema-line);
+  }
+  .audience-switch a {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--cinema-muted);
+  }
+  .audience-switch a[href='#hospitals'][aria-current] {
+    background: var(--cinema-blue);
+    color: var(--cinema-night);
+  }
+  .audience-switch a[href='#patients'][aria-current] {
+    background: var(--cinema-signal);
+    color: var(--cinema-night);
+  }
+  /* ...and, when stacked, room for the selector pinned beneath it. */
+  .audience-column,
+  #patient-experience {
+    scroll-margin-top: 66px;
   }
   /* Stacked: the node sits in the flow between the two scenes. */
   .connection-token {
@@ -929,6 +1050,27 @@
   }
 }
 @media (max-width: 540px) {
+  .hero-doors {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .hero-door {
+    min-height: 0;
+    padding: 14px 14px 42px;
+    border-radius: 14px;
+  }
+  .door-line {
+    font-size: 14px;
+  }
+  .door-kicker {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+  .door-arrow {
+    left: 14px;
+    right: auto;
+    bottom: 14px;
+  }
   .pulse-hero {
     min-height: 800px;
   }
@@ -988,14 +1130,6 @@
   .audience-heading h2 {
     font-size: 27px;
     line-height: 1.2;
-  }
-  .audience-controls {
-    width: 100%;
-  }
-  .audience-controls button {
-    flex: 1;
-    padding-inline: 7px;
-    font-size: 11px;
   }
   .audience-panorama {
     --card-h: 550px;
@@ -1113,6 +1247,12 @@
   .audience-scene,
   .country-map {
     transform: none !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .hero-doors {
+    grid-template-columns: 1fr;
   }
 }
 

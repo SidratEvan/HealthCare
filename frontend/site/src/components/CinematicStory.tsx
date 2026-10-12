@@ -101,13 +101,18 @@ export function HumanHero({ locale }: { readonly locale: Locale }): ReactNode {
           ))}
         </h1>
         <p className="pulse-lead">{t.lead}</p>
-        <div className="pulse-actions">
-          <Demo locale={locale} />
-          <a href="#vision" className="pulse-text-link">
-            {t.explore}
-            <Icon name="arrow" className="arrow" />
+        <nav className="hero-doors" aria-label={t.choose}>
+          <a href="#hospitals" className="hero-door door-hospital">
+            <span className="door-kicker">{t.hospital}</span>
+            <span className="door-line">{t.hospitalDoor}</span>
+            <Icon name="arrow" className="arrow door-arrow" />
           </a>
-        </div>
+          <a href="#patients" className="hero-door door-patient">
+            <span className="door-kicker">{t.patient}</span>
+            <span className="door-line">{t.patientDoor}</span>
+            <Icon name="arrow" className="arrow door-arrow" />
+          </a>
+        </nav>
       </div>
       <span className="hero-stem" aria-hidden="true" />
       <div className="shell hero-foot">
@@ -171,17 +176,43 @@ function Features({
   );
 }
 
+/** Which audience is in the middle of the screen — for the stacked selector only. */
+function useCurrentAudience(): 'hospital' | 'patient' {
+  const [current, setCurrent] = useState<'hospital' | 'patient'>('hospital');
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries)
+          if (entry.isIntersecting)
+            setCurrent(entry.target.id === 'patients' ? 'patient' : 'hospital');
+      },
+      { rootMargin: '-45% 0px -45% 0px' },
+    );
+    for (const id of ['hospitals', 'patients']) {
+      const element = document.getElementById(id);
+      if (element) observer.observe(element);
+    }
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  return current;
+}
+
 /**
- * Codex's panorama: hospitals and patients side by side, each photograph shown
- * once, joined by the MedLiveBD node. What each audience gets sits beneath its
- * scene. Unpinned: the scenes converge and the bridge draws as they arrive.
+ * The audience gateway (owner, 12 October 2026), on Codex's panorama: two
+ * unmistakable experiences side by side, each photograph shown once, each with
+ * its own heading, colour and action. The MedLiveBD node joins them in the gap
+ * between the photographs, never across a face or a line of text. Stacked on a
+ * phone, a selector keeps both one tap away. Unpinned: the scenes converge and
+ * the bridge draws as they arrive.
  */
 export function AudienceStage({ locale }: { readonly locale: Locale }): ReactNode {
   const t = cinematic[locale];
   const target = useRef<HTMLElement>(null);
   const enabled = useDesktopCinema();
   const lines = useMotionWelcome();
-  const [focus, setFocus] = useState<'both' | 'hospital' | 'patient'>('both');
+  const current = useCurrentAudience();
   const { scrollYProgress: p } = useScroll({ target, offset: ['start 0.85', 'start 0.12'] });
   const left = useTransform(p, [0, 1], ['5%', '0%']);
   const right = useTransform(p, [0, 1], ['-5%', '0%']);
@@ -195,26 +226,21 @@ export function AudienceStage({ locale }: { readonly locale: Locale }): ReactNod
       ref={target}
       data-motion={enabled}
       data-lines={lines}
-      data-focus={focus}
       aria-labelledby="audience-title"
     >
       <div className="shell audience-heading">
         <h2 id="audience-title">{t.experiences}</h2>
-        <div className="audience-controls" role="group" aria-label={t.focus}>
-          {(['hospital', 'both', 'patient'] as const).map((value) => (
-            <button
-              type="button"
-              key={value}
-              aria-pressed={focus === value}
-              onClick={() => {
-                setFocus(value);
-              }}
-            >
-              {value === 'both' ? t.reset : t[value]}
-            </button>
-          ))}
-        </div>
       </div>
+      <nav className="audience-switch" aria-label={t.choose}>
+        <div className="audience-switch-inner">
+          <a href="#hospitals" aria-current={current === 'hospital' ? 'location' : undefined}>
+            {t.hospital}
+          </a>
+          <a href="#patients" aria-current={current === 'patient' ? 'location' : undefined}>
+            {t.patient}
+          </a>
+        </div>
+      </nav>
       <div className="audience-panorama">
         <div id="hospitals" className="audience-column">
           <m.article
@@ -262,13 +288,13 @@ export function AudienceStage({ locale }: { readonly locale: Locale }): ReactNod
               <p className="pulse-kicker">{t.patient}</p>
               <h3 id="patient-title">{t.patientTitle}</h3>
               <p>{t.patientBody}</p>
-              <a className="button button-light" href="#patient-points">
+              <a className="button button-light" href="#patient-experience">
                 {t.patientCta}
                 <Icon name="arrow" className="arrow" />
               </a>
             </div>
           </m.article>
-          <div id="patient-points">
+          <div id="patient-experience" role="region" aria-label={t.patientInfo}>
             <Features points={t.patientFeatures} />
             <div className="patient-status">
               <strong>{t.comingSoon}</strong>
