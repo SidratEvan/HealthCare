@@ -21,7 +21,7 @@
 
 import { defineConfig, devices } from '@playwright/test';
 
-import { asApiRole } from './e2e/support/database.js';
+import { asApiRole, assertLocalDatabase } from './e2e/support/database.js';
 
 /** The three servers these specs drive. */
 const CONSOLE_URL = 'http://localhost:3100';
@@ -42,6 +42,18 @@ const API_URL = 'http://localhost:4000';
 // As the API's own role, which the tenant policies bind, and not as the
 // owner, which they do not (`e2e/support/database.ts`, migration 0043).
 const DATABASE_URL = asApiRole();
+
+// Fail closed before any server starts: the specs write, and a remote target
+// (the public demo's Supabase among them) is refused unless said out loud.
+assertLocalDatabase();
+
+/**
+ * A server already listening is reused only when asked for. Otherwise one
+ * started by hand — `pnpm dev:api` reads `.env`, whose `DATABASE_URL` may be a
+ * hosted database — would receive every write the specs make, past the check
+ * above. With the flag the caller vouches for what is listening.
+ */
+const REUSE_SERVERS = process.env['CI'] !== 'true' && process.env['E2E_REUSE_SERVERS'] === 'true';
 
 export default defineConfig({
   testDir: './e2e',
@@ -101,7 +113,7 @@ export default defineConfig({
     {
       command: 'pnpm dev:api',
       url: `${API_URL}/healthz`,
-      reuseExistingServer: process.env['CI'] !== 'true',
+      reuseExistingServer: REUSE_SERVERS,
       timeout: 120_000,
       env: {
         DATABASE_URL,
@@ -124,7 +136,7 @@ export default defineConfig({
     {
       command: 'pnpm dev:console',
       url: CONSOLE_URL,
-      reuseExistingServer: process.env['CI'] !== 'true',
+      reuseExistingServer: REUSE_SERVERS,
       timeout: 180_000,
       env: {
         NEXT_PUBLIC_API_URL: `${API_URL}/api/v1`,
@@ -134,7 +146,7 @@ export default defineConfig({
     {
       command: 'pnpm dev:patient',
       url: PATIENT_URL,
-      reuseExistingServer: process.env['CI'] !== 'true',
+      reuseExistingServer: REUSE_SERVERS,
       timeout: 180_000,
       env: {
         NEXT_PUBLIC_API_URL: `${API_URL}/api/v1`,
