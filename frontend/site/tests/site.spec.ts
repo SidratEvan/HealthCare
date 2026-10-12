@@ -82,7 +82,7 @@ for (const locale of ['en', 'bn'] as const) {
       ['#hospitals', t.forHospitals.title],
       ['#patients', t.forPatients.title],
       ['#bangladesh', t.vision.title],
-      ['#people', t.people.title],
+      ['#people', founders[locale].heading],
       ['#contact', t.closing.title],
     ] as const)
       await expect(page.locator(`${id} h2`)).toHaveAccessibleName(title);
@@ -206,7 +206,7 @@ for (const locale of ['en', 'bn'] as const) {
     await noOverflow(page);
   });
 
-  test(`${locale}: about page — founders and only confirmed addresses`, async ({ page }) => {
+  test(`${locale}: about page — founders, emails and phones only`, async ({ page }) => {
     const f = founders[locale];
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(`/${locale}/about`);
@@ -215,8 +215,8 @@ for (const locale of ['en', 'bn'] as const) {
       await expect(page.getByRole('heading', { name: person.name })).toBeVisible();
       await expect(page.locator(`a[href="tel:${person.phone}"]`)).toHaveText(person.phoneDisplay);
     }
-    await expect(page.locator('a[href="mailto:sidrat@medlivebd.com"]')).toBeVisible();
-    expect(await page.locator('a[href*="mayesha@"]').count()).toBe(0);
+    for (const person of f.founders)
+      await expect(page.locator(`main a[href="mailto:${person.email}"]`)).toHaveText(person.email);
     await expect(page.locator('main')).toContainText(contactEmail);
     await accessible(page);
     await page.setViewportSize({ width: 360, height: 800 });

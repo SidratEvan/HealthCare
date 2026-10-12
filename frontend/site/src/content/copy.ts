@@ -121,12 +121,6 @@ const en = {
     credit: 'Boundaries: geoBoundaries (CC0)',
   },
 
-  people: {
-    label: 'The people behind MedLiveBD',
-    title: 'Technology leadership and on-the-ground operations, working as one.',
-    more: 'About us',
-  },
-
   closing: {
     title: 'Let’s build more connected care, together.',
     body: 'Discover how MedLiveBD can support your hospital’s next step.',
@@ -340,12 +334,6 @@ const bn: Copy = {
     note: 'আটটি বিভাগজুড়ে সংযুক্ত সেবার আমাদের লক্ষ্য — বর্তমান হাসপাতাল কভারেজ নয়।',
     alt: 'আটটি বিভাগসহ বাংলাদেশের সীমানা। ঢাকা থেকে প্রতিটি বিভাগীয় সদরের দিকে রেখাগুলো একটি লক্ষ্য বোঝায়, চালু হাসপাতাল বা কভারেজ নয়।',
     credit: 'সীমানা: geoBoundaries (CC0)',
-  },
-
-  people: {
-    label: 'MedLiveBD-এর পেছনের মানুষ',
-    title: 'প্রযুক্তির নেতৃত্ব আর মাঠপর্যায়ের পরিচালনা, একসঙ্গে।',
-    more: 'আমাদের সম্পর্কে',
   },
 
   closing: {

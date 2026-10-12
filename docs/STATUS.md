@@ -13,8 +13,8 @@ Branch `feat/site-final-premium-redesign` in `D:\Projects\HealthCare-site-cinema
 - **For Hospitals** → `/{bn,en}/hospitals`, a page of this site. The password-less staff console is never linked.
 - **For Patients** → `https://healthcare-patient-zeta.vercel.app`, new tab, always tagged Demo, with the "do not enter real personal information" notice.
 - **Request a Demo** → `mailto:support@medlivebd.com` with a prefilled subject.
-- `/founders` became `/about` (Cloudflare `_redirects` 301). Mayesha's personal address is not shown until confirmed active; Sidrat's is.
-- Site suite 26/26 on the static export; eslint, prettier, tsc clean. **Local only: not pushed, merged or deployed.** Open: Bangla copy confirmation; Mayesha's address; founder photographs if wanted.
+- `/founders` became `/about` (Cloudflare `_redirects` 301). Founders show name, title, email and phone only — no bios (owner). Mayesha's address confirmed active by the owner, 12 October.
+- Site suite 26/26 on the static export; eslint, prettier, tsc clean. **Local only: not pushed, merged or deployed.** Open: Bangla copy confirmation; founder photographs if wanted.
 
 ## Company site — Codex's cinematic design, finished (12 October 2026, superseded by the redesign above)
 

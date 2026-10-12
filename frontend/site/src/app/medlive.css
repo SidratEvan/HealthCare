@@ -267,7 +267,6 @@ button {
     .motif-end span,
     .vision-note,
     .vision-points li,
-    .person-focus,
     .footer-brand p,
     .footer-base,
     .legal section p
@@ -1467,13 +1466,6 @@ a.lang-option:hover {
   color: var(--text);
 }
 
-.person-focus {
-  margin-top: 4px;
-  font-size: 0.95rem;
-  line-height: 1.55;
-  color: var(--text-2);
-}
-
 .person-mail {
   display: inline-block;
   margin-top: 16px;
@@ -1694,34 +1686,23 @@ a.lang-option:hover {
 }
 
 .founders {
-  padding-block: clamp(80px, 12vh, 130px);
-  background: var(--midnight);
+  padding-bottom: clamp(88px, 13vh, 140px);
+}
+
+.founders .page-title {
+  max-width: 14em;
+  margin-top: 20px;
 }
 
 .founders-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 56px clamp(32px, 5vw, 80px);
-  margin-top: 36px;
+  margin-top: clamp(56px, 9vh, 96px);
 }
 
 .founder .person-role {
   font-size: 0.98rem;
-}
-
-.founder .person-focus {
-  color: var(--teal);
-}
-
-.founder-bio {
-  display: grid;
-  gap: 14px;
-  margin-top: 22px;
-  color: var(--text-2);
-}
-
-:root[lang='bn'] .founder-bio {
-  line-height: 1.8;
 }
 
 .founder-contact {
@@ -1748,31 +1729,6 @@ a.lang-option:hover {
 
 .founder-contact a:hover {
   border-color: var(--teal);
-}
-
-.statement {
-  padding-block: clamp(88px, 13vh, 140px);
-  border-top: 1px solid var(--hair);
-  background:
-    radial-gradient(60% 90% at 100% 50%, rgb(42 125 255 / 0.12), rgb(4 11 22 / 0) 60%), var(--navy);
-}
-
-.statement-inner > * {
-  max-width: 920px;
-}
-
-.statement-inner .display-l {
-  margin-top: 20px;
-}
-
-.statement-inner .lead {
-  margin-top: 24px;
-}
-
-.statement-close {
-  margin-top: 20px;
-  font-weight: 600;
-  color: var(--teal);
 }
 
 .legal {
