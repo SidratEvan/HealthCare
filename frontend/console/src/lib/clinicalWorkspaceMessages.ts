@@ -58,8 +58,8 @@ export const CLINICAL = {
     en: 'The upload result is uncertain. Checking the server state.',
   },
   uploadOtherReport: {
-    bn: 'এই অর্ডারে আগেই অন্য একটি রিপোর্ট জমা হয়েছে। আপনার ফাইলটি পাঠানো হয়নি, রাখা আছে। অর্ডারের রিপোর্ট দেখে মিলিয়ে নিন।',
-    en: 'A different report was already delivered on this order. Your file was not sent and is kept. Check the order’s report.',
+    bn: 'এই অর্ডারে আগেই অন্য একটি রিপোর্ট জমা হয়েছে। আপনার ফাইলটি পাঠানো হয়নি। অর্ডারের রিপোর্ট দেখে মিলিয়ে নিন।',
+    en: 'A different report was already delivered on this order. Your file was not sent. Check the order’s report.',
   },
   confirmTitle: { bn: 'পুরো তালিকা যাচাই করেছেন?', en: 'Checked the whole list?' },
   confirmHint: {

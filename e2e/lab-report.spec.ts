@@ -597,7 +597,13 @@ test.describe('redesigned lab and pharmacy safeguards', () => {
           const competing = await nativeFetch(input, {
             ...init,
             headers,
-            body: JSON.stringify({ ...original, content: otherContent, idempotencyKey: otherKey }),
+            // Another bench's attempt: its own event and key, as its console makes them.
+            body: JSON.stringify({
+              ...original,
+              content: otherContent,
+              clientEventId: otherKey,
+              idempotencyKey: otherKey,
+            }),
           });
           sessionStorage.setItem('lab-report-competed', String(competing.status));
           throw new TypeError('Synthetic lost upload A');
@@ -618,9 +624,14 @@ test.describe('redesigned lab and pharmacy safeguards', () => {
     await expect
       .poll(() => page.evaluate(() => sessionStorage.getItem('lab-report-competed')))
       .toBe('201');
-    await expect(page.getByText(/অন্য একটি রিপোর্ট|A different report/)).toBeVisible();
-    // Not told it was delivered: the bench's own file is still in hand.
-    await expect(page.getByRole('dialog')).toContainText('report-A.pdf');
+    // The toast itself, not the screen-reader copy Radix announces it with.
+    await expect(
+      page
+        .locator('li[data-state="open"]')
+        .filter({ hasText: /অন্য একটি রিপোর্ট|A different report/ }),
+    ).toBeVisible();
+    // Never told its own file was delivered.
+    await expect(page.getByText(/^পৌঁছেছে: রোগী|^Delivered to: patient/)).toHaveCount(0);
     expect(await reportKeys(id)).toEqual([otherKey]);
   });
 

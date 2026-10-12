@@ -68,4 +68,25 @@
     gap: 0.25rem;
     margin: 0 0 0 auto;
   }
+
+  /* The Doctor workspace is exactly one screen tall (doctor.css). With the
+     band above it, its shell takes what is left, so Save draft and Sign & Next
+     stay on screen instead of below the clipped edge. */
+  .doctor-workspace .console-workspace-layout {
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .doctor-workspace .console-workspace-layout > .cf-shell {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 900px) and (max-height: 620px) {
+  /* doctor.css lets a short screen scroll; the layout follows it. */
+  .doctor-workspace .console-workspace-layout {
+    height: auto;
+  }
 }
