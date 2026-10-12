@@ -32,7 +32,7 @@ const en = {
     { id: 'trust', label: 'Trust' },
   ],
   otherLanguageLabel: 'বাংলায় পড়ুন',
-  demo: 'Request a demo',
+  demo: 'Request a Demo',
   demoPrivate: 'Request a private demo',
   pause: 'Pause the illustration',
   play: 'Play the illustration',
@@ -234,7 +234,7 @@ const en = {
 
   creditsTitle: 'Image and map credits',
   creditsIntro:
-    'Photographs on this site are used under the Creative Commons licences listed here; they were resized and cropped for the web, and those versions carry the same licence. The people shown are not MedLiveBD staff, customers or patients, and their appearance implies no endorsement. Product glimpses are illustrations on demonstration data.',
+    'Original AI-generated campaign scenes and openly licensed geographic data. All assets are served locally from this website.',
   creditsPhotos: 'Photographs',
   creditsMap: 'Map data',
   creditsBy: 'by',
@@ -260,7 +260,7 @@ const en = {
     },
     {
       heading: 'Demonstrations',
-      body: 'MedLiveBD demonstrations and the product glimpses shown on this site use synthetic data. No real patient information is shown.',
+      body: 'MedLiveBD demonstrations use synthetic data. The healthcare and city scenes on this website are AI-generated illustrations. They do not depict actual MedLiveBD staff, patients or customers. No real patient information is shown.',
     },
     {
       heading: 'The MedLiveBD platform',
@@ -469,7 +469,7 @@ const bn: Copy = {
 
   creditsTitle: 'ছবি ও মানচিত্রের কৃতজ্ঞতা',
   creditsIntro:
-    'এই সাইটের ছবিগুলো এখানে উল্লিখিত ক্রিয়েটিভ কমন্স লাইসেন্সে ব্যবহৃত; ওয়েবের জন্য আকার ও ফ্রেম বদলানো হয়েছে, এবং সেই সংস্করণও একই লাইসেন্সে। ছবির মানুষেরা MedLiveBD-এর কর্মী, গ্রাহক বা রোগী নন, এবং তাঁদের উপস্থিতি কোনো সমর্থন বোঝায় না। প্রোডাক্টের ঝলকগুলো ডেমো তথ্যে আঁকা দৃষ্টান্ত।',
+    'এই সাইটের জন্য এআই দিয়ে তৈরি দৃশ্য ও উন্মুক্ত লাইসেন্সের ভৌগোলিক তথ্য। সব ফাইল এই ওয়েবসাইট থেকেই সরবরাহ করা হয়।',
   creditsPhotos: 'ছবি',
   creditsMap: 'মানচিত্রের তথ্য',
   creditsBy: '—',
@@ -495,7 +495,7 @@ const bn: Copy = {
     },
     {
       heading: 'ডেমো',
-      body: 'MedLiveBD-এর ডেমো ও এই সাইটে দেখানো প্রোডাক্টের ঝলকে কৃত্রিম তথ্য ব্যবহার করা হয়। কোনো প্রকৃত রোগীর তথ্য দেখানো হয় না।',
+      body: 'MedLiveBD-এর ডেমোতে কৃত্রিম তথ্য ব্যবহার করা হয়। এই সাইটের স্বাস্থ্যসেবা ও শহরের দৃশ্যগুলো এআই দিয়ে তৈরি দৃষ্টান্ত। এগুলো MedLiveBD-এর প্রকৃত কর্মী, রোগী বা গ্রাহককে দেখায় না। কোনো প্রকৃত রোগীর তথ্য দেখানো হয় না।',
     },
     {
       heading: 'MedLiveBD প্ল্যাটফর্ম',

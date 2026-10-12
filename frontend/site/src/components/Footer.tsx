@@ -1,3 +1,4 @@
+import { cinematic } from '@/content/cinematic';
 import { contactEmail, copy, demoHref } from '@/content/copy';
 
 import { fmt } from './format';
@@ -47,6 +48,7 @@ export function Footer({
           <LanguageSwitch locale={locale} path={path} />
         </div>
       </div>
+      <p className="shell campaign-disclosure">{cinematic[locale].synthetic}</p>
       <div className="shell footer-bottom">
         <span>
           © {fmt(new Date().getFullYear(), locale)} {t.copyright}

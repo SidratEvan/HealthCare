@@ -1,0 +1,170 @@
+[
+  {
+    "name": "hero",
+    "width": 640,
+    "height": 276,
+    "format": "avif",
+    "bytes": 9765
+  },
+  {
+    "name": "hero",
+    "width": 640,
+    "height": 276,
+    "format": "webp",
+    "bytes": 16340
+  },
+  {
+    "name": "hero",
+    "width": 1200,
+    "height": 518,
+    "format": "avif",
+    "bytes": 21082
+  },
+  {
+    "name": "hero",
+    "width": 1200,
+    "height": 518,
+    "format": "webp",
+    "bytes": 35278
+  },
+  {
+    "name": "hero",
+    "width": 1920,
+    "height": 828,
+    "format": "avif",
+    "bytes": 36638
+  },
+  {
+    "name": "hero",
+    "width": 1920,
+    "height": 828,
+    "format": "webp",
+    "bytes": 58470
+  },
+  {
+    "name": "team",
+    "width": 640,
+    "height": 427,
+    "format": "avif",
+    "bytes": 15539
+  },
+  {
+    "name": "team",
+    "width": 640,
+    "height": 427,
+    "format": "webp",
+    "bytes": 24456
+  },
+  {
+    "name": "team",
+    "width": 1200,
+    "height": 800,
+    "format": "avif",
+    "bytes": 34212
+  },
+  {
+    "name": "team",
+    "width": 1200,
+    "height": 800,
+    "format": "webp",
+    "bytes": 54366
+  },
+  {
+    "name": "team",
+    "width": 1920,
+    "height": 1280,
+    "format": "avif",
+    "bytes": 59982
+  },
+  {
+    "name": "team",
+    "width": 1920,
+    "height": 1280,
+    "format": "webp",
+    "bytes": 90488
+  },
+  {
+    "name": "patient",
+    "width": 640,
+    "height": 427,
+    "format": "avif",
+    "bytes": 19041
+  },
+  {
+    "name": "patient",
+    "width": 640,
+    "height": 427,
+    "format": "webp",
+    "bytes": 30956
+  },
+  {
+    "name": "patient",
+    "width": 1200,
+    "height": 800,
+    "format": "avif",
+    "bytes": 45702
+  },
+  {
+    "name": "patient",
+    "width": 1200,
+    "height": 800,
+    "format": "webp",
+    "bytes": 73356
+  },
+  {
+    "name": "patient",
+    "width": 1920,
+    "height": 1280,
+    "format": "avif",
+    "bytes": 83575
+  },
+  {
+    "name": "patient",
+    "width": 1920,
+    "height": 1280,
+    "format": "webp",
+    "bytes": 128300
+  },
+  {
+    "name": "atmosphere",
+    "width": 640,
+    "height": 276,
+    "format": "avif",
+    "bytes": 12185
+  },
+  {
+    "name": "atmosphere",
+    "width": 640,
+    "height": 276,
+    "format": "webp",
+    "bytes": 17304
+  },
+  {
+    "name": "atmosphere",
+    "width": 1200,
+    "height": 518,
+    "format": "avif",
+    "bytes": 32949
+  },
+  {
+    "name": "atmosphere",
+    "width": 1200,
+    "height": 518,
+    "format": "webp",
+    "bytes": 47780
+  },
+  {
+    "name": "atmosphere",
+    "width": 1920,
+    "height": 828,
+    "format": "avif",
+    "bytes": 62947
+  },
+  {
+    "name": "atmosphere",
+    "width": 1920,
+    "height": 828,
+    "format": "webp",
+    "bytes": 88586
+  }
+]

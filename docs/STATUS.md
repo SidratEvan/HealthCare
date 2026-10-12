@@ -7,7 +7,20 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Company site — brand story (12 October 2026, awaiting the owner's review)
+## Company site — cinematic candidate (12 October 2026, local review)
+
+The owner's cinematic redesign supersedes the visual direction of the brand
+story below. Worktree `D:\Projects\HealthCare-site-cinematic`, branch
+`feat/site-cinematic-connected-care`, based on `940858d`. The previous branch and
+worktree are preserved. The user later specified more male imagery and hijab for
+female doctors; the selected original synthetic campaign follows that direction.
+Site code/assets only, plus directly related evidence and this handoff. No API,
+clinical database, patient app, console, DNS, mail or deployment changes. No push
+or merge. Preview and evidence: `docs/design/site-cinematic/README.md`. Detailed
+verification results there distinguish static-export browser checks from device
+or field performance; no hospital-platform suite is required for this site work.
+
+## Company site — brand story (12 October 2026, preserved baseline)
 
 Branch `feat/site-brand` (worktree `D:\Projects\HealthCare-site-mvp`), off `feat/site-premium` (`669aa80`, the approved product-led version, kept for comparison). Site files and `docs/design/company-site` only. **Local commits only: not merged, pushed or deployed; DNS/Cloudflare untouched.** Owner's direction: sell the experience, not the implementation. Screenshot tour, workflow diagram and module cards removed. The story is now hero, vision, two experiences (hospitals/patients), hospitals, patients (app marked *coming soon*, no demo link or form), an animated Bangladesh map (labelled a concept), trust and contact. Seven Wikimedia Commons photographs (CC BY/BY-SA) and a geoBoundaries map (CC0, districts CC BY 3.0 IGO): sources and crops in `docs/design/company-site/CREDITS.md` and `/{bn,en}/credits`. Smoke 15/15 on the production build; static export clean. Open: the owner confirms the Bangla copy; before paid ads, replace the three photographs with recognisable faces with model-released ones.
 

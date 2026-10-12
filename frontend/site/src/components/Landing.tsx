@@ -1,16 +1,17 @@
 import { copy } from '@/content/copy';
 
+import {
+  HumanHero,
+  Connection,
+  AudienceStage,
+  PeopleStories,
+  BangladeshScene,
+  Responsibility,
+  ClosingInvitation,
+} from './CinematicStory';
 import { Footer } from './Footer';
 import { Header } from './Header';
 import { MotionProvider } from './motion';
-import { ConnectedMap } from './sections/ConnectedMap';
-import { Contact } from './sections/Contact';
-import { Experiences } from './sections/Experiences';
-import { Hero } from './sections/Hero';
-import { Hospitals } from './sections/Hospitals';
-import { Patients } from './sections/Patients';
-import { Trust } from './sections/Trust';
-import { Vision } from './sections/Vision';
 
 import type { Locale } from '@/content/copy';
 import type { ReactNode } from 'react';
@@ -25,20 +26,19 @@ export function Landing({ locale }: { readonly locale: Locale }): ReactNode {
   const t = copy[locale];
   return (
     <MotionProvider>
-      <div className="company-page" lang={locale} id="top">
+      <div className="company-page cinematic-page" lang={locale} id="top">
         <a className="skip-link" href="#main">
           {t.skip}
         </a>
         <Header locale={locale} />
         <main id="main">
-          <Hero locale={locale} />
-          <Vision locale={locale} />
-          <Experiences locale={locale} />
-          <Hospitals locale={locale} />
-          <Patients locale={locale} />
-          <ConnectedMap locale={locale} />
-          <Trust locale={locale} />
-          <Contact locale={locale} />
+          <HumanHero locale={locale} />
+          <Connection locale={locale} />
+          <AudienceStage locale={locale} />
+          <PeopleStories locale={locale} />
+          <BangladeshScene locale={locale} />
+          <Responsibility locale={locale} />
+          <ClosingInvitation locale={locale} />
         </main>
         <Footer locale={locale} />
       </div>

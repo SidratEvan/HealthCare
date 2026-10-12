@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation';
 
+import { CampaignImage } from '@/components/CampaignImage';
 import { Footer } from '@/components/Footer';
 import { LanguageSwitch, Mark } from '@/components/Header';
-import { Photo } from '@/components/Photo';
+import { cinematic } from '@/content/cinematic';
 import { copy } from '@/content/copy';
-import { PHOTO_ORDER, PHOTOS } from '@/content/photos';
 import { SITE_ORIGIN } from '@/content/site';
 
 import type { Metadata } from 'next';
@@ -42,13 +42,6 @@ const MAP_SOURCES = [
     licence: 'CC0 1.0',
     licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
   },
-  {
-    name: 'Bangladesh district boundaries (ADM2)',
-    author: 'Bangladesh Bureau of Statistics (BBS) and OCHA ROAP, via geoBoundaries',
-    source: 'https://www.geoboundaries.org/countryDownloads.html',
-    licence: 'CC BY 3.0 IGO',
-    licenceUrl: 'https://creativecommons.org/licenses/by/3.0/igo/',
-  },
 ] as const;
 
 export default async function CreditsPage({
@@ -78,24 +71,17 @@ export default async function CreditsPage({
         <h1>{t.creditsTitle}</h1>
         <p className="legal-updated">{t.creditsIntro}</p>
         <section>
-          <h2>{t.creditsPhotos}</h2>
+          <h2>{cinematic[locale].assetsTitle}</h2>
+          <p>{cinematic[locale].assetsIntro}</p>
           <ul className="credit-list">
-            {PHOTO_ORDER.map((key) => {
-              const photo = PHOTOS[key];
+            {(['hero', 'team', 'patient', 'atmosphere'] as const).map((key, index) => {
               return (
                 <li key={key}>
-                  <Photo name={key} alt="" sizes="96px" className="credit-thumb" />
+                  <CampaignImage name={key} alt="" sizes="96px" className="credit-thumb" />
                   <span>
-                    <strong lang="en">{photo.title}</strong>
-                    <span lang="en">
-                      {photo.author} ·{' '}
-                      <a href={photo.source} rel="noreferrer">
-                        {t.creditsSource}
-                      </a>{' '}
-                      ·{' '}
-                      <a href={photo.licenceUrl} rel="noreferrer license">
-                        {photo.licence}
-                      </a>
+                    <strong>{cinematic[locale].assetNames[index]}</strong>
+                    <span>
+                      <a href={`/campaign/${key}-1920.webp`}>{t.creditsSource}</a>{' '}
                     </span>
                   </span>
                 </li>

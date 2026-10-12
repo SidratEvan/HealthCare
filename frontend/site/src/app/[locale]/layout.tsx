@@ -5,6 +5,7 @@ import { SITE_ORIGIN } from '@/content/site';
 import { fontVariables } from '../fonts';
 
 import '../site.css';
+import '../cinematic.css';
 
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
@@ -31,7 +32,9 @@ export default async function LocaleLayout({
         {/* Without script nothing animates, so nothing may wait hidden for it. */}
         <noscript>
           <style>
-            {'[data-reveal]{opacity:1!important;transform:none!important;clip-path:none!important}'}
+            {
+              '[data-reveal]{opacity:1!important;transform:none!important;clip-path:none!important}.audience-controls,.menu-toggle{display:none!important}'
+            }
           </style>
         </noscript>
         {children}

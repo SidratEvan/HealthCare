@@ -1,9 +1,13 @@
 # frontend/site — MedLiveBD company website
 
-The public company site at **medlivebd.com**: what MedLiveBD is, the platform's
-workspaces shown as real screens on demonstration data, how a hospital starts,
-and a demonstration request by email to `support@medlivebd.com`. Bangla at
-`/bn` (the default), English at `/en`, a privacy notice at `/{bn,en}/privacy`.
+The company presentation for **medlivebd.com**. The current cinematic candidate
+is local only on `feat/site-cinematic-connected-care`. It tells a connected-care
+story through original synthetic Bangladeshi healthcare scenes, hospital and
+patient perspectives and an accurately sourced Bangladesh vision. Demonstration
+requests open email to `support@medlivebd.com`; public patient booking is not open.
+Bangla at `/bn` (the default), English at `/en`, privacy and asset credits at
+`/{bn,en}/privacy` and `/{bn,en}/credits`. No operational software screens are used
+on the homepage. See `docs/design/site-cinematic/README.md` for review evidence.
 
 No patient, hospital-login, inquiry backend or clinical API is connected. There
 are no forms, cookies, analytics or trackers; the privacy notice says exactly
@@ -15,15 +19,21 @@ that, so adding any of them means changing the notice in the same change.
 pnpm --filter @platform/site dev          # http://localhost:3200
 pnpm --filter @platform/site build        # Node server build
 pnpm --filter @platform/site start
-pnpm --filter @platform/site test:smoke   # against the started build
+pnpm --filter @platform/site test:smoke   # static export on port 3210
 ```
 
-## Product screens
+For this isolated review, build with `SITE_EXPORT=1`, then run
+`node frontend/site/scripts/preview-static.mjs` from the repository root.
+The preview is `http://localhost:3210/en` (and `/bn`). It serves only the local
+`out/` directory and has no publishing action. The smoke suite starts this helper
+if it is not already running. Existing port 3200 previews remain independent.
+
+## Historical product screens
 
 `public/screens/*.webp` are captures of the real patient app and console on the
 seeded demonstration data (`FR-DEM-07`, `FR-SEC-08`), taken from a throwaway
-local database so no test data appears. Every one is described as
-demonstration data in its `alt` text and in the hero caption. Recapture them
+local database so no test data appears. These baseline assets are retained but
+are not used in the cinematic presentation. Recapture them
 from a freshly seeded database, never from a database tests have written to.
 
 ## Publish to Cloudflare Pages

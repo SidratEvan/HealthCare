@@ -86,6 +86,10 @@ export function Header({ locale }: { readonly locale: Locale }): ReactNode {
     if (!open) return;
     const root = document.documentElement;
     root.classList.add('menu-open');
+    const covered = [...document.querySelectorAll<HTMLElement>('main, .site-footer')];
+    covered.forEach((element) => {
+      element.setAttribute('inert', '');
+    });
     const close = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       setOpen(false);
@@ -94,6 +98,9 @@ export function Header({ locale }: { readonly locale: Locale }): ReactNode {
     document.addEventListener('keydown', close);
     return () => {
       root.classList.remove('menu-open');
+      covered.forEach((element) => {
+        element.removeAttribute('inert');
+      });
       document.removeEventListener('keydown', close);
     };
   }, [open]);
