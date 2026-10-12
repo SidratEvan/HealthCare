@@ -7,7 +7,7 @@ import type { MetadataRoute } from 'next';
 export const dynamic = 'force-static';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  return (['', '/privacy'] as const).flatMap((path) => {
+  return (['', '/privacy', '/credits'] as const).flatMap((path) => {
     const languages = { bn: `${SITE_ORIGIN}/bn${path}`, en: `${SITE_ORIGIN}/en${path}` };
     return (['bn', 'en'] as const).map((locale) => ({
       url: `${SITE_ORIGIN}/${locale}${path}`,

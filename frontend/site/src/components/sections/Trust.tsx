@@ -7,25 +7,21 @@ import type { IconName } from '../icons';
 import type { Locale } from '@/content/copy';
 import type { ReactNode } from 'react';
 
-const ICONS: readonly IconName[] = ['clock', 'lock', 'shield', 'key', 'map', 'people'];
+const ICONS: readonly IconName[] = ['lock', 'key', 'clock', 'people'];
 
-/** Rules the platform enforces, stated plainly (S-C-04, FR-SEC-*, FR-IMP-17). */
+/** Short, factual commitments — rules the platform enforces, no certifications claimed (S-C-04). */
 export function Trust({ locale }: { readonly locale: Locale }): ReactNode {
   const t = copy[locale];
   return (
-    <section className="trust dark-band section-space" id="trust" aria-labelledby="trust-heading">
-      <div className="trust-glow" aria-hidden="true" />
-      <div className="shell">
-        <Reveal className="section-head section-head-split">
-          <div>
-            <p className="eyebrow">{t.trustLabel}</p>
-            <h2 id="trust-heading">{t.trustTitle}</h2>
-          </div>
-          <p className="body-large">{t.trustBody}</p>
+    <section className="trust section-space" id="trust" aria-labelledby="trust-heading">
+      <div className="shell trust-layout">
+        <Reveal className="section-head">
+          <p className="eyebrow">{t.trustLabel}</p>
+          <h2 id="trust-heading">{t.trustTitle}</h2>
         </Reveal>
-        <RevealList className="trust-grid">
+        <RevealList className="trust-list">
           {t.trust.map((entry, index) => (
-            <RevealItem key={entry.title} className="trust-card">
+            <RevealItem key={entry.title} className="trust-item">
               <span className="trust-icon" aria-hidden="true">
                 <Icon name={ICONS[index] ?? 'shield'} />
               </span>

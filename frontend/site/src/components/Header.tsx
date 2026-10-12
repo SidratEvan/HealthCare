@@ -126,7 +126,7 @@ export function Header({ locale }: { readonly locale: Locale }): ReactNode {
           <div className="header-actions">
             <LanguageSwitch locale={locale} />
             <a className="button button-primary button-small header-cta" href={demoHref}>
-              {t.demoShort}
+              {t.demo}
             </a>
             <button
               className="menu-toggle"

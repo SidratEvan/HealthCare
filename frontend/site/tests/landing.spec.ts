@@ -5,6 +5,7 @@ import { expect, test } from '@playwright/test';
 import axe from 'axe-core';
 
 import { contactEmail, copy, demoHref } from '../src/content/copy';
+import { PHOTO_ORDER, PHOTOS } from '../src/content/photos';
 
 import type { Page } from '@playwright/test';
 import type { AxeResults } from 'axe-core';
@@ -15,12 +16,15 @@ async function revealAll(page: Page): Promise<void> {
   for (let index = 0; index < count; index += 1) {
     await page.locator('[data-reveal]').nth(index).scrollIntoViewIfNeeded();
   }
+  await page.evaluate(() => {
+    window.scrollTo(0, document.body.scrollHeight);
+  });
   await page.waitForFunction(() =>
     [...document.querySelectorAll('[data-reveal]')].every(
       (element) => getComputedStyle(element).opacity === '1',
     ),
   );
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(900);
 }
 
 async function expectAccessible(page: Page): Promise<void> {
@@ -61,8 +65,8 @@ test('Bangla entrance, server-rendered languages, invalid locale and security he
     expect(response.status()).toBe(200);
     const html = await response.text();
     expect(html).toContain(`<html lang="${locale}"`);
-    // The argument is in the server HTML, not only after script runs.
-    expect(html).toContain(copy[locale].problemBody);
+    // The story is in the server HTML, not only after script runs.
+    expect(html).toContain(copy[locale].patientsStatus);
     expect(response.headers()['x-content-type-options']).toBe('nosniff');
     expect(response.headers()['x-frame-options']).toBe('DENY');
     expect(response.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
@@ -72,11 +76,15 @@ test('Bangla entrance, server-rendered languages, invalid locale and security he
 
 for (const locale of ['bn', 'en'] as const) {
   const t = copy[locale];
-  test(`${locale}: every section, the real contact, keyboard access and axe (S-C-01/02/04/05)`, async ({
+  test(`${locale}: the company story, both audiences, the real contact, keyboard and axe (S-C-01/02/04/05)`, async ({
     page,
   }) => {
     const errors: string[] = [];
+    const foreign: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    page.on('request', (request) => {
+      if (!request.url().startsWith('http://localhost:3200')) foreign.push(request.url());
+    });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${locale}`);
     await expect(page).toHaveTitle(t.title);
@@ -88,92 +96,105 @@ for (const locale of ['bn', 'en'] as const) {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
       t.hero.map((part) => part.text).join(''),
     );
-    await expect(page.locator('#why')).toContainText(t.problemBody);
-    await expect(page.locator('#how')).toContainText(t.howBody);
-    await expect(page.locator('#product')).toContainText(t.productBody);
-    await expect(page.locator('#hospitals')).toContainText(t.capBody);
-    await expect(page.locator('#patients')).toContainText(t.patientBody);
-    await expect(page.locator('#network')).toContainText(t.networkBody);
-    await expect(page.locator('#trust')).toContainText(t.trustBody);
-    await expect(page.locator('#start')).toContainText(t.startBody);
+    await expect(page.locator('#vision')).toContainText(t.pillars[0]?.title ?? '');
+    await expect(page.locator('#experiences')).toContainText(t.experiences.hospitals.title);
+    await expect(page.locator('#experiences')).toContainText(t.experiences.patients.title);
+    await expect(page.locator('#hospitals')).toContainText(t.hospitalsBody);
+    await expect(page.locator('#patients')).toContainText(t.patientsBody);
+    await expect(page.locator('#bangladesh')).toContainText(t.mapLegend);
+    await expect(page.locator('#trust')).toContainText(t.trust[0]?.body ?? '');
     await expect(page.locator('#contact')).toContainText(t.contactNote);
-    await expect(page.getByText(t.live.caption, { exact: true })).toBeVisible();
-    await expect(
-      page.locator('#contact').getByRole('link', { name: contactEmail }),
-    ).toHaveAttribute('href', `mailto:${contactEmail}`);
-    await expect(
-      page.locator('.site-footer').getByRole('link', { name: contactEmail }),
-    ).toHaveAttribute('href', `mailto:${contactEmail}`);
-    for (const name of [t.demo, t.demoShort]) {
+
+    // Hospitals: a demo request, by email to the public address.
+    for (const name of [t.demo, t.demoPrivate]) {
       for (const link of await page.getByRole('link', { name, exact: true }).all()) {
         await expect(link).toHaveAttribute('href', demoHref);
       }
     }
-    // No other address is published.
+    await expect(
+      page.locator('#contact').getByRole('link', { name: contactEmail }),
+    ).toHaveAttribute('href', `mailto:${contactEmail}`);
     const mailtos = await page
       .locator('a[href^="mailto:"]')
       .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
     for (const href of mailtos) expect(href.startsWith(`mailto:${contactEmail}`)).toBe(true);
+
+    // Patients: said truthfully to be not yet open; nowhere to enter details.
+    await expect(page.locator('#patients')).toContainText(t.comingSoon);
+    await expect(page.locator('form, input, textarea')).toHaveCount(0);
+    const external = await page
+      .locator('a[href^="http"]')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+    expect(external).toEqual([]);
+
+    // The two experiences lead to their sections.
+    await page.getByRole('link', { name: t.experiences.patients.cta }).click();
+    await expect(page).toHaveURL(/#patients$/);
+    await page.getByRole('link', { name: t.experiences.hospitals.cta }).click();
+    await expect(page).toHaveURL(/#hospitals$/);
+
+    // The map is drawn, named for assistive technology, and labelled a concept.
+    await expect(page.getByRole('img', { name: t.mapAria })).toBeVisible();
+    await expect(page.locator('#bangladesh').getByText(t.mapConcept).first()).toBeVisible();
+
     const logo = page.locator('.site-header .brand-logo');
     expect(await logo.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
-
+    await page.goto(`/${locale}`);
     await page.keyboard.press('Tab');
     await expect(page.getByRole('link', { name: t.skip })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/#main$/);
-
-    // Workspaces: a tab list; arrow keys move and select.
-    const first = t.features[0];
-    if (first === undefined) throw new Error('No workspaces');
-    await expect(page.getByRole('tab')).toHaveCount(t.features.length);
-    await page.getByRole('tab', { name: first.label, exact: true }).focus();
-    for (const [index, feature] of t.features.entries()) {
-      const tab = page.getByRole('tab', { name: feature.label, exact: true });
-      await expect(tab).toBeFocused();
-      await expect(tab).toHaveAttribute('aria-selected', 'true');
-      await expect(page.locator('#workflow-view h3')).toHaveText(feature.title);
-      await expect(page.locator('#workflow-view')).toContainText(feature.detail);
-      if (index < t.features.length - 1) await page.keyboard.press('ArrowRight');
+    for (const link of t.nav) {
+      await expect(page.locator(`#${link.id}`)).toHaveCount(1);
     }
-    await page.keyboard.press('Home');
-    await expect(page.getByRole('tab', { name: first.label, exact: true })).toBeFocused();
-
-    // How it works: each step can be chosen directly.
-    for (const step of t.howSteps) {
-      const button = page.locator('#how').getByRole('button', { name: step.title });
-      await button.click();
-      await expect(button).toHaveAttribute('aria-current', 'step');
-    }
-
-    // Questions open and show their answer.
-    const question = t.faq[0];
-    if (question === undefined) throw new Error('No questions');
-    await page.getByText(question.q, { exact: true }).click();
-    await expect(page.getByText(question.a, { exact: true })).toBeVisible();
 
     await expectAccessible(page);
     await expectNoOverflow(page);
     expect(errors).toEqual([]);
+    expect(foreign).toEqual([]);
     if (locale === 'en') await capture(page, 'en-desktop.png');
   });
 
-  test(`${locale}: the live illustration answers "call next" and can be paused (S-C-01, WCAG 2.2.2)`, async ({
+  test(`${locale}: photographs are this site's own, licensed, described and lazily loaded`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${locale}`);
-    await page.getByRole('button', { name: t.live.pause }).click();
-    await expect(page.getByRole('button', { name: t.live.play })).toBeVisible();
-    const serving = page.locator('.chamber-serial');
-    const before = (await serving.textContent()) ?? '';
-    await page.getByRole('button', { name: t.live.tryIt }).click();
-    await expect(serving).not.toHaveText(before);
-    // Paused means paused: nothing moves on its own.
+    const photos = page.locator('main picture img');
+    const count = await photos.count();
+    expect(count).toBe(PHOTO_ORDER.length);
+    for (let index = 0; index < count; index += 1) {
+      const image = photos.nth(index);
+      const src = (await image.getAttribute('src')) ?? '';
+      expect(src).toMatch(/^\/photos\/[a-z]+-\d+\.webp$/);
+      expect((await image.getAttribute('alt')) ?? '').not.toBe('');
+      expect(await image.getAttribute('width')).not.toBeNull();
+      expect(await image.getAttribute('loading')).toBe(index === 0 ? 'eager' : 'lazy');
+    }
+    // Each one carries its photographer and licence on the page.
+    for (const key of PHOTO_ORDER) {
+      await expect(
+        page.getByText(`${PHOTOS[key].author} · ${PHOTOS[key].licence}`).first(),
+      ).toBeAttached();
+    }
+    await revealAll(page);
+    for (let index = 0; index < count; index += 1) {
+      await expect
+        .poll(() => photos.nth(index).evaluate((image: HTMLImageElement) => image.naturalWidth))
+        .toBeGreaterThan(0);
+    }
+  });
+
+  test(`${locale}: the hero illustration can be paused (WCAG 2.2.2)`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${locale}`);
+    await page.getByRole('button', { name: t.pause }).click();
+    await expect(page.getByRole('button', { name: t.play })).toBeVisible();
+    const ahead = page.locator('.glimpse-ahead .rolling');
     await page.waitForTimeout(800);
-    const after = (await serving.textContent()) ?? '';
-    await page.waitForTimeout(3200);
-    await expect(serving).toHaveText(after);
-    await expect(page.locator('#live-description')).toHaveText(t.live.description);
+    const before = (await ahead.textContent()) ?? '';
+    await page.waitForTimeout(3600);
+    await expect(ahead).toHaveText(before);
   });
 
   test(`${locale}: mobile navigation, language switch, tablet layout and resize safety (GR-06)`, async ({
@@ -190,9 +211,9 @@ for (const locale of ['bn', 'en'] as const) {
     await expect(nav).toBeHidden();
     await expect(toggle).toBeFocused();
     await toggle.click();
-    await nav.locator('a[href="#faq"]').click();
+    await nav.locator('a[href="#trust"]').click();
     await expect(nav).toBeHidden();
-    await expect(page).toHaveURL(/#faq$/);
+    await expect(page).toHaveURL(/#trust$/);
     await expectNoOverflow(page);
     await expectAccessible(page);
     if (locale === 'bn') await capture(page, 'bn-mobile.png');
@@ -206,7 +227,7 @@ for (const locale of ['bn', 'en'] as const) {
     await page.locator('.site-header .language-link').click();
     const target = locale === 'bn' ? 'en' : 'bn';
     // The reader's place comes along.
-    await expect(page).toHaveURL(new RegExp(`/${target}#faq$`));
+    await expect(page).toHaveURL(new RegExp(`/${target}#trust$`));
     await expect(page.locator('html')).toHaveAttribute('lang', target);
   });
 }
@@ -225,23 +246,21 @@ test('reduced motion: nothing loops, no pause control is needed, Bangla stays re
     return {
       scroll: getComputedStyle(document.documentElement).scrollBehavior,
       pulse: getComputedStyle(dot, '::after').animationName,
-      marquee: getComputedStyle(document.querySelector('.modules-track') ?? heading).animationName,
       leading: Number.parseFloat(style.lineHeight) / Number.parseFloat(style.fontSize),
       spacing: style.letterSpacing,
     };
   });
   expect(styles.scroll).toBe('auto');
   expect(styles.pulse).toBe('none');
-  expect(styles.marquee).toBe('none');
   expect(styles.leading).toBeGreaterThanOrEqual(1.35);
   expect(styles.spacing).toBe('normal');
-  // The illustration still answers a press; it just does not move by itself.
-  const serving = page.locator('.chamber-serial');
-  const before = (await serving.textContent()) ?? '';
-  await page.waitForTimeout(3000);
-  await expect(serving).toHaveText(before);
-  await page.getByRole('button', { name: copy.bn.live.tryIt }).click();
-  await expect(serving).not.toHaveText(before);
+  // The patient glimpse holds still.
+  const ahead = page.locator('.glimpse-ahead .rolling');
+  const before = (await ahead.textContent()) ?? '';
+  await page.waitForTimeout(3600);
+  await expect(ahead).toHaveText(before);
+  // The map's pulses are not drawn at all.
+  await expect(page.locator('.bd-pulse')).toHaveCount(0);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoOverflow(page);
 });
@@ -256,6 +275,14 @@ test('without script every section is visible (GR-06)', async ({ browser }) => {
       (elements) => elements.filter((element) => getComputedStyle(element).opacity !== '1').length,
     );
   expect(hidden).toBe(0);
+  const clipped = await page
+    .locator('[data-reveal]')
+    .evaluateAll(
+      (elements) =>
+        elements.filter((element) => !['none', ''].includes(getComputedStyle(element).clipPath))
+          .length,
+    );
+  expect(clipped).toBe(0);
   await expect(page.locator('#contact').getByRole('link', { name: contactEmail })).toBeVisible();
   await context.close();
 });
@@ -281,29 +308,29 @@ for (const locale of ['bn', 'en'] as const) {
     await expectAccessible(page);
     await expectNoOverflow(page);
   });
-}
 
-test('product screens load in both languages and say they are demonstration data', async ({
-  page,
-}) => {
-  for (const locale of ['bn', 'en'] as const) {
+  test(`${locale}: image credits name every photograph, its author, source and licence`, async ({
+    page,
+  }) => {
     await page.goto(`/${locale}`);
-    const patient = page.locator('#patients img');
-    await patient.scrollIntoViewIfNeeded();
-    await expect(patient).toHaveAttribute('alt', copy[locale].patientAlt);
-    await expect
-      .poll(() => patient.evaluate((element: HTMLImageElement) => element.naturalWidth))
-      .toBeGreaterThan(0);
-    for (const feature of copy[locale].features) {
-      await page.getByRole('tab', { name: feature.label, exact: true }).click();
-      // The outgoing screen fades while the new one arrives; wait for the hand-over.
-      await expect(page.locator('#workflow-view img')).toHaveCount(1);
-      const image = page.locator('#workflow-view img');
-      await expect(image).toHaveAttribute('alt', feature.alt);
-      expect(feature.alt).toMatch(/demonstration data|ডেমো তথ্য/);
-      await expect
-        .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
-        .toBeGreaterThan(0);
+    await page.locator('.site-footer').getByRole('link', { name: t.credits }).click();
+    await expect(page).toHaveURL(new RegExp(`/${locale}/credits$`));
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(t.creditsTitle);
+    for (const key of PHOTO_ORDER) {
+      const photo = PHOTOS[key];
+      const row = page.locator('.credit-list li').filter({ hasText: photo.title });
+      await expect(row).toContainText(photo.author);
+      await expect(row.getByRole('link', { name: t.creditsSource })).toHaveAttribute(
+        'href',
+        photo.source,
+      );
+      await expect(row.getByRole('link', { name: photo.licence })).toHaveAttribute(
+        'href',
+        photo.licenceUrl,
+      );
     }
-  }
-});
+    await expect(page.locator('main')).toContainText('CC BY 3.0 IGO');
+    await expectAccessible(page);
+    await expectNoOverflow(page);
+  });
+}

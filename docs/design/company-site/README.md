@@ -1,68 +1,83 @@
-# MedLiveBD company site — premium redesign
+# MedLiveBD company site — the brand story
 
 Updated 12 October 2026. Worktree `D:\Projects\HealthCare-site-mvp`, branch
-`feat/site-premium`, cut from `feat/company-site`. Site-only: nothing outside
-`frontend/site`, `pnpm-lock.yaml` and this folder changes.
+`feat/site-brand`, cut from `feat/site-premium` (`669aa80`, the approved
+product-led version, kept for comparison). Site-only: nothing outside
+`frontend/site` and this folder changes.
 
-## What the page argues, in order
+## Direction (owner, 12 October 2026)
 
-| Section | Job |
+Sell the experience, not the implementation. The public site says who
+MedLiveBD is, why connected care matters in Bangladesh, and what hospitals and
+patients gain. The software itself is shown in a private demonstration. The
+approved look is kept: the headline, the blue/navy/teal identity, typography
+and motion. The screenshot tour is gone, and people and place come in.
+
+## The page, in order
+
+| Chapter | What it does |
 |---|---|
-| Hero | Main line (owner, 12 October): *A Connected Healthcare Ecosystem for a Healthier Bangladesh* / *সুস্থ বাংলাদেশের জন্য একটি সংযুক্ত স্বাস্থ্যসেবা ইকোসিস্টেম*. Beside it, the product's promise **drawn in code**: reception presses *Call next*, the patient's phone moves (6 → 9, then "your turn"). It plays by itself, can be paused, and the visitor can press the button. |
-| Modules band | Breadth: every workspace by name. |
-| Why live matters | Without / with, five rows. |
-| How it works (dark) | Four steps, one diagram: reception → live queue → phones, doctor, administration; the last step shows the honest-degradation rule (offline, figure age). |
-| Product | The six **real captured screens** (`public/screens`, demonstration data) behind an accessible tab list. Console screens are cropped past the repeated side rail. |
-| For hospital teams | Seven cards, each with a small CSS-driven picture: reception, beds, emergency, lab, doctor, offline, branding. |
-| For patients | The real patient screen and five things a patient can do. |
-| Network | Hospital A/B/C (never a real or seeded name) — what is shared, what stays inside. |
-| Trust (dark) | Six rules the platform enforces. |
-| Getting started | Configure → import → rehearse → go live. |
-| Questions | Six, answered as the platform stands today (including "not in this version"). |
-| Contact (dark) | `support@medlivebd.com`, copy button, the synthetic-data note. |
+| Hero | *A Connected Healthcare Ecosystem for a Healthier Bangladesh*. The Padma Bridge (a connection the country recognises) with two abstract glimpses, a hospital and a patient, joined by a live heartbeat. Pausable. |
+| Vision | One statement that lights up word by word as you scroll; an ECG trace that writes itself; Dhaka at sunset in a cinematic, parallax band with three pillars. |
+| Two experiences | *One connected healthcare ecosystem. Two experiences designed for different needs.* A hospital card (lab bench detail) and a patient card (rice farmer, Chattogram), joined by a "one platform" node; the hovered card opens wider. |
+| For hospitals | Nurses in training (curtain reveal), a stethoscope drawn in fine line, an abstract console glimpse, six benefits, *Request a private demo*. |
+| For patients | Srimangal tea garden, a phone glimpse, a five-step journey line, and a clear **Coming soon**: the patient app is not yet open to the public. There is no link to the demo app and no form. |
+| Connected Bangladesh | The country drawn from official boundary data: the outline draws in, then divisions and districts, then arcs from Dhaka to the eight division headquarters, with a slow camera push-in on scroll. Labelled **Concept illustration**; it shows no hospitals or coverage. |
+| Trust | Four factual commitments. No certifications are claimed. |
+| Contact | The Buriganga at dusk; *Let's build connected care, together*; support@medlivebd.com. |
 
-Nothing invented: no customers, partners, figures, testimonials or
-certifications. Illustrations say they are illustrations; every screen says it
-is demonstration data.
-
-## Design system
-
-Tokens are all in `src/app/site.css` `:root`: logo blue for action, navy for
-words, teal only as the live signal. Type: Geist (English), Geist Mono (small
-live labels), Anek Bangla (Bangla; never tracked, headings ≥ 1.36 leading,
-body 1.72, Bengali numerals throughout). The logo master has a white ground,
-so it only ever sits on light surfaces; dark sections are inset panels.
+Removed from the public page: the screenshot tour of six workspaces, the
+"how it works" diagram, the module band, the capability cards, the
+before/after table, the getting-started timeline and the FAQ. The product
+captures in `public/screens` are no longer referenced.
 
 ## Motion
 
-Framer Motion `12.43.0` (owner's request), loaded through `LazyMotion` with
-its features fetched after first paint; the hero text animates in CSS so the
-first paint never waits for it. Loops run only on screen and in a visible tab,
-stop when paused (WCAG 2.2.2), and do not run under reduced motion. Without
-script, every section is visible (`<noscript>` style in the layout).
+Framer Motion through `LazyMotion`, with features loaded after first paint.
+Used where it tells the story:
+
+- word-by-word statement reveal;
+- scroll-written ECG traces;
+- parallax and zoom on the photographs;
+- curtain reveals on the photographs;
+- the stethoscope drawing itself;
+- the map drawing in, with its camera push-in.
+
+Loops either have a pause control (the hero) or run a few times and stop (the
+map pulses and rings). Nothing loops under reduced motion. Without script,
+everything is visible.
+
+## Imagery
+
+Seven photographs from Wikimedia Commons under CC BY / CC BY-SA, and the map
+from geoBoundaries (CC0, with district lines under CC BY 3.0 IGO). Sources,
+licences and crops are in [CREDITS.md](CREDITS.md) and on the site at
+`/{bn,en}/credits`. Each photograph carries its credit on the page.
 
 ## Checks (12 October)
 
-- `pnpm --filter @platform/site typecheck`, eslint on `frontend/site`,
-  `prettier --check frontend/site` — exit 0.
-- `pnpm --filter @platform/site build` and `SITE_EXPORT=1` build — both clean;
-  no `localhost` address outside `_next` (a share-image link on the privacy
-  pages used to resolve to localhost; fixed in the locale layout).
-- `SITE_CAPTURE=1 pnpm --filter @platform/site test:smoke` against the
-  production build — **12/12 passed**: headers and entrance, every section
-  in both languages, the real contact only, keyboard (skip link, tab list
-  arrows/Home, steps, questions), the illustration's button and pause, mobile
-  menu and language switch keeping the reader's place, 1024 px and 320 px
-  without overflow, reduced motion, no-script, privacy notice, screens with
-  demonstration-data alt text, and axe WCAG 2.1 AA on desktop and mobile in
-  both languages.
+- Typecheck, eslint on `frontend/site` and `prettier --check frontend/site`:
+  all exit 0.
+- `pnpm --filter @platform/site build` and the `SITE_EXPORT=1` build: 14
+  pages, and no `localhost` outside `_next`.
+- `SITE_CAPTURE=1 pnpm --filter @platform/site test:smoke` on the production
+  build: **15/15 passed**. Covered: entrance and headers; the story in both
+  languages; both audiences' calls to action; the real contact only; no
+  forms or external links; every photograph same-origin, described, sized and
+  lazily loaded, with its credit; the map named and labelled a concept; the
+  hero pause; mobile menu and language switch; 1024 px and 320 px; reduced
+  motion; no-script; privacy and credits pages; axe WCAG 2.1 AA on desktop,
+  mobile, privacy and credits in both languages.
+- First load on the production build: about 750 KB desktop and 680 KB mobile
+  (AVIF photographs, 22 KB for the hero image). Largest contentful paint is
+  the headline; layout shift is under 0.005.
 
 Captures from that run: [English desktop](en-desktop.png),
 [Bangla mobile](bn-mobile.png).
 
-## Not done here
+## Before launch
 
-- The product screens are the 11 October captures (pre-console-redesign).
-  Recapturing from the redesigned consoles needs the local capture database
-  (`scripts/capture-screens.mjs`, Docker Postgres); Docker was stopped.
+- Confirm the Bangla main line and the Bangla copy.
+- Before paid advertising, replace the three photographs with recognisable
+  faces with model-released photography (see CREDITS.md).
 - Not merged, pushed or deployed. DNS and Cloudflare untouched.

@@ -25,9 +25,9 @@ export function Footer({
           <p>{t.footer}</p>
           <p className="footer-tagline">{t.aboutFoot}</p>
         </div>
-        <nav aria-label={t.footerProduct}>
-          <h2>{t.footerProduct}</h2>
-          {t.footerLinks.product.map((link) => (
+        <nav aria-label={t.footerExplore}>
+          <h2>{t.footerExplore}</h2>
+          {t.footerLinks.map((link) => (
             <a key={link.id} href={`${home}#${link.id}`}>
               {link.label}
             </a>
@@ -35,12 +35,9 @@ export function Footer({
         </nav>
         <nav aria-label={t.footerCompany}>
           <h2>{t.footerCompany}</h2>
-          {t.footerLinks.company.map((link) => (
-            <a key={link.id} href={`${home}#${link.id}`}>
-              {link.label}
-            </a>
-          ))}
+          <a href={`${home}#trust`}>{t.trustLink}</a>
           <a href={`${home}/privacy`}>{t.privacy}</a>
+          <a href={`${home}/credits`}>{t.credits}</a>
         </nav>
         <div>
           <h2>{t.footerContact}</h2>
