@@ -4,7 +4,6 @@ import {
   HumanHero,
   Connection,
   AudienceStage,
-  PeopleStories,
   BangladeshScene,
   Responsibility,
   ClosingInvitation,
@@ -35,7 +34,6 @@ export function Landing({ locale }: { readonly locale: Locale }): ReactNode {
           <HumanHero locale={locale} />
           <Connection locale={locale} />
           <AudienceStage locale={locale} />
-          <PeopleStories locale={locale} />
           <BangladeshScene locale={locale} />
           <Responsibility locale={locale} />
           <ClosingInvitation locale={locale} />

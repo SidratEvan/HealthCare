@@ -15,9 +15,9 @@ export function Mark({ priority = false }: { readonly priority?: boolean }): Rea
   return (
     <img
       className="brand-logo"
-      src="/brand/medlivebd-logo-light.webp"
-      width="330"
-      height="218"
+      src="/brand/medlivebd-logo-480.webp"
+      width="480"
+      height="317"
       alt="MedLiveBD"
       fetchPriority={priority ? 'high' : 'auto'}
     />
@@ -63,8 +63,21 @@ export function LanguageSwitch({
   return <div className="lang-switch">{items}</div>;
 }
 
-export function Header({ locale }: { readonly locale: Locale }): ReactNode {
+/** Where a navigation item leads: a scene of the home page, or the founders page (S-C-01). */
+function navHref(locale: Locale, id: string, onHome: boolean): string {
+  if (id === 'founders') return `/${locale}/founders`;
+  return onHome ? `#${id}` : `/${locale}#${id}`;
+}
+
+export function Header({
+  locale,
+  page = 'home',
+}: {
+  readonly locale: Locale;
+  readonly page?: 'home' | 'founders';
+}): ReactNode {
   const t = copy[locale];
+  const onHome = page === 'home';
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
@@ -125,13 +138,17 @@ export function Header({ locale }: { readonly locale: Locale }): ReactNode {
           </a>
           <nav className="desktop-nav" aria-label={t.menu}>
             {t.nav.map((link) => (
-              <a key={link.id} href={`#${link.id}`}>
+              <a
+                key={link.id}
+                href={navHref(locale, link.id, onHome)}
+                aria-current={link.id === page ? 'page' : undefined}
+              >
                 {link.label}
               </a>
             ))}
           </nav>
           <div className="header-actions">
-            <LanguageSwitch locale={locale} />
+            <LanguageSwitch locale={locale} path={onHome ? '' : `/${page}`} />
             <a className="button button-primary button-small header-cta" href={demoHref}>
               {t.demo}
             </a>
@@ -164,7 +181,7 @@ export function Header({ locale }: { readonly locale: Locale }): ReactNode {
             {t.nav.map((link) => (
               <m.a
                 key={link.id}
-                href={`#${link.id}`}
+                href={navHref(locale, link.id, onHome)}
                 variants={{
                   hidden: { opacity: 0, y: 16 },
                   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
@@ -190,7 +207,7 @@ export function Header({ locale }: { readonly locale: Locale }): ReactNode {
               </a>
               <a
                 className="mobile-contact"
-                href={`#contact`}
+                href={onHome ? '#contact' : `/${locale}#contact`}
                 onClick={() => {
                   setOpen(false);
                 }}

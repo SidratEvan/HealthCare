@@ -3,6 +3,7 @@ import axe from 'axe-core';
 
 import { cinematic } from '../src/content/cinematic';
 import { contactEmail, copy, demoHref } from '../src/content/copy';
+import { founders } from '../src/content/founders';
 
 import type { Page } from '@playwright/test';
 import type { AxeResults } from 'axe-core';
@@ -12,6 +13,9 @@ async function jump(page: Page, top: number): Promise<void> {
     window.scrollTo({ top: y, behavior: 'instant' });
   }, top);
   await page.waitForTimeout(600);
+}
+async function topOf(page: Page, selector: string): Promise<number> {
+  return await page.locator(selector).evaluate((el) => el.getBoundingClientRect().top + scrollY);
 }
 async function accessible(page: Page): Promise<void> {
   await page.evaluate(axe.source);
@@ -30,19 +34,27 @@ async function accessible(page: Page): Promise<void> {
 async function noOverflow(page: Page): Promise<void> {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
+/** How far the care thread's ink is drawn (its scaleY), 1 when it carries no transform. */
+async function threadDrawn(page: Page, selector: string): Promise<number> {
+  return await page.locator(`${selector} .thread-ink`).evaluate((el) => {
+    const t = getComputedStyle(el).transform;
+    return t === 'none' ? 1 : Number(t.replace('matrix(', '').split(',')[3]);
+  });
+}
 
 test('static routes, Bangla entrance and security (S-C-01, GR-06)', async ({ request }) => {
   const entrance = await request.get('/', { maxRedirects: 0 });
   expect([302, 307]).toContain(entrance.status());
   expect(entrance.headers()['location']).toBe('/bn');
-  for (const locale of ['en', 'bn'] as const) {
-    const response = await request.get(`/${locale}`);
+  for (const path of ['/en', '/bn', '/en/founders', '/bn/founders']) {
+    const response = await request.get(path);
     expect(response.status()).toBe(200);
-    expect(await response.text()).toContain(`<html lang="${locale}"`);
+    expect(await response.text()).toContain(`<html lang="${path.slice(1, 3)}"`);
     expect(response.headers()['x-content-type-options']).toBe('nosniff');
     expect(response.headers()['x-frame-options']).toBe('DENY');
     expect(response.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
   }
+  expect(await (await request.get('/sitemap.xml')).text()).toContain('/bn/founders');
   expect((await request.get('/unsupported')).status()).toBe(404);
 });
 
@@ -63,12 +75,18 @@ for (const locale of ['en', 'bn'] as const) {
     await expect(page.locator('h1')).toHaveText(copy[locale].hero.map((p) => p.text).join(''));
     await expect(page.locator('#patients')).toContainText(cinematic[locale].patientStatus);
     await expect(page.locator('#bangladesh')).toContainText(cinematic[locale].mapNote);
+    for (const [title] of [
+      ...cinematic[locale].hospitalFeatures,
+      ...cinematic[locale].patientFeatures,
+    ])
+      await expect(page.locator('#experiences')).toContainText(title);
     const demos = page.getByRole('link', { name: copy[locale].demo, exact: true });
     expect(await demos.count()).toBeGreaterThanOrEqual(4);
     for (const link of await demos.all()) await expect(link).toHaveAttribute('href', demoHref);
     for (const link of await page.locator('a[href^="#"]').all()) {
       expect(await page.locator((await link.getAttribute('href')) ?? '').count()).toBe(1);
     }
+    await expect(page.locator('.closing-founders')).toHaveAttribute('href', `/${locale}/founders`);
     expect(await page.locator('form, iframe, canvas').count()).toBe(0);
     expect(
       await page
@@ -78,7 +96,7 @@ for (const locale of ['en', 'bn'] as const) {
         ),
     ).toEqual([]);
     const images = page.locator('main picture img');
-    expect(await images.count()).toBe(6);
+    expect(await images.count()).toBe(4);
     for (const [index, image] of (await images.all()).entries()) {
       await expect(image).toHaveAttribute('loading', index === 0 ? 'eager' : 'lazy');
       await expect(image).toHaveAttribute('alt', /.+/);
@@ -110,12 +128,15 @@ for (const locale of ['en', 'bn'] as const) {
     await expect(nav).toBeHidden();
     await expect(toggle).toBeFocused();
     await toggle.click();
+    await expect(nav.locator(`a[href="/${locale}/founders"]`)).toBeVisible();
     await nav.locator('a[href="#patients"]').click();
     await expect(page).toHaveURL(/#patients$/);
     await expect(nav).toBeHidden();
     await page.waitForTimeout(900);
+    // The anchor lands just below the compact header, never under it.
+    const header = await page.locator('.site-header').boundingBox();
     const anchor = await page.locator('#patients').boundingBox();
-    expect(anchor?.y).toBeGreaterThanOrEqual(60);
+    expect(anchor?.y).toBeGreaterThanOrEqual((header?.height ?? 0) - 1);
     expect(anchor?.y).toBeLessThan(170);
     await accessible(page);
     await page.locator('.site-header .language-link').click();
@@ -134,18 +155,14 @@ for (const locale of ['en', 'bn'] as const) {
       await noOverflow(page);
       await expect(page.locator('.site-header .brand-logo')).toBeVisible();
       expect((await page.locator('.hero-photograph').boundingBox())?.height).toBeGreaterThan(250);
-      if (width <= 960) {
-        expect(
-          await page.locator('.audience-sticky').evaluate((el) => getComputedStyle(el).position),
-        ).not.toBe('sticky');
-        const a = await page.locator('.audience-hospital').boundingBox(),
-          b = await page.locator('.audience-patient').boundingBox();
-        expect(b?.y).toBeGreaterThan((a?.y ?? 0) + (a?.height ?? 0));
-      }
+      const a = await page.locator('#hospitals').boundingBox(),
+        b = await page.locator('#patients').boundingBox();
+      if (width <= 960) expect(b?.y).toBeGreaterThanOrEqual((a?.y ?? 0) + (a?.height ?? 0));
+      else expect(Math.abs((b?.y ?? 0) - (a?.y ?? 0))).toBeLessThan(200);
       for (const selector of [
         '.pulse-hero h1',
         '.audience-copy',
-        '.people-copy',
+        '.feature-list',
         '.bangladesh-copy',
         '.closing-content',
       ]) {
@@ -153,20 +170,43 @@ for (const locale of ['en', 'bn'] as const) {
           expect(await el.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
       }
       if (locale === 'bn') {
-        const s = await page.locator('h1').evaluate((el) => {
-          const x = getComputedStyle(el);
-          return {
-            leading: parseFloat(x.lineHeight) / parseFloat(x.fontSize),
-            spacing: x.letterSpacing,
-          };
-        });
-        expect(s.leading).toBeGreaterThanOrEqual(1.64);
-        expect(s.spacing).toBe('normal');
+        for (const selector of ['h1', '#audience-title', '#bangladesh-title']) {
+          const s = await page.locator(selector).evaluate((el) => {
+            const x = getComputedStyle(el);
+            return {
+              leading: parseFloat(x.lineHeight) / parseFloat(x.fontSize),
+              spacing: x.letterSpacing,
+            };
+          });
+          expect(s.leading).toBeGreaterThanOrEqual(1.64);
+          expect(s.spacing).toBe('normal');
+        }
       }
     });
   }
 
-  test(`${locale}: privacy and asset provenance`, async ({ page }) => {
+  test(`${locale}: founders, privacy and asset provenance`, async ({ page }) => {
+    const t = founders[locale];
+    await page.goto(`/${locale}/founders`);
+    await expect(page.locator('h1')).toHaveText(t.heading);
+    for (const person of t.founders) {
+      await expect(page.getByRole('heading', { name: person.name })).toBeVisible();
+      await expect(page.locator(`a[href="mailto:${person.email}"]`)).toBeVisible();
+      await expect(page.locator(`a[href="tel:${person.phone}"]`)).toHaveText(person.phoneDisplay);
+    }
+    await expect(page.locator('.desktop-nav a[aria-current="page"]')).toHaveAttribute(
+      'href',
+      `/${locale}/founders`,
+    );
+    await expect(page.locator('.site-header .language-link')).toHaveAttribute(
+      'href',
+      `/${locale === 'en' ? 'bn' : 'en'}/founders`,
+    );
+    await expect(page.locator('main')).toContainText(contactEmail);
+    await accessible(page);
+    await page.setViewportSize({ width: 320, height: 800 });
+    await noOverflow(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
     for (const path of ['privacy', 'credits']) {
       await page.goto(`/${locale}/${path}`);
       await expect(page.locator('h1')).toHaveText(
@@ -179,6 +219,7 @@ for (const locale of ['en', 'bn'] as const) {
       await accessible(page);
       await page.setViewportSize({ width: 320, height: 800 });
       await noOverflow(page);
+      await page.setViewportSize({ width: 1280, height: 800 });
       if (path === 'credits') {
         await expect(page.locator('main')).toContainText(cinematic[locale].assetsIntro);
         expect(await page.locator('.credit-list img').count()).toBe(4);
@@ -188,51 +229,98 @@ for (const locale of ['en', 'bn'] as const) {
   });
 }
 
-test('reversible scroll, keyboard audience focus, geographic camera, responsive cleanup', async ({
-  page,
-}) => {
+/* The three faults the owner named on 12 October 2026, kept from returning. */
+for (const width of [1440, 390]) {
+  test(`each photograph appears once in a visit (${String(width)}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/en');
+    const sources = await page
+      .locator('main picture img')
+      .evaluateAll((images) =>
+        images
+          .filter((i) => i.getBoundingClientRect().width > 0)
+          .map((i) => (i as HTMLImageElement).src.replace(/^.*\/campaign\/([a-z]+)-.*$/, '$1')),
+      );
+    expect(sources.sort()).toEqual(['atmosphere', 'hero', 'patient', 'team']);
+  });
+}
+
+test('connecting lines are visible strokes, not hairlines', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.goto('/en');
-  const stage = page.locator('#experiences');
-  await expect(stage).toHaveAttribute('data-motion', 'true');
-  const top = await stage.evaluate((el) => el.getBoundingClientRect().top + scrollY);
-  await jump(page, top - 200);
-  const before = await page.locator('.layer-one').evaluate((el) => getComputedStyle(el).transform);
-  await jump(page, top + 250);
+  for (const selector of ['.fork-ink', '.map-spoke', '.country-outline']) {
+    for (const path of await page.locator(selector).all()) {
+      const style = await path.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { width: parseFloat(s.strokeWidth), effect: s.vectorEffect, opacity: s.opacity };
+      });
+      expect(style.width).toBeGreaterThanOrEqual(1.5);
+      expect(style.effect).toBe('non-scaling-stroke');
+      expect(style.opacity).toBe('1');
+    }
+  }
+  expect(await page.locator('.map-spoke').count()).toBe(7);
   expect(
-    await page.locator('.layer-one').evaluate((el) => getComputedStyle(el).transform),
-  ).not.toBe(before);
-  await jump(page, top - 200);
-  const after = await page.locator('.layer-one').evaluate((el) => getComputedStyle(el).transform);
-  const matrix = (s: string): number[] =>
-    s.replace('matrix(', '').replace(')', '').split(',').map(Number);
-  matrix(before).forEach((v, i) => expect(Math.abs(v - (matrix(after)[i] ?? 0))).toBeLessThan(0.8));
-  const hospital = page.getByRole('button', { name: cinematic.en.hospital, exact: true });
-  await hospital.focus();
-  await page.keyboard.press('Enter');
-  await expect(stage).toHaveAttribute('data-focus', 'hospital');
-  await expect(hospital).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: cinematic.en.patient, exact: true }).click();
-  await expect(stage).toHaveAttribute('data-focus', 'patient');
-  await page.getByRole('button', { name: cinematic.en.reset }).click();
-  await expect(stage).toHaveAttribute('data-focus', 'both');
-  const mapTop = await page
-    .locator('#bangladesh')
-    .evaluate((el) => el.getBoundingClientRect().top + scrollY);
-  await jump(page, mapTop - 850);
-  const mapBefore = await page
-    .locator('.country-map')
+    await page.locator('.token-layer, .hero-signal, .closing-signal, .photo-edge').count(),
+  ).toBe(0);
+});
+
+test('scroll draws the thread and the map, and scrolling back undraws them', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto('/en');
+  await expect(page.locator('#experiences')).toHaveAttribute('data-motion', 'true');
+  await expect(page.locator('#experiences')).toHaveAttribute('data-lines', 'true');
+  const vision = await topOf(page, '#vision');
+  await jump(page, 0);
+  expect(await threadDrawn(page, '.thread-top')).toBeLessThan(0.05);
+  await jump(page, vision);
+  expect(await threadDrawn(page, '.thread-top')).toBeGreaterThan(0.95);
+  await jump(page, 0);
+  expect(await threadDrawn(page, '.thread-top')).toBeLessThan(0.05);
+
+  const offset = (): Promise<number> =>
+    page
+      .locator('.map-spoke')
+      .last()
+      .evaluate((el) => {
+        const length = parseFloat(getComputedStyle(el).strokeDasharray.split(',')[0] ?? '1');
+        return length;
+      });
+  const map = await topOf(page, '#bangladesh');
+  await jump(page, map - 900);
+  const before = await offset();
+  await jump(page, map);
+  const drawn = await offset();
+  expect(drawn).toBeGreaterThan(before);
+  await jump(page, map - 900);
+  expect(await offset()).toBeLessThan(drawn);
+
+  const hero = await page
+    .locator('.hero-photograph')
     .evaluate((el) => getComputedStyle(el).transform);
-  await jump(page, mapTop);
+  await jump(page, 500);
   expect(
-    await page.locator('.country-map').evaluate((el) => getComputedStyle(el).transform),
-  ).not.toBe(mapBefore);
+    await page.locator('.hero-photograph').evaluate((el) => getComputedStyle(el).transform),
+  ).not.toBe(hero);
+
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(stage).toHaveAttribute('data-motion', 'false');
-  expect(
-    await page.locator('.audience-sticky').evaluate((el) => getComputedStyle(el).position),
-  ).not.toBe('sticky');
+  await expect(page.locator('#experiences')).toHaveAttribute('data-motion', 'false');
+  await expect(page.locator('#experiences')).toHaveAttribute('data-lines', 'true');
   await noOverflow(page);
+});
+
+test('the header logo is legible at the top and compact once scrolled', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto('/en');
+  const width = (): Promise<number> =>
+    page.locator('.site-header .brand-logo').evaluate((el) => el.getBoundingClientRect().width);
+  expect(await width()).toBeGreaterThanOrEqual(160);
+  const heroTop = (await page.locator('.pulse-hero').boundingBox())?.y ?? 0;
+  await jump(page, 600);
+  await page.waitForTimeout(500);
+  expect(await width()).toBeLessThan(120);
+  await jump(page, 0);
+  expect((await page.locator('.pulse-hero').boundingBox())?.y).toBe(heroTop);
 });
 
 test('reduced motion, including live preference changes', async ({ page }) => {
@@ -240,9 +328,17 @@ test('reduced motion, including live preference changes', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.goto('/bn');
   await expect(page.locator('#experiences')).toHaveAttribute('data-motion', 'false');
+  await expect(page.locator('#experiences')).toHaveAttribute('data-lines', 'false');
   expect(await page.locator('.country-map').evaluate((el) => getComputedStyle(el).transform)).toBe(
     'none',
   );
+  expect(await threadDrawn(page, '.thread-top')).toBe(1);
+  expect(
+    await page
+      .locator('.map-spoke')
+      .first()
+      .evaluate((el) => getComputedStyle(el).strokeDasharray),
+  ).toBe('none');
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).toBe(
     'auto',
   );
@@ -253,17 +349,22 @@ test('reduced motion, including live preference changes', async ({ page }) => {
   await expect(page.locator('#experiences')).toHaveAttribute('data-motion', 'false');
 });
 
-test('no JavaScript: complete story and contact in static HTML', async ({ browser }) => {
+test('no JavaScript: complete story, drawn lines and contact in static HTML', async ({
+  browser,
+}) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   await page.goto('/en');
   await expect(page.locator('h1')).toBeVisible();
   await expect(page.locator('#experiences')).toHaveAttribute('data-motion', 'false');
-  for (const heading of await page.locator('main h2, main h3').all())
+  for (const heading of await page.locator('main h2, main h3, main h4').all())
     await expect(heading).toBeVisible();
+  expect(await threadDrawn(page, '.thread-bottom')).toBe(1);
   await expect(page.locator('#contact').getByRole('link', { name: contactEmail })).toHaveAttribute(
     'href',
     `mailto:${contactEmail}`,
   );
+  await page.goto('/en/founders');
+  await expect(page.locator('.founder')).toHaveCount(2);
   await context.close();
 });

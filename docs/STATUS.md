@@ -7,7 +7,11 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Company site — cinematic candidate (12 October 2026, local review)
+## Company site — cinematic, refined (12 October 2026, awaiting the owner's review)
+
+Branch `feat/site-cinematic-refine` in worktree `D:ProjectsHealthCare-site-cinematic`, on top of Codex's work checkpointed unchanged as `8c563ec`. Each of the four AI-generated photographs now appears once (hashes unchanged); the duplicate hospital and patient sections were merged into one two-card scene with three concrete points per audience; meaningless lines removed, the map's hairline strokes fixed; no pinned scroll; larger logo with a readable tagline; new founders page (`/{bn,en}/founders`). Record, causes, measurements and evidence: `docs/design/site-cinematic/README.md`. Site smoke 30/30 on the static export. **Local only: not pushed, merged or deployed; Cloudflare, DNS and mail untouched.** Open: the owner confirms the Bangla copy and the founders' Bangla name spellings.
+
+## Company site — cinematic candidate (12 October 2026, Codex, superseded by the refinement above)
 
 The owner's cinematic redesign supersedes the visual direction of the brand
 story below. Worktree `D:\Projects\HealthCare-site-cinematic`, branch

@@ -1,9 +1,9 @@
 'use client';
 
-import { m, useScroll, useSpring, useTransform } from 'framer-motion';
+import { m, useScroll, useTransform } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 
-import { MAP_OUTLINE, MAP_VIEWBOX, MAP_DIVISIONS } from '@/content/bangladesh-map';
+import { MAP_CITIES, MAP_DIVISIONS, MAP_OUTLINE, MAP_VIEWBOX } from '@/content/bangladesh-map';
 import { cinematic } from '@/content/cinematic';
 import { contactEmail, copy, demoHref } from '@/content/copy';
 
@@ -11,25 +11,58 @@ import { CampaignImage } from './CampaignImage';
 import { Icon } from './icons';
 
 import type { Locale } from '@/content/copy';
-import type { ReactNode } from 'react';
+import type { MotionValue } from 'framer-motion';
+import type { ReactNode, RefObject } from 'react';
 
-/** GR-06: start from complete static HTML; enable cinema only on suitable screens. */
-function useDesktopCinema(): boolean {
-  const [enabled, setEnabled] = useState(false);
+/*
+ * Motion ownership (GR-06). Every animated element has exactly one owner: the
+ * scroll progress of the section it sits in, mapped straight to transform,
+ * opacity or SVG path length. No springs on scroll — the picture moves with
+ * the visitor's hand, never behind it. Nothing is pinned. Text and actions
+ * never depend on scroll position to be visible.
+ *
+ * Two gates:
+ * - `useMotionWelcome`: the visitor has not asked for reduced motion. Lines draw.
+ * - `useDesktopCinema`: additionally a large screen. Photographs drift.
+ * Without script, or with reduced motion, every line is fully drawn and every
+ * photograph is still.
+ */
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false);
   useEffect(() => {
-    const query = window.matchMedia(
-      '(min-width: 961px) and (min-height: 650px) and (prefers-reduced-motion: no-preference)',
-    );
+    const list = window.matchMedia(query);
     const update = (): void => {
-      setEnabled(query.matches);
+      setMatches(list.matches);
     };
     update();
-    query.addEventListener('change', update);
+    list.addEventListener('change', update);
     return () => {
-      query.removeEventListener('change', update);
+      list.removeEventListener('change', update);
     };
-  }, []);
-  return enabled;
+  }, [query]);
+  return matches;
+}
+const useMotionWelcome = (): boolean => useMediaQuery('(prefers-reduced-motion: no-preference)');
+const useDesktopCinema = (): boolean =>
+  useMediaQuery(
+    '(min-width: 961px) and (min-height: 650px) and (prefers-reduced-motion: no-preference)',
+  );
+
+/** Width of an element, updated on resize only (never on scroll). */
+function useWidth(target: RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const element = target.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(Math.round(entry.contentRect.width));
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [target]);
+  return width;
 }
 
 function Demo({ locale }: { readonly locale: Locale }): ReactNode {
@@ -41,18 +74,35 @@ function Demo({ locale }: { readonly locale: Locale }): ReactNode {
   );
 }
 
+/** A vertical length of the care thread, drawn downward by `draw` (0–1). */
+function Thread({
+  draw,
+  enabled,
+  className,
+}: {
+  readonly draw: MotionValue<number>;
+  readonly enabled: boolean;
+  readonly className: string;
+}): ReactNode {
+  return (
+    <span className={`thread ${className}`} aria-hidden="true">
+      <m.span className="thread-ink" style={enabled ? { scaleY: draw } : {}} />
+    </span>
+  );
+}
+
 export function HumanHero({ locale }: { readonly locale: Locale }): ReactNode {
   const t = cinematic[locale];
   const target = useRef<HTMLElement>(null);
-  const enabled = useDesktopCinema();
-  const { scrollYProgress } = useScroll({ target, offset: ['start start', 'end start'] });
-  const p = useSpring(scrollYProgress, { stiffness: 240, damping: 30 });
-  const y = useTransform(p, [0, 1], ['0%', '18%']);
-  const scale = useTransform(p, [0, 1], [1, 1.06]);
-  const line = useTransform(p, [0, 0.65], [0.42, 1]);
+  const cinema = useDesktopCinema();
+  const { scrollYProgress: p } = useScroll({ target, offset: ['start start', 'end start'] });
+  const y = useTransform(p, [0, 1], ['0%', '14%']);
+  const scale = useTransform(p, [0, 1], [1.02, 1.08]);
+  const lift = useTransform(p, [0, 1], [0, -70]);
+  const fade = useTransform(p, [0.45, 0.95], [1, 0]);
   return (
-    <section className="pulse-hero" ref={target} aria-labelledby="hero-title" data-motion={enabled}>
-      <m.div className="hero-photograph" style={enabled ? { y, scale } : {}}>
+    <section className="pulse-hero" ref={target} aria-labelledby="hero-title" data-motion={cinema}>
+      <m.div className="hero-photograph" style={cinema ? { y, scale } : {}}>
         <CampaignImage
           name="hero"
           alt={t.heroAlt}
@@ -61,7 +111,7 @@ export function HumanHero({ locale }: { readonly locale: Locale }): ReactNode {
         />
       </m.div>
       <div className="hero-shade" />
-      <div className="shell pulse-hero-content">
+      <m.div className="shell pulse-hero-content" style={cinema ? { y: lift, opacity: fade } : {}}>
         <p className="pulse-kicker">
           <span className="signal-dot" />
           {copy[locale].eyebrow}
@@ -81,37 +131,34 @@ export function HumanHero({ locale }: { readonly locale: Locale }): ReactNode {
             <Icon name="arrow" className="arrow" />
           </a>
         </div>
-      </div>
-      <svg
-        className="hero-signal"
-        viewBox="0 0 1440 800"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-      >
-        <path d="M1110 370 C1270 430 1200 600 1000 615 S720 660 720 800" className="signal-track" />
-        <m.path
-          d="M1110 370 C1270 430 1200 600 1000 615 S720 660 720 800"
-          className="signal-stroke"
-          style={enabled ? { pathLength: line } : {}}
-        />
-        <circle cx="1110" cy="370" r="5" className="signal-point" />
-      </svg>
-      <div className="shell hero-foot">
-        <span>{t.chapter}</span>
-        <a href="#vision">
-          {t.scroll}
-          <span aria-hidden="true">↓</span>
-        </a>
-      </div>
+      </m.div>
+      <a className="hero-cue" href="#vision">
+        <span>{t.scroll}</span>
+        <span className="hero-cue-line" aria-hidden="true" />
+      </a>
     </section>
   );
 }
 
+/**
+ * The care thread begins under the hero's scroll cue, runs through the
+ * statement and leads into the platform node of the next scene.
+ */
 export function Connection({ locale }: { readonly locale: Locale }): ReactNode {
   const t = cinematic[locale];
+  const target = useRef<HTMLElement>(null);
+  const enabled = useMotionWelcome();
+  const { scrollYProgress: p } = useScroll({ target, offset: ['start 0.9', 'end 0.55'] });
+  const upper = useTransform(p, [0, 0.35], [0, 1]);
+  const lower = useTransform(p, [0.55, 1], [0, 1]);
   return (
-    <section id="vision" className="pulse-connection" aria-labelledby="connection-title">
-      <div className="connection-stem" aria-hidden="true" />
+    <section
+      id="vision"
+      className="pulse-connection"
+      ref={target}
+      aria-labelledby="connection-title"
+    >
+      <Thread draw={upper} enabled={enabled} className="thread-top" />
       <div className="shell connection-copy">
         <p className="pulse-kicker">{t.chapter}</p>
         <h2 id="connection-title">
@@ -121,201 +168,251 @@ export function Connection({ locale }: { readonly locale: Locale }): ReactNode {
         </h2>
         <p>{t.connectionNote}</p>
       </div>
-      <div className="connection-stem connection-stem-bottom" aria-hidden="true" />
+      <Thread draw={lower} enabled={enabled} className="thread-bottom" />
     </section>
   );
 }
 
-/** One progress owner choreographs separation, the central layers and reconnection. */
+const FORK_HEIGHT = 100;
+/** The two branches from the platform node to the top of each scene, sized to the layout. */
+function forkPaths(width: number): readonly [string, string] {
+  const mid = width / 2;
+  const r = 26;
+  const bend = 58;
+  const drop = FORK_HEIGHT;
+  const left = width * 0.25;
+  const right = width * 0.75;
+  return [
+    `M${mid} 0V${bend - r}Q${mid} ${bend} ${mid - r} ${bend}H${left + r}Q${left} ${bend} ${left} ${bend + r}V${drop}`,
+    `M${mid} 0V${bend - r}Q${mid} ${bend} ${mid + r} ${bend}H${right - r}Q${right} ${bend} ${right} ${bend + r}V${drop}`,
+  ];
+}
+
+function Feature({ title, body }: { readonly title: string; readonly body: string }): ReactNode {
+  return (
+    <li>
+      <h4>{title}</h4>
+      <p>{body}</p>
+    </li>
+  );
+}
+
+/**
+ * Hospitals and patients, each with its own photograph — shown once — and the
+ * few things MedLiveBD does for them. One platform node branches to both.
+ */
 export function AudienceStage({ locale }: { readonly locale: Locale }): ReactNode {
   const t = cinematic[locale];
   const target = useRef<HTMLElement>(null);
-  const enabled = useDesktopCinema();
-  const [focus, setFocus] = useState<'both' | 'hospital' | 'patient'>('both');
-  const { scrollYProgress } = useScroll({ target, offset: ['start 0.18', 'end 0.9'] });
-  const p = useSpring(scrollYProgress, { stiffness: 260, damping: 32, restDelta: 0.001 });
-  const left = useTransform(p, [0, 0.5, 1], ['6%', '-2%', '0%']);
-  const right = useTransform(p, [0, 0.5, 1], ['-6%', '2%', '0%']);
-  const turn = useTransform(p, [0, 0.5, 1], [-28, 24, 0]);
-  const upper = useTransform(p, [0, 0.5, 1], [-12, -88, -28]);
-  const lower = useTransform(p, [0, 0.5, 1], [12, 88, 28]);
-  const trace = useTransform(p, [0, 0.65, 1], [0.12, 0.7, 1]);
+  const fork = useRef<HTMLDivElement>(null);
+  const width = useWidth(fork);
+  const enabled = useMotionWelcome();
+  const cinema = useDesktopCinema();
+  const { scrollYProgress: p } = useScroll({ target, offset: ['start 0.75', 'start 0.05'] });
+  const branch = useTransform(p, [0.2, 0.75], [0, 1]);
+  const node = useTransform(p, [0, 0.2], [0.86, 1]);
+  const settle = useTransform(p, [0.1, 1], [1.12, 1]);
+  const rise = useTransform(p, [0.1, 1], [80, 0]);
+  const riseLate = useTransform(p, [0.1, 1], [130, 0]);
+  // Before measurement (and without script) the fork is drawn at the shell's width and stretched.
+  const drawWidth = width > 0 ? width : 1240;
+  const [toHospital, toPatient] = forkPaths(drawWidth);
   return (
     <section
       id="experiences"
       className="pulse-audiences"
       ref={target}
-      data-motion={enabled}
-      data-focus={focus}
       aria-labelledby="audience-title"
+      data-motion={cinema}
+      data-lines={enabled}
     >
-      <div className="audience-sticky">
-        <div className="shell audience-heading">
-          <h2 id="audience-title">{t.experiences}</h2>
-          <div className="audience-controls" role="group" aria-label={t.focus}>
-            {(['hospital', 'both', 'patient'] as const).map((value) => (
-              <button
-                type="button"
-                key={value}
-                aria-pressed={focus === value}
-                onClick={() => {
-                  setFocus(value);
-                }}
-              >
-                {value === 'both' ? t.reset : t[value]}
-              </button>
-            ))}
-          </div>
+      <div className="shell">
+        <div className="audience-hub" aria-hidden="true">
+          <m.span className="hub-node" style={enabled ? { scale: node } : {}}>
+            <span className="hub-dot" />
+            {t.hub}
+          </m.span>
         </div>
-        <div className="audience-panorama">
-          <m.article
-            className="audience-scene audience-hospital"
-            style={enabled ? { x: left } : {}}
+        <h2 id="audience-title" className="audience-title">
+          {t.experiences}
+        </h2>
+        <div className="audience-fork" ref={fork} aria-hidden="true">
+          <svg
+            viewBox={`0 0 ${String(drawWidth)} ${String(FORK_HEIGHT)}`}
+            width={width > 0 ? width : '100%'}
+            height={FORK_HEIGHT}
+            preserveAspectRatio={width > 0 ? 'xMidYMid meet' : 'none'}
           >
-            <CampaignImage name="team" alt={t.teamAlt} sizes="(max-width: 960px) 100vw, 55vw" />
-            <div className="audience-shade" />
-            <div className="audience-copy">
-              <p className="pulse-kicker">{t.hospital}</p>
-              <h3>{t.hospitalTitle}</h3>
-              <p>{t.hospitalBody}</p>
+            {[toHospital, toPatient].map((d) => (
+              <g key={d}>
+                <path d={d} className="fork-track" />
+                <m.path d={d} className="fork-ink" style={enabled ? { pathLength: branch } : {}} />
+              </g>
+            ))}
+          </svg>
+        </div>
+        <div className="audience-grid">
+          <m.article
+            id="hospitals"
+            className="audience-card"
+            aria-labelledby="hospital-title"
+            style={cinema ? { y: rise } : {}}
+          >
+            <div className="audience-photo">
+              <m.div className="audience-photo-inner" style={cinema ? { scale: settle } : {}}>
+                <CampaignImage
+                  name="team"
+                  alt={t.teamAlt}
+                  sizes="(max-width: 960px) 100vw, 620px"
+                />
+              </m.div>
+              <div className="audience-shade" />
+              <div className="audience-copy">
+                <p className="pulse-kicker">{t.hospital}</p>
+                <h3 id="hospital-title">{t.hospitalTitle}</h3>
+              </div>
+            </div>
+            <ul className="feature-list">
+              {t.hospitalFeatures.map(([title, body]) => (
+                <Feature key={title} title={title} body={body} />
+              ))}
+            </ul>
+            <div className="audience-action">
               <Demo locale={locale} />
             </div>
           </m.article>
-          <div className="connection-token" aria-hidden="true">
-            <svg viewBox="0 0 320 400" className="token-lines">
-              <path
-                d="M160 0V105 M0 210C90 210 88 180 160 180S225 210 320 210 M160 275V400"
-                className="signal-track"
-              />
-              <m.path
-                d="M160 0V105 M0 210C90 210 88 180 160 180S225 210 320 210 M160 275V400"
-                className="signal-stroke"
-                style={enabled ? { pathLength: trace } : {}}
-              />
-            </svg>
-            <m.div
-              className="token-layer layer-one"
-              style={enabled ? { y: upper, rotate: turn } : {}}
-            />
-            <m.div className="token-layer layer-two" style={enabled ? { rotate: turn } : {}} />
-            <m.div
-              className="token-layer layer-three"
-              style={enabled ? { y: lower, rotate: turn } : {}}
-            />
-            <span className="token-point" />
-          </div>
           <m.article
-            className="audience-scene audience-patient"
-            style={enabled ? { x: right } : {}}
+            id="patients"
+            className="audience-card"
+            aria-labelledby="patient-title"
+            style={cinema ? { y: riseLate } : {}}
           >
-            <CampaignImage
-              name="patient"
-              alt={t.patientAlt}
-              sizes="(max-width: 960px) 100vw, 55vw"
-            />
-            <div className="audience-shade" />
-            <div className="audience-copy">
-              <p className="pulse-kicker">{t.patient}</p>
-              <h3>{t.patientTitle}</h3>
-              <p>{t.patientBody}</p>
-              <a className="button button-light" href="#patients">
-                {t.patientCta}
-                <Icon name="arrow" className="arrow" />
-              </a>
+            <div className="audience-photo">
+              <m.div className="audience-photo-inner" style={cinema ? { scale: settle } : {}}>
+                <CampaignImage
+                  name="patient"
+                  alt={t.patientAlt}
+                  sizes="(max-width: 960px) 100vw, 620px"
+                />
+              </m.div>
+              <div className="audience-shade" />
+              <div className="audience-copy">
+                <p className="pulse-kicker">{t.patient}</p>
+                <h3 id="patient-title">{t.patientTitle}</h3>
+              </div>
+            </div>
+            <ul className="feature-list">
+              {t.patientFeatures.map(([title, body]) => (
+                <Feature key={title} title={title} body={body} />
+              ))}
+            </ul>
+            <div className="audience-action">
+              <p className="patient-status">
+                <span className="status-dot" aria-hidden="true" />
+                <strong>{t.comingSoon}</strong>
+                <span>{t.patientStatus}</span>
+              </p>
             </div>
           </m.article>
-        </div>
-        <div className="audience-caption">
-          <span className="signal-dot" />
-          {t.together}
         </div>
       </div>
     </section>
   );
 }
 
-export function PeopleStories({ locale }: { readonly locale: Locale }): ReactNode {
-  const t = cinematic[locale];
+/*
+ * Lines from Dhaka to each division headquarters — eight divisions, one
+ * network, as an ambition. Geographic points only: no hospitals, no coverage.
+ */
+const HUB = MAP_CITIES.find((city) => city.key === 'dhaka') ?? {
+  key: 'dhaka',
+  en: 'Dhaka',
+  bn: 'ঢাকা',
+  x: 508,
+  y: 664,
+};
+/** Drawn clockwise from the west, so the network sweeps around the country. */
+const SPOKES = MAP_CITIES.filter((city) => city.key !== 'dhaka')
+  .map((city) => ({ city, angle: Math.atan2(city.y - HUB.y, city.x - HUB.x) }))
+  .sort(
+    (a, b) =>
+      ((a.angle + Math.PI * 0.9) % (Math.PI * 2)) - ((b.angle + Math.PI * 0.9) % (Math.PI * 2)),
+  )
+  .map(({ city }) => {
+    const dx = city.x - HUB.x;
+    const dy = city.y - HUB.y;
+    const bow = 0.18;
+    const cx = HUB.x + dx / 2 - dy * bow;
+    const cy = HUB.y + dy / 2 + dx * bow;
+    return {
+      ...city,
+      d: `M${String(HUB.x)} ${String(HUB.y)}Q${cx.toFixed(1)} ${cy.toFixed(1)} ${String(city.x)} ${String(city.y)}`,
+    };
+  });
+/** Labels sit beside their point, away from the lines' approach. */
+const LABEL_SIDE: Readonly<Record<string, 'start' | 'end'>> = {
+  rajshahi: 'end',
+  khulna: 'end',
+  rangpur: 'start',
+  mymensingh: 'start',
+  sylhet: 'end',
+  barishal: 'start',
+  chattogram: 'start',
+};
+
+function Spoke({
+  spoke,
+  index,
+  progress,
+  enabled,
+  locale,
+}: {
+  readonly spoke: (typeof SPOKES)[number];
+  readonly index: number;
+  readonly progress: MotionValue<number>;
+  readonly enabled: boolean;
+  readonly locale: Locale;
+}): ReactNode {
+  const start = 0.42 + index * 0.06;
+  const draw = useTransform(progress, [start, start + 0.16], [0, 1]);
+  const arrive = useTransform(progress, [start + 0.12, start + 0.18], [0, 1]);
+  const side = LABEL_SIDE[spoke.key] ?? 'start';
   return (
-    <>
-      <section
-        id="hospitals"
-        className="people-story hospital-story"
-        aria-labelledby="hospital-title"
-      >
-        <div className="shell people-grid">
-          <div className="people-photo">
-            <CampaignImage name="team" alt={t.teamAlt} sizes="(max-width: 960px) 100vw, 52vw" />
-            <span className="photo-edge" aria-hidden="true" />
-          </div>
-          <div className="people-copy">
-            <p className="pulse-kicker">{t.hospital}</p>
-            <h2 id="hospital-title">{t.hospitalDetail}</h2>
-            <p>{t.hospitalDetailBody}</p>
-            <ul className="benefit-lines">
-              {t.hospitalBenefits.map(([title, body]) => (
-                <li key={title}>
-                  <span className="benefit-dot" aria-hidden="true" />
-                  <div>
-                    <h3>{title}</h3>
-                    <p>{body}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <Demo locale={locale} />
-          </div>
-        </div>
-      </section>
-      <section id="patients" className="people-story patient-story" aria-labelledby="patient-title">
-        <div className="shell people-grid">
-          <div className="people-copy">
-            <p className="pulse-kicker">{t.patient}</p>
-            <h2 id="patient-title">{t.patientDetail}</h2>
-            <p>{t.patientDetailBody}</p>
-            <ul className="patient-steps">
-              {t.patientBenefits.map((text) => (
-                <li key={text}>
-                  <span className="benefit-dot" aria-hidden="true" />
-                  {text}
-                </li>
-              ))}
-            </ul>
-            <div className="patient-status">
-              <strong>{t.comingSoon}</strong>
-              <p>{t.patientStatus}</p>
-            </div>
-          </div>
-          <div className="people-photo">
-            <CampaignImage
-              name="patient"
-              alt={t.patientAlt}
-              sizes="(max-width: 960px) 100vw, 52vw"
-            />
-            <span className="photo-edge" aria-hidden="true" />
-          </div>
-        </div>
-      </section>
-    </>
+    <g>
+      <m.path d={spoke.d} className="map-spoke" style={enabled ? { pathLength: draw } : {}} />
+      <m.g style={enabled ? { opacity: arrive } : {}}>
+        <circle cx={spoke.x} cy={spoke.y} r="9" className="map-point" />
+        <text
+          x={spoke.x + (side === 'start' ? 22 : -22)}
+          y={spoke.y + 9}
+          textAnchor={side}
+          className="map-label"
+        >
+          {spoke[locale]}
+        </text>
+      </m.g>
+    </g>
   );
 }
 
 export function BangladeshScene({ locale }: { readonly locale: Locale }): ReactNode {
   const t = cinematic[locale];
   const target = useRef<HTMLElement>(null);
-  const enabled = useDesktopCinema();
-  const { scrollYProgress } = useScroll({ target, offset: ['start 0.85', 'center 0.4'] });
-  const p = useSpring(scrollYProgress, { stiffness: 220, damping: 30 });
-  const scale = useTransform(p, [0, 1], [0.88, 1]);
-  const trace = useTransform(p, [0, 0.8], [0, 1]);
-  const connections = useTransform(p, [0.35, 1], [0, 1]);
+  const enabled = useMotionWelcome();
+  const cinema = useDesktopCinema();
+  const { scrollYProgress: p } = useScroll({ target, offset: ['start 0.85', 'start 0.1'] });
+  const scale = useTransform(p, [0, 0.6], [0.94, 1]);
+  const trace = useTransform(p, [0, 0.42], [0, 1]);
+  const divisions = useTransform(p, [0.22, 0.45], [0, 1]);
+  const hub = useTransform(p, [0.34, 0.42], [0, 1]);
   return (
     <section
       id="bangladesh"
       className="pulse-bangladesh"
       ref={target}
       aria-labelledby="bangladesh-title"
-      data-motion={enabled}
+      data-motion={cinema}
+      data-lines={enabled}
     >
       <div className="shell bangladesh-layout">
         <div className="bangladesh-copy">
@@ -325,10 +422,10 @@ export function BangladeshScene({ locale }: { readonly locale: Locale }): ReactN
             <span>{t.mapAccent}</span>
           </h2>
           <p>{t.mapBody}</p>
-          <div className="map-honesty">
-            <span className="signal-dot" />
+          <p className="map-honesty">
+            <span className="signal-dot" aria-hidden="true" />
             {t.mapNote}
-          </div>
+          </p>
         </div>
         <figure className="country-figure">
           <m.svg
@@ -336,33 +433,49 @@ export function BangladeshScene({ locale }: { readonly locale: Locale }): ReactN
             role="img"
             aria-label={t.mapAlt}
             className="country-map"
-            style={enabled ? { scale } : {}}
+            style={cinema ? { scale } : {}}
           >
             <defs>
-              <radialGradient id="country-fill">
+              <radialGradient id="country-fill" cx="0.5" cy="0.47" r="0.6">
                 <stop offset="0" stopColor="var(--map-fill-bright)" />
                 <stop offset="1" stopColor="var(--map-fill)" />
               </radialGradient>
             </defs>
             <path d={MAP_OUTLINE} fill="url(#country-fill)" className="country-base" />
-            {MAP_DIVISIONS.map((division) => (
-              <path key={division.key} d={division.d} className="country-division" />
-            ))}
+            <m.g style={enabled ? { opacity: divisions } : {}}>
+              {MAP_DIVISIONS.map((division) => (
+                <path key={division.key} d={division.d} className="country-division" />
+              ))}
+            </m.g>
             <m.path
               d={MAP_OUTLINE}
               className="country-outline"
               style={enabled ? { pathLength: trace } : {}}
             />
-            <m.g className="country-connections" style={enabled ? { opacity: connections } : {}}>
-              <path d="M268 220Q600 270 508 664Q360 835 324 886 M131 537Q350 380 508 664Q680 640 814 415 M508 664Q810 710 796 999 M508 664Q400 820 495 919" />
-              <circle cx="508" cy="664" r="12" />
-              <circle cx="508" cy="664" r="27" className="country-halo" />
+            {SPOKES.map((spoke, index) => (
+              <Spoke
+                key={spoke.key}
+                spoke={spoke}
+                index={index}
+                progress={p}
+                enabled={enabled}
+                locale={locale}
+              />
+            ))}
+            <m.g style={enabled ? { opacity: hub } : {}}>
+              <circle cx={HUB.x} cy={HUB.y} r="34" className="map-hub-halo" />
+              <circle cx={HUB.x} cy={HUB.y} r="14" className="map-hub" />
+              <text
+                x={HUB.x - 26}
+                y={HUB.y - 32}
+                textAnchor="end"
+                className="map-label map-label-hub"
+              >
+                {HUB[locale]}
+              </text>
             </m.g>
           </m.svg>
-          <figcaption>
-            {t.mapCaption}
-            <small>{t.mapCredit}</small>
-          </figcaption>
+          <figcaption>{t.mapCredit}</figcaption>
         </figure>
       </div>
     </section>
@@ -378,15 +491,14 @@ export function Responsibility({ locale }: { readonly locale: Locale }): ReactNo
           <p className="pulse-kicker">{t.trustLabel}</p>
           <h2 id="trust-title">{t.trustTitle}</h2>
         </div>
-        <div className="trust-principles">
+        <ul className="trust-principles">
           {t.trust.map(([title, body]) => (
-            <div key={title}>
-              <span className="signal-dot" />
+            <li key={title}>
               <h3>{title}</h3>
               <p>{body}</p>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
         <a className="pulse-text-link" href={`/${locale}/privacy`}>
           {copy[locale].privacy}
           <Icon name="arrow" className="arrow" />
@@ -414,9 +526,10 @@ export function ClosingInvitation({ locale }: { readonly locale: Locale }): Reac
           </a>
         </div>
         <span className="email-hint">{t.emailHint}</span>
-        <div className="closing-signal" aria-hidden="true">
-          <span />
-        </div>
+        <a className="closing-founders" href={`/${locale}/founders`}>
+          {t.foundersLink}
+          <Icon name="arrow" className="arrow" />
+        </a>
       </div>
     </section>
   );

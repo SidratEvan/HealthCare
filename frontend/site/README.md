@@ -1,12 +1,12 @@
 # frontend/site — MedLiveBD company website
 
 The company presentation for **medlivebd.com**. The current cinematic candidate
-is local only on `feat/site-cinematic-connected-care`. It tells a connected-care
+is local only on `feat/site-cinematic-refine` (Codex's `feat/site-cinematic-connected-care`, refined). It tells a connected-care
 story through original synthetic Bangladeshi healthcare scenes, hospital and
 patient perspectives and an accurately sourced Bangladesh vision. Demonstration
 requests open email to `support@medlivebd.com`; public patient booking is not open.
-Bangla at `/bn` (the default), English at `/en`, privacy and asset credits at
-`/{bn,en}/privacy` and `/{bn,en}/credits`. No operational software screens are used
+Bangla at `/bn` (the default), English at `/en`, the founders at `/{bn,en}/founders`,
+privacy and asset credits at `/{bn,en}/privacy` and `/{bn,en}/credits`. No operational software screens are used
 on the homepage. See `docs/design/site-cinematic/README.md` for review evidence.
 
 No patient, hospital-login, inquiry backend or clinical API is connected. There
