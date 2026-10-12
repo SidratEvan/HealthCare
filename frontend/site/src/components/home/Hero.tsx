@@ -30,7 +30,7 @@ export function Hero({ locale }: { readonly locale: Locale }): ReactNode {
           name="hero-collaboration"
           alt={t.hero.alt}
           priority
-          sizes="(max-width: 719px) 140svh, (max-width: 1023px) and (orientation: portrait) 135svh, 100vw"
+          sizes="(max-width: 719px) 140svh, (max-width: 1023px) and (orientation: portrait) 135svh, max(100vw, 232svh, 1531px)"
         />
       </m.div>
       <div className="hero-shade" aria-hidden="true" />
