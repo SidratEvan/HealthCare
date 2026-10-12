@@ -21,6 +21,8 @@
     "build": "next build --webpack",
     "start": "next start --port 3200",
     "typecheck": "tsc --noEmit",
-    "test:smoke": "playwright test --config tests/playwright.config.ts"
+    "test:smoke": "playwright test --config tests/playwright.config.ts",
+    "deploy:preview": "node scripts/deploy-pages.mjs",
+    "deploy:production": "node scripts/deploy-pages.mjs --production"
   }
 }

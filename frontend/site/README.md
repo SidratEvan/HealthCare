@@ -60,7 +60,40 @@ not be touched.**
    still name `route1-3.mx.cloudflare.net`, and a test message to
    `sidrat@medlivebd.com` is delivered.
 
-To update later: build again and upload a new deployment to the same project.
+## Releasing updates with Wrangler
+
+The project stays Direct Upload; Wrangler uploads to it from a commit, so a
+release is a recorded act rather than a folder dragged in by hand.
+
+1. **Once:** create a Cloudflare API token limited to _Account · Cloudflare
+   Pages · Edit_ on this one account (no DNS, no Email Routing, no Zone
+   permissions). Put it, with the account ID, the project's name and its
+   production branch (Pages → the project → Settings), in
+   `frontend/site/.env.deploy.local`, which git ignores:
+
+   ```
+   CLOUDFLARE_API_TOKEN=...
+   CLOUDFLARE_ACCOUNT_ID=...
+   PAGES_PROJECT=...
+   PAGES_PRODUCTION_BRANCH=...
+   ```
+
+2. **Preview** (the default; nothing at medlivebd.com changes):
+   `pnpm --filter @platform/site deploy:preview` → served at
+   `preview.<project>.pages.dev`.
+
+3. **Production**, after the preview is checked:
+   `pnpm --filter @platform/site deploy:production -- --confirm=<project>`.
+
+The script refuses uncommitted site changes, builds `out/` fresh with
+`SITE_EXPORT=1`, checks it holds the security headers, redirects, both
+languages, the privacy notice, sitemap and robots, and that no file carries
+the token or a localhost address, then runs `pnpm dlx wrangler@4.140.0 pages
+deploy`. Wrangler is pinned and fetched on demand; it is not a repository
+dependency. Rolling back is a click on an earlier deployment in the
+dashboard.
+
+Manual alternative: To update later: build again and upload a new deployment to the same project.
 Connecting the project to the GitHub repository instead (build command as in
 step 1, output `frontend/site/out`, `NODE_VERSION=22`) needs the site's commits
 on a pushed branch first.
