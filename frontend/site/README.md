@@ -2,7 +2,7 @@
 
 The public company site at **medlivebd.com**: what MedLiveBD is, the platform's
 workspaces shown as real screens on demonstration data, how a hospital starts,
-and a demonstration request by email to `sidrat@medlivebd.com`. Bangla at
+and a demonstration request by email to `support@medlivebd.com`. Bangla at
 `/bn` (the default), English at `/en`, a privacy notice at `/{bn,en}/privacy`.
 
 No patient, hospital-login, inquiry backend or clinical API is connected. There
