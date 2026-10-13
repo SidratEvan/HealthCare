@@ -46,6 +46,24 @@ x-api-env: &api-env
   SMS_PROVIDER: ${SMS_PROVIDER:-log}
   SMS_API_KEY: ${SMS_API_KEY:-}
   SMS_SENDER_ID: ${SMS_SENDER_ID:-}
+  # The rest of what DEPLOY.md §S3 asks for when an aggregator is switched on.
+  # Without these two the API refuses to start under SMS_PROVIDER=http
+  # (`env.ts`), so they have to reach it (pilot-readiness audit, F-05).
+  SMS_API_URL: ${SMS_API_URL:-}
+  SMS_DLR_SECRET: ${SMS_DLR_SECRET:-}
+  SMS_MONTHLY_CAP: ${SMS_MONTHLY_CAP:-20000}
+  # bKash and Nagad (DEPLOY.md §S3), only once there are merchant accounts.
+  # Blank, a provider is simply not offered.
+  BKASH_BASE_URL: ${BKASH_BASE_URL:-}
+  BKASH_APP_KEY: ${BKASH_APP_KEY:-}
+  BKASH_APP_SECRET: ${BKASH_APP_SECRET:-}
+  BKASH_USERNAME: ${BKASH_USERNAME:-}
+  BKASH_PASSWORD: ${BKASH_PASSWORD:-}
+  NAGAD_BASE_URL: ${NAGAD_BASE_URL:-}
+  NAGAD_MERCHANT_ID: ${NAGAD_MERCHANT_ID:-}
+  NAGAD_MERCHANT_NUMBER: ${NAGAD_MERCHANT_NUMBER:-}
+  NAGAD_PUBLIC_KEY: ${NAGAD_PUBLIC_KEY:-}
+  NAGAD_PRIVATE_KEY: ${NAGAD_PRIVATE_KEY:-}
   TRAVEL_TIME_MODE: static
   TRUST_PROXY_HOPS: "1"
   # How many people one address stands for (DEPLOY.md §S2). 1 unless the
