@@ -36,7 +36,7 @@ const PROD: Readonly<Record<string, string>> = {
   VAPID_PUBLIC_KEY: 'vapid-public',
   VAPID_PRIVATE_KEY: 'vapid-private',
   PAYMENT_PROVIDER: 'live',
-  STORAGE_PROVIDER: 'supabase',
+  STORAGE_PROVIDER: 'local',
   SENTRY_DSN: 'https://sentry.example.com/1',
   TOTP_ENCRYPTION_KEY: 'd'.repeat(32),
   DEMO_MODE: 'false',
@@ -189,11 +189,17 @@ describe('production', () => {
 
   it('refuses missing storage credentials, and says what breaks', () => {
     try {
-      loadEnv({ ...PROD, SUPABASE_SERVICE_ROLE_KEY: '' });
+      loadEnv({ ...PROD, STORAGE_PROVIDER: 'supabase', SUPABASE_SERVICE_ROLE_KEY: '' });
       expect.unreachable('should have thrown');
     } catch (error) {
       expect((error as EnvError).message).toContain('no patient could open a report');
     }
+  });
+
+  it('refuses Supabase Storage, which has no adapter in this version (audit F-04)', () => {
+    // Accepted by the schema, its keys asked for, and then every upload
+    // refused by `UnconfiguredStorageAdapter`. A server must not boot that way.
+    expect(problemsOf({ ...PROD, STORAGE_PROVIDER: 'supabase' })).toContain('STORAGE_PROVIDER');
   });
 
   it('refuses missing SMS credentials when a real provider is configured', () => {

@@ -550,6 +550,18 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       });
     }
 
+    // Accepted by the schema, and its keys asked for above, but there is no
+    // adapter behind it in this version (`adapters/storage.ts`): every report
+    // and every patient's document would be refused at upload. A real server
+    // keeps files on its own disk (pilot-readiness audit, F-04).
+    if (env.STORAGE_PROVIDER === 'supabase') {
+      problems.push({
+        key: 'STORAGE_PROVIDER',
+        message:
+          'must be "local" in production — this version has no Supabase Storage adapter, so every lab report and patient document upload would be refused (FR-LAB-03, FR-PAT-62)',
+      });
+    }
+
     if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
       problems.push({
         key: 'JWT_REFRESH_SECRET',
