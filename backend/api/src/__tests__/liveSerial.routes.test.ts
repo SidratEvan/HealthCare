@@ -29,6 +29,7 @@ import type { StaffRole } from '@platform/domain';
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
+import { ticketFor } from '../config/serialTicket.js';
 import { resetEmitter } from '../realtime/emit.js';
 import * as queueService from '../services/queue.service.js';
 
@@ -303,7 +304,7 @@ describe('POST /bookings/:id/cancel (FR-PAT-23)', () => {
 
     const entry = (
       response.body.data.state.entries as { bookingId: string; status: string }[]
-    ).find((candidate) => candidate.bookingId === booked.bookingId);
+    ).find((candidate) => candidate.bookingId === ticketFor(fixture.sessionId, booked.bookingId));
     expect(entry?.status).toBe('cancelled');
   });
 
@@ -475,7 +476,7 @@ describe('POST /bookings/:id/late — the patient declares it (FR-PAT-33)', () =
         bookingId: string;
         late: { reinsertAfter: number } | null;
       }[]
-    ).find((candidate) => candidate.bookingId === booked.bookingId);
+    ).find((candidate) => candidate.bookingId === ticketFor(fixture.sessionId, booked.bookingId));
 
     // Never dropped, re-inserted after three (`FR-QUE-21`).
     expect(entry?.late?.reinsertAfter).toBe(3);
