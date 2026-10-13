@@ -142,7 +142,7 @@ export async function appendEvent(input: AppendEventInput): Promise<AppendEventR
     // Before the transaction, because the overwhelmingly common case is a first
     // send and the overwhelmingly common answer is "no". Checking inside the
     // lock would make every console action wait for the row.
-    const replayed = await findReplay(input.clientEventId ?? null);
+    const replayed = await findReplay(input.clientEventId ?? null, input.sessionId);
     if (replayed !== null) return replayed;
 
     const settled = await committed(async (trx) => {
@@ -224,7 +224,8 @@ export async function callNext(input: {
   // about; if it only had somebody to finish, the `done` key answers.
   const original = input.clientEventId ?? null;
   const replayed =
-    (await findReplay(derive(original, 'c'))) ?? (await findReplay(derive(original, 'd')));
+    (await findReplay(derive(original, 'c'), input.sessionId)) ??
+    (await findReplay(derive(original, 'd'), input.sessionId));
   if (replayed !== null) return replayed;
 
   const settled = await committed(async (trx) => {
@@ -346,7 +347,7 @@ export async function offerFreedSlot(input: {
   readonly clientEventId?: string | null;
   readonly clientTs?: string | null;
 }): Promise<AppendEventResult> {
-  const replayed = await findReplay(input.clientEventId ?? null);
+  const replayed = await findReplay(input.clientEventId ?? null, input.sessionId);
   if (replayed !== null) return replayed;
 
   const settled = await committed(async (trx) => {
@@ -498,11 +499,14 @@ export async function acceptSlotDetailed(input: {
   readonly clientTs?: string | null;
 }): Promise<SeatResult> {
   return await asQueue(async () => {
-    const replayed = await findReplay(input.clientEventId ?? null);
-    if (replayed !== null) return { result: replayed, newBookingId: null, serial: null };
-
+    // The offer first, for its chamber: a replay is recognised only there
+    // (F-02). Reading it is not a guard, so a retry is still answered with
+    // what the first attempt made rather than with "already taken".
     const offer = await standbyRepo.findOffer(input.offerId);
     if (offer === null) throw notFound('offer');
+
+    const replayed = await findReplay(input.clientEventId ?? null, offer.sessionId);
+    if (replayed !== null) return { result: replayed, newBookingId: null, serial: null };
 
     const settled = await committed(async (trx) => {
       const session = await lockSession(trx, offer.sessionId);
@@ -1015,12 +1019,22 @@ function etaTextFor(etas: readonly Eta[], bookingId: string): string | null {
  * cancelled — which is the right answer to a second attempt and the wrong one
  * to a retry of the first, and only the client event id can tell them apart.
  */
-export async function findReplay(clientEventId: string | null): Promise<AppendEventResult | null> {
+export async function findReplay(
+  clientEventId: string | null,
+  /**
+   * The chamber the request names. A key names one action in one chamber: the
+   * same key arriving for another is not a retry, and answering it with the
+   * first chamber's queue both swallowed the second action and handed back a
+   * queue the caller never asked about (audit of 12 October 2026, F-02).
+   */
+  sessionId: string,
+): Promise<AppendEventResult | null> {
   return await asQueue(async () => {
     if (clientEventId === null) return null;
 
     const stored = await eventRepo.findByClientEventId(clientEventId);
     if (stored === null) return null;
+    if (stored.sessionId !== sessionId) throw new AppError('IDEMPOTENCY_KEY_REUSED');
 
     const state = await getState(stored.sessionId);
     return {
@@ -1487,6 +1501,17 @@ export async function appendBatch(input: {
       // reported as accepted with the sequence it originally got, because
       // from the console's point of view it succeeded — which it did.
       const already = await eventRepo.findByClientEventId(entry.clientEventId, trx);
+      if (already !== null && already.sessionId !== input.sessionId) {
+        // The key made something in another chamber: not this entry's retry,
+        // and not to be reported as if it had been applied here (F-02).
+        outcomes.push({
+          kind: 'conflict',
+          clientEventId: entry.clientEventId,
+          reason: 'This action id was already used for another chamber.',
+          code: 'IDEMPOTENCY_KEY_REUSED',
+        });
+        continue;
+      }
       if (already !== null) {
         outcomes.push({
           kind: 'accepted',
