@@ -69,7 +69,7 @@ import { env } from '../env.js';
 import { AppError } from '../errors/AppError.js';
 import * as chamberRepo from '../repositories/chamber.repo.js';
 import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
-import { withTransaction } from '../repositories/transaction.js';
+import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import { endStaffSession, revokeStaffSessions } from './accessGuard.service.js';
 import { deskLimit } from './deskAccess.service.js';
@@ -151,6 +151,8 @@ async function issue(
    * revoke, and a console is not cut off every time its tokens rotate.
    */
   familyId: string = randomUUID(),
+  /** The renewal's transaction, so the new row is written with the old one's revocation (F-17). */
+  trx?: Tx,
 ): Promise<StaffSession> {
   const accessTtl = durationMs(env.JWT_ACCESS_TTL);
   const twoFactor = twoFactorOf(account, roles);
@@ -160,14 +162,17 @@ async function issue(
   // The session first: the access token names the sign-in it stands on, and
   // is refused once that sign-in holds no live session (`accessGuard`).
   const secret = randomBytes(32).toString('base64url');
-  const sessionId = await staffAuthRepo.createRefreshSession({
-    staffId: account.id,
-    tokenHash: sha256(secret),
-    expiresAt: new Date(Date.now() + durationMs(env.JWT_REFRESH_TTL)),
-    ip: client.ip,
-    userAgent: client.userAgent === null ? null : client.userAgent.slice(0, 300),
-    familyId,
-  });
+  const sessionId = await staffAuthRepo.createRefreshSession(
+    {
+      staffId: account.id,
+      tokenHash: sha256(secret),
+      expiresAt: new Date(Date.now() + durationMs(env.JWT_REFRESH_TTL)),
+      ip: client.ip,
+      userAgent: client.userAgent === null ? null : client.userAgent.slice(0, 300),
+      familyId,
+    },
+    trx,
+  );
 
   const access = await signToken({
     kind: 'access',
@@ -524,9 +529,20 @@ export async function refresh(token: string, client: Client): Promise<StaffSessi
   // row goes on, and the other is refused rather than issued a second session.
   // Renewal is not a sign-out: the row is replaced, the sign-in goes on, and
   // the connections it holds are left alone.
-  if (!(await staffAuthRepo.revokeRefreshSession(session.id))) throw refreshInvalid('raced');
-
-  return await issue(account, await rolesOrRefuse(account), client, session.familyId);
+  //
+  // One transaction for both halves. Revoked and written apart, the sign-in
+  // held no live session in between, so the access token still in use was
+  // refused as revoked by whatever arrived then — and the console, asking who
+  // it was on the same focus event, renewed again with the token just
+  // rotated, which the check above took for theft and ended every session
+  // (pilot-readiness audit, F-17). Together, a reader sees the old row or the
+  // new one, and a second renewal waits for the first and is refused as raced.
+  return await withTransaction(async (trx) => {
+    if (!(await staffAuthRepo.revokeRefreshSession(session.id, trx))) {
+      throw refreshInvalid('raced');
+    }
+    return await issue(account, await rolesOrRefuse(account), client, session.familyId, trx);
+  });
 }
 
 /** `POST /staff/logout`. Quietly does nothing for a token it does not recognise. */

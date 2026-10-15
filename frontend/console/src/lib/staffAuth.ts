@@ -215,6 +215,19 @@ export function isStaffSession(session: DemoSession | null): boolean {
  * the session: the next attempt may reach the server.
  */
 export async function refreshStaffSession(): Promise<boolean> {
+  // One renewal at a time in this tab. The background timer and the access
+  // check both renew on the same focus event; two renewals with one refresh
+  // token make the second look like a stolen token to the server, which then
+  // ends every session of the account (pilot-readiness audit, F-17).
+  renewing ??= renewOnce().finally(() => {
+    renewing = null;
+  });
+  return await renewing;
+}
+
+let renewing: Promise<boolean> | null = null;
+
+async function renewOnce(): Promise<boolean> {
   const session = readDemoSession();
   if (session?.authKind !== 'staff' || session.refresh === undefined) return false;
   let response: Response;
@@ -225,7 +238,13 @@ export async function refreshStaffSession(): Promise<boolean> {
   }
   if (response.ok) {
     const body = (await response.json()) as { data: StaffSessionPayload };
-    adoptStaffSession(body.data, session);
+    // Onto the session as it is now, not as it was before the request: a
+    // workspace chosen meanwhile is kept (F-17). And only onto the sign-in it
+    // renewed: if this tab was signed out, or signed in as somebody else,
+    // while the request was out, the answer belongs to nobody here.
+    const latest = readDemoSession();
+    if (latest?.authKind !== 'staff' || latest.refresh !== session.refresh) return true;
+    adoptStaffSession(body.data, latest);
     return true;
   }
   if (response.status === 401 || response.status === 400 || response.status === 403) {
