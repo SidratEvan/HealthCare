@@ -1,0 +1,1 @@
+interrupted after the Import Mapping helper race reproduced in its second scenario
