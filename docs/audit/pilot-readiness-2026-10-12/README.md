@@ -164,7 +164,55 @@ server, not code.
 
 ## 5. Remediation (Phase 4)
 
-*Completed after the initial report; see §6.*
+Five fixes, each its own commit on `audit/pilot-readiness-2026-10-12`, each
+with a regression test, none changing a clinical workflow, permission or
+business rule:
+
+| Commit | Finding | Change |
+|---|---|---|
+| `0b08285` | F-02 | A replay key is honoured only in its own chamber; elsewhere `IDEMPOTENCY_KEY_REUSED` (online) or a conflict (offline batch) |
+| `be85999` | F-01 | Patient and tracking-link callers of cancel, late and undo get the patients' copy of the queue; staff answers unchanged |
+| `6fcc75b` | F-04 | Production refuses `STORAGE_PROVIDER=supabase` |
+| `fcc92b4` | F-05 | Compose passes the SMS URL, receipt secret, monthly cap and bKash/Nagad settings; `deploy/.env.example` lists them and states what `SMS_PROVIDER=log` means for patients (F-11) |
+| `d7cbbb7` | F-06 | `pnpm lint` runs ESLint with a 4 GB heap |
+
+Escalated rather than changed, because each is a policy or an outside
+dependency, not a bug: F-07 (server hardening and backup encryption), F-08
+(lab prices), F-09 (doctor access scope), F-10 (national suppression), F-16
+(retention). Left as documented Low items: F-03, F-12, F-13, F-14, F-15.
+
+Independently retested after the fixes: the affected API suites (15 files,
+802 tests), the rendered compose environment against `env.ts` (refused before,
+boots after), and the full gate in §6.
+
+### Recovery drill (synthetic, local)
+
+The real `deploy/backup.sh` and `deploy/restore.sh`, in the stack's own
+`postgis/postgis:16-3.4` image, against `medlivebd_drill`, a throwaway copy
+of the seeded test database (61 migrations, 1,970 bookings, 1,529 queue
+events, 200 patients) plus one uploaded file:
+
+1. `backup.sh once`: dump and files archive written, **restored into a scratch
+   database and compared**, copied to the second location, checksums matched:
+   `backup ok: 20261013-025716, checked by restore, copied to the second location`.
+2. Total loss: the database dropped and recreated empty (0 tables), the
+   uploaded file deleted.
+3. `restore.sh` **from the second-location copy**: every count back exactly,
+   all 119 row-level-security policies present (same as the source), the file
+   back. About 6 seconds.
+
+Not covered by the drill: the real server, a realistic data volume, the
+`migrate` service re-applying the API role after a restore, and an encrypted
+second location (F-07). The DEPLOY.md §S5 rehearsal on the hospital's machine
+is still required.
+
+### Bounded load (local)
+
+One chamber, 150 and then 240 patients' phones subscribed to its live
+serial, a receptionist advancing ten times: every phone had each new state
+within 270 ms median / 594 ms worst (150) and 567 / 709 ms (240). Details and
+the pool-contention observation: [F-15](FINDINGS.md#f-15). This is one
+developer machine, not the hospital's server or network.
 
 ## 6. Second audit and verdict (Phases 5–6)
 

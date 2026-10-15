@@ -14,12 +14,12 @@ Statuses are updated in place as remediation proceeds; the history is in git.
 
 | ID | Severity | Kind | Area | Title | Status |
 |---|---|---|---|---|---|
-| [F-01](#f-01) | High | Verified defect | API, patient privacy | A patient's cancel, late and undo were answered with the staff copy of the whole queue | Open |
-| [F-02](#f-02) | Low | Verified defect | Queue engine | A replay key was honoured in a chamber it was never used in | Open |
-| [F-03](#f-03) | Low | Verified defect | Queue API | `POST /sessions/:id/next` has no expected-patient guard | Open (documented) |
-| [F-04](#f-04) | Medium | Static defect | Configuration | `STORAGE_PROVIDER=supabase` boots in production but no adapter exists | Open |
-| [F-05](#f-05) | High | Verified defect | Self-hosted stack | Compose drops the SMS URL and receipt secret (and bKash/Nagad), so switching SMS on stops the API | Open |
-| [F-06](#f-06) | Low | Verified defect | Tooling | `pnpm lint` runs out of memory on the default Node heap | Open |
+| [F-01](#f-01) | High | Verified defect | API, patient privacy | A patient's cancel, late and undo were answered with the staff copy of the whole queue | **Fixed** `be85999`, retested |
+| [F-02](#f-02) | Low | Verified defect | Queue engine | A replay key was honoured in a chamber it was never used in | **Fixed** `0b08285`, retested |
+| [F-03](#f-03) | Low | Verified defect | Queue API | `POST /sessions/:id/next` has no expected-patient guard | Open (documented; no screen uses it) |
+| [F-04](#f-04) | Medium | Static defect | Configuration | `STORAGE_PROVIDER=supabase` boots in production but no adapter exists | **Fixed** `6fcc75b`, retested |
+| [F-05](#f-05) | High | Verified defect | Self-hosted stack | Compose drops the SMS URL and receipt secret (and bKash/Nagad), so switching SMS on stops the API | **Fixed** `fcc92b4`, retested |
+| [F-06](#f-06) | Low | Verified defect | Tooling | `pnpm lint` runs out of memory on the default Node heap | **Fixed** `d7cbbb7`, retested |
 | [F-07](#f-07) | Medium | Infrastructure | Hosting | Backups are not encrypted; host hardening and off-host alerting are not set up | Open |
 | [F-08](#f-08) | High (lab module) | Decision | Laboratory | Real lab orders are priced from the demonstration price list (prior C11) | Awaiting owner |
 | [F-09](#f-09) | High (clinical module) | Decision | Doctor | Every doctor at a hospital can read every patient record there (prior C9) | Awaiting owner |
@@ -27,6 +27,9 @@ Statuses are updated in place as remediation proceeds; the history is in git.
 | [F-11](#f-11) | Medium | Infrastructure | Operations | Until SMS is live, no patient can book online or sign in on the real-data stack | Documented |
 | [F-12](#f-12) | Low | Verified defect | Queue API | A patient's own undo is refused (404), contrary to the route's comment | Open (fails closed) |
 | [F-13](#f-13) | Low | Static defect | Patient app | The patient's 30-day refresh token is kept in `localStorage` | Accepted risk, documented |
+| [F-14](#f-14) | Low | Verified defect | Test reliability | The 344-case development browser run is not stable on this machine | Open |
+| [F-15](#f-15) | Low | Verified observation | API capacity | A burst of 150–240 phones subscribing at once queues on the 10-connection database pool | Documented |
+| [F-16](#f-16) | Medium | Decision | Data protection | Clinical records have no retention or erasure policy | Awaiting owner and legal advice |
 
 ---
 
@@ -137,3 +140,40 @@ Statuses are updated in place as remediation proceeds; the history is in git.
 **The patient's 30-day refresh token is kept in `localStorage`.**
 
 - Script injection on the patient origin could read it. Mitigations already present: a strict CSP, no `dangerouslySetInnerHTML` anywhere in the apps (searched), refresh bound to the device's user agent, rotation with reuse detection. Accepted as a documented risk for a PWA without cookies.
+
+## F-14
+
+**The 344-case development browser run is not stable on this machine.**
+
+- **Evidence:** the baseline run on `8eec772` ended 313 passed, 33 failed (1.5 h). Thirty-one failures were one event: the console's `next dev` server exited with Windows status `0xC0000409` after case ~294, and every later case that opened the console got `ERR_CONNECTION_REFUSED`. The other two (`console-access.spec.ts:84`, `emergency-burn.spec.ts:98`) failed under the long run and **passed when re-run alone** on the same code (7/7 with a warm-up spec, 4.8 min). The burn case failed in the same second the patient dev server reported a full Fast Refresh reload.
+- **Impact:** none on patients; development-mode servers, not the built product. But a gate that fails for reasons other than the product trains people to ignore it (CLAUDE.md §6: a flaky test is a bug).
+- **Recommendation:** run the long suite against built apps (as `test:e2e:prod` already does), or split it into two runs that each start fresh servers; give `console-access.spec.ts:84` (1.7–1.8 min alone) more headroom or split it.
+
+## F-15
+
+**A burst of phones subscribing at once queues on the database pool.**
+
+- **Evidence (load probe, local machine):** 150 then 240 patients' phones subscribed to one chamber at the same moment; while they subscribed, the API logged 44 "slow query" warnings (300–1,257 ms) on a 40-event queue log, which points to waiting for one of `DATABASE_POOL_MAX=10` connections rather than an expensive query. Every phone subscribed. Afterwards, ten advances reached **every** phone in 270 ms median / 594 ms worst (150 phones) and 567 / 709 ms (240 phones), well inside the two-second promise (`FR-PAT-31`).
+- **Impact:** after a hospital Wi-Fi drop, reconnecting phones may wait a second or two for their first update. Not a correctness issue.
+- **Recommendation:** the self-hosted stack already sets `DATABASE_POOL_MAX=20`; leave it, and watch `/readyz` latency during the dry run. No code change.
+
+## F-16
+
+**Clinical records have no retention or erasure policy.**
+
+- Patient rows are soft-deleted; there is no workflow that erases a person's clinical record, and no stated retention period for visits, prescriptions or reports. Message bodies are kept 90 days and import staging 30 days.
+- **Needs:** the hospital's and the company's legal advice on Bangladesh's data-protection requirements and medical-record retention, before the pilot agreement is signed. Not a code change until that advice exists.
+
+---
+
+## Retest evidence for the fixes (Phase 4)
+
+| Finding | Before | After |
+|---|---|---|
+| F-01 | `pilotAudit` › late, cancel: response contained other patients' IDs and the priority reason | Same tests pass; the staff control still receives the staff copy; `liveSerial.routes` passes with ticket lookups |
+| F-02 | Second chamber answered `200` with the first chamber's queue | `422 IDEMPOTENCY_KEY_REUSED`; batch entry reported as a conflict; cross-hospital case still passes |
+| F-04 | `env.test` treated `supabase` as a valid production environment | Refused at boot with the reason |
+| F-05 | Rendered compose environment **refused** by `env.ts` (`SMS_API_URL`, `SMS_DLR_SECRET`) | Same probe env renders all settings and **boots**; `deployment.test` checks 18 documented settings |
+| F-06 | `pnpm lint` exit 134 (heap) | `pnpm lint` passes inside `pnpm verify` |
+
+Affected API files after the fixes: 15 files, 802 tests, all pass (pilotAudit, liveSerial, env, deployment, queue, queueConflict, sync, standby, standbySelfServe, booking, myBookings, realtime, receptionSafety, doctorSafety, tenantMatrix).
