@@ -16,10 +16,8 @@ import math
 import socket
 import urllib.error
 import urllib.request
-from contextlib import contextmanager
-from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Iterator, Protocol
+from typing import Any, Protocol
 
 from ..core.env import env
 from ..core.logging import logger
@@ -184,9 +182,11 @@ def http_receipt_signature(raw_body: str, secret: str) -> str:
 _current: Any = None
 
 
-#: The test seam's adapter for this request (`core/pipeline.py`, NODE_ENV=test
-#: only): the Node suite swapped in an adapter of its own, reached over HTTP.
-_bridged: ContextVar[Any] = ContextVar("medlive_sms_bridge", default=None)
+#: The test seam's adapter (`core/pipeline.py`, NODE_ENV=test only): the Node
+#: suite swapped in an adapter of its own, reached over HTTP. Process-wide, not
+#: per request, because the sender thread sends after the request answered;
+#: the suite runs one test at a time and waits for the sender between tests.
+_bridged: "BridgeSmsAdapter | None" = None
 
 
 class BridgeSmsAdapter:
@@ -210,6 +210,8 @@ class BridgeSmsAdapter:
         )
         with urllib.request.urlopen(request, timeout=15) as answer:  # noqa: S310 — a test-only loopback URL.
             result = json.loads(answer.read().decode("utf8"))
+        if result.get("threw"):
+            raise RuntimeError(result.get("message") or "the test's SMS adapter threw")
         return SmsResult(
             ok=bool(result.get("ok")),
             provider_ref=result.get("providerRef"),
@@ -225,18 +227,18 @@ class BridgeSmsAdapter:
         return None
 
 
-@contextmanager
-def sms_bridged(url: str) -> Iterator[None]:
-    token = _bridged.set(BridgeSmsAdapter(url))
-    try:
-        yield
-    finally:
-        _bridged.reset(token)
+def set_test_bridge(url: str | None) -> None:
+    """Points the SMS at a Node test's adapter, or back at the configured one."""
+    global _bridged
+    if url is None:
+        _bridged = None
+    elif _bridged is None or _bridged.url != url:
+        _bridged = BridgeSmsAdapter(url)
 
 
 def sms() -> Any:
     global _current
-    bridged = _bridged.get()
+    bridged = _bridged
     if bridged is not None:
         return bridged
     if _current is None:

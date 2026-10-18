@@ -23,6 +23,18 @@ import { defineConfig } from 'vitest/config';
 const appShim = fileURLToPath(new URL('./backend/django/tests/node_suite/app-shim.ts', import.meta.url));
 const emitShim = fileURLToPath(new URL('./backend/django/tests/node_suite/emit-shim.ts', import.meta.url));
 const smsShim = fileURLToPath(new URL('./backend/django/tests/node_suite/sms-shim.ts', import.meta.url));
+const realtimeServerShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/realtime-server-shim.ts', import.meta.url),
+);
+const queueServiceShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/queue-service-shim.ts', import.meta.url),
+);
+const notificationServiceShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/notification-service-shim.ts', import.meta.url),
+);
+const realtimeAuthShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/realtime-auth-shim.ts', import.meta.url),
+);
 
 export default defineConfig({
   resolve: {
@@ -30,6 +42,10 @@ export default defineConfig({
       { find: /^\.\.\/app\.js$/, replacement: appShim },
       { find: /^\.\.\/realtime\/emit\.js$/, replacement: emitShim },
       { find: /^\.\.\/adapters\/sms\.js$/, replacement: smsShim },
+      { find: /^\.\.\/realtime\/server\.js$/, replacement: realtimeServerShim },
+      { find: /^\.\.\/realtime\/auth\.js$/, replacement: realtimeAuthShim },
+      { find: /^\.\.\/services\/queue\.service\.js$/, replacement: queueServiceShim },
+      { find: /^(?:\.\.\/){1,2}services\/notification\.service\.js$/, replacement: notificationServiceShim },
     ],
   },
   test: {

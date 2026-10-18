@@ -18,6 +18,8 @@ from ..core.router import Router
 API_ROUTERS: list[str] = [
     "discovery",
     "guest",
+    "demo",
+    "staff_auth",
     "patient_auth",
     "booking",
     "queue",

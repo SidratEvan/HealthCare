@@ -378,11 +378,12 @@ def _test_seams(request: HttpRequest) -> Iterator[None]:
         if changed:
             stack.enter_context(env_overridden(json.loads(changed)))
         stack.enter_context(_test_clock(request))
-        bridge = request.META.get("HTTP_X_MEDLIVE_TEST_SMS")
-        if bridge:
-            from ..adapters.sms import sms_bridged
+        if request.META.get("HTTP_X_MEDLIVE_TEST_NOW"):
+            # Only a request the suite itself sent says what its SMS adapter is;
+            # the shims' own reads (the recorder, a socket's rooms) say nothing.
+            from ..adapters.sms import set_test_bridge
 
-            stack.enter_context(sms_bridged(bridge))
+            set_test_bridge(request.META.get("HTTP_X_MEDLIVE_TEST_SMS") or None)
         yield
 
 

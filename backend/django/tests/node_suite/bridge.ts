@@ -54,9 +54,10 @@ export function bridgeSms(handler: Handler | null): void {
             res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer));
           },
           (error: unknown) => {
+            // A throw is not a refusal: the server has to see it thrown.
             res
               .writeHead(200, { 'content-type': 'application/json' })
-              .end(JSON.stringify({ ok: false, error: String(error), retryable: true }));
+              .end(JSON.stringify({ threw: true, message: String(error) }));
           },
         );
       });
