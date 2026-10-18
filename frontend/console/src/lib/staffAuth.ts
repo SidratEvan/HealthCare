@@ -209,12 +209,28 @@ export function isStaffSession(session: DemoSession | null): boolean {
   return session?.authKind === 'staff';
 }
 
+/** The renewal in flight, which every caller waits on instead of starting its own. */
+let renewing: Promise<boolean> | null = null;
+
 /**
  * `POST /staff/refresh`. Returns false when the server refused the refresh
  * token — the session is over and has been forgotten. A network failure keeps
  * the session: the next attempt may reach the server.
+ *
+ * One at a time. The background renewal and the workspace check both reach
+ * here on the same focus event, and a refresh token works once: a second
+ * request with it reads as two parties holding it, and the server signs the
+ * account out everywhere, taking an open doctor's unsaved notes with the
+ * screen (FR-DOC-08, FR-SEC-06).
  */
 export async function refreshStaffSession(): Promise<boolean> {
+  renewing ??= renewStaffSession().finally(() => {
+    renewing = null;
+  });
+  return await renewing;
+}
+
+async function renewStaffSession(): Promise<boolean> {
   const session = readDemoSession();
   if (session?.authKind !== 'staff' || session.refresh === undefined) return false;
   let response: Response;

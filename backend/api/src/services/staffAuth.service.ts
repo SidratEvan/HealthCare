@@ -20,7 +20,9 @@
  * opaque — `<session id>.<32 random bytes>` — and only its SHA-256 is stored
  * (`sessions_auth`). Refreshing revokes the row and writes a new one, so a
  * token works once. A revoked token presented again means two parties hold
- * it, and every session of that account is revoked.
+ * it, and every session of that account is revoked. The two happen in one
+ * transaction: a sign-in never has a moment with no live row, which is the
+ * moment its access token would be refused as revoked (`staffAccessLive`).
  *
  * A password an administrator set (`must_change_password`, 0027) signs in,
  * but its token carries `mcp` and opens only the password change
@@ -69,7 +71,7 @@ import { env } from '../env.js';
 import { AppError } from '../errors/AppError.js';
 import * as chamberRepo from '../repositories/chamber.repo.js';
 import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
-import { withTransaction } from '../repositories/transaction.js';
+import { withTransaction, type Tx } from '../repositories/transaction.js';
 
 import { endStaffSession, revokeStaffSessions } from './accessGuard.service.js';
 import { deskLimit } from './deskAccess.service.js';
@@ -151,6 +153,8 @@ async function issue(
    * revoke, and a console is not cut off every time its tokens rotate.
    */
   familyId: string = randomUUID(),
+  /** Set by a renewal, so the new row commits with the old one's revocation. */
+  executor?: Tx,
 ): Promise<StaffSession> {
   const accessTtl = durationMs(env.JWT_ACCESS_TTL);
   const twoFactor = twoFactorOf(account, roles);
@@ -160,14 +164,17 @@ async function issue(
   // The session first: the access token names the sign-in it stands on, and
   // is refused once that sign-in holds no live session (`accessGuard`).
   const secret = randomBytes(32).toString('base64url');
-  const sessionId = await staffAuthRepo.createRefreshSession({
-    staffId: account.id,
-    tokenHash: sha256(secret),
-    expiresAt: new Date(Date.now() + durationMs(env.JWT_REFRESH_TTL)),
-    ip: client.ip,
-    userAgent: client.userAgent === null ? null : client.userAgent.slice(0, 300),
-    familyId,
-  });
+  const sessionId = await staffAuthRepo.createRefreshSession(
+    {
+      staffId: account.id,
+      tokenHash: sha256(secret),
+      expiresAt: new Date(Date.now() + durationMs(env.JWT_REFRESH_TTL)),
+      ip: client.ip,
+      userAgent: client.userAgent === null ? null : client.userAgent.slice(0, 300),
+      familyId,
+    },
+    executor,
+  );
 
   const access = await signToken({
     kind: 'access',
@@ -524,9 +531,20 @@ export async function refresh(token: string, client: Client): Promise<StaffSessi
   // row goes on, and the other is refused rather than issued a second session.
   // Renewal is not a sign-out: the row is replaced, the sign-in goes on, and
   // the connections it holds are left alone.
-  if (!(await staffAuthRepo.revokeRefreshSession(session.id))) throw refreshInvalid('raced');
-
-  return await issue(account, await rolesOrRefuse(account), client, session.familyId);
+  //
+  // Replaced in one transaction. Revoked and written as two statements, the
+  // sign-in had a moment with no live row, and a request in that moment was
+  // refused as revoked although its access token was good. The console took
+  // that refusal for an expired token and refreshed again with the token just
+  // spent, which reads as theft and signed the account out everywhere: a
+  // doctor's unsaved notes went with the screen (FR-DOC-08, FR-SEC-06).
+  // The second refresh waits on the row lock and then finds it revoked.
+  return await withTransaction(async (tx) => {
+    if (!(await staffAuthRepo.revokeRefreshSession(session.id, tx))) {
+      throw refreshInvalid('raced');
+    }
+    return await issue(account, await rolesOrRefuse(account), client, session.familyId, tx);
+  });
 }
 
 /** `POST /staff/logout`. Quietly does nothing for a token it does not recognise. */
