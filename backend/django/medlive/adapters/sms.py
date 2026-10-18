@@ -16,8 +16,10 @@ import math
 import socket
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Iterator, Protocol
 
 from ..core.env import env
 from ..core.logging import logger
@@ -49,7 +51,7 @@ class SmsAdapter(Protocol):
     name: str
     reports_delivery: bool
 
-    def send(self, *, to: str, body: str, notification_id: str, template_key: str) -> SmsResult: ...
+    def send(self, *, to: str, body: str, notification_id: str, template_key: str, sensitive: bool = False) -> SmsResult: ...
 
     def verify_receipt(self, raw_body: str, signature: str | None) -> bool: ...
 
@@ -60,7 +62,7 @@ class LogSmsAdapter:
     name = "log"
     reports_delivery = False
 
-    def send(self, *, to: str, body: str, notification_id: str, template_key: str) -> SmsResult:
+    def send(self, *, to: str, body: str, notification_id: str, template_key: str, sensitive: bool = False) -> SmsResult:
         segments = segments_for(body)
         logger.info(
             {"notificationId": notification_id, "templateKey": template_key, "channel": "sms", "segments": segments},
@@ -79,7 +81,7 @@ class UnconfiguredSmsAdapter:
     name = "unconfigured"
     reports_delivery = False
 
-    def send(self, *, to: str, body: str, notification_id: str, template_key: str) -> SmsResult:
+    def send(self, *, to: str, body: str, notification_id: str, template_key: str, sensitive: bool = False) -> SmsResult:
         return SmsResult(ok=False, error="no_sms_provider_configured")
 
     def verify_receipt(self, raw_body: str, signature: str | None) -> bool:
@@ -123,7 +125,7 @@ class HttpSmsAdapter:
         self.receipt_secret = e.SMS_DLR_SECRET if receipt_secret is None else receipt_secret
         self.timeout_seconds = timeout_seconds
 
-    def send(self, *, to: str, body: str, notification_id: str, template_key: str) -> SmsResult:
+    def send(self, *, to: str, body: str, notification_id: str, template_key: str, sensitive: bool = False) -> SmsResult:
         request = urllib.request.Request(
             self.url,
             data=json.dumps(
@@ -182,8 +184,61 @@ def http_receipt_signature(raw_body: str, secret: str) -> str:
 _current: Any = None
 
 
+#: The test seam's adapter for this request (`core/pipeline.py`, NODE_ENV=test
+#: only): the Node suite swapped in an adapter of its own, reached over HTTP.
+_bridged: ContextVar[Any] = ContextVar("medlive_sms_bridge", default=None)
+
+
+class BridgeSmsAdapter:
+    """Hands each message to the adapter a Node test installed (`tests/node_suite/sms-shim.ts`)."""
+
+    name = "bridge"
+    reports_delivery = False
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+    def send(self, *, to: str, body: str, notification_id: str, template_key: str, sensitive: bool = False) -> SmsResult:
+        message: dict[str, Any] = {"to": to, "body": body, "notificationId": notification_id, "templateKey": template_key}
+        if sensitive:
+            message["sensitive"] = True
+        request = urllib.request.Request(
+            self.url,
+            data=json.dumps(message, ensure_ascii=False).encode("utf8"),
+            headers={"content-type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=15) as answer:  # noqa: S310 — a test-only loopback URL.
+            result = json.loads(answer.read().decode("utf8"))
+        return SmsResult(
+            ok=bool(result.get("ok")),
+            provider_ref=result.get("providerRef"),
+            cost_poisha=result.get("costPoisha"),
+            error=result.get("error"),
+            retryable=result.get("retryable"),
+        )
+
+    def verify_receipt(self, raw_body: str, signature: str | None) -> bool:
+        return False
+
+    def read_receipt(self, body: Any) -> dict[str, Any] | None:
+        return None
+
+
+@contextmanager
+def sms_bridged(url: str) -> Iterator[None]:
+    token = _bridged.set(BridgeSmsAdapter(url))
+    try:
+        yield
+    finally:
+        _bridged.reset(token)
+
+
 def sms() -> Any:
     global _current
+    bridged = _bridged.get()
+    if bridged is not None:
+        return bridged
     if _current is None:
         provider = env().SMS_PROVIDER
         _current = LogSmsAdapter() if provider == "log" else HttpSmsAdapter() if provider == "http" else UnconfiguredSmsAdapter()

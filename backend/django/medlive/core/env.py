@@ -16,11 +16,14 @@ Two deliberate differences from the Node API, both stricter:
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Iterator, Mapping
 from urllib.parse import urlsplit
 
 from ..domain.phone import normalise_bd_mobile
@@ -572,13 +575,34 @@ _PRODUCTION_REQUIREMENTS = (
 
 _env: Env | None = None
 
+#: The test seam's per-request environment (`core/pipeline.py`, NODE_ENV=test
+#: only): the Node suite changes `env` in its own process, and each request it
+#: sends says what it changed (`tests/node_suite/app-shim.ts`).
+_override: ContextVar[Env | None] = ContextVar("medlive_env_override", default=None)
+
 
 def env() -> Env:
     """The validated environment, read once."""
     global _env
+    overridden = _override.get()
+    if overridden is not None:
+        return overridden
     if _env is None:
         _env = load_env()
     return _env
+
+
+@contextmanager
+def env_overridden(changes: Mapping[str, Any]) -> Iterator[None]:
+    """This context's environment with `changes` applied (unknown names ignored)."""
+    base = env()
+    known = {f.name for f in dataclasses.fields(base)}
+    applied = {name: value for name, value in changes.items() if name in known}
+    token = _override.set(dataclasses.replace(base, **applied) if applied else base)
+    try:
+        yield
+    finally:
+        _override.reset(token)
 
 
 def is_production() -> bool:

@@ -8,8 +8,8 @@ two run side by side during the migration (`architecture.md` §Cut-over).
 
 from __future__ import annotations
 
+import math
 import re
-import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -91,8 +91,16 @@ def _default_lifetime(kind: str) -> str:
     raise ValueError(kind)
 
 
+def _now_seconds() -> int:
+    # The clock the rest of the API reads, so a test that moves it moves token
+    # lifetimes too, as jose's `Date.now()` does under faked timers.
+    from ..domain.time import now_ms
+
+    return math.floor(now_ms() / 1000)
+
+
 def sign_token(kind: str, claims: dict[str, Any], expires_in: str | None = None) -> str:
-    now = int(time.time())
+    now = _now_seconds()
     payload = {
         **claims,
         "iss": ISSUER,
@@ -125,7 +133,7 @@ def verify_token(token: str, kind: str) -> Verified | Refused:
             algorithms=["HS256"],
             audience=AUDIENCES[kind],
             issuer=ISSUER,
-            options={"require": [], "verify_iat": False},
+            options={"require": [], "verify_iat": False, "verify_exp": False, "verify_nbf": False},
         )
     except pyjwt.ExpiredSignatureError:
         return Refused(False, "expired")
@@ -139,6 +147,18 @@ def verify_token(token: str, kind: str) -> Verified | Refused:
         return Refused(False, "invalid")
     if not isinstance(payload, dict):
         return Refused(False, "malformed")
+    # jose's claim checks, against the API's clock (`exp <= now` is expired).
+    now = _now_seconds()
+    exp = payload.get("exp")
+    if exp is not None:
+        if not isinstance(exp, (int, float)) or isinstance(exp, bool):
+            return Refused(False, "wrong_audience")  # jose: ERR_JWT_CLAIM_VALIDATION_FAILED
+        if exp <= now:
+            return Refused(False, "expired")
+    nbf = payload.get("nbf")
+    if nbf is not None:
+        if not isinstance(nbf, (int, float)) or isinstance(nbf, bool) or nbf > now:
+            return Refused(False, "wrong_audience")  # jose: ERR_JWT_CLAIM_VALIDATION_FAILED
     sub = payload.get("sub")
     kind_claim = payload.get("kind")
     if not isinstance(sub, str) or kind_claim not in ("patient", "guest", "staff"):

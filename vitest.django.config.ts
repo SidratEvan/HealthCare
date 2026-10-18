@@ -13,20 +13,23 @@ import { defineConfig } from 'vitest/config';
  * request goes over HTTP to Django. The database is the Django run's own
  * (`healthcare_django_api_test`), built and served by the global setup.
  *
- * Two seams keep the original assertions meaningful (both honoured by Django
- * only under NODE_ENV=test): each request carries the test's `Date.now()`, so
- * a faked clock moves the server's too, and `resetEmitter()` reads what the
- * Django process broadcast. What still cannot be checked from here (spies on
+ * Seams keep the original assertions meaningful (all honoured by Django only
+ * under NODE_ENV=test): each request carries the test's `Date.now()`, so a
+ * faked clock moves the server's too, and the `env` values the test changed;
+ * an SMS adapter a test installs receives the server's messages over a
+ * loopback callback; `resetEmitter()` reads what the Django process broadcast. What still cannot be checked from here (spies on
  * Node services) is listed per file in the compatibility matrix.
  */
 const appShim = fileURLToPath(new URL('./backend/django/tests/node_suite/app-shim.ts', import.meta.url));
 const emitShim = fileURLToPath(new URL('./backend/django/tests/node_suite/emit-shim.ts', import.meta.url));
+const smsShim = fileURLToPath(new URL('./backend/django/tests/node_suite/sms-shim.ts', import.meta.url));
 
 export default defineConfig({
   resolve: {
     alias: [
       { find: /^\.\.\/app\.js$/, replacement: appShim },
       { find: /^\.\.\/realtime\/emit\.js$/, replacement: emitShim },
+      { find: /^\.\.\/adapters\/sms\.js$/, replacement: smsShim },
     ],
   },
   test: {

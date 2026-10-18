@@ -12,6 +12,8 @@
 
 import { request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http';
 
+import { bridgeHeaders } from './bridge.js';
+
 export const DJANGO_API_URL = process.env['DJANGO_API_URL'] ?? 'http://127.0.0.1:4199';
 
 const target = new URL(DJANGO_API_URL);
@@ -24,7 +26,12 @@ export function createApp(): (req: IncomingMessage, res: ServerResponse) => void
         port: target.port,
         method: req.method,
         path: req.url,
-        headers: { ...req.headers, host: target.host, 'x-medlive-test-now': String(Date.now()) },
+        headers: {
+          ...req.headers,
+          host: target.host,
+          'x-medlive-test-now': String(Date.now()),
+          ...bridgeHeaders(),
+        },
       },
       (answer) => {
         res.writeHead(answer.statusCode ?? 502, answer.headers);

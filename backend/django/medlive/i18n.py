@@ -193,3 +193,29 @@ def local_name(locale: str, bn: str, en: str | None) -> str:
     if locale == "en" and en is not None and en.strip() != "":
         return en
     return bn
+
+
+#: What each test in the demo catalogue is called (`shared/i18n/src/lab.ts`; FR-LAB-01).
+LAB_TEST_NAMES: dict[str, dict[str, str]] = {
+    "CBC": {"bn": "সম্পূর্ণ রক্ত পরীক্ষা (CBC)", "en": "Complete blood count (CBC)"},
+    "BLOOD-SUGAR": {"bn": "রক্তে শর্করা (FBS)", "en": "Blood sugar (FBS)"},
+    "LIPID-PROFILE": {"bn": "লিপিড প্রোফাইল", "en": "Lipid profile"},
+    "SERUM-CREATININE": {"bn": "সিরাম ক্রিয়েটিনিন", "en": "Serum creatinine"},
+    "LFT": {"bn": "লিভার ফাংশন টেস্ট", "en": "Liver function test"},
+    "TSH": {"bn": "থাইরয়েড (TSH)", "en": "Thyroid (TSH)"},
+    "URINE-RE": {"bn": "প্রস্রাব পরীক্ষা (R/E)", "en": "Urine test (R/E)"},
+    "XR-CHEST": {"bn": "বুকের এক্স-রে", "en": "Chest X-ray"},
+    "ECG": {"bn": "ইসিজি", "en": "ECG"},
+    "ECHO": {"bn": "ইকোকার্ডিওগ্রাম", "en": "Echocardiogram"},
+    "USG-ABDOMEN": {"bn": "পেটের আলট্রাসনোগ্রাম", "en": "Abdominal ultrasound"},
+    "HBA1C": {"bn": "HbA1c", "en": "HbA1c"},
+}
+
+
+def is_lab_test_code(code: str) -> bool:
+    return code in LAB_TEST_NAMES
+
+
+def lab_test_name(code: str, locale: str, stored: str) -> str:
+    """A test's name in the language being read, or the stored name if unknown."""
+    return LAB_TEST_NAMES[code][locale] if code in LAB_TEST_NAMES else stored

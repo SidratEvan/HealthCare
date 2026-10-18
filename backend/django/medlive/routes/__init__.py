@@ -17,7 +17,11 @@ from ..core.router import Router
 #: module is ported; `docs/django-migration/compatibility-matrix.md` tracks it.
 API_ROUTERS: list[str] = [
     "discovery",
+    "guest",
+    "patient_auth",
+    "booking",
     "queue",
+    "lab",
 ]
 
 

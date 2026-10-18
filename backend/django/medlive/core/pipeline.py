@@ -27,7 +27,8 @@ import re
 import json
 import time
 import uuid
-from typing import Any, Callable
+from contextlib import ExitStack, contextmanager
+from typing import Any, Callable, Iterator
 
 from django.http import HttpRequest, HttpResponse
 from rest_framework.negotiation import BaseContentNegotiation
@@ -36,7 +37,7 @@ from rest_framework.views import APIView
 
 from ..domain.modules import modules_of_request
 from .auth import attach_guest_from_link, attach_principal, idempotency
-from .env import env
+from .env import env, env_overridden
 from .errors import AppError, BodyNotJson, PayloadTooLarge, as_app_error
 from .http import ApiRequest, Headers, Reply, dumps
 from .logging import request_logger
@@ -360,8 +361,29 @@ def handle(request: HttpRequest) -> HttpResponse:
     )
     headers: dict[str, str] = {"x-request-id": request_id}
     log = request_logger(request_id)
-    with _test_clock(request):
+    with _test_seams(request):
         return _handle(request, req, headers, log, started)
+
+
+@contextmanager
+def _test_seams(request: HttpRequest) -> Iterator[None]:
+    """What the Node suite changed in its own process, said per request
+    (NODE_ENV=test only; `tests/node_suite/app-shim.ts`): its clock, the
+    environment it altered, and an SMS adapter it swapped in."""
+    if env().NODE_ENV != "test":
+        yield
+        return
+    with ExitStack() as stack:
+        changed = request.META.get("HTTP_X_MEDLIVE_TEST_ENV")
+        if changed:
+            stack.enter_context(env_overridden(json.loads(changed)))
+        stack.enter_context(_test_clock(request))
+        bridge = request.META.get("HTTP_X_MEDLIVE_TEST_SMS")
+        if bridge:
+            from ..adapters.sms import sms_bridged
+
+            stack.enter_context(sms_bridged(bridge))
+        yield
 
 
 def _test_clock(request: HttpRequest) -> Any:
