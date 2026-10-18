@@ -46,6 +46,7 @@ async function openReception(context: BrowserContext): Promise<Page> {
 
 /** Marks serial 2 absent and offers the chair (`BTN-B02-OFFER`). */
 async function freeAndOffer(reception: Page): Promise<void> {
+  await reception.getByTestId('row-more-2').click();
   await reception.getByTestId('queue-row-2').getByRole('button', { name: 'অনুপস্থিত' }).click();
   const offer = reception.getByTestId('standby-offer-2');
   await expect(offer).toBeEnabled({ timeout: 10_000 });

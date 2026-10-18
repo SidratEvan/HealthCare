@@ -9,7 +9,9 @@
  * server-side with a different message.
  */
 
-import { validationFailed } from '../errors/AppError.js';
+import { refusedPhonePaths } from '@platform/domain';
+
+import { AppError, validationFailed } from '../errors/AppError.js';
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { ZodType } from 'zod';
@@ -31,6 +33,8 @@ export interface ValidationSchemas {
 export function validate(schemas: ValidationSchemas): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const issues: { path: string; message: string }[] = [];
+    // FR-DEM-08: where a demonstration refused a person's phone, by part.
+    const refusedPhones: string[] = [];
 
     if (schemas.params !== undefined) {
       const result = schemas.params.safeParse(req.params);
@@ -38,6 +42,7 @@ export function validate(schemas: ValidationSchemas): RequestHandler {
         req.params = result.data as typeof req.params;
       } else {
         issues.push(...collect(result.error.issues, 'params'));
+        refusedPhones.push(...refusedPhonePaths(result.error.issues, ['params']));
       }
     }
 
@@ -49,6 +54,7 @@ export function validate(schemas: ValidationSchemas): RequestHandler {
         Object.defineProperty(req, 'query', { value: result.data, configurable: true });
       } else {
         issues.push(...collect(result.error.issues, 'query'));
+        refusedPhones.push(...refusedPhonePaths(result.error.issues, ['query']));
       }
     }
 
@@ -58,7 +64,16 @@ export function validate(schemas: ValidationSchemas): RequestHandler {
         req.body = result.data;
       } else {
         issues.push(...collect(result.error.issues, 'body'));
+        refusedPhones.push(...refusedPhonePaths(result.error.issues, ['body']));
       }
+    }
+
+    // FR-DEM-08: a demonstration's refusal of a person's phone is its own
+    // answer, so a screen can say what to do rather than "invalid".
+    // A guest booking's refusal sits inside its union's branches.
+    if (refusedPhones.length > 0) {
+      next(new AppError('DEMO_PHONE_NOT_ALLOWED', { details: { fields: refusedPhones } }));
+      return;
     }
 
     if (issues.length > 0) {

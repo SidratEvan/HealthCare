@@ -79,12 +79,13 @@ export function labApi(getToken: () => string | null): {
   readonly upload: (
     orderId: string,
     file: { type: string; base64: string },
+    attemptId?: string,
   ) => Promise<LabWriteResponse>;
   readonly patientLabel: (orderId: string) => Promise<string | null>;
   readonly shelf: (hospitalId: string) => Promise<ShelfResponse>;
   readonly setFlags: (
     hospitalId: string,
-    flags: readonly { medicineId: string; inStock: boolean }[],
+    flags: readonly { medicineId: string; inStock: boolean; expectedUpdatedAt: string | null }[],
   ) => Promise<ShelfResponse>;
 } {
   const client = new ApiClient({ baseUrl: API_BASE, getToken });
@@ -109,8 +110,8 @@ export function labApi(getToken: () => string | null): {
       );
     },
 
-    upload: async (orderId, file) => {
-      const clientEventId = crypto.randomUUID();
+    upload: async (orderId, file, attemptId) => {
+      const clientEventId = attemptId ?? crypto.randomUUID();
       return await client.post<LabWriteResponse>(
         `/test-orders/${orderId}/report`,
         {
@@ -173,10 +174,13 @@ export function failureOf(error: unknown): LabFailure {
  */
 export async function readReportFile(
   file: File,
-): Promise<{ ok: true; type: string; base64: string } | { ok: false; reason: 'type' | 'size' }> {
+): Promise<
+  { ok: true; type: string; base64: string } | { ok: false; reason: 'type' | 'size' | 'empty' }
+> {
   if (!(REPORT_FILE_TYPES as readonly string[]).includes(file.type)) {
     return { ok: false, reason: 'type' };
   }
+  if (file.size === 0) return { ok: false, reason: 'empty' };
   if (file.size > REPORT_MAX_BYTES) return { ok: false, reason: 'size' };
 
   const buffer = await file.arrayBuffer();

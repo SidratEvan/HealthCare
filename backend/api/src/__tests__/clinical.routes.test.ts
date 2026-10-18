@@ -363,11 +363,18 @@ describe('writing a visit (FR-DOC-08)', () => {
     token?: string,
   ): Promise<request.Response> {
     const key = (body['idempotencyKey'] as string | undefined) ?? crypto.randomUUID();
+    const consultation = await request(app)
+      .get(`${BASE}/visits/booking/${String(body['bookingId'])}`)
+      .set('authorization', `Bearer ${token ?? (await staff(['doctor']))}`);
     return await request(app)
       .post(`${BASE}/visits`)
       .set('authorization', `Bearer ${token ?? (await staff(['doctor']))}`)
       .set('idempotency-key', key)
-      .send({ ...body, idempotencyKey: key });
+      .send({
+        expectedRevision: consultation.body.data?.visit?.revision ?? null,
+        ...body,
+        idempotencyKey: key,
+      });
   }
 
   it('saves a draft without ending the consultation (BTN-B05-DRAFT)', async () => {

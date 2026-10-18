@@ -40,7 +40,10 @@ export interface ChamberRow {
 }
 
 /** Every facility's chambers when `hospitalId` is null; one facility's otherwise. */
-export async function todaysChambers(hospitalId: string | null): Promise<ChamberRow[]> {
+export async function todaysChambers(
+  hospitalId: string | null,
+  includeEnded = false,
+): Promise<ChamberRow[]> {
   const sessions = await sql<{
     hospital_id: string;
     id: string;
@@ -81,7 +84,7 @@ export async function todaysChambers(hospitalId: string | null): Promise<Chamber
        -- A chamber that has been ended is no longer one to open (BTN-B02-END,
        -- owner's decision, 2026-10-05). Its queue and everything in it stay in
        -- the record; it is only this list of chambers to work that it leaves.
-       AND s.status <> 'ended'
+       AND (${includeEnded}::boolean OR s.status <> 'ended')
        AND (
          s.session_date = (now() AT TIME ZONE 'Asia/Dhaka')::date
          -- A chamber that opened at half past eleven and is still going at one

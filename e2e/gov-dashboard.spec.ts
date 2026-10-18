@@ -185,6 +185,7 @@ test.describe('the figure a tap moves (FR-GOV-03, CHIP-B05-SIGNAL)', () => {
     await doctor.getByTestId('visit-signal-dengue').click();
     await expect(doctor.getByTestId('visit-signal-dengue')).toHaveAttribute('aria-pressed', 'true');
     await doctor.getByTestId('sign-and-next').click();
+    await doctor.getByTestId('doctor-confirm-sign').click();
     // Signed: the note clears for the next patient.
     await expect(doctor.getByTestId('visit-diagnosis')).toHaveValue('');
     // And the tag clears with it — the next patient is untagged until a

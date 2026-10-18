@@ -198,11 +198,20 @@ export const TINY_PDF_BASE64 = Buffer.from(
 ).toString('base64');
 
 /** A medicine this hospital's shelf carries, for the stock endpoints. */
-export async function stockedMedicine(
-  hospitalId: string,
-): Promise<{ medicineId: string; genericName: string; inStock: boolean }> {
-  const result = await sql<{ medicine_id: string; generic_name: string; in_stock: boolean }>`
-    SELECT s.medicine_id, m.generic_name, s.in_stock
+export async function stockedMedicine(hospitalId: string): Promise<{
+  medicineId: string;
+  genericName: string;
+  inStock: boolean;
+  expectedUpdatedAt: string;
+}> {
+  const result = await sql<{
+    medicine_id: string;
+    generic_name: string;
+    in_stock: boolean;
+    updated_at: string;
+  }>`
+    SELECT s.medicine_id, m.generic_name, s.in_stock,
+           to_char(s.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
       FROM pharmacy_stock s
       JOIN medicines m ON m.id = s.medicine_id
      WHERE s.hospital_id = ${hospitalId}::uuid AND s.deleted_at IS NULL
@@ -212,5 +221,10 @@ export async function stockedMedicine(
 
   const row = result.rows[0];
   if (row === undefined) throw new Error('The seed should stock this pharmacy (FR-DEM-05).');
-  return { medicineId: row.medicine_id, genericName: row.generic_name, inStock: row.in_stock };
+  return {
+    medicineId: row.medicine_id,
+    genericName: row.generic_name,
+    inStock: row.in_stock,
+    expectedUpdatedAt: row.updated_at,
+  };
 }

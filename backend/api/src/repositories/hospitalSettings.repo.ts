@@ -1341,6 +1341,49 @@ export async function listDesks(hospitalId: string, trx?: Tx): Promise<DeskRow[]
   }));
 }
 
+/** Scoped lock and before-image for conditional desk edits (FR-REC-32, DB-P1).
+ * Every desk PATCH locks this row before replacing its memberships. */
+export async function deskForUpdate(
+  trx: Tx,
+  hospitalId: string,
+  deskId: string,
+): Promise<DeskRow | null> {
+  const locked = await sql<{ id: string }>`
+    SELECT id FROM reception_desks
+    WHERE id = ${deskId}::uuid AND hospital_id = ${hospitalId}::uuid AND deleted_at IS NULL
+    FOR UPDATE
+  `.execute(trx);
+  if (locked.rows.length === 0) return null;
+  // A separate READ COMMITTED statement is essential: membership subqueries
+  // must use a fresh snapshot after a concurrent row-lock holder commits.
+  const result = await sql<{
+    id: string;
+    name_bn: string;
+    name_en: string;
+    doctor_ids: string[];
+    staff_ids: string[];
+  }>`
+    SELECT d.id, d.name_bn, d.name_en,
+      coalesce((SELECT array_agg(dd.doctor_id::text ORDER BY dd.doctor_id)
+        FROM reception_desk_doctors dd WHERE dd.desk_id = d.id), '{}') AS doctor_ids,
+      coalesce((SELECT array_agg(ds.staff_user_id::text ORDER BY ds.staff_user_id)
+        FROM reception_desk_staff ds WHERE ds.desk_id = d.id), '{}') AS staff_ids
+    FROM reception_desks d
+    WHERE d.id = ${deskId}::uuid AND d.hospital_id = ${hospitalId}::uuid
+      AND d.deleted_at IS NULL
+  `.execute(trx);
+  const row = result.rows[0];
+  return row === undefined
+    ? null
+    : {
+        id: row.id,
+        nameBn: row.name_bn,
+        nameEn: row.name_en,
+        doctorIds: row.doctor_ids,
+        staffIds: row.staff_ids,
+      };
+}
+
 /** Whether another live desk at the hospital already has this English name. */
 export async function deskNameTaken(
   hospitalId: string,

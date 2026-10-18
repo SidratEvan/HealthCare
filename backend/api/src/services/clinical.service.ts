@@ -44,10 +44,12 @@
  * The two are not one transaction. `callNext` owns its own lock and dispatches
  * notifications after committing (`FR-QUE-53`), and reaching inside it would
  * mean two places deciding who is next. So the window is: record committed,
- * queue not yet advanced. A doctor who taps again lands on the same visit —
- * `upsertVisit` is idempotent on the booking and leaves a signed visit exactly
- * as it was — and the queue advances on the second tap. The recoverable order was chosen
- * over the atomic one deliberately; the alternative loses a record.
+ * queue not yet advanced. FR-DOC-08/FR-QUE-53: revisions and current encounter
+ * are checked under the session lock; signed records are immutable. The queue
+ * step is keyed by the visit and compares the expected booking under its lock.
+ * A retry replays first, or advances only while the original patient remains
+ * in the chamber. A queue failure/change is a separate confirmed receipt,
+ * and a signed record whose content differs never claims the local note saved.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -59,6 +61,7 @@ import { storage } from '../adapters/storage.js';
 import { logger } from '../config/logger.js';
 import { AppError, forbiddenScope, guardFailed, notFound } from '../errors/AppError.js';
 import * as clinicalRepo from '../repositories/clinical.repo.js';
+import * as sessionRepo from '../repositories/session.repo.js';
 import { withTransaction } from '../repositories/transaction.js';
 
 import * as queueService from './queue.service.js';
@@ -289,6 +292,67 @@ export interface SignVisitResult {
   readonly signed: boolean;
   /** Present when signing advanced the queue (`FR-DOC-08`). */
   readonly queue: queueService.AppendEventResult | null;
+  readonly revision: string;
+  /** FR-DOC-08: a replay must not claim a different local note was filed. */
+  readonly contentMatches: boolean;
+  readonly queueOutcome: 'not_requested' | 'advanced' | 'changed' | 'retry_needed';
+}
+
+function matchesContent(
+  body: CreateVisitBody,
+  visit: NonNullable<Awaited<ReturnType<typeof clinicalRepo.readDraft>>>,
+): boolean {
+  const sameMedicines =
+    body.medicines === undefined ||
+    JSON.stringify(
+      body.medicines.map((m) => ({
+        medicineId: m.medicineId ?? null,
+        name: m.name,
+        strength: blankToNull(m.strength),
+        schedule: blankToNull(m.schedule),
+        durationDays: m.durationDays ?? null,
+        instructionBn: blankToNull(m.instructionBn),
+      })),
+    ) === JSON.stringify(visit.medicines);
+  return (
+    sameMedicines &&
+    visit.diagnosisText === blankToNull(body.diagnosisText) &&
+    visit.adviceTextBn === blankToNull(body.adviceTextBn) &&
+    visit.followUpDate === (body.followUpDate ?? null) &&
+    visit.symptomSignal === (body.symptomSignal ?? null)
+  );
+}
+
+/** FR-DOC-10: unfinished records are doctor-only, own-hospital and audited.
+ * The session lock gives the version and medicines one consistent snapshot.
+ */
+export async function consultation(principal: Principal, bookingId: string) {
+  const booking = await clinicalRepo.findChamberBooking(bookingId);
+  if (booking === null) throw notFound('booking');
+  assertDoctor(principal, booking.hospitalId);
+  const visit = await withTransaction(async (trx) => {
+    if ((await sessionRepo.lockForUpdate(trx, booking.sessionId)) === null)
+      throw notFound('session');
+    return await clinicalRepo.readDraft(bookingId, trx);
+  });
+  await audit(principal, booking.patientId, {
+    subjectTable: 'visits',
+    subjectId: visit?.visitId ?? null,
+    meta: { bookingId, opened: 'consultation_draft' },
+  });
+  return {
+    bookingId,
+    patientId: booking.patientId,
+    sessionId: booking.sessionId,
+    hospitalId: booking.hospitalId,
+    visit,
+  };
+}
+
+function assertDoctor(principal: Principal, hospitalId: string): void {
+  if (principal.kind !== 'staff') throw forbiddenScope({ reason: 'staff_only' });
+  if (!principal.roles.includes('doctor')) throw forbiddenScope({ reason: 'role_not_permitted' });
+  if (principal.hospitalId !== hospitalId) throw forbiddenScope({ reason: 'hospital_scope' });
 }
 
 /**
@@ -318,19 +382,39 @@ export async function saveVisit(input: {
     throw forbiddenScope({ reason: 'hospital_scope' });
   }
 
-  // `FR-DOC-08` makes signing equivalent to reception's *done*, and *done*
-  // applies to whoever is in the chamber. Signing for a patient who was never
-  // called would end a consultation that never started and would advance the
-  // queue past somebody waiting.
-  if (body.sign && booking.status !== 'in_chamber') {
-    throw guardFailed(
-      'PATIENT_NOT_IN_CHAMBER',
-      'Only the patient currently in the chamber can be signed off.',
-    );
+  if (
+    (body.patientId !== undefined && body.patientId !== booking.patientId) ||
+    (body.sessionId !== undefined && body.sessionId !== booking.sessionId)
+  ) {
+    throw forbiddenScope({ reason: 'consultation_identity' });
   }
 
   const staffUserId = input.principal.id;
   const visit = await withTransaction(async (trx) => {
+    // FR-DOC-08/FR-QUE-53: compare both queue identity and draft revision after
+    // reception/another writer has released the same existing session lock.
+    if ((await sessionRepo.lockForUpdate(trx, booking.sessionId)) === null)
+      throw notFound('session');
+    const current = await clinicalRepo.findChamberBooking(booking.bookingId, trx);
+    if (current === null) throw notFound('booking');
+    const previous = await clinicalRepo.readDraft(booking.bookingId, trx);
+    if (previous?.signedAt !== null && previous !== null) {
+      if (!body.sign)
+        throw guardFailed('VISIT_ALREADY_SIGNED', 'A signed visit cannot be changed.');
+      return previous;
+    }
+    if (body.sign && current.status !== 'in_chamber') {
+      throw guardFailed('PATIENT_NOT_IN_CHAMBER', 'Only the current encounter may be signed.');
+    }
+    if ((body.expectedRevision ?? null) !== (previous?.revision ?? null)) {
+      // FR-DOC-08: a lost draft reply can be reconciled without another write
+      // only when every persisted field already equals the frozen request.
+      if (!body.sign && previous !== null && matchesContent(body, previous)) return previous;
+      throw guardFailed(
+        'VISIT_REVISION_CONFLICT',
+        'Another device changed the draft. Read and review it before saving.',
+      );
+    }
     const written = await clinicalRepo.upsertVisit(trx, {
       bookingId: booking.bookingId,
       patientId: booking.patientId,
@@ -360,31 +444,62 @@ export async function saveVisit(input: {
         })),
       });
     }
-    return written;
+    const saved = await clinicalRepo.readDraft(booking.bookingId, trx);
+    if (saved === null) throw new Error('saved consultation missing');
+    return saved;
   });
 
   // Signed is final. A sign sent again is the same act replayed and goes on to
   // the queue's own replay below; anything else against a signed record is an
   // edit, and is refused rather than written under the doctor's signature.
-  if (visit.alreadySigned && !body.sign) {
-    throw guardFailed('VISIT_ALREADY_SIGNED', 'A signed visit record cannot be changed.');
-  }
-
   if (!body.sign) {
-    return { visitId: visit.id, signed: false, queue: null };
+    return {
+      visitId: visit.visitId,
+      revision: visit.revision,
+      contentMatches: matchesContent(body, visit),
+      signed: false,
+      queue: null,
+      queueOutcome: 'not_requested',
+    };
   }
 
   // The record is committed. Now the queue (see the header for why this order).
-  const queue = await queueService.callNext({
-    sessionId: booking.sessionId,
-    actor: input.actor,
-    // Derived from the visit rather than generated, so a doctor tapping sign
-    // twice on a bad connection replays one `next` instead of calling two
-    // patients (CLAUDE.md §7).
-    clientEventId: body.idempotencyKey,
-  });
-
-  return { visitId: visit.id, signed: true, queue };
+  try {
+    const queue = await queueService.callNext({
+      sessionId: booking.sessionId,
+      expectedBookingId: booking.bookingId,
+      actor: input.actor,
+      // FR-DOC-08: one finalization per persisted visit, including retries
+      // with a different request key or from another authorised device.
+      clientEventId: visit.visitId,
+    });
+    return {
+      visitId: visit.visitId,
+      revision: visit.revision,
+      contentMatches: matchesContent(body, visit),
+      signed: true,
+      queue,
+      queueOutcome: 'advanced',
+    };
+  } catch (error) {
+    // The record already committed. A queue refusal/outage cannot make it
+    // unsigned; report the two outcomes separately and allow safe reconciliation.
+    const changed =
+      error instanceof AppError && error.details?.['guard'] === 'CONSULTATION_CHANGED';
+    if (!changed)
+      logger.warn(
+        { code: error instanceof AppError ? error.code : 'QUEUE_WRITE_FAILED' },
+        'signed record queue advancement needs reconciliation',
+      );
+    return {
+      visitId: visit.visitId,
+      revision: visit.revision,
+      contentMatches: matchesContent(body, visit),
+      signed: true,
+      queue: null,
+      queueOutcome: changed ? 'changed' : 'retry_needed',
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------

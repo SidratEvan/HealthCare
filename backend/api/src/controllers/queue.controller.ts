@@ -12,9 +12,16 @@
  * reading of the state.
  */
 
-import { measuredConsultSeconds, time, UNDO_WINDOW_SECONDS } from '@platform/domain';
+import {
+  id,
+  measuredConsultSeconds,
+  patientViewOf,
+  time,
+  UNDO_WINDOW_SECONDS,
+} from '@platform/domain';
 import type { QueueActor } from '@platform/domain';
 
+import { ticketsIn } from '../config/serialTicket.js';
 import { AppError, forbiddenScope, notFound } from '../errors/AppError.js';
 import { assertDeskAllows } from '../services/deskAccess.service.js';
 import * as queueService from '../services/queue.service.js';
@@ -292,7 +299,7 @@ export async function reinstate(req: Request, res: Response): Promise<void> {
 /** `POST /sessions/:id/walkin` (`FR-REC-13`, `FR-REC-14`). */
 export async function addWalkin(req: Request, res: Response): Promise<void> {
   const sessionId = param(req, 'id');
-  const session = await assertSessionScope(req, sessionId);
+  await assertSessionScope(req, sessionId);
   const body = req.body as {
     patientId: string;
     position: 'end' | 'index';
@@ -303,35 +310,15 @@ export async function addWalkin(req: Request, res: Response): Promise<void> {
   const principal = req.principal;
   if (principal?.kind !== 'staff') throw forbiddenScope({ reason: 'staff_only' });
 
-  // A counter that lost the answer sends the walk-in again with the same key.
-  // `appendEvent` would recognise the event — but only after a second booking
-  // had been made for it, a serial nobody holds. So a replay is answered
-  // before anything is written (`FR-QUE-51`, pilot step 23).
-  const replayed = await queueService.findReplay(envelope(req).clientEventId);
-  if (replayed !== null) {
-    send(res, replayed);
-    return;
-  }
-
-  const bookingId = await queueService.createWalkinBooking({
-    sessionId,
-    patientId: body.patientId,
-    feePoisha: session.feePoisha,
-    staffUserId: principal.id,
-  });
-
   send(
     res,
-    await queueService.appendEvent({
+    await queueService.addWalkin({
       sessionId,
-      type: 'WALKIN_ADDED',
-      payload: {
-        bookingId,
-        position: body.position,
-        index: body.index,
-        reason: body.reason,
-      },
-      actor: actorOf(req),
+      patientId: body.patientId,
+      position: body.position,
+      index: body.index,
+      reason: body.reason,
+      actor: { kind: 'staff', staffUserId: id(principal.id), role: 'receptionist' },
       ...envelope(req),
     }),
   );
@@ -492,17 +479,44 @@ function param(req: Request, name: string): string {
 }
 
 /** The success envelope from BACKEND.md §7, plus the freshness stamp. */
-function send(res: Response, result: AppendEventResult): void {
-  res.json({
-    ok: true,
-    data: {
+function send(
+  res: Response,
+  result: AppendEventResult & {
+    readonly walkin?: { readonly bookingId: string; readonly serial: number };
+  },
+): void {
+  res.json({ ok: true, data: queueAnswer(res.req, result) });
+}
+
+/**
+ * What a queue write is answered with, for whoever made it.
+ *
+ * Staff are answered with the queue as reception holds it. Anybody else — a
+ * patient saying they are late, a tracking link cancelling its serial — is
+ * answered with the patients' copy, exactly as the session channel and
+ * `GET /bookings/:id` already send it (plan I2c, `FR-NET-02`, `FR-SEC-11`).
+ * These answers used to carry the staff copy: every other patient's record
+ * id and booking id, and what reception typed about them ("elderly,
+ * breathing difficulty"). Found by the pilot-readiness audit of 12 October
+ * 2026 (finding F-01).
+ */
+export function queueAnswer(
+  req: Request,
+  result: AppendEventResult & {
+    readonly walkin?: { readonly bookingId: string; readonly serial: number };
+  },
+): Record<string, unknown> {
+  const receipt = { seq: result.seq, duplicate: result.duplicate, serverTs: result.serverTs };
+  if (req.principal?.kind === 'staff') {
+    return {
       state: result.state,
       etas: result.etas,
-      seq: result.seq,
-      duplicate: result.duplicate,
-      serverTs: result.serverTs,
-    },
-  });
+      ...receipt,
+      ...(result.walkin === undefined ? {} : { walkin: result.walkin }),
+    };
+  }
+  const sessionId = result.state.plan.sessionId;
+  return { ...patientViewOf(result.state, result.etas, ticketsIn(sessionId)), ...receipt };
 }
 
 /** `clientEventId` and `clientTs` off the validated body. */

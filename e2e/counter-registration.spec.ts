@@ -116,6 +116,8 @@ test.describe('the registration desk (S-B-03)', () => {
     await sheet.getByTestId('finder-register').click();
     await expect(sheet.getByTestId('walkin-patient')).toBeVisible();
     await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: /Leave entered information|লেখা ছেড়ে/ }).click();
+    await expect(sheet).toBeHidden();
 
     // At the desk, the number said the other way round: +880…
     await page.goto('/?view=registration');
@@ -125,13 +127,17 @@ test.describe('the registration desk (S-B-03)', () => {
     const results = page.getByTestId('finder-results');
     await expect(results).toContainText('আবদুল করিম (ডেমো)');
     await results.getByRole('button', { name: 'আবদুল করিম (ডেমো) — বেছে নিন' }).click();
+    await page.getByTestId('finder-confirm-patient').click();
     await expect(page.getByTestId('registration-chosen')).toContainText('আবদুল করিম (ডেমো)');
 
     // A seeded chamber: the lists hide the spec's own (room `E2E`, `chamber.repo`)
     // so a person looking at the demo never sees a test's leftovers.
     await page.locator('[data-testid^="registration-add-"]').first().click();
-    await expect(page.getByText(/আবদুল করিম \(ডেমো\)-কে সিরিয়াল/).first()).toBeVisible();
+    await page.getByTestId('registration-submit').click();
+    await expect(page.getByTestId('registration-confirmed')).toContainText('আবদুল করিম (ডেমো)');
+    await expect(page.getByTestId('registration-serial')).toHaveText(/[০-৯]+/);
     // The desk is ready for the next person.
+    await page.getByTestId('registration-next-patient').click();
     await expect(page.getByTestId('finder-phone')).toHaveValue('');
   });
 });

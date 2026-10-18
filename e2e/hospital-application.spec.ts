@@ -16,6 +16,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
+import { approveManagementWrites } from './support/adminManagement.js';
 import { E2E_DATABASE_URL, assertLocalDatabase } from './support/database.js';
 
 const CONSOLE = 'http://localhost:3100';
@@ -144,6 +145,7 @@ test.describe('a hospital applies by itself (FR-ONB-09)', () => {
     ).toHaveCount(0);
 
     await row.click();
+    await platform.getByTestId('platform-section-access').click();
     await expect(platform.getByTestId('platform-workspace')).toHaveAttribute(
       'data-lifecycle',
       'setup',
@@ -167,6 +169,8 @@ test.describe('a hospital applies by itself (FR-ONB-09)', () => {
     // --- the platform can decline it: close it, with the reason (FR-ONB-10) -------
     // While it is setting up the next move is the hospital's, and closing is
     // the one thing the platform is offered.
+    await platform.getByTestId('platform-section-readiness').click();
+    await approveManagementWrites(platform);
     await expect(platform.getByTestId('platform-no-actions')).toBeVisible();
     await expect(platform.getByTestId('platform-decline-line')).toBeVisible();
     await expect(platform.getByTestId('platform-act-approve')).toHaveCount(0);

@@ -170,6 +170,8 @@ export const importApi = {
     attempt(
       async (api) => (await api.get<{ batches: ImportBatch[] }>('/hospital/imports')).batches,
     ),
+  view: (id: string) =>
+    attempt(async (api) => await api.get<ImportBatchView>(`/hospital/imports/${id}`)),
   check: (set: ImportSet, fileName: string, csv: string) =>
     attempt(
       async (api) =>

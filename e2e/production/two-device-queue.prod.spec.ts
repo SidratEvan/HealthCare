@@ -65,7 +65,7 @@ async function signInAndOpenChamber(context: BrowserContext): Promise<Page> {
   await page.getByTestId('login-email').fill(reception.email);
   await page.getByTestId('login-password').fill(DEMO_PASSWORD);
   await page.getByTestId('login-submit').click();
-  await expect(page.getByTestId('picker-signed-in')).toBeVisible();
+  await expect(page.getByTestId('reception-workspace')).toBeVisible();
 
   await page.goto(`${CONSOLE}/?session=${demo.sessionId}`);
   await expect(page.getByTestId('queue-table')).toBeVisible();

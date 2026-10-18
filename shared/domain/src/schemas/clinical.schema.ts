@@ -73,6 +73,10 @@ export const formularyQuery = z.object({
  */
 export const createVisitBody = z.object({
   bookingId: uuid,
+  /** FR-DOC-08: explicit editor identity and optimistic draft version. */
+  patientId: uuid.optional(),
+  sessionId: uuid.optional(),
+  expectedRevision: z.string().max(200).nullable().optional(),
 
   /**
    * Free text. `INP-B05-DX` allows it and no document fixes a coding system,

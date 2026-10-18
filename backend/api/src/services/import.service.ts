@@ -56,6 +56,8 @@ import {
   NO_WARNINGS,
   columnIndex,
   importWarnings,
+  latinDigits,
+  normaliseBdMobile,
   missingColumns,
   parseCsv,
   readRow,
@@ -71,6 +73,7 @@ import {
   type StructureRecord,
 } from '@platform/domain';
 
+import { demoPhoneAdmitted } from '../config/demoPhones.js';
 import { AppError, notFound } from '../errors/AppError.js';
 import * as settingsRepo from '../repositories/hospitalSettings.repo.js';
 import * as repo from '../repositories/import.repo.js';
@@ -207,6 +210,24 @@ export async function check(
     }
     return { rowNumber: row.rowNumber, raw, result: readRow(input.set, row.cells, index) };
   });
+  // FR-DEM-08: a demonstration takes no real phone number, and a patient
+  // register brings hundreds. Every row's mobile, read or not, is held to the
+  // demonstration's list before the batch (which keeps the rows as uploaded)
+  // is written; only the template's own example row is passed over.
+  const refusedRows = read
+    .filter((entry) => {
+      if (entry.result.ok && isExample(entry.result.record)) return false;
+      const typed = entry.raw['mobile'];
+      const phone = typed === undefined ? null : normaliseBdMobile(latinDigits(typed));
+      return phone !== null && !demoPhoneAdmitted(phone);
+    })
+    .map((entry) => entry.rowNumber);
+  if (refusedRows.length > 0) {
+    throw new AppError('DEMO_PHONE_NOT_ALLOWED', {
+      details: { rows: refusedRows.slice(0, 50), count: refusedRows.length },
+    });
+  }
+
   const inFile = new Set<string>();
   for (const entry of read) {
     if (entry.result.ok && !isExample(entry.result.record)) inFile.add(keyOf(entry.result.record));
@@ -375,6 +396,7 @@ export async function commit(actor: ImportActor, batchId: string): Promise<Batch
   let wroteSchedules = false;
 
   await withTransaction(async (trx) => {
+    await repo.lockWrites(trx, actor.hospitalId);
     const batch = await repo.batchOf(actor.hospitalId, batchId, trx);
     if (batch === null) throw notFound('import');
     if (batch.state !== 'checked') throw wrongState(batch.state);
@@ -410,6 +432,7 @@ export async function commit(actor: ImportActor, batchId: string): Promise<Batch
           targetKind: refKindOf(record),
           targetId: written.entityId,
           previous: written.previous,
+          action: written.previous !== null || row.action === 'update' ? 'update' : 'add',
         });
         if (written.sessionId !== null) touchedSessions.add(written.sessionId);
         if ('type' in record && record.type === 'schedule') wroteSchedules = true;
@@ -425,6 +448,30 @@ export async function commit(actor: ImportActor, batchId: string): Promise<Batch
       }
     }
 
+    // Seal the final after-state after all rows, so the batch's own later
+    // writes cannot look like another administrator's edits (FR-IMP-07).
+    const rows = await repo.rowsOf(batchId, trx);
+    for (const row of rows) {
+      if (
+        row.targetId === null ||
+        row.targetKind === null ||
+        (row.action !== 'add' && row.action !== 'update')
+      )
+        continue;
+      const table = TABLE_OF[row.targetKind];
+      if (table === undefined) throw wrongState('unknown_target');
+      const after = await repo.undoFingerprint(trx, table, row.targetId);
+      const replaced = row.previous?.['replacedTemplateId'];
+      const replacedAfter =
+        typeof replaced === 'string'
+          ? await repo.undoFingerprint(trx, 'session_templates', replaced)
+          : null;
+      await repo.markRowWritten(trx, row.id, {
+        targetKind: row.targetKind,
+        targetId: row.targetId,
+        previous: { ...row.previous, __importUndo: { version: 1, after, replacedAfter } },
+      });
+    }
     await repo.setState(trx, batchId, 'committed', actor.staffId);
     await repo.audit(trx, {
       actorStaffId: actor.staffId,
@@ -556,7 +603,11 @@ async function write(
         doctorId,
         departmentId,
       });
-      if (linked !== null) return done(linked);
+      if (linked !== null)
+        return done(
+          linked,
+          await repo.currentValues(trx, 'doctor_hospitals', linked, ['fee_poisha', 'room']),
+        );
       return done(
         await settingsRepo.linkDoctor(trx, {
           doctorId,
@@ -736,6 +787,7 @@ const UNDO_ORDER = [
 export async function undo(actor: ImportActor, batchId: string): Promise<BatchView> {
   const touchedSessions = new Set<string>();
   await withTransaction(async (trx) => {
+    await repo.lockWrites(trx, actor.hospitalId);
     const batch = await repo.batchOf(actor.hospitalId, batchId, trx);
     if (batch === null) throw notFound('import');
     if (batch.state !== 'committed') throw wrongState(batch.state);
@@ -748,15 +800,74 @@ export async function undo(actor: ImportActor, batchId: string): Promise<BatchVi
     );
     const own = written.map((row) => row.targetId ?? '');
 
-    // Anything built on an added row since stops the whole undo.
+    const templates = written
+      .filter((row) => row.targetKind === 'schedule')
+      .flatMap((row) => {
+        const replaced = row.previous?.['replacedTemplateId'];
+        return typeof replaced === 'string' ? [row.targetId ?? '', replaced] : [row.targetId ?? ''];
+      });
+    await repo.lockUndoTemplates(trx, templates);
+    await repo.lockUndoSessions(
+      trx,
+      templates,
+      written.filter((row) => row.targetKind === 'appointment').map((row) => row.targetId ?? ''),
+    );
+
+    // Validate every after-state under locks before any undo write. Legacy
+    // batches lack this evidence and fail closed, rather than erase later work.
     const blocking: { rowNumber: number; kind: string }[] = [];
+    for (const row of [...written].sort((a, b) =>
+      (a.targetId ?? '').localeCompare(b.targetId ?? ''),
+    )) {
+      const table = TABLE_OF[row.targetKind ?? ''];
+      const evidence = row.previous?.['__importUndo'];
+      const expected =
+        typeof evidence === 'object' && evidence !== null
+          ? (evidence as Record<string, unknown>)
+          : null;
+      const actual =
+        table === undefined ? null : await repo.undoFingerprint(trx, table, row.targetId ?? '');
+      const replaced = row.previous?.['replacedTemplateId'];
+      const replacedActual =
+        typeof replaced === 'string'
+          ? await repo.undoFingerprint(trx, 'session_templates', replaced)
+          : null;
+      if (
+        expected?.['version'] !== 1 ||
+        typeof expected['after'] !== 'string' ||
+        actual !== expected['after'] ||
+        replacedActual !== expected['replacedAfter'] ||
+        // These updates have linked role/chamber side effects without a complete
+        // reversible preimage. Refuse the whole undo rather than partially restore.
+        (row.action === 'update' && (row.targetKind === 'staff' || row.targetKind === 'doctor'))
+      ) {
+        blocking.push({ rowNumber: row.rowNumber, kind: row.targetKind ?? 'unknown' });
+      }
+    }
+    const aliased = new Set(
+      await repo.aliasUsers(
+        trx,
+        batchId,
+        written.filter((row) => row.action === 'add').map((row) => row.targetId ?? ''),
+      ),
+    );
+    for (const row of written) {
+      if (aliased.has(row.targetId ?? ''))
+        blocking.push({ rowNumber: row.rowNumber, kind: row.targetKind ?? 'unknown' });
+    }
     for (const kind of UNDO_ORDER) {
-      const added = written.filter((row) => row.action === 'add' && row.targetKind === kind);
-      const held = new Set(
-        await repo.heldByOthers(trx, { kind, ids: added.map((row) => row.targetId ?? ''), own }),
-      );
+      const added = written.filter((row) => row.targetKind === kind);
+      const ids = added.flatMap((row) => {
+        const replaced = row.previous?.['replacedTemplateId'];
+        return kind === 'schedule' && typeof replaced === 'string'
+          ? [row.targetId ?? '', replaced]
+          : [row.targetId ?? ''];
+      });
+      const held = new Set(await repo.heldByOthers(trx, { kind, ids, own }));
       for (const row of added) {
-        if (held.has(row.targetId ?? '')) blocking.push({ rowNumber: row.rowNumber, kind });
+        const replaced = row.previous?.['replacedTemplateId'];
+        if (held.has(row.targetId ?? '') || (typeof replaced === 'string' && held.has(replaced)))
+          blocking.push({ rowNumber: row.rowNumber, kind });
       }
     }
     if (blocking.length > 0) {
@@ -766,7 +877,7 @@ export async function undo(actor: ImportActor, batchId: string): Promise<BatchVi
     }
 
     for (const kind of UNDO_ORDER) {
-      const rows = written.filter((row) => row.targetKind === kind);
+      const rows = written.filter((row) => row.targetKind === kind).reverse();
       const table = TABLE_OF[kind];
       if (table === undefined) continue;
       for (const row of rows) {
@@ -783,9 +894,25 @@ export async function undo(actor: ImportActor, batchId: string): Promise<BatchVi
           // An updated schedule was a replacement: end the new, bring back the old.
           await settingsRepo.endTemplate(trx, id);
           const replaced = row.previous?.['replacedTemplateId'];
-          if (typeof replaced === 'string') await repo.reviveTemplate(trx, replaced);
+          if (typeof replaced === 'string') {
+            await repo.reviveTemplate(trx, replaced);
+            if (
+              !(await repo.restoreRefTarget(trx, {
+                hospitalId: actor.hospitalId,
+                externalRef: row.raw?.['ref'] ?? '',
+                currentId: id,
+                previousId: replaced,
+              }))
+            )
+              throw new AppError('IMPORT_UNDO_BLOCKED', {
+                details: { blocking: [{ rowNumber: row.rowNumber, kind }] },
+              });
+          }
         } else if (row.previous !== null) {
-          await repo.restoreValues(trx, table, id, row.previous);
+          const before = Object.fromEntries(
+            Object.entries(row.previous).filter(([key]) => key !== '__importUndo'),
+          );
+          await repo.restoreValues(trx, table, id, before);
         }
       }
     }

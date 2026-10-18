@@ -20,13 +20,14 @@
 
 import { expect, test, type Page } from '@playwright/test';
 
+import { CONSOLE } from '../../shared/i18n/src/messages.js';
 import {
   createConsoleSession,
   eventCount,
   eventTypes,
   type ConsoleSession,
 } from '../support/console.js';
-import { putReceptionistInTab } from '../support/consoleSession.js';
+import { isProductionConfiguration, putReceptionistInTab } from '../support/consoleSession.js';
 
 let demo: ConsoleSession;
 
@@ -140,9 +141,16 @@ test.describe('the console opens with no network (FR-OFF-01)', () => {
 
     // The console itself opens. What it has nothing to show, it says — an
     // empty queue or an endless "loading" would both be a claim (`FR-OFF-05`).
-    await expect(page.getByTestId('queue-not-kept')).toHaveText(
-      'সংযোগ নেই, আর এই চেম্বারের সিরিয়াল এই ডিভাইসে রাখা নেই। সংযোগ ফিরলে নিজে থেকেই খুলবে।',
-    );
+    if (isProductionConfiguration()) {
+      // Staff must authorise an unseen target online before it may mount.
+      // The built shell opens, but the private queue remains inaccessible.
+      await expect(page.getByTestId('picker-failed')).toContainText(
+        CONSOLE.accessOfflineSelection.bn,
+      );
+    } else
+      await expect(page.getByTestId('queue-not-kept')).toHaveText(
+        'সংযোগ নেই, আর এই চেম্বারের সিরিয়াল এই ডিভাইসে রাখা নেই। সংযোগ ফিরলে নিজে থেকেই খুলবে।',
+      );
     await expect(page.getByTestId('queue-table')).toHaveCount(0);
 
     // And it opens by itself when the connection returns.

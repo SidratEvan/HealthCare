@@ -13,6 +13,14 @@
 
 /** Where the token comes from today. Replaced wholesale by Supabase Auth. */
 export interface DemoSession {
+  /** Metadata only, for the same previously opened offline desk. No patients. */
+  readonly receptionChambers?: readonly ReceptionChamberDescriptor[];
+  /** Revalidated against actual desk memberships before multi-queue entry. */
+  readonly receptionDeskId?: string | null;
+  /** Real sign-in identity, supplied by /staff/login or /staff/me; not a clinician mapping. */
+  readonly staffId?: string;
+  /** Last validated facility view, for an already-open offline continuation only. */
+  readonly workspaceView?: string | null;
   readonly token: string;
   /**
    * Null for the national console (`S-B-13`): a government viewer works for
@@ -81,6 +89,25 @@ export interface DemoSession {
     readonly required: boolean;
     readonly recoveryCodesLeft: number;
   };
+}
+
+export interface ReceptionChamberDescriptor {
+  readonly id: string;
+  readonly doctorId: string;
+  readonly hospitalId: string;
+  readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
+  readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
+  readonly room: string | null;
+  readonly status: string;
+  readonly plannedStart: string;
+  /**
+   * Whether the server calls the chamber's date today (`BTN-B01-CHAMBER`). Read
+   * fresh with the roster and never cached: a copy kept from before midnight
+   * would call yesterday's chamber today. Unknown offline.
+   */
+  readonly today?: boolean;
 }
 
 const STORAGE_KEY = 'console.demo-session';

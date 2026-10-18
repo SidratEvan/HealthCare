@@ -69,6 +69,8 @@ function failureKey(failure: AccountFailure): PatientKey {
       return 'accountOffline';
     case 'phone':
       return 'accountPhoneInvalid';
+    case 'demoPhone':
+      return 'demoPhoneRefused';
     case 'rate':
       return 'accountTooMany';
     case 'locked':

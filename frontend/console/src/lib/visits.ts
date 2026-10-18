@@ -14,6 +14,10 @@ export interface VisitDraft {
   readonly adviceTextBn: string;
   /** `SEL-B05-FOLLOWUP`: 7, 14, 30, or none. */
   readonly followUpDays: number | null;
+  /** A hydrated date stays exact through reconnect/retry (FR-DOC-08). */
+  readonly followUpDate?: string | null;
+  /** Raw custom days remain local on invalid-draft save; never a server field. */
+  readonly customFollowUp?: string | undefined;
   /** `BTN-B05-TEST`: the chips ticked, by catalogue code (`FR-DOC-06`). */
   readonly testCodes: readonly string[];
   /**
@@ -217,32 +221,89 @@ export interface SaveVisitResult {
   readonly signed: boolean;
   /** Present when signing advanced the queue (`FR-DOC-08`). */
   readonly queue: { readonly state: QueueState } | null;
+  readonly revision: string;
+  readonly contentMatches: boolean;
+  readonly queueOutcome: 'not_requested' | 'advanced' | 'changed' | 'retry_needed';
+}
+
+export interface Consultation {
+  readonly bookingId: string;
+  readonly patientId: string;
+  readonly sessionId: string;
+  readonly hospitalId: string;
+  readonly visit: {
+    readonly visitId: string;
+    readonly revision: string;
+    readonly signedAt: string | null;
+    readonly diagnosisText: string | null;
+    readonly adviceTextBn: string | null;
+    readonly followUpDate: string | null;
+    readonly symptomSignal: SymptomSignal | null;
+    readonly medicines: readonly PrescribedMedicine[];
+  } | null;
+}
+
+/** FR-DOC-08/FR-DOC-10: authorised drafts, never browser storage. */
+export async function fetchConsultation(input: {
+  readonly apiBaseUrl: string;
+  readonly token: string | null;
+  readonly bookingId: string;
+}): Promise<Consultation> {
+  return await call<Consultation>(
+    `${input.apiBaseUrl}/visits/booking/${input.bookingId}`,
+    input.token,
+    { method: 'GET' },
+  );
+}
+
+export function consultationDraft(visit: NonNullable<Consultation['visit']>): VisitDraft {
+  return {
+    diagnosisText: visit.diagnosisText ?? '',
+    adviceTextBn: visit.adviceTextBn ?? '',
+    followUpDays: null,
+    followUpDate: visit.followUpDate,
+    symptomSignal: visit.symptomSignal,
+    testCodes: [],
+    medicines: visit.medicines.map((m) => ({
+      key: crypto.randomUUID(),
+      medicineId: m.medicineId,
+      name: m.name,
+      strength: m.strength ?? '',
+      schedule: m.schedule ?? '',
+      days: m.durationDays === null ? '' : String(m.durationDays),
+      instructionBn: m.instructionBn ?? '',
+    })),
+  };
 }
 
 /**
  * `POST /visits` — `BTN-B05-DRAFT` when `sign` is false, `BTN-B05-SIGN` when true.
  *
- * The idempotency key is generated per call rather than per draft, and that is
- * correct for both buttons: two taps of *save draft* are two saves of the same
- * text and harmless, while two taps of *sign* are two requests the server must
- * collapse — which it does on this key, so only one patient is ever called.
+ * FR-DOC-08: the caller freezes the body/key of an uncertain attempt.
  */
 export async function saveVisit(input: {
   readonly apiBaseUrl: string;
   readonly token: string | null;
   readonly bookingId: string;
+  readonly patientId: string;
+  readonly sessionId: string;
+  readonly expectedRevision: string | null;
+  readonly idempotencyKey: string;
   readonly draft: VisitDraft;
   /** The rows `medicineRows` read from the draft; the screen holds the save while any is wrong. */
   readonly medicines: readonly MedicineBody[];
   readonly sign: boolean;
 }): Promise<SaveVisitResult> {
-  const key = crypto.randomUUID();
+  const key = input.idempotencyKey;
 
   return await call<SaveVisitResult>(`${input.apiBaseUrl}/visits`, input.token, {
     method: 'POST',
     headers: { 'idempotency-key': key },
     body: JSON.stringify({
       bookingId: input.bookingId,
+      patientId: input.patientId,
+      sessionId: input.sessionId,
+      expectedRevision: input.expectedRevision,
       // Omitted rather than sent empty: an empty string would be a diagnosis
       // that exists and says nothing.
       ...(input.draft.diagnosisText.trim() === ''
@@ -251,9 +312,11 @@ export async function saveVisit(input: {
       ...(input.draft.adviceTextBn.trim() === ''
         ? {}
         : { adviceTextBn: input.draft.adviceTextBn.trim() }),
-      ...(input.draft.followUpDays === null
-        ? {}
-        : { followUpDate: dhakaDateIn(input.draft.followUpDays) }),
+      ...(input.draft.followUpDate !== undefined && input.draft.followUpDate !== null
+        ? { followUpDate: input.draft.followUpDate }
+        : input.draft.followUpDays === null
+          ? {}
+          : { followUpDate: dhakaDateIn(input.draft.followUpDays) }),
       ...(input.draft.symptomSignal === null ? {} : { symptomSignal: input.draft.symptomSignal }),
       // Always sent, so a row the doctor removed is removed from the draft too.
       medicines: input.medicines,

@@ -11,9 +11,16 @@
 import { z } from 'zod';
 
 import { SEXES } from '../types/enums.js';
+import { DEMO_PHONE_NOT_ALLOWED, personPhoneAdmitted } from '../util/demoPhones.js';
 
 /** A phone as typed at the counter; the server normalises it or refuses it. */
-const typedPhone = z.string().trim().min(10).max(20);
+const typedPhone = z
+  .string()
+  .trim()
+  .min(10)
+  .max(20)
+  // FR-DEM-08: a demonstration takes only its own numbers.
+  .refine(personPhoneAdmitted, { message: DEMO_PHONE_NOT_ALLOWED });
 
 /** `GET /registration/patients?phone=` — duplicate detection by phone (`FR-REC-20`). */
 export const registrationLookupQuery = z.object({ phone: typedPhone });

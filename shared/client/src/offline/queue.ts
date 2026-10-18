@@ -330,8 +330,9 @@ export class OfflineQueue {
    * For the case where the fault was the server's and has been fixed: the
    * actions were real, and sending them again is better than retyping them.
    */
-  async retryStuck(): Promise<void> {
+  async retryStuck(sessionId?: string): Promise<void> {
     for (const event of await this.stuck()) {
+      if (sessionId !== undefined && event.sessionId !== sessionId) continue;
       const { stuck: _stuck, ...rest } = event;
       await this.store.put({ ...rest, attempts: 0 });
     }

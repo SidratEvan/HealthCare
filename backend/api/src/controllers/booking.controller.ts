@@ -15,7 +15,7 @@ import * as booking from '../services/booking.service.js';
 import { methodAvailable } from '../services/deployment.service.js';
 import * as patientAuth from '../services/patientAuth.service.js';
 
-import { actorOf, assertBookingScope } from './queue.controller.js';
+import { actorOf, assertBookingScope, queueAnswer } from './queue.controller.js';
 
 import type { Booker } from '../services/booking.service.js';
 import type { Request, Response } from 'express';
@@ -144,14 +144,6 @@ export async function cancelBooking(req: Request, res: Response): Promise<void> 
     clientTs: body.clientTs ?? null,
   });
 
-  res.json({
-    ok: true,
-    data: {
-      state: result.state,
-      etas: result.etas,
-      seq: result.seq,
-      duplicate: result.duplicate,
-      serverTs: result.serverTs,
-    },
-  });
+  // A patient is answered with the patients' copy, staff with theirs (F-01).
+  res.json({ ok: true, data: queueAnswer(req, result) });
 }

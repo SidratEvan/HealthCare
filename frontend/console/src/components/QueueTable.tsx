@@ -23,8 +23,16 @@
  */
 
 import type { BookingStatus, QueueEntry, QueueState } from '@platform/domain';
-import { format, formatNumber, formatSerial, t, type Locale, numeralsFor } from '@platform/i18n';
-import { Button, Chip, type ChipTone } from '@platform/ui';
+import {
+  format,
+  formatNumber,
+  formatSerial,
+  t,
+  CONSOLE,
+  type Locale,
+  numeralsFor,
+} from '@platform/i18n';
+import { BilingualLabel, ConsoleAction, Chip, type ChipTone } from '@platform/ui';
 
 import type { ReactNode } from 'react';
 
@@ -62,6 +70,8 @@ const SOURCE_LABEL = {
 } as const;
 
 export interface QueueTableProps {
+  readonly scope?: string | null;
+  readonly ended?: boolean;
   readonly state: QueueState;
   readonly locale: Locale;
   /** Keys still waiting to reach the server, for the clock glyph (§6.4). */
@@ -77,6 +87,8 @@ export interface QueueTableProps {
 }
 
 export function QueueTable({
+  scope = null,
+  ended = false,
   state,
   locale,
   pendingBookingIds,
@@ -88,163 +100,125 @@ export function QueueTable({
   patientNames,
 }: QueueTableProps): ReactNode {
   const numerals = numeralsFor(locale);
+  const testId = (name: string): string => (scope === null ? name : `${name}-${scope}`);
   if (state.entries.length === 0) {
     // GR-03: an empty state is a designed state. One plain Bangla sentence and
     // nothing else (FRONTEND.md §5.9).
     return (
-      <p className="p-6 text-body-md text-ink-muted" data-testid="queue-empty">
+      <p className="p-6 text-body-md text-ink-muted" data-testid={testId('queue-empty')}>
         {t('emptyQueue', locale)}
       </p>
     );
   }
 
   return (
-    <table className="w-full table-fixed border-collapse" data-testid="queue-table">
+    <table className="cf-reception-table" data-testid={testId('queue-table')}>
       <caption className="sr-only">{t('navQueue', locale)}</caption>
-
-      <thead>
-        <tr className="bg-sunken text-left text-caption font-semibold text-ink-secondary">
-          <th scope="col" className="w-20 px-4 py-3">
-            {t('colSerial', locale)}
-          </th>
-          <th scope="col" className="px-4 py-3">
-            {t('colPatient', locale)}
-          </th>
-          <th scope="col" className="w-32 px-4 py-3">
-            {t('colStatus', locale)}
-          </th>
-          <th scope="col" className="w-24 px-4 py-3">
-            {t('colSource', locale)}
-          </th>
-          {/* Wide enough for the three buttons a waiting row carries, and no
-              wider: the name column gets the rest, so a name reads on one
-              line. */}
-          <th scope="col" className="w-72 px-4 py-3">
-            {t('colActions', locale)}
-          </th>
+      <thead className="sr-only">
+        <tr>
+          {['colSerial', 'colPatient', 'colStatus', 'colActions'].map((key) => (
+            <th key={key} scope="col">
+              {t(key as 'colSerial', locale)}
+            </th>
+          ))}
         </tr>
       </thead>
-
       <tbody>
         {state.entries.map((entry) => {
-          const serving = entry.status === 'in_chamber';
           const unsent = pendingBookingIds.has(entry.bookingId);
-
           return (
             <tr
+              className="cf-reception-row"
               key={entry.bookingId}
-              data-testid={`queue-row-${String(entry.serial)}`}
+              data-testid={testId(`queue-row-${entry.serial}`)}
               data-status={entry.status}
               data-pending={unsent ? 'true' : 'false'}
-              // Hairline separation, never zebra striping (§5.8).
-              className={serving ? 'border-b border-line bg-brand-100' : 'border-b border-line'}
             >
-              <td className="h-14 px-4 font-semibold tabular-nums">
-                {formatSerial(entry.serial, numeralsFor(locale))}
+              <td>
+                <strong>{formatSerial(entry.serial, numerals)}</strong>
               </td>
-
-              <td className="px-4">
-                <span className={serving ? 'text-body-md font-semibold' : 'text-body-md'}>
-                  {patientNames.get(entry.patientId) ?? '—'}
-                </span>
+              <td>
+                <strong>{patientNames.get(entry.patientId) ?? '—'}</strong>
+                <p className="cf-secondary">{t(SOURCE_LABEL[entry.source], locale)}</p>
                 {unsent ? <PendingGlyph label={t('pendingToSync', locale)} /> : null}
               </td>
-
-              <td className="px-4">
-                {/* Here, checked in: said as a word, because "waiting" is also
-                    what a booked patient still at home is (`FR-REC-18`). */}
+              <td>
                 <Chip tone={STATUS_TONE[entry.status]}>
-                  {entry.status === 'waiting' && entry.arrivedAt !== null
-                    ? t('statusArrived', locale)
-                    : t(STATUS_LABEL[entry.status], locale)}
+                  <span aria-hidden="true">
+                    {entry.status === 'done'
+                      ? '✓ '
+                      : entry.status === 'in_chamber'
+                        ? '● '
+                        : entry.status === 'late' || entry.status === 'no_show'
+                          ? '! '
+                          : '○ '}
+                  </span>
+                  {isWaiting(entry.status) && entry.arrivedAt === null
+                    ? t('receptionNotArrived', locale)
+                    : entry.status === 'waiting' && entry.arrivedAt !== null
+                      ? t('statusArrived', locale)
+                      : t(STATUS_LABEL[entry.status], locale)}
                 </Chip>
                 {entry.quotedWaitMinutes !== null && isWaiting(entry.status) ? (
-                  <span
-                    className="mt-1 block text-caption text-ink-muted tabular-nums"
-                    data-testid={`quoted-${String(entry.serial)}`}
-                  >
+                  <p className="cf-secondary" data-testid={testId(`quoted-${entry.serial}`)}>
                     {format('quotedShort', locale, {
-                      // Bengali, as the serial on the same row is.
                       minutes: formatNumber(entry.quotedWaitMinutes, numerals),
                     })}
-                  </span>
+                  </p>
                 ) : null}
               </td>
-
-              <td className="px-4 text-body-sm text-ink-muted">
-                {t(SOURCE_LABEL[entry.source], locale)}
-              </td>
-
-              <td className="px-4">
-                {/*
-                  Always visible, never hover-revealed: a hover affordance
-                  fails outright on the touch monitors many counters use, and
-                  costs a second per patient on the ones it works on (§5.8).
-                */}
-                <div className="flex gap-2">
-                  {entry.status === 'in_chamber' ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        onDone(entry);
-                      }}
-                    >
-                      {t('markDone', locale)}
-                    </Button>
-                  ) : null}
-
-                  {/* `BTN-B02-CHECKIN`: first, because it is the first thing
-                      that happens to a patient at the counter. */}
-                  {entry.arrivedAt === null &&
-                  (isWaiting(entry.status) || entry.status === 'late') ? (
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => {
-                        onCheckIn(entry);
-                      }}
-                      data-testid={`check-in-${String(entry.serial)}`}
-                    >
-                      {t('checkIn', locale)}
-                    </Button>
-                  ) : null}
-
-                  {isWaiting(entry.status) ? (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          onLate(entry);
-                        }}
-                      >
-                        {t('markLate', locale)}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          onNoShow(entry);
-                        }}
-                      >
-                        {t('markNoShow', locale)}
-                      </Button>
-                    </>
-                  ) : null}
-
-                  {entry.status === 'no_show' ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        onReinstate(entry);
-                      }}
-                    >
-                      {t('reinstate', locale)}
-                    </Button>
-                  ) : null}
-                </div>
+              <td className="cf-reception-actions">
+                {!ended &&
+                entry.arrivedAt === null &&
+                (isWaiting(entry.status) || entry.status === 'late') ? (
+                  <ConsoleAction
+                    label={CONSOLE.checkIn}
+                    variant="secondary"
+                    data-testid={testId(`check-in-${entry.serial}`)}
+                    onClick={() => onCheckIn(entry)}
+                  />
+                ) : null}
+                {!ended &&
+                ['in_chamber', 'booked', 'waiting', 'late', 'no_show'].includes(entry.status) ? (
+                  <details className="cf-reception-menu">
+                    <summary data-testid={testId(`row-more-${entry.serial}`)}>
+                      <BilingualLabel label={CONSOLE.receptionMore} />
+                    </summary>
+                    <div className="cf-stack">
+                      {entry.status === 'in_chamber' ? (
+                        <ConsoleAction
+                          label={CONSOLE.markDone}
+                          variant="secondary"
+                          onClick={() => onDone(entry)}
+                        />
+                      ) : null}
+                      {isWaiting(entry.status) ? (
+                        <>
+                          <ConsoleAction
+                            label={CONSOLE.markLate}
+                            variant="secondary"
+                            onClick={() => onLate(entry)}
+                          />
+                          <ConsoleAction
+                            label={CONSOLE.markNoShow}
+                            variant="secondary"
+                            {...(state.status === 'paused'
+                              ? { disabled: true, disabledReason: t('pausedResumeFirst', locale) }
+                              : {})}
+                            onClick={() => onNoShow(entry)}
+                          />
+                        </>
+                      ) : null}
+                      {entry.status === 'late' || entry.status === 'no_show' ? (
+                        <ConsoleAction
+                          label={CONSOLE.reinstate}
+                          variant="secondary"
+                          onClick={() => onReinstate(entry)}
+                        />
+                      ) : null}
+                    </div>
+                  </details>
+                ) : null}
               </td>
             </tr>
           );

@@ -12,12 +12,13 @@ import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
 import request from 'supertest';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { verifyToken } from '../config/jwt.js';
 import { hashPassword } from '../config/password.js';
+import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
 
 import { guestToken } from './support/tokens.js';
 
@@ -225,6 +226,19 @@ describe('POST /staff/login', () => {
   });
 });
 
+/** Resolves once another connection is waiting on a lock on `sessions_auth`. */
+async function waitForLockWait(): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const waiting = await sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM pg_stat_activity
+       WHERE wait_event_type = 'Lock' AND query ILIKE '%sessions_auth%'
+    `.execute(db);
+    if ((waiting.rows[0]?.n ?? 0) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error('the second refresh never waited on the first');
+}
+
 describe('refresh tokens', () => {
   it('rotate: a refresh works once, and a reused one ends every session', async () => {
     const staff = await makeStaff();
@@ -247,6 +261,76 @@ describe('refresh tokens', () => {
       .post(`${BASE}/staff/refresh`)
       .send({ refresh: second.body.data.refresh });
     expect(afterTheft.status).toBe(401);
+  });
+
+  it('keep the sign-in live while they rotate: its access token is never refused midway (FR-DOC-08, FR-SEC-06)', async () => {
+    const staff = await makeStaff({ roles: ['doctor'] });
+    const first = (await login({ email: staff.email, password: PASSWORD })).body.data;
+
+    // Paused after the old row is revoked and before the new one is written:
+    // the moment a console's other request arrived and was refused as revoked,
+    // and then refreshed again with the token just spent.
+    let midway: request.Response | null = null;
+    const original = staffAuthRepo.createRefreshSession;
+    vi.spyOn(staffAuthRepo, 'createRefreshSession').mockImplementationOnce(
+      async (input, executor) => {
+        midway = await request(app)
+          .get(`${BASE}/staff/me`)
+          .set('authorization', `Bearer ${first.access}`);
+        return await original(input, executor);
+      },
+    );
+
+    const renewed = await request(app)
+      .post(`${BASE}/staff/refresh`)
+      .send({ refresh: first.refresh });
+    expect(renewed.status).toBe(200);
+    expect(midway).not.toBeNull();
+    expect(midway!.status).toBe(200);
+
+    // The renewed sign-in goes on.
+    const me = await request(app)
+      .get(`${BASE}/staff/me`)
+      .set('authorization', `Bearer ${renewed.body.data.access}`);
+    expect(me.status).toBe(200);
+  });
+
+  it('racing with the same token: one renews, the other is refused, and nobody is signed out', async () => {
+    const staff = await makeStaff({ roles: ['doctor'] });
+    const first = (await login({ email: staff.email, password: PASSWORD })).body.data;
+
+    // The second arrives while the first is inside its transaction, and is held
+    // there until it waits on the first's row lock: a race, deterministically.
+    const renew = async (): Promise<request.Response> =>
+      await request(app).post(`${BASE}/staff/refresh`).send({ refresh: first.refresh });
+    let second: Promise<request.Response> | null = null;
+    const original = staffAuthRepo.createRefreshSession;
+    vi.spyOn(staffAuthRepo, 'createRefreshSession').mockImplementationOnce(
+      async (input, executor) => {
+        second = renew();
+        await waitForLockWait();
+        return await original(input, executor);
+      },
+    );
+    const firstAnswer = await renew();
+    expect(second).not.toBeNull();
+    const answers = [firstAnswer, await second!];
+    const won = answers.filter((answer) => answer.status === 200);
+    const lost = answers.filter((answer) => answer.status !== 200);
+    expect(won).toHaveLength(1);
+    expect(lost).toHaveLength(1);
+    expect(lost[0]!.status).toBe(401);
+    expect(lost[0]!.body.error.details.reason).toBe('raced');
+
+    // A race is not theft: the winner's tokens keep working.
+    const me = await request(app)
+      .get(`${BASE}/staff/me`)
+      .set('authorization', `Bearer ${won[0]!.body.data.access}`);
+    expect(me.status).toBe(200);
+    const again = await request(app)
+      .post(`${BASE}/staff/refresh`)
+      .send({ refresh: won[0]!.body.data.refresh });
+    expect(again.status).toBe(200);
   });
 
   it('stop working after logout', async () => {

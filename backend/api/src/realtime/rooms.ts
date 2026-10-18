@@ -91,7 +91,10 @@ export function canJoinSession(
 
   switch (principal.kind) {
     case 'staff':
-      return principal.hospitalId === context.hospitalId;
+      return (
+        principal.hospitalId === context.hospitalId &&
+        principal.roles.some((role) => ['receptionist', 'doctor', 'hospital_admin'].includes(role))
+      );
     case 'patient':
     case 'guest':
       return context.holdsBooking;
@@ -103,18 +106,34 @@ export function canJoinSession(
 }
 
 /** Every room a principal is entitled to without any row lookup. */
-export function ambientRoomsFor(principal: Principal): string[] {
+export function ambientRoomsFor(principal: Principal, off: readonly string[] = []): string[] {
   switch (principal.kind) {
     case 'staff':
       // A console subscribes to its own hospital's boards; which of them it
       // actually listens on is the client's choice, and joining costs nothing
       // it is not already allowed to read.
+      // The existing HTTP board-read roles/modules, not every staff member
+      // (FR-ROLE-01, FR-SEC-06). Public board reads remain separate.
       return [
-        ROOMS.beds(principal.hospitalId),
-        ROOMS.emergency(principal.hospitalId),
-        ROOMS.lab(principal.hospitalId),
-        ROOMS.admin(principal.hospitalId),
-      ];
+        {
+          module: 'beds',
+          roles: ['ward', 'emergency', 'receptionist', 'doctor', 'hospital_admin'],
+          room: ROOMS.beds(principal.hospitalId),
+        },
+        {
+          module: 'emergency',
+          roles: ['emergency', 'hospital_admin'],
+          room: ROOMS.emergency(principal.hospitalId),
+        },
+        { module: 'lab', roles: ['lab', 'hospital_admin'], room: ROOMS.lab(principal.hospitalId) },
+        { module: 'dashboard', roles: ['hospital_admin'], room: ROOMS.admin(principal.hospitalId) },
+      ]
+        .filter(
+          (entry) =>
+            !off.includes(entry.module) &&
+            principal.roles.some((role) => entry.roles.includes(role)),
+        )
+        .map((entry) => entry.room);
     case 'patient':
       return [];
     case 'guest':

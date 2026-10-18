@@ -14,6 +14,7 @@
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
+import { approveManagementWrites, managementSection } from './support/adminManagement.js';
 import { closeOtherContexts } from './support/contexts.js';
 import {
   bedStates,
@@ -65,7 +66,7 @@ async function signIn(page: Page, email: string, password: string): Promise<void
 }
 
 async function tab(page: Page, id: string): Promise<void> {
-  await page.getByTestId(`settings-tab-${id}`).click();
+  await managementSection(page, id);
 }
 
 const made: NewFacility[] = [];
@@ -75,10 +76,10 @@ test.afterAll(async () => {
 });
 
 async function openSettings(page: Page, facility: NewFacility): Promise<void> {
+  await approveManagementWrites(page);
   await signIn(page, facility.adminEmail, PASSWORD);
   // An administrator: the second factor, set up the first time (pilot step 28).
   await passSecondFactor(page, facility.adminEmail);
-  await page.getByTestId(`open-admin-${facility.hospitalId}`).click();
   await expect(page.getByTestId('admin-dashboard')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('admin-open-settings').click();
   await expect(page.getByTestId('hospital-settings')).toBeVisible({ timeout: 30_000 });
@@ -149,6 +150,8 @@ test.describe('S-B-11: a facility with no seed data sets itself up', () => {
     await doctor.getByLabel('ফি (টাকা)').fill('৮০০');
     await page.getByTestId('settings-add-doctor-submit').click();
 
+    await page.getByTestId('management-close').click();
+    await page.locator('tr').filter({ hasText: bmdc }).getByRole('button').click();
     const card = page.locator('[data-testid^="settings-doctor-"]').filter({ hasText: bmdc });
     await expect(card).toBeVisible();
     await expect(card).toContainText('যাচাই বাকি');
@@ -230,6 +233,7 @@ test.describe('S-B-11: a facility with no seed data sets itself up', () => {
     await staff.getByLabel('পুরো নাম').fill('রিসেপশন (ডেমো)');
     await staff.getByLabel('ইমেইল').fill(email);
     await page.getByTestId('settings-add-staff-submit').click();
+    await expect(page.getByTestId('settings-temp-password-value')).toBeVisible();
     const temporary =
       (await page.getByTestId('settings-temp-password-value').textContent())?.trim() ?? '';
     expect(temporary.length).toBeGreaterThanOrEqual(12);
@@ -241,6 +245,7 @@ test.describe('S-B-11: a facility with no seed data sets itself up', () => {
     // and nothing of the hospital is public until the platform approves
     // (`platform-onboarding.spec.ts` takes it from there).
     await page.reload();
+    await page.getByTestId('admin-open-settings').click();
     const status = page.getByTestId('settings-status');
     await expect(status).toHaveAttribute('data-lifecycle', 'setup');
     await expect(page.getByTestId('settings-check-departments')).toHaveAttribute(
@@ -267,19 +272,23 @@ test.describe('S-B-11: a facility with no seed data sets itself up', () => {
     await expect(page.getByTestId('settings-advised')).toBeVisible();
 
     // What it was registered as is its own to correct while it is setting up.
+    await page.getByTestId('settings-group-identity').click();
     await page.getByTestId('settings-district').fill('Gazipur');
     await page.getByTestId('settings-registration').fill('DEMO-REG-5150');
     await page.getByTestId('settings-save-identity').click();
     await expect(page.getByText('সংরক্ষণ করা হয়েছে').first()).toBeVisible();
 
+    await page.getByTestId('settings-back').click();
     await page.getByTestId('settings-request-review').click();
     await expect(status).toHaveAttribute('data-lifecycle', 'ready_for_review');
     // Asked for: those details are now what is being reviewed, shown and not
     // offered for change.
+    await page.getByTestId('settings-group-identity').click();
     const locked = page.getByTestId('settings-identity-locked');
     await expect(locked).toContainText('Gazipur');
     await expect(locked).toContainText('DEMO-REG-5150');
     await expect(page.getByTestId('settings-identity')).toHaveCount(0);
+    await page.getByTestId('settings-back').click();
     await expect(page.getByTestId('settings-request-review')).toHaveCount(0);
     await expect(page.getByTestId('settings-live')).toHaveCount(0);
 

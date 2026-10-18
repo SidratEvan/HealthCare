@@ -5,7 +5,7 @@
  * The hospital administrator's, on their own facility. Checking a file writes
  * only the batch; committing, undoing and discarding each take an
  * idempotency key and are audited (`FR-IMP-08`). The check route parses its
- * own body, up to six megabytes (five of CSV and the JSON around it), and the
+ * own bounded JSON body, with five MiB of actual CSV validated separately; the
  * global parser steps aside for it (`app.ts`).
  */
 
@@ -18,6 +18,7 @@ import {
   importParams,
   importSetParams,
   importUploadBody,
+  MAX_IMPORT_BYTES,
 } from '@platform/domain';
 
 import * as imports from '../controllers/import.controller.js';
@@ -30,6 +31,10 @@ export const importRoutes: Router = Router();
 
 const admin = [requireAuth, requireRole('hospital_admin')];
 const write = idempotency({ required: true });
+
+// JSON can escape each CSV byte as six ASCII bytes. Bound the envelope while
+// the shared schema independently enforces five MiB of actual UTF-8 (FR-IMP-09).
+const fileBody = json({ limit: MAX_IMPORT_BYTES * 6 + 64 * 1024 });
 
 importRoutes.get(
   '/hospital/imports/templates/:set',
@@ -48,8 +53,8 @@ importRoutes.get(
 
 importRoutes.post(
   '/hospital/imports',
-  json({ limit: '6mb' }),
   ...admin,
+  fileBody,
   write,
   validate({ body: importUploadBody }),
   imports.check,
@@ -62,15 +67,15 @@ importRoutes.post(
 // itself, by another door, and is keyed like the one above.
 importRoutes.post(
   '/hospital/imports/analyse',
-  json({ limit: '6mb' }),
   ...admin,
+  fileBody,
   validate({ body: importAnalyseBody }),
   imports.analyse,
 );
 importRoutes.post(
   '/hospital/imports/mapped',
-  json({ limit: '6mb' }),
   ...admin,
+  fileBody,
   write,
   validate({ body: importMappedBody }),
   imports.checkMapped,

@@ -4,9 +4,10 @@
  * account, and a public answer to "what does this deployment offer".
  */
 
+import { readFileSync } from 'node:fs';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -98,5 +99,48 @@ describe('PAYMENT_PROVIDER=off, and GET /config', () => {
       });
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('PAYMENT_UNAVAILABLE');
+  });
+});
+
+/**
+ * What the self-hosted stack hands the API (`deploy/docker-compose.yml`).
+ *
+ * The compose file names, one by one, which of `deploy/.env`'s settings
+ * reach the API's container; anything it leaves out is silently dropped. The
+ * SMS aggregator's address and receipt secret were left out, so following
+ * DEPLOY.md §S3 to switch SMS on would have stopped the API from starting
+ * (`env.ts` requires both under `SMS_PROVIDER=http`), and bKash and Nagad
+ * could never have been configured (pilot-readiness audit, F-05).
+ */
+describe('the self-hosted stack passes every setting DEPLOY.md asks for', () => {
+  const root = resolve(import.meta.dirname, '../../../..');
+  const compose = readFileSync(join(root, 'deploy/docker-compose.yml'), 'utf8');
+  const apiEnv = compose.slice(compose.indexOf('x-api-env:'), compose.indexOf('\nservices:'));
+  const example = readFileSync(join(root, 'deploy/.env.example'), 'utf8');
+
+  const DOCUMENTED = [
+    'SMS_PROVIDER',
+    'SMS_API_URL',
+    'SMS_API_KEY',
+    'SMS_SENDER_ID',
+    'SMS_DLR_SECRET',
+    'SMS_MONTHLY_CAP',
+    'PAYMENT_PROVIDER',
+    'BKASH_BASE_URL',
+    'BKASH_APP_KEY',
+    'BKASH_APP_SECRET',
+    'BKASH_USERNAME',
+    'BKASH_PASSWORD',
+    'NAGAD_BASE_URL',
+    'NAGAD_MERCHANT_ID',
+    'NAGAD_MERCHANT_NUMBER',
+    'NAGAD_PUBLIC_KEY',
+    'NAGAD_PRIVATE_KEY',
+    'TOTP_ENCRYPTION_KEY',
+  ];
+
+  it.each(DOCUMENTED)('%s reaches the API and is listed in deploy/.env.example', (key) => {
+    expect(apiEnv).toMatch(new RegExp(String.raw`\n\s+${key}: \$\{${key}[:}]`));
+    expect(example).toMatch(new RegExp(`^${key}=`, 'm'));
   });
 });

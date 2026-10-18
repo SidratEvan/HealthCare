@@ -28,6 +28,9 @@ export async function lookup(req: Request, res: Response): Promise<void> {
 }
 
 export async function register(req: Request, res: Response): Promise<void> {
-  actorOf(req);
-  res.json({ ok: true, data: await registration.register(registerPatientBody.parse(req.body)) });
+  const actor = actorOf(req);
+  res.json({
+    ok: true,
+    data: await registration.register(registerPatientBody.parse(req.body), actor),
+  });
 }

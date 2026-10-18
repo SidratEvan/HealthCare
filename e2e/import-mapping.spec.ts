@@ -60,7 +60,9 @@ async function openImport(page: Page, facility: NewFacility): Promise<void> {
   await page.getByTestId('login-password').fill(PASSWORD);
   await page.getByTestId('login-submit').click();
   await passSecondFactor(page, facility.adminEmail);
-  await page.getByTestId(`open-admin-${facility.hospitalId}`).click();
+  // This new facility has one role; let the role picker finish its automatic
+  // handoff to Admin before opening Settings.
+  await expect(page.getByTestId('admin-dashboard')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('admin-open-settings').click();
   await page.getByTestId('settings-open-import').click();
   await expect(page.getByTestId('hospital-import')).toBeVisible({ timeout: 30_000 });
@@ -259,10 +261,10 @@ test.describe('S-B-14: a hospital’s own export, mapped (FR-IMP-13 to FR-IMP-20
       await route.fulfill({ response, json: body });
     });
 
-    let confirmedBody: { suggestedByModel?: string[] } | null = null;
+    const confirmedBody: { value: { suggestedByModel?: string[] } | null } = { value: null };
     page.on('request', (request) => {
       if (request.url().endsWith('/hospital/imports/mapped')) {
-        confirmedBody = request.postDataJSON() as { suggestedByModel?: string[] };
+        confirmedBody.value = request.postDataJSON() as { suggestedByModel?: string[] };
       }
     });
 
@@ -304,8 +306,8 @@ test.describe('S-B-14: a hospital’s own export, mapped (FR-IMP-13 to FR-IMP-20
     await expect(page.getByTestId('import-count-error')).toContainText('০');
 
     // The audit is told which fields still hold what the model suggested.
-    expect(confirmedBody).not.toBeNull();
-    expect([...(confirmedBody?.suggestedByModel ?? [])].sort()).toEqual([
+    expect(confirmedBody.value).not.toBeNull();
+    expect([...(confirmedBody.value?.suggestedByModel ?? [])].sort()).toEqual([
       'age_years',
       'full_name',
       'ref',

@@ -591,6 +591,13 @@ export {
 } from './sessions/materialise.js';
 export { arrivalWindowAt, arrivalWindows, type ArrivalWindow } from './sessions/arrivalWindows.js';
 export { BD_MOBILE, normaliseBdMobile } from './util/phone.js';
+export {
+  DEMO_PERSON_PHONES,
+  DEMO_PHONE_NOT_ALLOWED,
+  personPhoneAdmitted,
+  refusedPhonePaths,
+  setPersonPhoneAdmission,
+} from './util/demoPhones.js';
 
 // --- Importing a hospital's own data (pilot step 24, FR-IMP) ---------------
 export { bookingStanding, type BookingStanding } from './queue/standing.js';

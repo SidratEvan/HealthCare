@@ -65,6 +65,7 @@ import {
 
 import { hashPassword, temporaryPassword } from '../config/password.js';
 import { AppError, notFound, validationFailed } from '../errors/AppError.js';
+import { dropHospitalSockets } from '../realtime/auth.js';
 import * as repo from '../repositories/hospitalSettings.repo.js';
 import * as platformRepo from '../repositories/platform.repo.js';
 import * as staffAuthRepo from '../repositories/staffAuth.repo.js';
@@ -761,17 +762,23 @@ export async function addDesk(actor: Actor, body: DeskBody): Promise<{ deskId: s
   if (await repo.deskNameTaken(actor.hospitalId, body.nameEn, null)) throw duplicate('nameEn');
   await assertOwnDoctors(actor.hospitalId, body.doctorIds);
   await assertOwnReceptionists(actor.hospitalId, body.staffIds);
-  return await change(actor, { table: 'reception_desks', change: 'desk_added' }, async (trx) => {
-    const deskId = await repo.createDesk(trx, {
-      hospitalId: actor.hospitalId,
-      nameBn: body.nameBn,
-      nameEn: body.nameEn,
-      createdBy: actor.staffId,
-    });
-    await repo.setDeskDoctors(trx, actor.hospitalId, deskId, body.doctorIds);
-    await repo.setDeskStaff(trx, actor.hospitalId, deskId, body.staffIds);
-    return { result: { deskId }, subjectId: deskId };
-  });
+  const result = await change(
+    actor,
+    { table: 'reception_desks', change: 'desk_added' },
+    async (trx) => {
+      const deskId = await repo.createDesk(trx, {
+        hospitalId: actor.hospitalId,
+        nameBn: body.nameBn,
+        nameEn: body.nameEn,
+        createdBy: actor.staffId,
+      });
+      await repo.setDeskDoctors(trx, actor.hospitalId, deskId, body.doctorIds);
+      await repo.setDeskStaff(trx, actor.hospitalId, deskId, body.staffIds);
+      return { result: { deskId }, subjectId: deskId };
+    },
+  );
+  dropHospitalSockets(actor.hospitalId);
+  return result;
 }
 
 export async function updateDesk(actor: Actor, deskId: string, body: DeskPatchBody): Promise<void> {
@@ -784,6 +791,21 @@ export async function updateDesk(actor: Actor, deskId: string, body: DeskPatchBo
   if (body.doctorIds !== undefined) await assertOwnDoctors(actor.hospitalId, body.doctorIds);
   if (body.staffIds !== undefined) await assertOwnReceptionists(actor.hospitalId, body.staffIds);
   await change(actor, { table: 'reception_desks', change: 'desk_changed' }, async (trx) => {
+    // Compare under the same row lock as every PATCH, not a frontend-only read
+    // check (FR-REC-32, DB-P1). Multiple desks still have separate receipts.
+    const current = await repo.deskForUpdate(trx, actor.hospitalId, deskId);
+    if (current === null) throw notFound('desk');
+    const expected = body.expected;
+    const membersEqual = (a: readonly string[], b: readonly string[]): boolean =>
+      [...new Set(a)].sort().join(',') === [...new Set(b)].sort().join(',');
+    if (
+      expected !== undefined &&
+      (current.nameBn !== expected.nameBn ||
+        current.nameEn !== expected.nameEn ||
+        !membersEqual(current.doctorIds, expected.doctorIds) ||
+        !membersEqual(current.staffIds, expected.staffIds))
+    )
+      throw notAllowed('desk_changed');
     // Renaming nothing still finds the desk, so an unknown one is a 404.
     const found = await repo.renameDesk(trx, actor.hospitalId, deskId, body);
     if (!found) throw notFound('desk');
@@ -795,6 +817,7 @@ export async function updateDesk(actor: Actor, deskId: string, body: DeskPatchBo
     }
     return { result: undefined, subjectId: deskId };
   });
+  dropHospitalSockets(actor.hospitalId);
 }
 
 export async function removeDesk(actor: Actor, deskId: string): Promise<void> {
@@ -802,4 +825,5 @@ export async function removeDesk(actor: Actor, deskId: string): Promise<void> {
     if (!(await repo.removeDesk(trx, actor.hospitalId, deskId))) throw notFound('desk');
     return { result: undefined, subjectId: deskId };
   });
+  dropHospitalSockets(actor.hospitalId);
 }

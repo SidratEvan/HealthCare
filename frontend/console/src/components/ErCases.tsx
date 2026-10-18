@@ -34,6 +34,7 @@ import {
 import { Button, Chip, type ChipTone } from '@platform/ui';
 
 import { ReferralLine } from '@/components/ErReferrals';
+import { ER_WORKSPACE as COPY } from '@/lib/wardEmergencyMessages';
 
 import type { CaseCommand } from '@/hooks/useEmergencyConsole';
 
@@ -54,7 +55,25 @@ export function TriageChip({
   return triage === null ? (
     <Chip tone="neutral">{t('erUntriaged', locale)}</Chip>
   ) : (
-    <Chip tone={TRIAGE_TONE[triage]}>{triageName(triage, locale)}</Chip>
+    <Chip tone={TRIAGE_TONE[triage]}>
+      <svg
+        className="er-triage-shape"
+        width="12"
+        height="12"
+        viewBox="0 0 12 12"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        {triage === 'red' ? (
+          <path d="M6 1L11 11H1Z" />
+        ) : triage === 'yellow' ? (
+          <rect x="2" y="2" width="8" height="8" />
+        ) : (
+          <circle cx="6" cy="6" r="4" />
+        )}
+      </svg>
+      {triageName(triage, locale)}
+    </Chip>
   );
 }
 
@@ -376,6 +395,22 @@ export function TriageTable({
                           onCommand(entry.id, { action: 'triage', triage: colour });
                         }}
                       >
+                        <svg
+                          className="er-triage-shape"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 12 12"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          {colour === 'red' ? (
+                            <path d="M6 1L11 11H1Z" />
+                          ) : colour === 'yellow' ? (
+                            <rect x="2" y="2" width="8" height="8" />
+                          ) : (
+                            <circle cx="6" cy="6" r="4" />
+                          )}
+                        </svg>
                         {triageName(colour, locale)}
                       </Button>
                     ))}
@@ -400,6 +435,7 @@ export function TriageTable({
                         {format('erHandedOff', locale, {
                           kind: bedKindName(entry.admitBedKind, locale),
                         })}
+                        <small className="block text-ink-muted">{COPY.handoff[locale]}</small>
                       </span>
                     )}
                     {open ? null : (

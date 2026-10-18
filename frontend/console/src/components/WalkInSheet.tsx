@@ -13,7 +13,7 @@
  * channel like every other change.
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   format,
@@ -21,9 +21,19 @@ import {
   numeralsFor,
   t,
   toLatinDigits,
+  CONSOLE,
   type ConsoleKey,
 } from '@platform/i18n';
-import { Button, FilterChip, Input, Sheet, SheetActions, useLocale } from '@platform/ui';
+import {
+  Button,
+  FilterChip,
+  Input,
+  Sheet,
+  SheetActions,
+  useLocale,
+  ConsoleHelp,
+  ConsoleConfirmation,
+} from '@platform/ui';
 
 import { FAILURE_KEY, PatientFinder, type ChosenPatient } from '@/components/PatientFinder';
 import { addWalkIn } from '@/lib/registration';
@@ -33,6 +43,7 @@ export function WalkInSheet({
   open,
   online,
   waiting,
+  chamberName,
   onAdded,
   onClose,
 }: {
@@ -41,6 +52,7 @@ export function WalkInSheet({
   readonly online: boolean;
   /** How many are waiting, so a position can be no further back than the end. */
   readonly waiting: number;
+  readonly chamberName?: string;
   readonly onAdded: (message: string) => void;
   readonly onClose: () => void;
 }): ReactNode {
@@ -51,7 +63,22 @@ export function WalkInSheet({
   const [place, setPlace] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const [finderDirty, setFinderDirty] = useState(false);
+  const [finderPending, setFinderPending] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const sending = useRef(false);
+  const restoreFocus = useRef<HTMLElement | null>(null);
+  const onFinderDirty = useCallback((dirty: boolean, pending: boolean) => {
+    setFinderDirty(dirty);
+    setFinderPending(pending);
+  }, []);
   const [error, setError] = useState<ConsoleKey | null>(null);
+  const attempt = useRef<{
+    readonly signature: string;
+    readonly key: string;
+    readonly at: string;
+  } | null>(null);
 
   // Every opening starts from the phone.
   useEffect(() => {
@@ -61,6 +88,11 @@ export function WalkInSheet({
     setPlace('');
     setReason('');
     setError(null);
+    setUncertain(false);
+    setClosing(false);
+    setFinderDirty(false);
+    setFinderPending(false);
+    attempt.current = null;
   }, [open]);
 
   const placeNumber = /^\d{1,3}$/.test(toLatinDigits(place).trim())
@@ -74,19 +106,32 @@ export function WalkInSheet({
       reason.trim() !== '');
 
   async function confirm(): Promise<void> {
-    if (patient === null || !positionReady || busy) return;
+    if (patient === null || (!positionReady && !uncertain) || sending.current || !online) return;
+    sending.current = true;
     setBusy(true);
     setError(null);
+    const signature = JSON.stringify({
+      sessionId,
+      patientId: patient.patientId,
+      atPosition,
+      placeNumber,
+      reason,
+    });
+    if (attempt.current?.signature !== signature)
+      attempt.current = { signature, key: crypto.randomUUID(), at: new Date().toISOString() };
     const result = await addWalkIn(
       sessionId,
       patient.patientId,
       atPosition && placeNumber !== null
         ? { kind: 'index', index: placeNumber - 1, reason: reason.trim() }
         : { kind: 'end' },
+      attempt.current,
     );
     setBusy(false);
+    sending.current = false;
     if (!result.ok) {
       setError(FAILURE_KEY[result.failure]);
+      setUncertain(uncertain || result.failure === 'uncertain');
       return;
     }
     onAdded(
@@ -101,23 +146,64 @@ export function WalkInSheet({
     ? t('walkInOffline', locale)
     : patient === null
       ? t('registrationChooseFirst', locale)
-      : positionReady
+      : positionReady || uncertain
         ? null
         : t('walkInNeedReason', locale);
 
+  function requestClose(): void {
+    if (busy || uncertain || finderPending) {
+      setError('regUncertain');
+      return;
+    }
+    if (finderDirty || patient !== null || place !== '' || reason !== '') {
+      restoreFocus.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setClosing(true);
+    } else onClose();
+  }
+  useEffect(() => {
+    const guard = (event: BeforeUnloadEvent): void => {
+      if (open && (finderDirty || patient !== null || uncertain || finderPending))
+        event.preventDefault();
+    };
+    globalThis.addEventListener('beforeunload', guard);
+    return () => globalThis.removeEventListener('beforeunload', guard);
+  }, [open, finderDirty, patient, uncertain, finderPending]);
   return (
     <Sheet
+      console
       open={open}
       onOpenChange={(next) => {
-        if (!next) onClose();
+        if (!next) requestClose();
       }}
       variant="modal"
       title={t('addWalkin', locale)}
-      description={t('walkInDescription', locale)}
+      description={
+        chamberName === undefined
+          ? t('walkInDescription', locale)
+          : `${chamberName} · ${t('walkInDescription', locale)}`
+      }
     >
       <div className="flex flex-col gap-4" data-testid="walkin-sheet">
+        <ConsoleHelp
+          topic={{
+            id: 'reception-add',
+            title: { bn: t('addWalkin', 'bn'), en: t('addWalkin', 'en') },
+            steps: [
+              { bn: t('receptionHelpAdd', 'bn'), en: t('receptionHelpAdd', 'en') },
+              { bn: t('receptionHelpOffline', 'bn'), en: t('receptionHelpOffline', 'en') },
+            ],
+          }}
+        />
         {patient === null ? (
-          <PatientFinder online={online} onChosen={setPatient} />
+          <PatientFinder
+            online={online}
+            onChosen={(chosen) => {
+              setPatient(chosen);
+              setFinderPending(false);
+            }}
+            onDirty={onFinderDirty}
+          />
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-brand-100 px-4 py-3">
             <p className="text-body-md font-semibold" data-testid="walkin-patient">
@@ -125,6 +211,9 @@ export function WalkInSheet({
             </p>
             <Button
               variant="quiet"
+              {...(busy || uncertain
+                ? { disabled: true, disabledReason: t('regUncertain', locale) }
+                : {})}
               onClick={() => {
                 setPatient(null);
               }}
@@ -135,7 +224,7 @@ export function WalkInSheet({
         )}
 
         {patient === null ? null : (
-          <fieldset className="flex flex-col gap-3">
+          <fieldset className="flex flex-col gap-3" disabled={busy || uncertain}>
             <legend className="mb-2 text-body-sm text-ink-secondary">
               {t('walkInWhere', locale)}
             </legend>
@@ -193,12 +282,12 @@ export function WalkInSheet({
         )}
 
         <SheetActions>
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={requestClose}>
             {t('checkInCancel', locale)}
           </Button>
           {blocked === null ? (
             <Button loading={busy} onClick={() => void confirm()} data-testid="walkin-confirm">
-              {t('walkInConfirm', locale)}
+              {t(uncertain ? 'regRetrySame' : 'walkInConfirm', locale)}
             </Button>
           ) : (
             <Button disabled disabledReason={blocked} data-testid="walkin-confirm">
@@ -206,6 +295,21 @@ export function WalkInSheet({
             </Button>
           )}
         </SheetActions>
+        <ConsoleConfirmation
+          open={closing}
+          onOpenChange={(next) => {
+            setClosing(next);
+            if (!next) globalThis.requestAnimationFrame(() => restoreFocus.current?.focus());
+          }}
+          trigger={<button type="button" hidden aria-label={t('regLeaveTitle', locale)} />}
+          title={CONSOLE.regLeaveTitle}
+          description={CONSOLE.regLeaveBody}
+          confirmLabel={CONSOLE.regDiscard}
+          onConfirm={() => {
+            setClosing(false);
+            onClose();
+          }}
+        />
       </div>
     </Sheet>
   );

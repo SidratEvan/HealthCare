@@ -142,7 +142,7 @@ export async function appendEvent(input: AppendEventInput): Promise<AppendEventR
     // Before the transaction, because the overwhelmingly common case is a first
     // send and the overwhelmingly common answer is "no". Checking inside the
     // lock would make every console action wait for the row.
-    const replayed = await findReplay(input.clientEventId ?? null);
+    const replayed = await findReplay(input.clientEventId ?? null, input.sessionId);
     if (replayed !== null) return replayed;
 
     const settled = await committed(async (trx) => {
@@ -212,6 +212,8 @@ async function afterSessionEnded(type: QueueEventType, sessionId: string): Promi
  */
 export async function callNext(input: {
   readonly sessionId: string;
+  /** FR-DOC-08/FR-QUE-53: signing may finish only this encounter. */
+  readonly expectedBookingId?: string;
   readonly actor: QueueActor;
   readonly clientEventId?: string | null;
   readonly clientTs?: string | null;
@@ -222,7 +224,8 @@ export async function callNext(input: {
   // about; if it only had somebody to finish, the `done` key answers.
   const original = input.clientEventId ?? null;
   const replayed =
-    (await findReplay(derive(original, 'c'))) ?? (await findReplay(derive(original, 'd')));
+    (await findReplay(derive(original, 'c'), input.sessionId)) ??
+    (await findReplay(derive(original, 'd'), input.sessionId));
   if (replayed !== null) return replayed;
 
   const settled = await committed(async (trx) => {
@@ -230,9 +233,35 @@ export async function callNext(input: {
     let state = await loadState(trx, session);
     const events: QueueEvent[] = [];
 
+    // FR-QUE-51: a concurrent retry may have committed while we waited for
+    // the lock. Recognise it before comparing the now-changed consultation.
+    const replay =
+      original === null
+        ? null
+        : ((await eventRepo.findByClientEventId(String(derive(original, 'c')), trx)) ??
+          (await eventRepo.findByClientEventId(String(derive(original, 'd')), trx)));
+    if (replay !== null) {
+      return {
+        result: {
+          state,
+          etas: computeEtas(state, nowTs()),
+          seq: state.lastSeq,
+          duplicate: true,
+          serverTs: nowTs(),
+        },
+        batch: notifications.NOTHING,
+      };
+    }
+
     // Everything below reads `state`, which is re-bound after each append, so
     // the second decision is made against the result of the first.
     const serving = nowServing(state);
+    if (input.expectedBookingId !== undefined && serving?.bookingId !== input.expectedBookingId) {
+      throw guardFailed(
+        'CONSULTATION_CHANGED',
+        'The signed encounter is no longer in the chamber.',
+      );
+    }
     if (serving !== null) {
       const applied = await applyOne(trx, session, state, {
         sessionId: input.sessionId,
@@ -300,9 +329,8 @@ export async function callNext(input: {
  * `SLOT_OFFERED` names an `offerId`, and the log must never contain a fact
  * about nothing — the same reason `createWalkinBooking` runs before
  * `WALKIN_ADDED`. The difference is that this one is in the *same*
- * transaction: a walk-in's booking is worth keeping even if the event fails,
- * because a patient is standing at the counter, while an offer nobody was told
- * about is only a row that will expire quietly and block the chair meanwhile.
+ * transaction. Walk-in creation also uses one guarded transaction so a failed
+ * event cannot leave an unissued booking behind (FR-REC-14, FR-QUE-51).
  *
  * ## Why the next standby patient is chosen under the lock
  *
@@ -319,7 +347,7 @@ export async function offerFreedSlot(input: {
   readonly clientEventId?: string | null;
   readonly clientTs?: string | null;
 }): Promise<AppendEventResult> {
-  const replayed = await findReplay(input.clientEventId ?? null);
+  const replayed = await findReplay(input.clientEventId ?? null, input.sessionId);
   if (replayed !== null) return replayed;
 
   const settled = await committed(async (trx) => {
@@ -471,11 +499,14 @@ export async function acceptSlotDetailed(input: {
   readonly clientTs?: string | null;
 }): Promise<SeatResult> {
   return await asQueue(async () => {
-    const replayed = await findReplay(input.clientEventId ?? null);
-    if (replayed !== null) return { result: replayed, newBookingId: null, serial: null };
-
+    // The offer first, for its chamber: a replay is recognised only there
+    // (F-02). Reading it is not a guard, so a retry is still answered with
+    // what the first attempt made rather than with "already taken".
     const offer = await standbyRepo.findOffer(input.offerId);
     if (offer === null) throw notFound('offer');
+
+    const replayed = await findReplay(input.clientEventId ?? null, offer.sessionId);
+    if (replayed !== null) return { result: replayed, newBookingId: null, serial: null };
 
     const settled = await committed(async (trx) => {
       const session = await lockSession(trx, offer.sessionId);
@@ -988,12 +1019,22 @@ function etaTextFor(etas: readonly Eta[], bookingId: string): string | null {
  * cancelled — which is the right answer to a second attempt and the wrong one
  * to a retry of the first, and only the client event id can tell them apart.
  */
-export async function findReplay(clientEventId: string | null): Promise<AppendEventResult | null> {
+export async function findReplay(
+  clientEventId: string | null,
+  /**
+   * The chamber the request names. A key names one action in one chamber: the
+   * same key arriving for another is not a retry, and answering it with the
+   * first chamber's queue both swallowed the second action and handed back a
+   * queue the caller never asked about (audit of 12 October 2026, F-02).
+   */
+  sessionId: string,
+): Promise<AppendEventResult | null> {
   return await asQueue(async () => {
     if (clientEventId === null) return null;
 
     const stored = await eventRepo.findByClientEventId(clientEventId);
     if (stored === null) return null;
+    if (stored.sessionId !== sessionId) throw new AppError('IDEMPOTENCY_KEY_REUSED');
 
     const state = await getState(stored.sessionId);
     return {
@@ -1460,6 +1501,17 @@ export async function appendBatch(input: {
       // reported as accepted with the sequence it originally got, because
       // from the console's point of view it succeeded — which it did.
       const already = await eventRepo.findByClientEventId(entry.clientEventId, trx);
+      if (already !== null && already.sessionId !== input.sessionId) {
+        // The key made something in another chamber: not this entry's retry,
+        // and not to be reported as if it had been applied here (F-02).
+        outcomes.push({
+          kind: 'conflict',
+          clientEventId: entry.clientEventId,
+          reason: 'This action id was already used for another chamber.',
+          code: 'IDEMPOTENCY_KEY_REUSED',
+        });
+        continue;
+      }
       if (already !== null) {
         outcomes.push({
           kind: 'accepted',
@@ -1635,6 +1687,87 @@ export async function createWalkinBooking(input: {
       feePoisha: input.feePoisha,
       createdByStaffId: input.staffUserId,
     });
+  });
+}
+
+/** Issue one walk-in under the session lock (FR-REC-14, FR-QUE-51).
+ * Replay is checked again inside that lock before allocation. Booking, event,
+ * projection and queued notifications commit together; publishing stays after
+ * commit. The receipt identifies this booking, even after later arrivals.
+ */
+export async function addWalkin(input: {
+  readonly sessionId: string;
+  readonly patientId: string;
+  readonly position: 'end' | 'index';
+  readonly index: number | null;
+  readonly reason: string | null;
+  readonly actor: QueueActor & { readonly kind: 'staff' };
+  readonly clientEventId: string | null;
+  readonly clientTs: string | null;
+}): Promise<
+  AppendEventResult & { readonly walkin: { readonly bookingId: string; readonly serial: number } }
+> {
+  return await asQueue(async () => {
+    const issued = await committed(async (trx) => {
+      const session = await lockSession(trx, input.sessionId);
+      const before = await loadState(trx, session);
+      const stored =
+        input.clientEventId === null
+          ? null
+          : await eventRepo.findByClientEventId(input.clientEventId, trx);
+      if (stored !== null) {
+        if (
+          stored.sessionId !== input.sessionId ||
+          stored.type !== 'WALKIN_ADDED' ||
+          stored.actor.kind !== 'staff' ||
+          stored.actor.staffUserId !== input.actor.staffUserId
+        )
+          throw new AppError('QUEUE_CONFLICT');
+        const entry = before.entries.find((row) => row.bookingId === stored.payload.bookingId);
+        if (
+          entry?.patientId !== input.patientId ||
+          stored.payload.position !== input.position ||
+          stored.payload.index !== input.index ||
+          stored.payload.reason !== input.reason
+        )
+          throw new AppError('QUEUE_CONFLICT');
+        return {
+          result: {
+            state: before,
+            etas: computeEtas(before, nowTs()),
+            seq: stored.seq,
+            duplicate: true,
+            serverTs: stored.serverTs,
+            walkin: { bookingId: entry.bookingId, serial: entry.serial },
+          },
+          batch: null,
+        };
+      }
+      const guard = canAddWalkin(before, input.position, input.reason);
+      if (!guard.ok) throw guardFailed(guard.code, guard.detail);
+      const roster = await bookingRepo.rosterFor(session.id, trx);
+      const serial = roster.reduce((max, booking) => Math.max(max, booking.serial), 0) + 1;
+      const bookingId = await bookingRepo.insertWalkin(trx, {
+        sessionId: session.id,
+        patientId: input.patientId,
+        serial,
+        feePoisha: session.feePoisha,
+        createdByStaffId: input.actor.staffUserId,
+      });
+      const withBooking = await loadState(trx, session);
+      const applied = await applyOne(trx, session, withBooking, {
+        sessionId: session.id,
+        type: 'WALKIN_ADDED',
+        payload: { bookingId, position: input.position, index: input.index, reason: input.reason },
+        actor: input.actor,
+        clientEventId: input.clientEventId,
+        clientTs: input.clientTs,
+      });
+      const settled = await settle(trx, session, applied.state, [applied.event]);
+      return { result: { ...settled.result, walkin: { bookingId, serial } }, batch: settled.batch };
+    });
+    if (issued.batch !== null) await notifications.dispatch(issued.batch);
+    return issued.result;
   });
 }
 

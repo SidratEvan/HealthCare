@@ -810,10 +810,11 @@ export async function cancelBooking(input: CancelBookingInput): Promise<AppendEv
   // answer to a second attempt but the wrong one to a retry of the first —
   // which would leave the app showing an error for a cancellation that
   // worked (`FR-QUE-51`, `SY-02`).
-  const replayed = await queueService.findReplay(input.clientEventId ?? null);
-  if (replayed !== null) return replayed;
-
   const booking = await queueService.requireBooking(input.bookingId);
+
+  // In the booking's own chamber only (F-02).
+  const replayed = await queueService.findReplay(input.clientEventId ?? null, booking.sessionId);
+  if (replayed !== null) return replayed;
 
   if (booking.status === 'cancelled') {
     // Not an error worth a stack trace: a patient double-tapping confirm on a

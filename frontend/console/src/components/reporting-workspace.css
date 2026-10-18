@@ -1,0 +1,127 @@
+/* Approved Import/National workspaces (FR-IMP-01/22, FR-GOV-01/06, GR-06).
+   Only the staff theme changes; patient screens retain their original tokens. */
+.reporting-workspace .reporting-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+.reporting-workspace [role='tablist'] {
+  gap: 8px;
+  padding-bottom: 16px;
+}
+.reporting-workspace [role='tab'] {
+  min-height: 44px;
+  border-radius: 10px;
+}
+.reporting-workspace [role='tabpanel'] {
+  min-width: 0;
+}
+.reporting-read-warning,
+.reporting-hour-detail {
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--warn-100);
+  color: var(--warn-700);
+}
+.reporting-read-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.reporting-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-weight: 600;
+}
+.reporting-filter select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+.reporting-heat-cell {
+  min-width: 44px;
+  min-height: 44px;
+  width: 100%;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.reporting-heat-cell[aria-pressed='true'] {
+  outline: 3px solid var(--brand-600);
+  outline-offset: -3px;
+}
+.reporting-workspace table {
+  width: 100%;
+}
+.reporting-workspace .overflow-x-auto {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+.reporting-workspace [data-testid='gov-heatmap'] {
+  width: max-content;
+}
+.reporting-workspace th,
+.reporting-workspace td {
+  padding: 10px 12px;
+}
+.reporting-workspace [data-testid='gov-heatmap'] td {
+  padding: 2px;
+}
+.reporting-workspace [data-testid='gov-districts'] > li {
+  min-width: 0;
+}
+.import-guide {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.import-guide li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--bg-surface);
+}
+.import-guide li[aria-current='step'] {
+  color: var(--brand-600);
+  border-color: var(--brand-600);
+  background: var(--brand-100);
+}
+.import-guide span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-sunken);
+  font-weight: 700;
+}
+.import-history {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 24px;
+}
+@media (max-width: 1000px) {
+  .import-guide {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .import-guide {
+    grid-template-columns: 1fr;
+  }
+  .reporting-workspace th,
+  .reporting-workspace td {
+    padding: 8px;
+  }
+}

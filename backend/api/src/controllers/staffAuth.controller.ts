@@ -85,7 +85,7 @@ export async function chambers(req: Request, res: Response): Promise<void> {
     data: {
       // A receptionist at a desk is offered only its chambers (`FR-REC-32`);
       // the server refuses the rest whatever a screen shows.
-      chambers: await staffAuth.chambersFor(principal),
+      chambers: await staffAuth.chambersFor(principal, req.query['includeEnded'] === '1'),
       // What this hospital does not run (`FR-BRD-11`), so the picker offers
       // no console that would be refused.
       modulesOff: await modules.modulesOff(principal.hospitalId),

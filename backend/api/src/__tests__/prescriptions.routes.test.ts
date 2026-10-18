@@ -71,11 +71,21 @@ async function callFirstPatient(): Promise<void> {
 
 async function postVisit(body: Record<string, unknown>): Promise<request.Response> {
   const key = crypto.randomUUID();
+  const bookingId =
+    typeof body['bookingId'] === 'string' ? body['bookingId'] : fixture.bookingIds[0];
+  const consultation = await request(app)
+    .get(`${BASE}/visits/booking/${String(bookingId)}`)
+    .set('authorization', `Bearer ${await staff()}`);
   return await request(app)
     .post(`${BASE}/visits`)
     .set('authorization', `Bearer ${await staff()}`)
     .set('idempotency-key', key)
-    .send({ bookingId: fixture.bookingIds[0], ...body, idempotencyKey: key });
+    .send({
+      bookingId: fixture.bookingIds[0],
+      expectedRevision: consultation.body.data?.visit?.revision ?? null,
+      ...body,
+      idempotencyKey: key,
+    });
 }
 
 async function storedRows(): Promise<{ name_text: string; schedule: string | null }[]> {

@@ -142,6 +142,7 @@ export const MODULE_ROUTES: Readonly<Record<string, readonly HospitalModule[]>> 
 
   // --- the doctor's console ------------------------------------------------------
   'POST /visits': ['doctor'],
+  'GET /visits/booking/:id': ['doctor'],
   // A patient reads their own record here; for staff it is the doctor's panel.
   'GET /patients/:id/records': ['doctor'],
   'POST /consents/qr': ['doctor'],

@@ -686,6 +686,8 @@ Accessed at `console.[domain]`. Designed for 1280px+ monitors, mouse and keyboar
 
 ## B0. Console authentication
 
+> **Phase 8B Batch 2 (10 October 2026):** approved staff-access presentation now uses the shared console foundation. After required password/MFA steps, current `/staff/me` permissions, module configuration and actual desk/chamber assignments determine landing. A single unambiguous facility workspace opens directly; multiple roles/desks require selection. A single reception desk covering several chambers still requires a chamber choice. Doctors always choose explicitly until a real account mapping is approved. Existing server guards, hospital-code flow, optional MFA, refresh/revocation and scoped explicit queue reads remain intact. Details and verification: `docs/design/console-access/README.md`. Patient Registration and clinical/administrative workspace redesigns are excluded.
+
 ### `S-B-00` Staff login
 
 | Element | ID | Wiring |
@@ -754,6 +756,8 @@ Shown when a user holds multiple roles or the hospital has multiple counters.
 ---
 
 ## B1. Reception console — `S-B-02`
+
+> **Phase 8B Batch 3A (10 October 2026):** Reception now opens an authorised desk as an expandable multi-chamber workspace (`?view=reception`), while existing `?session=` links remain compatible. Each card retains its own V1 queue state, pending/rejected actions, undo and forms; collapse does not unmount it. One selected expanded queue owns N/Space, A, P, W and queue Ctrl+Z; editors, composing/repeated keys, dialogs/Help and native button Space remain protected. Secondary row/session actions use visible More menus. Add Patient uses the existing registration finder and the selected card's actual session. The server issues the serial; the same attempt key and original booking receipt are used after an uncertain reply. Current hospital/role/module/desk rules are revalidated, and finished/cancelled chambers stay read-only. The normal work picker still omits ended chambers; Reception opts into their scoped roster read. Details, comparison and evidence: `docs/design/console-reception/README.md`. Full Registration and Doctor redesigns remain outside this batch; Doctor C1/C2 protection remains a critical clinical-release dependency.
 
 The highest-traffic screen in the system. Every primary action must be reachable by keyboard.
 
@@ -832,12 +836,22 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 `S-B-03` Registration: phone-first search → existing patient or create → optional NID → save → immediate booking option.
 
-> **Built in pilot step 23**, from the rail's রেজিস্ট্রেশন (`/?view=registration`), a receptionist's. The same finder as `MOD-B02-WALKIN` on the left; on the right, today's chambers at the facility with **এই চেম্বারে যোগ করুন** on each — a walk-in at the end, the serial in the toast — and the desk clears for the next person. States: a skeleton while the chambers load, "no chambers today", the failure with a retry, and offline with the finder and the buttons switched off and the reason given. **The NID is not asked for**: `patients.national_id` is to be encrypted by the application before it is stored, and nothing encrypts it yet; `FR-REC-20` does not need it.
+> **Built in pilot step 23; redesigned in Phase 8B Batch 3B:** `/?view=registration` uses **Mobile number → Patient → Doctor/Chamber → Serial confirmation**, reusing the counter finder and the existing write endpoints. Valid V1 phone formats search automatically, with an explicit retry. Household members remain separate; choosing an existing person opens inline demographic confirmation. Duplicate-name warnings and indistinguishable identity stops never merge or overwrite people. A new patient needs the existing name, age (0–130) and sex; **NID is not asked for** because its encryption is not implemented and `FR-REC-20` does not need it. Patient-profile creation remains separate from queue insertion. The canonical registration receipt identifies a reused record after concurrent creation or an uncertain answer; it requires confirmation rather than presenting the typed demographics as that record.
+
+> The selected authorised desk filters today's chamber choices. An individual Reception queue links to `/?view=registration&from=<session-id>`: only that authorised chamber is offered, preselected with an obvious return link. Missing/revoked context supplies no substitute; ended/cancelled chambers are explained and disabled, while the existing server guard still refuses stale writes. A summary describes the intended end-of-queue insertion without predicting a serial. Only the actual walk-in receipt opens the large serial confirmation, patient/chamber summary, Next patient and Return to queue. Next patient clears the standalone chamber selection; an originating queue retains its context. Positioned/reasoned insertion remains available in Reception's existing walk-in sheet.
+
+> Loading/empty/failed/offline states retain entered information. Serial issuance and patient lookup/creation remain online-only. Incomplete forms ask before destructive reset or in-app navigation and use the browser's leave warning; Help/language changes preserve work. Pending submission blocks repeats. Uncertain writes retain their original request and patient/chamber target until authoritative retry returns a result. A profile receipt is never a serial receipt. There is no new printing, billing, durable patient-form storage or offline serial allocation in this batch.
 `S-B-04` Billing: collect fee, method, print/SMS receipt (`FR-REC-22`); shift reconciliation view with expected vs collected and a variance note field (`FR-REC-23`).
 
 ---
 
 ## B2. Doctor console — `S-B-05`
+
+**Phase 8B Batch 4B presentation:** the real workspace uses the shared hospital-branded header, compact read-only chamber queue (a drawer on tablets), pinned patient identity/allergy strip, history beside numbered consultation sections, and persistent Save Draft / Sign & Next controls. Bangla/English and contextual Help keep the same mounted editor. Queue identity and ordering come from existing authorised reads; the patient strip and history describe the encounter being edited even when Reception has moved the live queue. Unknown allergies are distinct from declared none.
+
+Follow-up offers none, 7/14/30 days and Custom (1–365 whole days, Bangla or Latin numerals). The preview is a Bangladesh calendar date, persisted through the existing date-only visit field. After acknowledgement the exact stored date stays visible; sign review and server-record printing use that date. Invalid custom input blocks signing but other valid notes can be saved: the follow-up date is cleared, its exclusion is disclosed, and the raw invalid input remains locally visible. Leaving that input for a new patient requires explicit discard. No appointment or reminder is created. Saving/signing/failed/unsaved/excluded/signed states are distinguished; an uncertain draft save must be retried before signing.
+
+Sign & Next opens a confirmation of the pinned patient, encounter and record. It captures the reviewed calendar date so crossing Bangladesh midnight before confirmation cannot change the filed follow-up. A queue change during review blocks a fresh confirmation. The dialog describes the conditional queue effect without promising a particular next patient; only backend receipts establish signature and queue outcomes. The existing 30-minute delay now asks for confirmation; no arbitrary duration is added. See the [integrated Doctor review](design/console-doctor/README.md) and [retained safety contract](design/console-doctor-safety/README.md).
 
 > **Built in this version:** the session header, `BTN-B05-DELAY`, the patient
 > panel, `INP-B05-DX`, `INP-B05-ADVICE`, `SEL-B05-FOLLOWUP`, `BTN-B05-DRAFT`,
@@ -880,12 +894,14 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 | Test chips | `BTN-B05-TEST` | Adds test orders → pushed to lab queue on save (`FR-DOC-06`). The chips are the hospital's own catalogue (`GET /lab/catalogue`), so the name and price a doctor ticks are the ones the lab and the wallet show. Ticking writes nothing: the orders go with the record, because an order hangs off the visit and there is no visit until it is filed |
 | Advice box | `INP-B05-ADVICE` | Printed in Bangla for the patient (`FR-DOC-07`) |
 | Public health signal | `CHIP-B05-SIGNAL` | কোনোটি নয় / ডেঙ্গু / ডায়রিয়া / জ্বর — one or none, "none" first and selected by default. Filed with the visit as `visits.symptom_signal` and counted by district only (`FR-GOV-03`, `v_gov_symptom_daily`). Not a diagnosis and not shown in the patient's wallet: `INP-B05-DX` stays the record. Added at step 20, because a spike needs a category to count and nothing else in the product records one |
-| Follow-up | `SEL-B05-FOLLOWUP` | 7/14/30 days or date → schedules patient reminder (`FR-PAT-80`) |
+| Follow-up | `SEL-B05-FOLLOWUP` | None, 7/14/30 days or Custom 1–365 → Bangladesh calendar date in the existing visit field; invalid custom blocks signing and is explicitly excluded/cleared on draft save. V1 creates no reminder (`FR-PAT-80` remains unbuilt) or appointment |
 | খসড়া রাখুন | `BTN-B05-DRAFT` | Saves without finishing the consultation |
 | **রেকর্ড দিন ও পরবর্তী** | `BTN-B05-SIGN` | Signs the visit and its medicines → writes the record to the patient wallet → `EVT-PATIENT_DONE` + `EVT-PATIENT_CALLED` for the next patient (`FR-DOC-08`) |
 | শেষ প্রেসক্রিপশন প্রিন্ট | `BTN-B05-PRINT` | The visit last signed here, read back from the server → the Bangla sheet → the browser's print (`FR-DOC-07`, plan R2) |
 
-**Failure handling:** if the record fails to save, the consultation is **not** marked done, and the doctor sees a retry banner with the draft preserved on screen. The record is written first and the queue advances only on success, which is what makes that order observable rather than aspirational.
+**Failure handling (`FR-DOC-08`, Phase 8B Batch 4A):** the editor owns the original session/booking/patient independently of reception's live queue. Socket updates/reconnects do not clear or reassign writing. If reception changes patient, keep the original patient panel and note, explain the change and block a fresh Sign & Next; the doctor explicitly saves to that old booking or confirms discarding before opening the current patient. Failed saves retain fields. Authorised server drafts hydrate before writing is enabled, never over local edits or a newer save. Newer server revisions require explicit review; unsigned clinical writing is never placed in localStorage, sessionStorage, IndexedDB or the offline outbox. Native reload/close warns about unfinished/uncertain work; a forced close/crash still loses unsaved memory.
+
+Signing freezes identity/body/key, blocks overlapping submissions, and checks the backend receipt before declaring any signature. An uncertain network reply offers **Check signing and queue result** using that same attempt, even when reception moved on. Confirmed signatures and queue changes/failures are reported separately. The backend checks current encounter and draft revision under the existing session lock, commits the immutable record first, then performs a queue operation restricted to the signed booking; replay precedes stale-state guards. A different existing signature never causes silent discard of this device's writing. Confirmed complete signing refreshes through the existing sequence-aware queue hook before releasing the editor. Failed test-order requests remain independently bound to their original booking/codes/key for retry, even after opening another patient. Draft-time test ordering, consent rules and server-record prescription printing remain as before. Test-code selection is not a persisted clinical-draft field.
 
 ---
 
@@ -1056,10 +1072,14 @@ Columns: serial, patient, age, phone, status, source (app / phone / walk-in), wa
 
 ## B6. Hospital admin — `S-B-10`
 
+**Phase 8B Batch 5A:** the shared branded workspace has five entries: Today, Reports, Staff & Desks, Doctors and Settings. Today opens first with five operational tiles, recorded attention signals, today's chambers grouped by existing desks, and today's V1 figures. `GET /admin/overview` now adds up to 250 chambers in one set-based query under the existing hospital-admin/own-hospital gate; no patient names or clinical details. Cancelled/ended states remain visible, multi-desk membership is explained, and truncation is explicit. Snapshot time and one-minute polling are visible; failed reads keep older information with a warning. Attention explains overdue starts, paused queues, missing room/desk assignments and old bed information; links inspect a row or open existing settings, without intervention APIs.
+
+Reports retains all nine V1 categories and Today / 7 / 30 / 90-day inclusive Bangladesh periods (30 days initially). Every metric, original snapshot/live-read distinction, unavailable value and report limitation is retained. The displayed period describes loaded data even when another period fails. CSV exports that period, with all four Revenue breakdowns accessible; print includes only the selected report, period and timestamps. Both date bounds use one captured clock. Staff & Desks, Doctors and Settings open the existing `S-B-11` panes (`tab=staff`, `doctors`, `profile`) without changing writes; their redesign waits for Batch 5B. See [the actual React review package](design/console-admin/README.md).
+
 | Section | Controls | Wiring |
 |---|---|---|
 | Now | `CARD-B10-NOW` | Above everything else (`FR-ADM-12`, plan R6): five tiles — doctors (sitting of scheduled), waiting, appointments (seen of booked), beds (free of in service, with the ward's age), emergency (on the way · in the ER). `GET /admin/overview`, read on opening and every minute; one freshness line for the panel, the beds' own age under their tile; a tile with nothing to know says so |
-| Today | Date range selector, department filter | Live KPIs (`FR-ADM-01`) |
+| Overview report | Date range selector | Existing daily snapshot KPIs (`FR-ADM-01`); no unsupported department filter |
 | Trends | Wait-time chart with adoption marker | `FR-ADM-02` |
 | Loss & recovery | No-show taka value, recovered value | `FR-ADM-03` |
 | Revenue | By doctor / department / service / method | `FR-ADM-04` |

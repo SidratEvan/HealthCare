@@ -10,6 +10,7 @@
 import { z } from 'zod';
 
 import { BED_KINDS } from '../types/enums.js';
+import { DEMO_PHONE_NOT_ALLOWED, personPhoneAdmitted } from '../util/demoPhones.js';
 
 /** A UUID as it arrives on the wire, before it is branded. */
 const uuid = z.string().uuid();
@@ -25,7 +26,9 @@ const uuid = z.string().uuid();
 export const bdPhone = z
   .string()
   .trim()
-  .regex(/^\+8801[3-9]\d{8}$/, 'must be a Bangladeshi mobile number, e.g. +8801712345678');
+  .regex(/^\+8801[3-9]\d{8}$/, 'must be a Bangladeshi mobile number, e.g. +8801712345678')
+  // FR-DEM-08: a demonstration takes only its own numbers.
+  .refine(personPhoneAdmitted, { message: DEMO_PHONE_NOT_ALLOWED });
 
 // ---------------------------------------------------------------------------
 // Discovery (public)

@@ -42,6 +42,8 @@
  * row, because a route guard reads a token and this reads the truth.
  */
 
+import { createHash } from 'node:crypto';
+
 import {
   canActOnTestOrder,
   canDeliverReport,
@@ -50,6 +52,8 @@ import {
   sortLabQueue,
   summariseTurnaround,
   LAB_ACTION_RESULT,
+  REPORT_MAX_BYTES,
+  sniffDocument,
   OPEN_TEST_STATES,
   REPORTED_TEST_STATES,
   type LabAction,
@@ -65,6 +69,7 @@ import { patientLink } from '../config/links.js';
 import { logger } from '../config/logger.js';
 import { AppError, forbiddenScope, notFound, validationFailed } from '../errors/AppError.js';
 import * as emit from '../realtime/emit.js';
+import * as clinicalRepo from '../repositories/clinical.repo.js';
 import * as labRepo from '../repositories/lab.repo.js';
 import { withTransaction, type Tx } from '../repositories/transaction.js';
 
@@ -287,19 +292,38 @@ export async function uploadReport(
   // and answering here also means a replayed ten megabytes is never re-stored.
   const already = await labRepo.findReportByIdempotencyKey(input.idempotencyKey);
   if (already !== null) {
+    assertReportOwner(already.testOrderId, before.id);
     return { order: before, duplicate: true, serverTs: at.toISOString() };
   }
 
   guard(canUploadReport(before));
 
+  // FR-LAB-03: Node's permissive decoder must not accept malformed payloads.
+  if (
+    input.content.length > Math.ceil(REPORT_MAX_BYTES / 3) * 4 ||
+    input.content.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(input.content)
+  ) {
+    throw validationFailed({ field: 'content', reason: 'invalid or oversized base64' });
+  }
   const bytes = Buffer.from(input.content, 'base64');
-  if (bytes.length === 0) {
-    throw validationFailed({ field: 'content', reason: 'the file decoded to no bytes' });
+  if (
+    bytes.length === 0 ||
+    bytes.length > REPORT_MAX_BYTES ||
+    bytes.toString('base64') !== input.content ||
+    sniffDocument(bytes) !== input.fileType
+  ) {
+    throw validationFailed({
+      field: 'content',
+      reason: 'unsupported, mismatched or oversized file',
+    });
   }
 
   // Stored outside the transaction — see the header. The key is derived from
   // the order and the idempotency key, never from a file name a client sent.
-  const key = `reports/${before.id}/${input.idempotencyKey}.${extensionFor(input.fileType)}`;
+  // FR-LAB-03: racing payloads cannot overwrite a committed report object.
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  const key = `reports/${before.id}/${input.idempotencyKey}-${digest}.${extensionFor(input.fileType)}`;
   let fileUrl: string;
   try {
     const stored = await storage().put({ key, contentType: input.fileType, bytes });
@@ -323,12 +347,14 @@ export async function uploadReport(
     duplicate,
     batch,
   } = await withTransaction(async (trx) => {
+    await labRepo.lockIdempotencyKey(trx, input.idempotencyKey);
     const current = await lockOwn(trx, input.orderId, actor);
 
     // Again, inside the lock: two uploads carrying one key that raced the
     // check above serialise here, and the second finds the first's report.
     const replayed = await labRepo.findReportByIdempotencyKey(input.idempotencyKey, trx);
     if (replayed !== null) {
+      assertReportOwner(replayed.testOrderId, current.id);
       return { order: current, duplicate: true, batch: null };
     }
 
@@ -382,6 +408,10 @@ export async function uploadReport(
   }
 
   return { order: updated, duplicate, serverTs };
+}
+
+function assertReportOwner(testOrderId: string, orderId: string): void {
+  if (testOrderId !== orderId) throw new AppError('IDEMPOTENCY_KEY_REUSED');
 }
 
 function extensionFor(fileType: string): string {
@@ -453,14 +483,24 @@ export async function ordersForBooking(bookingId: string): Promise<TestOrderView
   return sortLabQueue(await labRepo.listTestOrdersForBooking(bookingId));
 }
 
-/** The name a bench calls somebody by (`S-B-08`). Audited by the caller. */
+/** DB-P7: a returned identifying read always has a durable audit row. */
 export async function patientLabel(orderId: string, actor: LabActor): Promise<string | null> {
   const row = await labRepo.findTestOrder(orderId);
   if (row === null) throw notFound('test order');
   if (row.hospitalId !== actor.hospitalId) {
     throw forbiddenScope({ resource: 'test order', hospitalId: row.hospitalId });
   }
-  return await labRepo.patientLabel(row.patientId);
+  const label = await labRepo.patientLabel(row.patientId);
+  await clinicalRepo.recordRecordView({
+    staffUserId: actor.staffUserId,
+    userId: null,
+    hospitalId: actor.hospitalId,
+    patientId: row.patientId,
+    subjectTable: 'test_orders',
+    subjectId: row.id,
+    meta: { surface: 'S-B-08', read: 'patient_label' },
+  });
+  return label;
 }
 
 /**

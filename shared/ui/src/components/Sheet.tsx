@@ -25,11 +25,19 @@
 // browser behaviour.
 import * as Dialog from '@radix-ui/react-dialog';
 
+import { useConsoleBrandStyle } from '../console/ConsoleFoundation.js';
+
 import { cx } from './cx.js';
 
 import type { ReactNode } from 'react';
 
 export interface SheetProps {
+  /** Optional workspace layout; the shared dialog behavior remains unchanged. */
+  readonly className?: string;
+  /** For a workspace list that opens a panel without a single static trigger. */
+  readonly restoreFocusTo?: () => HTMLElement | null;
+  /** Explicit opt-in; existing patient/other workspace dialogs retain V1. */
+  readonly console?: boolean;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   /** Required: an unlabelled dialog is announced as nothing at all. */
@@ -59,6 +67,9 @@ export interface SheetProps {
 }
 
 export function Sheet({
+  className,
+  restoreFocusTo,
+  console: consoleScope = false,
   open,
   onOpenChange,
   title,
@@ -68,6 +79,7 @@ export function Sheet({
   variant = 'sheet',
   dismissible = true,
 }: SheetProps): ReactNode {
+  const brandStyle = useConsoleBrandStyle();
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       {trigger !== undefined ? <Dialog.Trigger asChild>{trigger}</Dialog.Trigger> : null}
@@ -77,24 +89,48 @@ export function Sheet({
             Above everything fixed on the page, the patient app's bottom
             navigation (`z-40`) included: a sheet that slid under the nav hid
             its own primary button behind it. */}
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40" />
+        <Dialog.Overlay
+          className={
+            consoleScope ? 'console-foundation cf-overlay' : 'fixed inset-0 z-50 bg-ink/40'
+          }
+          style={consoleScope ? brandStyle : undefined}
+        />
 
         <Dialog.Content
+          onCloseAutoFocus={
+            restoreFocusTo === undefined
+              ? undefined
+              : (event) => {
+                  const target = restoreFocusTo();
+                  if (target?.isConnected) {
+                    event.preventDefault();
+                    target.focus();
+                  }
+                }
+          }
+          style={consoleScope ? brandStyle : undefined}
+          onKeyDown={(event) => {
+            if (consoleScope) event.stopPropagation();
+          }}
           onPointerDownOutside={(event) => {
             if (!dismissible) event.preventDefault();
           }}
           onEscapeKeyDown={(event) => {
             if (!dismissible) event.preventDefault();
           }}
-          className={cx(
-            'fixed z-50 bg-surface shadow-2 focus:outline-none',
-            variant === 'sheet'
-              ? // Rises from the bottom, rounded on the top corners only.
-                // A tall sheet on a short phone scrolls rather than pushing its
-                // action off the screen.
-                'inset-x-0 bottom-0 max-h-[90dvh] overflow-y-auto rounded-t-lg p-5 motion-safe:duration-sheet motion-safe:ease-sheet'
-              : 'left-1/2 top-1/2 w-full max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-lg p-6',
-          )}
+          className={
+            consoleScope
+              ? cx('console-foundation cf-dialog cf-reception-dialog', className)
+              : cx(
+                  'fixed z-50 bg-surface shadow-2 focus:outline-none',
+                  variant === 'sheet'
+                    ? // Rises from the bottom, rounded on the top corners only.
+                      // A tall sheet on a short phone scrolls rather than pushing its
+                      // action off the screen.
+                      'inset-x-0 bottom-0 max-h-[90dvh] overflow-y-auto rounded-t-lg p-5 motion-safe:duration-sheet motion-safe:ease-sheet'
+                    : 'left-1/2 top-1/2 w-full max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-lg p-6',
+                )
+          }
         >
           {variant === 'sheet' ? (
             // The drag handle. Decorative: the sheet is closed by Esc, the

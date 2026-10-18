@@ -34,6 +34,173 @@ export interface Message {
  * what pressing it will do.
  */
 export const CONSOLE = {
+  receptionToday: { bn: 'আজকের চেম্বার', en: "Today's chambers" },
+  receptionChambers: { bn: 'চেম্বার', en: 'chambers' },
+  receptionMore: { bn: 'আরও', en: 'More' },
+  receptionNotArrived: { bn: 'এখনও আসেননি', en: 'Not arrived' },
+  receptionRegister: { bn: 'নিবন্ধন', en: 'Register' },
+  receptionChamberCancelled: {
+    bn: 'এই চেম্বার বাতিল করা হয়েছে।',
+    en: 'This chamber has been cancelled.',
+  },
+  receptionCountsLoading: {
+    bn: 'প্রতিটি চেম্বারের সর্বশেষ তথ্য নেওয়া হচ্ছে…',
+    en: 'Loading the latest information for each chamber…',
+  },
+  receptionChooseQueue: {
+    bn: 'আগে যে ডাক্তারের সিরিয়ালে কাজ করবেন, সেটি খুলে বেছে নিন।',
+    en: 'Open and select the doctor’s queue before using a shortcut.',
+  },
+  receptionKeyboardHint: {
+    bn: 'শর্টকাট শুধু বেছে নেওয়া খোলা সিরিয়ালে কাজ করে। N: পরের রোগী, A: ডাক্তার এসেছেন, P: বিরতি, W: রোগী যোগ।',
+    en: 'Shortcuts act only on the selected open queue. N: next, A: doctor arrived, P: pause/resume, W: add patient.',
+  },
+  receptionHelpAdd: {
+    bn: 'সঠিক ডাক্তারের রোগী যোগ বোতাম চাপুন। ফোন দিয়ে পরিবারের সঠিক মানুষটি বেছে নিন। সার্ভার নম্বর দেওয়ার পরেই সিরিয়াল বলুন।',
+    en: 'Use Add patient for the correct doctor. Find the phone’s household and choose the right person. Give the serial only after the server issues it.',
+  },
+  receptionHelpNext: {
+    bn: 'ডাক্তারের নাম ও বর্তমানে চেম্বারে থাকা রোগী দেখুন। পরের রোগী ডাকলে বর্তমান রোগীর দেখা শেষও নথিভুক্ত হয়।',
+    en: 'Check the doctor and current patient. Calling the next patient also records the current patient as finished.',
+  },
+  receptionHelpArrival: {
+    bn: 'ডাক্তার এলে ডাক্তার এসেছেন চাপুন। রোগী কাউন্টারে এলে তাঁর সারিতে এসেছেন চাপুন এবং যে অপেক্ষা বলেছেন তা লিখুন।',
+    en: 'Record Doctor arrived when the doctor arrives. Check in the patient on their row and enter the wait you quoted.',
+  },
+  receptionUndoHelp: {
+    bn: 'ভুল হলে একই চেম্বারে ফিরিয়ে নিন ব্যবহার করুন—সাধারণত ১০ সেকেন্ডের মধ্যে। সব কাজ ফেরানো যায় না; অন্য পরিবর্তন হলে সার্ভার বাধা দিতে পারে।',
+    en: 'Use Undo in the same chamber, normally within 10 seconds. Some actions cannot be undone; later changes can make the server refuse.',
+  },
+  receptionHelpPause: {
+    bn: 'বিরতি দিলে নতুন রোগী ডাকা ও অনুপস্থিত করা বন্ধ থাকে। কাজ শুরু হলে আবার শুরু চাপুন।',
+    en: 'During a pause, next-patient and no-show actions are blocked. Resume when work starts again.',
+  },
+  receptionHelpOffline: {
+    bn: 'সংযোগ না থাকলে সমর্থিত কাজ এই কম্পিউটারে পাঠানোর অপেক্ষায় থাকে। প্রতিটি চেম্বারের সময় ও অপাঠানো কাজ দেখুন। নতুন সিরিয়াল দিতে সংযোগ লাগে।',
+    en: 'Supported offline actions wait on this computer to be sent. Check each chamber’s timestamp and unsent actions. Issuing a new serial requires a connection.',
+  },
+  accessRateLimited: {
+    bn: 'অনেকবার চেষ্টা হয়েছে। একটু পরে আবার চেষ্টা করুন।',
+    en: 'Too many attempts. Try again shortly.',
+  },
+  // Staff access and landing (FR-SEC-06/10, FR-ROLE-01, FR-REC-32).
+  accessHelpTitle: { bn: 'লগ ইন ও কাজ বেছে নেওয়া', en: 'Sign-in and workspace Help' },
+  accessHelpCredentials: {
+    bn: 'নিজের ইমেইল ও পাসওয়ার্ড দিন। পাসওয়ার্ড ভুলে গেলে প্রশাসককে বলুন।',
+    en: 'Use your own email and password. Ask your administrator if you forgot your password.',
+  },
+  accessHelpMfa: {
+    bn: 'প্রয়োজন হলে নিজের পাসওয়ার্ড বদলান ও দুই ধাপের যাচাই শেষ করুন।',
+    en: 'Complete the required password change and two-step verification.',
+  },
+  accessHelpShared: {
+    bn: 'ভাগ করা কম্পিউটারে কাজ শেষে লগ আউট করুন। সাহায্য বন্ধ করলে লেখা রয়ে যাবে।',
+    en: 'Sign out when leaving a shared computer. Closing Help keeps your form.',
+  },
+  accessSharedComputer: {
+    bn: 'অন্যের সঙ্গে ভাগ করা কম্পিউটারে কাজ শেষে লগ আউট করুন।',
+    en: 'Sign out when leaving a shared computer.',
+  },
+  accessShowPassword: { bn: 'দেখান', en: 'Show' },
+  accessHidePassword: { bn: 'লুকান', en: 'Hide' },
+  accessSteps: { bn: 'লগ ইনের ধাপ', en: 'Sign-in steps' },
+  accessPasswordStep: { bn: 'নিজের পাসওয়ার্ড', en: 'Your password' },
+  accessMfaStep: { bn: 'দুই ধাপের যাচাই', en: 'Two-step verification' },
+  accessWorkspaceStep: { bn: 'কাজ বেছে নিন', en: 'Choose work' },
+  accessLoading: { bn: 'আপনার কাজের অনুমতি যাচাই হচ্ছে…', en: 'Checking your workspace access…' },
+  accessChooseRole: { bn: 'কোন কাজটি খুলবেন?', en: 'Which work are you opening?' },
+  accessChooseDesk: { bn: 'কোন ডেস্কে কাজ করবেন?', en: 'Which desk are you working at?' },
+  accessChooseChamber: { bn: 'চেম্বার বেছে নিন', en: 'Choose a chamber' },
+  accessDoctorChoice: {
+    bn: 'হাসপাতালের অনুমোদিত চেম্বারগুলো দেখানো হচ্ছে। নিজের নাম দেখে বেছে নিন।',
+    en: 'Showing the hospital’s permitted chambers. Choose the chamber by your own name.',
+  },
+  accessCommonDesk: {
+    bn: 'নির্দিষ্ট ডেস্কে নিয়োগ নেই — হাসপাতালের অনুমোদিত চেম্বারগুলো দেখানো হচ্ছে।',
+    en: 'No assigned desk — showing this hospital’s permitted chambers.',
+  },
+  accessNoChamber: {
+    bn: 'এই কাজের জন্য খোলা চেম্বার নেই। প্রয়োজনে হাসপাতালের প্রশাসককে বলুন।',
+    en: 'No chamber is available for this work. Ask your hospital administrator if needed.',
+  },
+  accessNoWork: {
+    bn: 'এই লগ ইনে কোনো কাজ এখন খোলা নেই। প্রশাসককে বলুন।',
+    en: 'No workspace is currently available for this sign-in. Ask your administrator.',
+  },
+  accessDenied: {
+    bn: 'এই কাজ বা চেম্বার এখন আপনার জন্য খোলা নয়। অনুমোদিত কাজ বেছে নিন।',
+    en: 'This workspace or chamber is not currently available to you. Choose permitted work.',
+  },
+  accessLoadFailed: {
+    bn: 'কাজের অনুমতি যাচাই করা যায়নি। আবার চেষ্টা করুন।',
+    en: 'Could not check workspace access. Try again.',
+  },
+  accessOfflineSelection: {
+    bn: 'নতুন কাজ বেছে নিতে সংযোগ দরকার। আগে খোলা কাজ অফলাইনে চলতে পারে।',
+    en: 'A connection is needed to choose new work. Already-open work may continue offline.',
+  },
+  accessChangeChoice: { bn: 'অন্য কাজ বেছে নিন', en: 'Choose different work' },
+  accessAllChambers: { bn: 'সব অনুমোদিত চেম্বার', en: 'All permitted chambers' },
+  // Approved console foundation (GR-03, GR-06); no clinical help invented.
+  foundationSkip: { bn: 'মূল কাজে যান', en: 'Skip to workspace' },
+  foundationNavigation: { bn: 'কাজের তালিকা', en: 'Workspaces' },
+  foundationHelp: { bn: 'সাহায্য', en: 'Help' },
+  foundationClose: { bn: 'বন্ধ করুন', en: 'Close' },
+  foundationGoBack: { bn: 'ফিরে যান', en: 'Go back' },
+  foundationWait: {
+    bn: 'কাজ শেষ হওয়া পর্যন্ত অপেক্ষা করুন।',
+    en: 'Wait for the action to finish.',
+  },
+  foundationHelpKeepsWork: {
+    bn: 'সাহায্য বন্ধ করলে আগের কাজেই ফিরবেন।',
+    en: 'Close Help to return to your work.',
+  },
+  foundationEmpty: { bn: 'দেখানোর মতো কিছু নেই', en: 'Nothing to show' },
+  foundationPreview: { bn: 'কনসোলের নতুন নকশা', en: 'Console design foundation' },
+  foundationPreviewNote: {
+    bn: 'স্থানীয় নকশা যাচাই — কোনো রোগীর তথ্য বা সার্ভারের কাজ নেই।',
+    en: 'Local design review — no patient data or server operations.',
+  },
+  foundationControls: { bn: 'ফর্ম ও বোতাম', en: 'Forms and actions' },
+  foundationFeedback: { bn: 'অবস্থা ও বার্তা', en: 'States and feedback' },
+  foundationExampleField: { bn: 'নকশা যাচাইয়ের লেখা', en: 'Design review text' },
+  foundationFieldHelp: {
+    bn: 'লেখা রেখে সাহায্য খুলে দেখুন।',
+    en: 'Type something, then open Help.',
+  },
+  foundationPreviewAction: { bn: 'বার্তা দেখুন', en: 'Show feedback' },
+  foundationPreviewBlocked: { bn: 'এখন করা যাবে না', en: 'Currently unavailable' },
+  foundationPreviewBlockedReason: {
+    bn: 'এটি বন্ধ থাকা বোতামের উদাহরণ।',
+    en: 'This demonstrates a disabled control.',
+  },
+  foundationPreviewConfirm: { bn: 'নিশ্চিত করার উদাহরণ', en: 'Confirmation example' },
+  foundationPreviewConfirmTitle: { bn: 'উদাহরণের লেখা মুছবেন?', en: 'Clear the example text?' },
+  foundationPreviewConfirmDescription: {
+    bn: 'শুধু এই নকশা যাচাইয়ের লেখা মুছবে। কোনো রেকর্ড বদলাবে না।',
+    en: 'Only the local review text will clear. No record changes.',
+  },
+  foundationPreviewClear: { bn: 'হ্যাঁ, লেখা মুছুন', en: 'Yes, clear text' },
+  foundationPreviewSuccess: { bn: 'উদাহরণের বার্তা দেখানো হয়েছে', en: 'Example feedback shown' },
+  foundationPreviewError: { bn: 'ব্যর্থতার বার্তার উদাহরণ', en: 'Example error feedback' },
+  foundationPreviewReady: { bn: 'প্রস্তুত', en: 'Ready' },
+  foundationPreviewInformation: { bn: 'তথ্য', en: 'Information' },
+  foundationPreviewCaution: { bn: 'খেয়াল করুন', en: 'Needs attention' },
+  foundationPreviewAlert: { bn: 'সতর্কতা', en: 'Alert' },
+  foundationPreviewNeutral: { bn: 'অজানা', en: 'Unknown' },
+  foundationHelpTopic: { bn: 'ফর্মে কাজ করা', en: 'Working with forms' },
+  foundationHelpStepOne: {
+    bn: 'ঘরের নাম দেখে তথ্য লিখুন। ভুল হলে ঘরের নিচের নির্দেশ পড়ুন।',
+    en: 'Read the field label. If there is an error, read the guidance below it.',
+  },
+  foundationHelpStepTwo: {
+    bn: 'বাংলা ও ইংরেজির বোতাম দিয়ে ভাষা বদলাতে পারেন।',
+    en: 'Use the Bangla and English controls to change language.',
+  },
+  foundationHelpStepThree: {
+    bn: 'সাহায্য বন্ধ করুন বা Esc চাপুন। আগের ফর্মের লেখা রয়ে যাবে।',
+    en: 'Close Help or press Esc. The underlying form stays in place.',
+  },
   // --- Navigation rail (B1.1) ---------------------------------------------
   navQueue: { bn: 'সিরিয়াল', en: 'Queue' },
   // Beneath the hospital's own name on every console (FR-BRD-12, plan K4).
@@ -692,6 +859,279 @@ export const CONSOLE = {
   pickerOtherChambers: { bn: 'অন্য চেম্বার', en: 'Other chambers' },
   // CARD-B10-NOW (FR-ADM-12; plan R6).
   adminNowTitle: { bn: 'এখন হাসপাতালে', en: 'The hospital now' },
+  manageReview: { bn: 'পরিবর্তন পর্যালোচনা', en: 'Review changes' },
+  manageReviewNote: {
+    bn: 'শুধু এই হাসপাতালের তথ্য বদলাবে। দেখানো পরিবর্তন যাচাই করে নিশ্চিত করুন। আলাদা কাজ আলাদাভাবে সংরক্ষিত হয়।',
+    en: 'Only this hospital is affected. Check the changes before confirming. Separate operations are saved separately.',
+  },
+  manageLeaveTitle: { bn: 'সংরক্ষণ না করা পরিবর্তন বাদ দেবেন?', en: 'Discard unsaved changes?' },
+  manageLeaveNote: {
+    bn: 'সম্পাদনা চালিয়ে যেতে ফিরে যান। বাদ দিলে শুধু সংরক্ষণ না করা লেখা মুছবে; সার্ভারে সম্পন্ন কাজ ফিরিয়ে নেওয়া হবে না।',
+    en: 'Go back to keep editing. Discard removes unsaved edits; completed server changes are kept.',
+  },
+  manageUnsaved: { bn: 'পরিবর্তন এখনও সংরক্ষিত হয়নি', en: 'Unsaved changes' },
+  manageDiscard: { bn: 'পরিবর্তন বাদ দিন', en: 'Discard changes' },
+  manageKeepEditing: { bn: 'ফিরে যান', en: 'Go back' },
+  manageConfirm: { bn: 'নিশ্চিত করে সংরক্ষণ', en: 'Confirm and save' },
+  manageServerChanged: {
+    bn: 'সার্ভারের তথ্য বদলেছে। আপনার লেখা রাখা আছে। পরিবর্তন বাদ দিয়ে নতুন তথ্য দেখে আবার সম্পাদনা করুন।',
+    en: 'Server values changed. Your edits are retained. Discard them to review the latest values before editing again.',
+  },
+  manageField: { bn: 'বিষয়', en: 'Field' },
+  manageBefore: { bn: 'আগে', en: 'Before' },
+  manageAfter: { bn: 'পরে', en: 'After' },
+  manageBlank: { bn: 'দেওয়া নেই', en: 'Not provided' },
+  manageYes: { bn: 'হ্যাঁ', en: 'Yes' },
+  manageNo: { bn: 'না', en: 'No' },
+  manageStaffDescription: {
+    bn: 'কর্মী, তাঁদের ভূমিকা, রিসেপশন ডেস্ক ও সারি পরিচালনার অনুমতি।',
+    en: 'Staff, their roles, reception desks and queue access.',
+  },
+  manageDoctorsDescription: {
+    bn: 'এই হাসপাতালের ডাক্তার, বিভাগ, ফি, কক্ষ ও সাপ্তাহিক চেম্বার।',
+    en: 'This hospital’s doctors, departments, fees, rooms and weekly chambers.',
+  },
+  manageSettingsDescription: {
+    bn: 'রোগীরা যা দেখেন, প্রতিদিনের নিয়ম ও হাসপাতালের প্রস্তুতি।',
+    en: 'What patients see, daily rules and hospital readiness.',
+  },
+  manageStaffList: { bn: 'কর্মী', en: 'Staff' },
+  manageDesks: { bn: 'রিসেপশন ডেস্ক', en: 'Reception desks' },
+  manageAccess: { bn: 'কে কোন সারি চালাতে পারেন', en: 'Who can run which queue' },
+  manageSearchStaff: { bn: 'নাম বা ইমেইল দিয়ে খুঁজুন', en: 'Find by name or email' },
+  manageSearchDoctors: {
+    bn: 'নাম বা বিএমডিসি নম্বর দিয়ে খুঁজুন',
+    en: 'Find by name or BMDC number',
+  },
+  manageAll: { bn: 'সবাই', en: 'All' },
+  manageChange: { bn: 'বদলান', en: 'Change' },
+  manageClose: { bn: 'বন্ধ করুন', en: 'Close' },
+  manageLastLogin: { bn: 'সর্বশেষ সাইন-ইন', en: 'Last sign-in' },
+  manageNeverLogin: { bn: 'এখনও সাইন-ইন করেননি', en: 'Has not signed in yet' },
+  manageActive: { bn: 'সক্রিয়', en: 'Active' },
+  manageInactive: { bn: 'নিষ্ক্রিয়', en: 'Inactive' },
+  manageNoMatches: { bn: 'এই খোঁজে কাউকে পাওয়া যায়নি', en: 'No matching people' },
+  manageNoDesk: { bn: 'কোনো ডেস্ক নেই — হাসপাতালের সব সারি', en: 'No desk — all hospital queues' },
+  manageRoleAccess: {
+    bn: 'এই ভূমিকার অনুমতি ডেস্ক দিয়ে সীমিত হয় না। ডাক্তার অ্যাকাউন্টের সঙ্গে চিকিৎসকের স্বয়ংক্রিয় পরিচয়-যোগ নেই।',
+    en: 'This role is not restricted by desks. Doctor accounts are not automatically linked to a clinician identity.',
+  },
+  manageAssignDesks: { bn: 'এই কর্মীর ডেস্ক বদলান', en: 'Change this person’s desks' },
+  manageDeskConsequence: {
+    bn: 'ডেস্ক থাকলে রিসেপশনিস্ট শুধু সেসব ডেস্কের ডাক্তারদের সারি চালান। শেষ ডেস্ক সরালে বর্তমান নিয়মে হাসপাতালের সব সারি খোলে। ডাক্তার ও ব্যবস্থাপনা ভূমিকা ডেস্ক দিয়ে সীমিত হয় না।',
+    en: 'Assigned receptionists run their desks’ doctors’ queues. Removing their last desk restores access to all hospital queues under the existing rule. Doctor and management roles are not restricted by desks.',
+  },
+  manageDeskWriteNote: {
+    bn: 'প্রতিটি ডেস্ক আলাদাভাবে সংরক্ষিত হয়। কোনোটি ব্যর্থ হলে সম্পন্ন পরিবর্তন রাখা হবে; বাকি কাজের আগে সার্ভারের তথ্য আবার দেখা হবে।',
+    en: 'Each desk is saved separately. If one fails, completed changes are kept; server state is read again before remaining work.',
+  },
+  manageDeskChanged: {
+    bn: 'ডেস্কের তথ্য ইতিমধ্যে বদলেছে। সর্বশেষ তথ্য দেখে আবার পর্যালোচনা করুন।',
+    en: 'The desk has changed. Read the latest state and review again.',
+  },
+  manageCompleted: { bn: 'সম্পন্ন', en: 'Completed' },
+  manageRejected: { bn: 'প্রত্যাখ্যাত', en: 'Rejected' },
+  manageUncertain: {
+    bn: 'ফল নিশ্চিত নয় — সার্ভারে যাচাই দরকার',
+    en: 'Outcome uncertain — server verification needed',
+  },
+  managePending: { bn: 'এখনও চেষ্টা হয়নি', en: 'Not attempted' },
+  manageConfirmed: { bn: 'সার্ভারে যাচাই করা হয়েছে', en: 'Confirmed on server' },
+  manageReconcile: { bn: 'সার্ভারের তথ্য আবার দেখুন', en: 'Read server state again' },
+  manageSaveRemaining: { bn: 'বাকি পরিবর্তন পর্যালোচনা', en: 'Review remaining changes' },
+  manageDeskResults: { bn: 'ডেস্ক পরিবর্তনের ফল', en: 'Desk change results' },
+  manageProfile: { bn: 'হাসপাতালের পরিচয় ও যোগাযোগ', en: 'Name, address and contact' },
+  managePatientSettings: { bn: 'রোগীরা যা দেখবেন', en: 'What patients see' },
+  manageDailySettings: { bn: 'দৈনন্দিন কাজের জন্য', en: 'For everyday work' },
+  manageOccasionalSettings: { bn: 'মাঝেমধ্যে দরকার হবে', en: 'Occasional setup' },
+  manageFace: { bn: 'রোগীর অ্যাপে আপনার হাসপাতাল', en: 'Your hospital in the patient app' },
+  manageRules: { bn: 'সিরিয়ালের নিয়ম', en: 'Queue rules' },
+  manageSms: { bn: 'এই মাসের এসএমএস', en: 'This month’s SMS' },
+  manageRegistration: { bn: 'নিবন্ধনের তথ্য', en: 'Registration details' },
+  manageReadiness: { bn: 'হাসপাতালের প্রস্তুতি', en: 'Hospital readiness' },
+  manageBackSettings: { bn: 'সেটিংসে ফিরে যান', en: 'Back to Settings' },
+  manageInvalid: {
+    bn: 'মানটি গ্রহণযোগ্য সীমা ও বিন্যাসে দিন',
+    en: 'Enter a value in the allowed range and format',
+  },
+  manageReadFailedAfterSave: {
+    bn: 'সার্ভার পরিবর্তন গ্রহণ করেছে, কিন্তু নতুন তথ্য পড়া যায়নি। আবার পড়ে যাচাই করুন।',
+    en: 'The server accepted the change, but the new values could not be read. Refresh to verify them.',
+  },
+  manageWriteFailed: {
+    bn: 'পরিবর্তনের ফল যাচাই করুন। আপনার লেখা রাখা আছে; স্বয়ংক্রিয়ভাবে আবার পাঠানো হবে না।',
+    en: 'Check the outcome of the change. Your edits are retained; it will not be sent again automatically.',
+  },
+  manageRoleReceptionist: {
+    bn: 'সিরিয়াল দেওয়া ও রোগীর সারি পরিচালনা',
+    en: 'Register patients and manage queues',
+  },
+  manageRoleDoctor: {
+    bn: 'বর্তমান হাসপাতাল-ভিত্তিক অনুমতিতে রোগী দেখা ও চিকিৎসা নথি',
+    en: 'Consultations and clinical records under existing hospital-wide access',
+  },
+  manageRoleWard: { bn: 'ওয়ার্ড, ভর্তি ও বেডের অবস্থা', en: 'Wards, admissions and bed status' },
+  manageRoleEmergency: {
+    bn: 'জরুরি রোগী, সক্ষমতা ও রেফারেল',
+    en: 'Emergency cases, capabilities and referrals',
+  },
+  manageRoleLab: { bn: 'টেস্টের কাজ ও রিপোর্ট', en: 'Test work and reports' },
+  manageRolePharmacy: { bn: 'ওষুধের প্রাপ্যতা জানানো', en: 'Record medicine availability' },
+  manageRoleAdmin: {
+    bn: 'কর্মী, অনুমতি, হাসপাতাল সেটিংস ও রিপোর্ট',
+    en: 'Staff, access, hospital settings and reports',
+  },
+  manageDoctorIdentity: { bn: 'ডাক্তারের তথ্য', en: 'Doctor information' },
+  manageConsultMinutes: { bn: 'প্রতি রোগীতে সাধারণত কত মিনিট', en: 'Usual minutes per patient' },
+  manageIdentityRestriction: {
+    bn: 'যাচাই করা বা অন্য হাসপাতালে যুক্ত ডাক্তারের পরিচয় এখানে বদলানো যায় না। ফি ও কক্ষ এই হাসপাতালের নিজস্ব।',
+    en: 'Verified or shared doctor identity cannot be changed here. Fees and rooms belong to this hospital.',
+  },
+  manageStaffConsequence: {
+    bn: 'ভূমিকা, সক্রিয়তা বা নিরাপত্তা বদলালে এই কর্মীর অনুমতি বদলাবে এবং বর্তমান সেশন শেষ হতে পারে। নিজের ব্যবস্থাপনা অনুমতি সরানো বা নিজেকে নিষ্ক্রিয় করা যাবে না।',
+    en: 'Role, activation or security changes affect this person’s access and can end current sessions. You cannot remove your own management access or deactivate yourself.',
+  },
+  manageDoctorConsequence: {
+    bn: 'এই হাসপাতালের ডাক্তার ও চেম্বারের তথ্য বদলাবে। বর্তমান বুকিংয়ের ফি থাকবে। চেম্বার যোগ বা সরানো আলাদা কাজ।',
+    en: 'This hospital’s doctor and chamber settings will change. Existing bookings retain their fee. Adding or removing chambers is a separate operation.',
+  },
+  manageScheduleConsequence: {
+    bn: 'সাপ্তাহিক চেম্বার ও সংশ্লিষ্ট ভবিষ্যৎ সূচি বদলাবে। রোগী বুক করা চেম্বার সরানো হবে না।',
+    en: 'The weekly chamber and relevant future schedule will change. Chambers with bookings are kept.',
+  },
+  manageSaving: { bn: 'সার্ভারের ফলের জন্য অপেক্ষা করুন', en: 'Wait for the server result' },
+  manageHelpStaff: {
+    bn: 'নাম বা ইমেইল দিয়ে কর্মী খুঁজুন। বদলান খুলে ভূমিকা ও ডেস্ক যাচাই করুন; অনুমতি বদলানোর আগে ফল পর্যালোচনা করুন।',
+    en: 'Find staff by name or email. Open Change to review roles and desks, then confirm the access changes.',
+  },
+  manageHelpDesks: {
+    bn: 'ডেস্কের ডাক্তার ও রিসেপশনিস্টই সারি পরিচালনার সীমা ঠিক করে। একাধিক ডেস্কের ফল আলাদা; আংশিক ব্যর্থতায় সম্পন্ন কাজ রাখুন এবং বাকি কাজের আগে সার্ভার আবার পড়ুন।',
+    en: 'Desk doctors and receptionists define queue scope. Multiple desks have separate results; keep completed changes and read server state before the remaining work.',
+  },
+  manageHelpDoctors: {
+    bn: 'ডাক্তার বদলান খুলে এই হাসপাতালের ফি, কক্ষ ও চেম্বার দেখুন। পরিচয়ের সীমা মানুন; অ্যাকাউন্টের সঙ্গে নাম মিলিয়ে চিকিৎসক নির্ধারণ করবেন না।',
+    en: 'Open Change to view this hospital’s fees, rooms and chambers. Respect identity restrictions; matching names does not establish account identity.',
+  },
+  manageHelpSettings: {
+    bn: 'সেটিংসের বিষয় বেছে নিন। আগে ও পরে যাচাই করে সংরক্ষণ করুন। ব্যর্থতায় লেখা রাখুন, সার্ভারের ফল যাচাই করুন; সাহায্য খুললে লেখা মুছবে না।',
+    en: 'Choose a settings group. Review before and after saving. Retain edits on failure and check server state; opening Help keeps your work.',
+  },
+  manageHelpUnsaved: {
+    bn: 'অসম্পূর্ণ পরিবর্তন থাকলে আগে সংরক্ষণ করুন বা পর্যালোচনা করে বাদ দিন। ব্যর্থ হলে লেখা রেখে সার্ভারের ফল যাচাই করুন। সাহায্য খুললে লেখা থাকবে।',
+    en: 'Save unfinished changes or review them before discarding. On failure, keep your edits and check server results. Help keeps your work.',
+  },
+  adminNavToday: { bn: 'আজ', en: 'Today' },
+  adminNavReports: { bn: 'রিপোর্ট', en: 'Reports' },
+  adminNavStaff: { bn: 'কর্মী ও ডেস্ক', en: 'Staff & Desks' },
+  adminNavDoctors: { bn: 'ডাক্তার', en: 'Doctors' },
+  adminNavSettings: { bn: 'সেটিংস', en: 'Settings' },
+  adminTodayDescription: {
+    bn: 'আজকের হাসপাতালের কার্যক্রম ও নজর দেওয়ার বিষয়।',
+    en: 'Hospital activity today and items to check.',
+  },
+  adminReportsDescription: {
+    bn: 'শুধু এই হাসপাতালের হিসাব ও কার্যক্রমের সারসংক্ষেপ। রোগীর ব্যক্তিগত তথ্য নেই।',
+    en: 'Activity and financial summaries for this hospital. No patient records.',
+  },
+  adminDhakaTime: { bn: 'বাংলাদেশ সময়', en: 'Bangladesh time' },
+  adminPollingNotice: {
+    bn: 'প্রতি মিনিটে নতুন তথ্য আনা হয়। এটি সরাসরি লাইভ সংযোগ নয়। অপেক্ষার সংখ্যায় আগাম বুকিংও থাকে।',
+    en: 'Refreshed every minute; this is a polling snapshot. Waiting includes booked patients who may not have arrived.',
+  },
+  adminSnapshotOld: {
+    bn: 'আগের তথ্য দেখানো হচ্ছে। নতুন তথ্যের জন্য আবার চেষ্টা করুন।',
+    en: 'Showing older information. Retry to fetch current information.',
+  },
+  adminAttentionTitle: { bn: 'নজর দেওয়া দরকার', en: 'Needs attention' },
+  adminAttentionNone: {
+    bn: 'দেখানো চেম্বারে এখন কোনো পরিচিত সতর্কতা নেই।',
+    en: 'No recorded attention signals in the chambers shown.',
+  },
+  adminAttentionContact: {
+    bn: 'সংশ্লিষ্ট রিসেপশন ডেস্কের সঙ্গে কথা বলুন। এখান থেকে চেম্বার বদলানো যায় না।',
+    en: 'Contact the reception desk. Chamber operations cannot be changed here.',
+  },
+  adminAttentionOverdue: {
+    bn: 'নির্ধারিত সময় পেরিয়েছে; চেম্বার এখনও শুরু হয়নি।',
+    en: 'The planned start has passed; the chamber has not started.',
+  },
+  adminAttentionPaused: {
+    bn: 'চেম্বারে বিরতি চলছে এবং রোগী অপেক্ষায় আছেন।',
+    en: 'The chamber is paused with patients waiting.',
+  },
+  adminAttentionRoom: { bn: 'কক্ষের তথ্য দেওয়া নেই।', en: 'No room has been recorded.' },
+  adminAttentionDesk: {
+    bn: 'এই ডাক্তারের সঙ্গে কোনো রিসেপশন ডেস্ক যুক্ত নেই।',
+    en: 'This doctor has no assigned reception desk.',
+  },
+  adminAttentionBeds: {
+    bn: 'বেডের তথ্য পাঁচ মিনিটের বেশি আগের বা কখন লেখা হয়েছে জানা নেই। ওয়ার্ডের সঙ্গে যাচাই করুন।',
+    en: 'The last bed record is over five minutes old or has no timestamp. Check with the ward.',
+  },
+  adminBedsUnavailable: { bn: 'বেডের সংখ্যা জানা নেই', en: 'Bed count unavailable' },
+  adminBedsUnavailableNote: {
+    bn: 'বেড সেবা নেই বা প্রকাশিত হিসাব নেই।',
+    en: 'No bed service or published count is available.',
+  },
+  adminInspectChamber: { bn: 'চেম্বারের তথ্য দেখুন', en: 'View chamber details' },
+  adminViewExistingSetup: { bn: 'বিদ্যমান সেটিংস খুলুন', en: 'Open existing settings' },
+  adminChambersTitle: { bn: 'আজকের চেম্বার', en: "Today's chambers" },
+  adminChambersDescription: {
+    bn: 'ডেস্ক অনুযায়ী চেম্বার। একাধিক ডেস্কে যুক্ত ডাক্তার একাধিকবার দেখা যেতে পারেন; ওপরের মোট সংখ্যায় পুনরাবৃত্তি নেই।',
+    en: 'Chambers grouped by desk. Doctors assigned to several desks appear in each group; headline totals are not duplicated.',
+  },
+  adminChambersTruncated: {
+    bn: 'প্রথম ২৫০টি চেম্বার দেখানো হচ্ছে। নজর দেওয়ার তালিকাও এই চেম্বারগুলোর জন্য; ওপরের মোট সংখ্যায় পুরো হাসপাতাল আছে।',
+    en: 'Showing the first 250 chambers. Attention signals cover these chambers only; headline totals cover the full hospital.',
+  },
+  adminChambersEmpty: {
+    bn: 'আজ কোনো চেম্বার নথিভুক্ত নেই।',
+    en: 'No chambers are recorded for today.',
+  },
+  adminNoDesk: { bn: 'ডেস্ক যুক্ত নেই', en: 'No desk assigned' },
+  adminRoom: { bn: 'কক্ষ', en: 'Room' },
+  adminChamberStatus: { bn: 'অবস্থা', en: 'Status' },
+  adminChamberTime: { bn: 'নির্ধারিত / শুরু', en: 'Planned / started' },
+  adminChamberWaiting: { bn: 'অপেক্ষায়', en: 'Waiting' },
+  adminChamberSeen: { bn: 'দেখা হয়েছে', en: 'Seen' },
+  adminChamberNoShows: { bn: 'আসেননি', en: 'No-shows' },
+  adminChamberScheduled: { bn: 'শুরু হয়নি', en: 'Not started' },
+  adminChamberRunning: { bn: 'চলছে', en: 'Running' },
+  adminChamberPaused: { bn: 'বিরতি', en: 'Paused' },
+  adminChamberEnded: { bn: 'শেষ', en: 'Ended' },
+  adminChamberCancelled: { bn: 'বাতিল', en: 'Cancelled' },
+  adminDeclaredDelay: {
+    bn: 'মোট ঘোষিত বিলম্ব: {minutes} মিনিট',
+    en: 'Total declared delay: {minutes} min',
+  },
+  adminChamberCountsNote: {
+    bn: 'দেখা হয়েছে ও আসেননি সংখ্যায় বুকিংয়ের নথিভুক্ত অবস্থা ব্যবহার করা হয়েছে। শেষ বা বাতিল চেম্বারের অবশিষ্ট বুকিং ওপরের অপেক্ষার মোট সংখ্যায় নেই।',
+    en: 'Seen and no-shows use recorded booking states. Remaining bookings in ended or cancelled chambers are excluded from the headline waiting count.',
+  },
+  adminTodayFigures: { bn: 'আজকের হিসাব', en: "Today's figures" },
+  adminLoadedRange: { bn: 'দেখানো হিসাবের সময়সীমা:', en: 'Figures shown for:' },
+  adminRangeLoading: { bn: 'নতুন সময়সীমার হিসাব আনা হচ্ছে।', en: 'Loading the requested period.' },
+  adminExportBreakdown: { bn: 'CSV-এর বিভাগ', en: 'CSV breakdown' },
+  adminReportFreshness: {
+    bn: 'প্রতিটি রিপোর্টে তার নিজস্ব তথ্যের সময় আছে। সারসংক্ষেপ সর্বোচ্চ পাঁচ মিনিট আগের হতে পারে; অন্য হিসাব পড়ার সময় নেওয়া হয়। রেফারেল ও মতামতের সময় শেষ নথির সময়।',
+    en: 'Each report has its own timestamp. Daily summaries may be up to five minutes old; other figures are read on request. Referral and feedback timestamps describe the newest record.',
+  },
+  adminHelpToday: {
+    bn: 'আজকের সংখ্যাগুলো প্রতি মিনিটে আনা হয়। সময় দেখুন; সংযোগ না থাকলে আগের তথ্য থেকে যায়। রোগীর নাম বা চিকিৎসার তথ্য এখানে নেই।',
+    en: 'Today refreshes every minute. Check the timestamps; a failed read retains older information. No patient names or clinical details are shown.',
+  },
+  adminHelpChambers: {
+    bn: 'চেম্বারের অবস্থা ও সংখ্যা নথিভুক্ত তথ্য। নজর দেওয়ার বিষয় যাচাই করতে ডেস্কের সঙ্গে কথা বলুন; চেম্বারের তথ্যের লিংক একই পাতার সারিতে নিয়ে যায়।',
+    en: 'Chamber states and counts are recorded information. Contact the desk to verify an attention signal; View chamber details takes you to its row on this page.',
+  },
+  adminHelpReports: {
+    bn: 'চারটি সময়সীমা ও নয়টি রিপোর্ট আছে। CSV নির্বাচিত রিপোর্ট ও দেখানো সময়সীমার জন্য; আয় রিপোর্টের চারটি CSV বিভাগ আছে। প্রিন্টে নির্বাচিত রিপোর্ট ও তার সময় থাকবে।',
+    en: 'Choose one of four periods and nine reports. CSV uses the selected report and displayed dates; Revenue offers four CSV breakdowns. Print includes the selected report and its timestamps.',
+  },
+  adminHelpUnavailable: {
+    bn: 'শূন্য মানে নথিতে সংখ্যা শূন্য। ড্যাশ বা সেবা নেই লেখা থাকলে তথ্য জানা নেই। রেফারেল ও মতামতের সময় শেষ নথির সময়, সংযোগের অবস্থা নয়।',
+    en: 'Zero is a recorded zero. A dash or an absent service means information is unavailable. Referral and feedback ages describe the newest record, not connection health.',
+  },
   adminNowDoctors: { bn: 'আজকের ডাক্তার', en: "Today's doctors" },
   adminNowDoctorsNote: { bn: 'এখন বসছেন / আজ চেম্বার আছে', en: 'sitting now / scheduled today' },
   adminNowWaiting: { bn: 'অপেক্ষায় রোগী', en: 'Patients waiting' },
@@ -758,6 +1198,163 @@ export const CONSOLE = {
 
   saveDraft: { bn: 'খসড়া রাখুন', en: 'Save draft' },
   draftSaved: { bn: 'খসড়া রাখা হয়েছে', en: 'Draft saved' },
+  consultationEditing: {
+    bn: 'এই নোট সিরিয়াল {serial}-এর রোগীর জন্য।',
+    en: 'Editing the patient with serial {serial}.',
+  },
+  doctorQueue: { bn: 'রোগীর সারি', en: 'Patient queue' },
+  doctorSignAndNext: { bn: 'রেকর্ড দিন ও পরবর্তী', en: 'Sign & Next' },
+  doctorDraftRetryFirst: {
+    bn: 'স্বাক্ষরের আগে অনিশ্চিত খসড়া সেভটি আবার যাচাই করুন।',
+    en: 'Retry the uncertain draft save before signing.',
+  },
+  doctorIntakeTitle: { bn: 'রোগী যা জানিয়েছেন', en: 'What the patient told us' },
+  doctorTestsUnavailable: {
+    bn: 'পরীক্ষার তালিকা এখন পাওয়া যায়নি।',
+    en: 'The test catalogue is currently unavailable.',
+  },
+  doctorQueueHere: { bn: 'এখন চেম্বারে', en: 'In the chamber now' },
+  doctorQueueWaiting: { bn: 'অপেক্ষায়', en: 'Waiting' },
+  doctorQueueSeen: { bn: 'এই চেম্বারে দেখা হয়েছে', en: 'Seen in this chamber' },
+  doctorQueueReadOnly: {
+    bn: 'রিসেপশন সারি চালায়। এই তালিকা থেকে রোগী ডাকা বা ক্রম বদলানো যায় না।',
+    en: 'Reception manages the queue. This list does not call patients or change their order.',
+  },
+  doctorQueueNamesMissing: {
+    bn: 'নাম নিশ্চিত করা যায়নি। সার্ভারের সিরিয়াল ও অবস্থা দেখানো হচ্ছে।',
+    en: 'Names could not be confirmed. Server serials and states are shown.',
+  },
+  doctorRecordFor: {
+    bn: 'সিরিয়াল {serial} — এই রোগীর রেকর্ড',
+    en: 'Serial {serial} — this patient’s record',
+  },
+  doctorNotSaved: { bn: 'এখনও সার্ভারে রাখা হয়নি', en: 'Not saved to the server yet' },
+  doctorSaving: { bn: 'খসড়া রাখা হচ্ছে…', en: 'Saving draft…' },
+  doctorSigning: { bn: 'স্বাক্ষরের ফলের অপেক্ষায়…', en: 'Waiting for signing confirmation…' },
+  doctorSaveFailed: {
+    bn: 'সেভের ফল নিশ্চিত নয় — লেখা আছে',
+    en: 'Save outcome unconfirmed — writing retained',
+  },
+  doctorSavedWithoutFollowUp: {
+    bn: 'খসড়া রাখা হয়েছে — ফলো-আপ ছাড়া',
+    en: 'Draft saved — without follow-up',
+  },
+  doctorFollowUpCustom: { bn: 'নিজের মতো', en: 'Custom' },
+  doctorDiscardFollowUp: {
+    bn: 'অসংরক্ষিত ফলো-আপ বাদ দিয়ে বর্তমান রোগী খুলুন',
+    en: 'Discard unsaved follow-up and open current patient',
+  },
+  doctorDiscardFollowUpConfirm: {
+    bn: 'অন্য নোট খসড়ায় রাখা আছে। ভুল ফলো-আপ শুধু এই স্ক্রিনে আছে। এটি বাদ দিয়ে বর্তমান রোগী খুলবেন?',
+    en: 'Other notes are saved as a draft. This invalid follow-up exists only on screen. Discard it and open the current patient?',
+  },
+  doctorFollowUpDays: { bn: 'কত দিন পরে (১–৩৬৫)', en: 'Days from today (1–365)' },
+  doctorFollowUpInvalid: {
+    bn: '১ থেকে ৩৬৫-এর পূর্ণ সংখ্যা দিন। এই মান ঠিক না হলে স্বাক্ষর করা যাবে না; অন্য নোট খসড়ায় রাখা যাবে, ফলো-আপ ছাড়া।',
+    en: 'Enter a whole number from 1 to 365. Fix this before signing; other notes can be saved as a draft without follow-up.',
+  },
+  doctorFollowUpExcluded: {
+    bn: 'শেষ খসড়ায় এই ফলো-আপ রাখা হয়নি। আগের সংরক্ষিত ফলো-আপও সরেছে।',
+    en: 'This follow-up was excluded from the last draft. Any previously saved follow-up was cleared too.',
+  },
+  doctorFollowUpNoAppointment: {
+    bn: 'এটি শুধু দেখানোর তারিখ। অ্যাপয়েন্টমেন্ট বা রিমাইন্ডার তৈরি হয় না।',
+    en: 'This is a follow-up date only. No appointment or reminder is created.',
+  },
+  doctorSignTitle: { bn: 'এই রোগীর রেকর্ড নিশ্চিত করুন', en: 'Confirm this patient’s record' },
+  doctorSignEffect: {
+    bn: 'এই রেকর্ড স্বাক্ষরিত হলে আর বদলানো যাবে না। সার্ভার এই রোগী শেষ করে পরের রোগী ডাকতে পারে। রিসেপশন সারি বদলালে ফল আলাদা হবে; নির্দিষ্ট পরের রোগী নিশ্চিত নয়।',
+    en: 'Signing makes this record final. The backend may finish this encounter and call the next patient. Reception can change the queue; a specific next patient is not guaranteed.',
+  },
+  doctorSignConfirm: { bn: 'হ্যাঁ, এই রেকর্ড দিন', en: 'Yes, file this record' },
+  doctorBackToRecord: { bn: 'রেকর্ডে ফিরুন', en: 'Back to record' },
+  doctorDelayTitle: { bn: '৩০ মিনিট দেরি জানান?', en: 'Announce a 30-minute delay?' },
+  doctorDelayEffect: {
+    bn: 'এই চেম্বারের দেরিতে ৩০ মিনিট যোগ হবে। সারির আপডেট ও পাঠানোর অপেক্ষার অবস্থা দেখুন। এটি রোগীর অ্যাপয়েন্টমেন্ট বদলায় না।',
+    en: 'Add 30 minutes to this chamber’s delay. Check queue confirmation and any pending work. This does not reschedule appointments.',
+  },
+  doctorDelayQueued: {
+    bn: '৩০ মিনিটের দেরি পাঠানোর কাজ নেওয়া হয়েছে। সারির নিশ্চিত ফল দেখুন।',
+    en: 'The 30-minute delay action was submitted. Check the confirmed queue outcome.',
+  },
+  doctorHelpIdentity: {
+    bn: 'উপরে নাম ও সিরিয়াল মিলিয়ে রোগী নিশ্চিত করুন। রিসেপশন অন্য রোগী ডাকলেও আপনার নোট এই রোগীরই থাকে।',
+    en: 'Confirm the name and serial at the top. Your note stays with this patient if reception calls someone else.',
+  },
+  doctorHelpHistory: {
+    bn: 'এই হাসপাতালের ইতিহাস দেখুন। অন্য হাসপাতালের তথ্যের জন্য রোগীর বৈধ কোড লাগে; রোগী বদলালে খোলা তথ্য বন্ধ হয়।',
+    en: 'Review this hospital’s history. Other-hospital records need the patient’s valid code; open records close when the patient changes.',
+  },
+  doctorHelpNotes: {
+    bn: 'রোগ নির্ণয়, ওষুধ ও পরামর্শ লিখুন। ওষুধের নাম নিজে লেখা যায়; সকাল+দুপুর+রাত ও কত দিন ঠিক করুন।',
+    en: 'Write diagnosis, medicines and advice. Free-text medicine names are allowed; check the schedule and duration.',
+  },
+  doctorHelpDraft: {
+    bn: 'খসড়া রাখুন চাপুন এবং নিশ্চিত ফল দেখুন। খসড়া রোগীকে দেওয়া চূড়ান্ত রেকর্ড নয়। অসংরক্ষিত লেখা ব্রাউজার বন্ধ করলে হারাতে পারে।',
+    en: 'Press Save draft and check the confirmed outcome. A draft is not a final patient record. Closing the browser can lose unsaved writing.',
+  },
+  doctorHelpTests: {
+    bn: 'পরীক্ষা বেছে নিয়ে খসড়া রাখলে বা স্বাক্ষর করলে বর্তমান নিয়মে অর্ডার পাঠানো হয়। ব্যর্থ অর্ডার একই রোগীর জন্য আবার পাঠান।',
+    en: 'Selected tests are ordered when saving a draft or signing under V1 rules. Retry failed orders for their original patient.',
+  },
+  doctorHelpFollowUp: {
+    bn: '৭, ১৪, ৩০ দিন বা ১–৩৬৫ দিনের নিজের মতো মান দিন। ভুল মানে স্বাক্ষর বন্ধ; খসড়ায় অন্য নোট রাখা যায়, ফলো-আপ বাদ দিয়ে।',
+    en: 'Choose 7, 14, 30 or a custom 1–365 days. Invalid input blocks signing; a draft can save other notes without follow-up.',
+  },
+  doctorHelpSign: {
+    bn: 'স্বাক্ষরের আগে নাম, সিরিয়াল ও সারাংশ মিলিয়ে দেখুন। নিশ্চিত ফল না পাওয়া পর্যন্ত লেখা আছে; ফল অনিশ্চিত হলে যাচাই করুন।',
+    en: 'Review name, serial and summary before signing. Writing remains until confirmation; check the result after an uncertain reply.',
+  },
+  doctorHelpErrors: {
+    bn: 'ব্যর্থ সেভ বা সারি বদলালে লেখা বাদ দেবেন না। পুরনো রোগীর খসড়া রাখুন, অথবা সার্ভারের রেকর্ড দেখে স্পষ্টভাবে সিদ্ধান্ত নিন।',
+    en: 'Keep your writing after a failed save or queue change. Save the old patient’s draft or review the server record before making an explicit decision.',
+  },
+  consultationFollowUpDate: {
+    bn: 'সংরক্ষিত ফলো-আপের তারিখ: {date}',
+    en: 'Saved follow-up date: {date}',
+  },
+  consultationSignedConflict: {
+    bn: 'অন্য ডিভাইসে ভিন্ন লেখা স্বাক্ষরিত হয়েছে। আপনার লেখা জমা হয়নি এবং এখানেই আছে। স্বাক্ষরিত রেকর্ড দেখে সিদ্ধান্ত নিন।',
+    en: 'Another device signed different content. Your writing was not filed and remains here. Review the signed record before deciding what to discard.',
+  },
+  consultationChanged: {
+    bn: 'রিসেপশনের রোগী বদলেছে। এই নোট আগের রোগীরই আছে। খসড়া রাখুন অথবা নিশ্চিত করে বাদ দিন, তারপর বর্তমান রোগী খুলুন।',
+    en: 'Reception changed the queue. This note still belongs to the original patient. Save the draft or confirm discarding it before opening the current patient.',
+  },
+  consultationConflict: {
+    bn: 'অন্য ডিভাইসে রেকর্ড বদলেছে অথবা এই কাজ প্রত্যাখ্যাত হয়েছে। আপনার লেখা আছে। সার্ভারের খসড়া দেখে সিদ্ধান্ত নিন।',
+    en: 'Another device changed the record or this operation was refused. Your writing is retained. Review the server draft before continuing.',
+  },
+  consultationSigned: {
+    bn: 'সার্ভারে এই রোগীর রেকর্ড স্বাক্ষরিত হয়েছে।',
+    en: 'The backend confirmed this patient’s signed record.',
+  },
+  consultationSignedChanged: {
+    bn: 'রেকর্ড স্বাক্ষরিত হয়েছে। রিসেপশনের রোগী বদলেছে; এই স্বাক্ষর নতুন রোগীকে শেষ করেনি।',
+    en: 'Record signed. The queue changed; this sign did not finish the new patient.',
+  },
+  consultationSignedRetry: {
+    bn: 'রেকর্ড স্বাক্ষরিত হয়েছে। পরের রোগী ডাকার ফল নিশ্চিত নয়। ফল যাচাই করুন।',
+    en: 'Record signed. Queue advancement needs result checking.',
+  },
+  consultationCheckSign: {
+    bn: 'স্বাক্ষর ও সারির ফল যাচাই করুন',
+    en: 'Check signing and queue result',
+  },
+  consultationReview: { bn: 'সার্ভারের খসড়া খুলুন', en: 'Open server draft' },
+  consultationReloadConfirm: {
+    bn: 'আপনার বর্তমান লেখা বাদ দিয়ে এই রোগীর সার্ভারের খসড়া খুলবেন? আগে প্রয়োজনীয় লেখা সংরক্ষণ করুন।',
+    en: 'Replace your current writing with this patient’s server draft? Preserve any needed writing before confirming.',
+  },
+  consultationContinue: { bn: 'বর্তমান রোগী খুলুন', en: 'Open current patient' },
+  consultationDiscard: {
+    bn: 'নোট বাদ দিয়ে বর্তমান রোগী খুলুন',
+    en: 'Discard note and open current patient',
+  },
+  consultationDiscardConfirm: {
+    bn: 'এই রোগীর অসংরক্ষিত নোট বাদ দেবেন? এটি আর ফেরত পাওয়া যাবে না।',
+    en: 'Discard this patient’s unsaved note? It cannot be recovered.',
+  },
   signAndNext: { bn: 'রেকর্ড দিন ও পরবর্তী', en: 'Save record and next' },
   signedAndCalled: {
     bn: 'রেকর্ড জমা হয়েছে। সিরিয়াল {serial} ডাকা হয়েছে।',
@@ -770,8 +1367,8 @@ export const CONSOLE = {
   // APP_FLOW.md B2: "if the prescription fails to save, the consultation is
   // **not** marked done… with the draft preserved locally".
   visitSaveFailed: {
-    bn: 'রেকর্ড জমা হয়নি, তাই রোগী শেষ করা হয়নি। যা লিখেছেন তা রয়ে গেছে — আবার চেষ্টা করুন।',
-    en: 'The record did not save, so the consultation was not closed. What you wrote is still here — try again.',
+    bn: 'সার্ভারের ফল নিশ্চিত করা যায়নি। আপনার লেখা রয়ে গেছে। স্বাক্ষর পাঠিয়ে থাকলে ফল যাচাই করুন; নইলে আবার খসড়া রাখুন।',
+    en: 'The server outcome could not be confirmed. Your writing is retained. Check the result if signing was sent; otherwise retry saving the draft.',
   },
   needSomethingToSign: {
     bn: 'রোগ নির্ণয়, পরামর্শ বা ফলো-আপ — অন্তত একটি লিখুন',
@@ -2667,11 +3264,126 @@ export const CONSOLE = {
   settingsSaveRoles: { bn: 'দায়িত্ব সংরক্ষণ করুন', en: 'Save roles' },
 
   // --- Counter registration and walk-ins (S-B-03, MOD-B02-WALKIN, pilot step 23) --
+  regAccess: {
+    bn: 'আপনার অনুমতি বদলেছে। কাজের জায়গা আবার বেছে নিন। সার্ভার এই কাজটি গ্রহণ করেনি।',
+    en: 'Your access has changed. Choose your workspace again. The server refused this action.',
+  },
+  regPaused: { bn: 'বিরতি চলছে', en: 'Paused' },
+  regStepPhone: { bn: 'মোবাইল নম্বর', en: 'Mobile number' },
+  regStepPatient: { bn: 'রোগী', en: 'Patient' },
+  regStepDoctor: { bn: 'ডাক্তার / চেম্বার', en: 'Doctor / chamber' },
+  regStepSerial: { bn: 'সিরিয়াল নিশ্চিত', en: 'Serial confirmation' },
+  regAutoSearch: {
+    bn: 'সঠিক মোবাইল নম্বর হলে নিজে থেকে খোঁজা হবে।',
+    en: 'A valid mobile number is searched automatically.',
+  },
+  regIdentityCheck: {
+    bn: 'এক নম্বরে পরিবারের একাধিক ব্যক্তি থাকতে পারেন। নাম, বয়স ও লিঙ্গ মিলিয়ে রোগীকে জিজ্ঞেস করে নিশ্চিত করুন।',
+    en: 'A household may share a number. Ask the patient and check the name, age and sex before confirming.',
+  },
+  regConfirmPatient: { bn: 'এই রোগী নিশ্চিত করুন', en: 'Confirm this patient' },
+  regNotListed: { bn: 'এই তালিকায় নেই — নতুন রোগী', en: 'Not listed — new patient' },
+  regNameTaken: {
+    bn: 'এই নামের রেকর্ড আছে। নতুন করে তৈরি না করে সঠিক রোগী নিশ্চিত করুন। একই নামের ভিন্ন ব্যক্তি হলে এখানে থামুন; পরিচয় যাচাইয়ের সহায়তা নিন।',
+    en: 'A record with this name exists. Confirm the correct patient instead of creating another. For a different person with the same name, stop and seek identity-verification help.',
+  },
+  regAmbiguous: {
+    bn: 'এই তথ্য দিয়ে ব্যক্তিদের আলাদা করা যাচ্ছে না। এগোবেন না; পরিচয় যাচাইয়ের সহায়তা নিন।',
+    en: 'These details cannot distinguish the people. Stop and seek identity-verification help.',
+  },
+  regExisting: { bn: 'আগে নিবন্ধিত', en: 'Existing patient' },
+  regNew: { bn: 'নতুন রোগীর রেকর্ড তৈরি হয়েছে', en: 'New patient record created' },
+  regNameError: {
+    bn: 'রোগীর নাম দিন, সর্বোচ্চ ১২০ অক্ষর।',
+    en: 'Enter the patient’s name, up to 120 characters.',
+  },
+  regAgeError: {
+    bn: 'বয়স ০ থেকে ১৩০ পূর্ণ বছর দিন।',
+    en: 'Enter a whole-number age from 0 to 130.',
+  },
+  regSexError: { bn: 'লিঙ্গ বেছে নিন।', en: 'Choose the sex.' },
+  regUncertain: {
+    bn: 'সার্ভারের ফল নিশ্চিত নয়। কাজটি হয়ে থাকতে পারে। একই অনুরোধ আবার পাঠিয়ে ফল যাচাই করুন; নতুন করে শুরু করবেন না।',
+    en: 'The result is uncertain. Registration may already have completed. Check its result before starting again.',
+  },
+  regRetrySame: { bn: 'ফল যাচাই করুন', en: 'Check result' },
+  regGiveSerial: { bn: 'সিরিয়াল দিন', en: 'Give serial' },
+  regServerOnly: {
+    bn: 'নিশ্চিত করার পর সার্ভার সিরিয়াল দেবে। রোগী সারির শেষে যোগ হবেন।',
+    en: 'The server issues the serial after submission. The patient joins the end of the queue.',
+  },
+  regNextPatient: { bn: 'পরের রোগী', en: 'Next patient' },
+  regBackQueue: { bn: 'এই ডাক্তারদের সারিতে ফিরুন', en: 'Return to this chamber’s queue' },
+  regTellSerial: { bn: 'রোগীকে এই নম্বরটি বলে দিন', en: 'Tell the patient this number' },
+  regStartOver: { bn: 'নতুন করে শুরু', en: 'Start over' },
+  regLeaveTitle: { bn: 'অসম্পূর্ণ কাজ ছেড়ে যাবেন?', en: 'Leave unfinished registration?' },
+  regLeaveBody: {
+    bn: 'এখানে লেখা তথ্য মুছে যাবে। ইতিমধ্যে তৈরি রোগীর রেকর্ড মুছবে না। অনিশ্চিত ফল থাকলে আগে একই অনুরোধ যাচাই করুন।',
+    en: 'Entered information will be cleared. Any patient record already created remains. Resolve an uncertain result by checking the same request first.',
+  },
+  regDiscard: { bn: 'লেখা ছেড়ে এগিয়ে যান', en: 'Leave entered information' },
+  regSummary: { bn: 'সিরিয়াল দেওয়ার আগে দেখুন', en: 'Review before giving a serial' },
+  regFromQueue: {
+    bn: 'রোগী এই চেম্বার থেকে এসেছেন। ডাক্তার আগে থেকেই বাছাই করা আছে।',
+    en: 'Started from this queue. Its doctor is preselected.',
+  },
+  regUnavailableContext: {
+    bn: 'যে চেম্বার থেকে এসেছেন তা এখানে অনুমোদিত বা উপলব্ধ নয়। ভুল চেম্বারে যোগ না করে সারিতে ফিরে যান।',
+    en: 'The originating chamber is not authorised or available here. Return to Reception before choosing another chamber.',
+  },
+  regPreserved: {
+    bn: 'আপনার লেখা রাখা আছে। সংযোগ ফিরলে চালিয়ে যান।',
+    en: 'Your entered information is retained. Continue when the connection returns.',
+  },
+  regPending: {
+    bn: 'সার্ভারের ফলের অপেক্ষায় — আবার চাপবেন না।',
+    en: 'Waiting for the server — do not submit again.',
+  },
+  regCreatedNoSerial: {
+    bn: 'রোগীর রেকর্ড আছে। চেম্বারে যোগ না করা পর্যন্ত সিরিয়াল নেই।',
+    en: 'The patient record exists. There is no serial until they are added to a chamber.',
+  },
+  regListRead: { bn: 'চেম্বারের তালিকা পড়ার সময়', en: 'Chamber list read time' },
+  regHelpPhone: {
+    bn: 'মোবাইল নম্বর দিন। বাংলা সংখ্যা বা +৮৮০ নম্বরও ব্যবহার করা যায়। সঠিক নম্বরে নিজে থেকে খোঁজা হবে।',
+    en: 'Enter a mobile number. Bangla digits and +880 numbers are supported. Valid numbers are searched automatically.',
+  },
+  regHelpPatient: {
+    bn: 'এক নম্বরে সবাই একই ব্যক্তি নন। রোগীর নাম, বয়স ও লিঙ্গ যাচাই করে নিশ্চিত করুন। একই নামের দ্বিধা থাকলে থামুন।',
+    en: 'People sharing a number are separate people. Check and confirm the patient’s name, age and sex. Stop when a same-name identity is ambiguous.',
+  },
+  regHelpDoctor: {
+    bn: 'নিজের ডেস্কের চেম্বার বেছে নিন। বন্ধ চেম্বারে যোগ করা যাবে না। সারির মাঝখানে বসাতে ওই সারির ওয়াক-ইন ব্যবহার করুন।',
+    en: 'Choose a chamber for your desk. Closed chambers cannot accept patients. Use that queue’s walk-in flow for insertion within the queue.',
+  },
+  regHelpSerial: {
+    bn: 'সার্ভার নিশ্চিত করলে বড় সিরিয়ালটি রোগীকে বলুন। পরের রোগী বা ওই ডাক্তারদের সারিতে ফিরুন।',
+    en: 'After the server confirms, tell the patient the large serial. Register the next patient or return to that queue.',
+  },
+  regHelpNetwork: {
+    bn: 'সংযোগ না থাকলে লেখা রাখুন। ফল অনিশ্চিত হলে একই অনুরোধ যাচাই করুন। নতুন করে জমা দিলে ভুল হতে পারে।',
+    en: 'Keep the form during an outage. If the outcome is uncertain, check the same request. A fresh submission can cause mistakes.',
+  },
+  regReused: {
+    bn: 'সার্ভার আগে থাকা রেকর্ড ফিরিয়েছে। লেখা তথ্যের বদলে নিচের সংরক্ষিত পরিচয় দেখে নিশ্চিত করুন।',
+    en: 'The server returned an existing record. Check the stored identity below before confirming, rather than assuming it matches what you typed.',
+  },
+  regSelectDoctor: { bn: 'ডাক্তার / চেম্বার বেছে নিন', en: 'Choose a doctor / chamber' },
+  regClosed: {
+    bn: 'বন্ধ চেম্বার — নতুন রোগী নেওয়া যাবে না',
+    en: 'Closed chamber — no new patients',
+  },
+  regSerialIssued: { bn: 'সার্ভার সিরিয়াল নিশ্চিত করেছে', en: 'Serial confirmed by the server' },
   counterPhone: { bn: 'রোগীর মোবাইল নম্বর', en: "Patient's mobile number" },
   counterFind: { bn: 'খুঁজুন', en: 'Find' },
   counterPhoneInvalid: {
     bn: 'এটি বাংলাদেশের মোবাইল নম্বর নয়। যেমন ০১৭১২৩৪৫৬৭৮।',
     en: 'That is not a Bangladeshi mobile number, such as 01712345678.',
+  },
+  /** FR-DEM-08: a demonstration refused a person's number. */
+  counterDemoPhone: {
+    bn: 'ডেমোতে শুধু ডেমোর নিজস্ব নম্বর নেওয়া হয়, যেমন ০১৩৮০০০০০০১। কারও আসল নম্বর দেবেন না।',
+    en: 'The demonstration takes only its own numbers, such as 01380000001. Never enter a real person’s number.',
   },
   counterFound: { bn: 'এই নম্বরে যাঁরা আছেন', en: 'Registered under this number' },
   counterNoneFound: {
@@ -2851,6 +3563,11 @@ export const CONSOLE = {
   importBy: { bn: '{name}-এর আমদানি, {when}', en: 'Imported by {name}, {when}' },
   importStateChecked: { bn: 'যাচাই হয়েছে, অনুমোদন বাকি', en: 'Checked, awaiting approval' },
   importStateCommitted: { bn: 'সংরক্ষিত', en: 'Saved' },
+  govWorkspaceLabel: { bn: 'জাতীয়', en: 'National' },
+  importUndoProtected: {
+    bn: 'আমদানিতে কর্মী বা ডাক্তারের তথ্য বদলালে এখানে তা ফিরিয়ে নেওয়া যাবে না। সেটিংসে তথ্য ও অনুমতি পর্যালোচনা করুন। পরবর্তী কাজ বা পরিবর্তন থাকা অন্য সারিও ফিরিয়ে নেওয়া যাবে না।',
+    en: 'Imported staff or doctor updates cannot be undone here. Review their details and permissions in Settings. Other rows with later work or changes also cannot be undone.',
+  },
   importStateUndone: { bn: 'ফিরিয়ে নেওয়া', en: 'Taken back' },
   importStateDiscarded: { bn: 'বাতিল', en: 'Discarded' },
   importOffline: { bn: 'আমদানি করতে ইন্টারনেট সংযোগ লাগবে', en: 'Importing needs a connection' },
@@ -3842,6 +4559,11 @@ export const PATIENT = {
   accountPhoneInvalid: {
     bn: 'এটি বাংলাদেশের মোবাইল নম্বর নয়। যেমন ০১৭১২৩৪৫৬৭৮।',
     en: 'That is not a Bangladeshi mobile number, such as 01712345678.',
+  },
+  /** FR-DEM-08: a demonstration refused a person's number. */
+  demoPhoneRefused: {
+    bn: 'ডেমোতে শুধু ডেমোর নিজস্ব নম্বর নেওয়া হয়, যেমন ০১৩৮০০০০০০১। কারও আসল নম্বর দেবেন না।',
+    en: 'The demonstration takes only its own numbers, such as 01380000001. Never enter a real person’s number.',
   },
   accountTooMany: {
     bn: 'এই নম্বরে অনেকবার কোড পাঠানো হয়েছে। এক ঘণ্টা পর আবার চেষ্টা করুন।',

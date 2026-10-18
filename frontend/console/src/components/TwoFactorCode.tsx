@@ -18,9 +18,10 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
-import { format, formatClock, numeralsFor, t, toLatinDigits } from '@platform/i18n';
-import { Button, Input, useLocale } from '@platform/ui';
+import { CONSOLE, format, formatClock, numeralsFor, t, toLatinDigits } from '@platform/i18n';
+import { ConsoleAction, ConsoleInput as Input, useLocale } from '@platform/ui';
 
+import { accessFieldLabel } from '@/components/StaffAccessFrame';
 import {
   adoptStaffSession,
   verifySecondFactor,
@@ -96,11 +97,6 @@ export function TwoFactorCode({
 
   return (
     <div className="flex flex-col gap-6" data-testid="two-factor-code">
-      <div className="flex flex-col gap-2">
-        <h2 className="text-title-md">{t('tfaCodeTitle', locale)}</h2>
-        <p className="text-body-md text-ink-secondary">{t('tfaCodeIntro', locale)}</p>
-      </div>
-
       {online ? null : (
         <p
           role="status"
@@ -119,7 +115,7 @@ export function TwoFactorCode({
         }}
       >
         <Input
-          label={t('tfaCodeLabel', locale)}
+          label={accessFieldLabel('tfaCodeLabel', locale)}
           density="console"
           autoComplete="one-time-code"
           autoCapitalize="none"
@@ -145,11 +141,15 @@ export function TwoFactorCode({
         )}
 
         {failure?.reason === 'expired' ? (
-          <Button type="button" onClick={onBack} data-testid="tfa-back">
-            {t('tfaBack', locale)}
-          </Button>
+          <ConsoleAction
+            label={CONSOLE.tfaBack}
+            type="button"
+            onClick={onBack}
+            data-testid="tfa-back"
+          />
         ) : (
-          <Button
+          <ConsoleAction
+            label={CONSOLE.tfaCodeSubmit}
             type="submit"
             {...(ready
               ? {}
@@ -159,16 +159,17 @@ export function TwoFactorCode({
                 })}
             loading={busy}
             data-testid="tfa-submit"
-          >
-            {busy ? t('loginSubmitting', locale) : t('tfaCodeSubmit', locale)}
-          </Button>
+          />
         )}
       </form>
 
       {failure?.reason === 'expired' ? null : (
-        <Button variant="secondary" onClick={onBack} data-testid="tfa-start-again">
-          {t('tfaBack', locale)}
-        </Button>
+        <ConsoleAction
+          label={CONSOLE.tfaBack}
+          variant="secondary"
+          onClick={onBack}
+          data-testid="tfa-start-again"
+        />
       )}
     </div>
   );
