@@ -118,6 +118,9 @@ export default defineConfig({
       env: {
         DATABASE_URL,
         DEMO_MODE: 'true',
+        // The specs book with random numbers; the demonstration's phone list
+        // (FR-DEM-08) is off here, which the API allows only on a local database.
+        DEMO_PHONES: 'any',
         NODE_ENV: 'development',
         // This machine is the platform (`FR-BRD-07`): `padma.localhost` is
         // Padma's portal, as `padma.<the platform's domain>` is on a server.

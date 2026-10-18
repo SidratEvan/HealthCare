@@ -19,6 +19,8 @@ import { resolve } from 'node:path';
 
 import { z } from 'zod';
 
+import { normaliseBdMobile } from '@platform/domain';
+
 /**
  * Merges the repository's `.env` into `process.env`, without overwriting
  * anything already set.
@@ -77,6 +79,15 @@ const secret = z
 const duration = z.string().regex(/^\d+[smhd]$/, 'must look like 15m, 24h or 30d');
 
 const boolish = z.enum(['true', 'false']).transform((value) => value === 'true');
+
+/** Whether a connection string names this machine. */
+function onThisMachine(url: string): boolean {
+  try {
+    return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
 
 const port = z.coerce.number().int().min(1).max(65_535);
 const positiveInt = z.coerce.number().int().positive();
@@ -321,6 +332,37 @@ const schema = z.object({
   GUEST_BOOKING_OTP: boolish.optional(),
 
   /**
+   * The phones a demonstration accepts from a person (`FR-DEM-08`). Unset:
+   * the demonstration's own identities (`DEMO_PERSON_PHONES`). A comma list
+   * replaces them, each a Bangladeshi mobile. `any` turns the check off, and is
+   * refused below unless the database is on this machine: the test suites book
+   * with random numbers, and a demo whose database is anywhere else would
+   * store whatever anybody typed. Read only under `DEMO_MODE`.
+   */
+  DEMO_PHONES: z
+    .string()
+    .optional()
+    .transform((value, context): 'any' | readonly string[] | undefined => {
+      const trimmed = value?.trim() ?? '';
+      if (trimmed === '') return undefined;
+      if (trimmed === 'any') return 'any';
+      const phones: string[] = [];
+      for (const entry of trimmed.split(',')) {
+        if (entry.trim() === '') continue;
+        const phone = normaliseBdMobile(entry.trim());
+        if (phone === null) {
+          context.addIssue({
+            code: 'custom',
+            message: `not a Bangladeshi mobile: ${entry.trim()}`,
+          });
+          return z.NEVER;
+        }
+        phones.push(phone);
+      }
+      return phones;
+    }),
+
+  /**
    * How many bookings one phone number may make without an account in a
    * rolling day (`FR-GST-14`). One phone often books for a household, so
    * this is generous; it stops a number being used to fill a doctor's list.
@@ -512,6 +554,16 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
 
   const env = parsed.data;
   const problems: { key: string; message: string }[] = [];
+
+  // FR-DEM-08: switching the demonstration's phone check off is for a
+  // database on this machine and nowhere else.
+  if (env.DEMO_PHONES === 'any' && !onThisMachine(env.DATABASE_URL)) {
+    problems.push({
+      key: 'DEMO_PHONES',
+      message:
+        '"any" is accepted only with a local database — elsewhere a demonstration would store any number typed into it (FR-DEM-08)',
+    });
+  }
 
   if (env.NODE_ENV === 'production') {
     for (const requirement of PRODUCTION_REQUIREMENTS) {

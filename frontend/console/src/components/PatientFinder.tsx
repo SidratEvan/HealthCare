@@ -33,6 +33,7 @@ const SEX_KEY: Readonly<Record<CounterPatient['sex'], ConsoleKey>> = {
 export const FAILURE_KEY: Readonly<Record<CounterFailure, ConsoleKey>> = {
   offline: 'walkInOffline',
   phone: 'counterPhoneInvalid',
+  demoPhone: 'counterDemoPhone',
   refused: 'counterRefused',
   failed: 'counterFailed',
   uncertain: 'regUncertain',

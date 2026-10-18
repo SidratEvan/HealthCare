@@ -3380,6 +3380,11 @@ export const CONSOLE = {
     bn: 'এটি বাংলাদেশের মোবাইল নম্বর নয়। যেমন ০১৭১২৩৪৫৬৭৮।',
     en: 'That is not a Bangladeshi mobile number, such as 01712345678.',
   },
+  /** FR-DEM-08: a demonstration refused a person's number. */
+  counterDemoPhone: {
+    bn: 'ডেমোতে শুধু ডেমোর নিজস্ব নম্বর নেওয়া হয়, যেমন ০১৩৮০০০০০০১। কারও আসল নম্বর দেবেন না।',
+    en: 'The demonstration takes only its own numbers, such as 01380000001. Never enter a real person’s number.',
+  },
   counterFound: { bn: 'এই নম্বরে যাঁরা আছেন', en: 'Registered under this number' },
   counterNoneFound: {
     bn: 'এই নম্বরে কেউ নেই — নিচে নতুন রোগী হিসেবে রেজিস্টার করুন।',
@@ -4554,6 +4559,11 @@ export const PATIENT = {
   accountPhoneInvalid: {
     bn: 'এটি বাংলাদেশের মোবাইল নম্বর নয়। যেমন ০১৭১২৩৪৫৬৭৮।',
     en: 'That is not a Bangladeshi mobile number, such as 01712345678.',
+  },
+  /** FR-DEM-08: a demonstration refused a person's number. */
+  demoPhoneRefused: {
+    bn: 'ডেমোতে শুধু ডেমোর নিজস্ব নম্বর নেওয়া হয়, যেমন ০১৩৮০০০০০০১। কারও আসল নম্বর দেবেন না।',
+    en: 'The demonstration takes only its own numbers, such as 01380000001. Never enter a real person’s number.',
   },
   accountTooMany: {
     bn: 'এই নম্বরে অনেকবার কোড পাঠানো হয়েছে। এক ঘণ্টা পর আবার চেষ্টা করুন।',

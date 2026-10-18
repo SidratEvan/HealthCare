@@ -715,6 +715,7 @@ All templates exist in `bn` and `en` (`FR-NOT-04`); the recipient's `locale` pic
 | `BOOKING_DUPLICATE` | 409 | same patient, same doctor, same day (a *new* request; the same request sent again is answered with its booking) |
 | `BOOKING_LIMIT_REACHED` | 429 | a phone number with no account has made its day's bookings (`FR-GST-14`) |
 | `IDEMPOTENCY_KEY_REUSED` | 422 | the key has already made something else |
+| `DEMO_PHONE_NOT_ALLOWED` | 422 | under `DEMO_MODE`, a person's phone that is not one of the demonstration's own identities (`FR-DEM-08`, `DEMO_PHONES`); refused during validation, before any handler runs, on every route whose body or query carries one; an import file with such a row is refused before its batch is written. `details.fields` names where |
 | `WRITE_CONFLICT` | 409 | a unique index refused a write that a check a moment earlier allowed: two requests raced. Answered as a conflict, logged as unexpected, never a 500 |
 | `QUEUE_CONFLICT` | 409 | another counter already advanced |
 | `QUEUE_GUARD_FAILED` | 422 | rule violation (e.g. no-show before grace) |
@@ -750,6 +751,7 @@ STORAGE_PROVIDER=mock|local|supabase, STORAGE_DIR   # local: files on this serve
 JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, JWT_ACCESS_TTL=15m, JWT_REFRESH_TTL=30d
 GUEST_LINK_SECRET, GUEST_LINK_TTL_DAYS=30
 GUEST_BOOKING_OTP=true|false # a guest proves the phone before booking (FR-GST-03); unset: on unless DEMO_MODE
+DEMO_PHONES=                 # under DEMO_MODE, the phones a person may give (FR-DEM-08): a comma list replacing the built-in demo identities, or `any` (no check; local database only, for the test suites)
 GUEST_BOOKINGS_PER_PHONE_PER_DAY=10 # bookings one number may make without an account in a rolling day (FR-GST-14)
 ORG_APPLICATIONS_OPEN_MAX=200 # hospitals' own applications that may wait unanswered at once; at that many the public form is paused (FR-ONB-09)
 OTP_TTL_SECONDS=300, OTP_MAX_PER_HOUR=5

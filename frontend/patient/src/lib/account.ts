@@ -63,6 +63,8 @@ export interface ClaimableProfile extends Profile {
 export type AccountFailure =
   | { readonly kind: 'offline' }
   | { readonly kind: 'phone' }
+  /** A number a demonstration does not take (`FR-DEM-08`). */
+  | { readonly kind: 'demoPhone' }
   | { readonly kind: 'rate' }
   | { readonly kind: 'locked'; readonly until: string | null }
   | { readonly kind: 'wrong'; readonly attemptsLeft: number | null }
@@ -98,6 +100,7 @@ function failureOf(error: unknown): AccountFailure {
   if (error instanceof NetworkError) return { kind: 'offline' };
   if (error instanceof ApiError) {
     const details = error.details ?? {};
+    if (error.code === 'DEMO_PHONE_NOT_ALLOWED') return { kind: 'demoPhone' };
     if (error.code === 'VALIDATION_FAILED') return { kind: 'phone' };
     if (error.code === 'AUTH_OTP_RATE_LIMIT' || error.code === 'RATE_LIMITED')
       return { kind: 'rate' };

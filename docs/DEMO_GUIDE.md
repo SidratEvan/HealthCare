@@ -50,8 +50,9 @@ figure is. A figure that is old says so.
 
 **2. Book a serial (patient).** Choose **Shapla General Hospital (Demo) →
 Cardiology → Dr Ayesha Siddika**, today's chamber. Enter any name, a phone
-from the demo block such as `01380000001` (no SMS is sent; never type a real
-person's number) and an age, then confirm. Pay at the
+from the demo list, `01380000001` to `01380000010` (no SMS is sent; the demo
+refuses any other number, so nobody's real one can be stored, `FR-DEM-08`) and
+an age, then confirm. Pay at the
 hospital, or pick bKash/Nagad: a page titled **Simulated payment (demo)**
 opens. No money moves; choose the outcome. You get serial 18 or so. Tap
 **লাইভ সিরিয়াল দেখুন** (see the live serial).

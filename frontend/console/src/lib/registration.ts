@@ -30,7 +30,15 @@ export interface CounterPatient {
 }
 
 /** Why a counter call failed, in the words the screen has copy for. */
-export type CounterFailure = 'offline' | 'phone' | 'refused' | 'failed' | 'uncertain' | 'access';
+export type CounterFailure =
+  | 'offline'
+  | 'phone'
+  /** A number a demonstration does not take (`FR-DEM-08`). */
+  | 'demoPhone'
+  | 'refused'
+  | 'failed'
+  | 'uncertain'
+  | 'access';
 
 export type CounterResult<T> =
   | { readonly ok: true; readonly value: T }
@@ -44,6 +52,7 @@ function failureOf(error: unknown): CounterFailure {
   if (error instanceof NetworkError) return 'offline';
   if (error instanceof ApiError) {
     if (error.status === 401 || error.status === 403) return 'access';
+    if (error.code === 'DEMO_PHONE_NOT_ALLOWED') return 'demoPhone';
     if (error.code === 'VALIDATION_FAILED') return 'phone';
     if (error.code === 'QUEUE_GUARD_FAILED' || error.code === 'QUEUE_CONFLICT') return 'refused';
   }

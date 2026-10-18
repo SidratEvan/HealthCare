@@ -76,7 +76,14 @@ for (const [name, port] of Object.entries(PORTS)) {
   if (await listening(port)) fail(`port ${String(port)} (${name}) is in use; stop it first.`);
 }
 
-const env = { ...process.env, DATABASE_URL, DEMO_MODE: 'true', NODE_ENV: 'development' };
+// DEMO_PHONES: the capture's local database only (FR-DEM-08).
+const env = {
+  ...process.env,
+  DATABASE_URL,
+  DEMO_MODE: 'true',
+  DEMO_PHONES: 'any',
+  NODE_ENV: 'development',
+};
 if (process.argv.includes('--reset')) {
   const reset = spawnSync('pnpm db:reset', { cwd: REPO, env, shell: true, stdio: 'inherit' });
   if (reset.status !== 0) fail('the reset failed.');

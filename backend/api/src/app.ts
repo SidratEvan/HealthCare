@@ -25,6 +25,7 @@
 import express, { json, type Express } from 'express';
 
 import { runInDbScope, scopeOfPrincipal } from './config/dbScope.js';
+import { installDemoPhoneRule } from './config/demoPhones.js';
 import { rememberRawBody } from './config/rawBody.js';
 import { runWithPatientOrigin } from './config/requestOrigin.js';
 import { env } from './env.js';
@@ -77,6 +78,10 @@ const OWN_BODY_LIMIT: readonly RegExp[] = [
 
 export function createApp(): Express {
   const app = express();
+
+  // FR-DEM-08: a demonstration takes a person's phone only from its own list,
+  // checked by the shared schemas during validation.
+  installDemoPhoneRule();
 
   // Render terminates TLS and forwards the caller's address in
   // `X-Forwarded-For`. Without this, `req.ip` is the balancer's address and

@@ -267,6 +267,34 @@ describe('production', () => {
  * the variable only parsed while it was absent, and both templates say to set
  * it.
  */
+describe("a demonstration's phone list (FR-DEM-08)", () => {
+  it('is the built-in list when unset, and a deployment’s own when given', () => {
+    expect(loadEnv({ ...DEV, DEMO_MODE: 'true' }).DEMO_PHONES).toBeUndefined();
+    expect(
+      loadEnv({ ...DEV, DEMO_MODE: 'true', DEMO_PHONES: '01380000001, +880 1380-000002' })
+        .DEMO_PHONES,
+    ).toEqual(['+8801380000001', '+8801380000002']);
+  });
+
+  it('refuses an entry that is not a Bangladeshi mobile', () => {
+    expect(problemsOf({ ...DEV, DEMO_MODE: 'true', DEMO_PHONES: '01380000001,12345' })).toContain(
+      'DEMO_PHONES',
+    );
+  });
+
+  it('takes "any" only with a database on this machine', () => {
+    expect(loadEnv({ ...DEV, DEMO_MODE: 'true', DEMO_PHONES: 'any' }).DEMO_PHONES).toBe('any');
+    expect(
+      problemsOf({
+        ...DEV,
+        DEMO_MODE: 'true',
+        DEMO_PHONES: 'any',
+        DATABASE_URL: 'postgresql://postgres:x@aws-0-ap-southeast-1.pooler.supabase.com:5432/db',
+      }),
+    ).toContain('DEMO_PHONES');
+  });
+});
+
 describe('the shipped configuration parses', () => {
   it('accepts a platform fee of zero, which is what both templates say', () => {
     // An environment variable is a string. `positive().or(literal(0))` looked

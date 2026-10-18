@@ -8,6 +8,8 @@
 
 import { z } from 'zod';
 
+import { DEMO_PHONE_NOT_ALLOWED, personPhoneAdmitted } from '../util/demoPhones.js';
+
 /** An email as staff type it: trimmed, and long enough to be one. */
 const email = z.string().trim().min(3).max(254).includes('@');
 
@@ -66,7 +68,13 @@ export const staffTwoFactorEnableBody = z.strictObject({ code: totpCode });
 // --- Patients: phone and a one-time code (pilot step 25, FR-PAT-01) ---------
 
 /** A phone as the patient types it; the server normalises it or refuses it (`DB-P6`). */
-const typedPhone = z.string().trim().min(10).max(20);
+const typedPhone = z
+  .string()
+  .trim()
+  .min(10)
+  .max(20)
+  // FR-DEM-08: a demonstration takes only its own numbers.
+  .refine(personPhoneAdmitted, { message: DEMO_PHONE_NOT_ALLOWED });
 
 /** `POST /auth/otp`. */
 export const otpRequestBody = z.strictObject({ phone: typedPhone });

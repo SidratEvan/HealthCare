@@ -56,6 +56,8 @@ import {
   NO_WARNINGS,
   columnIndex,
   importWarnings,
+  latinDigits,
+  normaliseBdMobile,
   missingColumns,
   parseCsv,
   readRow,
@@ -71,6 +73,7 @@ import {
   type StructureRecord,
 } from '@platform/domain';
 
+import { demoPhoneAdmitted } from '../config/demoPhones.js';
 import { AppError, notFound } from '../errors/AppError.js';
 import * as settingsRepo from '../repositories/hospitalSettings.repo.js';
 import * as repo from '../repositories/import.repo.js';
@@ -207,6 +210,24 @@ export async function check(
     }
     return { rowNumber: row.rowNumber, raw, result: readRow(input.set, row.cells, index) };
   });
+  // FR-DEM-08: a demonstration takes no real phone number, and a patient
+  // register brings hundreds. Every row's mobile, read or not, is held to the
+  // demonstration's list before the batch (which keeps the rows as uploaded)
+  // is written; only the template's own example row is passed over.
+  const refusedRows = read
+    .filter((entry) => {
+      if (entry.result.ok && isExample(entry.result.record)) return false;
+      const typed = entry.raw['mobile'];
+      const phone = typed === undefined ? null : normaliseBdMobile(latinDigits(typed));
+      return phone !== null && !demoPhoneAdmitted(phone);
+    })
+    .map((entry) => entry.rowNumber);
+  if (refusedRows.length > 0) {
+    throw new AppError('DEMO_PHONE_NOT_ALLOWED', {
+      details: { rows: refusedRows.slice(0, 50), count: refusedRows.length },
+    });
+  }
+
   const inFile = new Set<string>();
   for (const entry of read) {
     if (entry.result.ok && !isExample(entry.result.record)) inFile.add(keyOf(entry.result.record));
