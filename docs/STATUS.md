@@ -7,6 +7,45 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
+## Latest work — MARKS readiness assessment and remediation (18 October 2026)
+
+Full report: [docs/audit/marks-readiness-2026-10-18.md](audit/marks-readiness-2026-10-18.md).
+Code assessed: `audit/pilot-readiness-2026-10-12` @ `b7bee62`, which holds the
+whole console redesign and every safety fix since 9 October (39 commits not on
+`mvp`). Nothing pushed, merged, deployed; `main`, `demo`, Supabase untouched.
+
+**Verified 18 October, before remediation (local Docker DB only):**
+`pnpm verify` 169 files / 8,110 tests pass · `pnpm test:e2e` 344/346 · 
+`pnpm test:e2e:prod` 79/84 · production canary alone 6/6 (< 2 s) ·
+`pnpm test:e2e:built` 3/3. The two patient specs red on `mvp` CI
+(portal-install, patient-search burn) pass on this code.
+
+**Failures found:** (1) `console-access.spec.ts:390`: a doctor's unsaved
+diagnosis emptied after a token refresh, editor unmounted and remounted
+(intermittent; passed alone). (2) `lab-report.spec.ts:574`: fixture used up by
+the case before it. (3) Production canary fixture (`createConsoleSession`)
+picked a test-created hospital that has no seeded receptionist. (4)
+`reception-pilot.prod.spec.ts` expects the picker the access redesign replaced
+with a direct landing.
+
+**Verdict:** demonstration YES with conditions; real-patient pilot NO.
+
+**Blockers before MARKS uses the public demo:** the public demo is `99e4c5e`
+(9 October: no redesign, no C1–C4/F-01 fixes); it stores any phone number
+typed into it (owner's synthetic-identity rule of 12 October not built); the
+release gate must be green on the commit released.
+
+**Blockers before real patients:** no server; the S8 dry run and a restore on
+target hardware never done; S8 names `fb1d1d8`; MARKS IT's S1 answer (LAN-only
+not built); no SMS (counter-only pilot); F-09, F-08, F-16 decisions; backups
+unencrypted and no alerting (F-07).
+
+**Owner-authorised remediation order (18 October):** doctor draft on refresh →
+the three faulty release tests until `test:e2e:prod` is green → demo
+phone-number allowlist → rerun unit/integration/browser/offline/production →
+prepare the redesign and fixes for `mvp`. No merge, push, deploy, database
+reset, or `main`/`demo` change without the owner's word.
+
 ## Web architecture and releases (11 October 2026, proposed — awaiting the owner)
 
 - **Live:** `medlivebd.com` = company site, Cloudflare Pages *Direct Upload*, contact `support@medlivebd.com` (Email Routing forwards it). `www.medlivebd.com` has **no DNS record**. The site links to no app yet.
