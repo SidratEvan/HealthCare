@@ -37,7 +37,8 @@ cd backend/django && .venv/Scripts/python -m pytest
 
 | # | Commit | What | Verified |
 |---|---|---|---|
-| 2 | (this commit) | Queue service, its repositories, notifications outbox and sender, links, realtime server (python-socketio), queue routes; Node-suite harness (`vitest.django.config.ts`) with a test-only clock and emission seam | `queue.routes.test.ts` 35/35 and `queueConflict.test.ts` 3/3 of the original Node suite, against the Django server |
+| 3 | (this commit) | Discovery (search, needs, config, logo) ported; every repository of `backend/api/src/repositories` ported to raw-SQL Python (28 modules, same SQL); payment adapters (mock, bKash, Nagad request signing) | `search.routes`, `queue.routes`, `queueConflict` pass; `app.test` 21/22 (the remaining one waits for the lab routes); every repository imports |
+| 2 | `5e136d0` | Queue service, its repositories, notifications outbox and sender, links, realtime server (python-socketio), queue routes; Node-suite harness (`vitest.django.config.ts`) with a test-only clock and emission seam | `queue.routes.test.ts` 35/35 and `queueConflict.test.ts` 3/3 of the original Node suite, against the Django server |
 | 1 | `0f4dead` | Django/DRF foundation: env, pipeline, scoped db, zod-compatible validator, JWT, logging, health routes; queue engine port | 161 parity cases vs the TypeScript engine; two mutations confirmed to fail it; `/healthz`, `/readyz` against the seeded DB as `healthcare_api` |
 
 ## Next exact steps

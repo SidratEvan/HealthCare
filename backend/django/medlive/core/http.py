@@ -47,9 +47,22 @@ class _Encoder(json.JSONEncoder):
         return super().default(o)
 
 
+def _js_numbers(value: Any) -> Any:
+    """JavaScript has one number type: an integral float is written `3`, not `3.0`."""
+    if isinstance(value, float):
+        if value.is_integer() and abs(value) < 1e21:
+            return int(value)
+        return value
+    if isinstance(value, dict):
+        return {key: _js_numbers(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_js_numbers(item) for item in value]
+    return value
+
+
 def dumps(value: Any) -> str:
     """`JSON.stringify` with Express's `json spaces: 0`: compact, UTF-8, no escaping."""
-    return json.dumps(value, cls=_Encoder, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(_js_numbers(value), cls=_Encoder, ensure_ascii=False, separators=(",", ":"))
 
 
 class Headers:

@@ -439,8 +439,19 @@ class StringSchema(Schema):
         return self._with("normalize", form)
 
     def regex(self, pattern: "re.Pattern[str] | str", message: str | None = None, js: str | None = None) -> "StringSchema":
-        compiled = re.compile(pattern) if isinstance(pattern, str) else pattern
-        return self._with("regex", (compiled, message, js))
+        r"""A JavaScript regular expression, matched as JavaScript matches it.
+
+        Given as source text, it is compiled with `re.ASCII` (JavaScript's `\d`
+        and `\w` are ASCII; Python's are not) and a closing `$` becomes `\Z`
+        (Python's `$` also matches before a trailing newline). The message
+        shows the source as written, as zod's does.
+        """
+        if isinstance(pattern, str):
+            shown = js if js is not None else f"/{pattern}/"
+            source = pattern[:-1] + r"\Z" if pattern.endswith("$") and not pattern.endswith(r"\$") else pattern
+            compiled = re.compile(source, re.ASCII)
+            return self._with("regex", (compiled, message, shown))
+        return self._with("regex", (pattern, message, js))
 
     def starts_with(self, prefix: str, message: str | None = None) -> "StringSchema":
         return self._with("starts_with", (prefix, message))

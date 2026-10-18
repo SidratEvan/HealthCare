@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 import json
 import time
 import uuid
@@ -203,11 +204,31 @@ def _cors(req: ApiRequest, headers: dict[str, str]) -> Reply | None:
     return None
 
 
+# The routes that parse their own, larger body (`OWN_BODY_LIMIT` in app.ts):
+# the global 256 kB limit steps aside for these paths, whatever the method.
+OWN_BODY_LIMIT = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"^/api/v1/test-orders/[^/]+/report$",
+        r"^/api/v1/hospital/imports$",
+        r"^/api/v1/hospital/imports/(?:analyse|mapped)$",
+        r"^/api/v1/hospital/logo$",
+        r"^/api/v1/me/documents$",
+    )
+)
+
+
 def _parse_body(req: ApiRequest, request: HttpRequest, api: Router) -> None:
     if not _has_body(request) or not _is_json(req.content_type):
         return
-    own_limit = api.body_limit_for(req.method, req.api_path) if req.path.lower().startswith(API_BASE_PATH) else None
-    limit = own_limit if own_limit is not None else BODY_LIMIT
+    limit = BODY_LIMIT
+    if any(pattern.search(req.path) for pattern in OWN_BODY_LIMIT):
+        own_limit = api.body_limit_for(req.method, req.api_path)
+        if own_limit is None:
+            # No route here parses a body of its own: as in Express, the
+            # global parser stepped aside and nothing read the body.
+            return
+        limit = own_limit
     declared = request.META.get("CONTENT_LENGTH")
     if declared and declared.isdigit() and int(declared) > limit:
         raise PayloadTooLarge()

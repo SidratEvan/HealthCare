@@ -16,12 +16,17 @@ from ..core.router import Router
 #: The TypeScript's order (`buildApiRouter`). A router is listed once its
 #: module is ported; `docs/django-migration/compatibility-matrix.md` tracks it.
 API_ROUTERS: list[str] = [
+    "discovery",
     "queue",
 ]
 
 
 def build() -> tuple[Router, Router]:
+    from ..core.demo_phones import install_demo_phone_rule
     from .health import health_routes
+
+    # FR-DEM-08: a demonstration takes a person's phone only from its own list.
+    install_demo_phone_rule()
 
     api = Router()
     for name in API_ROUTERS:
