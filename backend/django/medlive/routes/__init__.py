@@ -24,7 +24,14 @@ API_ROUTERS: list[str] = [
     "booking",
     "queue",
     "lab",
+    "payment",
+    "webhooks",
+    "mock_pay",
+    "sync",
 ]
+
+#: Mounted only where its condition holds (`buildApiRouter`).
+_CONDITIONAL = {"mock_pay": lambda e: e.PAYMENT_PROVIDER == "mock"}
 
 
 def build() -> tuple[Router, Router]:
@@ -34,13 +41,17 @@ def build() -> tuple[Router, Router]:
     # FR-DEM-08: a demonstration takes a person's phone only from its own list.
     install_demo_phone_rule()
 
+    from ..core.env import env
+
     api = Router()
     for name in API_ROUTERS:
+        condition = _CONDITIONAL.get(name)
+        if condition is not None and not condition(env()):
+            continue
         module = importlib.import_module(f"medlive.routes.{name}")
         api.use(module.routes)
     root = Router()
     root.use(health_routes)
-    from ..core.env import env
 
     if env().NODE_ENV == "test":
         from .test_seam import routes as seam

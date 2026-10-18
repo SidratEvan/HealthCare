@@ -1,13 +1,15 @@
 /**
  * What a Node test changed in its own process, carried to the Django server
- * with each request (`app-shim.ts`), so the original assertions hold:
+ * with each request (`app-shim.ts`, `call.ts`), so the original assertions hold:
  *
  * - `env`: a test writes `(env as …).DEMO_MODE = false` and expects the API
  *   to behave so. Every request says which values differ from the ones the
  *   file started with (`x-medlive-test-env`).
- * - an SMS adapter a test installs (`setSmsAdapter`, `sms-shim.ts`): the
- *   Django server hands each message to it over a loopback callback and takes
- *   its answer (`x-medlive-test-sms`).
+ * - an adapter a test installs (`setSmsAdapter`, `setPaymentProvider`): the
+ *   Django server calls its methods over a loopback callback and takes their
+ *   answers, its properties travelling in `x-medlive-test-adapters`. A method
+ *   the stand-in does not have is answered as missing, so the server applies
+ *   the same default the Node code applies (`verifyReceipt?.() ?? false`).
  *
  * Django reads both only under NODE_ENV=test (`core/pipeline.py`).
  */
@@ -29,45 +31,68 @@ export function envChanges(): Record<string, unknown> {
   return changes;
 }
 
-type Handler = (message: unknown) => Promise<unknown>;
+export type AdapterKind = 'sms' | 'payments';
 
-let smsHandler: Handler | null = null;
+/** The properties of each kind the server reads without calling anything. */
+const PROPERTIES: Record<AdapterKind, readonly string[]> = {
+  sms: ['name', 'reportsDelivery'],
+  payments: ['name', 'refundsByApi'],
+};
+
+const installed = new Map<AdapterKind, Record<string, unknown>>();
 let server: Server | null = null;
 let serverUrl: string | null = null;
 
-/** Installs (or with null removes) the handler the Django server's SMS goes to. */
-export function bridgeSms(handler: Handler | null): void {
-  smsHandler = handler;
-  if (handler !== null && server === null) {
-    server = createServer((req, res) => {
-      const chunks: Buffer[] = [];
-      req.on('data', (chunk: Buffer) => chunks.push(chunk));
-      req.on('end', () => {
-        const current = smsHandler;
-        if (current === null) {
-          res.writeHead(503).end();
-          return;
-        }
-        const message: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        current(message).then(
-          (answer) => {
-            res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer));
-          },
-          (error: unknown) => {
-            // A throw is not a refusal: the server has to see it thrown.
-            res
-              .writeHead(200, { 'content-type': 'application/json' })
-              .end(JSON.stringify({ threw: true, message: String(error) }));
-          },
+function answer(res: import('node:http').ServerResponse, body: unknown): void {
+  res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+}
+
+function ensureServer(): void {
+  if (server !== null) return;
+  server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      const kind = (req.url ?? '').slice(1) as AdapterKind;
+      const adapter = installed.get(kind);
+      const { method, args } = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+        method: string;
+        args: unknown[];
+      };
+      const given = args.map((arg) =>
+        typeof arg === 'object' && arg !== null && (arg as Record<string, unknown>)['$undefined'] === true
+          ? undefined
+          : arg,
+      );
+      const fn = adapter?.[method];
+      if (adapter === undefined || typeof fn !== 'function') {
+        answer(res, { missing: true });
+        return;
+      }
+      Promise.resolve()
+        .then(() => (fn as (...a: unknown[]) => unknown).apply(adapter, given))
+        .then(
+          (value) => answer(res, { value: value === undefined ? null : value }),
+          // A throw is not a refusal: the server has to see it thrown.
+          (error: unknown) => answer(res, { threw: true, message: String(error) }),
         );
-      });
     });
-    server.listen(0, '127.0.0.1', () => {
-      const address = server?.address() as AddressInfo;
-      serverUrl = `http://127.0.0.1:${String(address.port)}/sms`;
-    });
-    server.unref();
+  });
+  server.listen(0, '127.0.0.1', () => {
+    const address = server?.address() as AddressInfo;
+    serverUrl = `http://127.0.0.1:${String(address.port)}`;
+  });
+  server.unref();
+}
+
+/** Installs (or with null removes) the stand-in the Django server's calls of this kind go to. */
+export function bridgeAdapter(kind: AdapterKind, adapter: object | null): void {
+  if (adapter === null) {
+    installed.delete(kind);
+    return;
   }
+  installed.set(kind, adapter as Record<string, unknown>);
+  ensureServer();
 }
 
 /** The headers every proxied request carries. */
@@ -75,6 +100,17 @@ export function bridgeHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   const changes = envChanges();
   if (Object.keys(changes).length > 0) headers['x-medlive-test-env'] = JSON.stringify(changes);
-  if (smsHandler !== null && serverUrl !== null) headers['x-medlive-test-sms'] = serverUrl;
+  if (installed.size > 0 && serverUrl !== null) {
+    const spec: Record<string, { url: string; props: Record<string, unknown> }> = {};
+    for (const [kind, adapter] of installed) {
+      const props: Record<string, unknown> = {};
+      for (const name of PROPERTIES[kind]) {
+        const value = adapter[name];
+        if (value !== undefined && typeof value !== 'function') props[name] = value;
+      }
+      spec[kind] = { url: `${serverUrl}/${kind}`, props };
+    }
+    headers['x-medlive-test-adapters'] = JSON.stringify(spec);
+  }
   return headers;
 }

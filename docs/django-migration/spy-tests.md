@@ -7,15 +7,15 @@ process; the Django server never sees the spy. Such a test either fails
 against Django (it expected the injected failure) or passes without having
 tested anything (it asserted the spy was *not* called).
 
-Neither result is evidence about Django.
-
-Where a test calls a service directly and asserts on what the server did,
-the harness runs that call in the Django process instead
-(`tests/node_suite/call.ts`; the queue service's writes, the notification
-sender's `settled` and `dispatch`). That is not a spy and is not listed here. Each case below gets a pytest
+Neither result is evidence about Django. Each case below gets a pytest
 equivalent in `backend/django/tests/` that injects the same failure into the
 Python module, and the compatibility matrix counts that pytest, not the Node
 case, for the Django side. No Node test is edited or skipped.
+
+Where a test calls a service directly and asserts on what the server did,
+the harness runs that call in the Django process instead
+(`tests/node_suite/call.ts`: the queue service's writes, the notification
+sender's `settled` and `dispatch`). That is not a spy and is not listed here.
 
 | Node file | Case | What it injects | Django equivalent |
 |---|---|---|---|

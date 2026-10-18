@@ -182,36 +182,21 @@ def http_receipt_signature(raw_body: str, secret: str) -> str:
 _current: Any = None
 
 
-#: The test seam's adapter (`core/pipeline.py`, NODE_ENV=test only): the Node
-#: suite swapped in an adapter of its own, reached over HTTP. Process-wide, not
-#: per request, because the sender thread sends after the request answered;
-#: the suite runs one test at a time and waits for the sender between tests.
-_bridged: "BridgeSmsAdapter | None" = None
-
-
 class BridgeSmsAdapter:
-    """Hands each message to the adapter a Node test installed (`tests/node_suite/sms-shim.ts`)."""
+    """A Node test's SMS stand-in (`adapters/bridge.py`)."""
 
-    name = "bridge"
-    reports_delivery = False
-
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, props: dict[str, Any]) -> None:
         self.url = url
+        self.name = props.get("name", "bridge")
+        self.reports_delivery = props.get("reportsDelivery") is True
 
     def send(self, *, to: str, body: str, notification_id: str, template_key: str, sensitive: bool = False) -> SmsResult:
+        from .bridge import call
+
         message: dict[str, Any] = {"to": to, "body": body, "notificationId": notification_id, "templateKey": template_key}
         if sensitive:
             message["sensitive"] = True
-        request = urllib.request.Request(
-            self.url,
-            data=json.dumps(message, ensure_ascii=False).encode("utf8"),
-            headers={"content-type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(request, timeout=15) as answer:  # noqa: S310 — a test-only loopback URL.
-            result = json.loads(answer.read().decode("utf8"))
-        if result.get("threw"):
-            raise RuntimeError(result.get("message") or "the test's SMS adapter threw")
+        result = call(self.url, "send", message) or {}
         return SmsResult(
             ok=bool(result.get("ok")),
             provider_ref=result.get("providerRef"),
@@ -221,26 +206,25 @@ class BridgeSmsAdapter:
         )
 
     def verify_receipt(self, raw_body: str, signature: str | None) -> bool:
-        return False
+        from .bridge import MISSING, UNDEFINED_ARG, call
+
+        answer = call(self.url, "verifyReceipt", raw_body, UNDEFINED_ARG if signature is None else signature)
+        return False if answer is MISSING or answer is None else bool(answer)
 
     def read_receipt(self, body: Any) -> dict[str, Any] | None:
-        return None
+        from .bridge import MISSING, call
 
-
-def set_test_bridge(url: str | None) -> None:
-    """Points the SMS at a Node test's adapter, or back at the configured one."""
-    global _bridged
-    if url is None:
-        _bridged = None
-    elif _bridged is None or _bridged.url != url:
-        _bridged = BridgeSmsAdapter(url)
+        answer = call(self.url, "readReceipt", body)
+        return None if answer is MISSING else answer
 
 
 def sms() -> Any:
     global _current
-    bridged = _bridged
+    from .bridge import installed
+
+    bridged = installed("sms")
     if bridged is not None:
-        return bridged
+        return BridgeSmsAdapter(bridged["url"], bridged.get("props") or {})
     if _current is None:
         provider = env().SMS_PROVIDER
         _current = LogSmsAdapter() if provider == "log" else HttpSmsAdapter() if provider == "http" else UnconfiguredSmsAdapter()

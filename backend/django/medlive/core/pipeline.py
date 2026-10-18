@@ -369,7 +369,7 @@ def handle(request: HttpRequest) -> HttpResponse:
 def _test_seams(request: HttpRequest) -> Iterator[None]:
     """What the Node suite changed in its own process, said per request
     (NODE_ENV=test only; `tests/node_suite/app-shim.ts`): its clock, the
-    environment it altered, and an SMS adapter it swapped in."""
+    environment it altered, and the adapters it swapped in."""
     if env().NODE_ENV != "test":
         yield
         return
@@ -381,9 +381,10 @@ def _test_seams(request: HttpRequest) -> Iterator[None]:
         if request.META.get("HTTP_X_MEDLIVE_TEST_NOW"):
             # Only a request the suite itself sent says what its SMS adapter is;
             # the shims' own reads (the recorder, a socket's rooms) say nothing.
-            from ..adapters.sms import set_test_bridge
+            from ..adapters.bridge import set_test_adapters
 
-            set_test_bridge(request.META.get("HTTP_X_MEDLIVE_TEST_SMS") or None)
+            adapters = request.META.get("HTTP_X_MEDLIVE_TEST_ADAPTERS")
+            set_test_adapters(json.loads(adapters) if adapters else None)
         yield
 
 

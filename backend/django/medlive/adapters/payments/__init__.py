@@ -138,10 +138,67 @@ def mock_provider() -> MockPaymentProvider:
         return _mock
 
 
+class BridgePaymentProvider:
+    """A Node test's payment stand-in (`adapters/bridge.py`)."""
+
+    def __init__(self, url: str, props: dict[str, Any]) -> None:
+        self.url = url
+        self.name = props.get("name", "bridge")
+        self.refunds_by_api = props.get("refundsByApi") is True
+
+    def _call(self, method: str, *args: Any) -> Any:
+        from ..bridge import MISSING, call
+
+        answer = call(self.url, method, *args)
+        if answer is MISSING:
+            raise RuntimeError(f"the test's payment provider has no {method}")
+        return answer
+
+    def charge(self, *, payment_id: str, amount_poisha: int, idempotency_key: str, return_url: str) -> dict[str, Any]:
+        return self._call(
+            "charge",
+            {"paymentId": payment_id, "amountPoisha": amount_poisha, "idempotencyKey": idempotency_key, "returnUrl": return_url},
+        )
+
+    def confirm(self, *, payment_id: str, checkout_id: str, amount_poisha: int, hint: str | None) -> dict[str, Any]:
+        return self._call(
+            "confirm", {"paymentId": payment_id, "checkoutId": checkout_id, "amountPoisha": amount_poisha, "hint": hint}
+        )
+
+    def refund(self, **kw: Any) -> dict[str, Any]:
+        return self._call(
+            "refund",
+            {
+                "paymentId": kw.get("payment_id"),
+                "checkoutId": kw.get("checkout_id"),
+                "providerRef": kw.get("provider_ref"),
+                "amountPoisha": kw.get("amount_poisha"),
+                "idempotencyKey": kw.get("idempotency_key"),
+                "reason": kw.get("reason"),
+            },
+        )
+
+    def verify_webhook(self, raw_body: str, signature: str | None) -> bool:
+        from ..bridge import MISSING, UNDEFINED_ARG, call
+
+        answer = call(self.url, "verifyWebhook", raw_body, UNDEFINED_ARG if signature is None else signature)
+        return answer is not MISSING and answer is True
+
+
+def _bridged() -> Any:
+    from ..bridge import installed
+
+    spec = installed("payments")
+    return None if spec is None else BridgePaymentProvider(spec["url"], spec.get("props") or {})
+
+
 def provider_for(method: str) -> Any:
     global _bkash, _nagad
     if not is_online(method):
         return None
+    bridged = _bridged()
+    if bridged is not None:
+        return bridged
     if _override is not None:
         return _override
     provider = env().PAYMENT_PROVIDER
@@ -168,6 +225,9 @@ def available_methods() -> list[str]:
 
 
 def payments() -> Any:
+    bridged = _bridged()
+    if bridged is not None:
+        return bridged
     if _override is not None:
         return _override
     return mock_provider() if env().PAYMENT_PROVIDER == "mock" else UnconfiguredPaymentProvider()
