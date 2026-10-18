@@ -6,7 +6,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Any
 
-from ..domain.time import from_datetime
+from ..domain.time import from_datetime, utc_now
 
 _lock = threading.Lock()
 _beats: dict[str, dict[str, str | None]] = {}
@@ -19,7 +19,7 @@ def register(worker: str, every_ms: int) -> None:
 
 
 def beat(worker: str, ok: bool, at: datetime | None = None) -> None:
-    now = from_datetime(at or datetime.now(timezone.utc))
+    now = from_datetime(at or utc_now())
     with _lock:
         last = _beats.get(worker, {"lastOkAt": None, "lastFailedAt": None})
         _beats[worker] = {**last, "lastOkAt": now} if ok else {**last, "lastFailedAt": now}

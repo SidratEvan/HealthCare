@@ -14,6 +14,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
+from ..domain.time import now_ms
 from .env import env
 from .errors import AppError
 from .http import ApiRequest
@@ -97,7 +98,7 @@ def rate_limit(
             if bucket is None
             else f"{bucket}:{key_for(req)}"
         )
-        allowed, remaining, retry = counter.hit(key, effective, window_seconds, time.time() * 1000)
+        allowed, remaining, retry = counter.hit(key, effective, window_seconds, now_ms())
         req.response_headers["RateLimit-Limit"] = str(effective)
         req.response_headers["RateLimit-Remaining"] = str(remaining)
         if not allowed:

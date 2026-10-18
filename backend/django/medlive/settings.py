@@ -18,7 +18,10 @@ from .core.logging import configure as configure_logging
 BASE_DIR = Path(__file__).resolve().parent.parent
 _env = env()
 
-configure_logging(_env.LOG_LEVEL, silent=_env.NODE_ENV == "test")
+import os as _os  # noqa: E402
+
+# Silent under test, as the Node logger is; MEDLIVE_TEST_LOGS=1 shows errors while debugging.
+configure_logging(_env.LOG_LEVEL, silent=_env.NODE_ENV == "test" and _os.environ.get("MEDLIVE_TEST_LOGS") != "1")
 
 # Django's own signing key is used for nothing this API exposes; derived from
 # the access secret so no further variable is needed.

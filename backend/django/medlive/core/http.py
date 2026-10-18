@@ -26,7 +26,9 @@ def iso(value: datetime) -> str:
 
 
 def now_iso() -> str:
-    return iso(datetime.now(timezone.utc))
+    from ..domain.time import utc_now
+
+    return iso(utc_now())
 
 
 class _Encoder(json.JSONEncoder):

@@ -15,7 +15,9 @@ from ..core.router import Router
 
 #: The TypeScript's order (`buildApiRouter`). A router is listed once its
 #: module is ported; `docs/django-migration/compatibility-matrix.md` tracks it.
-API_ROUTERS: list[str] = []
+API_ROUTERS: list[str] = [
+    "queue",
+]
 
 
 def build() -> tuple[Router, Router]:
@@ -25,5 +27,13 @@ def build() -> tuple[Router, Router]:
     for name in API_ROUTERS:
         module = importlib.import_module(f"medlive.routes.{name}")
         api.use(module.routes)
-    install_routes(api, health_routes)
-    return api, health_routes
+    root = Router()
+    root.use(health_routes)
+    from ..core.env import env
+
+    if env().NODE_ENV == "test":
+        from .test_seam import routes as seam
+
+        root.use(seam)
+    install_routes(api, root)
+    return api, root

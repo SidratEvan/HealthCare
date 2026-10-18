@@ -11,9 +11,12 @@ on purpose, because ETAs and quotes depend on them:
 
 from __future__ import annotations
 
+import contextvars
 import math
 import re
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from typing import Iterator
 
 DHAKA_UTC_OFFSET_MINUTES = 360
 
@@ -103,12 +106,32 @@ def from_datetime(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+# The one clock the API reads. Only the test seam moves it (`core/pipeline.py`,
+# under NODE_ENV=test): a test that fakes `Date` in the Node process sends its
+# time with each request, as `vi.setSystemTime` would move the Node API's.
+_offset_ms: contextvars.ContextVar[float] = contextvars.ContextVar("clock_offset_ms", default=0.0)
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(milliseconds=_offset_ms.get())
+
+
+@contextmanager
+def clock_at(epoch_ms: float) -> Iterator[None]:
+    """Runs the body as if it were `epoch_ms` now (tests only)."""
+    token = _offset_ms.set(epoch_ms - datetime.now(timezone.utc).timestamp() * 1000)
+    try:
+        yield
+    finally:
+        _offset_ms.reset(token)
+
+
 def now_iso() -> str:
-    return from_datetime(datetime.now(timezone.utc))
+    return from_datetime(utc_now())
 
 
 def now_ms() -> float:
-    return float(math.floor(datetime.now(timezone.utc).timestamp() * 1000))
+    return float(math.floor(utc_now().timestamp() * 1000))
 
 
 def add_seconds(value: str, seconds: float) -> str:

@@ -339,6 +339,30 @@ def handle(request: HttpRequest) -> HttpResponse:
     )
     headers: dict[str, str] = {"x-request-id": request_id}
     log = request_logger(request_id)
+    with _test_clock(request):
+        return _handle(request, req, headers, log, started)
+
+
+def _test_clock(request: HttpRequest) -> Any:
+    """The test seam's clock: under NODE_ENV=test only, `x-medlive-test-now`
+    (epoch ms) is this request's "now", as `vi.setSystemTime` is the Node
+    API's. Refused everywhere else by never being read."""
+    from contextlib import nullcontext
+
+    from ..domain.time import clock_at
+
+    if env().NODE_ENV != "test":
+        return nullcontext()
+    value = request.META.get("HTTP_X_MEDLIVE_TEST_NOW")
+    if not value:
+        return nullcontext()
+    try:
+        return clock_at(float(value))
+    except ValueError:
+        return nullcontext()
+
+
+def _handle(request: HttpRequest, req: ApiRequest, headers: dict[str, str], log: Any, started: float) -> HttpResponse:
     try:
         api, root = _routers()
         _security_headers(req, headers)
