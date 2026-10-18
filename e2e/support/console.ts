@@ -27,6 +27,7 @@ import { Client } from 'pg';
 import { signToken } from '../../backend/api/src/config/jwt.js';
 
 import { E2E_DATABASE_URL, assertLocalDatabase } from './database.js';
+import { FACILITY_CODE_PREFIX } from './facility.js';
 
 // Importing `signToken` pulls in the API's `env.ts`, which merges the
 // repository's `.env` into `process.env` as an import side effect. That is why
@@ -190,9 +191,14 @@ export async function createConsoleSession(
           AND d.bmdc_verified_at IS NOT NULL
           AND ($1::uuid IS NULL OR dh.hospital_id=$1::uuid)
           AND ($2::uuid IS NULL OR dh.doctor_id=$2::uuid)
+          -- A seeded facility unless one is named: earlier specs make facilities
+          -- of their own and give them seeded doctors, and a chamber there has
+          -- no seeded receptionist to sign in as (the production canary, 18
+          -- October). Named, it is the spec's own choice.
+          AND ($1::uuid IS NOT NULL OR h.code NOT LIKE $3 || '%')
         ORDER BY d.bmdc_number
         LIMIT 1`,
-      [place.hospitalId ?? null, place.doctorId ?? null],
+      [place.hospitalId ?? null, place.doctorId ?? null, FACILITY_CODE_PREFIX],
     );
 
     const row = chamber.rows[0];

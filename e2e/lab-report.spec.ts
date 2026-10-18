@@ -500,18 +500,39 @@ test.describe('redesigned lab and pharmacy safeguards', () => {
    * not proof it is the bench's own file — only the same key can say — so the
    * console replays the same attempt and believes the server's answer to it.
    */
+  /**
+   * An order on the bench with no report yet, made for this case alone: the
+   * doctor signs serial 1's visit and orders a test, the bench collects and
+   * processes it. The seed holds one such order, and two cases that each
+   * took "the first" left the second with none (18 October).
+   */
   async function processingOrderWithoutReport(page: Page): Promise<string> {
-    const response = await page.request.get(
-      `http://localhost:4000/api/v1/hospitals/${demo.hospitalId}/test-orders?state=open&days=30`,
-      { headers: { Authorization: `Bearer ${lab.labToken}` } },
-    );
-    const orders = (
-      (await response.json()) as {
-        data: { orders: { id: string; state: string; report: unknown }[] };
-      }
-    ).data.orders;
-    const order = orders.find((entry) => entry.state === 'processing' && entry.report === null);
+    const booking = await bookingBySerial(demo.sessionId, 1);
+    expect(booking).not.toBeNull();
+    await signVisit(demo, booking!.id, {
+      diagnosisText: ASSESSMENT!.diagnosisBn,
+      adviceTextBn: ASSESSMENT!.adviceBn,
+    });
+    const orderKey = crypto.randomUUID();
+    const ordered = await page.request.post('http://localhost:4000/api/v1/test-orders', {
+      headers: { Authorization: `Bearer ${demo.doctorToken}`, 'Idempotency-Key': orderKey },
+      data: { bookingId: booking!.id, tests: [{ testCode: 'CBC' }], idempotencyKey: orderKey },
+    });
+    expect(ordered.ok()).toBe(true);
+    const [order] = await ordersForBooking(booking!.id);
     expect(order).toBeDefined();
+    for (const action of ['collect', 'process'] as const) {
+      const stepKey = crypto.randomUUID();
+      const stepped = await page.request.patch(
+        `http://localhost:4000/api/v1/test-orders/${order!.id}/state`,
+        {
+          headers: { Authorization: `Bearer ${lab.labToken}`, 'Idempotency-Key': stepKey },
+          data: { action, idempotencyKey: stepKey },
+        },
+      );
+      expect(stepped.ok()).toBe(true);
+    }
+    expect((await ordersForBooking(booking!.id))[0]?.state).toBe('processing');
     return order!.id;
   }
 

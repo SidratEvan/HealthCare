@@ -460,6 +460,24 @@ function ReceptionQueue(props: ReceptionQueueProps): ReactNode {
             {formatClock(state.plan.plannedStart, numerals)} –{' '}
             {formatClock(state.plan.plannedEnd, numerals)}
           </p>
+          {/* The day it belongs to, in words: yesterday's chamber still running
+              after midnight and today's for the same doctor cannot be taken for
+              each other (BTN-B01-CHAMBER, owner's decision 2026-10-05). */}
+          {chamber.today === undefined ? null : (
+            <p
+              className={chamber.today ? 'cf-secondary' : 'cf-feedback cf-tone-caution'}
+              data-testid={testId('chamber-when')}
+              data-today={String(chamber.today)}
+            >
+              {chamber.today
+                ? format('chamberToday', locale, {
+                    time: formatClock(state.plan.plannedStart, numerals),
+                  })
+                : format('chamberEarlierDay', locale, {
+                    when: formatDateTime(state.plan.plannedStart, numerals),
+                  })}
+            </p>
+          )}
           <ConsoleStatus
             tone={
               ended

@@ -102,6 +102,12 @@ export interface ReceptionChamberDescriptor {
   readonly room: string | null;
   readonly status: string;
   readonly plannedStart: string;
+  /**
+   * Whether the server calls the chamber's date today (`BTN-B01-CHAMBER`). Read
+   * fresh with the roster and never cached: a copy kept from before midnight
+   * would call yesterday's chamber today. Unknown offline.
+   */
+  readonly today?: boolean;
 }
 
 const STORAGE_KEY = 'console.demo-session';
