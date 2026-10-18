@@ -1,0 +1,13 @@
+# The Django API's direct dependencies, pinned (requirements.lock.txt has the
+# full resolved set). All free and open source.
+Django==5.2.18
+djangorestframework==3.18.3
+python-socketio==5.17.0
+uvicorn==0.54.0
+websockets==17.2
+psycopg[binary]==3.3.6
+psycopg-pool==3.3.3
+PyJWT==2.15.1
+cryptography==50.0.2
+pytest==9.1.1
+pytest-django==4.14.0

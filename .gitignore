@@ -65,3 +65,9 @@ storage/
 # A database dump taken before a release (DEPLOY.md 7.3). It can hold a
 # deployment's data and never belongs in the repository.
 *.dump
+
+# Python (the Django backend, backend/django)
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
