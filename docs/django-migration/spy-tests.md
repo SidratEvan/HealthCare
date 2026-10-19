@@ -28,7 +28,8 @@ sender's `settled` and `dispatch`). That is not a spy and is not listed here.
 | `demoPhones.routes.test.ts` | to be listed | | |
 | `doctorSafety.routes.test.ts` | to be listed | | |
 | `readiness.routes.test.ts` | to be listed | | |
-| `receptionSafety.routes.test.ts` | to be listed | | |
+| `receptionSafety.routes.test.ts` | refuses exposing a reused canonical identity when its required audit fails | the registration lookup audit rejects | pending |
+| `receptionSafety.routes.test.ts` | an event write failure rolls back the booking too | `queueEvent.append` rejects during a walk-in | pending |
 | `smsRedaction.test.ts` | to be listed | | |
 | `staffAuth.routes.test.ts` | keep the sign-in live while they rotate | `createRefreshSession` paused mid-transaction to send another request | pending |
 | `staffAuth.routes.test.ts` | racing with the same token | a refresh held inside its transaction until the second waits on its lock | pending |
