@@ -1,0 +1,408 @@
+'use client';
+
+/**
+ * `BTN-A12-QR` and `BTN-A12-ACCESS` — letting a doctor look, and seeing who did
+ * (`FR-PAT-63`, `FR-PAT-64`, `APP_FLOW.md` A7).
+ *
+ * ## A code, not yet a QR
+ *
+ * `FR-PAT-63` says QR. Drawing one needs an encoder and scanning one needs a
+ * camera pipeline, and neither dependency has been agreed (`CLAUDE.md` §7), so
+ * the sheet shows the signed code itself with a copy button and the doctor's
+ * console takes it pasted. The capability is identical — a three-minute string
+ * naming one patient — and turning it into a picture later changes this sheet
+ * and `BTN-B05-SCAN`, nothing else.
+ *
+ * ## Who is speaking
+ *
+ * There are no accounts (`CLAUDE.md` §4.1), so what speaks for a patient on
+ * this device is a link to one of their bookings, and the API accepts that only
+ * while `DEMO_MODE` is on. Every action opens the link again for a fresh
+ * access token rather than holding one: the token lives fifteen minutes, a
+ * sheet can sit open longer than that, and a revoke that fails because a
+ * credential went stale in the background would look like the product refusing
+ * to let go.
+ */
+
+import { useCallback, useEffect, useState } from 'react';
+
+import { formatDateTime, formatNumber, tp, numeralsFor, localName } from '@platform/i18n';
+import { Button, Card, Chip, Sheet, useLocale } from '@platform/ui';
+
+import { useNow } from '@/hooks/useNow';
+import { accessLog, offerConsent, openTrackingLink, revokeConsent } from '@/lib/api';
+
+/** A fresh access token for this patient's link. */
+async function speak(speaker) {
+  return (await openTrackingLink(speaker.linkToken)).token;
+}
+
+export function WalletConsent({ speaker, online, showName }) {
+  const locale = useLocale();
+  return (
+    <Card elevated>
+      <div className="flex flex-col gap-3" data-testid={`wallet-consent-${speaker.patientId}`}>
+        <h2 className="text-title-sm font-bold">{tp('walletShare', locale)}</h2>
+
+        {showName ? (
+          <p className="text-body-sm text-ink-secondary">
+            {tp('walletPatient', locale).replace('{name}', speaker.patientName)}
+          </p>
+        ) : null}
+
+        <div className="flex flex-wrap gap-3">
+          <CodeSheet speaker={speaker} online={online} />
+          <AccessSheet speaker={speaker} online={online} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function CodeSheet({ speaker, online }) {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const [open, setOpen] = useState(false);
+  const [offer, setOffer] = useState({ kind: 'idle' });
+  const [copied, setCopied] = useState(false);
+
+  // Seconds matter here: the code lives three minutes and the patient is
+  // holding the phone out while the doctor types.
+  const now = useNow(1_000);
+
+  const fetchOffer = useCallback(async () => {
+    setOffer({ kind: 'loading' });
+    setCopied(false);
+    try {
+      const minted = await offerConsent({
+        patientId: speaker.patientId,
+        token: await speak(speaker),
+      });
+      setOffer({
+        kind: 'ready',
+        offer: minted,
+        expiresAt: Date.now() + minted.expiresInSeconds * 1_000,
+      });
+    } catch {
+      setOffer({ kind: 'failed' });
+    }
+  }, [speaker]);
+
+  // A new code every time the sheet opens. An old one may already have been
+  // shown to somebody, and it expires in minutes anyway.
+  useEffect(() => {
+    if (open) void fetchOffer();
+    else setOffer({ kind: 'idle' });
+  }, [open, fetchOffer]);
+
+  const secondsLeft =
+    offer.kind === 'ready' ? Math.max(0, Math.ceil((offer.expiresAt - now.getTime()) / 1_000)) : 0;
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={setOpen}
+      title={tp('consentCodeTitle', locale)}
+      trigger={
+        online ? (
+          <Button data-testid="show-consent-code">{tp('showCode', locale)}</Button>
+        ) : (
+          <Button disabled disabledReason={tp('offline', locale)}>
+            {tp('showCode', locale)}
+          </Button>
+        )
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {offer.kind === 'ready' ? (
+          <>
+            {/* Scope and expiry before the code, because they are what the
+                patient is agreeing to (`APP_FLOW.md` S-A-12). */}
+            <p className="text-body-md text-ink-secondary" data-testid="consent-scope">
+              {tp('consentScope', locale).replace(
+                '{hours}',
+                formatNumber(offer.offer.grantHours, numerals),
+              )}
+            </p>
+
+            {secondsLeft > 0 ? (
+              <>
+                <p
+                  data-testid="consent-code"
+                  className="select-all break-all rounded-md border border-line-strong bg-sunken p-3 text-body-sm"
+                >
+                  {offer.offer.code}
+                </p>
+
+                {/* Not a live region: announcing every second would drown the
+                    screen reader. Expiry itself is a state change and is read. */}
+                <p className="text-body-sm tabular-nums text-ink-muted">
+                  {tp('consentCodeExpiresIn', locale).replace(
+                    '{seconds}',
+                    formatNumber(secondsLeft, numerals),
+                  )}
+                </p>
+
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  data-testid="copy-consent-code"
+                  onClick={() => {
+                    // Absent outside a secure context (a phone opening the demo
+                    // over a LAN address), which the DOM types do not admit.
+                    const clipboard = globalThis.navigator.clipboard;
+                    void clipboard
+                      ?.writeText(offer.offer.code)
+                      .then(() => {
+                        setCopied(true);
+                      })
+                      .catch(() => {
+                        // The code is selectable on screen; a blocked clipboard
+                        // costs a long-press, not the handshake.
+                      });
+                  }}
+                >
+                  {copied ? tp('copied', locale) : tp('copyCode', locale)}
+                </Button>
+              </>
+            ) : (
+              <>
+                <p
+                  role="status"
+                  className="text-body-md text-warn-700"
+                  data-testid="consent-code-expired"
+                >
+                  {tp('consentCodeExpired', locale)}
+                </p>
+                <Button fullWidth onClick={() => void fetchOffer()}>
+                  {tp('newCode', locale)}
+                </Button>
+              </>
+            )}
+          </>
+        ) : offer.kind === 'failed' ? (
+          <>
+            <p className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700">
+              {tp('listFailed', locale)}
+            </p>
+            <Button fullWidth onClick={() => void fetchOffer()}>
+              {tp('tryAgain', locale)}
+            </Button>
+          </>
+        ) : (
+          <div aria-busy="true" className="flex flex-col gap-3">
+            <div className="h-5 w-2/3 rounded-sm bg-sunken" />
+            <div className="h-16 rounded-md bg-sunken" />
+            <span className="sr-only">{tp('loading', locale)}</span>
+          </div>
+        )}
+
+        <Button
+          variant="quiet"
+          fullWidth
+          onClick={() => {
+            setOpen(false);
+          }}
+        >
+          {tp('close', locale)}
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
+
+function AccessSheet({ speaker, online }) {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const [open, setOpen] = useState(false);
+  const [log, setLog] = useState({ kind: 'loading' });
+  const [revoking, setRevoking] = useState(null);
+  const [revokeFailed, setRevokeFailed] = useState(false);
+  const now = useNow();
+
+  const load = useCallback(async () => {
+    setLog({ kind: 'loading' });
+    try {
+      setLog({
+        kind: 'ready',
+        log: await accessLog({ patientId: speaker.patientId, token: await speak(speaker) }),
+      });
+    } catch {
+      setLog({ kind: 'failed' });
+    }
+  }, [speaker]);
+
+  useEffect(() => {
+    if (open) {
+      setRevokeFailed(false);
+      void load();
+    }
+  }, [open, load]);
+
+  const revoke = useCallback(
+    async (consentId) => {
+      setRevoking(consentId);
+      setRevokeFailed(false);
+      try {
+        await revokeConsent({
+          consentId,
+          token: await speak(speaker),
+          idempotencyKey: crypto.randomUUID(),
+        });
+        await load();
+      } catch {
+        setRevokeFailed(true);
+      } finally {
+        setRevoking(null);
+      }
+    },
+    [speaker, load],
+  );
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={setOpen}
+      title={tp('whoLooked', locale)}
+      trigger={
+        online ? (
+          <Button variant="secondary" data-testid="show-access">
+            {tp('whoLooked', locale)}
+          </Button>
+        ) : (
+          <Button variant="secondary" disabled disabledReason={tp('offline', locale)}>
+            {tp('whoLooked', locale)}
+          </Button>
+        )
+      }
+    >
+      <div className="flex max-h-[70vh] flex-col gap-5 overflow-y-auto" data-testid="access-log">
+        {log.kind === 'loading' ? (
+          <div aria-busy="true" className="flex flex-col gap-3">
+            <div className="h-12 rounded-md bg-sunken" />
+            <div className="h-12 rounded-md bg-sunken" />
+            <span className="sr-only">{tp('loading', locale)}</span>
+          </div>
+        ) : log.kind === 'failed' ? (
+          <>
+            <p className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700">
+              {tp('listFailed', locale)}
+            </p>
+            <Button fullWidth onClick={() => void load()}>
+              {tp('tryAgain', locale)}
+            </Button>
+          </>
+        ) : (
+          <>
+            {revokeFailed ? (
+              <p role="alert" className="text-body-sm text-alert-700">
+                {tp('revokeFailed', locale)}
+              </p>
+            ) : null}
+
+            <section className="flex flex-col gap-3">
+              <h3 className="text-body-lg font-semibold">{tp('grantsTitle', locale)}</h3>
+              {log.log.consents.length === 0 ? (
+                <p className="text-body-sm text-ink-muted">{tp('noGrants', locale)}</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {log.log.consents.map((grant) => (
+                    <li key={grant.id}>
+                      <GrantRow
+                        grant={grant}
+                        now={now}
+                        busy={revoking === grant.id}
+                        onRevoke={() => void revoke(grant.id)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <h3 className="text-body-lg font-semibold">{tp('viewsTitle', locale)}</h3>
+              {log.log.views.length === 0 ? (
+                <p className="text-body-sm text-ink-muted">{tp('noViews', locale)}</p>
+              ) : (
+                <ul className="flex flex-col gap-2" data-testid="access-views">
+                  {log.log.views.map((view, index) => (
+                    // Views have no id of their own; the log is append-only and
+                    // ordered, so position is stable for one render.
+                    <li key={`${view.at}-${String(index)}`} className="flex flex-col">
+                      <span className="text-body-md">
+                        {view.staffName ?? tp('hospitalStaff', locale)}
+                        {view.hospitalNameBn === null
+                          ? null
+                          : ` · ${localName(locale, view.hospitalNameBn, view.hospitalNameEn)}`}
+                      </span>
+                      <span className="text-body-sm tabular-nums text-ink-muted">
+                        {formatDateTime(view.at, numerals)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </>
+        )}
+
+        <Button
+          variant="quiet"
+          fullWidth
+          onClick={() => {
+            setOpen(false);
+          }}
+        >
+          {tp('close', locale)}
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
+
+/** One hospital's access, with the control that ends it (`FR-PAT-64`). */
+function GrantRow({ grant, now, busy, onRevoke }) {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const expired = grant.expiresAt !== null && new Date(grant.expiresAt) <= now;
+  const live = grant.revokedAt === null && !expired;
+
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-md border border-line p-3"
+      data-testid={`grant-${grant.id}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-body-md font-semibold">
+          {localName(locale, grant.hospitalNameBn, grant.hospitalNameEn)}
+        </span>
+        {/* A11Y-03: the state is a word, never only a colour. */}
+        <Chip tone={live ? 'positive' : 'neutral'}>
+          {grant.revokedAt !== null
+            ? tp('grantRevoked', locale)
+            : expired
+              ? tp('grantExpired', locale)
+              : grant.expiresAt === null
+                ? tp('grantLive', locale)
+                : tp('grantLiveUntil', locale).replace(
+                    '{time}',
+                    formatDateTime(grant.expiresAt, numerals),
+                  )}
+        </Chip>
+      </div>
+
+      {live ? (
+        <Button
+          variant="danger-quiet"
+          size="sm"
+          loading={busy}
+          data-testid={`revoke-${grant.id}`}
+          onClick={onRevoke}
+        >
+          {tp('revokeGrant', locale)}
+        </Button>
+      ) : null}
+    </div>
+  );
+}

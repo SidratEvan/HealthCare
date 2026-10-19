@@ -1,0 +1,11 @@
+{
+  "_comment": "The site's browser tests stay TypeScript, like e2e/; the site itself is JavaScript. `allowJs` because the tests read the site's copy, which is JavaScript; its types are inferred, not checked. `noUncheckedIndexedAccess` is off here only: JavaScript's pairs are inferred as arrays, not tuples, so every `[title, body]` would read as possibly undefined.",
+  "extends": "@platform/config/tsconfig/next.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["**/*.ts"]
+}

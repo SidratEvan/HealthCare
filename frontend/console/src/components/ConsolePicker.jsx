@@ -1,0 +1,755 @@
+'use client';
+
+/**
+ * `S-B-01` Role & counter selection, in the form a demo needs (CLAUDE.md §4.1).
+ *
+ * `S-B-00` Staff login is not built — authentication is deferred to Supabase
+ * Auth — so this is how somebody gets into a console:
+ *
+ *   "Under `DEMO_MODE=true`, the console picks a hospital and a role without a
+ *   password. That is the correct implementation for a pitch version, not a
+ *   shortcut to apologise for."
+ *
+ * Before this screen existed, opening the console meant pasting a signed token
+ * into `sessionStorage` by hand. That is workable on the machine that built it
+ * and impossible to hand to anybody else, which made the whole console
+ * undemonstrable over a link.
+ *
+ * ## It says what it is
+ *
+ * A console that anybody can open must not be mistaken for one that checked
+ * who you are. The banner says so in Bangla, on the screen, every time — the
+ * same honesty the demonstration-data label applies to the rows (`FR-DEM-07`).
+ *
+ * The token it receives is the same signed staff token `auth.service` will
+ * issue later, with the same claims, verified by the same middleware. When
+ * Supabase Auth arrives, this screen is deleted rather than rewritten.
+ */
+
+import { useCallback, useEffect, useState } from 'react';
+
+import { MODULE_OF_ROLE } from '@platform/domain';
+import {
+  format,
+  formatClock,
+  formatDateTime,
+  formatNumber,
+  localName,
+  numeralsFor,
+  t,
+} from '@platform/i18n';
+import { Button, Card, CardMeta, CardTitle, FilterChip, useLocale } from '@platform/ui';
+
+import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
+import { mintDemoToken, readDemoSession, writeDemoSession } from '@/lib/demo';
+import { loadDesks } from '@/lib/settings';
+import { fetchStaffChambers, fetchStaffModulesOff, signOut } from '@/lib/staffAuth';
+
+const API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
+
+/**
+ * How long one attempt at reaching the API may take.
+ *
+ * `fetch` has no timeout of its own: a request to a host that accepts the
+ * connection and then never answers stays pending for as long as the page is
+ * open. That is exactly what a sleeping demo API does while it boots, and it is
+ * how this screen came to sit on its loading skeleton indefinitely — the one
+ * state `GR-03` has no way out of, because nothing ever rejects.
+ */
+const ATTEMPT_TIMEOUT_MS = 12_000;
+
+/**
+ * How many times to try before giving up.
+ *
+ * The demo API sleeps when idle and takes the better part of a minute to wake,
+ * so the first attempt failing is the *expected* case rather than the broken
+ * one. Giving up after one would make the console unopenable exactly when
+ * somebody is opening it for the first time — which is every demo.
+ */
+const ATTEMPTS = 4;
+
+/** Roles whose console opens on the hospital rather than on one chamber. */
+const HOSPITAL_CONSOLES = new Set(['ward', 'emergency', 'lab', 'pharmacy', 'hospital_admin']);
+
+/** The roles this version has a console for. Others are not offered. */
+const ROLE_LABEL = {
+  receptionist: 'roleReceptionist',
+  doctor: 'roleDoctor',
+  ward: 'roleWard',
+  emergency: 'roleEmergency',
+  lab: 'roleLab',
+  pharmacy: 'rolePharmacy',
+  hospital_admin: 'roleHospitalAdmin',
+};
+
+/** A signed-in hospital's desks; none when they cannot be read, which hides nothing. */
+async function staffDesks() {
+  const desks = await loadDesks();
+  return typeof desks === 'string' ? [] : desks;
+}
+
+/** Where this device remembers its desk at a hospital (`SEL-B01-COUNTER`). */
+const deskKey = (hospitalId) => `console.desk.${hospitalId}`;
+
+function readDesk(hospitalId) {
+  try {
+    return globalThis.localStorage.getItem(deskKey(hospitalId));
+  } catch {
+    return null;
+  }
+}
+
+function writeDesk(hospitalId, deskId) {
+  try {
+    if (deskId === null) globalThis.localStorage.removeItem(deskKey(hospitalId));
+    else globalThis.localStorage.setItem(deskKey(hospitalId), deskId);
+  } catch {
+    // Storage refused (a private window): the choice lasts as long as the page.
+  }
+}
+
+/**
+ * The chambers in the order a desk wants them (`FR-REC-32`): its doctors'
+ * first, then every other. Nothing is left out: a desk organises and never
+ * restricts (decision 2a).
+ */
+function byDesk(sessions, desk) {
+  if (desk === null) return [{ title: null, sessions }];
+  const mine = new Set(desk.doctorIds);
+  const own = sessions.filter(
+    (session) => session.doctorId !== undefined && mine.has(session.doctorId),
+  );
+  const other = sessions.filter((session) => !own.includes(session));
+  return [
+    { title: 'pickerDeskChambers', sessions: own },
+    { title: 'pickerOtherChambers', sessions: other },
+  ];
+}
+
+/**
+ * A hospital as the picker offers it: only the consoles of modules it runs
+ * (`FR-BRD-11`). A role whose module is off has no console here, and a
+ * hospital that does not run serials has no chamber to open. The server
+ * refuses what is off whatever this shows.
+ */
+function offered(hospital) {
+  const off = hospital.modulesOff ?? [];
+  if (off.length === 0) return hospital;
+  return {
+    ...hospital,
+    roles: hospital.roles.filter((role) => {
+      const module = MODULE_OF_ROLE[role];
+      return module == null || !off.includes(module);
+    }),
+    sessions: off.includes('queue') ? [] : hospital.sessions,
+  };
+}
+
+export function ConsolePicker({ onChosen, mode = 'demo', onSignedOut }) {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const [consoles, setConsoles] = useState(null);
+  const [national, setNational] = useState([]);
+  const [failed, setFailed] = useState(false);
+  /** True once an attempt has timed out and another is running. */
+  const [waking, setWaking] = useState(false);
+  const [hospital, setHospital] = useState(null);
+  const [busy, setBusy] = useState(false);
+  /** `SEL-B01-COUNTER`: this device's desk at the chosen hospital, if any. */
+  const [deskId, setDeskId] = useState(null);
+  useEffect(() => {
+    setDeskId(hospital === null ? null : readDesk(hospital.hospitalId));
+  }, [hospital]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOwn() {
+      const session = readDemoSession();
+      const chambers = await fetchStaffChambers();
+      if (cancelled) return;
+      if (session === null || chambers === null) {
+        setFailed(true);
+        return;
+      }
+      const roles = session.roles ?? [];
+      if (session.hospitalId === null) {
+        // A national account works for no facility (`FR-ROLE-01`).
+        setConsoles([]);
+        setNational(['gov_viewer', 'platform_admin'].filter((role) => roles.includes(role)));
+        return;
+      }
+      const own = offered({
+        hospitalId: session.hospitalId,
+        nameBn: session.hospitalNameBn ?? '',
+        nameEn: session.hospitalNameEn ?? '',
+        district: '',
+        roles,
+        modulesOff: await fetchStaffModulesOff(),
+        sessions: chambers,
+        desks: await staffDesks(),
+      });
+      if (cancelled) return;
+      setConsoles([own]);
+      setHospital(own);
+    }
+
+    async function load() {
+      if (mode === 'staff') {
+        await loadOwn();
+        return;
+      }
+      for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+        if (cancelled) return;
+
+        // The second attempt onward means the first one timed out, which for
+        // this API almost always means it is waking rather than broken. Say
+        // that, instead of leaving a skeleton to be read as a hang.
+        if (attempt > 1) setWaking(true);
+
+        try {
+          const response = await fetch(`${API}/demo/consoles`, {
+            signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
+          });
+          if (!response.ok) throw new Error(String(response.status));
+
+          const body = await response.json();
+          if (cancelled) return;
+
+          setConsoles(body.data.consoles.map(offered));
+          // Absent from an API older than step 20, which offers nothing
+          // national rather than failing the picker.
+          setNational(body.data.national ?? []);
+          // One facility is the common case in a demo; skipping a choice that
+          // has one answer is not a shortcut, it is one fewer tap before the
+          // thing being demonstrated.
+          setHospital(body.data.consoles[0] ?? null);
+          setWaking(false);
+          return;
+        } catch {
+          // Fall through to the next attempt. The last one is the only failure
+          // worth telling somebody about.
+        }
+      }
+
+      if (!cancelled) {
+        setWaking(false);
+        setFailed(true);
+      }
+    }
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
+
+  /**
+   * Takes a principal for this hospital and role, then opens the chamber.
+   *
+   * A null hospital is the national console: the token is asked for with a
+   * role alone, because naming a facility for a government viewer is refused
+   * (`demoTokenBody`, migration 0024).
+   */
+  const open = useCallback(
+    async (hospitalId, role, choice) => {
+      setBusy(true);
+      try {
+        // A signed-in person's token already carries every role they hold, so
+        // choosing a console changes what is stored and nothing on the server.
+        const staffSession = mode === 'staff' ? readDemoSession() : null;
+        const minted =
+          staffSession === null
+            ? await mintDemoToken(hospitalId, role)
+            : {
+                token: staffSession.token,
+                hospitalId: staffSession.hospitalId,
+                staffName: staffSession.staffName,
+              };
+
+        const picked = consoles?.find((entry) => entry.hospitalId === hospitalId);
+        const chamber =
+          choice.kind === 'chamber'
+            ? picked?.sessions.find((session) => session.id === choice.sessionId)
+            : undefined;
+
+        writeDemoSession({
+          ...(staffSession ?? {}),
+          token: minted.token,
+          hospitalId: minted.hospitalId,
+          staffName: minted.staffName,
+          role,
+          ...(picked === undefined
+            ? {}
+            : {
+                hospitalNameBn: picked.nameBn,
+                hospitalNameEn: picked.nameEn,
+                // So the rail can offer this facility's other consoles.
+                roles: picked.roles,
+              }),
+          ...(choice.kind === 'chamber' ? { chamberSessionId: choice.sessionId } : {}),
+          ...(chamber === undefined
+            ? {}
+            : {
+                chamber: {
+                  doctorNameBn: chamber.doctorNameBn,
+                  doctorNameEn: chamber.doctorNameEn,
+                  departmentNameBn: chamber.departmentNameBn,
+                  departmentNameEn: chamber.departmentNameEn,
+                  room: chamber.room,
+                },
+              }),
+        });
+
+        onChosen(choice);
+      } catch {
+        setFailed(true);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [onChosen, consoles, mode],
+  );
+
+  if (failed) {
+    return (
+      <Shell mode={mode} {...(onSignedOut === undefined ? {} : { onSignedOut })}>
+        <p
+          role="alert"
+          data-testid="picker-failed"
+          className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700"
+        >
+          {t('consoleLoadFailed', locale)}
+        </p>
+
+        {/* A dead end is not a state. Reloading is the whole retry, because the
+                screen has nothing else on it yet. */}
+        <Button
+          variant="secondary"
+          onClick={() => {
+            globalThis.location.reload();
+          }}
+        >
+          {t('retry', locale)}
+        </Button>
+      </Shell>
+    );
+  }
+
+  if (consoles === null) {
+    // `GR-03` loading: the shape of the answer, never a spinner over the page.
+    return (
+      <Shell mode={mode} {...(onSignedOut === undefined ? {} : { onSignedOut })}>
+        {waking ? (
+          <p
+            role="status"
+            data-testid="picker-waking"
+            className="rounded-sm bg-warn-100 px-3 py-2 text-body-md text-warn-700"
+          >
+            {t('consoleWaking', locale)}
+          </p>
+        ) : null}
+
+        <div className="flex flex-col gap-3" aria-busy="true" data-testid="picker-loading">
+          <div className="h-20 rounded-md bg-sunken" />
+          <div className="h-20 rounded-md bg-sunken" />
+        </div>
+      </Shell>
+    );
+  }
+
+  // `S-B-13` belongs to no hospital, so it is offered whether or not any
+  // hospital is running something today.
+  // And so does `S-B-12`: the platform's administrator works for no hospital
+  // either, and brings hospitals on (`FR-ONB-*`).
+  const nationalSection =
+    national.length === 0 ? null : (
+      <>
+        {national.includes('platform_admin') ? (
+          <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+            <h2 className="text-title-sm">{t('platformSection', locale)}</h2>
+            <p className="text-body-sm text-ink-secondary">{t('platformSectionHint', locale)}</p>
+            <div>
+              <Button
+                variant="secondary"
+                loading={busy}
+                data-testid="open-platform"
+                onClick={() => {
+                  void open(null, 'platform_admin', { kind: 'platform' });
+                }}
+              >
+                {t('openPlatform', locale)}
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {national.includes('gov_viewer') ? (
+          <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+            <h2 className="text-title-sm">{t('govSection', locale)}</h2>
+            <p className="text-body-sm text-ink-secondary">{t('govSectionHint', locale)}</p>
+            <div>
+              <Button
+                variant="secondary"
+                loading={busy}
+                data-testid="open-gov"
+                onClick={() => {
+                  void open(null, 'gov_viewer', { kind: 'gov' });
+                }}
+              >
+                {t('openGov', locale)}
+              </Button>
+            </div>
+          </section>
+        ) : null}
+      </>
+    );
+
+  if (consoles.length === 0) {
+    return (
+      <Shell mode={mode} {...(onSignedOut === undefined ? {} : { onSignedOut })}>
+        <p className="text-body-md text-ink-secondary" data-testid="picker-empty">
+          {t('noConsoles', locale)}
+        </p>
+        {nationalSection}
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell mode={mode} {...(onSignedOut === undefined ? {} : { onSignedOut })}>
+      {mode === 'staff' ? null : (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-title-sm">{t('chooseHospital', locale)}</h2>
+
+          <ul className="flex flex-wrap gap-2">
+            {consoles.map((candidate) => (
+              <li key={candidate.hospitalId}>
+                <Button
+                  variant={candidate.hospitalId === hospital?.hospitalId ? 'primary' : 'secondary'}
+                  size="sm"
+                  data-testid={`pick-hospital-${candidate.hospitalId}`}
+                  onClick={() => {
+                    setHospital(candidate);
+                  }}
+                >
+                  {localName(locale, candidate.nameBn, candidate.nameEn)}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* The hospital's own consoles — the ward board (`S-B-06`), the ER
+            (`S-B-07`), the lab and the pharmacy (`S-B-08`, `S-B-09`) and the
+            dashboard (`S-B-10`) — belong to the facility rather than to a
+            chamber, so they are offered once, side by side, above the chambers.
+            A facility is offered only what its roster staffs: a diagnostic
+            centre gets a lab and no pharmacy, a clinic the reverse
+            (`data/people.ts`). */}
+      {hospital === null ? null : (
+        <FacilityConsoles
+          hospital={hospital}
+          busy={busy}
+          onOpen={(role, choice) => {
+            void open(hospital.hospitalId, role, choice);
+          }}
+        />
+      )}
+
+      {hospital === null ? null : (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-title-sm">{t('chooseChamber', locale)}</h2>
+
+          {/* A Friday at a hospital with no weekend chamber: the facility's
+                own consoles are still offered above, so say why this is empty
+                rather than draw nothing. */}
+          {hospital.sessions.length === 0 ? (
+            <p className="text-body-md text-ink-secondary" data-testid="picker-no-chambers">
+              {t('noChambersToday', locale)}
+            </p>
+          ) : null}
+
+          {/* SEL-B01-COUNTER (FR-REC-32, plan R4): where the hospital has desks. */}
+          {(hospital.desks ?? []).length === 0 ? null : (
+            <div className="flex flex-wrap items-center gap-2" data-testid="picker-desks">
+              <span className="text-body-sm font-semibold">{t('pickerDesk', locale)}</span>
+              {[null, ...(hospital.desks ?? [])].map((desk) => (
+                <FilterChip
+                  key={desk?.id ?? 'all'}
+                  selected={deskId === (desk?.id ?? null)}
+                  data-testid={desk === null ? 'picker-desk-all' : `picker-desk-${desk.id}`}
+                  onToggle={() => {
+                    const next = desk?.id ?? null;
+                    setDeskId(next);
+                    writeDesk(hospital.hospitalId, next);
+                  }}
+                >
+                  {desk === null
+                    ? t('pickerDeskAll', locale)
+                    : localName(locale, desk.nameBn, desk.nameEn)}
+                </FilterChip>
+              ))}
+            </div>
+          )}
+
+          {byDesk(
+            hospital.sessions,
+            (hospital.desks ?? []).find((desk) => desk.id === deskId) ?? null,
+          ).map((group) => (
+            <div
+              key={group.title ?? 'all'}
+              className="flex flex-col gap-2"
+              data-testid={`picker-group-${group.title ?? 'all'}`}
+            >
+              {group.title === null ? null : (
+                <h3 className="text-body-md font-semibold">{t(group.title, locale)}</h3>
+              )}
+              <ul className="grid gap-3 md:grid-cols-2">
+                {group.sessions.map((session) => (
+                  <li key={session.id}>
+                    <Card
+                      tone={session.status === 'running' ? 'brand' : 'default'}
+                      data-testid={`chamber-card-${session.id}`}
+                      data-today={session.today ? 'true' : 'false'}
+                    >
+                      <CardTitle>
+                        {localName(locale, session.doctorNameBn, session.doctorNameEn)}
+                      </CardTitle>
+                      {/* Which day's chamber, and when it was due to start
+                    (`S-B-01`, owner's decision 2026-10-05). A chamber nobody
+                    ended is still listed the next morning, beside today's for
+                    the same doctor, and without this the two cards read the
+                    same — so today's patients went into yesterday's queue. */}
+                      <p
+                        className={
+                          session.today
+                            ? 'mt-1 text-body-sm text-ink-secondary'
+                            : 'mt-1 text-body-sm font-bold text-warn-700'
+                        }
+                        data-testid={`chamber-when-${session.id}`}
+                      >
+                        {session.today
+                          ? format('chamberToday', locale, {
+                              time: formatClock(session.plannedStart, numerals),
+                            })
+                          : format('chamberEarlierDay', locale, {
+                              when: formatDateTime(session.plannedStart, numerals),
+                            })}
+                      </p>
+                      <CardMeta>
+                        {localName(locale, session.departmentNameBn, session.departmentNameEn)}
+                        {session.room === null ? '' : ` · ${session.room}`} ·{' '}
+                        {t(statusKey(session.status), locale)} ·{' '}
+                        {format('waitingCount', locale, {
+                          count: formatNumber(session.waiting, numerals),
+                        })}
+                      </CardMeta>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {hospital.roles
+                          // The ward board, the ER, the lab, the pharmacy and the
+                          // dashboard belong to the hospital, not to a chamber, and
+                          // are offered once above.
+                          .filter((role) => !HOSPITAL_CONSOLES.has(role))
+                          .map((role) => (
+                            <Button
+                              key={role}
+                              variant={role === 'receptionist' ? 'primary' : 'secondary'}
+                              size="sm"
+                              loading={busy}
+                              data-testid={`open-${role}-${session.id}`}
+                              onClick={() => {
+                                void open(hospital.hospitalId, role, {
+                                  kind: 'chamber',
+                                  sessionId: session.id,
+                                });
+                              }}
+                            >
+                              {t(ROLE_LABEL[role] ?? 'roleReceptionist', locale)}
+                            </Button>
+                          ))}
+                      </div>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {nationalSection}
+    </Shell>
+  );
+}
+
+/** The consoles that belong to a facility rather than to one chamber. */
+const FACILITY_CONSOLES = [
+  {
+    role: 'ward',
+    id: 'ward',
+    choice: { kind: 'ward' },
+    title: 'wardBoardSection',
+    action: 'openWardBoard',
+  },
+  {
+    role: 'emergency',
+    id: 'er',
+    choice: { kind: 'emergency' },
+    title: 'erSection',
+    action: 'openEr',
+  },
+  { role: 'lab', id: 'lab', choice: { kind: 'lab' }, title: 'labSection', action: 'openLab' },
+  {
+    role: 'pharmacy',
+    id: 'pharmacy',
+    choice: { kind: 'pharmacy' },
+    title: 'pharmacySection',
+    action: 'openPharmacy',
+  },
+  {
+    role: 'hospital_admin',
+    id: 'admin',
+    choice: { kind: 'admin' },
+    title: 'adminSection',
+    action: 'openAdmin',
+  },
+];
+
+function FacilityConsoles({ hospital, busy, onOpen }) {
+  const locale = useLocale();
+  const dashboardOff = (hospital.modulesOff ?? []).includes('dashboard');
+  const entries = FACILITY_CONSOLES.filter((entry) => hospital.roles.includes(entry.role)).map(
+    (entry) =>
+      // An administrator whose hospital does not run the dashboard still has
+      // its settings to open (`FR-BRD-11`: settings are nobody's module).
+      entry.id === 'admin' && dashboardOff
+        ? {
+            ...entry,
+            choice: { kind: 'settings' },
+            title: 'settingsTitle',
+            action: 'pickerOpenSettings',
+          }
+        : entry,
+  );
+  if (entries.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-title-sm">{t('facilityConsoles', locale)}</h2>
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {entries.map((entry) => (
+          <li key={entry.id}>
+            <Card>
+              <CardTitle>{t(entry.title, locale)}</CardTitle>
+              <div className="mt-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={busy}
+                  data-testid={`open-${entry.id}-${hospital.hospitalId}`}
+                  onClick={() => {
+                    onOpen(entry.role, entry.choice);
+                  }}
+                >
+                  {t(entry.action, locale)}
+                </Button>
+              </div>
+            </Card>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function statusKey(status) {
+  if (status === 'running') return 'sessionRunning';
+  if (status === 'ended') return 'sessionEnded';
+  return 'sessionScheduled';
+}
+
+function Shell({ children, mode = 'demo', onSignedOut }) {
+  const locale = useLocale();
+  const session = mode === 'staff' ? readDemoSession() : null;
+  return (
+    <div className="min-h-screen">
+      {/* The institution's colour across the top, as the consoles' rail is:
+            the first screen a director sees should look like the product, not
+            like a form in front of it. */}
+      <header className="bg-brand-700 text-ink-inverse">
+        <div className="mx-auto flex max-w-[1040px] items-center gap-4 px-8 py-8">
+          <h1 className="font-reading text-title-lg">{t('chooseConsole', locale)}</h1>
+          <ConsoleLanguageSwitch />
+        </div>
+      </header>
+
+      <main className="mx-auto flex max-w-[1040px] flex-col gap-6 p-8" data-testid="console-picker">
+        {mode === 'staff' ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-body-sm text-ink-secondary" data-testid="picker-signed-in">
+              {format('signedInAs', locale, { name: session?.staffName ?? '' })} ·{' '}
+              {t('staffPickerNote', locale)}
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {session?.twoFactor === undefined ? null : session.twoFactor.enabled ? (
+                <span className="text-body-sm text-ink-secondary" data-testid="picker-tfa-on">
+                  {t('tfaOnNote', locale)}
+                </span>
+              ) : (
+                <a
+                  href="/?view=2fa"
+                  className="text-body-sm text-brand-600 underline"
+                  data-testid="picker-tfa-setup"
+                >
+                  {t('tfaSetupTitle', locale)}
+                </a>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                data-testid="picker-sign-out"
+                onClick={() => {
+                  void signOut().then(() => onSignedOut?.());
+                }}
+              >
+                {t('signOut', locale)}
+              </Button>
+            </div>
+            {/* A recovery code was used for a lost phone: say when few are
+                left, while an administrator can still reset it in time. */}
+            {session?.twoFactor?.enabled === true && session.twoFactor.recoveryCodesLeft <= 3 ? (
+              <p
+                role="status"
+                className="w-full rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
+                data-testid="picker-tfa-low"
+              >
+                {format('tfaRecoveryLow', locale, {
+                  count: formatNumber(session.twoFactor.recoveryCodesLeft, numeralsFor(locale)),
+                })}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          // The demo picker needs no password. Saying so is the honest state,
+          // and it is the same reason every demo row carries its label
+          // (`FR-DEM-07`). Signing in with an account is offered beside it.
+          <p className="flex flex-wrap items-center gap-3 rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
+            <span>{t('demoSignIn', locale)}</span>
+            <a href="/?login=1" className="underline" data-testid="picker-login-link">
+              {t('loginDemoLink', locale)}
+            </a>
+            <a href="/?apply=1" className="underline" data-testid="picker-apply-link">
+              {t('applyLink', locale)}
+            </a>
+          </p>
+        )}
+
+        {children}
+      </main>
+    </div>
+  );
+}

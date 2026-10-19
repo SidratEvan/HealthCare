@@ -29,7 +29,10 @@ export default defineConfig({
       {
         test: {
           name: 'unit',
-          include: ['shared/*/src/**/*.{test,spec}.ts', 'frontend/console/src/lib/**/*.test.ts'],
+          include: [
+            'shared/*/src/**/*.{test,spec}.{ts,js}',
+            'frontend/console/src/lib/**/*.test.js',
+          ],
           environment: 'node',
           globals: false,
           restoreMocks: true,
@@ -51,9 +54,9 @@ export default defineConfig({
         // `contrast.test.ts` cover the visual layer instead.
         test: {
           name: 'ui',
-          include: ['shared/ui/src/**/*.{test,spec}.tsx'],
+          include: ['shared/ui/src/**/*.{test,spec}.jsx'],
           environment: 'jsdom',
-          setupFiles: ['shared/ui/src/__tests__/setup.ts'],
+          setupFiles: ['shared/ui/src/__tests__/setup.js'],
           globals: false,
           restoreMocks: true,
         },

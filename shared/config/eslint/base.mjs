@@ -21,6 +21,83 @@ import tseslint from 'typescript-eslint';
 /** Absolute repository root, independent of the directory eslint was run from. */
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../..');
 
+/** What a browser page, a service worker and the test runner may name. */
+const BROWSER_GLOBALS = Object.fromEntries(
+  [
+    'window',
+    'self',
+    'globalThis',
+    'document',
+    'navigator',
+    'location',
+    'history',
+    'localStorage',
+    'sessionStorage',
+    'indexedDB',
+    'caches',
+    'crypto',
+    'performance',
+    'fetch',
+    'Headers',
+    'Request',
+    'Response',
+    'FormData',
+    'Blob',
+    'File',
+    'FileReader',
+    'URL',
+    'URLSearchParams',
+    'AbortController',
+    'AbortSignal',
+    'TextEncoder',
+    'TextDecoder',
+    'atob',
+    'btoa',
+    'structuredClone',
+    'queueMicrotask',
+    'setTimeout',
+    'clearTimeout',
+    'setInterval',
+    'clearInterval',
+    'requestAnimationFrame',
+    'cancelAnimationFrame',
+    'matchMedia',
+    'getComputedStyle',
+    'Event',
+    'CustomEvent',
+    'EventTarget',
+    'KeyboardEvent',
+    'MouseEvent',
+    'Node',
+    'Element',
+    'HTMLElement',
+    'HTMLInputElement',
+    'HTMLButtonElement',
+    'HTMLDialogElement',
+    'HTMLAnchorElement',
+    'HTMLFormElement',
+    'HTMLTextAreaElement',
+    'HTMLSelectElement',
+    'HTMLDivElement',
+    'MutationObserver',
+    'ResizeObserver',
+    'IntersectionObserver',
+    'DOMException',
+    'Image',
+    'Notification',
+    'BroadcastChannel',
+    'WebSocket',
+    'Storage',
+    'StorageEvent',
+    'Intl',
+    'console',
+    'process',
+    'alert',
+    'confirm',
+    'Buffer',
+  ].map((name) => [name, 'readonly']),
+);
+
 /** Files that are never linted. */
 export const ignores = [
   '**/node_modules/**',
@@ -171,6 +248,52 @@ export const base = tseslint.config(
   },
 
   // ---------------------------------------------------------------------------
+  // The web apps and their two browser packages, in JavaScript since the
+  // Django migration (docs/django-migration/frontend-js.md). No type
+  // information, so the rules that need it are gone; what is kept is what a
+  // parser can see: undefined names, unused code, the import hygiene and the
+  // boundaries, no console.
+  // ---------------------------------------------------------------------------
+  {
+    files: ['{frontend,shared}/*/src/**/*.{js,jsx}'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: { ecmaFeatures: { jsx: true } },
+      globals: BROWSER_GLOBALS,
+    },
+    plugins: { 'import-x': importX },
+    settings: {
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({
+          alwaysTryTypes: true,
+          noWarnOnMultipleProjects: true,
+          project: [
+            'tsconfig.json',
+            '{frontend,backend,shared}/*/tsconfig.json',
+            'frontend/*/jsconfig.json',
+          ],
+        }),
+      ],
+    },
+    rules: {
+      'no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
+      ],
+      'import-x/no-cycle': ['error', { maxDepth: Infinity, ignoreExternal: true }],
+      'import-x/no-self-import': 'error',
+      'import-x/no-duplicates': 'error',
+      'no-console': 'error',
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
+      'no-var': 'error',
+      'prefer-const': 'error',
+      'object-shorthand': ['error', 'always'],
+    },
+  },
+
+  // ---------------------------------------------------------------------------
   // Configuration written as ESM JavaScript (this file, eslint.config.mjs).
   // Linted without type information, because it sits outside every tsconfig.
   // ---------------------------------------------------------------------------
@@ -234,6 +357,16 @@ export const overrides = tseslint.config(
       // trigger on queue_events, RLS scoping, serial allocation under
       // concurrency (BACKEND.md §11) — and reaches the database directly to
       // do it. The layering rule still applies to everything that is not a test.
+      'no-restricted-imports': 'off',
+    },
+  },
+
+  // The same relaxations for the web apps' tests, which are JavaScript.
+  {
+    files: ['**/*.{test,spec}.{js,jsx}', '**/__tests__/**/*.{js,jsx}'],
+    rules: {
+      'no-restricted-syntax': 'off',
+      'no-console': 'off',
       'no-restricted-imports': 'off',
     },
   },

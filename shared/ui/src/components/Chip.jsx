@@ -1,0 +1,70 @@
+/**
+ * Chip and status pill (FRONTEND.md §5.5).
+ *
+ * "Four semantic families only… A chip never carries an action — chips inform;
+ * buttons act. Filter chips are the one exception and use `radius-pill` to be
+ * visually distinct from status pills."
+ *
+ * So there are two components here rather than one with an `onClick`. `Chip`
+ * renders a `<span>` and has no click handler in its type; `FilterChip`
+ * renders a real `<button>` with `aria-pressed`. The distinction is not
+ * cosmetic — a status a screen reader announces as a button is a status
+ * somebody will try to press.
+ */
+
+'use client';
+
+// `FilterChip` toggles, so this module crosses the boundary. `Chip` itself is
+// inert markup and would be fine on the server; splitting the file to save one
+// component's worth of bundle would cost more in indirection than it saves.
+import { cx } from './cx.js';
+
+const TONE = {
+  neutral: 'bg-sunken text-ink',
+  positive: 'bg-positive-100 text-positive-700',
+  caution: 'bg-warn-100 text-warn-700',
+  alert: 'bg-alert-100 text-alert-700',
+};
+
+export function Chip({ children, tone = 'neutral', label }) {
+  return (
+    <span
+      // §5.5: 12px caption, 6/10px padding, radius-xs.
+      className={cx(
+        'inline-flex items-center rounded-xs px-[10px] py-[6px] font-ui text-caption font-medium',
+        TONE[tone],
+      )}
+      aria-label={label}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The one chip that acts.
+ *
+ * `radius-pill` rather than `radius-xs`, so it cannot be mistaken for a status
+ * pill at a glance, and a real `<button>` with `aria-pressed` so it is
+ * reachable by keyboard and announced as a toggle.
+ */
+export function FilterChip({ children, selected, onToggle, 'data-testid': testId }) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      aria-pressed={selected}
+      onClick={onToggle}
+      className={cx(
+        'inline-flex min-h-touch items-center rounded-pill border px-4 font-ui text-body-sm',
+        'transition-colors duration-instant ease-standard',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2',
+        selected
+          ? 'border-brand-600 bg-brand-600 text-white'
+          : 'border-line-strong bg-surface text-ink hover:bg-sunken',
+      )}
+    >
+      {children}
+    </button>
+  );
+}

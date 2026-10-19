@@ -1,0 +1,250 @@
+'use client';
+
+/**
+ * The navigation rail every hospital console shares (`APP_FLOW.md` B1.1).
+ *
+ * The design reference (`FRONTEND.md` §0.4, the `Reception` artboard) sets it
+ * in the institution's own green, with the facility named at the top: a
+ * counter screen should say whose counter it is before it says anything else.
+ * Five consoles used to carry their own copy of a pale rail with no name on
+ * it, which is how they came to look like five unrelated pages.
+ *
+ * ## Every item goes somewhere, or says why it does not
+ *
+ * It used to be labels styled as a menu, on the reasoning that `S-B-01` was
+ * the one way between consoles. People clicked them, nothing happened, and a
+ * console that ignores a click reads as a broken one. B1.1 calls this a
+ * navigation rail, so each item now opens its console **for the same
+ * facility**: a principal for that role is taken the way the picker takes one
+ * (`mintDemoToken`, CLAUDE.md §4.1) and the page reloads onto it.
+ *
+ * An item with no console behind it is shown switched off with the reason
+ * under it (`FRONTEND.md` §5.1): রেজিস্ট্রেশন because `S-B-03` is not built,
+ * বিল because `S-B-04` is not, and any console the facility does not run (a
+ * clinic has no ward).
+ */
+
+import { useState } from 'react';
+
+import { localName, t } from '@platform/i18n';
+
+import { useWorkspaceBrand } from '@/hooks/useWorkspaceBrand';
+import { mintDemoToken, readDemoSession, writeDemoSession } from '@/lib/demo';
+import { signOut } from '@/lib/staffAuth';
+
+/** `APP_FLOW.md` B1.1, in its order. */
+const NAV_ITEMS = [
+  'navQueue',
+  'navRegistration',
+  'navBeds',
+  'navEmergency',
+  'navTests',
+  'navPharmacy',
+  'navBilling',
+  'navDashboard',
+];
+
+/**
+ * Which console each item opens: the role it needs and the `?view=` that
+ * `app/page.tsx` routes on. `null` view is a chamber, opened by its session.
+ * `null` target is a screen this version does not have.
+ */
+const TARGET = {
+  navQueue: { role: 'receptionist', view: null },
+  // `S-B-03` (pilot step 23): the registration desk, a receptionist's.
+  navRegistration: { role: 'receptionist', view: 'registration' },
+  navBeds: { role: 'ward', view: 'ward' },
+  navEmergency: { role: 'emergency', view: 'er' },
+  navTests: { role: 'lab', view: 'lab' },
+  navPharmacy: { role: 'pharmacy', view: 'pharmacy' },
+  // `S-B-04` is not built. The pharmacy console used to sit under বিল, and a
+  // person who clicked "Billing" landed on medicine stock; it has its own
+  // item now, and বিল says it is not in this version.
+  navBilling: null,
+  navDashboard: { role: 'hospital_admin', view: 'admin' },
+};
+
+/** Why an item cannot be opened, or null when it can. */
+function offReason(key, session) {
+  const target = TARGET[key];
+  if (target === null) return 'navNotInVersion';
+  // No facility — the national console — has none of these.
+  const hospitalId = session?.hospitalId ?? null;
+  if (session === null || hospitalId === null) return 'navNotHere';
+  // A session stored before the rail linked anywhere has no list; let the
+  // attempt decide rather than switch off everything.
+  if (session.roles !== undefined && !session.roles.includes(target.role)) return 'navNotHere';
+  return null;
+}
+
+const ITEM =
+  'flex min-h-touch w-full flex-col justify-center rounded-sm px-3 text-left text-body-md text-brand-100';
+
+export function ConsoleRail({ current, locale, children }) {
+  const session = readDemoSession();
+  const [opening, setOpening] = useState(null);
+  const [failed, setFailed] = useState(null);
+
+  // The hospital's own face (FR-BRD-12, plan K4): what this tab keeps at once,
+  // then the server's answer. Until then, the session's name on the
+  // platform's colour; the brand never stands between staff and their work.
+  const { brand, logo } = useWorkspaceBrand();
+
+  async function open(key) {
+    const target = TARGET[key];
+    const hospitalId = session?.hospitalId ?? null;
+    if (target === null || session === null || hospitalId === null) return;
+
+    // A queue with no chamber remembered has nothing to reopen: the picker is
+    // where a chamber is chosen.
+    if (target.view === null && session.chamberSessionId === undefined) {
+      globalThis.location.assign('/');
+      return;
+    }
+
+    setOpening(key);
+    setFailed(null);
+    try {
+      // A signed-in person's token already carries every role they hold
+      // (pilot step 21); only the demo mints one per console.
+      const minted =
+        session.authKind === 'staff'
+          ? { token: session.token, staffName: session.staffName, hospitalId: session.hospitalId }
+          : await mintDemoToken(hospitalId, target.role, AbortSignal.timeout(20_000));
+      // Everything the picker knew about the facility carries over; only the
+      // principal and the role change.
+      writeDemoSession({
+        ...session,
+        token: minted.token,
+        staffName: minted.staffName,
+        hospitalId: minted.hospitalId,
+        role: target.role,
+      });
+
+      const url = new URL('/', globalThis.location.href);
+      if (target.view === null) {
+        url.searchParams.set('session', session.chamberSessionId ?? '');
+      } else {
+        url.searchParams.set('view', target.view);
+      }
+      globalThis.location.assign(url.toString());
+    } catch {
+      setOpening(null);
+      setFailed(key);
+    }
+  }
+
+  return (
+    <nav
+      aria-label={t(current, locale)}
+      data-brand={brand?.theme === null || brand === null ? 'platform' : 'hospital'}
+      className="console-rail flex min-h-screen w-56 shrink-0 flex-col gap-6 bg-brand-700 p-4 text-ink-inverse"
+      data-testid="console-rail"
+    >
+      <div className="px-2 pt-2">
+        {/* FR-BRD-12 (plan K4): the hospital's own logo and name, and
+            beneath them the platform that runs it. */}
+        {logo === null ? null : (
+          <img
+            src={logo}
+            alt=""
+            className="mb-2 max-h-12 max-w-full rounded-sm bg-white p-1"
+            data-testid="rail-logo"
+          />
+        )}
+        {brand === null && session?.hospitalNameBn === undefined ? null : (
+          <p className="text-title-sm font-bold" data-testid="rail-hospital">
+            {brand === null
+              ? localName(locale, session?.hospitalNameBn ?? '', session?.hospitalNameEn ?? '')
+              : localName(locale, brand.nameBn, brand.nameEn)}
+          </p>
+        )}
+        {session?.hospitalId == null ? null : (
+          <p className="text-caption text-brand-100 opacity-80" data-testid="rail-powered-by">
+            {t('consolePoweredBy', locale)}
+          </p>
+        )}
+        {session === null ? null : (
+          <p className="mt-1 text-caption text-brand-100">{session.staffName}</p>
+        )}
+      </div>
+
+      <ul className="flex flex-col gap-1">
+        {NAV_ITEMS.map((key) => {
+          if (key === current) {
+            return (
+              <li key={key}>
+                <span
+                  aria-current="page"
+                  className={`${ITEM} bg-white/15 font-semibold text-ink-inverse`}
+                  data-testid={`rail-${key}`}
+                >
+                  {t(key, locale)}
+                </span>
+              </li>
+            );
+          }
+          const reason = offReason(key, session);
+          if (reason !== null) {
+            return (
+              <li key={key}>
+                <span aria-disabled="true" className={ITEM} data-testid={`rail-${key}`}>
+                  <span className="opacity-60">{t(key, locale)}</span>
+                  <span className="text-caption">{t(reason, locale)}</span>
+                </span>
+              </li>
+            );
+          }
+          return (
+            <li key={key}>
+              <button
+                type="button"
+                className={`${ITEM} hover:bg-white/10 hover:text-ink-inverse disabled:cursor-wait`}
+                disabled={opening !== null}
+                aria-busy={opening === key}
+                data-testid={`rail-${key}`}
+                onClick={() => {
+                  void open(key);
+                }}
+              >
+                {t(key, locale)}
+                {opening === key ? (
+                  <span className="text-caption">{t('navOpening', locale)}</span>
+                ) : null}
+                {failed === key ? (
+                  <span role="alert" className="text-caption">
+                    {t('navOpenFailed', locale)}
+                  </span>
+                ) : null}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="mt-auto flex flex-col gap-3">
+        {children}
+        {session?.authKind === 'staff' ? (
+          <button
+            type="button"
+            className="flex min-h-touch items-center rounded-sm px-3 text-left text-body-sm text-brand-100 hover:bg-white/10 hover:text-ink-inverse"
+            data-testid="rail-sign-out"
+            onClick={() => {
+              void signOut().then(() => {
+                globalThis.location.assign('/');
+              });
+            }}
+          >
+            {t('signOut', locale)}
+          </button>
+        ) : null}
+        <a
+          href="/"
+          className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-100 hover:bg-white/10 hover:text-ink-inverse"
+        >
+          {t('changeConsole', locale)}
+        </a>
+      </div>
+    </nav>
+  );
+}

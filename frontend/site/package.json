@@ -21,7 +21,7 @@
     "dev": "next dev --webpack --port 3200",
     "build": "next build --webpack",
     "start": "next start --port 3200",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tests",
     "test:smoke": "playwright test --config tests/playwright.config.ts",
     "deploy:preview": "node scripts/deploy-pages.mjs",
     "deploy:production": "node scripts/deploy-pages.mjs --production"

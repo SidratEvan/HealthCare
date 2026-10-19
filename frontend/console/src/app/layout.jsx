@@ -1,0 +1,52 @@
+/**
+ * The console shell (FRONTEND.md §7, §9).
+ *
+ * `lang="bn"` on the root element is not decoration: `tokens.css` keys the
+ * Bangla typesetting rules off it — the 1.65 line-height floor, no
+ * letter-spacing, no conjunct breaking (`TYP-01`, `TYP-02`, `TYP-06`). Bangla
+ * is the default language of this product, not a translation of it
+ * (CLAUDE.md §11.5). English is the switch in each console's header
+ * (`SEG-B00-LANG`); `<LocaleDocument>` moves `lang` with it.
+ */
+
+import { t } from '@platform/i18n';
+import { LocaleDocument } from '@platform/ui';
+
+import '@platform/ui/styles.css';
+
+import { fontVariables } from '@/app/fonts';
+import { ServiceWorker } from '@/components/ServiceWorker';
+
+export const metadata = {
+  title: 'MedLiveBD — হাসপাতাল কনসোল',
+  description: 'রিসেপশন কনসোল — সিরিয়াল ব্যবস্থাপনা',
+};
+
+export const viewport = {
+  // The console runs on a counter monitor, but a supervisor's tablet is a real
+  // case. A11Y-06 requires 200% text scaling without clipping, which a fixed
+  // maximum-scale would break.
+  width: 'device-width',
+  initialScale: 1,
+};
+
+/**
+ * Every page is rendered per request, so it can carry the script nonce its
+ * Content-Security-Policy names (`src/proxy.ts`, plan I2d). A page built
+ * ahead of time has no nonce, and the policy would refuse its own scripts.
+ */
+export const dynamic = 'force-dynamic';
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="bn" className={fontVariables}>
+      <body className="min-h-screen bg-canvas text-ink">
+        {children}
+        <LocaleDocument title={{ bn: t('consoleTitle', 'bn'), en: t('consoleTitle', 'en') }} />
+        {/* Keeps the shell on the device, so the console opens with no
+            network (FR-OFF-01). */}
+        <ServiceWorker />
+      </body>
+    </html>
+  );
+}

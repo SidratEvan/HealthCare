@@ -23,7 +23,6 @@
   "scripts": {
     "dev": "next dev --webpack --port 3000",
     "build": "next build --webpack",
-    "start": "next start --port 3000",
-    "typecheck": "tsc --noEmit"
+    "start": "next start --port 3000"
   }
 }

@@ -6,10 +6,7 @@
   "description": "The design system: tokens, primitives and the signature components. The only place a styling decision exists (FRONTEND.md §10).",
   "sideEffects": false,
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
+    ".": "./src/index.js",
     "./styles.css": "./src/styles.css",
     "./tokens.css": "./src/tokens/tokens.css",
     "./patient.css": "./src/tokens/patient.css",
@@ -24,9 +21,7 @@
     "./console-lab.css": "./src/console/lab.css",
     "./console-pharmacy.css": "./src/console/pharmacy.css"
   },
-  "scripts": {
-    "typecheck": "tsc --noEmit"
-  },
+  "scripts": {},
   "dependencies": {
     "@platform/i18n": "workspace:*",
     "@radix-ui/react-dialog": "^1.1.23",
