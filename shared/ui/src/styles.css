@@ -47,7 +47,7 @@
  * classes depend on an application coincidentally using the same ones is not a
  * component library, so this line is load-bearing.
  */
-@source "./**/*.{ts,tsx}";
+@source "./**/*.{js,jsx}";
 
 @theme inline {
   /* --- Colour (§1.1) ---------------------------------------------------- */
