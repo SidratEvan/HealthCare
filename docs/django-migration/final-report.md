@@ -27,9 +27,9 @@ on the demo**, on the same database, where going back is one command
 (`deployment.md`).
 
 It is not yet enough to make it the API real patients depend on. It has
-never run on Linux or on the target server, the production browser
-configuration has not been run against it, it carries a third to a half of
-Node's throughput, and the release restrictions of CLAUDE.md §4.6 apply to
+never run on the target server (it has run in Docker's Linux containers,
+with backup, restore and rollback proved there), it carries a third to a
+half of Node's throughput, and the release restrictions of CLAUDE.md §4.6 apply to
 it as to everything else. §9 lists what stands between this branch and that
 decision; none of it is a known defect in the port.
 
@@ -67,13 +67,13 @@ browser packages were converted to JavaScript (`frontend-js.md`).
   migrations are the SQL ledger applied by `pnpm db:migrate`; Django owns no
   table. A Python runner over the same ledger was not written: the Node one
   works and is what the stack runs.
-- **A single clean full browser run after the last two fixes** is owed:
-  the fixes were each rerun on their files, not in one complete run.
-- **Not run against Django:** the production browser configuration
-  (`playwright.prod.config.ts`: built apps, `DEMO_MODE=false`, the limited
-  database role) and the built-console configuration. The Docker smoke test
-  ran the image in production mode against the local test database, not the
-  whole compose stack.
+- **Not run against Django:** the built-console configuration
+  (`playwright.built.config.ts`); the production run below builds the
+  console too.
+- **Not run on the target server.** The whole compose stack ran in Docker's
+  Linux containers on this Windows machine (§7): the same images, not the
+  hospital's hardware. The `DEPLOY.md` S8 dry run is still owed, for either
+  API.
 - **`shared/domain` and `shared/i18n` stay TypeScript** (the Node API and the
   parity vectors use them), as do the browser specs and the Node API itself.
 
@@ -162,7 +162,10 @@ synthetic (FR-SEC-08).
 | `pnpm typecheck`, `pnpm lint`, `pnpm format:check` | pass |
 | `next build` of console, patient app and site (JavaScript) | pass |
 | Docker image, production mode, local database | healthy; `/healthz`, `/readyz`, `/api/v1/config` 200; unauthenticated `/staff/me` 401; Socket.IO handshake; clean shutdown on SIGTERM (exit 0) |
-| Browser suite (`playwright.django.config.ts`), Django API, JavaScript frontends | Final full run: **343 / 346**, canary 5/5 (1.0 h). The three others, each
+| Browser suite, clean full run after every fix | **345 / 346**, canary 5/5. The one other (`publish-controls.spec.ts:80`) found the patient's search page still in its server-rendered state after a reload: the page's script never ran, so no request reached the API. A stall of the Next dev server; it passed in both earlier full runs and 6/6 alone |
+| Production browser suite (`playwright.prod.django.config.ts`: built apps, `DEMO_MODE=false`, the limited role, production secrets) | **85 / 85**, the production canary included |
+| The whole stack in Docker (`docker-compose.yml` + `docker-compose.django.yml`, Linux containers) | Every service healthy behind Caddy; `/healthz`, `/readyz`, the config, both apps and the Socket.IO handshake answered at their addresses; the first administrator made with `pnpm staff:create` (the `tools` service) signed in through Django and was asked to change the password and set up two-step verification; a backup taken and proved by the script, a hospital added after it, the backup restored, the later hospital gone and the earlier one back; rolled back to the Node API on the same database, where the same account signed in; forward to Django again |
+| Browser suite (`playwright.django.config.ts`), earlier full runs | Final full run: **343 / 346**, canary 5/5 (1.0 h). The three others, each
 resolved and rerun: two lab-report cases were a race in the spec (it signed
 serial 1 after opening the doctor's screen, which since FR-DOC-08 keeps the
 patient it loaded); fixed in `234e00a`, the file then 24/24 with every case
@@ -204,12 +207,14 @@ the answer there is more API processes with one running the background jobs
    pitch and the readiness audits; the Django API has passed the same
    suites on one machine, but has never served a real day. Run it beside the
    Node API on the demo first, where the rollback is one command.
-2. **Only Windows has run it.** The image was built and smoke-tested, but the
-   whole compose stack has not been brought up on Linux, and the S8 dry run
-   (`DEPLOY.md`) has never been done for either API.
-3. **The production browser configuration has not been run against
-   Django** (built apps, `DEMO_MODE=false`, the limited role):
-   `playwright.prod.config.ts` points at the Node API.
+2. **Not on the target server.** The whole stack has run in Docker's Linux
+   containers on a development machine, with backup, restore and rollback;
+   the S8 dry run (`DEPLOY.md`) on the hospital's hardware has never been
+   done, for either API.
+3. **`DEPLOY.md` S3 names `exec api` for the operator's commands**, which
+   holds for the Node API only; with Django they run through `tools`
+   (`deployment.md`). `DEPLOY.md` is one of the owner's documents and is not
+   edited here.
 4. **Two codebases to keep equal** until one is retired: every change made to
    the Node API from here needs its port, or the parity this report records
    decays. The Node suite run against Django is the guard, and it must be

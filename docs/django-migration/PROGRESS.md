@@ -75,13 +75,13 @@ cd backend/django && .venv/Scripts/python -m pytest
 
 ## Next exact steps (for the owner to choose)
 
-1. One clean full browser run after `234e00a`
-   (`pnpm exec playwright test -c playwright.django.config.ts`, ~1 h).
-2. Run the production browser configuration against Django (needs a
-   `playwright.prod.django.config.ts`, like `playwright.django.config.ts`).
-3. Bring up `deploy/docker-compose.yml` + `deploy/docker-compose.django.yml`
-   on a Linux machine and do the `DEPLOY.md` S8 dry run.
-4. Only on the owner's word: run it beside the Node API on the demo.
+Done on 19 October: a clean full browser run (345/346, the one other a dev
+server stall), the production browser suite against Django (85/85), and the
+whole compose stack in Docker with backup, restore and rollback
+(`final-report.md` §7).
+
+1. The `DEPLOY.md` S8 dry run on the target server.
+2. Only on the owner's word: run it beside the Node API on the demo.
 
 Not done, by decision: a Python runner for the SQL migration ledger (the
 Node one is what the stack runs; `final-report.md` §2).

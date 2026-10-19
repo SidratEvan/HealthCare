@@ -18,3 +18,31 @@ services:
     image: medlivebd-api-django
     volumes:
       - files:/data/files
+
+  # The operator's commands that are Node scripts (`pnpm staff:create`,
+  # `pnpm doctor:verify`, `pnpm staff:reset-2fa`; DEPLOY.md S3). With the Node
+  # API they ran in the `api` container; the Django one has no pnpm, so they
+  # run here, from the image the `migrate` service built, with the API's
+  # variables and its database role. Only when asked for:
+  #
+  #   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.django.yml \
+  #     --env-file deploy/.env run --rm tools pnpm staff:create ...
+  tools:
+    image: medlivebd-api
+    profiles: ["tools"]
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DEMO_MODE: "false"
+      DATABASE_URL: postgresql://${API_DB_USER}:${API_DB_PASSWORD}@db:5432/${POSTGRES_DB}
+      API_BASE_URL: ${API_ORIGIN}
+      WEB_BASE_URL: ${APP_ORIGIN}
+      CONSOLE_BASE_URL: ${CONSOLE_ORIGIN}
+      STORAGE_PROVIDER: local
+      STORAGE_DIR: /data/files
+    volumes:
+      - files:/data/files
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    healthcheck: { disable: true }

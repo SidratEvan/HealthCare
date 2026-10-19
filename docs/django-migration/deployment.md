@@ -13,7 +13,7 @@ environment runs (CLAUDE.md §4.6: no deployment without the owner's word).
 | Schema changes | Unchanged: `pnpm db:migrate` (the SQL ledger) and `pnpm db:role` (the API's limited role), run by the `migrate` service from the Node image |
 | API | `backend/django`, uvicorn on port 4000: HTTP and Socket.IO on one port, the background jobs in the same process |
 | Web apps, web server, backups | Unchanged (`deploy/docker-compose.yml`, `deploy/Caddyfile`, `deploy/backup.sh`, `deploy/restore.sh`) |
-| First administrator | Unchanged: `pnpm staff:create` from the Node image (`DEPLOY.md` S3). Passwords and TOTP seals are the same format in both APIs, so an account made by either signs in to both |
+| First administrator | `pnpm staff:create` from the Node image, through the `tools` service (below), not `exec api` as `DEPLOY.md` S3 says for the Node API: the Django container has no pnpm. Passwords and TOTP seals are the same format in both APIs, so an account made by either signs in to both |
 
 Run **one** API process with `RUN_BACKGROUND_JOBS=true` (the default). A second
 process beside it sets it to `false`, or the schedules and the message sender
@@ -59,6 +59,30 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.django.yml 
 `backend/django/Dockerfile`; every other service is the one in
 `deploy/docker-compose.yml`. The `migrate` service still builds the Node image,
 because the schema tool is part of it.
+
+### The operator's commands
+
+`DEPLOY.md` S3 runs `pnpm staff:create`, `pnpm doctor:verify` and
+`pnpm staff:reset-2fa` with `exec api`. With the Django API they run in the
+`tools` service of `deploy/docker-compose.django.yml` instead (the Node image,
+the API's variables and database role, started only when asked for):
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.django.yml \
+  --env-file deploy/.env run --rm tools \
+  pnpm staff:create --hospital-code MARKS --email admin@hospital.com.bd --name "Full Name" \
+  --hospital-name-bn "…" --hospital-name-en "…" --kind hospital --division Dhaka --district Dhaka
+```
+
+### Trying it on one machine
+
+Origins without a port (`http://app.localhost`, `http://console.localhost`,
+`http://api.localhost`) and `HTTP_PORT=80`. Caddy listens on the port an
+origin names, inside its container, while compose publishes the container's
+80 and 443, so an origin such as `http://app.localhost:8080` is served on a
+port nothing publishes. A real server uses 80 and 443 and is not affected.
+From Git Bash on Windows, set `MSYS_NO_PATHCONV=1` before a command that names
+a path inside a container (`/deploy/backup.sh`), or Git Bash rewrites it.
 
 ### Health checks
 
