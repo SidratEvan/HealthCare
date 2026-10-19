@@ -1,0 +1,10 @@
+{
+  "_comment": "The app is JavaScript (docs/django-migration/frontend-js.md); this tells Next and editors that `@/` is `src/`.",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "jsx": "preserve",
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["src/**/*.js", "src/**/*.jsx"],
+  "exclude": ["node_modules"]
+}

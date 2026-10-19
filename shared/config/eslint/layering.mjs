@@ -156,7 +156,7 @@ export const layering = [
   // rather than add to it.
   // ---------------------------------------------------------------------------
   {
-    files: ['{frontend,backend,shared}/*/src/**/*.{ts,tsx}', 'database/**/*.ts'],
+    files: ['{frontend,backend,shared}/*/src/**/*.{ts,tsx,js,jsx}', 'database/**/*.ts'],
     rules: {
       'import-x/no-restricted-paths': [
         'error',
@@ -220,7 +220,7 @@ export const layering = [
   // The queue reducer exists once (CLAUDE.md §7) — client side.
   // ---------------------------------------------------------------------------
   {
-    files: ['shared/{client,ui}/src/**/*.{ts,tsx}'],
+    files: ['shared/{client,ui}/src/**/*.{js,jsx}'],
     rules: {
       'no-restricted-syntax': [
         'error',

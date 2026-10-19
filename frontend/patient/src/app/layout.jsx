@@ -1,0 +1,100 @@
+/**
+ * The patient app shell (FRONTEND.md §7, §9).
+ *
+ * `lang="bn"` is load-bearing: `tokens.css` keys the Bangla typesetting rules
+ * off it — the 1.65 line-height floor, no letter-spacing, no conjunct breaking
+ * (`TYP-01`, `TYP-02`, `TYP-06`). This product is written in Bangla, not
+ * translated into it (CLAUDE.md §11.5). English is the switch in the header of
+ * every screen (`SEG-A00-LANG`, `<AppHeader>`); `<LocaleDocument>` moves `lang` with it.
+ *
+ * ## What makes this an app rather than a page
+ *
+ * Three things, and all three were missing until now:
+ *
+ * **A manifest**, so it installs to a home screen with its own icon and opens
+ * without browser chrome. `display: standalone` is the difference between a
+ * bookmark and an app. It is made per request (`app/manifest.webmanifest`),
+ * so that a hospital's portal installs as that hospital's app (`FR-BRD-08`).
+ *
+ * **A service worker**, so it opens on a bad connection and shows its own
+ * offline state rather than the browser's error page — while never serving a
+ * queue from a cache, because a serial with no age is the one thing this
+ * product does not show (`FR-OFF-03`).
+ *
+ * **Safe-area insets and no user scaling of the chrome**, so the bottom
+ * navigation sits above the home indicator instead of under the system
+ * gesture area.
+ */
+
+import { PATIENT_COLOUR } from '@platform/ui';
+
+import '@platform/ui/styles.css';
+// Visual Direction 2 (FRONTEND.md §0.5): the patient palette, over the shared
+// layer. Only this app loads it; the consoles keep §1.1.
+import '@platform/ui/patient.css';
+
+import { fontVariables } from '@/app/fonts';
+import { PortalDocument } from '@/components/PortalDocument';
+import { PortalGate } from '@/components/PortalGate';
+import { ScopeTheme } from '@/components/ScopeTheme';
+import { ServiceWorker } from '@/components/ServiceWorker';
+
+export const metadata = {
+  title: 'MedLiveBD',
+  description: 'ডাক্তারের সিরিয়াল নিন, আর অপেক্ষা সরাসরি দেখুন।',
+  applicationName: 'MedLiveBD',
+  icons: {
+    icon: '/icon.svg',
+  },
+  // The marketing site is a separate app (FRONTEND.md §10); nothing here is
+  // meant to be indexed, and a patient's booking screen least of all.
+  robots: { index: false, follow: false },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  // A11Y-06: 200% OS text scaling must not clip, so scaling is not pinned.
+  // `viewport-fit=cover` is what lets `env(safe-area-inset-*)` return
+  // anything other than zero on a notched phone — without it the bottom
+  // navigation sits under the home indicator.
+  viewportFit: 'cover',
+  // Read from the token module so it cannot drift from `--bg-canvas`.
+  themeColor: PATIENT_COLOUR['bg-canvas'],
+};
+
+/**
+ * Every page is rendered per request, so it can carry the script nonce its
+ * Content-Security-Policy names (`src/proxy.ts`, plan I2d). A page built
+ * ahead of time has no nonce, and the policy would refuse its own scripts.
+ */
+export const dynamic = 'force-dynamic';
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="bn" className={fontVariables}>
+      <head>
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="MedLiveBD" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
+      </head>
+      {/*
+          `overscroll-none` stops the rubber-band bounce revealing the browser's
+          background behind a fixed bottom bar, which is the single clearest
+          tell that a standalone app is a web page.
+        */}
+      <body className="min-h-screen overscroll-none bg-canvas text-ink">
+        <ScopeTheme />
+        {/* At a name only the server can place, nothing is shown until it has
+            said whose it is (`FR-BRD-07`). Everywhere else this is nothing. */}
+        <PortalGate>{children}</PortalGate>
+        <ServiceWorker />
+        {/* The title, and what a phone installs it as: the network's, or the
+            hospital's whose portal this is (`FR-BRD-08`). */}
+        <PortalDocument />
+      </body>
+    </html>
+  );
+}

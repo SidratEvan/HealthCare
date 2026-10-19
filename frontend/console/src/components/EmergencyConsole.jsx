@@ -1,0 +1,567 @@
+'use client';
+
+/**
+ * The emergency console — `S-B-07` (`APP_FLOW.md` B4, `FR-EMG-01..05`).
+ *
+ * Laid out like the reception console and the ward board, so a hospital's
+ * staff learn one shape: navigation rail and offline block on the left, the
+ * work in the middle, what the ER publishes and reads on the right.
+ *
+ * The middle is two lists in the order an ER works them:
+ *
+ *   **আসছেন** — inbound alerts (`CARD-B07-<caseId>`), unanswered first. A new
+ *   one rings and stays the emergency colour until somebody answers it.
+ *   **জরুরি বিভাগে আছেন** — the triage list (`TBL-B07-TRIAGE`), red pinned to
+ *   the top, then the untriaged, then yellow and green (`triageOrder`).
+ *
+ * Between them, **অন্য হাসপাতাল পাঠাতে চায়** — referrals other ERs have sent
+ * this one (`LIST-B07-IN`, `FR-EMG-09`), which ring as an alert does. Each row
+ * of the triage list can be referred out (`BTN-B07-REFER`, `FR-EMG-07`) and
+ * shows where its referral has got to; the right column keeps today's
+ * referrals with their timelines (`FR-EMG-08`).
+ *
+ * Above them, the ER's load (`FR-EMG-04`), counted from these very lists —
+ * never a number somebody typed.
+ *
+ * ## The four states (`GR-03`)
+ *
+ * Loading is the shape of the console. An error says what failed and offers
+ * the retry. Empty lists say what fills them. Offline keeps everything on
+ * screen and working, says that new alerts cannot arrive, and counts what is
+ * waiting to send.
+ */
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import { inboundOrder, isInEr, isOnTheWay, triageOrder } from '@platform/domain';
+import { format, formatNumber, problemName, t, formatAge, numeralsFor } from '@platform/i18n';
+import {
+  Button,
+  FreshnessLine,
+  ToastProvider,
+  useToast,
+  useLocale,
+  ConsoleHelp,
+  ConsolePageHeader,
+  Sheet,
+  SheetActions,
+} from '@platform/ui';
+
+import { ConsoleWorkspaceFrame } from '@/components/ConsoleWorkspaceFrame';
+import { DemoBanner } from '@/components/DemoBanner';
+import { InboundCard, TriageTable } from '@/components/ErCases';
+import {
+  IncomingReferrals,
+  ReferSheet,
+  ReferralCancelSheet,
+  ReferralDeclineSheet,
+  ReferralsToday,
+  latestReferralOf,
+} from '@/components/ErReferrals';
+import { AdmitSheet, DeclineSheet, DischargeSheet, WalkInSheet } from '@/components/ErSheets';
+import { CapabilityPanel, ErBeds } from '@/components/ErSidebar';
+import { OfflineBlock } from '@/components/OfflineBlock';
+import { useEmergencyConsole } from '@/hooks/useEmergencyConsole';
+import { createAlarm } from '@/lib/alarm';
+import { readDemoSession } from '@/lib/demo';
+import { ER_WORKSPACE as COPY } from '@/lib/wardEmergencyMessages';
+import '@platform/ui/console-emergency.css';
+
+/** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
+function readToken() {
+  return readDemoSession()?.token ?? null;
+}
+
+export function EmergencyConsole() {
+  return (
+    <ToastProvider placement="console">
+      <ConsoleBody />
+    </ToastProvider>
+  );
+}
+
+function ConsoleBody() {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const { show } = useToast();
+  const session = readDemoSession();
+  const hospitalId = session?.hospitalId ?? '';
+
+  // One alarm for the life of the screen.
+  const [alarm] = useState(() => createAlarm());
+  const er = useEmergencyConsole({ hospitalId, getToken: readToken, alarm });
+
+  const [now, setNow] = useState(() => new Date());
+  const [walkInOpen, setWalkInOpen] = useState(false);
+  const [declining, setDeclining] = useState(null);
+  const [admitting, setAdmitting] = useState(null);
+  const [discharging, setDischarging] = useState(null);
+  const [referring, setReferring] = useState(null);
+  const [decliningReferral, setDecliningReferral] = useState(null);
+  const [arrivingReferral, setArrivingReferral] = useState(null);
+  const [cancellingReferral, setCancellingReferral] = useState(null);
+
+  // Freshness lines age on screen with nothing else happening (`FR-OFF-03`).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 1_000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
+
+  // A refused action is said once, as a sentence (`SY-03`).
+  useEffect(() => {
+    if (er.lastRefusal === null) return;
+    show({ title: t('erRefused', locale), tone: 'caution' });
+    er.clearRefusal();
+  }, [er, show, locale]);
+
+  // BTN-A10C-CANCEL reaching the ER: the family is not coming.
+  useEffect(() => {
+    if (er.lastCancelled === null) return;
+    show({
+      title: format('erFamilyCancelled', locale, {
+        problem: problemName(er.lastCancelled.problem, locale),
+      }),
+      tone: 'caution',
+    });
+    er.clearCancelled();
+  }, [er, show, locale]);
+
+  const inbound = useMemo(
+    () => inboundOrder(er.cases.filter((entry) => isOnTheWay(entry.state))),
+    [er.cases],
+  );
+  const inEr = useMemo(
+    () => triageOrder(er.cases.filter((entry) => isInEr(entry.state))),
+    [er.cases],
+  );
+
+  // A referred person arrived: the token the desk now calls them by.
+  useEffect(() => {
+    if (er.lastArrival === null) return;
+    show({
+      title: format('erIncomingArrivedAs', locale, {
+        token: er.lastArrival.arrivedTokenLabel ?? '',
+      }),
+      tone: 'positive',
+    });
+    er.clearArrival();
+  }, [er, show, locale]);
+
+  const fetchPhone = useCallback((caseId) => er.api.contact(caseId), [er.api]);
+  // Stable, so the refer sheet asks again only when the need changes.
+  const fetchReferResults = useCallback(
+    (problem, need) => er.api.suggestions(hospitalId, problem, need),
+    [er.api, hospitalId],
+  );
+  const referralOf = useCallback(
+    (caseId) => latestReferralOf(er.referrals, caseId, hospitalId),
+    [er.referrals, hospitalId],
+  );
+
+  if (hospitalId === '' || session === null) {
+    return <Notice>{t('noSession', locale)}</Notice>;
+  }
+
+  if (er.loading) {
+    return (
+      <div className="flex min-h-screen gap-6 p-6" aria-busy="true" data-testid="er-loading">
+        <div className="w-52 shrink-0 rounded-md bg-sunken" />
+        <div className="flex flex-1 flex-col gap-3">
+          <div className="h-28 rounded-md bg-sunken" />
+          <div className="h-28 rounded-md bg-sunken" />
+          <div className="h-64 rounded-md bg-sunken" />
+        </div>
+        <div className="w-96 shrink-0 rounded-md bg-sunken" />
+      </div>
+    );
+  }
+
+  if (er.failed || er.board === null) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <p role="alert" className="text-body-lg text-ink-secondary" data-testid="er-failed">
+          {t('loadFailed', locale)}
+        </p>
+        <Button variant="secondary" onClick={er.retry}>
+          {t('retry', locale)}
+        </Button>
+      </div>
+    );
+  }
+
+  const loaded = er.board;
+  const freshness = {
+    justNow: t('updatedJustNow', locale),
+    ago: t('updatedAgo', locale),
+    never: t('neverConfirmed', locale),
+    stale: t('staleWarning', locale),
+  };
+  const minutes = (value) => formatAge(value, locale, numerals);
+  const capabilitiesPending = er.pendingCount > 0 && er.pendingCaseIds.size < er.pendingCount;
+
+  return (
+    <div className="er-workspace" data-testid="er-console">
+      <ConsoleWorkspaceFrame
+        session={session}
+        workspace={COPY.title}
+        rail="navEmergency"
+        navigation={[
+          {
+            id: 'emergency',
+            label: COPY.overview,
+            current: true,
+            enabled: true,
+            roles: ['emergency'],
+            onSelect: () => {
+              document.getElementById('er-inbound-title')?.scrollIntoView({ block: 'start' });
+            },
+          },
+        ]}
+        actions={
+          <>
+            <div className="er-connection">
+              <OfflineBlock
+                connected={er.connected}
+                pendingCount={er.pendingCount}
+                lastServerTs={er.lastServerTs}
+                stuckCount={er.stuckCount}
+                onRetryStuck={() => {
+                  void er.retryStuck();
+                }}
+                onDiscardStuck={() => {
+                  void er.discardStuck();
+                }}
+                durable={er.durable}
+                locale={locale}
+                now={now}
+              />
+            </div>
+            <ConsoleHelp
+              topic={{
+                id: referring === null ? 'emergency-overview' : 'emergency-referral',
+                title: COPY.title,
+                steps: [
+                  COPY.helpTriage,
+                  COPY.helpReferrals,
+                  COPY.handoff,
+                  COPY.helpPrivacy,
+                  COPY.helpOffline,
+                ],
+              }}
+            />
+            <small>{session.staffName}</small>
+            <a className="cf-work-switch" href="/">
+              {t('changeConsole', locale)}
+            </a>
+          </>
+        }
+      >
+        <DemoBanner />
+        <ConsolePageHeader
+          title={COPY.title}
+          description={COPY.description}
+          actions={
+            <FreshnessLine
+              asOf={er.lastServerTs === null ? null : new Date(er.lastServerTs)}
+              now={now}
+              staleAfterMinutes={loaded.staleAfterMinutes}
+              labels={{ ...freshness, never: t('neverSynced', locale) }}
+              formatMinutes={minutes}
+            />
+          }
+        />
+        <section className="er-load-strip" data-testid="er-load">
+          <div className="er-total">
+            <strong>{formatNumber(er.load, numerals)}</strong>
+            <span>{t('erLoadHint', locale)}</span>
+          </div>
+          <div className="er-load-counts">
+            <span>
+              {t('erInboundTitle', locale)}{' '}
+              <strong data-testid="er-inbound-count">
+                {formatNumber(inbound.length, numerals)}
+              </strong>
+            </span>
+            <span>
+              {t('erTriageTitle', locale)}{' '}
+              <strong data-testid="er-present-count">{formatNumber(inEr.length, numerals)}</strong>
+            </span>
+            <span className="er-red-count">
+              {COPY.red[locale]}{' '}
+              <strong data-testid="er-red-count">
+                {formatNumber(inEr.filter((entry) => entry.triage === 'red').length, numerals)}
+              </strong>
+            </span>
+          </div>
+          <div className="er-load-actions">
+            {er.alarm === 'ready' ? (
+              <span data-testid="er-sound-on">{t('erSoundOn', locale)}</span>
+            ) : er.alarm === 'blocked' ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                data-testid="er-sound-enable"
+                onClick={() => {
+                  void er.unlockAlarm();
+                }}
+              >
+                {t('erSoundEnable', locale)}
+              </Button>
+            ) : (
+              <span role="status" data-testid="er-sound-unavailable">
+                {COPY.soundUnavailable[locale]}
+              </span>
+            )}
+            <Button data-testid="er-walkin" onClick={() => setWalkInOpen(true)}>
+              {t('erWalkIn', locale)}
+            </Button>
+          </div>
+        </section>
+        {er.connected ? null : (
+          <p
+            role="status"
+            data-testid="er-offline"
+            className="bg-warn-100 px-6 py-2 text-body-sm text-warn-700"
+          >
+            {t('erOffline', locale)}
+          </p>
+        )}
+        {er.alarm === 'blocked' ? (
+          <p className="px-6 pt-2 text-caption text-ink-muted">{t('erSoundBlocked', locale)}</p>
+        ) : null}
+
+        <div className="er-layout">
+          <div className="er-main-content">
+            {/* --- আসছেন ---------------------------------------------------- */}
+            <section aria-labelledby="er-inbound-title" className="flex flex-col gap-3">
+              <h2 id="er-inbound-title" className="text-title-md text-ink">
+                {t('erInboundTitle', locale)}
+              </h2>
+              {inbound.length === 0 ? (
+                <div data-testid="er-inbound-empty">
+                  <p className="text-body-md text-ink-secondary">{t('erInboundEmpty', locale)}</p>
+                  <p className="text-caption text-ink-muted">{t('erInboundEmptyHint', locale)}</p>
+                </div>
+              ) : (
+                <ul className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3">
+                  {inbound.map((entry) => (
+                    <li key={entry.id}>
+                      <InboundCard
+                        entry={entry}
+                        isNew={er.newCaseIds.has(entry.id)}
+                        pending={er.pendingCaseIds.has(entry.id)}
+                        locale={locale}
+                        connected={er.connected}
+                        onCommand={(next) => {
+                          void er.command(entry.id, next);
+                        }}
+                        onDecline={() => setDeclining(entry)}
+                        onSeen={() => {
+                          er.seen(entry.id);
+                        }}
+                        fetchPhone={fetchPhone}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {/* --- অন্য হাসপাতাল পাঠাতে চায় (LIST-B07-IN) -------------------- */}
+            <section
+              aria-labelledby="er-incoming-title"
+              className="flex flex-col gap-3"
+              data-testid="er-incoming"
+            >
+              <h2 id="er-incoming-title" className="text-title-md text-ink">
+                {t('erIncomingTitle', locale)}
+              </h2>
+              <IncomingReferrals
+                referrals={er.referrals}
+                hospitalId={hospitalId}
+                newIds={er.newReferralIds}
+                pendingIds={er.pendingReferralIds}
+                locale={locale}
+                onSeen={er.seenReferral}
+                onAccept={(referral) => {
+                  void er.referralStep(referral.id, { action: 'accept' });
+                }}
+                onDecline={setDecliningReferral}
+                onArrive={setArrivingReferral}
+              />
+            </section>
+
+            {/* --- জরুরি বিভাগে আছেন ----------------------------------------- */}
+            <section aria-labelledby="er-triage-title" className="flex flex-col gap-3">
+              <h2 id="er-triage-title" className="text-title-md text-ink">
+                {t('erTriageTitle', locale)}
+              </h2>
+              <p className="er-sort-note">{COPY.sort[locale]}</p>
+              {inEr.length === 0 ? (
+                <div data-testid="er-triage-empty">
+                  <p className="text-body-md text-ink-secondary">{t('erTriageEmpty', locale)}</p>
+                  <p className="text-caption text-ink-muted">{t('erTriageEmptyHint', locale)}</p>
+                </div>
+              ) : (
+                <div className="er-table-scroll">
+                  <TriageTable
+                    cases={inEr}
+                    pendingCaseIds={er.pendingCaseIds}
+                    locale={locale}
+                    connected={er.connected}
+                    onCommand={(caseId, next) => {
+                      void er.command(caseId, next);
+                    }}
+                    onAdmit={setAdmitting}
+                    onDischarge={setDischarging}
+                    fetchPhone={fetchPhone}
+                    referralOf={referralOf}
+                    pendingReferralIds={er.pendingReferralIds}
+                    onRefer={setReferring}
+                    onCancelReferral={setCancellingReferral}
+                  />
+                </div>
+              )}
+            </section>
+          </div>
+
+          {/* --- right column -------------------------------------------------- */}
+          <aside className="er-sidebar">
+            <CapabilityPanel
+              capabilities={er.capabilities}
+              pending={capabilitiesPending}
+              locale={locale}
+              now={now}
+              staleAfterMinutes={loaded.staleAfterMinutes}
+              freshness={freshness}
+              minutes={minutes}
+              onToggle={(kind, available) => {
+                void er.confirmCapabilities([{ kind, available }]);
+              }}
+              onConfirmAll={() => {
+                void er.confirmCapabilities(
+                  er.capabilities.map((row) => ({ kind: row.kind, available: row.available })),
+                );
+              }}
+            />
+            <ErBeds
+              published={er.published}
+              locale={locale}
+              now={now}
+              staleAfterMinutes={loaded.staleAfterMinutes}
+              freshness={freshness}
+              minutes={minutes}
+            />
+            <ReferralsToday referrals={er.referrals} hospitalId={hospitalId} locale={locale} />
+          </aside>
+        </div>
+
+        <Sheet
+          open={arrivingReferral !== null}
+          onOpenChange={(open) => {
+            if (!open) setArrivingReferral(null);
+          }}
+          variant="modal"
+          title={COPY.confirmArrival[locale]}
+          description={COPY.arrivalHint[locale]}
+        >
+          {arrivingReferral === null ? null : (
+            <>
+              <p>{problemName(arrivingReferral.summary.problem, locale)}</p>
+              <SheetActions>
+                <Button
+                  data-testid="er-arrival-confirm"
+                  onClick={() => {
+                    void er.referralStep(arrivingReferral.id, { action: 'arrive' });
+                    setArrivingReferral(null);
+                  }}
+                >
+                  {t('erIncomingArrived', locale)}
+                </Button>
+                <Button variant="secondary" onClick={() => setArrivingReferral(null)}>
+                  {t('goBack', locale)}
+                </Button>
+              </SheetActions>
+            </>
+          )}
+        </Sheet>
+        <WalkInSheet
+          open={walkInOpen}
+          locale={locale}
+          onOpenChange={setWalkInOpen}
+          onSave={(input) => {
+            void er.walkIn(input);
+          }}
+        />
+        <DeclineSheet
+          entry={declining}
+          locale={locale}
+          connected={er.connected}
+          onClose={() => setDeclining(null)}
+          onDecline={(entry, reason) => {
+            void er.command(entry.id, { action: 'decline', reason });
+          }}
+          fetchSuggestions={(problem) => er.api.suggestions(hospitalId, problem)}
+        />
+        <AdmitSheet
+          entry={admitting}
+          bedKinds={loaded.bedKinds}
+          locale={locale}
+          onClose={() => setAdmitting(null)}
+          onHandoff={(entry, bedKind) => {
+            void er.command(entry.id, { action: 'handoff', bedKind });
+          }}
+        />
+        <DischargeSheet
+          entry={discharging}
+          locale={locale}
+          onClose={() => setDischarging(null)}
+          onDischarge={(entry) => {
+            void er.command(entry.id, { action: 'discharge' });
+          }}
+        />
+        <ReferSheet
+          entry={referring}
+          locale={locale}
+          connected={er.connected}
+          now={now}
+          freshness={freshness}
+          minutes={minutes}
+          fetchResults={fetchReferResults}
+          onSend={(input) => {
+            void er.refer(input);
+          }}
+          onClose={() => setReferring(null)}
+        />
+        <ReferralDeclineSheet
+          referral={decliningReferral}
+          locale={locale}
+          onClose={() => setDecliningReferral(null)}
+          onDecline={(referral, reason) => {
+            void er.referralStep(referral.id, { action: 'decline', reason });
+          }}
+        />
+        <ReferralCancelSheet
+          referral={cancellingReferral}
+          locale={locale}
+          onClose={() => setCancellingReferral(null)}
+          onCancel={(referral) => {
+            void er.referralStep(referral.id, { action: 'cancel' });
+          }}
+        />
+      </ConsoleWorkspaceFrame>
+    </div>
+  );
+}
+
+function Notice({ children }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <p className="text-body-lg text-ink-muted">{children}</p>
+    </div>
+  );
+}

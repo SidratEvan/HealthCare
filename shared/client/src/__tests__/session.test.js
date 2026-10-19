@@ -1,0 +1,257 @@
+/**
+ * Staleness, and the API client's one important distinction.
+ *
+ * Both are small functions carrying a lot of the product's honesty rules
+ * (`PRD.md` §3.2, `FR-OFF-03`, `FR-OFF-05`), which is exactly the kind of code
+ * that gets quietly "simplified" later.
+ */
+
+import { describe, expect, it, vi } from 'vitest';
+
+import { ApiClient, ApiError, NetworkError } from '../api/client.js';
+import {
+  DEFAULT_STALE_AFTER_MS,
+  foldUpdate,
+  isQueueEvent,
+  isQueueStatement,
+  isStale,
+  startingFrom,
+  takeStatement,
+} from '../realtime/session.js';
+
+describe('isStale (FR-OFF-03, FR-OFF-04)', () => {
+  const now = new Date('2026-09-18T12:00:00Z');
+
+  it('is fresh inside the threshold', () => {
+    const recent = new Date(now.getTime() - 60_000).toISOString();
+    expect(isStale(recent, now, DEFAULT_STALE_AFTER_MS)).toBe(false);
+  });
+
+  it('is stale past it', () => {
+    const old = new Date(now.getTime() - 11 * 60_000).toISOString();
+    expect(isStale(old, now, DEFAULT_STALE_AFTER_MS)).toBe(true);
+  });
+
+  it('is stale exactly at the threshold', () => {
+    // Erring short is deliberate: claiming fresh data is stale costs a glance,
+    // the reverse costs trust.
+    const exactly = new Date(now.getTime() - DEFAULT_STALE_AFTER_MS).toISOString();
+    expect(isStale(exactly, now, DEFAULT_STALE_AFTER_MS)).toBe(true);
+  });
+
+  it('treats never having heard from the server as stale', () => {
+    // The honest answer. A number on screen is a guess until something
+    // confirms it, and this is what stops a console showing yesterday's queue
+    // as though it were live (FR-OFF-05).
+    expect(isStale(null, now, DEFAULT_STALE_AFTER_MS)).toBe(true);
+  });
+
+  it('honours the threshold a hospital set for itself', () => {
+    // hospital_settings.stale_threshold_minutes (FR-OFF-04) is the hospital's
+    // setting; the constant is only the fallback.
+    const twoMinutesAgo = new Date(now.getTime() - 2 * 60_000).toISOString();
+    expect(isStale(twoMinutesAgo, now, 60_000)).toBe(true);
+    expect(isStale(twoMinutesAgo, now, 5 * 60_000)).toBe(false);
+  });
+});
+
+describe('ApiClient', () => {
+  const ok = (data) =>
+    new Response(JSON.stringify({ ok: true, data }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  function client(fetchImpl, token = 'tok') {
+    return new ApiClient({ baseUrl: 'https://api.test', getToken: () => token, fetchImpl });
+  }
+
+  /**
+   * A fetch double that keeps fetch's own signature.
+   *
+   * Declaring the parameters rather than casting is what lets the assertions
+   * below read `calls[0][1]` as a `RequestInit` — an argument-less `vi.fn()`
+   * infers a zero-length tuple and every inspection becomes a cast.
+   */
+  function fetchDouble(response) {
+    return vi.fn((_input, _init) => response());
+  }
+
+  /** The `RequestInit` a double was called with. */
+  function initOf(mock) {
+    return mock.mock.calls[0]?.[1] ?? {};
+  }
+
+  function headersOf(mock) {
+    return initOf(mock).headers ?? {};
+  }
+
+  it('unwraps the success envelope', async () => {
+    const fetchImpl = fetchDouble(() => Promise.resolve(ok({ seq: 7 })));
+    const result = await client(fetchImpl).get('/x');
+    expect(result).toEqual({ seq: 7 });
+  });
+
+  it('sends the bearer token when there is one, and omits it when there is not', async () => {
+    const fetchImpl = fetchDouble(() => Promise.resolve(ok({})));
+    await client(fetchImpl).get('/x');
+    expect(headersOf(fetchImpl)['authorization']).toBe('Bearer tok');
+
+    const anon = fetchDouble(() => Promise.resolve(ok({})));
+    await client(anon, null).get('/x');
+    expect(headersOf(anon)['authorization']).toBeUndefined();
+  });
+
+  it('sends no body on a GET', async () => {
+    // `exactOptionalPropertyTypes` aside, a GET with an explicit undefined body
+    // is not the same as one without, and some runtimes care.
+    const fetchImpl = fetchDouble(() => Promise.resolve(ok({})));
+    await client(fetchImpl).get('/x');
+    expect(initOf(fetchImpl).body).toBeUndefined();
+  });
+
+  it('carries an idempotency key when given one', async () => {
+    const fetchImpl = fetchDouble(() => Promise.resolve(ok({})));
+    await client(fetchImpl).post('/x', { a: 1 }, 'key-1');
+    expect(headersOf(fetchImpl)['idempotency-key']).toBe('key-1');
+  });
+
+  it('throws ApiError with the stable code the UI maps to Bangla copy', async () => {
+    const fetchImpl = fetchDouble(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: { code: 'QUEUE_GUARD_FAILED', message: 'Not allowed yet.' },
+          }),
+          { status: 422, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+
+    await expect(client(fetchImpl).get('/x')).rejects.toThrow(ApiError);
+    await expect(client(fetchImpl).get('/x')).rejects.toMatchObject({
+      code: 'QUEUE_GUARD_FAILED',
+      status: 422,
+    });
+  });
+
+  it('throws NetworkError when the request never reached the server', async () => {
+    // The distinction the whole offline design turns on: "the server said no"
+    // rolls a row back, "there was no server" leaves it applied and queued.
+    const fetchImpl = fetchDouble(() => Promise.reject(new Error('Failed to fetch')));
+    await expect(client(fetchImpl).get('/x')).rejects.toThrow(NetworkError);
+  });
+});
+
+describe('foldUpdate (FR-QUE-05)', () => {
+  /** A state that only says which sequence it describes; nothing here reads more. */
+  const stateAt = (seq) => ({ lastSeq: seq });
+  const empty = {
+    state: null,
+    etas: [],
+    lastServerTs: null,
+    lastSeq: 0,
+    connected: true,
+  };
+  const update = (seq) => ({
+    seq,
+    serverTs: `2026-09-29T06:00:${String(seq).padStart(2, '0')}Z`,
+    data: { state: stateAt(seq), etas: [] },
+  });
+
+  it('takes the first state it is given', () => {
+    const folded = foldUpdate(empty, -1, update(4));
+    expect(folded?.snapshot.state).toEqual(stateAt(4));
+    expect(folded?.stateSeq).toBe(4);
+  });
+
+  it('keeps a newer state when the older catch-up arrives after it', () => {
+    // The live broadcast of seq 6 reached the room before the join's
+    // catch-up, which was read at seq 5. Last-wins put the screen back on 5.
+    const live = foldUpdate(empty, -1, update(6));
+    if (live === null) throw new Error('the first update was refused');
+    expect(foldUpdate(live.snapshot, live.stateSeq, update(5))).toBeNull();
+  });
+
+  it('takes the same sequence again, and anything newer', () => {
+    const held = foldUpdate(empty, -1, update(6));
+    if (held === null) throw new Error('the first update was refused');
+    expect(foldUpdate(held.snapshot, held.stateSeq, update(6))?.snapshot.state).toEqual(stateAt(6));
+    expect(foldUpdate(held.snapshot, held.stateSeq, update(7))?.snapshot.lastSeq).toBe(7);
+  });
+});
+
+describe('takeStatement (SY-08: one action, shown once)', () => {
+  const queue = (lastSeq) => ({ lastSeq });
+  const statement = (seq, applied) => ({
+    seq,
+    serverTs: `2026-10-06T10:00:${String(seq).padStart(2, '0')}.000Z`,
+    ...(applied === undefined ? {} : { applied }),
+    data: { state: queue(seq), etas: [] },
+  });
+  const named = [{ clientEventId: 'k-1', seq: 7, eventId: 'e-7' }];
+
+  it('shows a newer statement and reports what it named', () => {
+    const start = startingFrom(undefined);
+    const taken = takeStatement(start.snapshot, start.stateSeq, statement(7, named));
+    expect(taken.shown).toBe(true);
+    expect(taken.stateSeq).toBe(7);
+    expect(taken.snapshot.state).toEqual(queue(7));
+    expect(taken.applied).toEqual(named);
+  });
+
+  it('does not show an older statement, and still reports what it named', () => {
+    // The answer came first and the queue held is already at 9. The broadcast
+    // for the tap at 7 arrives late: it changes nothing on screen, and the
+    // queue held contains the action it names.
+    const start = startingFrom(undefined);
+    const held = takeStatement(start.snapshot, start.stateSeq, statement(9));
+    const late = takeStatement(held.snapshot, held.stateSeq, statement(7, named));
+    expect(late.shown).toBe(false);
+    expect(late.snapshot).toBe(held.snapshot);
+    expect(late.stateSeq).toBe(9);
+    expect(late.applied).toEqual(named);
+  });
+
+  it('names nothing for a statement from a server that does not say', () => {
+    const start = startingFrom(undefined);
+    expect(takeStatement(start.snapshot, start.stateSeq, statement(3)).applied).toEqual([]);
+  });
+});
+
+describe('a message that is not what the queue engine sends (frontend-js.md)', () => {
+  const good = {
+    seq: 4,
+    serverTs: '2026-10-19T06:00:04.000Z',
+    data: { state: { lastSeq: 4 }, etas: [] },
+  };
+
+  it('accepts the statement the engine sends, with or without what it applied', () => {
+    expect(isQueueStatement(good)).toBe(true);
+    expect(isQueueStatement({ ...good, applied: [] })).toBe(true);
+  });
+
+  it.each([
+    ['nothing', undefined],
+    ['a string', 'queue'],
+    ['no sequence', { ...good, seq: undefined }],
+    ['a sequence that is text', { ...good, seq: '4' }],
+    ['a negative sequence', { ...good, seq: -1 }],
+    ['a fractional sequence', { ...good, seq: 4.5 }],
+    ['no server time', { ...good, serverTs: undefined }],
+    ['no data', { ...good, data: null }],
+    ['no state', { ...good, data: { etas: [] } }],
+    ['ETAs that are not a list', { ...good, data: { state: { lastSeq: 4 }, etas: {} } }],
+    ['applied that is not a list', { ...good, applied: 'k-1' }],
+  ])('refuses a statement with %s', (_case, message) => {
+    expect(isQueueStatement(message)).toBe(false);
+  });
+
+  it('accepts a replayed event only with a whole, non-negative sequence', () => {
+    expect(isQueueEvent({ seq: 7 })).toBe(true);
+    expect(isQueueEvent({ seq: '7' })).toBe(false);
+    expect(isQueueEvent({ seq: -2 })).toBe(false);
+    expect(isQueueEvent(null)).toBe(false);
+  });
+});

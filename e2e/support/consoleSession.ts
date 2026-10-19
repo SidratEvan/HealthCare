@@ -15,7 +15,7 @@
  * every spec that tried otherwise. So here the receptionist signs in — a real
  * `POST /staff/login` with their own account, a real server-side session and a
  * real refresh token — and what is put in the tab is exactly what the sign-in
- * screen would have stored (`frontend/console/src/lib/staffAuth.ts`,
+ * screen would have stored (`frontend/console/src/lib/staffAuth.js`,
  * `adoptStaffSession`). Only the typing is left out, and that is covered where
  * it matters: `e2e/production/` signs in through the screen itself.
  *

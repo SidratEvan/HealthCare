@@ -19,7 +19,7 @@ const tailwind = require('@tailwindcss/postcss');
 const output = join(root, '.cache/console-foundation-preview');
 await mkdir(output, { recursive: true });
 await build({
-  entryPoints: [join(root, 'shared/ui/src/console/__preview__/FoundationPreview.tsx')],
+  entryPoints: [join(root, 'shared/ui/src/console/__preview__/FoundationPreview.jsx')],
   outfile: join(output, 'preview.js'),
   bundle: true,
   platform: 'browser',

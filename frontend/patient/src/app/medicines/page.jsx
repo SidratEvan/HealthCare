@@ -1,0 +1,288 @@
+'use client';
+
+/**
+ * Medicine availability — the patient's half of `FR-PHR-02`.
+ *
+ * "Out-of-stock flagging feeds medicine availability search in the patient
+ * app." This is that search: type a name, see which pharmacies say they have
+ * it, and how long ago each of them said so.
+ *
+ * ## It is not `S-A-14`
+ *
+ * `APP_FLOW.md` gives `S-A-14` as *prescription QR → nearby pharmacies →
+ * reserve or request delivery*, and all three of those hang off a
+ * prescription. Prescribing was dropped from this version (`PRD.md` §9), so
+ * the QR, the reservation and the delivery request have nothing to stand on.
+ * What survives without one is the search itself, and it is worth having on
+ * its own: a family holding a paper prescription from any doctor anywhere can
+ * still find out who has the medicine.
+ *
+ * ## Three answers, never two
+ *
+ * A pharmacy that has not confirmed in twelve hours is shown as **জানা নেই**,
+ * not as "in stock" and not as "no". Folding *unknown* into *no* invents a
+ * shortage; folding it into *yes* sends somebody across Dhaka for nothing
+ * (`PRD.md` §3.2). The summary line counts all three rather than reaching a
+ * verdict, and every row carries the age of the claim behind it.
+ *
+ * ## The four states (`GR-03`)
+ *
+ * Nothing typed is an invitation, not an empty list. Searching is the shape
+ * of a result. A failure says so and offers the retry. Offline says the
+ * search needs a connection — the service worker never answers an API request
+ * from a cache (`FR-OFF-03`), so there is nothing stale to show instead.
+ */
+
+import { useCallback, useEffect, useState } from 'react';
+
+import { formatAge, formatSerial, tp, numeralsFor, localName } from '@platform/i18n';
+import { Button, Card, Chip, FreshnessLine, useLocale } from '@platform/ui';
+
+import { SearchIcon } from '@/components/icons';
+import { TabScreen } from '@/components/TabScreen';
+import { useDeployment } from '@/hooks/useDeployment';
+import { useOnline } from '@/hooks/useOnline';
+import { searchMedicines } from '@/lib/api';
+
+/** The shortest query the API accepts (`medicineSearchQuery`). */
+const MIN_QUERY = 2;
+
+/** How long after the last keystroke the search runs. */
+const DEBOUNCE_MS = 350;
+
+export default function MedicinesPage() {
+  const locale = useLocale();
+  const online = useOnline();
+  // Inside a hospital's own portal the search is about its pharmacy only
+  // (`FR-BRD-09`), and the screen says whose.
+  const scope = useDeployment()?.scope ?? null;
+  const [query, setQuery] = useState('');
+  const [state, setState] = useState({ kind: 'idle' });
+  const [attempt, setAttempt] = useState(0);
+
+  const trimmed = query.trim();
+
+  useEffect(() => {
+    if (trimmed.length < MIN_QUERY) {
+      setState({ kind: 'idle' });
+      return;
+    }
+
+    let cancelled = false;
+    setState({ kind: 'searching' });
+
+    // Debounced: a search per keystroke on a 2G connection is a screen that
+    // never settles, and the API is keyed on the whole word anyway.
+    const timer = setTimeout(() => {
+      void searchMedicines(trimmed)
+        .then((medicines) => {
+          if (!cancelled) setState({ kind: 'ready', medicines });
+        })
+        .catch(() => {
+          if (!cancelled) setState({ kind: 'failed' });
+        });
+    }, DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [trimmed, attempt]);
+
+  const retry = useCallback(() => {
+    setAttempt((n) => n + 1);
+  }, []);
+
+  return (
+    <TabScreen title={tp('medicinesTitle', locale)} back={{ fallback: '/' }}>
+      <p className="text-body-md text-ink-secondary" data-testid="medicines-intro">
+        {scope === null
+          ? tp('medicinesIntro', locale)
+          : tp('scopedMedicinesIntro', locale).replace(
+              '{hospital}',
+              localName(locale, scope.nameBn, scope.nameEn),
+            )}
+      </p>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="flex min-h-[56px] items-center gap-3 rounded-md border border-line bg-surface px-4 shadow-1 focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-100">
+          <span className="text-brand-600">
+            <SearchIcon size={22} />
+          </span>
+          <span className="sr-only">{tp('medicinesSearch', locale)}</span>
+          <input
+            type="search"
+            value={query}
+            data-testid="medicine-search"
+            placeholder={tp('medicinesSearch', locale)}
+            aria-describedby="medicine-search-hint"
+            autoComplete="off"
+            enterKeyHint="search"
+            onChange={(event) => {
+              setQuery(event.target.value);
+            }}
+            className="h-[54px] min-w-0 flex-1 bg-transparent text-body-md text-ink outline-none placeholder:text-ink-muted"
+          />
+        </label>
+        <p id="medicine-search-hint" className="px-1 text-caption text-ink-muted">
+          {tp('medicinesSearchHint', locale)}
+        </p>
+      </div>
+
+      {!online ? (
+        <p
+          data-testid="medicines-offline"
+          className="rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
+        >
+          {tp('medicinesOffline', locale)}
+        </p>
+      ) : null}
+
+      {state.kind === 'searching' ? (
+        // GR-03 loading: the shape of the answer, never a spinner.
+        <div className="flex flex-col gap-3" aria-busy="true" data-testid="medicines-loading">
+          <div className="h-28 rounded-md bg-sunken" />
+          <div className="h-28 rounded-md bg-sunken" />
+          <span className="sr-only">{tp('medicinesSearching', locale)}</span>
+        </div>
+      ) : null}
+
+      {state.kind === 'failed' ? (
+        <div className="flex flex-col gap-3" data-testid="medicines-error">
+          <p className="rounded-sm bg-alert-100 px-3 py-2 text-body-md text-alert-700">
+            {online ? tp('medicinesFailed', locale) : tp('medicinesOffline', locale)}
+          </p>
+          <Button onClick={retry} data-testid="medicines-retry">
+            {tp('tryAgain', locale)}
+          </Button>
+        </div>
+      ) : null}
+
+      {state.kind === 'ready' && state.medicines.length === 0 ? (
+        <div
+          data-testid="medicines-empty"
+          className="rounded-md border border-line bg-surface p-5 text-body-md text-ink-secondary"
+        >
+          {tp('medicinesNoMatch', locale)}
+        </div>
+      ) : null}
+
+      {state.kind === 'ready' && state.medicines.length > 0 ? (
+        <ul className="flex flex-col gap-4" data-testid="medicine-list">
+          {state.medicines.map((medicine) => (
+            <li key={medicine.medicineId}>
+              <MedicineCard medicine={medicine} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </TabScreen>
+  );
+}
+
+/**
+ * What each answer is called, and its pill (FRONTEND.md §0.5, §5.5): green
+ * only for good news; "not here" is neutral, because red is kept for
+ * emergencies (§1.1); "not known" is caution, because it means the shelf has
+ * not been confirmed recently, which is one of caution's three meanings.
+ */
+const ANSWER = {
+  in_stock: { key: 'medicineHere', tone: 'positive' },
+  out_of_stock: { key: 'medicineNotHere', tone: 'neutral' },
+  unknown: { key: 'medicineUnknown', tone: 'caution' },
+};
+
+function MedicineCard({ medicine }) {
+  const locale = useLocale();
+  const numerals = numeralsFor(locale);
+  const [now] = useState(() => new Date());
+
+  const freshness = {
+    justNow: tp('updatedJustNow', locale),
+    ago: tp('updatedAgo', locale),
+    never: tp('updatedNever', locale),
+    stale: tp('staleWarning', locale),
+  };
+  const minutes = (value) => formatAge(value, locale, numerals);
+
+  return (
+    <Card elevated>
+      <div className="flex flex-col gap-3" data-testid={`medicine-${medicine.medicineId}`}>
+        <div>
+          <p className="text-title-sm font-bold">
+            {medicine.brandName === null
+              ? medicine.genericName
+              : `${medicine.brandName} (${medicine.genericName})`}
+          </p>
+          {medicine.form === null ? null : (
+            <p className="text-body-sm text-ink-muted">{medicine.form}</p>
+          )}
+        </div>
+
+        {/* `GR-05`: counts, never a verdict about the whole city. */}
+        <p className="text-body-sm text-ink-secondary" data-testid="medicine-summary">
+          {tp('medicineSummary', locale)
+            .replace('{inStock}', formatSerial(medicine.summary.inStock, numerals))
+            .replace('{outOfStock}', formatSerial(medicine.summary.outOfStock, numerals))
+            .replace('{unknown}', formatSerial(medicine.summary.unknown, numerals))}
+        </p>
+
+        {medicine.pharmacies.length === 0 ? (
+          <p className="text-body-sm text-ink-muted">{tp('medicineNoPharmacies', locale)}</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {medicine.pharmacies.map((pharmacy) => {
+              const answer = ANSWER[pharmacy.answer] ?? ANSWER['unknown'];
+              return (
+                <li
+                  key={pharmacy.hospitalId}
+                  data-testid={`pharmacy-${pharmacy.hospitalId}`}
+                  className="flex flex-col gap-1 border-t border-line pt-2"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="min-w-0 text-body-md font-semibold">
+                      {localName(locale, pharmacy.hospitalNameBn, pharmacy.hospitalNameEn)}
+                    </p>
+                    <span className="shrink-0" data-testid="medicine-answer">
+                      <Chip tone={answer?.tone ?? 'caution'}>
+                        {tp(answer?.key ?? 'medicineUnknown', locale)}
+                      </Chip>
+                    </span>
+                  </div>
+
+                  {pharmacy.distanceKm === null ? null : (
+                    <p className="text-caption text-ink-muted">
+                      {tp('emergencyDistance', locale).replace(
+                        '{km}',
+                        formatSerial(pharmacy.distanceKm, numerals),
+                      )}
+                    </p>
+                  )}
+
+                  {/* Every live figure carries its age (CLAUDE.md §5.8). */}
+                  <FreshnessLine
+                    asOf={
+                      pharmacy.freshness.asOf === null ? null : new Date(pharmacy.freshness.asOf)
+                    }
+                    now={now}
+                    staleAfterMinutes={12 * 60}
+                    labels={freshness}
+                    formatMinutes={minutes}
+                  />
+
+                  {pharmacy.answer === 'unknown' ? (
+                    <p className="text-caption text-ink-muted">
+                      {tp('medicineUnknownHint', locale)}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <p className="text-caption text-ink-muted">{tp('medicineCallFirst', locale)}</p>
+      </div>
+    </Card>
+  );
+}
