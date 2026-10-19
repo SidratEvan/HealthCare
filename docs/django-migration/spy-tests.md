@@ -23,7 +23,7 @@ sender's `settled` and `dispatch`). That is not a spy and is not listed here.
 | `labPharmacySafety.routes.test.ts` | refuses a foreign hospital without writing a read audit | spy must not be called | pending |
 | `adminChambers.routes.test.ts` | to be listed when the module is ported | | |
 | `broadcastAfterCommit.test.ts` | to be listed | | |
-| `consent.routes.test.ts` | to be listed | | |
+| `consent.routes.test.ts` | none: its one spy is on `env`, which the harness carries to Django | | |
 | `demo.routes.test.ts` | to be listed | | |
 | `demoPhones.routes.test.ts` | to be listed | | |
 | `doctorSafety.routes.test.ts` | refuses a stale unsigned sign when reception wins before the clinical transaction lock | `sessionRepo.lockForUpdate` runs reception's Next before taking the lock | pending |
