@@ -4,21 +4,21 @@ The handover file for this migration. A fresh session reads this first, then
 `architecture.md`, `spy-tests.md` and `compatibility-matrix.md` (not yet
 written). Update it at every commit.
 
-## Where the port stands (19 October)
+## Where the port stands (19 October, evening)
 
-- **Every router of `routes/index.ts` is ported**, in its order
-  (`tests/unit/test_route_table.py` checks it against the TypeScript), and
-  the background jobs (sender, hourly jobs, offer and payment timers).
-- **The original Node suite against Django, clean full run:** 1,925 of
-  1,935. The 10 others are exactly the cases that spy on Node modules; each
-  has a pytest equivalent that passes (`spy-tests.md`).
-- **pytest:** 220 pass (161 queue parity, 59 in `tests/api` and
-  `tests/unit`).
-- **`compatibility-matrix.md`** written.
-- **Not started:** the browser suites and the two-device canary against
-  Django (`playwright.django.config.ts` written, not yet run); the frontend
-  conversion to JavaScript; Docker and deployment documents;
-  `final-report.md`.
+**Every phase of the brief is done; `final-report.md` is the verdict**
+(GO to run it beside the Node API on the demo, NO-GO for real patients yet).
+
+- Backend: every router and job ported; route table identical to Node's.
+- Node API suite against Django: 1,925 / 1,935 (the 10 others are spy
+  cases with passing pytest equivalents). pytest 220 / 220.
+- Frontends converted to JavaScript (`frontend-js.md`), merged here.
+- Browser suite against Django with the JavaScript frontends: 343 / 346 on
+  the last full run, canary 5/5; the three resolved and rerun green on
+  their files (`final-report.md` §7).
+- Docker image, compose override, env template, `deployment.md`; smoke
+  test of the image in production mode passed.
+- Performance: Django 2–3× slower per request (`final-report.md` §8).
 
 ## Where the work is
 
@@ -73,17 +73,18 @@ cd backend/django && .venv/Scripts/python -m pytest
 | 2 | `5e136d0` | Queue service, its repositories, notifications outbox and sender, links, realtime server (python-socketio), queue routes; Node-suite harness (`vitest.django.config.ts`) with a test-only clock and emission seam | `queue.routes.test.ts` 35/35 and `queueConflict.test.ts` 3/3 of the original Node suite, against the Django server |
 | 1 | `0f4dead` | Django/DRF foundation: env, pipeline, scoped db, zod-compatible validator, JWT, logging, health routes; queue engine port | 161 parity cases vs the TypeScript engine; two mutations confirmed to fail it; `/healthz`, `/readyz` against the seeded DB as `healthcare_api` |
 
-## Next exact steps
+## Next exact steps (for the owner to choose)
 
-1. Done: the harness, every router, the background jobs, pytest
-   equivalents, a clean full run of the Node suite, the compatibility matrix.
-2. The browser suites and the two-device canary against the Django server
-   (`pnpm exec playwright test -c playwright.django.config.ts`): uvicorn on
-   port 4000, the frontends unchanged.
-3. Frontend TS -> JS conversion (the brief's Phase 5), then the browser
-   suites again.
-4. Docker, environment template, a Python `db_migrate` over the same SQL
-   ledger, deployment and rollback documents; `final-report.md`.
+1. One clean full browser run after `234e00a`
+   (`pnpm exec playwright test -c playwright.django.config.ts`, ~1 h).
+2. Run the production browser configuration against Django (needs a
+   `playwright.prod.django.config.ts`, like `playwright.django.config.ts`).
+3. Bring up `deploy/docker-compose.yml` + `deploy/docker-compose.django.yml`
+   on a Linux machine and do the `DEPLOY.md` S8 dry run.
+4. Only on the owner's word: run it beside the Node API on the demo.
+
+Not done, by decision: a Python runner for the SQL migration ledger (the
+Node one is what the stack runs; `final-report.md` §2).
 
 ## Decisions taken (routine, recorded)
 

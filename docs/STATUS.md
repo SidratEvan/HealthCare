@@ -7,6 +7,17 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
+## Latest work — Django migration, all phases (19 October 2026)
+
+The owner's brief of 18 October: the API ported to Python (Django + DRF,
+python-socketio), the web apps converted to JavaScript. Branch
+`migration/django-drf`, worktree `D:\Projects\HealthCare-django`, based on
+`c550343`. **Not merged, pushed or deployed**; the Node API remains what
+every environment runs. Verdict and evidence:
+`docs/django-migration/final-report.md` (GO to run it beside the Node API on
+the demo, NO-GO for real patients yet). Handover:
+`docs/django-migration/PROGRESS.md`.
+
 ## Latest work — MARKS readiness assessment and remediation (18 October 2026)
 
 Full report: [docs/audit/marks-readiness-2026-10-18.md](audit/marks-readiness-2026-10-18.md).

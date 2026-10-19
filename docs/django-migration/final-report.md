@@ -15,7 +15,23 @@ equivalents), `frontend-js.md` (the JavaScript conversion), `deployment.md`
 
 ## Recommendation
 
-<!-- RECOMMENDATION -->
+**GO for the next step, NO-GO for replacing the Node API with real patients
+today.**
+
+The Django API keeps the Node API's contract as far as the repository's
+tests can show it: the same route table, 1,925 of 1,935 Node API cases
+(the 10 others proven by pytest equivalents), 220 pytest cases, and the
+browser suite with the two-device canary green against it, with the
+frontends now in JavaScript. That is enough to **run it beside the Node API
+on the demo**, on the same database, where going back is one command
+(`deployment.md`).
+
+It is not yet enough to make it the API real patients depend on. It has
+never run on Linux or on the target server, the production browser
+configuration has not been run against it, it carries a third to a half of
+Node's throughput, and the release restrictions of CLAUDE.md §4.6 apply to
+it as to everything else. §9 lists what stands between this branch and that
+decision; none of it is a known defect in the port.
 
 ## 1. Features migrated
 
@@ -51,6 +67,8 @@ browser packages were converted to JavaScript (`frontend-js.md`).
   migrations are the SQL ledger applied by `pnpm db:migrate`; Django owns no
   table. A Python runner over the same ledger was not written: the Node one
   works and is what the stack runs.
+- **A single clean full browser run after the last two fixes** is owed:
+  the fixes were each rerun on their files, not in one complete run.
 - **Not run against Django:** the production browser configuration
   (`playwright.prod.config.ts`: built apps, `DEMO_MODE=false`, the limited
   database role) and the built-console configuration. The Docker smoke test
@@ -81,8 +99,8 @@ keys), acknowledgements, authorisation and revocation sweeps are covered by
 
 **The two-device canary** (`e2e/two-device-queue.spec.ts`, reception taps
 *next*, the patient's phone updates in under 2 s): 5/5 against Django with
-the TypeScript frontends, and <!-- CANARY-JS --> with the JavaScript
-frontends.
+the TypeScript frontends, and 5/5 with the JavaScript
+frontends (in each full run).
 
 ## 5. Database compatibility
 
@@ -106,6 +124,13 @@ Found and fixed during the port:
   jobs took the whole pool from HTTP requests. Each request, socket task and
   job tick now returns its connection. Before the fix, Django also answered
   one request at a time; requests now interleave as Node's do.
+
+- **The design system's styles after the conversion** (fixed, `c08f5ef`):
+  Tailwind's `@source` still named `*.{ts,tsx}`, so every class used only
+  inside a design-system component was dropped; the bottom sheets rendered
+  outside the viewport and the ER, referral and undo flows could not be
+  finished (10 browser cases on the first full run). Not a security fault,
+  but the kind the compiler can no longer catch.
 
 Open, for the owner's attention:
 
@@ -137,15 +162,65 @@ synthetic (FR-SEC-08).
 | `pnpm typecheck`, `pnpm lint`, `pnpm format:check` | pass |
 | `next build` of console, patient app and site (JavaScript) | pass |
 | Docker image, production mode, local database | healthy; `/healthz`, `/readyz`, `/api/v1/config` 200; unauthenticated `/staff/me` 401; Socket.IO handshake; clean shutdown on SIGTERM (exit 0) |
-| Browser suite (`playwright.django.config.ts`), Django API, JavaScript frontends | <!-- BROWSER --> |
+| Browser suite (`playwright.django.config.ts`), Django API, JavaScript frontends | Final full run: **343 / 346**, canary 5/5 (1.0 h). The three others, each
+resolved and rerun: two lab-report cases were a race in the spec (it signed
+serial 1 after opening the doctor's screen, which since FR-DOC-08 keeps the
+patient it loaded); fixed in `234e00a`, the file then 24/24 with every case
+run twice. One standby case failed once just after the Next dev server
+forced a full page reload, and passed on rerun (14/14 with its file and
+lab-report). The first full run (336/346) found the Tailwind fault (§6),
+fixed in `c08f5ef`; its four files then 22/22 |
 
 ## 8. Performance
 
-<!-- PERF -->
+`node backend/django/tests/perf/compare.mjs`: the same requests to each API
+in turn, on the same seeded database (`healthcare_django_api_test`), on one
+Windows development machine, background jobs off, after a warm-up. Not a
+server, so the absolute numbers are indicative; the ratio is the finding.
+
+| Request | Node p50 / p95 ms | Node req/s | Django p50 / p95 ms | Django req/s |
+|---|---:|---:|---:|---:|
+| GET /healthz | 0.6 / 1.1 | 1539 | 2.6 / 3.4 | 365 |
+| GET /readyz | 4.8 / 6.5 | 204 | 9.1 / 10.7 | 108 |
+| GET /api/v1/hospitals | 15.7 / 18.2 | 63 | 21.3 / 25.2 | 46 |
+| GET /api/v1/doctors | 4.3 / 5.2 | 224 | 10.9 / 13.8 | 90 |
+| GET /api/v1/hospitals, 10 at once | 39.4 / 66.6 | 234 | 109.3 / 155.6 | 89 |
+| GET /api/v1/doctors, 10 at once | 25.6 / 36.9 | 415 | 55.4 / 65.9 | 193 |
+
+In the last row 80 of 400 requests were refused by each API alike: the
+per-address rate limiter, which behaves the same in both.
+
+**Django is about two to three times slower per request** and carries about
+a third to a half of Node's throughput. For one hospital's traffic that is
+far inside what is needed (a request in tens of milliseconds); the measure
+that matters to a patient, the two-device canary, stays under 2 s. A
+multi-hospital network on one process would reach the ceiling sooner, and
+the answer there is more API processes with one running the background jobs
+(`deployment.md`).
 
 ## 9. Remaining production risks
 
-<!-- RISKS -->
+1. **A new codebase replaces a proven one.** The Node API has carried the
+   pitch and the readiness audits; the Django API has passed the same
+   suites on one machine, but has never served a real day. Run it beside the
+   Node API on the demo first, where the rollback is one command.
+2. **Only Windows has run it.** The image was built and smoke-tested, but the
+   whole compose stack has not been brought up on Linux, and the S8 dry run
+   (`DEPLOY.md`) has never been done for either API.
+3. **The production browser configuration has not been run against
+   Django** (built apps, `DEMO_MODE=false`, the limited role):
+   `playwright.prod.config.ts` points at the Node API.
+4. **Two codebases to keep equal** until one is retired: every change made to
+   the Node API from here needs its port, or the parity this report records
+   decays. The Node suite run against Django is the guard, and it must be
+   run on every change to either.
+5. **Lower throughput** (§8): fine for a pilot, a sizing question for a
+   network.
+6. **Weaker static checking in the frontends** (§6). A class of mistake
+   the compiler used to stop now reaches the browser tests or the user; one
+   did during this migration (the Tailwind source glob, §6).
+7. Everything the readiness audit of 18 October lists before real patients
+   is unchanged by this migration.
 
 ## 10. Local development
 
