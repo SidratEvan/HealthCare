@@ -4,21 +4,21 @@ The handover file for this migration. A fresh session reads this first, then
 `architecture.md`, `spy-tests.md` and `compatibility-matrix.md` (not yet
 written). Update it at every commit.
 
-## Where the port stands (18 October, late)
+## Where the port stands (19 October)
 
-- **Every router of `routes/index.ts` is ported**, in its order, and the
-  background jobs (sender, hourly jobs, offer and payment timers).
-- **The original Node suite against Django:** 1,921 of 1,935 on the last
-  full run. The 14 others: 10 cases that spy on Node modules, which have
-  pytest equivalents that pass (`spy-tests.md`), and 4 harness gaps fixed
-  since and passing when rerun (module cache forwarding, port exhaustion in
-  `pilotAudit`, an import concurrency case that passes on rerun). A clean
-  full run after these fixes is still owed.
-- **pytest:** 218 pass (161 queue parity, 57 in `tests/api` and
+- **Every router of `routes/index.ts` is ported**, in its order
+  (`tests/unit/test_route_table.py` checks it against the TypeScript), and
+  the background jobs (sender, hourly jobs, offer and payment timers).
+- **The original Node suite against Django, clean full run:** 1,925 of
+  1,935. The 10 others are exactly the cases that spy on Node modules; each
+  has a pytest equivalent that passes (`spy-tests.md`).
+- **pytest:** 220 pass (161 queue parity, 59 in `tests/api` and
   `tests/unit`).
+- **`compatibility-matrix.md`** written.
 - **Not started:** the browser suites and the two-device canary against
-  Django; the frontend conversion to JavaScript; Docker and deployment
-  documents; `compatibility-matrix.md`; `final-report.md`.
+  Django (`playwright.django.config.ts` written, not yet run); the frontend
+  conversion to JavaScript; Docker and deployment documents;
+  `final-report.md`.
 
 ## Where the work is
 
@@ -54,7 +54,8 @@ cd backend/django && .venv/Scripts/python -m pytest
 
 | # | Commit | What | Verified |
 |---|---|---|---|
-| 17 | (this commit) | Background jobs (hourly, offers, payments) beside the sender; pytest equivalents of every Node case that spies on a Node module (doctor and reception safety, registration audit, lab audits and storage, broadcast after commit, the chamber board's single query, the staff refresh races, SMS redaction, the mapping provider); harness: `forgetModules` reaches the server in order, the shim keeps connections alive and drops hop-by-hop headers; `architecture.md` | pytest 218/218; `realtime`, `moduleRoutes`, `import.routes`, `publishing` 88/88 and `pilotAudit` 10/10 on rerun |
+| 18 | (this commit) | Requests each on a worker thread of their own, as Node interleaves them, with the thread's connection returned to the pool after; the same for socket work and each tick of the clock's jobs (the full run starved the pool of connections); the route-table test; `playwright.django.config.ts`; the race test's lock probe clears Postgres's per-transaction activity snapshot; `compatibility-matrix.md` | pytest 220/220; Node suite against Django 1,925/1,935, the 10 others the spy cases |
+| 17 | `e9022b9` | Background jobs (hourly, offers, payments) beside the sender; pytest equivalents of every Node case that spies on a Node module (doctor and reception safety, registration audit, lab audits and storage, broadcast after commit, the chamber board's single query, the staff refresh races, SMS redaction, the mapping provider); harness: `forgetModules` reaches the server in order, the shim keeps connections alive and drops hop-by-hop headers; `architecture.md` | pytest 218/218; `realtime`, `moduleRoutes`, `import.routes`, `publishing` 88/88 and `pilotAudit` 10/10 on rerun |
 | 16 | `ffb8aa7` | CSV import (template, check, preview with warnings, commit, undo, discard) and the mapped import (analyse, confirm, saved mappings, the model adapter, off by default); the import domain (CSV reader, sets, warnings, mapping rules); router: a route's own body parser can sit after its first steps, as Express places it; harness: a mapping provider a test installs answers the server | `import.routes`, `importMapping`: 57/57 |
 | 15 | `f55cb52` | The platform's side of onboarding (workspaces, approve/send back/suspend/reinstate/close, doctor verification, portal domain, modules, agreement, audit trail, health) and a hospital applying by itself; harness: a test's heartbeats reach the server, and `portals.hospitalLinkOrigin` is answered by it | `platform.routes`, `platformHealth`, `platformAgreement`, `orgApplication`, `portalAddress`, `readiness`: 115/115 |
 | 14 | `c84b749` | The national layer: district capacity, ER load by hour, symptom signals, anonymised benchmarks, read as `gov_reader` and walked for identifiers before sending | `gov.routes` 59/59 |
@@ -74,17 +75,14 @@ cd backend/django && .venv/Scripts/python -m pytest
 
 ## Next exact steps
 
-1. Done: the harness, every router, the background jobs, pytest equivalents.
-2. A clean full run of the Node suite against Django (`pnpm exec vitest run
-   -c vitest.django.config.ts`, about ten minutes) with today's fixes.
-3. The browser suites and the two-device canary against the Django server:
-   a Playwright configuration whose API server is uvicorn on the Django test
-   database, the frontends unchanged.
-4. `compatibility-matrix.md`: every Node test file and every endpoint, with
-   what covers it on the Django side.
-5. Frontend TS -> JS conversion (the brief's Phase 5), then the browser
+1. Done: the harness, every router, the background jobs, pytest
+   equivalents, a clean full run of the Node suite, the compatibility matrix.
+2. The browser suites and the two-device canary against the Django server
+   (`pnpm exec playwright test -c playwright.django.config.ts`): uvicorn on
+   port 4000, the frontends unchanged.
+3. Frontend TS -> JS conversion (the brief's Phase 5), then the browser
    suites again.
-6. Docker, environment template, a Python `db_migrate` over the same SQL
+4. Docker, environment template, a Python `db_migrate` over the same SQL
    ledger, deployment and rollback documents; `final-report.md`.
 
 ## Decisions taken (routine, recorded)

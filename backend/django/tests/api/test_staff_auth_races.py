@@ -77,6 +77,11 @@ def _wait_for_lock_wait() -> None:
     from medlive.core import db
 
     for _attempt in range(200):
+        # This runs inside the paused request's transaction, where Postgres
+        # keeps the first `pg_stat_activity` it read until the transaction
+        # ends; a second request that arrives after that first look would
+        # never be seen without the snapshot cleared.
+        db.fetch_value("SELECT pg_stat_clear_snapshot()")
         waiting = db.fetch_value(
             "SELECT count(*)::int FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query ILIKE %s",
             ["%sessions_auth%"],

@@ -38,11 +38,21 @@ _threads: list[threading.Thread] = []
 
 
 def _loop(name: str, every_seconds: float, run: Callable[[], None], *, now_first: bool) -> threading.Thread:
+    def tick() -> None:
+        from django.db import connection
+
+        try:
+            run()
+        finally:
+            # Back to the pool between ticks: a thread that kept its connection
+            # would hold one of the pool's for the life of the process.
+            connection.close()
+
     def body() -> None:
         if now_first:
-            run()
+            tick()
         while not _stop.wait(every_seconds):
-            run()
+            tick()
 
     thread = threading.Thread(target=body, name=f"medlive-{name}", daemon=True)
     thread.start()

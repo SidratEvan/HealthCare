@@ -31,6 +31,28 @@ REVOKED_SWEEP_SECONDS = 60
 PORTAL_REFRESH_SECONDS = 30
 
 
+def _off_loop(work: Any) -> Any:
+    """`work` on a worker thread, its database connection handed back after.
+
+    Django gives each thread a connection and returns it to the pool only when
+    the thread closes it, which an HTTP request does as it finishes and a
+    worker thread never would. Without this, every thread that ever ran a
+    socket's work kept a connection, and enough sockets took the whole pool
+    from the HTTP requests. Django Channels' `database_sync_to_async` does the
+    same for the same reason.
+    """
+
+    def run(*args: Any, **kwargs: Any) -> Any:
+        from django.db import connection
+
+        try:
+            return work(*args, **kwargs)
+        finally:
+            connection.close()
+
+    return sync_to_async(run, thread_sensitive=False)
+
+
 class _Json:
     """Compact JSON with the API's own encoder (dates as JavaScript writes them)."""
 
@@ -137,7 +159,7 @@ def attach_loop() -> None:
 
 @sio.event
 async def connect(sid: str, environ: dict[str, Any], auth: Any = None) -> None:
-    session = await sync_to_async(socket_auth.authenticate, thread_sensitive=False)(sid, auth, environ)
+    session = await _off_loop(socket_auth.authenticate)(sid, auth, environ)
     if session is None:
         raise socketio.exceptions.ConnectionRefusedError("unauthorised")
     socket_auth.remember(session)
@@ -146,7 +168,7 @@ async def connect(sid: str, environ: dict[str, Any], auth: Any = None) -> None:
 
 async def _join_ambient(sid: str) -> None:
     try:
-        rooms = await sync_to_async(ambient_rooms, thread_sensitive=False)(sid)
+        rooms = await _off_loop(ambient_rooms)(sid)
     except Exception:  # noqa: BLE001
         await sio.disconnect(sid)
         return
@@ -160,7 +182,7 @@ async def _join_ambient(sid: str) -> None:
 
 @sio.on("session:subscribe")
 async def session_subscribe(sid: str, message: Any = None) -> None:
-    decision = await sync_to_async(authorize_subscription, thread_sensitive=False)(sid, message)
+    decision = await _off_loop(authorize_subscription)(sid, message)
     if decision.get("disconnect"):
         await sio.disconnect(sid)
         return
@@ -174,7 +196,7 @@ async def session_subscribe(sid: str, message: Any = None) -> None:
     # client, which folds by `seq` (SY-01).
     await sio.enter_room(sid, decision["room"])
     session.rooms.add(decision["room"])
-    result = await sync_to_async(catch_up, thread_sensitive=False)(
+    result = await _off_loop(catch_up)(
         sid, message, decision["sessionId"], decision["staff"]
     )
     if "error" in result:
@@ -208,7 +230,7 @@ async def disconnect(sid: str, reason: Any = None) -> None:
 async def _every(seconds: float, work: Any, label: str) -> None:
     while True:
         try:
-            await sync_to_async(work, thread_sensitive=False)()
+            await _off_loop(work)()
         except Exception as error:  # noqa: BLE001
             logger.error({"task": label}, "realtime background task failed", exc=error)
         await asyncio.sleep(seconds)
