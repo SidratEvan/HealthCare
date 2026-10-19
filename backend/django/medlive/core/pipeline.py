@@ -385,7 +385,22 @@ def _test_seams(request: HttpRequest) -> Iterator[None]:
 
             adapters = request.META.get("HTTP_X_MEDLIVE_TEST_ADAPTERS")
             set_test_adapters(json.loads(adapters) if adapters else None)
+        _test_rate_window(request.META.get("HTTP_X_MEDLIVE_TEST_RATE_WINDOW"))
         yield
+
+
+_rate_window: list[str | None] = [None]
+
+
+def _test_rate_window(window: str | None) -> None:
+    """A new test file, or a test's `counter.reset()`, starts an empty rate
+    limiter, as the Node API's in-process counter did (`ratelimit-shim.ts`)."""
+    if window is None or window == _rate_window[0]:
+        return
+    from .ratelimit import counter
+
+    _rate_window[0] = window
+    counter.reset()
 
 
 def _test_clock(request: HttpRequest) -> Any:

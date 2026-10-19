@@ -17,7 +17,8 @@ import { defineConfig } from 'vitest/config';
  * under NODE_ENV=test): each request carries the test's `Date.now()`, so a
  * faked clock moves the server's too, and the `env` values the test changed;
  * an SMS adapter or payment provider a test installs answers the server's
- * calls over a loopback callback; `resetEmitter()` reads what the Django process broadcast. What still cannot be checked from here (spies on
+ * calls over a loopback callback; `counter.reset()` empties the server's rate
+ * limiter too, as does each new test file; `resetEmitter()` reads what the Django process broadcast. What still cannot be checked from here (spies on
  * Node services) is listed per file in the compatibility matrix.
  */
 const appShim = fileURLToPath(new URL('./backend/django/tests/node_suite/app-shim.ts', import.meta.url));
@@ -33,6 +34,7 @@ const queueServiceShim = fileURLToPath(
 const notificationServiceShim = fileURLToPath(
   new URL('./backend/django/tests/node_suite/notification-service-shim.ts', import.meta.url),
 );
+const rateLimitShim = fileURLToPath(new URL('./backend/django/tests/node_suite/ratelimit-shim.ts', import.meta.url));
 const realtimeAuthShim = fileURLToPath(
   new URL('./backend/django/tests/node_suite/realtime-auth-shim.ts', import.meta.url),
 );
@@ -46,6 +48,7 @@ export default defineConfig({
       { find: /^\.\.\/adapters\/payments\/index\.js$/, replacement: paymentsShim },
       { find: /^\.\.\/realtime\/server\.js$/, replacement: realtimeServerShim },
       { find: /^\.\.\/realtime\/auth\.js$/, replacement: realtimeAuthShim },
+      { find: /^\.\.\/middleware\/rateLimit\.js$/, replacement: rateLimitShim },
       { find: /^\.\.\/services\/queue\.service\.js$/, replacement: queueServiceShim },
       { find: /^(?:\.\.\/){1,2}services\/notification\.service\.js$/, replacement: notificationServiceShim },
     ],

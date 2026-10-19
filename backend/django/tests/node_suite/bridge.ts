@@ -11,9 +11,15 @@
  *   the stand-in does not have is answered as missing, so the server applies
  *   the same default the Node code applies (`verifyReceipt?.() ?? false`).
  *
- * Django reads both only under NODE_ENV=test (`core/pipeline.py`).
+ * - the rate limiter's window: each test file, and each `counter.reset()` a
+ *   test makes (`ratelimit-shim.ts`), starts a new one
+ *   (`x-medlive-test-rate-window`); the server empties its counter when the
+ *   window it is told differs from the last.
+ *
+ * Django reads them only under NODE_ENV=test (`core/pipeline.py`).
  */
 
+import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -95,9 +101,20 @@ export function bridgeAdapter(kind: AdapterKind, adapter: object | null): void {
   ensureServer();
 }
 
+// This module is loaded afresh by each test file, as the Node counter was.
+const fileWindow = randomUUID();
+let resets = 0;
+
+/** A test emptied the rate limiter's counter: the server empties its own. */
+export function startRateWindow(): void {
+  resets += 1;
+}
+
 /** The headers every proxied request carries. */
 export function bridgeHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    'x-medlive-test-rate-window': `${fileWindow}:${String(resets)}`,
+  };
   const changes = envChanges();
   if (Object.keys(changes).length > 0) headers['x-medlive-test-env'] = JSON.stringify(changes);
   if (installed.size > 0 && serverUrl !== null) {

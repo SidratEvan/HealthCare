@@ -37,7 +37,8 @@ cd backend/django && .venv/Scripts/python -m pytest
 
 | # | Commit | What | Verified |
 |---|---|---|---|
-| 9 | (this commit) | Consent: the chamber code, a doctor redeeming it, the patient granting and revoking from the app, the patient's view of who read their records | `consent.routes` 20/20 |
+| 10 | (this commit) | The ward board: board, panel (audited), admit (desk, request, ER hand-off), discharge, transfer, hold, release, cleaning, out of service, discharge forecast, lapsed holds; families' bed requests and the ward's answer; the board and capacity rules and the ER case rules ported; harness: `counter.reset()` and each new test file empty the server's rate limiter | `bed.routes` 34/34; `patientAuth.routes`, `standby`, `paymentHolds` still pass (102/102 together) |
+| 9 | `329bb2f` | Consent: the chamber code, a doctor redeeming it, the patient granting and revoking from the app, the patient's view of who read their records | `consent.routes` 20/20 |
 | 8 | `7ca5c4d` | The doctor's consultation (read, save, sign and call next), the patient's records and the read audit, formulary search, a patient's own papers (upload by bytes, list, remove, signed link) | `clinical.routes`, `doctorSafety`, `patientDocuments`, `prescriptions`: 60 of 63; the 3 others spy on Node modules (`spy-tests.md`) |
 | 7 | `a721367` | Counter registration (lookup, register, walk-in) and the standby list (join, status, accept, decline, leave) | `registration.routes`, `receptionSafety`, `standby`: 52 of 54; the 2 others spy on Node modules (`spy-tests.md`) |
 | 6 | `d942eac` | Offline sync, payment routes, provider and SMS-receipt webhooks, the simulated payment page; harness: any adapter a test installs (SMS, payment provider) answers Django's calls method by method | `sync.routes` 35/35; payment, holds, providers, no-show prepay, SMS delivery, patient auth, notifications: 121 of 127 before the undefined-argument fix, the rest wait for the admin routes |
