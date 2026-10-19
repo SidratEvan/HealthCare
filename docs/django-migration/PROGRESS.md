@@ -1,7 +1,24 @@
 # Django migration — progress checkpoint
 
 The handover file for this migration. A fresh session reads this first, then
-`architecture.md` and `compatibility-matrix.md`. Update it at every commit.
+`architecture.md`, `spy-tests.md` and `compatibility-matrix.md` (not yet
+written). Update it at every commit.
+
+## Where the port stands (18 October, late)
+
+- **Every router of `routes/index.ts` is ported**, in its order, and the
+  background jobs (sender, hourly jobs, offer and payment timers).
+- **The original Node suite against Django:** 1,921 of 1,935 on the last
+  full run. The 14 others: 10 cases that spy on Node modules, which have
+  pytest equivalents that pass (`spy-tests.md`), and 4 harness gaps fixed
+  since and passing when rerun (module cache forwarding, port exhaustion in
+  `pilotAudit`, an import concurrency case that passes on rerun). A clean
+  full run after these fixes is still owed.
+- **pytest:** 218 pass (161 queue parity, 57 in `tests/api` and
+  `tests/unit`).
+- **Not started:** the browser suites and the two-device canary against
+  Django; the frontend conversion to JavaScript; Docker and deployment
+  documents; `compatibility-matrix.md`; `final-report.md`.
 
 ## Where the work is
 
@@ -37,7 +54,8 @@ cd backend/django && .venv/Scripts/python -m pytest
 
 | # | Commit | What | Verified |
 |---|---|---|---|
-| 16 | (this commit) | CSV import (template, check, preview with warnings, commit, undo, discard) and the mapped import (analyse, confirm, saved mappings, the model adapter, off by default); the import domain (CSV reader, sets, warnings, mapping rules); router: a route's own body parser can sit after its first steps, as Express places it; harness: a mapping provider a test installs answers the server | `import.routes`, `importMapping`: 57/57 |
+| 17 | (this commit) | Background jobs (hourly, offers, payments) beside the sender; pytest equivalents of every Node case that spies on a Node module (doctor and reception safety, registration audit, lab audits and storage, broadcast after commit, the chamber board's single query, the staff refresh races, SMS redaction, the mapping provider); harness: `forgetModules` reaches the server in order, the shim keeps connections alive and drops hop-by-hop headers; `architecture.md` | pytest 218/218; `realtime`, `moduleRoutes`, `import.routes`, `publishing` 88/88 and `pilotAudit` 10/10 on rerun |
+| 16 | `ffb8aa7` | CSV import (template, check, preview with warnings, commit, undo, discard) and the mapped import (analyse, confirm, saved mappings, the model adapter, off by default); the import domain (CSV reader, sets, warnings, mapping rules); router: a route's own body parser can sit after its first steps, as Express places it; harness: a mapping provider a test installs answers the server | `import.routes`, `importMapping`: 57/57 |
 | 15 | `f55cb52` | The platform's side of onboarding (workspaces, approve/send back/suspend/reinstate/close, doctor verification, portal domain, modules, agreement, audit trail, health) and a hospital applying by itself; harness: a test's heartbeats reach the server, and `portals.hospitalLinkOrigin` is answered by it | `platform.routes`, `platformHealth`, `platformAgreement`, `orgApplication`, `portalAddress`, `readiness`: 115/115 |
 | 14 | `c84b749` | The national layer: district capacity, ER load by hour, symptom signals, anonymised benchmarks, read as `gov_reader` and walked for identifiers before sending | `gov.routes` 59/59 |
 | 13 | `5548147` | Hospital settings (profile, rules, publishing, brand and logo, departments, doctors, schedules, wards and beds, staff and resets, capabilities, desks, asking for review); the workspace lifecycle rules; the session materialiser | `hospitalSettings`, `hospitalDesks`, `adminDeskSafety`, `publishing`, `hospitalFace`, `workspaceBrand` pass |
@@ -56,16 +74,18 @@ cd backend/django && .venv/Scripts/python -m pytest
 
 ## Next exact steps
 
-1. Done: the harness (`pnpm exec vitest run -c vitest.django.config.ts <filter>`).
-2. Port module by module in `routes/index.ts` order, re-running the suite:
-   discovery, guest, demo, staff auth, patient auth, booking, queue (+ the
-   realtime handlers), registration, standby, clinical, consent, beds,
-   emergency, referrals, lab, payments, admin, hospital settings, import,
-   platform, gov, webhooks, mock pay, sync. Then the background jobs.
-3. Realtime: python-socketio ASGI server (`medlive/asgi.py`) with the same
-   events and rooms; the two-device canary against it.
-4. Frontend TS → JS conversion, then the browser suites against Django.
-5. Docker, deployment and rollback docs; final report.
+1. Done: the harness, every router, the background jobs, pytest equivalents.
+2. A clean full run of the Node suite against Django (`pnpm exec vitest run
+   -c vitest.django.config.ts`, about ten minutes) with today's fixes.
+3. The browser suites and the two-device canary against the Django server:
+   a Playwright configuration whose API server is uvicorn on the Django test
+   database, the frontends unchanged.
+4. `compatibility-matrix.md`: every Node test file and every endpoint, with
+   what covers it on the Django side.
+5. Frontend TS -> JS conversion (the brief's Phase 5), then the browser
+   suites again.
+6. Docker, environment template, a Python `db_migrate` over the same SQL
+   ledger, deployment and rollback documents; `final-report.md`.
 
 ## Decisions taken (routine, recorded)
 

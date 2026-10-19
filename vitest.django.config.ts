@@ -37,6 +37,9 @@ const notificationServiceShim = fileURLToPath(
 );
 const rateLimitShim = fileURLToPath(new URL('./backend/django/tests/node_suite/ratelimit-shim.ts', import.meta.url));
 const mappingShim = fileURLToPath(new URL('./backend/django/tests/node_suite/mapping-shim.ts', import.meta.url));
+const modulesServiceShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/modules-service-shim.ts', import.meta.url),
+);
 const heartbeatShim = fileURLToPath(new URL('./backend/django/tests/node_suite/heartbeat-shim.ts', import.meta.url));
 const portalServiceShim = fileURLToPath(
   new URL('./backend/django/tests/node_suite/portal-service-shim.ts', import.meta.url),
@@ -57,6 +60,7 @@ export default defineConfig({
       { find: /^\.\.\/realtime\/auth\.js$/, replacement: realtimeAuthShim },
       { find: /^\.\.\/middleware\/rateLimit\.js$/, replacement: rateLimitShim },
       { find: /^\.\.\/services\/heartbeat\.service\.js$/, replacement: heartbeatShim },
+      { find: /^\.\.\/services\/modules\.service\.js$/, replacement: modulesServiceShim },
       { find: /^\.\.\/services\/portal\.service\.js$/, replacement: portalServiceShim },
       { find: /^\.\.\/services\/queue\.service\.js$/, replacement: queueServiceShim },
       { find: /^(?:\.\.\/){1,2}services\/notification\.service\.js$/, replacement: notificationServiceShim },

@@ -19,7 +19,7 @@ import socket
 import time
 import urllib.error
 import urllib.request
-from typing import Any
+from typing import Any, Callable
 
 from ..core.env import env
 from ..core.logging import logger
@@ -89,14 +89,32 @@ class OffMappingProvider:
         return _unavailable("off")
 
 
+Transport = Callable[[urllib.request.Request, float], "tuple[int, bytes]"]
+
+
+def _urlopen(request: urllib.request.Request, timeout: float) -> tuple[int, bytes]:
+    """The standard library's HTTPS: an error status is an answer, not a raise."""
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+            return response.status, response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, b""
+
+
 class ClaudeMappingProvider:
+    """Claude, over the Messages API. `transport` stands in for the network in a
+    test, as `fetchImpl` does for the Node adapter."""
+
     name = "claude"
 
-    def __init__(self, *, api_key: str, model: str, base_url: str, timeout_ms: int) -> None:
+    def __init__(
+        self, *, api_key: str, model: str, base_url: str, timeout_ms: int, transport: Transport | None = None
+    ) -> None:
         self.api_key = api_key
         self.model = model
         self.base_url = base_url
         self.timeout_ms = timeout_ms
+        self.transport = transport or _urlopen
 
     def propose(self, request: dict[str, Any]) -> dict[str, Any]:
         started = time.monotonic()
@@ -143,10 +161,7 @@ class ClaudeMappingProvider:
             f"{self.base_url}/v1/messages", data=json.dumps(body).encode("utf8"), headers=headers, method="POST"
         )
         try:
-            with urllib.request.urlopen(http_request, timeout=self.timeout_ms / 1000) as response:  # noqa: S310
-                status, payload = response.status, response.read()
-        except urllib.error.HTTPError as error:
-            status, payload = error.code, b""
+            status, payload = self.transport(http_request, self.timeout_ms / 1000)
         except (TimeoutError, socket.timeout):
             return _unavailable("timeout")
         except (urllib.error.URLError, OSError) as error:

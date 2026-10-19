@@ -102,9 +102,12 @@ def _notification_calls() -> dict[str, Any]:
 
 
 def _portal_calls() -> dict[str, Any]:
-    from ..services import portal
+    from ..services import modules, portal
 
-    return {"portals.hospitalLinkOrigin": lambda hospital_id: portal.hospital_link_origin(hospital_id)}
+    return {
+        "portals.hospitalLinkOrigin": lambda hospital_id: portal.hospital_link_origin(hospital_id),
+        "modules.forgetModules": lambda hospital_id=None: modules.forget_modules(hospital_id),
+    }
 
 
 def call(req: ApiRequest) -> Reply:

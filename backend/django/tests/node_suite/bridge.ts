@@ -106,6 +106,24 @@ export function bridgeAdapter(kind: AdapterKind, adapter: object | null): void {
   ensureServer();
 }
 
+// A call a shim forwarded to the server without waiting (`modules-service-shim.ts`).
+// Every request the test sends next waits for these first (`app-shim.ts`), so
+// the order the test wrote is the order the server sees.
+const pending = new Set<Promise<unknown>>();
+
+export function track(work: Promise<unknown>): void {
+  const settled = work.then(
+    () => undefined,
+    () => undefined,
+  );
+  pending.add(settled);
+  void settled.finally(() => pending.delete(settled));
+}
+
+export async function drained(): Promise<void> {
+  while (pending.size > 0) await Promise.all([...pending]);
+}
+
 // This module is loaded afresh by each test file, as the Node counter was.
 const fileWindow = randomUUID();
 let resets = 0;

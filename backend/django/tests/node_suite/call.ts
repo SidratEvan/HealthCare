@@ -13,9 +13,11 @@
 import { AppError } from '../../../api/src/errors/AppError.js';
 
 import { DJANGO_API_URL } from './app-shim.js';
-import { bridgeHeaders } from './bridge.js';
+import { bridgeHeaders, drained } from './bridge.js';
 
 export async function callDjango<T>(fn: string, ...args: unknown[]): Promise<T> {
+  // A forwarded call waits for those before it, but not for itself.
+  if (fn !== 'modules.forgetModules') await drained();
   const response = await fetch(`${DJANGO_API_URL}/__test__/call`, {
     method: 'POST',
     headers: {
