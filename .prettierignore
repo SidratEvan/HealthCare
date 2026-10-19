@@ -23,3 +23,8 @@ database/docker/
 # edited. Formatting it means a diff that reappears the next time anyone runs
 # `pnpm dev`.
 next-env.d.ts
+
+# The Django API's virtualenv, test caches and generated parity vectors.
+backend/django/.venv
+backend/django/.pytest_cache
+backend/django/tests/parity/vectors

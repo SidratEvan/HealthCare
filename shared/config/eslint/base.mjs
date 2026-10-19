@@ -106,6 +106,9 @@ export const ignores = [
   '**/coverage/**',
   '**/playwright-report/**',
   '**/test-results/**',
+  // The Django API's virtualenv and its generated parity vectors.
+  '**/.venv/**',
+  'backend/django/tests/parity/vectors/**',
   '**/*.d.ts',
   'pnpm-lock.yaml',
 ];
