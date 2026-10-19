@@ -44,6 +44,9 @@ class Route:
     handler: Handler
     #: A larger body this route parses for itself (`OWN_BODY_LIMIT` in app.ts).
     body_limit: int | None = None
+    #: Where that parser sits in the chain, as Express runs it: after this many
+    #: steps (`...admin, fileBody, ...` is 2). None: before every step.
+    parse_after: int | None = None
 
 
 def _compile(pattern: str) -> tuple[re.Pattern[str], tuple[str, ...]]:
@@ -64,7 +67,9 @@ class Router:
     def __init__(self) -> None:
         self.routes: list[Route] = []
 
-    def add(self, method: str, pattern: str, *chain: object, body_limit: int | None = None) -> None:
+    def add(
+        self, method: str, pattern: str, *chain: object, body_limit: int | None = None, parse_after: int | None = None
+    ) -> None:
         if not chain:
             raise ValueError(f"{method} {pattern} has no handler")
         *steps, handler = chain
@@ -78,6 +83,7 @@ class Router:
                 steps=tuple(steps),  # type: ignore[arg-type]
                 handler=handler,  # type: ignore[arg-type]
                 body_limit=body_limit,
+                parse_after=parse_after,
             )
         )
 

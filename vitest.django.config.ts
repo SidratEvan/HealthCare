@@ -16,7 +16,7 @@ import { defineConfig } from 'vitest/config';
  * Seams keep the original assertions meaningful (all honoured by Django only
  * under NODE_ENV=test): each request carries the test's `Date.now()`, so a
  * faked clock moves the server's too, and the `env` values the test changed;
- * an SMS adapter or payment provider a test installs answers the server's
+ * an SMS adapter, payment provider or mapping provider a test installs answers the server's
  * calls over a loopback callback; `counter.reset()` empties the server's rate
  * limiter too, as does each new test file; a heartbeat a test records reaches
  * the server's; `resetEmitter()` reads what the Django process broadcast. What still cannot be checked from here (spies on
@@ -36,6 +36,7 @@ const notificationServiceShim = fileURLToPath(
   new URL('./backend/django/tests/node_suite/notification-service-shim.ts', import.meta.url),
 );
 const rateLimitShim = fileURLToPath(new URL('./backend/django/tests/node_suite/ratelimit-shim.ts', import.meta.url));
+const mappingShim = fileURLToPath(new URL('./backend/django/tests/node_suite/mapping-shim.ts', import.meta.url));
 const heartbeatShim = fileURLToPath(new URL('./backend/django/tests/node_suite/heartbeat-shim.ts', import.meta.url));
 const portalServiceShim = fileURLToPath(
   new URL('./backend/django/tests/node_suite/portal-service-shim.ts', import.meta.url),
@@ -50,6 +51,7 @@ export default defineConfig({
       { find: /^\.\.\/app\.js$/, replacement: appShim },
       { find: /^\.\.\/realtime\/emit\.js$/, replacement: emitShim },
       { find: /^\.\.\/adapters\/sms\.js$/, replacement: smsShim },
+      { find: /^\.\.\/adapters\/mapping\.js$/, replacement: mappingShim },
       { find: /^\.\.\/adapters\/payments\/index\.js$/, replacement: paymentsShim },
       { find: /^\.\.\/realtime\/server\.js$/, replacement: realtimeServerShim },
       { find: /^\.\.\/realtime\/auth\.js$/, replacement: realtimeAuthShim },

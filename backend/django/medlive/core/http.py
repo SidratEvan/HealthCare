@@ -105,6 +105,8 @@ class ApiRequest:
     response_headers: dict[str, str] = field(default_factory=dict)
     #: The underlying Django request, for the few routes that need it.
     django: Any = None
+    #: A route's own body limit, when its parser runs after its first steps.
+    deferred_body_limit: int | None = None
 
     def __post_init__(self) -> None:
         if self.query is None:

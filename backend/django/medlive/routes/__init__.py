@@ -34,6 +34,7 @@ API_ROUTERS: list[str] = [
     "payment",
     "admin",
     "hospital_settings",
+    "imports",
     "platform",
     "gov",
     "webhooks",

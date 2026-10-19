@@ -224,12 +224,22 @@ def _parse_body(req: ApiRequest, request: HttpRequest, api: Router) -> None:
         return
     limit = BODY_LIMIT
     if any(pattern.search(req.path) for pattern in OWN_BODY_LIMIT):
-        own_limit = api.body_limit_for(req.method, req.api_path)
+        found = api.find(req.method, req.api_path)
+        own_limit = None if found is None else found[0].body_limit
         if own_limit is None:
             # No route here parses a body of its own: as in Express, the
             # global parser stepped aside and nothing read the body.
             return
+        if found is not None and found[0].parse_after is not None:
+            # Its parser comes after its first steps (authentication, say):
+            # `_dispatch` reads the body when the chain reaches it.
+            req.deferred_body_limit = own_limit
+            return
         limit = own_limit
+    _read_body(req, request, limit)
+
+
+def _read_body(req: ApiRequest, request: HttpRequest, limit: int) -> None:
     declared = request.META.get("CONTENT_LENGTH")
     if declared and declared.isdigit() and int(declared) > limit:
         raise PayloadTooLarge()
@@ -240,6 +250,15 @@ def _parse_body(req: ApiRequest, request: HttpRequest, api: Router) -> None:
     if req.path.startswith("/api/v1/webhooks/"):
         req.raw_body = data.decode("utf8", errors="replace")
     req.body = parse_json_body(data)
+
+
+def _read_deferred_body(req: ApiRequest) -> None:
+    """A route's own parser, where its chain places it (`parse_after`)."""
+    limit = req.deferred_body_limit
+    if limit is None or req.django is None:
+        return
+    req.deferred_body_limit = None
+    _read_body(req, req.django, limit)
 
 
 def _module_gate(req: ApiRequest) -> None:
@@ -270,8 +289,12 @@ def _dispatch(req: ApiRequest, api: Router, root: Router) -> Reply:
         route, params = found
         req.route = (API_BASE_PATH if router is api else "") + route.pattern
         req.params = params
-        for step in route.steps:
+        for position, step in enumerate(route.steps):
+            if position == route.parse_after:
+                _read_deferred_body(req)
             step(req)
+        if route.parse_after is not None and route.parse_after >= len(route.steps):
+            _read_deferred_body(req)
         return route.handler(req)
     if req.method == "OPTIONS":
         allowed: list[str] = []

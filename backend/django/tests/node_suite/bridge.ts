@@ -41,12 +41,13 @@ export function envChanges(): Record<string, unknown> {
   return changes;
 }
 
-export type AdapterKind = 'sms' | 'payments';
+export type AdapterKind = 'sms' | 'payments' | 'mapping';
 
 /** The properties of each kind the server reads without calling anything. */
 const PROPERTIES: Record<AdapterKind, readonly string[]> = {
   sms: ['name', 'reportsDelivery'],
   payments: ['name', 'refundsByApi'],
+  mapping: ['name'],
 };
 
 const installed = new Map<AdapterKind, Record<string, unknown>>();
