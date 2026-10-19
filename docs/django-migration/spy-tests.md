@@ -26,7 +26,9 @@ sender's `settled` and `dispatch`). That is not a spy and is not listed here.
 | `consent.routes.test.ts` | to be listed | | |
 | `demo.routes.test.ts` | to be listed | | |
 | `demoPhones.routes.test.ts` | to be listed | | |
-| `doctorSafety.routes.test.ts` | to be listed | | |
+| `doctorSafety.routes.test.ts` | refuses a stale unsigned sign when reception wins before the clinical transaction lock | `sessionRepo.lockForUpdate` runs reception's Next before taking the lock | pending |
+| `doctorSafety.routes.test.ts` | does not finish B when reception advances after A is signed but before its queue step | `queue.callNext` runs reception's Next first, then the doctor's | pending |
+| `doctorSafety.routes.test.ts` | reports a committed signature separately from a failed queue step and recovers safely | `queue.callNext` rejects once | pending |
 | `readiness.routes.test.ts` | to be listed | | |
 | `receptionSafety.routes.test.ts` | refuses exposing a reused canonical identity when its required audit fails | the registration lookup audit rejects | pending |
 | `receptionSafety.routes.test.ts` | an event write failure rolls back the booking too | `queueEvent.append` rejects during a walk-in | pending |

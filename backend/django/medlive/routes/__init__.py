@@ -25,6 +25,7 @@ API_ROUTERS: list[str] = [
     "queue",
     "registration",
     "standby",
+    "clinical",
     "lab",
     "payment",
     "webhooks",
