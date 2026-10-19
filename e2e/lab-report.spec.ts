@@ -138,14 +138,14 @@ test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
     const bookingId = await bookAsGuest(page);
 
     // --- the doctor calls them in, ticks a test, and signs ------------------
+    // Serial 1 is finished through the API rather than typed: this spec is
+    // about the test chips, and signing needs content either way. Finished
+    // before the doctor's screen opens: a screen that has already loaded
+    // serial 1 keeps it after it is signed elsewhere (FR-DOC-08), so opening
+    // first made the guest's arrival a race between the page and the API.
+    await callInTheGuest();
     const doctor = await context.newPage();
     await enterConsole(doctor, demo.doctorToken, 'doctor', `${CONSOLE}/?session=${demo.sessionId}`);
-
-    // Serial 1 is finished through the API rather than typed: this spec is
-    // about the test chips, and signing needs content either way.
-    await callInTheGuest();
-    // The call reaches this screen over the socket. Until it has, the panel is
-    // still on serial 1, and a visit signed now would land on that booking.
     await expect(doctor.getByTestId('doctor-patient-identity')).toContainText(GUEST_NAME);
     await expect(doctor.getByTestId('visit-diagnosis')).toHaveValue('');
 
@@ -240,9 +240,10 @@ test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
 
     const bookingId = await bookAsGuest(page);
 
+    // Serial 1 is finished before the doctor's screen opens (see the case above).
+    await callInTheGuest();
     const doctor = await context.newPage();
     await enterConsole(doctor, demo.doctorToken, 'doctor', `${CONSOLE}/?session=${demo.sessionId}`);
-    await callInTheGuest();
     await expect(doctor.getByTestId('doctor-patient-identity')).toContainText(GUEST_NAME);
     await doctor.getByTestId('visit-diagnosis').fill(ASSESSMENT.diagnosisBn);
     await doctor.getByTestId('visit-tests').getByRole('button').first().click();
