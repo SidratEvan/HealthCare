@@ -386,7 +386,25 @@ def _test_seams(request: HttpRequest) -> Iterator[None]:
             adapters = request.META.get("HTTP_X_MEDLIVE_TEST_ADAPTERS")
             set_test_adapters(json.loads(adapters) if adapters else None)
         _test_rate_window(request.META.get("HTTP_X_MEDLIVE_TEST_RATE_WINDOW"))
+        _test_heartbeats(request.META.get("HTTP_X_MEDLIVE_TEST_HEARTBEAT"))
         yield
+
+
+def _test_heartbeats(ops: str | None) -> None:
+    """The heartbeats a Node test registered or recorded, in order (`heartbeat-shim.ts`)."""
+    if not ops:
+        return
+    from datetime import datetime, timezone
+
+    from ..services import heartbeat
+
+    for op in json.loads(ops):
+        if op["op"] == "register":
+            heartbeat.register(op["worker"], op["everyMs"])
+        elif op["op"] == "beat":
+            heartbeat.beat(op["worker"], op["ok"], datetime.fromtimestamp(op["at"] / 1000, tz=timezone.utc))
+        elif op["op"] == "reset":
+            heartbeat.reset()
 
 
 _rate_window: list[str | None] = [None]

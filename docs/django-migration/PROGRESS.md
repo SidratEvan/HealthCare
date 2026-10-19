@@ -37,7 +37,8 @@ cd backend/django && .venv/Scripts/python -m pytest
 
 | # | Commit | What | Verified |
 |---|---|---|---|
-| 14 | (this commit) | The national layer: district capacity, ER load by hour, symptom signals, anonymised benchmarks, read as `gov_reader` and walked for identifiers before sending | `gov.routes` 59/59 |
+| 15 | (this commit) | The platform's side of onboarding (workspaces, approve/send back/suspend/reinstate/close, doctor verification, portal domain, modules, agreement, audit trail, health) and a hospital applying by itself; harness: a test's heartbeats reach the server, and `portals.hospitalLinkOrigin` is answered by it | `platform.routes`, `platformHealth`, `platformAgreement`, `orgApplication`, `portalAddress`, `readiness`: 115/115 |
+| 14 | `c84b749` | The national layer: district capacity, ER load by hour, symptom signals, anonymised benchmarks, read as `gov_reader` and walked for identifiers before sending | `gov.routes` 59/59 |
 | 13 | `5548147` | Hospital settings (profile, rules, publishing, brand and logo, departments, doctors, schedules, wards and beds, staff and resets, capabilities, desks, asking for review); the workspace lifecycle rules; the session materialiser | `hospitalSettings`, `hospitalDesks`, `adminDeskSafety`, `publishing`, `hospitalFace`, `workspaceBrand` pass |
 | 12 | `a1d8a0b` | Admin dashboard, overview, export | `admin.routes`, `adminOverview`, `adminChambers`, `smsDelivery` pass |
 | 11 | `f23c56e` | Emergency (search, inbound, ER console) and referrals | `emergency.routes` 35/35, `referral.routes` 24/24 |

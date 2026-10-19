@@ -101,6 +101,12 @@ def _notification_calls() -> dict[str, Any]:
     }
 
 
+def _portal_calls() -> dict[str, Any]:
+    from ..services import portal
+
+    return {"portals.hospitalLinkOrigin": lambda hospital_id: portal.hospital_link_origin(hospital_id)}
+
+
 def call(req: ApiRequest) -> Reply:
     """Runs one service function the Node suite called directly (`tests/node_suite/call.ts`).
 
@@ -108,7 +114,7 @@ def call(req: ApiRequest) -> Reply:
     answers one, so the caller can rethrow it as the Node AppError.
     """
     body = req.body if isinstance(req.body, dict) else {}
-    calls = {**_queue_calls(), **_notification_calls()}
+    calls = {**_queue_calls(), **_notification_calls(), **_portal_calls()}
     fn = calls.get(body.get("fn"))
     if fn is None:
         raise AppError("NOT_FOUND", details={"fn": body.get("fn")})

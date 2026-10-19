@@ -16,6 +16,10 @@
  *   (`x-medlive-test-rate-window`); the server empties its counter when the
  *   window it is told differs from the last.
  *
+ * - the clock's heartbeats a test registered or recorded
+ *   (`heartbeat-shim.ts`), in order, applied before the request is handled
+ *   (`x-medlive-test-heartbeat`).
+ *
  * Django reads them only under NODE_ENV=test (`core/pipeline.py`).
  */
 
@@ -105,6 +109,18 @@ export function bridgeAdapter(kind: AdapterKind, adapter: object | null): void {
 const fileWindow = randomUUID();
 let resets = 0;
 
+export type HeartbeatOp =
+  | { readonly op: 'register'; readonly worker: string; readonly everyMs: number }
+  | { readonly op: 'beat'; readonly worker: string; readonly ok: boolean; readonly at: number }
+  | { readonly op: 'reset' };
+
+let heartbeats: HeartbeatOp[] = [];
+
+/** A heartbeat a test made: the server applies it before the next request. */
+export function queueHeartbeat(op: HeartbeatOp): void {
+  heartbeats.push(op);
+}
+
 /** A test emptied the rate limiter's counter: the server empties its own. */
 export function startRateWindow(): void {
   resets += 1;
@@ -115,6 +131,10 @@ export function bridgeHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     'x-medlive-test-rate-window': `${fileWindow}:${String(resets)}`,
   };
+  if (heartbeats.length > 0) {
+    headers['x-medlive-test-heartbeat'] = JSON.stringify(heartbeats);
+    heartbeats = [];
+  }
   const changes = envChanges();
   if (Object.keys(changes).length > 0) headers['x-medlive-test-env'] = JSON.stringify(changes);
   if (installed.size > 0 && serverUrl !== null) {
