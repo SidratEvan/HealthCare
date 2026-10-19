@@ -29,14 +29,30 @@ import {
   twoAwayBookings,
 } from '../../../../shared/domain/src/queue/eta.js';
 import { patientViewOf } from '../../../../shared/domain/src/queue/patientView.js';
-import { observeConsult, rateSpreadSeconds, measuredConsultSeconds } from '../../../../shared/domain/src/queue/rate.js';
-import { reduce } from '../../../../shared/domain/src/queue/reducer.js';
-import { applyBatch, continueReplay, needsFullRebuild, replay } from '../../../../shared/domain/src/queue/replay.js';
-import * as rules from '../../../../shared/domain/src/queue/rules.js';
 import { suggestedQuote } from '../../../../shared/domain/src/queue/quote.js';
-import { checkInvariants, emptyState, project, queueCounts } from '../../../../shared/domain/src/queue/state.js';
+import {
+  observeConsult,
+  rateSpreadSeconds,
+  measuredConsultSeconds,
+} from '../../../../shared/domain/src/queue/rate.js';
+import { reduce } from '../../../../shared/domain/src/queue/reducer.js';
+import {
+  applyBatch,
+  continueReplay,
+  needsFullRebuild,
+  replay,
+} from '../../../../shared/domain/src/queue/replay.js';
+import * as rules from '../../../../shared/domain/src/queue/rules.js';
+import {
+  checkInvariants,
+  emptyState,
+  project,
+  queueCounts,
+} from '../../../../shared/domain/src/queue/state.js';
+import { timestamp } from '../../../../shared/domain/src/types/ids.js';
 
 import type { QueueEvent } from '../../../../shared/domain/src/types/events.js';
+import type { Timestamp } from '../../../../shared/domain/src/types/ids.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASE_MS = Date.parse('2026-09-17T11:00:00.000Z');
@@ -46,8 +62,8 @@ const settings = { ...rules.DEFAULT_QUEUE_SETTINGS };
 /** Deterministic stand-in for the server's keyed ticket. */
 const ticket = (bookingId: string): string => `t-${[...bookingId].reverse().join('')}`;
 
-function iso(ms: number): string {
-  return new Date(ms).toISOString();
+function iso(ms: number): Timestamp {
+  return timestamp(new Date(ms).toISOString());
 }
 
 const EVENT_TYPES = [
@@ -95,7 +111,10 @@ function chaosLog(seedValue: number, size: number, steps: number): QueueEvent[] 
       SESSION_PAUSED: { reason: random() < 0.5 ? null : 'prayer' },
       SESSION_RESUMED: {},
       PATIENT_CALLED: { bookingId: booking(), serial: int(1, size) },
-      PATIENT_DONE: { bookingId: booking(), consultSeconds: [0, 12, 45, 300, 777.5, 5000][int(0, 5)] },
+      PATIENT_DONE: {
+        bookingId: booking(),
+        consultSeconds: [0, 12, 45, 300, 777.5, 5000][int(0, 5)],
+      },
       PATIENT_LATE: { bookingId: booking(), expectedMinutes: int(5, 90), reinsertAfter: int(0, 5) },
       PATIENT_NO_SHOW: { bookingId: booking(), graceUsedMinutes: int(0, 40) },
       PATIENT_REINSERTED: { bookingId: booking(), newPosition: int(-2, size + 3) },
@@ -133,7 +152,8 @@ function chaosLog(seedValue: number, size: number, steps: number): QueueEvent[] 
       seq: random() < 0.1 ? int(1, n) : n,
       serverTs: iso(at),
       clientTs: null,
-      clientEventId: random() < 0.2 ? null : `88888888-8888-7888-8888-${String(n).padStart(12, '0')}`,
+      clientEventId:
+        random() < 0.2 ? null : `88888888-8888-7888-8888-${String(n).padStart(12, '0')}`,
       actor: { kind: 'system', job: 'parity' },
       type,
       payload: payloads[type],
@@ -154,7 +174,7 @@ function shuffle<T>(items: readonly T[], seedValue: number): T[] {
   return out;
 }
 
-function guardsAt(state: ReturnType<typeof emptyState>, now: string): Record<string, unknown> {
+function guardsAt(state: ReturnType<typeof emptyState>, now: Timestamp): Record<string, unknown> {
   const out: Record<string, unknown> = {
     canDeclareDoctorArrived: rules.canDeclareDoctorArrived(state),
     canDeclareDelay: [0, 1, 30, 480, 481, 2.5].map((m) => rules.canDeclareDelay(state, m)),
@@ -186,7 +206,10 @@ function guardsAt(state: ReturnType<typeof emptyState>, now: string): Record<str
       canReinstate: rules.canReinstate(state, entry.bookingId),
       canDeclareLate: rules.canDeclareLate(state, entry.bookingId),
       lateReinsertIndex: rules.lateReinsertIndex(state, entry.bookingId, 3),
-      canReorder: [rules.canReorder(state, entry.bookingId, '  '), rules.canReorder(state, entry.bookingId, 'elderly')],
+      canReorder: [
+        rules.canReorder(state, entry.bookingId, '  '),
+        rules.canReorder(state, entry.bookingId, 'elderly'),
+      ],
       canOfferFreedSlot: rules.canOfferFreedSlot(state, entry.bookingId),
       suggestedQuote: suggestedQuote(state, entry.bookingId, now),
     })),
@@ -195,9 +218,14 @@ function guardsAt(state: ReturnType<typeof emptyState>, now: string): Record<str
   return out;
 }
 
-function observe(state: ReturnType<typeof emptyState>, nows: readonly string[]): Record<string, unknown> {
+function observe(
+  state: ReturnType<typeof emptyState>,
+  nows: readonly Timestamp[],
+): Record<string, unknown> {
   const etas = nows.map((now) => computeEtas(state, now));
-  const told = new Map(state.entries.map((e, i) => [e.bookingId, iso(BASE_MS + i * 240_000)] as const));
+  const told = new Map(
+    state.entries.map((e, i) => [e.bookingId, iso(BASE_MS + i * 240_000)] as const),
+  );
   return {
     state,
     project: project(state),
@@ -206,7 +234,9 @@ function observe(state: ReturnType<typeof emptyState>, nows: readonly string[]):
     spread: rateSpreadSeconds(state.rate),
     etas,
     etasWithPrevious: computeEtas(state, nows[0] ?? iso(BASE_MS), { previous: told }),
-    earlierThanTold: earlierThanTold(state, etas[0] ?? [], told, state.plan.plannedStart).map((e) => e.bookingId),
+    earlierThanTold: earlierThanTold(state, etas[0] ?? [], told, state.plan.plannedStart).map(
+      (e) => e.bookingId,
+    ),
     outstandingDelay: nows.map((now) => outstandingDelayMinutes(state, now)),
     projectedEnd: nows.map((now) => projectedEnd(state, now)),
     twoAway: twoAwayBookings(state),
@@ -220,7 +250,7 @@ interface Case {
   readonly seed: ReturnType<typeof makeSeed>;
   readonly events: readonly QueueEvent[];
   readonly shuffled: readonly QueueEvent[];
-  readonly nows: readonly string[];
+  readonly nows: readonly Timestamp[];
   readonly steps: readonly Record<string, unknown>[];
   readonly replayed: unknown;
   readonly replayedShuffled: unknown;
@@ -229,7 +259,12 @@ interface Case {
   readonly batch: unknown;
 }
 
-function buildCase(name: string, seed: ReturnType<typeof makeSeed>, events: readonly QueueEvent[], seedValue: number): Case {
+function buildCase(
+  name: string,
+  seed: ReturnType<typeof makeSeed>,
+  events: readonly QueueEvent[],
+  seedValue: number,
+): Case {
   const last = events.at(-1)?.serverTs ?? iso(BASE_MS);
   const lastMs = Date.parse(last);
   const nows = [iso(lastMs + 30_000), iso(lastMs + 17 * 60_000 + 500), iso(BASE_MS - 3_600_000)];
@@ -241,7 +276,8 @@ function buildCase(name: string, seed: ReturnType<typeof makeSeed>, events: read
     state = reduce(state, event);
     // Observing everything after every event makes a big file; every third
     // step, and the last, is plenty.
-    if (index % 3 === 0 || index === events.length - 1) steps.push({ index, ...observe(state, nows) });
+    if (index % 3 === 0 || index === events.length - 1)
+      steps.push({ index, ...observe(state, nows) });
   }
 
   const half = Math.floor(events.length / 2);
@@ -263,13 +299,39 @@ function buildCase(name: string, seed: ReturnType<typeof makeSeed>, events: read
 
 const cases: Case[] = [];
 for (let seedValue = 1; seedValue <= 40; seedValue += 1) {
-  const seed = makeSeed(4 + (seedValue % 9), { defaultConsultSeconds: [300, 480, 777, 31][seedValue % 4] ?? 480 });
-  cases.push(buildCase(`legal-${seedValue}`, seed, generateLog(seed, seedValue, 45, { withUndo: seedValue % 3 === 0 }), seedValue));
-  cases.push(buildCase(`chaos-${seedValue}`, seed, chaosLog(seedValue, 4 + (seedValue % 9), 40), seedValue));
+  const seed = makeSeed(4 + (seedValue % 9), {
+    defaultConsultSeconds: [300, 480, 777, 31][seedValue % 4] ?? 480,
+  });
+  cases.push(
+    buildCase(
+      `legal-${seedValue}`,
+      seed,
+      generateLog(seed, seedValue, 45, { withUndo: seedValue % 3 === 0 }),
+      seedValue,
+    ),
+  );
+  cases.push(
+    buildCase(`chaos-${seedValue}`, seed, chaosLog(seedValue, 4 + (seedValue % 9), 40), seedValue),
+  );
 }
 
 // The rate on its own, over awkward values.
-const rateCases = [0, 1, 29, 30, 30.5, 31, 299.5, 300, 3599.5, 3600, 3601, 7200, -5, Number.NaN].map((seconds) => ({
+const rateCases = [
+  0,
+  1,
+  29,
+  30,
+  30.5,
+  31,
+  299.5,
+  300,
+  3599.5,
+  3600,
+  3601,
+  7200,
+  -5,
+  Number.NaN,
+].map((seconds) => ({
   seconds,
   observed: observeConsult({ seedSeconds: 480, currentSeconds: 480, samples: [300, 600] }, seconds),
 }));
@@ -280,7 +342,11 @@ const measured = [
   [iso(BASE_MS), iso(BASE_MS + 1500)],
   [iso(BASE_MS), iso(BASE_MS + 4 * 3600_000)],
   [iso(BASE_MS + 9000), iso(BASE_MS)],
-].map(([calledAt, now]) => ({ calledAt, now, seconds: measuredConsultSeconds(calledAt ?? null, now as string) }));
+].map(([calledAt, now]) => ({
+  calledAt,
+  now,
+  seconds: measuredConsultSeconds(calledAt ?? null, now ?? iso(BASE_MS)),
+}));
 
 const out = join(HERE, 'vectors', 'queue.json');
 mkdirSync(dirname(out), { recursive: true });

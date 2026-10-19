@@ -8,9 +8,9 @@
  * Everything else is the real module's.
  */
 
-import type * as Real from '../../../api/src/services/portal.service.js';
-
 import { callDjango } from './call.js';
+
+import type * as Real from '../../../api/src/services/portal.service.js';
 
 export * from '../../../api/src/services/portal.service.js';
 

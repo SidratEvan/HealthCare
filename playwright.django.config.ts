@@ -23,8 +23,8 @@ import './e2e/support/djangoEnv.js';
 
 import { defineConfig } from '@playwright/test';
 
-import base from './playwright.config.js';
 import { asApiRole, assertLocalDatabase } from './e2e/support/database.js';
+import base from './playwright.config.js';
 
 // Merges the repository's `.env`, if any, into process.env as the Node API
 // does, so the secrets the specs sign with are the ones this server is given.

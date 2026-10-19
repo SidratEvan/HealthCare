@@ -41,7 +41,8 @@ async function waitForHealth(deadline: number): Promise<void> {
     } catch {
       // not up yet
     }
-    if (Date.now() > deadline) throw new Error('The Django server did not answer /healthz in time.');
+    if (Date.now() > deadline)
+      throw new Error('The Django server did not answer /healthz in time.');
     await new Promise((done) => setTimeout(done, 250));
   }
 }
@@ -51,18 +52,39 @@ let server: ChildProcess | null = null;
 export default async function setup(): Promise<() => Promise<void>> {
   await buildApiDatabase();
 
-  const python = join(DJANGO_ROOT, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-  const env = { ...process.env, ...testEnv(), PORT: String(PORT), PYTHONUNBUFFERED: '1' };
+  const python = join(
+    DJANGO_ROOT,
+    '.venv',
+    process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python',
+  );
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...testEnv(),
+    PORT: String(PORT),
+    PYTHONUNBUFFERED: '1',
+  };
   delete env['DATABASE_URL_OWNER_TEST'];
   server = spawn(
     python,
-    ['-m', 'uvicorn', 'medlive.asgi:application', '--host', '127.0.0.1', '--port', String(PORT), '--no-proxy-headers', '--log-level', 'warning'],
+    [
+      '-m',
+      'uvicorn',
+      'medlive.asgi:application',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      String(PORT),
+      '--no-proxy-headers',
+      '--log-level',
+      'warning',
+    ],
     { cwd: DJANGO_ROOT, env, stdio: ['ignore', 'inherit', 'inherit'] },
   );
   await waitForHealth(Date.now() + 60_000);
 
-  return async () => {
+  return () => {
     server?.kill();
     server = null;
+    return Promise.resolve();
   };
 }

@@ -12,18 +12,21 @@
 
 import { execFileSync } from 'node:child_process';
 import { connect, type Socket } from 'node:net';
-import type { IncomingMessage, Server as HttpServer } from 'node:http';
-import type { Duplex } from 'node:stream';
 
 import { DJANGO_API_URL } from './app-shim.js';
 import { bridgeHeaders } from './bridge.js';
+
+import type { IncomingMessage, Server as HttpServer } from 'node:http';
+import type { Duplex } from 'node:stream';
 
 const target = new URL(DJANGO_API_URL);
 
 export interface ForwardedRealtime {
   close(): Promise<void>;
   /** `io.sockets.sockets.get(id)?.rooms`, read from the Django process. */
-  readonly sockets: { readonly sockets: { get(id: string): { readonly rooms: Set<string> } | undefined } };
+  readonly sockets: {
+    readonly sockets: { get(id: string): { readonly rooms: Set<string> } | undefined };
+  };
 }
 
 function roomsOf(id: string): Set<string> | null {

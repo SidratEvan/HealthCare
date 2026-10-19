@@ -22,25 +22,39 @@ import { defineConfig } from 'vitest/config';
  * the server's; `resetEmitter()` reads what the Django process broadcast. What still cannot be checked from here (spies on
  * Node services) is listed per file in the compatibility matrix.
  */
-const appShim = fileURLToPath(new URL('./backend/django/tests/node_suite/app-shim.ts', import.meta.url));
-const emitShim = fileURLToPath(new URL('./backend/django/tests/node_suite/emit-shim.ts', import.meta.url));
-const smsShim = fileURLToPath(new URL('./backend/django/tests/node_suite/sms-shim.ts', import.meta.url));
+const appShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/app-shim.ts', import.meta.url),
+);
+const emitShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/emit-shim.ts', import.meta.url),
+);
+const smsShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/sms-shim.ts', import.meta.url),
+);
 const realtimeServerShim = fileURLToPath(
   new URL('./backend/django/tests/node_suite/realtime-server-shim.ts', import.meta.url),
 );
-const paymentsShim = fileURLToPath(new URL('./backend/django/tests/node_suite/payments-shim.ts', import.meta.url));
+const paymentsShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/payments-shim.ts', import.meta.url),
+);
 const queueServiceShim = fileURLToPath(
   new URL('./backend/django/tests/node_suite/queue-service-shim.ts', import.meta.url),
 );
 const notificationServiceShim = fileURLToPath(
   new URL('./backend/django/tests/node_suite/notification-service-shim.ts', import.meta.url),
 );
-const rateLimitShim = fileURLToPath(new URL('./backend/django/tests/node_suite/ratelimit-shim.ts', import.meta.url));
-const mappingShim = fileURLToPath(new URL('./backend/django/tests/node_suite/mapping-shim.ts', import.meta.url));
+const rateLimitShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/ratelimit-shim.ts', import.meta.url),
+);
+const mappingShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/mapping-shim.ts', import.meta.url),
+);
 const modulesServiceShim = fileURLToPath(
   new URL('./backend/django/tests/node_suite/modules-service-shim.ts', import.meta.url),
 );
-const heartbeatShim = fileURLToPath(new URL('./backend/django/tests/node_suite/heartbeat-shim.ts', import.meta.url));
+const heartbeatShim = fileURLToPath(
+  new URL('./backend/django/tests/node_suite/heartbeat-shim.ts', import.meta.url),
+);
 const portalServiceShim = fileURLToPath(
   new URL('./backend/django/tests/node_suite/portal-service-shim.ts', import.meta.url),
 );
@@ -63,7 +77,10 @@ export default defineConfig({
       { find: /^\.\.\/services\/modules\.service\.js$/, replacement: modulesServiceShim },
       { find: /^\.\.\/services\/portal\.service\.js$/, replacement: portalServiceShim },
       { find: /^\.\.\/services\/queue\.service\.js$/, replacement: queueServiceShim },
-      { find: /^(?:\.\.\/){1,2}services\/notification\.service\.js$/, replacement: notificationServiceShim },
+      {
+        find: /^(?:\.\.\/){1,2}services\/notification\.service\.js$/,
+        replacement: notificationServiceShim,
+      },
     ],
   },
   test: {
@@ -75,7 +92,8 @@ export default defineConfig({
     ],
     globalSetup: ['backend/django/tests/node_suite/global-setup.ts'],
     env: {
-      DATABASE_URL_API_TEST: 'postgresql://healthcare:healthcare@localhost:5432/healthcare_django_api_test',
+      DATABASE_URL_API_TEST:
+        'postgresql://healthcare:healthcare@localhost:5432/healthcare_django_api_test',
       DJANGO_API_URL: 'http://127.0.0.1:4199',
     },
     maxWorkers: 1,

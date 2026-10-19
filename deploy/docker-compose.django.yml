@@ -1,0 +1,20 @@
+# The self-hosted stack with the Django API in place of the Node API
+# (docs/django-migration/deployment.md).
+#
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.django.yml \
+#     --env-file deploy/.env up -d --build
+#
+# Only the `api` service changes. Everything else is deploy/docker-compose.yml
+# as it is: the same database and volumes, the same `migrate` service (the
+# SQL ledger and the API's database role, run from the Node image), the same
+# web apps, web server and nightly backup, and the same deploy/.env. The two
+# APIs read the same variables and the same schema, so going back to the Node
+# API is the same command without this file (the rollback).
+
+services:
+  api:
+    build:
+      context: ../backend/django
+    image: medlivebd-api-django
+    volumes:
+      - files:/data/files

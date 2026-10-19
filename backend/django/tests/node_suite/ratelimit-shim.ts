@@ -25,6 +25,8 @@ export const counter: typeof realCounter = new Proxy(realCounter, {
       };
     }
     const value: unknown = Reflect.get(target, property, receiver);
-    return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+    return typeof value === 'function'
+      ? (value as (...args: unknown[]) => unknown).bind(target)
+      : value;
   },
 });

@@ -24,10 +24,11 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 
 import { env } from '../../../api/src/env.js';
+
+import type { AddressInfo } from 'node:net';
 
 const started: Record<string, unknown> = { ...(env as unknown as Record<string, unknown>) };
 
@@ -54,7 +55,7 @@ const installed = new Map<AdapterKind, Record<string, unknown>>();
 let server: Server | null = null;
 let serverUrl: string | null = null;
 
-function answer(res: import('node:http').ServerResponse, body: unknown): void {
+function answer(res: ServerResponse, body: unknown): void {
   res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(body));
 }
 
@@ -71,7 +72,9 @@ function ensureServer(): void {
         args: unknown[];
       };
       const given = args.map((arg) =>
-        typeof arg === 'object' && arg !== null && (arg as Record<string, unknown>)['$undefined'] === true
+        typeof arg === 'object' &&
+        arg !== null &&
+        (arg as Record<string, unknown>)['$undefined'] === true
           ? undefined
           : arg,
       );

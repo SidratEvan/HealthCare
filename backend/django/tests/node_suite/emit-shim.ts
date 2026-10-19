@@ -30,7 +30,9 @@ function call(path: string, method: 'GET' | 'POST'): unknown {
 
 export class DjangoRecordingEmitter {
   emit(): void {
-    throw new Error('The Django run records what the Django server emits; a test does not emit into it.');
+    throw new Error(
+      'The Django run records what the Django server emits; a test does not emit into it.',
+    );
   }
 
   all(): readonly Emission[] {

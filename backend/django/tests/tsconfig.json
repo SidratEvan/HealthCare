@@ -1,0 +1,9 @@
+{
+  "_comment": "The TypeScript beside the Django API: the harness that sends the Node API suite to Django (node_suite/) and the generator of the queue parity vectors (parity/). Type-checked and linted like the suite it serves.",
+  "extends": "@platform/config/tsconfig/node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["node_suite/**/*.ts", "parity/**/*.ts"]
+}

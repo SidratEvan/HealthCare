@@ -10,7 +10,12 @@
  * honoured only under NODE_ENV=test).
  */
 
-import { Agent, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http';
+import {
+  Agent,
+  request as httpRequest,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http';
 
 import { bridgeHeaders, drained } from './bridge.js';
 
