@@ -37,8 +37,9 @@ cd backend/django && .venv/Scripts/python -m pytest
 
 | # | Commit | What | Verified |
 |---|---|---|---|
-| 13 | (this commit) | Hospital settings (profile, rules, publishing, brand and logo, departments, doctors, schedules, wards and beds, staff and resets, capabilities, desks, asking for review); the workspace lifecycle rules; the session materialiser | `hospitalSettings`, `hospitalDesks`, `adminDeskSafety`, `publishing`, `hospitalFace`, `workspaceBrand` pass |
-| 12 | admin commit | Admin dashboard, overview, export | `admin.routes`, `adminOverview`, `adminChambers`, `smsDelivery` pass |
+| 14 | (this commit) | The national layer: district capacity, ER load by hour, symptom signals, anonymised benchmarks, read as `gov_reader` and walked for identifiers before sending | `gov.routes` 59/59 |
+| 13 | `5548147` | Hospital settings (profile, rules, publishing, brand and logo, departments, doctors, schedules, wards and beds, staff and resets, capabilities, desks, asking for review); the workspace lifecycle rules; the session materialiser | `hospitalSettings`, `hospitalDesks`, `adminDeskSafety`, `publishing`, `hospitalFace`, `workspaceBrand` pass |
+| 12 | `a1d8a0b` | Admin dashboard, overview, export | `admin.routes`, `adminOverview`, `adminChambers`, `smsDelivery` pass |
 | 11 | `f23c56e` | Emergency (search, inbound, ER console) and referrals | `emergency.routes` 35/35, `referral.routes` 24/24 |
 | 10 | `df03d80` | The ward board: board, panel (audited), admit (desk, request, ER hand-off), discharge, transfer, hold, release, cleaning, out of service, discharge forecast, lapsed holds; families' bed requests and the ward's answer; the board and capacity rules and the ER case rules ported; harness: `counter.reset()` and each new test file empty the server's rate limiter | `bed.routes` 34/34; `patientAuth.routes`, `standby`, `paymentHolds` still pass (102/102 together) |
 | 9 | `329bb2f` | Consent: the chamber code, a doctor redeeming it, the patient granting and revoking from the app, the patient's view of who read their records | `consent.routes` 20/20 |
