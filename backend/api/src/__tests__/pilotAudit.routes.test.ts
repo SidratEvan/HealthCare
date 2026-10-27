@@ -18,6 +18,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { once } from 'node:events';
+import { Agent, createServer } from 'node:http';
 
 import { sql } from 'kysely';
 import request from 'supertest';
@@ -441,45 +443,63 @@ describe('no route answers malformed input with a 5xx (GR-03)', () => {
   });
 
   it('every mounted route, as nobody and as a member of staff holding every role', async () => {
-    const crashes: string[] = [];
-    for (const route of mountedRoutes()) {
-      for (const value of PARAMS) {
-        const path = route.path
-          .replace(/:hospitalId\b/g, otherId)
-          .replace(/:\w+/g, encodeURIComponent(value));
-        for (const token of [null, everyRole]) {
-          const bodies = route.method === 'GET' || route.method === 'DELETE' ? [undefined] : BODIES;
-          for (const body of bodies) {
-            let call = request(app)[
-              route.method.toLowerCase() as 'get' | 'post' | 'put' | 'patch' | 'delete'
-            ](
-              `${BASE}${path}?limit=-1&from=notadate&to=2026-13-45&q=${encodeURIComponent("' OR 1=1--")}`,
-            );
-            if (token !== null) call = call.set('Authorization', bearer(token));
-            if (route.method !== 'GET') call = call.set('Idempotency-Key', randomUUID());
-            const response = body === undefined ? await call : await call.send(body as object);
-            if (response.status >= 500) {
-              crashes.push(
-                `${route.method} ${route.path} [${value}] ${token === null ? 'anon' : 'staff'} → ${String(response.status)} ${String(response.body?.error?.code)}`,
-              );
+    // Reuse a listener and connection for the thousands of malformed requests.
+    // Per-request ephemeral listeners exhaust Windows TCP ports (NFR-01).
+    // The Django contract harness supplies an HTTP proxy handler too.
+    const server = createServer(app);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const client = request(server);
+    const agent = new Agent({ keepAlive: true, maxSockets: 1 });
+    try {
+      const crashes: string[] = [];
+      for (const route of mountedRoutes()) {
+        for (const value of PARAMS) {
+          const path = route.path
+            .replace(/:hospitalId\b/g, otherId)
+            .replace(/:\w+/g, encodeURIComponent(value));
+          for (const token of [null, everyRole]) {
+            const bodies =
+              route.method === 'GET' || route.method === 'DELETE' ? [undefined] : BODIES;
+            for (const body of bodies) {
+              let call = client[
+                route.method.toLowerCase() as 'get' | 'post' | 'put' | 'patch' | 'delete'
+              ](
+                `${BASE}${path}?limit=-1&from=notadate&to=2026-13-45&q=${encodeURIComponent("' OR 1=1--")}`,
+              ).agent(agent);
+              if (token !== null) call = call.set('Authorization', bearer(token));
+              if (route.method !== 'GET') call = call.set('Idempotency-Key', randomUUID());
+              const response = body === undefined ? await call : await call.send(body as object);
+              if (response.status >= 500) {
+                crashes.push(
+                  `${route.method} ${route.path} [${value}] ${token === null ? 'anon' : 'staff'} → ${String(response.status)} ${String(response.body?.error?.code)}`,
+                );
+              }
             }
           }
         }
-      }
-      // Syntactically broken JSON, once per writing route.
-      if (route.method !== 'GET') {
-        const path = route.path.replace(/:\w+/g, PARAMS[0] ?? '');
-        const broken = await request(app)
-          [route.method.toLowerCase() as 'post' | 'put' | 'patch' | 'delete'](`${BASE}${path}`)
-          .set('Authorization', bearer(everyRole))
-          .set('Content-Type', 'application/json')
-          .set('Idempotency-Key', randomUUID())
-          .send('{"a":');
-        if (broken.status >= 500) {
-          crashes.push(`${route.method} ${route.path} [broken JSON] → ${String(broken.status)}`);
+        // Syntactically broken JSON, once per writing route.
+        if (route.method !== 'GET') {
+          const path = route.path.replace(/:\w+/g, PARAMS[0] ?? '');
+          const broken = await client[
+            route.method.toLowerCase() as 'post' | 'put' | 'patch' | 'delete'
+          ](`${BASE}${path}`)
+            .agent(agent)
+            .set('Authorization', bearer(everyRole))
+            .set('Content-Type', 'application/json')
+            .set('Idempotency-Key', randomUUID())
+            .send('{"a":');
+          if (broken.status >= 500) {
+            crashes.push(`${route.method} ${route.path} [broken JSON] → ${String(broken.status)}`);
+          }
         }
       }
+      expect(crashes).toEqual([]);
+    } finally {
+      agent.destroy();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error === undefined ? resolve() : reject(error)));
+      });
     }
-    expect(crashes).toEqual([]);
   }, 600_000);
 });

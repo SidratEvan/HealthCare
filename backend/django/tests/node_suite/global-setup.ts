@@ -12,10 +12,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import buildApiDatabase from '../../../../database/tests/support/api-global-setup.js';
+import buildApiDatabase, {
+  API_TEST_ROLE,
+} from '../../../../database/tests/support/api-global-setup.js';
 
 // The Django run's own database, never the Node run's (`healthcare_api_test`).
-process.env['DATABASE_URL_API_TEST'] ??=
+process.env['DATABASE_URL_API_TEST'] =
+  process.env['DATABASE_URL_DJANGO_TEST'] ??
   'postgresql://healthcare:healthcare@localhost:5432/healthcare_django_api_test';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -64,6 +67,11 @@ export default async function setup(): Promise<() => Promise<void>> {
     PYTHONUNBUFFERED: '1',
   };
   delete env['DATABASE_URL_OWNER_TEST'];
+  // Serve the database this run built, including custom local ports (FR-SEC-08).
+  const database = new URL(process.env['DATABASE_URL_API_TEST'] ?? '');
+  database.username = API_TEST_ROLE.name;
+  database.password = API_TEST_ROLE.password;
+  env['DATABASE_URL'] = database.toString();
   server = spawn(
     python,
     [

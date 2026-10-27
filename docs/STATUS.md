@@ -7,6 +7,34 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
+## Latest work — master consolidation (27 October 2026)
+
+Owner requested one organized branch containing the current compatible work and
+a working local app. `master` starts at migration/django-drf `6d29a7f`, which
+already contains the approved website, redesigned consoles, later safety fixes,
+Django API and JavaScript frontends. Missing design ZIP archives and useful local
+runner/history additions are incorporated. The stash, old refs and dirty preview
+worktree are preserved. `main`, `mvp`, `demo`, public deployment and remote data
+were not changed. This explicit request supersedes the old mvp-only workflow for
+the creation of this consolidated branch.
+
+[Branch inventory, integration decisions and fresh verification](BRANCH_INTEGRATION.md).
+[Current local commands and troubleshooting](LOCAL_DEVELOPMENT.md).
+The local demo uses localhost:5433; 5432 belongs to another PostgreSQL instance.
+Start: `./run.ps1 -Background -DatabaseProvider Existing`; stop: `./run.ps1 -Stop`.
+Both API choices and all frontends now run from this checkout, not the old split
+preview. Existing seeded demo data is preserved. Historical entries below retain
+their original environment/branch scope; they are not current master results.
+
+Fresh checks: production builds and type/lint/format pass; full Node test run
+8,147 passed plus one Windows TCP test-harness failure, repaired and 10/10 on the
+affected file; Django contract run 1,924/1,935, with ten known Node-only spy cases
+and the same harness failure, then repaired audit/queue/tenant/demo selection
+85/85; Python safety/parity 220/220; website export/browser 30/30; Django two-device
+canary 5/5. Both API choices start and stop through the launcher. Full release
+browser/offline/production gates were not rerun; detailed limitations are in the
+integration report. No real-patient readiness is claimed.
+
 ## Latest work — Django migration, all phases (19 October 2026)
 
 The owner's brief of 18 October: the API ported to Python (Django + DRF,

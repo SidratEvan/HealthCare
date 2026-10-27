@@ -93,6 +93,7 @@ export default defineConfig({
     globalSetup: ['backend/django/tests/node_suite/global-setup.ts'],
     env: {
       DATABASE_URL_API_TEST:
+        process.env['DATABASE_URL_DJANGO_TEST'] ??
         'postgresql://healthcare:healthcare@localhost:5432/healthcare_django_api_test',
       DJANGO_API_URL: 'http://127.0.0.1:4199',
     },

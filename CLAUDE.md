@@ -116,6 +116,13 @@ Rules:
 
 ## 3. Git workflow — follow exactly
 
+**Owner request, 27 October 2026:** create `master` as the consolidated development
+branch from the latest compatible work, with organized documentation and verified
+local startup. Use master as the development base for subsequent task branches
+and merge verified work back there; this supersedes the older mvp-only workflow
+below. See `docs/BRANCH_INTEGRATION.md` for the inventory and explicit exclusions.
+It does not move main/demo, change the remote default branch or deploy publicly.
+
 ### 3.1 Branches
 
 ```

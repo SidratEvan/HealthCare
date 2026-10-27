@@ -1,5 +1,11 @@
 import { defineConfig } from 'vitest/config';
 
+import { loadEnvFile } from './database/scripts/lib/env.js';
+
+// Set explicit test database overrides before worker processes are created.
+// Global setup and workers must use the same local port (FR-SEC-08).
+loadEnvFile();
+
 /**
  * Unit and integration tests (BACKEND.md §11).
  *

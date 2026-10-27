@@ -1,5 +1,42 @@
 # MedLiveBD — a national healthcare platform for Bangladesh
 
+**`master` is the consolidated development branch**, based on the Django migration
+`6d29a7f`: approved company website, redesigned staff consoles, safety fixes,
+Django API, JavaScript frontends and the original Node API for rollback.
+See [branch inventory and verification](docs/BRANCH_INTEGRATION.md) and
+[local development](docs/LOCAL_DEVELOPMENT.md). Older reports describe their own
+revisions; creating master does not change the public deployment.
+
+## Start the consolidated app on Windows
+
+Requires Node 22.19+ (24 recommended), Corepack, Python 3.12+ for Django,
+and local PostgreSQL 16 with PostGIS (Docker, Ubuntu WSL or an existing instance).
+
+```powershell
+git switch master
+.\run.ps1 -Background
+# Patient http://localhost:3000 · Staff http://localhost:3100
+# Website http://localhost:3200/en (or /bn) · API http://localhost:4000/readyz
+.\run.ps1 -Stop
+```
+
+The launcher defaults to Django, installs pinned dependencies, generates missing
+local secrets, migrates, seeds only an empty database and verifies its schema.
+Existing demo data is preserved. Use `-ApiBackend Node` for the original API,
+`-SetupOnly` to prepare without starting, or `-SkipInstall` after dependencies are
+installed. Logs and ownership records are in ignored `.local/`.
+
+On the inspected machine the existing demo database is on **localhost:5433**;
+5432 belongs to another instance. The ignored `.env` now selects 5433. Start with:
+
+```powershell
+.\run.ps1 -Background -DatabaseProvider Existing
+```
+
+The frontends and browser packages are JavaScript/JSX. Shared domain rules,
+translations, database tools and the original Node API remain TypeScript. Django
+uses the existing SQL ledger: do not run Django ORM migrations.
+
 A two-sided healthcare platform: a Bangla-first patient PWA and a set of hospital
 staff consoles, built around a **live queue engine** that keeps a doctor's chamber
 queue true in real time.
@@ -30,6 +67,7 @@ frontend/      Everything that runs in a browser
   site/        Marketing website (Part C)        — Next.js, server-rendered
 backend/       Everything that runs on a server
   api/         HTTP + realtime                   — Express 5, Socket.IO, the queue service
+  django/      New HTTP + realtime API           — Django/DRF, python-socketio
   workers/     Background jobs                   — pg-boss
 shared/        Imported by both sides
   domain/      Types, queue event log, reducer, ETA maths — pure, no I/O
@@ -65,12 +103,17 @@ docker compose up -d            # Postgres 16 + PostGIS on localhost:5432
 ```bash
 pnpm dev              # every app that has a dev server
 pnpm dev:api          # the API alone, with reload
+pnpm dev:django       # Django API from the root local .env, limited DB role
+pnpm dev:site         # company website on :3200
 pnpm build
 pnpm typecheck
 pnpm lint             # includes the architectural boundaries
 pnpm format
 pnpm test             # unit + api + schema
 pnpm verify           # typecheck + lint + format + test, as CI runs them
+pnpm test:django      # original API suite against Django (see guide for spy cases)
+pnpm test:e2e:django  # browser suite against Django; disposable local DB only
+pnpm test:e2e:prod:django # production browser configuration against Django
 
 pnpm db:migrate       # apply pending migrations
 pnpm db:verify        # assert the DATABASE.md §0 invariants
@@ -80,8 +123,9 @@ The test suite runs as three projects: `unit` needs nothing, `api` and `schema`
 need `docker compose up -d`. Run one with `pnpm vitest run --project unit`.
 
 `pnpm db:seed`, `pnpm db:reset`, `pnpm dev:patient`, `pnpm dev:console` and
-`pnpm test:e2e` are wired up by the steps that introduce them (see
-[CLAUDE.md](CLAUDE.md) §4).
+`pnpm test:e2e` are implemented. Browser suites rebuild their configured database
+and own their app ports; stop local apps first and use a disposable database as
+described in the development guide. CI includes master.
 
 ## Toolchain notes
 

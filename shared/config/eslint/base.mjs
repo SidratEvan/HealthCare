@@ -100,6 +100,8 @@ const BROWSER_GLOBALS = Object.fromEntries(
 
 /** Files that are never linted. */
 export const ignores = [
+  '.local/**',
+  'docs/history/**',
   '**/node_modules/**',
   '**/dist/**',
   '**/.next/**',

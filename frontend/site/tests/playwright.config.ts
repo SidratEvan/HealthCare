@@ -20,8 +20,9 @@ export default defineConfig({
   },
   webServer: {
     command: 'node scripts/preview-static.mjs',
+    cwd: '..',
     url: 'http://localhost:3210/bn',
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 });

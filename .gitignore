@@ -31,6 +31,7 @@ blob-report/
 .playwright/
 
 # Local-only files
+.local/
 *.local
 .DS_Store
 Thumbs.db

@@ -27,9 +27,9 @@ name: CI
 
 on:
   push:
-    branches: [main, mvp]
+    branches: [main, mvp, master]
   pull_request:
-    branches: [main, mvp]
+    branches: [main, mvp, master]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -50,6 +50,44 @@ env:
   NODE_VERSION: "24"
 
 jobs:
+  django:
+    name: Django safety · queue parity · API compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: healthcare
+          POSTGRES_PASSWORD: healthcare
+          POSTGRES_DB: healthcare_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U healthcare -d healthcare_dev"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL_API_TEST: postgresql://healthcare:healthcare@localhost:5432/healthcare_django_api_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare Python
+        run: |
+          python -m venv backend/django/.venv
+          backend/django/.venv/bin/python -m pip install -r backend/django/requirements.lock.txt
+      - name: API compatibility (queue, tenant isolation, demo identity)
+        run: pnpm test:django queue.routes.test.ts tenantScope.test.ts demo.routes.test.ts
+      - name: Python safety and deterministic queue parity
+        working-directory: backend/django
+        run: .venv/bin/python -m pytest
+
   verify:
     name: typecheck · lint · format · test
     runs-on: ubuntu-latest
