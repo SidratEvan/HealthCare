@@ -91,7 +91,7 @@ function check(at: number, extra: Record<string, string> = {}): Promise<void> {
   return new Promise((done, fail) => {
     const child = spawn(process.execPath, [SCRIPT, 'once'], {
       env: {
-        PATH: process.env.PATH ?? '',
+        PATH: process.env['PATH'] ?? '',
         WATCHDOG_READYZ_URL: `${base}/readyz`,
         WATCHDOG_STATE_FILE: join(dir, 'state.json'),
         WATCHDOG_NOW: String(at),
