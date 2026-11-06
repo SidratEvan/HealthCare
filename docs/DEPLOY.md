@@ -540,6 +540,16 @@ Real patient data lives here and nowhere else — not on Supabase, Render or
 Vercel, and never in a development or demo database (`FR-SEC-08`,
 `FR-IMP-11`).
 
+**Quick start (6 November 2026).** On a fresh Ubuntu server,
+`sudo bash deploy/setup.sh` does S1's Docker, S2, S3 and the firewall in one
+run: it asks for the web address, the backup folder, the alert link and the
+two first administrators, generates every secret, starts the stack, waits for
+it, creates the administrators and switches the laboratory off (F-08). It
+never overwrites an existing `deploy/.env`. `MEDLIVEBD_SKIP_SYSTEM=1` leaves
+Docker and the firewall to the hospital's IT. The plain-language version for
+the hospital is `docs/MARKS_START_HERE.md`. The sections below remain what
+the script does, step by step.
+
 One command starts the whole stack: the database, the migrations, the API,
 the two web apps, a web server that holds the TLS certificates, and a nightly
 backup that is checked and copied to a second place (`deploy/docker-compose.yml`,
