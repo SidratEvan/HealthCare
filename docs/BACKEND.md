@@ -438,7 +438,7 @@ Base: `/api/v1`. All responses: `{ ok: true, data }` or `{ ok: false, error: { c
 | POST | `/sessions/:id/arrived` | receptionist, doctor | `DOCTOR_ARRIVED` |
 | POST | `/sessions/:id/delay` | receptionist, doctor | `DELAY_DECLARED` |
 | POST | `/sessions/:id/pause` \| `/resume` | receptionist | `SESSION_PAUSED` / `_RESUMED` |
-| POST | `/sessions/:id/next` | receptionist, doctor | `PATIENT_DONE` + `PATIENT_CALLED` |
+| POST | `/sessions/:id/next` | receptionist, doctor | `PATIENT_DONE` + `PATIENT_CALLED`. Optional `expectedBookingId`: who the caller believes is in the chamber; if that has changed, `QUEUE_GUARD_FAILED` (422, guard `CONSULTATION_CHANGED`) and nothing is appended. An integration should always send it |
 | POST | `/bookings/:id/done` | receptionist, doctor | `PATIENT_DONE` |
 | POST | `/bookings/:id/late` | receptionist | `PATIENT_LATE` |
 | POST | `/bookings/:id/no-show` | receptionist | `PATIENT_NO_SHOW` + auto slot offer |

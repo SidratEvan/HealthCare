@@ -167,11 +167,16 @@ export async function endSession(req: Request, res: Response): Promise<void> {
 export async function callNext(req: Request, res: Response): Promise<void> {
   const sessionId = param(req, 'id');
   await assertSessionScope(req, sessionId);
+  const body = req.body as { expectedBookingId?: string };
 
   send(
     res,
     await queueService.callNext({
       sessionId,
+      // F-03: who the caller believes is in the chamber, checked in the lock.
+      ...(body.expectedBookingId === undefined
+        ? {}
+        : { expectedBookingId: body.expectedBookingId }),
       actor: actorOf(req),
       ...envelope(req),
     }),

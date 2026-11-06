@@ -80,12 +80,21 @@ export const endSessionBody = command({
 /**
  * `POST /sessions/:id/next` — the single most-used control in the product.
  *
- * No body beyond the envelope. Which patient is finished and which is next are
- * both decisions the reducer makes from the current state, not choices a
- * console gets to send: two counters that each named "the next patient" would
- * name different ones (`FR-QUE-53`).
+ * Which patient is finished and which is next are both decisions the reducer
+ * makes from the current state, not choices a console gets to send: two
+ * counters that each named "the next patient" would name different ones
+ * (`FR-QUE-53`).
+ *
+ * `expectedBookingId` is the one thing a caller may say: who it believes is in
+ * the chamber now. When that is no longer so (another counter, or a stale
+ * screen, moved the queue first) the call is refused rather than finishing a
+ * patient it never saw (pilot-readiness F-03). Optional, as the consoles'
+ * explicit finish/call events are guarded already; any integration or script
+ * that calls this route should send it.
  */
-export const callNextBody = command({});
+export const callNextBody = command({
+  expectedBookingId: uuid.optional(),
+});
 
 // ---------------------------------------------------------------------------
 // Patient commands

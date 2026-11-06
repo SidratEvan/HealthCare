@@ -259,7 +259,7 @@ export async function callNext(input: {
     if (input.expectedBookingId !== undefined && serving?.bookingId !== input.expectedBookingId) {
       throw guardFailed(
         'CONSULTATION_CHANGED',
-        'The signed encounter is no longer in the chamber.',
+        'The patient expected in the chamber is no longer there.',
       );
     }
     if (serving !== null) {

@@ -246,8 +246,11 @@ queueRoutes.post(
 /**
  * Ten seconds, and only the actor who did it (`GR-02`).
  *
- * No `requireRole`: a patient who cancels by mistake has the same ten seconds
- * a receptionist does, and the controller enforces that it is the same person.
+ * No `requireRole`; the controller enforces that it is the same person. Undo
+ * is reception's (`FR-REC-16`): a patient's is refused with 404, because the
+ * event is looked up under the patient's database scope, which holds no queue
+ * events, and the patient app offers none. A patient's undo, if one is ever
+ * wanted, starts with that lookup (pilot-readiness F-12).
  */
 queueRoutes.post(
   '/events/:id/undo',
