@@ -7,7 +7,38 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Latest work — MARKS readiness assessment and remediation (18 October 2026)
+## Latest work — the MARKS pilot handover (6 November 2026)
+
+**Owner's order (6 November):** MARKS Group asked for the software to run;
+make it pilot-ready as fast as possible, decide safe defaults without asking,
+explain in plain English. The Python/Django rewrite (`migration/django-drf`,
+local and remote, its folders and image) was **deleted** on his order; the
+Node/TypeScript stack is the product.
+
+**Branch `feat/marks-pilot`** (worktree `D:\Projects\HealthCare-ops-alerts`),
+on top of `chore/integrate-console-redesign` (`c550343`, the console redesign
+and every fix to 18 October, not yet on `mvp`):
+
+- `8864fcf` seed: the poor-line facility's late work no longer depends on the
+  weekday (it failed `platformHealth.routes.test.ts` on Friday 6 November).
+- F-03: `POST /sessions/:id/next` takes `expectedBookingId`; F-12 comment.
+- Ops: the `watchdog` service (Telegram/ntfy alerts from `/readyz`,
+  `DEPLOY.md` S5a); the backup's second copy encrypted with gpg and proven to
+  decrypt (S5); `deploy/images.sh` (build elsewhere, install without building,
+  S4).
+- `deploy/setup.sh`: the whole server set up in one command (DEPLOY.md Part S,
+  *Quick start*); `docs/MARKS_START_HERE.md`, the hospital's guide.
+
+**Decided for the pilot without asking (owner's instruction):** Laboratory
+**off** (F-08; `setup.sh` switches it off) until MARKS's price list is
+loaded; Doctor **on**, with hospital-wide access and every view audited, for
+MARKS to confirm in the pilot agreement (F-09). No SMS: counter-only pilot.
+
+**Still open:** the printed token slip (`FR-REC-21`) is not built;
+registration lookup caps at 20 silently; retention and erasure (F-16) is
+legal, not code.
+
+## Previous work — MARKS readiness assessment and remediation (18 October 2026)
 
 Full report: [docs/audit/marks-readiness-2026-10-18.md](audit/marks-readiness-2026-10-18.md).
 Code assessed: `audit/pilot-readiness-2026-10-12` @ `b7bee62`, which holds the
