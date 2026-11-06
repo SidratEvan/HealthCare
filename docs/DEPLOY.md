@@ -800,6 +800,32 @@ The `migrate` service runs on every `up` and applies only migrations the
 database has not seen; the API waits for it to finish. Take a backup first
 (`S5`) — migrations are forward-only.
 
+**Building elsewhere, so the counters are not kept waiting.** `--build` above
+compiles the API and both web apps on the server while patients wait, and a
+small server is slow at it. Instead, on any other machine with Docker, at the
+commit to deploy and with a copy of the server's `deploy/.env` (the web apps
+bake `API_ORIGIN` and `PLATFORM_DOMAIN` in; no secret goes into an image):
+
+```bash
+sh deploy/images.sh build deploy/.env medlivebd-images.tar.gz
+scp medlivebd-images.tar.gz* admin@<server>:~/
+```
+
+then on the server, at the same commit:
+
+```bash
+git fetch && git checkout <the commit in medlivebd-images.tar.gz.commit>
+sh deploy/images.sh install ~/medlivebd-images.tar.gz deploy/.env
+```
+
+`install` checks the archive against its checksum, refuses images built from
+another commit than the one checked out (the compose file and the backup
+scripts come from the checkout, the code from the images, and they must
+agree), loads them and starts the stack without building. The API is away
+for as long as the migrations and its own start take. The build refuses a
+checkout with uncommitted changes, and builds for x86-64 servers even on an
+ARM laptop.
+
 **A server first started before plan 1.7** needs two things once, before
 that `up`: `API_DB_USER`, `API_DB_PASSWORD` and `BACKUP_SECOND_DIR` added to
 `deploy/.env` (`S2`), and the uploaded files handed to the account the API now

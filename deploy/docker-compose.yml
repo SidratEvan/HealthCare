@@ -135,6 +135,8 @@ services:
       migrate: { condition: service_completed_successfully }
 
   console:
+    # Named, so `deploy/images.sh` can save and load it (DEPLOY.md S4).
+    image: medlivebd-console
     build:
       context: ..
       target: console
@@ -147,6 +149,8 @@ services:
       api: { condition: service_healthy }
 
   patient:
+    # Named, so `deploy/images.sh` can save and load it (DEPLOY.md S4).
+    image: medlivebd-patient
     build:
       context: ..
       target: patient
