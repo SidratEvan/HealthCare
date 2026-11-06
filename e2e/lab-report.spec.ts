@@ -109,6 +109,23 @@ async function callInTheGuest(): Promise<void> {
   });
 }
 
+/**
+ * The doctor's screen moves on to the guest, as a doctor would move it.
+ *
+ * Since `FR-DOC-08`'s safety fix the screen does not swap the patient under
+ * the doctor when the queue moves from elsewhere: it says the patient in the
+ * chamber changed and offers to go on (`consultation-switch`). Serial 1 was
+ * finished through the API here, so that is what the doctor sees, unless the
+ * screen opened after the call and starts on the guest.
+ */
+async function followToTheGuest(doctor: Page): Promise<void> {
+  const identity = doctor.getByTestId('doctor-patient-identity');
+  const goOn = doctor.getByTestId('consultation-switch');
+  await expect(identity.filter({ hasText: GUEST_NAME }).or(goOn)).toBeVisible();
+  if (await goOn.isVisible()) await goOn.click();
+  await expect(identity).toContainText(GUEST_NAME);
+}
+
 /** Enters a console as the picker would, with no password (`CLAUDE.md` §4.1). */
 async function enterConsole(page: Page, token: string, role: string, url: string): Promise<void> {
   await page.addInitScript(
@@ -146,7 +163,7 @@ test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
     await callInTheGuest();
     // The call reaches this screen over the socket. Until it has, the panel is
     // still on serial 1, and a visit signed now would land on that booking.
-    await expect(doctor.getByTestId('doctor-patient-identity')).toContainText(GUEST_NAME);
+    await followToTheGuest(doctor);
     await expect(doctor.getByTestId('visit-diagnosis')).toHaveValue('');
 
     await doctor.getByTestId('visit-diagnosis').fill(ASSESSMENT.diagnosisBn);
@@ -243,7 +260,7 @@ test.describe('a report a lab uploads reaches the patient (FR-LAB-03)', () => {
     const doctor = await context.newPage();
     await enterConsole(doctor, demo.doctorToken, 'doctor', `${CONSOLE}/?session=${demo.sessionId}`);
     await callInTheGuest();
-    await expect(doctor.getByTestId('doctor-patient-identity')).toContainText(GUEST_NAME);
+    await followToTheGuest(doctor);
     await doctor.getByTestId('visit-diagnosis').fill(ASSESSMENT.diagnosisBn);
     await doctor.getByTestId('visit-tests').getByRole('button').first().click();
     await doctor.getByTestId('sign-and-next').click();
