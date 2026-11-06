@@ -597,6 +597,7 @@ Fill in `deploy/.env`:
 | `ADDRESS_RATE_LIMIT_FACTOR` | `1` unless patients will book from the hospital's own network. The API limits what one address may do in ten minutes (30 phone checks, 10 standby places, 10 emergency alerts), and a waiting room on the hospital's Wi-Fi is one address: the 31st patient would be told to wait. `10` allows ten times each limit; the most is `100`. The limits on a single phone number are not affected |
 | `BACKUP_AT_UTC_HOUR`, `BACKUP_KEEP_DAYS` | When the nightly backup runs (20 UTC is 02:00 Dhaka) and how many days are kept |
 | `BACKUP_SECOND_DIR` | The folder on **another disk or machine** every backup is copied to (`S5`). Empty means backups stay on this disk and the backup service reports itself failing |
+| `BACKUP_ENCRYPTION_PASSPHRASE` | Encrypts the copy in `BACKUP_SECOND_DIR` (`S5`). Long and random (`openssl rand -base64 32`), **kept off the server too**: without it the encrypted copies cannot be restored. Empty means the second copy is plain |
 | `ALERT_WEBHOOK_URL` | Where the watchdog posts when the server needs a person (`S5a`): a Telegram bot URL or an ntfy topic. A secret. Empty means alerts reach the log only |
 | `ALERT_WEBHOOK_FORMAT` | `json` (Telegram, Slack, Discord) or `text` (ntfy) |
 | `ALERT_SERVER_NAME`, `ALERT_REPEAT_HOURS`, `ALERT_DAILY_UTC_HOUR` | The name in each message; how often a lasting problem is repeated (6); the UTC hour of the daily "all well" (3, 09:00 in Dhaka; empty for none) |
@@ -830,6 +831,18 @@ They hold patient data: not a service outside Bangladesh without the
 hospital's agreement (`FR-SEC-07`). The stack cannot tell whether the folder
 you name really is another disk; that is for whoever sets it up to make true.
 
+**The copy there is encrypted** when `BACKUP_ENCRYPTION_PASSPHRASE` is set
+(`S2`): `db-<stamp>.dump.gpg` and `files-<stamp>.tar.gz.gpg` (gpg, AES-256),
+so an external drive that is lost or taken gives away nothing. Each night the
+copy is decrypted again and compared with the original before the run counts,
+so a damaged copy is found the same night. The copy on the server's own disk
+stays plain: it is the one restored in a hurry, and the server's disk is
+protected by the server's own full-disk encryption (`S1`). **Write the
+passphrase down somewhere off the server** (the hospital's safe, a password
+manager two people can open): a backup whose passphrase died with the server
+cannot be restored by anybody. Without a passphrase the second copy is plain
+and every run warns.
+
 **Whether last night worked is visible without reading a log:**
 
 ```bash
@@ -911,6 +924,16 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env stop api cons
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --entrypoint sh backup \
   /deploy/restore.sh /backups/db-<stamp>.dump /backups/files-<stamp>.tar.gz
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+```
+
+From the encrypted copy, name the `.gpg` files instead (they may sit in
+`deploy/backups/` or in the second location, `/backups-second/` inside the
+container); `restore.sh` decrypts them first with the passphrase in
+`deploy/.env`, and stops before touching the database if it cannot:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --entrypoint sh backup \
+  /deploy/restore.sh /backups-second/db-<stamp>.dump.gpg /backups-second/files-<stamp>.tar.gz.gpg
 ```
 
 Practise this once on a spare machine before the pilot starts; a restore

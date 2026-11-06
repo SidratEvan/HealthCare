@@ -203,6 +203,8 @@ services:
       BACKUP_AT_UTC_HOUR: ${BACKUP_AT_UTC_HOUR:-20}
       BACKUP_VERIFY_RESTORE: ${BACKUP_VERIFY_RESTORE:-true}
       BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-26}
+      # The copy in the second location is encrypted with it (DEPLOY.md §S5).
+      BACKUP_ENCRYPTION_PASSPHRASE: ${BACKUP_ENCRYPTION_PASSPHRASE:-}
       # Set only when the host names a second location: with none, the script
       # says so and reports every run as failing, rather than copying a backup
       # onto the disk it is a backup of and calling that a second copy.

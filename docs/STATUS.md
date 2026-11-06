@@ -1568,10 +1568,11 @@ administrator and an uploaded file were all there, and the API came up as the
 limited role again.
 
 **What it does not do:**
-- **Alerts arrived later** (`feat/ops-alerts`, 6 November): the `watchdog`
-  service posts to a Telegram or ntfy webhook (`DEPLOY.md` S5a). Until
-  `ALERT_WEBHOOK_URL` is set on a server, somebody still has to look each
-  morning.
+- **Alerts arrived later** (`chore/ops-monitoring`, 6 November): the
+  `watchdog` service posts to a Telegram or ntfy webhook (`DEPLOY.md` S5a).
+  Until `ALERT_WEBHOOK_URL` is set on a server, somebody still has to look
+  each morning. The same branch encrypts the second copy of each backup
+  (`BACKUP_ENCRYPTION_PASSPHRASE`, S5).
 - **It cannot tell whether the second location is really another disk.** A
   folder on the same disk satisfies it. `DEPLOY.md` says so.
 - **The demonstration deployment is unchanged**: on Supabase the API still
