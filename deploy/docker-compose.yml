@@ -222,6 +222,32 @@ services:
     depends_on:
       db: { condition: service_healthy }
 
+  # Somebody is told (DEPLOY.md §S5a, FR-SUP-06). Reads the API's `/readyz`
+  # every minute and posts to ALERT_WEBHOOK_URL when something goes wrong,
+  # changes, stays wrong for ALERT_REPEAT_HOURS, or comes right. The API's own
+  # image runs it, with Node's own modules: no new image, no new dependency.
+  # It waits for nothing to be healthy, since an API that never becomes
+  # healthy is exactly what it has to report.
+  watchdog:
+    image: medlivebd-api
+    restart: unless-stopped
+    logging: *logging
+    command: ["node", "/deploy/watchdog.mjs"]
+    environment:
+      WATCHDOG_READYZ_URL: http://api:4000/readyz
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_WEBHOOK_FORMAT: ${ALERT_WEBHOOK_FORMAT:-json}
+      ALERT_SERVER_NAME: ${ALERT_SERVER_NAME:-MedLiveBD server}
+      ALERT_REPEAT_HOURS: ${ALERT_REPEAT_HOURS:-6}
+      ALERT_DAILY_UTC_HOUR: ${ALERT_DAILY_UTC_HOUR:-3}
+    volumes:
+      - ./watchdog.mjs:/deploy/watchdog.mjs:ro
+    # The image's health check asks the API whether it is ready; this is not
+    # the API.
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
 volumes:
   db-data:
   files:

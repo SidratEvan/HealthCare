@@ -597,6 +597,9 @@ Fill in `deploy/.env`:
 | `ADDRESS_RATE_LIMIT_FACTOR` | `1` unless patients will book from the hospital's own network. The API limits what one address may do in ten minutes (30 phone checks, 10 standby places, 10 emergency alerts), and a waiting room on the hospital's Wi-Fi is one address: the 31st patient would be told to wait. `10` allows ten times each limit; the most is `100`. The limits on a single phone number are not affected |
 | `BACKUP_AT_UTC_HOUR`, `BACKUP_KEEP_DAYS` | When the nightly backup runs (20 UTC is 02:00 Dhaka) and how many days are kept |
 | `BACKUP_SECOND_DIR` | The folder on **another disk or machine** every backup is copied to (`S5`). Empty means backups stay on this disk and the backup service reports itself failing |
+| `ALERT_WEBHOOK_URL` | Where the watchdog posts when the server needs a person (`S5a`): a Telegram bot URL or an ntfy topic. A secret. Empty means alerts reach the log only |
+| `ALERT_WEBHOOK_FORMAT` | `json` (Telegram, Slack, Discord) or `text` (ntfy) |
+| `ALERT_SERVER_NAME`, `ALERT_REPEAT_HOURS`, `ALERT_DAILY_UTC_HOUR` | The name in each message; how often a lasting problem is repeated (6); the UTC hour of the daily "all well" (3, 09:00 in Dhaka; empty for none) |
 | `BACKUP_VERIFY_RESTORE` | `true`: each night's dump is restored into a scratch database to prove it restores. Needs free disk the size of the database |
 
 `deploy/.env` holds the hospital's secrets. It is ignored by git and by the
@@ -854,9 +857,43 @@ sender is not sending), `worker_late` (something the server does on a clock
 has stopped). The rest of `signals` gives the ages and counts behind them.
 None of it makes the API unready: a failed backup is not a reason to stop a
 reception desk. A free uptime checker pointed at that address and set to
-look for an empty `attention` is an alert; this repository sets none up,
-because it needs an account somebody owns. Until one exists, **somebody has
-to look each morning**.
+look for an empty `attention` is a second, outside check (S5a).
+
+### S5a. Being told
+
+The `watchdog` service reads `/readyz` every minute and posts to
+`ALERT_WEBHOOK_URL` (`S2`) when something goes wrong, when what is wrong
+changes, every `ALERT_REPEAT_HOURS` while it lasts, and when it is right
+again. Besides the words above it says `api_unreachable` (three checks in a
+row without an answer, so a restart is not an alarm) and
+`database_unreachable` (the API answers but cannot reach the database). Once a
+day at `ALERT_DAILY_UTC_HOUR` it says all is well; **a day without that
+message means the watchdog, or the whole server, has stopped**. A message
+holds the server's name and the fixed sentences only, never a patient, a
+token or a log line. A message that cannot be posted is tried again at the
+next check.
+
+A free destination, either of:
+
+- **Telegram.** Make a bot with @BotFather, add it to the group that should be
+  told, and set
+  `ALERT_WEBHOOK_URL=https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>`
+  (the chat id is in `https://api.telegram.org/bot<TOKEN>/getUpdates` after
+  somebody writes in the group).
+- **ntfy.** `ALERT_WEBHOOK_URL=https://ntfy.sh/<a long random topic>` and
+  `ALERT_WEBHOOK_FORMAT=text`; subscribe to the topic in the ntfy app. The
+  topic is the only secret, so make it long.
+
+Try it after setting it: stop the API for four minutes
+(`docker compose … stop api`, wait, `start api`); the group gets "needs
+attention" and then "all well again". With `ALERT_WEBHOOK_URL` empty the same
+messages go to `docker compose … logs watchdog` only, and **somebody has to
+look each morning**.
+
+The watchdog runs on the server it watches, so a server that is off, or has
+lost its network, says nothing at all. For that, also point a free outside
+uptime checker (UptimeRobot, Better Stack) at `https://api.<your-domain>/readyz`;
+it needs an account somebody owns.
 
 A backup on demand:
 
@@ -924,7 +961,7 @@ before Docker sees them. A Linux server needs nothing.
 - **Each service reports its own health** (`docker compose ps`): the API is
   healthy only while it can reach the database; the web server waits for the
   three it serves; the backup is healthy only while last night's backup is
-  good (`S5`). Nothing restarts or alerts on it — it is there to be read.
+  good (`S5`). Nothing restarts on it; the watchdog tells somebody (`S5a`).
 
 ## S7. When something is wrong
 

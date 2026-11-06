@@ -1568,9 +1568,10 @@ administrator and an uploaded file were all there, and the API came up as the
 limited role again.
 
 **What it does not do:**
-- **Nothing alerts anybody.** A failed backup or an unready API is visible in
-  `docker compose ps` and nowhere else. Until an alert exists somebody has to
-  look each morning. An SMS alert waits on an aggregator (decision D1).
+- **Alerts arrived later** (`feat/ops-alerts`, 6 November): the `watchdog`
+  service posts to a Telegram or ntfy webhook (`DEPLOY.md` S5a). Until
+  `ALERT_WEBHOOK_URL` is set on a server, somebody still has to look each
+  morning.
 - **It cannot tell whether the second location is really another disk.** A
   folder on the same disk satisfies it. `DEPLOY.md` says so.
 - **The demonstration deployment is unchanged**: on Supabase the API still
