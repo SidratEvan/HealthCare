@@ -331,6 +331,8 @@ const KEPT: Readonly<Record<string, Kept>> = {
     by: 'row',
     other: booking('check-in', () => ({ quotedWaitMinutes: 10 })),
   },
+  // The token slip (FR-REC-21): B's booking, and no link minted for it.
+  'POST /bookings/:id/slip': { by: 'row', other: booking('slip') },
   'POST /bookings/:id/offer-slot': { by: 'row', other: booking('offer-slot') },
   'POST /bookings/:id/cancel': { by: 'row', other: booking('cancel') },
   'GET /bookings/:id': {

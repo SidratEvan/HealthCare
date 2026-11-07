@@ -125,6 +125,8 @@ export const MODULE_ROUTES: Readonly<Record<string, readonly HospitalModule[]>> 
   'POST /bookings/:id/no-show': ['queue'],
   'POST /bookings/:id/reinstate': ['queue'],
   'POST /bookings/:id/check-in': ['queue'],
+  // The token slip (FR-REC-21): the counter's, so the queue's.
+  'POST /bookings/:id/slip': ['queue'],
   'POST /bookings/:id/offer-slot': ['queue'],
   'POST /offers/:id/accept': ['queue'],
   'POST /sync/events': ['queue'],
