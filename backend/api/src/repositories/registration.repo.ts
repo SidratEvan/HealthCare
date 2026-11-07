@@ -30,9 +30,48 @@ export interface CounterPatient {
   readonly owner: 'account' | 'guest' | 'hospital';
 }
 
+/** Canonical counter receipt inside the existing locked household transaction
+ * (FR-REC-20). No identity inference from the submitted demographic fields.
+ */
+export async function guestNameCount(trx: Tx, guestId: string, fullName: string): Promise<number> {
+  const result = await sql<{ n: number }>`SELECT count(*)::int AS n FROM patients
+    WHERE owner_guest_id=${guestId} AND full_name=${fullName} AND deleted_at IS NULL`.execute(trx);
+  return result.rows[0]?.n ?? 0;
+}
+export async function registeredPatient(trx: Tx, patientId: string): Promise<CounterPatient> {
+  const result = await sql<{
+    id: string;
+    full_name: string;
+    age_years: number | null;
+    sex: string;
+    relationship: string;
+    is_primary: boolean;
+  }>`SELECT id, full_name, coalesce(age_years,date_part('year',age(date_of_birth))::int) AS age_years,
+    sex::text AS sex,relationship,is_primary FROM patients WHERE id=${patientId} AND deleted_at IS NULL`.execute(
+    trx,
+  );
+  const row = result.rows[0];
+  if (row === undefined) throw new Error('Registered patient receipt missing.');
+  return {
+    patientId: row.id,
+    fullName: row.full_name,
+    ageYears: row.age_years,
+    sex: row.sex,
+    relationship: row.relationship,
+    isPrimary: row.is_primary,
+    owner: 'guest',
+  };
+}
+
+/** The most people one lookup lists (`FR-REC-20`). */
+export const LOOKUP_MAX = 50;
+
 /**
  * A patient another hospital imported is that hospital's alone (`FR-IMP-10`),
  * so only this facility's own imported patients are ever shown here.
+ *
+ * Reads one past `LOOKUP_MAX`, so the caller can say there are more rather
+ * than leave the counter believing the list is everybody.
  */
 export async function patientsForPhone(
   phone: string,
@@ -59,7 +98,7 @@ export async function patientsForPhone(
        AND (g.phone = ${phone} OR u.phone = ${phone} OR p.phone = ${phone})
        AND (p.owner_hospital_id IS NULL OR p.owner_hospital_id = ${hospitalId})
      ORDER BY p.is_primary DESC, p.full_name
-     LIMIT 20
+     LIMIT ${LOOKUP_MAX + 1}
   `.execute(db);
   return result.rows.map((row) => ({
     patientId: row.id,

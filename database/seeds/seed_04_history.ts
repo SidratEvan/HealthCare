@@ -195,6 +195,7 @@ export const seed04History: SeedModule = {
 
     const plans = choosePastSessions(history, seededChambers, now);
     const perSession = allocateVisits(plans.length, HISTORY_VISIT_TARGET);
+    const latestPoorLine = latestLiveSessionAt(plans, POOR_LINE_FACILITY);
 
     let sessions = 0;
     let bookings = 0;
@@ -254,7 +255,7 @@ export const seed04History: SeedModule = {
       // `FR-SUP-06`: one facility's counter worked offline for a stretch.
       const built = {
         ...sessionLog,
-        drafts: withOfflineStretch(sessionLog.drafts, plan, now),
+        drafts: withOfflineStretch(sessionLog.drafts, plan, now, plan === latestPoorLine),
       };
 
       // `FR-QUE-30` against a chair that a no-show left empty. Planned from
@@ -691,8 +692,36 @@ const POOR_LINE_FACILITY = 'karnaphuli-general';
 /** How far back a chamber may be and still get an offline stretch. Inside the health view's week. */
 const OFFLINE_STRETCH_DAYS = 2;
 
+/**
+ * The oldest the facility's latest chamber may be and still be given a
+ * stretch, when none ran in the last `OFFLINE_STRETCH_DAYS`. Inside the
+ * health view's week with a day to spare.
+ */
+const OFFLINE_STRETCH_FALLBACK_DAYS = 6;
+
 /** How many actions the counter took while its line was down. */
 const OFFLINE_STRETCH_ACTIONS = 8;
+
+/**
+ * The facility's most recent live chamber.
+ *
+ * `OFFLINE_STRETCH_DAYS` alone made the health view's late work depend on the
+ * weekday the seed ran: on a day whose two days before held none of the
+ * facility's chambers, the one workspace meant to show late work showed none
+ * (found 6 November 2026, a Friday). Its latest chamber always gets the
+ * stretch as well.
+ */
+function latestLiveSessionAt(
+  plans: readonly PastSession[],
+  hospitalSlug: string,
+): PastSession | null {
+  let latest: PastSession | null = null;
+  for (const plan of plans) {
+    if (plan.chamber.hospitalSlug !== hospitalSlug || !plan.live) continue;
+    if (latest === null || plan.plannedStart > latest.plannedStart) latest = plan;
+  }
+  return latest;
+}
 
 /**
  * Gives a chamber a stretch its counter worked offline (`FR-OFF-01`).
@@ -709,12 +738,14 @@ function withOfflineStretch(
   drafts: readonly EventDraft[],
   plan: PastSession,
   now: Timestamp,
+  isLatest: boolean,
 ): EventDraft[] {
   const ageMinutes = time.differenceInSeconds(now, plan.plannedStart) / 60;
+  const allowedDays = isLatest ? OFFLINE_STRETCH_FALLBACK_DAYS : OFFLINE_STRETCH_DAYS;
   if (
     plan.chamber.hospitalSlug !== POOR_LINE_FACILITY ||
     !plan.live ||
-    ageMinutes > OFFLINE_STRETCH_DAYS * 24 * 60
+    ageMinutes > allowedDays * 24 * 60
   ) {
     return [...drafts];
   }

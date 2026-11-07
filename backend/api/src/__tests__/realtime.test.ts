@@ -25,7 +25,9 @@ import { createApp } from '../app.js';
 import { db } from '../config/db.js';
 import { signToken } from '../config/jwt.js';
 import { resetEmitter } from '../realtime/emit.js';
+import { ROOMS } from '../realtime/rooms.js';
 import { attachRealtime } from '../realtime/server.js';
+import { forgetModules } from '../services/modules.service.js';
 import * as queueService from '../services/queue.service.js';
 
 import { createQueueFixture, type QueueFixture } from './support/queueFixture.js';
@@ -37,6 +39,7 @@ let io: SocketServer;
 let url: string;
 let fixture: QueueFixture;
 const clients: ClientSocket[] = [];
+const temporaryDesks: { readonly id: string; readonly token: string }[] = [];
 
 /** Opens a client. The caller waits for `connect` or for `connect_error`. */
 function open(token: string | null): ClientSocket {
@@ -101,12 +104,38 @@ beforeEach(async () => {
   fixture = await createQueueFixture(4);
 });
 
-afterEach(() => {
+afterEach(async () => {
   for (const client of clients) client.disconnect();
   clients.length = 0;
+  for (const desk of temporaryDesks.splice(0)) {
+    const response = await request(createApp())
+      .delete(`/api/v1/hospital/desks/${desk.id}`)
+      .set('Authorization', `Bearer ${desk.token}`)
+      .set('Idempotency-Key', randomUUID());
+    expect(response.status).toBe(200);
+  }
 });
 
 describe('the handshake', () => {
+  it.each([{ mcp: true }, { tfa: 'setup' as const }])(
+    'refuses a security-restricted staff token before any room is joined: %j',
+    async (restriction) => {
+      const token = await signToken({
+        kind: 'access',
+        claims: {
+          sub: fixture.receptionistId,
+          kind: 'staff',
+          hospitalId: fixture.hospitalId,
+          roles: ['receptionist'],
+          ...restriction,
+        },
+      });
+      const socket = open(token);
+      const error = await once<Error>(socket, 'connect_error');
+      expect(error.message).toBe('unauthorised');
+      expect(socket.connected).toBe(false);
+    },
+  );
   it('refuses a connection with no credential', async () => {
     const socket = open(null);
     const error = await once<Error>(socket, 'connect_error');
@@ -129,6 +158,100 @@ describe('the handshake', () => {
 });
 
 describe('session rooms', () => {
+  it('reception receives only its permitted ambient board, not lab/ER/admin payloads', async () => {
+    const socket = open(await staffToken());
+    await once(socket, 'connect');
+    await expect
+      .poll(() =>
+        io.sockets.sockets.get(socket.id ?? '')?.rooms.has(ROOMS.beds(fixture.hospitalId)),
+      )
+      .toBe(true);
+    const held = io.sockets.sockets.get(socket.id ?? '')?.rooms;
+    expect(held?.has(ROOMS.lab(fixture.hospitalId))).toBe(false);
+    expect(held?.has(ROOMS.emergency(fixture.hospitalId))).toBe(false);
+    expect(held?.has(ROOMS.admin(fixture.hospitalId))).toBe(false);
+  });
+  it('a newly assigned empty desk disconnects old queue access and refuses a fresh subscribe', async () => {
+    const token = await staffToken();
+    const socket = open(token);
+    await once(socket, 'connect');
+    const initial = once(socket, 'queue.updated');
+    socket.emit('session:subscribe', { sessionId: fixture.sessionId });
+    await initial;
+    const disconnected = once(socket, 'disconnect');
+    const admin = await signToken({
+      kind: 'access',
+      claims: {
+        sub: fixture.receptionistId,
+        kind: 'staff',
+        hospitalId: fixture.hospitalId,
+        roles: ['hospital_admin'],
+      },
+    });
+    const response = await request(createApp())
+      .post('/api/v1/hospital/desks')
+      .set('Authorization', `Bearer ${admin}`)
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        nameBn: 'যাচাই ডেস্ক (ডেমো)',
+        nameEn: `Socket scope (Demo) ${randomUUID()}`,
+        doctorIds: [],
+        staffIds: [fixture.receptionistId],
+      });
+    const deskId = (response.body as { data?: { deskId?: string } }).data?.deskId;
+    if (deskId !== undefined) temporaryDesks.push({ id: deskId, token: admin });
+    expect(response.status).toBe(200);
+    await disconnected;
+    const next = open(token);
+    await once(next, 'connect');
+    const denied = once<{ data: { code: string } }>(next, 'error.occurred');
+    next.emit('session:subscribe', { sessionId: fixture.sessionId });
+    expect((await denied).data.code).toBe('AUTH_FORBIDDEN_SCOPE');
+  });
+  it('switching off queue closes an existing private subscription', async () => {
+    const result = await sql<{ off: string[] }>`SELECT modules_off AS off FROM hospital_settings
+      WHERE hospital_id=${fixture.hospitalId}::uuid`.execute(db);
+    const socket = open(await staffToken());
+    await once(socket, 'connect');
+    const initial = once(socket, 'queue.updated');
+    socket.emit('session:subscribe', { sessionId: fixture.sessionId });
+    await initial;
+    try {
+      const disconnected = once(socket, 'disconnect');
+      await sql`UPDATE hospital_settings SET modules_off=ARRAY['queue','doctor']::text[]
+        WHERE hospital_id=${fixture.hospitalId}::uuid`.execute(db);
+      forgetModules(fixture.hospitalId);
+      await disconnected;
+      const next = open(await staffToken());
+      await once(next, 'connect');
+      const denied = once<{ data: { code: string } }>(next, 'error.occurred');
+      next.emit('session:subscribe', { sessionId: fixture.sessionId });
+      expect((await denied).data.code).toBe('MODULE_OFF');
+    } finally {
+      await sql`UPDATE hospital_settings SET modules_off=${result.rows[0]?.off ?? []}::text[]
+        WHERE hospital_id=${fixture.hospitalId}::uuid`.execute(db);
+      forgetModules(fixture.hospitalId);
+    }
+  });
+  it('a same-hospital pharmacy role cannot read the reception queue payload', async () => {
+    const token = await signToken({
+      kind: 'access',
+      claims: {
+        sub: fixture.receptionistId,
+        kind: 'staff',
+        hospitalId: fixture.hospitalId,
+        roles: ['pharmacy'],
+      },
+    });
+    const socket = open(token);
+    await once(socket, 'connect');
+    const denied = once<{ data: { code: string } }>(socket, 'error.occurred');
+    const payloads: unknown[] = [];
+    socket.on('queue.updated', (value: unknown) => payloads.push(value));
+    socket.emit('session:subscribe', { sessionId: fixture.sessionId });
+    expect((await denied).data.code).toBe('AUTH_FORBIDDEN_SCOPE');
+    expect(payloads).toEqual([]);
+  });
   it('sends the state on subscribe', async () => {
     const socket = open(await staffToken());
     await once(socket, 'connect');

@@ -20,7 +20,9 @@ import { Client } from 'pg';
 
 import { signToken } from '../backend/api/src/config/jwt.js';
 
+import { approveManagementWrites } from './support/adminManagement.js';
 import { E2E_DATABASE_URL, assertLocalDatabase } from './support/database.js';
+import { latin } from './support/digits.js';
 
 const CONSOLE = 'http://localhost:3100';
 const API = 'http://localhost:4000/api/v1';
@@ -78,12 +80,14 @@ test.beforeAll(async () => {
 async function openPlatform(page: Page): Promise<void> {
   await page.goto(CONSOLE);
   await expect(page.getByTestId('console-picker')).toBeVisible({ timeout: 45_000 });
+  await approveManagementWrites(page);
   await page.getByTestId('open-platform').click();
   await expect(page.getByTestId('platform-console')).toBeVisible({ timeout: 30_000 });
 }
 
 async function openWorkspace(page: Page, code: string): Promise<void> {
   await page.getByTestId(`platform-row-${code}`).click();
+  await page.getByTestId('platform-section-health').click();
   await expect(page.getByTestId('platform-health')).toBeVisible();
 }
 
@@ -136,7 +140,13 @@ test.describe('how a hospital is doing (FR-SUP-06)', () => {
     await openPlatform(page);
     await openWorkspace(page, 'MEGHNA');
     await expect(page.getByTestId('platform-health-failed')).toHaveText('০');
-    await expect(page.getByTestId('platform-health-sent')).not.toHaveText('০');
+    const sent = await withClient(async (client) => {
+      const result = await client.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM notifications n JOIN bookings b ON b.id=(n.params->>'bookingId')::uuid JOIN sessions s ON s.id=b.session_id JOIN hospitals h ON h.id=s.hospital_id WHERE h.code='MEGHNA' AND n.queued_at >= now()-interval '7 days' AND n.state IN ('sent','delivered')`,
+      );
+      return result.rows[0]?.n ?? 0;
+    });
+    expect(Number(latin(await page.getByTestId('platform-health-sent').innerText()))).toBe(sent);
     await expect(page.getByTestId('platform-health-late')).toHaveCount(0);
     await expect(page.getByTestId('platform-health-sync')).toContainText(
       'এই সময়ে কোনো কাজ দেরিতে পৌঁছায়নি।',
@@ -173,14 +183,15 @@ test.describe('what was done to a hospital (FR-ONB-07)', () => {
     const trail = page.getByTestId('platform-trail-list');
     await expect(trail).toBeVisible();
     // How it was brought on: approved by the platform, set up by its own administrator.
-    await expect(trail.locator('[data-change="workspace_approve"]')).toContainText('প্ল্যাটফর্ম');
     // The oldest lines are a tap away, not drawn until asked for.
     await expect(trail.locator('[data-change="workspace_created"]')).toHaveCount(0);
     await page.getByTestId('platform-trail-more').click();
+    await expect(trail.locator('[data-change="workspace_approve"]')).toContainText('প্ল্যাটফর্ম');
     await expect(trail.locator('[data-change="workspace_created"]')).toBeVisible();
     await expect(trail.locator('[data-change="department_added"]')).toContainText('হাসপাতাল');
 
     // The platform marks the agreement overdue, on the same panel.
+    await page.getByTestId('platform-section-access').click();
     await page.getByTestId('platform-agreement-overdue').click();
     await page.getByTestId('platform-agreement-save').click();
     await expect(page.getByTestId('platform-agreement')).toHaveAttribute(
@@ -189,6 +200,7 @@ test.describe('what was done to a hospital (FR-ONB-07)', () => {
     );
 
     // The trail on show is read again: what was just done, who by, and whose side.
+    await page.getByTestId('platform-section-health').click();
     const first = page.getByTestId('platform-trail-entry').first();
     await expect(first).toHaveAttribute('data-change', 'agreement_overdue');
     await expect(first).toContainText('চুক্তির অবস্থা: বকেয়া');

@@ -1,0 +1,497 @@
+/* Doctor-only production composition (FR-DOC-03/08, FR-BRD-12, GR-06).
+ * Foundation tokens/portals remain shared; no global patient-app styles.
+ */
+.doctor-workspace {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  overflow: hidden;
+}
+.doctor-workspace .cf-main {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.doctor-workspace .cf-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.doctor-workspace .cf-body {
+  flex: 1;
+  min-height: 0;
+}
+.doctor-workspace .cf-header {
+  position: relative;
+}
+.doctor-workspace .cf-skip:not(:focus) {
+  opacity: 0;
+  pointer-events: none;
+}
+.doctor-workspace .doc-identity {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+}
+.doctor-workspace header.doc-session {
+  display: block;
+  padding: 0;
+}
+.doctor-workspace .doc-session-wrap {
+  flex: none;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--line-soft);
+}
+.doctor-workspace .doc-session {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cf-space-4);
+  padding: var(--cf-space-2) var(--cf-space-5);
+}
+.doctor-workspace .doc-session dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cf-space-5);
+}
+.doctor-workspace .doc-session dt {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.doctor-workspace .doc-session dd {
+  font-size: 17px;
+  font-weight: 700;
+}
+.doctor-workspace .doc-session > :last-child {
+  margin-left: auto;
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-trigger {
+  display: none;
+}
+.doctor-workspace .doc-shell {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue {
+  border-right: 1px solid var(--line-soft);
+  background: var(--bg-surface);
+  overflow: auto;
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-content {
+  padding: var(--cf-space-4) var(--cf-space-3);
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-content h2,
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-seen-toggle {
+  font-size: 15px;
+  font-weight: 700;
+  margin: var(--cf-space-4) 0 var(--cf-space-2);
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-content ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-row {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-space-3);
+  padding: var(--cf-space-2);
+  border-radius: var(--cf-radius-md);
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-row strong {
+  font-size: 15px;
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-row small {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-row > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-serial {
+  min-width: var(--cf-touch);
+  height: var(--cf-touch);
+  display: grid;
+  place-items: center;
+  border-radius: var(--cf-radius-md);
+  background: var(--brand-100);
+  color: var(--brand-700);
+  font-size: 21px;
+  font-weight: 700;
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-current {
+  border: 1px solid var(--positive-600);
+  background: var(--positive-100);
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-current .doc-queue-serial {
+  color: white;
+  background: var(--positive-600);
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-note {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin: var(--cf-space-4) 0;
+}
+:is(.doctor-workspace, .console-foundation.cf-dialog) .doc-seen-toggle {
+  min-height: var(--cf-touch);
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+}
+.doctor-workspace .doc-work {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.doctor-workspace .doc-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-space-4);
+  padding: var(--cf-space-3) var(--cf-space-5);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--bg-surface);
+  flex: none;
+}
+.doctor-workspace .doc-patient-serial {
+  min-width: 72px;
+  padding: var(--cf-space-2);
+  border-radius: var(--cf-radius-lg);
+  background: var(--positive-600);
+  color: white;
+  text-align: center;
+}
+.doctor-workspace .doc-patient-serial small {
+  display: block;
+  font-size: 12px;
+}
+.doctor-workspace .doc-patient-serial strong {
+  font-size: 32px;
+  line-height: 1.2;
+}
+.doctor-workspace .doc-patient-main {
+  min-width: 0;
+  flex: 1;
+}
+.doctor-workspace .doc-patient-main h1 {
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0;
+}
+.doctor-workspace .doc-patient-main > p {
+  font-size: 14px;
+  margin: 0;
+}
+.doctor-workspace .doc-allergy {
+  display: inline-block;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--cf-radius-sm);
+  background: var(--bg-sunken);
+  padding: var(--cf-space-1) var(--cf-space-2);
+  margin-top: var(--cf-space-1) !important;
+}
+.doctor-workspace .doc-allergy-known {
+  background: var(--warn-100);
+  border-color: var(--warn-border);
+  color: var(--warn-700);
+  font-weight: 700;
+}
+.doctor-workspace .doc-save-status {
+  max-width: 260px;
+  font-size: 13px;
+  text-align: right;
+}
+.doctor-workspace .doc-columns {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(350px, 1.15fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.doctor-workspace .doc-information {
+  overflow: auto;
+  padding: var(--cf-space-4);
+  border-right: 1px solid var(--line-soft);
+}
+.doctor-workspace .doc-information > * {
+  margin-bottom: var(--cf-space-4);
+}
+.doctor-workspace .doc-information [data-testid='patient-panel'] {
+  font-size: 15px;
+}
+.doctor-workspace .doc-information [data-testid='patient-panel'] > h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+.doctor-workspace .doc-record-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-surface);
+}
+.doctor-workspace .doc-record-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--cf-space-5) var(--cf-space-5);
+}
+.doctor-workspace .doc-record-title {
+  font-size: 23px;
+  font-weight: 700;
+  margin: var(--cf-space-4) 0 0;
+}
+.doctor-workspace .doc-section {
+  border-bottom: 1px solid var(--line-soft);
+  padding: var(--cf-space-4) 0;
+}
+.doctor-workspace .doc-section-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-space-2);
+  margin-bottom: var(--cf-space-3);
+}
+.doctor-workspace .doc-section-heading > span:first-child {
+  border-radius: 50%;
+  background: var(--brand-700);
+  color: white;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
+.doctor-workspace .doc-section-heading .cf-bilingual {
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--cf-space-2);
+  font-size: 18px;
+  font-weight: 700;
+}
+.doctor-workspace .doc-section-heading small {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+.doctor-workspace .doc-section label {
+  font-weight: 600;
+}
+.doctor-workspace .doc-section p {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-top: var(--cf-space-2);
+}
+.doctor-workspace .doc-section textarea {
+  width: 100%;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--cf-radius-sm);
+  padding: var(--cf-space-3);
+}
+.doctor-workspace .doc-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cf-space-2);
+}
+.doctor-workspace .doc-options button {
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--ink-secondary);
+  min-height: var(--cf-touch);
+  padding: var(--cf-space-1) var(--cf-space-3);
+}
+.doctor-workspace .doc-options button[aria-pressed='true'] {
+  color: var(--brand-700);
+  border-color: var(--brand-700);
+  background: var(--brand-100);
+}
+.doctor-workspace .doc-options button:disabled {
+  opacity: 0.6;
+}
+.doctor-workspace .doc-section fieldset > legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.doctor-workspace .doc-alert,
+.doctor-workspace .doc-caution {
+  border-radius: var(--cf-radius-sm);
+  padding: var(--cf-space-3);
+  margin-top: var(--cf-space-3);
+}
+.doctor-workspace .doc-alert {
+  color: var(--alert-700);
+  background: var(--alert-100);
+}
+.doctor-workspace .doc-caution {
+  color: var(--warn-700) !important;
+  background: var(--warn-100);
+}
+.doctor-workspace .doc-record-footer {
+  flex: none;
+  border-top: 1px solid var(--line-soft);
+  padding: var(--cf-space-3) var(--cf-space-5);
+  background: var(--bg-surface);
+}
+.doctor-workspace .doc-footer-status {
+  font-size: 13px;
+  margin-bottom: var(--cf-space-2);
+}
+.doctor-workspace .doc-footer-actions {
+  display: flex;
+  gap: var(--cf-space-2);
+}
+.doctor-workspace .doc-footer-actions > :first-child {
+  flex: 1;
+}
+.doctor-workspace .doc-footer-actions > :last-child {
+  flex: 1.7;
+}
+.doctor-workspace .doc-footer-actions .cf-action {
+  min-height: 58px;
+}
+.doctor-workspace [data-testid='rx-rows'] li {
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-md);
+  padding: var(--cf-space-3);
+}
+.doctor-workspace .doc-followup-date {
+  font-weight: 700;
+  color: var(--brand-700) !important;
+}
+.doctor-workspace [data-testid='rx-rows'] ol {
+  min-width: 0;
+}
+.doctor-workspace [data-testid='rx-rows'] li > div {
+  min-width: 0;
+}
+.doctor-workspace .doc-information [data-testid='past-visits'] li {
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+.doctor-workspace [data-testid='print-last'] {
+  width: 100%;
+}
+/* Toasts occupy a gap above the persistent controls, never the controls. */
+.doc-toast-viewport {
+  bottom: 160px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+@media (max-width: 1279px) {
+  :is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue {
+    display: none;
+  }
+  .doctor-workspace .doc-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :is(.doctor-workspace, .console-foundation.cf-dialog) .doc-queue-trigger {
+    display: block;
+    padding: var(--cf-space-2) var(--cf-space-4);
+  }
+  .doctor-workspace .doc-columns {
+    grid-template-columns: minmax(280px, 0.85fr) minmax(360px, 1.15fr);
+  }
+  .doctor-workspace .cf-workspace {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .doctor-workspace .doc-columns {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+  .doctor-workspace .doc-information {
+    overflow: visible;
+    border-right: 0;
+  }
+  .doctor-workspace .doc-record-column {
+    display: contents;
+  }
+  .doctor-workspace .doc-record-scroll {
+    flex: none;
+    overflow: visible;
+  }
+  .doctor-workspace .doc-record-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 8;
+  }
+  .doctor-workspace .doc-identity {
+    flex-wrap: wrap;
+  }
+  .doctor-workspace .doc-save-status {
+    max-width: none;
+    width: 100%;
+    text-align: left;
+  }
+  .doctor-workspace .cf-header {
+    flex-wrap: wrap;
+  }
+  .doctor-workspace .cf-header-actions {
+    gap: var(--cf-space-2);
+  }
+  .doctor-workspace .cf-role {
+    display: none;
+  }
+}
+@media (max-height: 620px) {
+  .doctor-workspace {
+    position: static;
+    inset: auto;
+    height: auto;
+    overflow: visible;
+  }
+  .doctor-workspace .cf-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+  .doctor-workspace .cf-main {
+    display: block;
+  }
+  .doctor-workspace .doc-shell {
+    height: auto;
+    min-height: 600px;
+  }
+  .doctor-workspace .doc-record-footer {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 15;
+  }
+  .doctor-workspace .doc-record-scroll {
+    padding-bottom: 200px;
+  }
+}
+
+.console-foundation [data-testid='doctor-sign-summary'] h3 {
+  font-size: 18px;
+  font-weight: 700;
+}
+.console-foundation [data-testid='doctor-sign-summary'] dl {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px 14px;
+  margin: 16px 0;
+}
+.console-foundation [data-testid='doctor-sign-summary'] dt {
+  color: var(--ink-muted);
+}
+.console-foundation [data-testid='doctor-sign-summary'] dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

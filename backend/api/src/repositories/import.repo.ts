@@ -197,12 +197,64 @@ export async function markRowWritten(
     readonly targetKind: string;
     readonly targetId: string;
     readonly previous: Record<string, unknown> | null;
+    readonly action?: 'add' | 'update';
   },
 ): Promise<void> {
   await sql`
     UPDATE import_rows SET target_kind = ${input.targetKind}::external_kind, target_id = ${input.targetId},
-           previous = ${input.previous === null ? null : JSON.stringify(input.previous)}::jsonb
+           previous = ${input.previous === null ? null : JSON.stringify(input.previous)}::jsonb,
+           action = coalesce(${input.action ?? null}::text, action)
      WHERE id = ${rowId}
+  `.execute(trx);
+}
+
+/** Locks and fingerprints the exact persisted row, including its full timestamp.
+ * Only a digest is retained, never an extra copy of clinical/account fields
+ * (FR-IMP-07, FR-SEC-08). Parent locks also serialize later FK-dependent writes. */
+export async function undoFingerprint(
+  trx: Tx,
+  table: ImportTable,
+  id: string,
+): Promise<string | null> {
+  const result = await sql<{ fingerprint: string }>`
+    SELECT encode(extensions.digest(to_jsonb(t)::text, 'sha256'), 'hex') AS fingerprint
+      FROM ${sql.table(table)} t WHERE t.id = ${id}::uuid FOR UPDATE
+  `.execute(trx);
+  if (table === 'staff_users' && result.rows[0] !== undefined) {
+    const roles = await sql<{ fingerprint: string }>`
+      SELECT encode(extensions.digest(coalesce(jsonb_agg(to_jsonb(r) ORDER BY r.id), '[]'::jsonb)::text, 'sha256'), 'hex') AS fingerprint
+        FROM staff_roles r WHERE r.staff_user_id = ${id}::uuid
+    `.execute(trx);
+    return `${result.rows[0].fingerprint}:${roles.rows[0]?.fingerprint ?? ''}`;
+  }
+  return result.rows[0]?.fingerprint ?? null;
+}
+
+/** Polymorphic identifiers have no FK: serialize import writes/undo per hospital. */
+export async function lockWrites(trx: Tx, hospitalId: string): Promise<void> {
+  await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`import:${hospitalId}`}, 0))`.execute(
+    trx,
+  );
+}
+
+/** Settings ends templates before chambers; keep that order and prevent new chambers. */
+export async function lockUndoTemplates(trx: Tx, ids: readonly string[]): Promise<void> {
+  await sql`SELECT id FROM session_templates WHERE id = ANY(${[...ids]}::uuid[]) ORDER BY id FOR UPDATE`.execute(
+    trx,
+  );
+}
+
+/** Lock affected chambers before their bookings (FR-IMP-07, DB-P1). */
+export async function lockUndoSessions(
+  trx: Tx,
+  templateIds: readonly string[],
+  bookingIds: readonly string[],
+): Promise<void> {
+  await sql`
+    SELECT s.id FROM sessions s
+     WHERE s.template_id = ANY(${[...templateIds]}::uuid[])
+        OR s.id IN (SELECT session_id FROM bookings WHERE id = ANY(${[...bookingIds]}::uuid[]))
+     ORDER BY s.id FOR UPDATE OF s
   `.execute(trx);
 }
 
@@ -284,6 +336,38 @@ export async function dropRefsOf(trx: Tx, batchId: string): Promise<void> {
   await sql`DELETE FROM external_refs WHERE batch_id = ${batchId}`.execute(trx);
 }
 
+/** Replacement undo must return the original identifier to the revived template. */
+export async function restoreRefTarget(
+  trx: Tx,
+  input: {
+    hospitalId: string;
+    externalRef: string;
+    currentId: string;
+    previousId: string;
+  },
+): Promise<boolean> {
+  const result = await sql<{ id: string }>`
+    UPDATE external_refs SET entity_id = ${input.previousId}::uuid
+     WHERE hospital_id = ${input.hospitalId} AND kind = 'schedule'
+       AND external_ref = ${input.externalRef} AND entity_id = ${input.currentId}::uuid
+    RETURNING id
+  `.execute(trx);
+  return result.rows.length === 1;
+}
+
+/** A later alias is evidence of another batch using an added entity. */
+export async function aliasUsers(
+  trx: Tx,
+  batchId: string,
+  ids: readonly string[],
+): Promise<string[]> {
+  const result = await sql<{ entity_id: string }>`
+    SELECT DISTINCT entity_id FROM external_refs
+     WHERE entity_id = ANY(${[...ids]}::uuid[]) AND batch_id <> ${batchId}::uuid
+  `.execute(trx);
+  return result.rows.map((row) => row.entity_id);
+}
+
 /** One `IMPORT` audit row (`FR-IMP-08`): who, which batch, what happened to it. */
 export async function audit(
   trx: Tx,
@@ -326,9 +410,12 @@ export async function currentValues(
 ): Promise<Record<string, unknown> | null> {
   const pairs = sql.join(columns.map((column) => sql`${column}::text, t.${sql.ref(column)}`));
   const result = await sql<{ values: Record<string, unknown> }>`
-    SELECT jsonb_build_object(${pairs}) AS values FROM ${sql.table(table)} t WHERE t.id = ${id}
+    SELECT jsonb_build_object(${pairs}) AS values FROM ${sql.table(table)} t
+     WHERE t.id = ${id} AND t.deleted_at IS NULL FOR UPDATE
   `.execute(trx);
-  return result.rows[0]?.values ?? null;
+  const row = result.rows[0];
+  if (row === undefined) throw new Error('Import target is no longer active');
+  return row.values;
 }
 
 /** Puts back what `currentValues` kept, each column cast to its own type by Postgres. */
@@ -527,9 +614,11 @@ export async function heldByOthers(
       case 'schedule':
         return sql<{ id: string }>`
           SELECT DISTINCT s.template_id AS id FROM sessions s
-            JOIN bookings b ON b.session_id = s.id AND b.deleted_at IS NULL
            WHERE s.template_id = ANY(${ids}::uuid[]) AND s.deleted_at IS NULL
-             AND NOT (b.id = ANY(${own}::uuid[]))
+             AND (s.status <> 'scheduled' OR EXISTS (
+               SELECT 1 FROM bookings b WHERE b.session_id = s.id AND b.deleted_at IS NULL
+                 AND NOT (b.id = ANY(${own}::uuid[]))
+             ))
         `;
       case 'ward':
         return sql<{ id: string }>`
@@ -552,7 +641,15 @@ export async function heldByOthers(
            WHERE p.id = ANY(${ids}::uuid[])
              AND (EXISTS (SELECT 1 FROM bookings b WHERE b.patient_id = p.id AND b.deleted_at IS NULL
                                                     AND NOT (b.id = ANY(${own}::uuid[])))
-                  OR EXISTS (SELECT 1 FROM visits v WHERE v.patient_id = p.id))
+                  OR EXISTS (SELECT 1 FROM visits v WHERE v.patient_id = p.id)
+                  OR EXISTS (SELECT 1 FROM test_orders x WHERE x.patient_id = p.id)
+                  OR EXISTS (SELECT 1 FROM patient_documents x WHERE x.patient_id = p.id)
+                  OR EXISTS (SELECT 1 FROM consents x WHERE x.patient_id = p.id)
+                  OR EXISTS (SELECT 1 FROM emergency_cases x WHERE x.patient_id = p.id)
+                  OR EXISTS (SELECT 1 FROM bed_requests x WHERE x.patient_id = p.id)
+                  OR EXISTS (SELECT 1 FROM admissions x WHERE x.patient_id = p.id)
+                  OR EXISTS (SELECT 1 FROM referrals x WHERE x.patient_id = p.id)
+                  OR EXISTS (SELECT 1 FROM blood_requests x WHERE x.patient_id = p.id))
         `;
       case 'appointment':
         return sql<{ id: string }>`

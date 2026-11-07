@@ -145,7 +145,13 @@ export type LabQueueQuery = z.infer<typeof labQueueQuery>;
  */
 export const stockFlagsBody = labCommandEnvelope.extend({
   flags: z
-    .array(z.object({ medicineId: uuid, inStock: z.boolean() }))
+    .array(
+      z.object({
+        medicineId: uuid,
+        inStock: z.boolean(),
+        expectedUpdatedAt: z.string().datetime().nullable(),
+      }),
+    )
     .min(1)
     .max(200),
   idempotencyKey: uuid,

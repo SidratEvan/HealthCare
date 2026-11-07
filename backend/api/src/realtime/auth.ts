@@ -26,9 +26,15 @@
  * - **at the handshake**, when a revoked token tries to connect again.
  */
 
+import { runInDbScope, scopeOfPrincipal } from '../config/dbScope.js';
 import { verifyToken } from '../config/jwt.js';
 import { toPrincipal } from '../middleware/auth.js';
+import { deskLimit } from '../services/deskAccess.service.js';
+import { modulesOff } from '../services/modules.service.js';
+import { requireSession } from '../services/queue.service.js';
 import { staffAccessLive } from '../services/staffAccess.service.js';
+
+import { ambientRoomsFor } from './rooms.js';
 
 import type { Principal } from '../types/express.js';
 import type { Socket } from 'socket.io';
@@ -42,6 +48,7 @@ export interface SocketSession {
   readonly staffId: string | null;
   /** The sign-in it came from (`sid`); null when the token named none. */
   readonly familyId: string | null;
+  readonly expiresAt: number | null;
   /** Closes the connection from this side. */
   readonly close: () => void;
 }
@@ -105,6 +112,13 @@ export async function authenticateSocket(
     return;
   }
 
+  // Match the HTTP password/MFA restrictions before joining any private room
+  // (FR-SEC-06/10). Setup tokens have no legitimate realtime capability.
+  if (result.claims.mcp === true || result.claims.tfa === 'setup') {
+    next(new Error('unauthorised'));
+    return;
+  }
+
   const principal = toPrincipal(result.claims);
   if (principal === null) {
     next(new Error('unauthorised'));
@@ -126,6 +140,7 @@ export async function authenticateSocket(
     rooms: new Set(),
     staffId,
     familyId,
+    expiresAt: typeof result.claims.exp === 'number' ? result.claims.exp * 1000 : null,
     close: () => {
       socket.disconnect(true);
     },
@@ -155,6 +170,46 @@ export function dropFamilySockets(familyId: string): number {
   return drop((session) => session.familyId === familyId);
 }
 
+/** Reconnect after an authorised desk/module change, before any later private
+ * broadcast can use the old membership (FR-SEC-06, FR-REC-32).
+ */
+export function dropHospitalSockets(hospitalId: string): number {
+  return drop(
+    (session) => session.principal.kind === 'staff' && session.principal.hospitalId === hospitalId,
+  );
+}
+
+async function roomsStillAllowed(session: SocketSession): Promise<boolean> {
+  const principal = session.principal;
+  if (principal.kind !== 'staff') return true;
+  return await runInDbScope(scopeOfPrincipal(principal), async () => {
+    const off = await modulesOff(principal.hospitalId);
+    const ambient = new Set(ambientRoomsFor(principal, off));
+    const doctors = await deskLimit(principal);
+    for (const room of session.rooms) {
+      const chamber = /^session:([\da-f-]+):staff$/i.exec(room)?.[1];
+      if (chamber === undefined) {
+        if (!ambient.has(room)) return false;
+      } else {
+        if (
+          off.includes('queue') ||
+          !principal.roles.some((role) =>
+            ['receptionist', 'doctor', 'hospital_admin'].includes(role),
+          )
+        )
+          return false;
+        const record = await requireSession(chamber);
+        if (
+          record.hospitalId !== principal.hospitalId ||
+          (doctors !== null && !doctors.has(record.doctorId))
+        )
+          return false;
+      }
+    }
+    return true;
+  });
+}
+
 /**
  * Closes the connections whose access has ended by a road this process did
  * not see: a command on the server, another instance, a row changed by hand.
@@ -171,9 +226,24 @@ export async function sweepRevoked(): Promise<number> {
     verdicts.set(key, await staffAccessLive(session.staffId ?? '', session.familyId));
   }
 
+  const forbidden = new Set<SocketSession>();
+  for (const session of staff) {
+    try {
+      if (
+        (session.expiresAt !== null && Date.now() >= session.expiresAt) ||
+        !(await roomsStillAllowed(session))
+      )
+        forbidden.add(session);
+    } catch {
+      // A permission lookup failure never renews permission to a private room.
+      forbidden.add(session);
+    }
+  }
+
   return drop(
     (session) =>
       session.staffId !== null &&
-      verdicts.get(`${session.staffId}|${session.familyId ?? ''}`) === false,
+      (verdicts.get(`${session.staffId}|${session.familyId ?? ''}`) === false ||
+        forbidden.has(session)),
   );
 }

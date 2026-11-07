@@ -1,0 +1,81 @@
+/* Approved organisation workspace, scoped to platform administration (S-B-12). */
+.platform-workspace .platform-content {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.platform-columns {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 2fr);
+  gap: 24px;
+  align-items: start;
+}
+.platform-columns > section {
+  min-width: 0;
+}
+.platform-workspace-tabs,
+.platform-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.platform-workspace-tabs {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.platform-workspace-tabs button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  font-weight: 600;
+}
+.platform-workspace-tabs button[aria-pressed='true'] {
+  border-color: var(--brand-600);
+  color: var(--brand-600);
+  background: var(--brand-100);
+}
+.platform-workspace [hidden] {
+  display: none !important;
+}
+.platform-workspace label:has(input[type='checkbox']) {
+  min-height: 44px;
+}
+.platform-read-warning {
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--warn-100);
+  color: var(--warn-700);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.platform-guide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.platform-guide li {
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--brand-100);
+  font-weight: 600;
+}
+@media (max-width: 1100px) {
+  .platform-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .platform-workspace [data-testid='platform-list'] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+@media (max-width: 650px) {
+  .platform-workspace [data-testid='platform-list'],
+  .platform-guide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

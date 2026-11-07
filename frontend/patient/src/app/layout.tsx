@@ -45,17 +45,9 @@ import type { ReactNode } from 'react';
 export const metadata: Metadata = {
   title: 'MedLiveBD',
   description: 'ডাক্তারের সিরিয়াল নিন, আর অপেক্ষা সরাসরি দেখুন।',
-  manifest: '/manifest.webmanifest',
   applicationName: 'MedLiveBD',
-  appleWebApp: {
-    capable: true,
-    title: 'MedLiveBD',
-    // The ground, so the status bar matches the page rather than fighting it.
-    statusBarStyle: 'default',
-  },
   icons: {
     icon: '/icon.svg',
-    apple: '/icon.svg',
   },
   // The marketing site is a separate app (FRONTEND.md §10); nothing here is
   // meant to be indexed, and a patient's booking screen least of all.
@@ -84,6 +76,13 @@ export const dynamic = 'force-dynamic';
 export default function RootLayout({ children }: { readonly children: ReactNode }): ReactNode {
   return (
     <html lang="bn" className={fontVariables}>
+      <head>
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="MedLiveBD" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
+      </head>
       {/*
         `overscroll-none` stops the rubber-band bounce revealing the browser's
         background behind a fixed bottom bar, which is the single clearest

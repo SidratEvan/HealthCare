@@ -11,6 +11,8 @@
 
 ## 0. The standard we are building to
 
+> **Console redesign foundation, 10 October 2026 (Phase 8B Batch 1).** The founder-approved eleven standalone prototypes now govern the new console visual direction. Their shared cool surfaces, compact navigation and bilingual controls are implemented as opt-in `ConsoleTheme` / `@platform/ui/console.css` and shared React components; see `docs/design/console-foundation/README.md`. Existing V1 screens and the patient app keep their current styles and behaviour until separately approved migration batches. Hospital branding still uses the six permitted tokens; status colours stay fixed. This supersedes the warm-console composition and tablet restriction below only for the opt-in foundation. It adds no domain workflow, permission or API change.
+
 ### 0.1 What "premium" means here
 
 Premium is not decoration. In this product it means four things:
@@ -599,6 +601,8 @@ Font subsetting is mandatory: full Bengali Anek is large; subset to the ranges a
 
 ## 12. Accessibility
 
+Phase 8B Batch 5A Administration uses the Batch 1 `ConsoleWorkspaceFrame`, hospital theme/header/navigation, language controls and contextual `ConsoleHelp`. `AdminDashboard` switches Today/Reports; `AdminNow` owns the aggregate polling/chamber board and attention; `AdminReports` preserves the nine V1 sections and renders the daily figures with a Today-only period. Its scoped `@platform/ui/console-admin.css` styles summary tiles, grouped tables, report controls, tablet scrolling and selected-report printing. No patient or other console selectors change. Staff & Desks / Doctors / Settings navigate into existing V1 settings panes. See [Administration review and verification](design/console-admin/README.md).
+
 - `A11Y-01` Real semantic elements: `<button>`, `<a href>`, `<input>` + `<label>`. Never a clickable `div` (`FR-LOC-06`).
 - `A11Y-02` Visible focus ring on every interactive element; never `outline: none` without a replacement.
 - `A11Y-03` Colour never carries meaning alone — every state has a text label or icon.
@@ -638,6 +642,8 @@ A screen cannot merge until every line passes.
 ---
 
 ## 14. Handover notes for implementation
+
+Phase 8B's integrated Doctor workspace composes `ConsoleWorkspaceFrame`, shared theme/header/Help/status/actions and Sheet with opt-in `@platform/ui/console-doctor.css`. `DoctorConsole` retains the encounter/revision/replay controller; `DoctorWorkspace` presents its pinned identity and authorised read-only queue, and `DoctorRecord` arranges existing fields. Desktop uses bounded independent history/record scrolling; tablets open the queue in a shared focus-managed drawer, portrait stacks the content, and a short CSS viewport keeps actions at the bottom. Toast placement is opt-in. See [the review and actual React captures](design/console-doctor/README.md); no prototype state machine or patient-app style change is introduced.
 
 1. Build `shared/ui` first: tokens, then Button/Input/Card/Chip/Sheet/Toast, then the signature components in §6. Nothing else starts until these exist, or the design will fragment.
 2. Build `S-A-08 LiveSerial` and `S-B-02 Reception` next, together, on two devices. They are the product; everything else is supporting cast.

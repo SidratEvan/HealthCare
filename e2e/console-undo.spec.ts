@@ -105,6 +105,7 @@ test.describe('undoing a queue action (GR-02)', () => {
       await expect(row).toHaveAttribute('data-status', 'booked');
 
       // The wrong row: serial 3 is marked late and moves down the queue.
+      await row.getByTestId('row-more-3').click();
       await row.getByRole('button', { name: 'দেরি' }).click();
       await expect(row).toHaveAttribute('data-status', 'late');
       await expect.poll(async () => (await eventTypes(demo.sessionId)).at(-1)).toBe('PATIENT_LATE');

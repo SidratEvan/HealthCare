@@ -23,6 +23,7 @@ import { logger } from '../config/logger.js';
 import { ticketsIn } from '../config/serialTicket.js';
 import { AppError } from '../errors/AppError.js';
 import { deskLimit } from '../services/deskAccess.service.js';
+import { firstOff, modulesOff } from '../services/modules.service.js';
 import * as queueService from '../services/queue.service.js';
 
 import { forgetSocket, sessionOf } from './auth.js';
@@ -67,10 +68,15 @@ export function registerHandlers(io: Server): void {
 
     // Rooms a principal is entitled to without any row lookup: a console's own
     // hospital boards. Joining costs nothing it is not already allowed to read.
-    for (const room of ambientRoomsFor(session.principal)) {
-      void socket.join(room);
-      session.rooms.add(room);
-    }
+    void runInDbScope(scopeOfPrincipal(session.principal), async () => {
+      const off =
+        session.principal.kind === 'staff' ? await modulesOff(session.principal.hospitalId) : [];
+      if (sessionOf(socket) !== session || !socket.connected) return;
+      for (const room of ambientRoomsFor(session.principal, off)) {
+        await socket.join(room);
+        session.rooms.add(room);
+      }
+    }).catch(() => socket.disconnect(true));
 
     socket.on('session:subscribe', (message: SubscribeMessage) => {
       // A socket's reads are held to its principal's scope like a request's
@@ -130,11 +136,19 @@ async function subscribeToSession(socket: Socket, message: SubscribeMessage): Pr
     emitError(socket, new AppError('AUTH_FORBIDDEN_SCOPE', { details: { room: 'session' } }));
     return;
   }
+  if (
+    session.principal.kind === 'staff' &&
+    (await firstOff(record.hospitalId, ['queue'])) !== null
+  ) {
+    emitError(socket, new AppError('MODULE_OFF', { details: { module: 'queue' } }));
+    return;
+  }
 
   // Staff hear the queue as reception holds it; anybody else the patients'
   // copy, which names nobody (plan I2c, `queue/patientView`).
   const staff = session.principal.kind === 'staff';
   const room = staff ? ROOMS.sessionStaff(sessionId) : ROOMS.session(sessionId);
+  if (sessionOf(socket) !== session || !socket.connected) return;
   await socket.join(room);
   session.rooms.add(room);
 

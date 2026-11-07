@@ -59,6 +59,7 @@ import {
   type HospitalModule,
 } from '@platform/domain';
 import {
+  CONSOLE,
   DIVISION_NAMES,
   auditChangeName,
   divisionName,
@@ -74,11 +75,30 @@ import {
   t,
   type ConsoleKey,
 } from '@platform/i18n';
-import { Button, Card, Chip, FilterChip, FreshnessLine, Input, useLocale } from '@platform/ui';
+import {
+  Button,
+  Card,
+  Chip,
+  ConsoleHelp,
+  ConsolePageHeader,
+  FilterChip,
+  FreshnessLine,
+  Input,
+  useLocale,
+} from '@platform/ui';
 
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
+import {
+  AdminManagementProvider,
+  AdminManagementFeedback,
+  useAdminManagement,
+  reviewField,
+} from '@/components/AdminManagementContext';
+import { ConsoleWorkspaceFrame } from '@/components/ConsoleWorkspaceFrame';
+import '@platform/ui/console-admin.css';
+import './platform-workspace.css';
 import { DemoBanner } from '@/components/DemoBanner';
 import { MODULE_KEY } from '@/components/HospitalSettings';
+import { usePlatformDraft } from '@/components/PlatformDraft';
 import { readDemoSession } from '@/lib/demo';
 import {
   platformApi,
@@ -204,20 +224,35 @@ function useNow(): Date {
 }
 
 export function PlatformConsole(): ReactNode {
+  return (
+    <AdminManagementProvider>
+      <PlatformWorkspace />
+    </AdminManagementProvider>
+  );
+}
+function PlatformWorkspace(): ReactNode {
   const locale = useLocale();
   const online = useOnline();
   const now = useNow();
   const session = readDemoSession();
   const token = session?.token ?? '';
 
+  const management = useAdminManagement();
+  const [listFailed, setListFailed] = useState(false);
+  const sequence = useRef(0);
   const [list, setList] = useState<List>({ state: 'loading' });
   const [panel, setPanel] = useState<Panel>({ kind: 'none' });
 
   const load = useCallback(async (): Promise<void> => {
+    const request = ++sequence.current;
     try {
       const items = await platformApi.list(token);
+      if (request !== sequence.current) return;
+      setListFailed(false);
       setList({ state: 'ready', items, asOf: new Date() });
     } catch {
+      if (request !== sequence.current) return;
+      setListFailed(true);
       // Never drawn as an empty platform: that would be a statement about
       // hospitals standing in for a statement about the network.
       setList((current) => (current.state === 'ready' ? current : { state: 'failed' }));
@@ -233,134 +268,158 @@ export function PlatformConsole(): ReactNode {
       ? list.items.filter((item) => item.lifecycle === 'ready_for_review').length
       : 0;
 
+  if (session === null) return null;
   return (
-    <div className="min-h-screen">
-      {/* FR-DEM-07: a demonstration says so, where the server says it is one. */}
-      <DemoBanner />
-
-      <main className="mx-auto flex max-w-6xl flex-col gap-5 p-6" data-testid="platform-console">
-        <header className="flex flex-wrap items-baseline justify-between gap-3">
-          <div>
-            <h1 className="text-title-lg">{t('platformTitle', locale)}</h1>
-            {session?.staffName === undefined ? null : (
-              <p className="text-body-sm text-ink-muted">{session.staffName}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <ConsoleLanguageSwitch className="" />
-            <a
-              href="/"
-              className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
-            >
-              {t('changeConsole', locale)}
-            </a>
-          </div>
-        </header>
-
-        {/* FR-ONB-08, said where it is true. */}
-        <p className="text-body-sm text-ink-secondary" data-testid="platform-no-patients">
-          {t('platformIntro', locale)}
-        </p>
-
-        {online ? null : (
-          <p
-            role="status"
-            data-testid="platform-offline"
-            className="rounded-sm bg-warn-100 px-3 py-2 text-body-md text-warn-700"
-          >
-            {t('platformOffline', locale)}
-          </p>
-        )}
-
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <section className="flex flex-col gap-3" aria-labelledby="platform-list-title">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 id="platform-list-title" className="text-title-sm">
-                  {t('platformListTitle', locale)}
-                </h2>
-                {list.state === 'ready' && waiting > 0 ? (
-                  <p className="text-body-sm text-warn-700" data-testid="platform-waiting">
-                    {format('platformWaitingCount', locale, {
-                      count: formatNumber(waiting, numeralsFor(locale)),
-                    })}
-                  </p>
-                ) : null}
-              </div>
-              <GuardedButton
-                variant="secondary"
-                size="sm"
-                data-testid="platform-new"
-                reason={online ? null : t('platformOffline', locale)}
-                onClick={() => {
-                  setPanel({ kind: 'new' });
-                }}
-              >
-                {t('platformNew', locale)}
-              </GuardedButton>
-            </div>
-
-            <WorkspaceList
-              list={list}
-              now={now}
-              selected={panel.kind === 'workspace' ? panel.id : null}
-              onSelect={(id) => {
-                setPanel({ kind: 'workspace', id });
-              }}
-              onRetry={() => {
-                setList({ state: 'loading' });
-                void load();
-              }}
-            />
-          </section>
-
-          <section aria-live="polite">
-            {panel.kind === 'none' ? (
-              <p
-                className="rounded-md border border-line bg-surface p-5 text-body-md text-ink-secondary"
-                data-testid="platform-pick"
-              >
-                {t('platformPickOne', locale)}
+    <div className="platform-workspace admin-workspace">
+      <ConsoleWorkspaceFrame
+        session={session}
+        workspace={CONSOLE.platformTitle}
+        navigation={[
+          {
+            id: 'organisations',
+            label: { bn: 'প্রতিষ্ঠান', en: 'Organisations' },
+            current: true,
+            roles: ['platform_admin'],
+            enabled: true,
+            onSelect: () => management?.navigate(() => setPanel({ kind: 'none' })),
+          },
+        ]}
+        actions={
+          <ConsoleHelp
+            topic={{
+              id: 'platform-onboarding',
+              title: CONSOLE.platformTitle,
+              steps: [
+                CONSOLE.platformIntro,
+                CONSOLE.platformFormIntro,
+                CONSOLE.platformVerifyHint,
+                CONSOLE.platformModulesHelper,
+                CONSOLE.platformCloseConfirm,
+              ],
+            }}
+          />
+        }
+      >
+        <DemoBanner />
+        <div className="platform-content" data-testid="platform-console">
+          <ConsolePageHeader title={CONSOLE.platformTitle} />
+          <AdminManagementFeedback />
+          {listFailed && list.state === 'ready' ? (
+            <div role="alert" className="platform-read-warning">
+              <p>
+                {t('platformLoadFailed', locale)} {t('staleWarning', locale)}
               </p>
-            ) : null}
+              <Button variant="secondary" size="sm" onClick={() => void load()}>
+                {t('retry', locale)}
+              </Button>
+            </div>
+          ) : null}
+          {/* FR-ONB-08, said where it is true. */}
+          <p className="text-body-sm text-ink-secondary" data-testid="platform-no-patients">
+            {t('platformIntro', locale)}
+          </p>
 
-            {panel.kind === 'new' ? (
-              <NewWorkspaceForm
-                token={token}
-                online={online}
-                onCancel={() => {
-                  setPanel({ kind: 'none' });
+          {online ? null : (
+            <p
+              role="status"
+              data-testid="platform-offline"
+              className="rounded-sm bg-warn-100 px-3 py-2 text-body-md text-warn-700"
+            >
+              {t('platformOffline', locale)}
+            </p>
+          )}
+
+          <div className="platform-columns">
+            <section className="flex flex-col gap-3" aria-labelledby="platform-list-title">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 id="platform-list-title" className="text-title-sm">
+                    {t('platformListTitle', locale)}
+                  </h2>
+                  {list.state === 'ready' && waiting > 0 ? (
+                    <p className="text-body-sm text-warn-700" data-testid="platform-waiting">
+                      {format('platformWaitingCount', locale, {
+                        count: formatNumber(waiting, numeralsFor(locale)),
+                      })}
+                    </p>
+                  ) : null}
+                </div>
+                <GuardedButton
+                  variant="secondary"
+                  size="sm"
+                  data-testid="platform-new"
+                  reason={online ? null : t('platformOffline', locale)}
+                  onClick={() => {
+                    management?.navigate(() => setPanel({ kind: 'new' }));
+                  }}
+                >
+                  {t('platformNew', locale)}
+                </GuardedButton>
+              </div>
+
+              <WorkspaceList
+                list={list}
+                now={now}
+                selected={panel.kind === 'workspace' ? panel.id : null}
+                onSelect={(id) => {
+                  management?.navigate(() => setPanel({ kind: 'workspace', id }));
                 }}
-                onCreated={(created) => {
-                  setPanel({ kind: 'created', created });
+                onRetry={() => {
+                  setList({ state: 'loading' });
                   void load();
                 }}
               />
-            ) : null}
+            </section>
 
-            {panel.kind === 'created' ? (
-              <CreatedCard
-                created={panel.created}
-                onDone={() => {
-                  setPanel({ kind: 'workspace', id: panel.created.hospitalId });
-                }}
-              />
-            ) : null}
+            <section aria-live="polite">
+              {panel.kind === 'none' ? (
+                <p
+                  className="rounded-md border border-line bg-surface p-5 text-body-md text-ink-secondary"
+                  data-testid="platform-pick"
+                >
+                  {t('platformPickOne', locale)}
+                </p>
+              ) : null}
 
-            {panel.kind === 'workspace' ? (
-              <WorkspacePanel
-                key={panel.id}
-                token={token}
-                hospitalId={panel.id}
-                online={online}
-                onChanged={() => {
-                  void load();
-                }}
-              />
-            ) : null}
-          </section>
+              {panel.kind === 'new' ? (
+                <NewWorkspaceForm
+                  token={token}
+                  online={online}
+                  onLocated={(id) => setPanel({ kind: 'workspace', id })}
+                  onCancel={() => {
+                    management?.navigate(() => setPanel({ kind: 'none' }));
+                  }}
+                  onCreated={(created) => {
+                    setPanel({ kind: 'created', created });
+                    void load();
+                  }}
+                />
+              ) : null}
+
+              {panel.kind === 'created' ? (
+                <CreatedCard
+                  created={panel.created}
+                  onDone={() => {
+                    setPanel({ kind: 'workspace', id: panel.created.hospitalId });
+                  }}
+                />
+              ) : null}
+
+              {panel.kind === 'workspace' ? (
+                <WorkspacePanel
+                  key={panel.id}
+                  token={token}
+                  hospitalId={panel.id}
+                  online={online}
+                  onChanged={() => {
+                    void load();
+                  }}
+                />
+              ) : null}
+            </section>
+          </div>
         </div>
-      </main>
+      </ConsoleWorkspaceFrame>
     </div>
   );
 }
@@ -388,10 +447,17 @@ function GuardedButton({
   readonly onClick?: () => void;
   readonly 'data-testid'?: string;
 }): ReactNode {
-  return reason === null ? (
+  const management = useAdminManagement();
+  const locale = useLocale();
+  const blocked = management?.busy
+    ? t('manageSaving', locale)
+    : [...(management?.drafts.values() ?? [])].some((d) => d.conflict)
+      ? t('manageServerChanged', locale)
+      : reason;
+  return blocked === null ? (
     <Button {...rest}>{children}</Button>
   ) : (
-    <Button {...rest} disabled disabledReason={reason}>
+    <Button {...rest} disabled disabledReason={blocked}>
       {children}
     </Button>
   );
@@ -418,6 +484,8 @@ function WorkspaceList({
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
 
   if (list.state === 'loading') {
     // GR-03 loading: the shape of the answer, never a spinner.
@@ -473,99 +541,143 @@ function WorkspaceList({
         formatMinutes={(value) => formatAge(value, locale, numerals)}
       />
 
+      <Input
+        label={locale === 'bn' ? 'নাম, কোড বা জেলা দিয়ে খুঁজুন' : 'Find by name, code or district'}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        data-testid="platform-search"
+      />
+      <div className="platform-filters">
+        {['all', 'ready_for_review', 'attention', 'setup', 'active', 'suspended', 'closed'].map(
+          (value) => (
+            <FilterChip
+              key={value}
+              selected={filter === value}
+              data-testid={`platform-filter-${value}`}
+              onToggle={() => setFilter(value)}
+            >
+              {value === 'all'
+                ? locale === 'bn'
+                  ? 'সব প্রতিষ্ঠান'
+                  : 'All organisations'
+                : value === 'attention'
+                  ? locale === 'bn'
+                    ? 'নজর প্রয়োজন'
+                    : 'Needs attention'
+                  : t(STATE_NAME[value as OrgLifecycle], locale)}
+            </FilterChip>
+          ),
+        )}
+      </div>
       <ul className="flex flex-col gap-2" data-testid="platform-list">
-        {list.items.map((item) => {
-          const active = item.id === selected;
-          return (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onSelect(item.id);
-                }}
-                aria-current={active ? 'true' : undefined}
-                data-testid={`platform-row-${item.code ?? item.id}`}
-                data-lifecycle={item.lifecycle}
-                className={`flex w-full flex-col gap-1.5 rounded-md border p-4 text-left ${
-                  active
-                    ? 'border-brand-600 bg-brand-100'
-                    : 'border-line bg-surface hover:bg-sunken'
-                }`}
-              >
-                <span className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-body-md font-semibold">
-                    {localName(locale, item.nameBn, item.nameEn)}
-                  </span>
-                  <span className="flex flex-wrap items-center gap-2">
-                    {/* `FR-ONB-10`: an application is a workspace like any
+        {list.items
+          .filter(
+            (item) =>
+              (filter === 'all' || filter === 'attention'
+                ? filter === 'all' || item.attention.length > 0
+                : item.lifecycle === filter) &&
+              [item.nameBn, item.nameEn, item.code ?? '', item.district]
+                .join(' ')
+                .toLocaleLowerCase()
+                .includes(query.trim().toLocaleLowerCase()),
+          )
+          .map((item) => {
+            const active = item.id === selected;
+            return (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelect(item.id);
+                  }}
+                  aria-current={active ? 'true' : undefined}
+                  data-testid={`platform-row-${item.code ?? item.id}`}
+                  data-lifecycle={item.lifecycle}
+                  className={`flex w-full flex-col gap-1.5 rounded-md border p-4 text-left ${
+                    active
+                      ? 'border-brand-600 bg-brand-100'
+                      : 'border-line bg-surface hover:bg-sunken'
+                  }`}
+                >
+                  <span className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-body-md font-semibold">
+                      {localName(locale, item.nameBn, item.nameEn)}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-2">
+                      {/* `FR-ONB-10`: an application is a workspace like any
                         other, and the list says that it was one. */}
-                    {item.selfRegistered === true ? (
-                      <span data-testid="platform-self-registered">
-                        <Chip tone="neutral">{t('platformSelfRegistered', locale)}</Chip>
-                      </span>
-                    ) : null}
-                    {/* An agreement somebody has to act on is said in the
+                      {item.selfRegistered === true ? (
+                        <span data-testid="platform-self-registered">
+                          <Chip tone="neutral">{t('platformSelfRegistered', locale)}</Chip>
+                        </span>
+                      ) : null}
+                      {/* An agreement somebody has to act on is said in the
                         list; trial and active are the ordinary states and
                         are read on the workspace (`FR-SUP-04`). */}
-                    {item.agreement.state === 'overdue' || item.agreement.state === 'ended' ? (
-                      <span data-testid="platform-row-agreement">
-                        <Chip tone="caution">
-                          {t(
-                            item.agreement.state === 'overdue'
-                              ? 'platformAgreementChipOverdue'
-                              : 'platformAgreementChipEnded',
-                            locale,
-                          )}
-                        </Chip>
-                      </span>
-                    ) : null}
-                    {/* `FR-SUP-06`: which hospital is stale or failing, said
+                      {item.agreement.state === 'overdue' || item.agreement.state === 'ended' ? (
+                        <span data-testid="platform-row-agreement">
+                          <Chip tone="caution">
+                            {t(
+                              item.agreement.state === 'overdue'
+                                ? 'platformAgreementChipOverdue'
+                                : 'platformAgreementChipEnded',
+                              locale,
+                            )}
+                          </Chip>
+                        </span>
+                      ) : null}
+                      {/* `FR-SUP-06`: which hospital is stale or failing, said
                         where every hospital is in view. */}
-                    {item.attention.map((entry) => (
-                      <span key={entry} data-testid={`platform-row-attention-${entry}`}>
-                        <Chip tone="caution">{t(ATTENTION_NAME[entry], locale)}</Chip>
-                      </span>
-                    ))}
-                    <StateChip lifecycle={item.lifecycle} />
+                      {item.attention.map((entry) => (
+                        <span key={entry} data-testid={`platform-row-attention-${entry}`}>
+                          <Chip tone="caution">{t(ATTENTION_NAME[entry], locale)}</Chip>
+                        </span>
+                      ))}
+                      <StateChip lifecycle={item.lifecycle} />
+                    </span>
                   </span>
-                </span>
-                <span className="text-body-sm text-ink-secondary">
-                  {[
-                    facilityKindName(item.kind as FacilityKind, locale),
-                    districtName(item.district, locale),
-                    item.code === null ? null : format('platformCode', locale, { code: item.code }),
-                  ]
-                    .filter((part) => part !== null)
-                    .join(' · ')}
-                </span>
-                <span className="text-caption text-ink-muted">
-                  {[
-                    format('settingsCountDoctors', locale, {
-                      count: formatNumber(item.counts.doctors, numerals),
-                    }),
-                    format('settingsCountVerified', locale, {
-                      count: formatNumber(item.counts.verifiedDoctors, numerals),
-                    }),
-                    format('settingsCountSchedules', locale, {
-                      count: formatNumber(item.counts.schedules, numerals),
-                    }),
-                  ].join(' · ')}
-                </span>
-                {/* `FR-SUP-06`, the stale-data offenders: said as an age on
+                  <span className="text-body-sm text-ink-secondary">
+                    {[
+                      facilityKindName(item.kind as FacilityKind, locale),
+                      districtName(item.district, locale),
+                      item.code === null
+                        ? null
+                        : format('platformCode', locale, { code: item.code }),
+                    ]
+                      .filter((part) => part !== null)
+                      .join(' · ')}
+                  </span>
+                  <span className="text-caption text-ink-muted">
+                    {[
+                      format('settingsCountDoctors', locale, {
+                        count: formatNumber(item.counts.doctors, numerals),
+                      }),
+                      format('settingsCountVerified', locale, {
+                        count: formatNumber(item.counts.verifiedDoctors, numerals),
+                      }),
+                      format('settingsCountSchedules', locale, {
+                        count: formatNumber(item.counts.schedules, numerals),
+                      }),
+                    ].join(' · ')}
+                  </span>
+                  {/* `FR-SUP-06`, the stale-data offenders: said as an age on
                     every row that has one, so the worst can be read against
                     the rest, and not as a flag that is on everywhere. */}
-                {item.stalest === null ? null : (
-                  <span className="text-caption text-ink-muted" data-testid="platform-row-stalest">
-                    {format('platformRowStalest', locale, {
-                      figure: t(FIGURE_NAME[item.stalest.figure], locale),
-                      age: formatAge(item.stalest.ageMinutes, locale, numerals),
-                    })}
-                  </span>
-                )}
-              </button>
-            </li>
-          );
-        })}
+                  {item.stalest === null ? null : (
+                    <span
+                      className="text-caption text-ink-muted"
+                      data-testid="platform-row-stalest"
+                    >
+                      {format('platformRowStalest', locale, {
+                        figure: t(FIGURE_NAME[item.stalest.figure], locale),
+                        age: formatAge(item.stalest.ageMinutes, locale, numerals),
+                      })}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
       </ul>
     </div>
   );
@@ -622,12 +734,28 @@ function WorkspacePanel({
   const [note, setNote] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   const [sure, setSure] = useState(false);
+  const [tab, setTab] = useState('readiness');
+  const management = useAdminManagement();
+  const readSequence = useRef(0);
+  usePlatformDraft(
+    'decision',
+    t('platformActionsTitle', locale),
+    [reviewField(t('platformNoteLabel', locale), '', note)],
+    () => {
+      setNote('');
+      setSure(false);
+    },
+  );
 
   const read = useCallback(async (): Promise<void> => {
+    const request = ++readSequence.current;
     try {
-      setDetail(await platformApi.detail(token, hospitalId));
+      const next = await platformApi.detail(token, hospitalId);
+      if (request !== readSequence.current) return;
+      setDetail(next);
       setFailed(false);
     } catch {
+      if (request !== readSequence.current) return;
       setFailed(true);
     }
   }, [token, hospitalId]);
@@ -636,7 +764,7 @@ function WorkspacePanel({
     void read();
   }, [read]);
 
-  if (failed) {
+  if (failed && detail === null) {
     return (
       <div
         role="alert"
@@ -662,34 +790,75 @@ function WorkspacePanel({
     return <div className="h-64 rounded-md bg-sunken" aria-busy="true" />;
   }
 
-  const settle = (
+  const settle = async (
     key: string,
-    call: Promise<
+    call: () => Promise<
       | { readonly ok: true; readonly value: WorkspaceDetail }
       | { readonly ok: false; readonly failure: PlatformFailure }
     >,
-  ): void => {
+  ): Promise<boolean> => {
+    if (
+      busy !== null ||
+      !online ||
+      management?.busy ||
+      [...(management?.drafts.values() ?? [])].some((d) => d.conflict)
+    )
+      return false;
+    const fields = management?.drafts.get(key)?.fields;
+    if (
+      !(await management?.confirm({
+        title:
+          key === 'modules'
+            ? t('platformModulesSave', locale)
+            : key === 'domain'
+              ? t('platformDomainSave', locale)
+              : key === 'agreement'
+                ? t('platformAgreementSave', locale)
+                : key.length > 20
+                  ? t('platformVerify', locale)
+                  : t(ACTS.find((a) => a.action === key)?.label ?? 'platformActionsTitle', locale),
+        scope: localName(locale, detail.nameBn, detail.nameEn),
+        note:
+          key.length > 20
+            ? t('platformVerifyHint', locale)
+            : key === 'close'
+              ? t('platformCloseConfirm', locale)
+              : note.trim() || t('manageReviewNote', locale),
+        ...(fields === undefined ? {} : { fields }),
+      }))
+    )
+      return false;
     setBusy(key);
+    management?.setBusy(true);
     setProblem(null);
-    void call
-      .then((result) => {
-        if (result.ok) {
-          setDetail(result.value);
-          setNote('');
-          setSure(false);
-          onChanged();
-          return;
-        }
-        setProblem(failureLine(result.failure, locale));
-        // Somebody else answered first: show what is true now.
-        if (result.failure.kind === 'changed') {
-          void read();
-          onChanged();
-        }
-      })
-      .finally(() => {
-        setBusy(null);
-      });
+    try {
+      const result = await call();
+      if (result.ok) {
+        setDetail(result.value);
+        setNote('');
+        setSure(false);
+        onChanged();
+        return true;
+      }
+      setProblem(failureLine(result.failure, locale));
+      if (
+        result.failure.kind === 'changed' ||
+        result.failure.kind === 'offline' ||
+        result.failure.kind === 'failed'
+      ) {
+        await read();
+        onChanged();
+      }
+      return false;
+    } catch {
+      setProblem(t('platformActionFailed', locale));
+      await read();
+      onChanged();
+      return false;
+    } finally {
+      setBusy(null);
+      management?.setBusy(false);
+    }
   };
 
   const offered = ACTS.filter((act) => detail.actions.includes(act.action));
@@ -734,8 +903,36 @@ function WorkspacePanel({
           </p>
         )}
 
+        <div className="platform-workspace-tabs" aria-label={t('platformTitle', locale)}>
+          {[
+            ['readiness', 'প্রস্তুতি ও সিদ্ধান্ত', 'Readiness & decision'],
+            ['services', 'সেবা ও ঠিকানা', 'Services & address'],
+            ['access', 'প্রশাসনিক অ্যাক্সেস', 'Administrator access'],
+            ['health', 'অবস্থা ও ইতিহাস', 'Health & history'],
+          ].map(([id, bn, en]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={tab === id}
+              data-testid={`platform-section-${id}`}
+              onClick={() => setTab(id ?? 'readiness')}
+            >
+              {locale === 'bn' ? bn : en}
+            </button>
+          ))}
+        </div>
+        {failed ? (
+          <div role="alert" className="platform-read-warning">
+            <p>
+              {t('platformLoadFailed', locale)} {t('staleWarning', locale)}
+            </p>
+            <Button variant="secondary" onClick={() => void read()}>
+              {t('retry', locale)}
+            </Button>
+          </div>
+        ) : null}
         {/* The same checklist the hospital sees, over the same counts. */}
-        <section className="flex flex-col gap-2">
+        <section hidden={tab !== 'readiness'} className="flex flex-col gap-2">
           <h3 className="text-body-md font-semibold">{t('settingsChecklistTitle', locale)}</h3>
           <ul className="flex flex-wrap gap-x-5 gap-y-1 text-body-sm">
             {detail.checklist.map((item) => (
@@ -764,7 +961,7 @@ function WorkspacePanel({
           </ul>
         </section>
 
-        <section className="flex flex-col gap-2">
+        <section hidden={tab !== 'readiness'} className="flex flex-col gap-2">
           <h3 className="text-body-md font-semibold">{t('platformDoctors', locale)}</h3>
           <p className="text-caption text-ink-muted">{t('platformVerifyHint', locale)}</p>
           {detail.doctors.length === 0 ? (
@@ -806,8 +1003,7 @@ function WorkspacePanel({
                         }
                         data-testid={`platform-verify-${doctor.bmdcNumber}`}
                         onClick={() => {
-                          settle(
-                            doctor.doctorId,
+                          void settle(doctor.doctorId, () =>
                             platformApi.verifyDoctor(token, hospitalId, doctor.doctorId),
                           );
                         }}
@@ -824,7 +1020,7 @@ function WorkspacePanel({
           )}
         </section>
 
-        <section className="flex flex-col gap-1">
+        <section hidden={tab !== 'access'} className="flex flex-col gap-1">
           <h3 className="text-body-md font-semibold">{t('platformAdmins', locale)}</h3>
           <ul className="text-body-sm text-ink-secondary">
             {detail.administrators.map((admin) => (
@@ -851,43 +1047,58 @@ function WorkspacePanel({
           ) : null}
         </section>
 
-        <Agreement
-          detail={detail}
-          online={online}
-          busy={busy === 'agreement'}
-          onSet={(state, note) => {
-            settle('agreement', platformApi.setAgreement(token, hospitalId, state, note));
-          }}
-        />
+        <div hidden={tab !== 'access'}>
+          <Agreement
+            detail={detail}
+            online={online}
+            busy={busy === 'agreement'}
+            onSet={(state, note) => {
+              return settle('agreement', () =>
+                platformApi.setAgreement(token, hospitalId, state, note),
+              );
+            }}
+          />
+        </div>
 
-        <Health detail={detail} />
+        <div hidden={tab !== 'health'}>
+          <Health detail={detail} />
+        </div>
 
-        <Modules
-          detail={detail}
-          online={online}
-          busy={busy === 'modules'}
-          onSet={(off) => {
-            settle('modules', platformApi.setModules(token, hospitalId, off));
-          }}
-        />
+        <div hidden={tab !== 'services'}>
+          <Modules
+            detail={detail}
+            online={online}
+            busy={busy === 'modules'}
+            onSet={(off) => {
+              return settle('modules', () => platformApi.setModules(token, hospitalId, off));
+            }}
+          />
+        </div>
 
-        <PortalAddress
-          detail={detail}
-          online={online}
-          busy={busy === 'domain'}
-          onSet={(domain) => {
-            settle('domain', platformApi.setDomain(token, hospitalId, domain));
-          }}
-        />
+        <div hidden={tab !== 'services'}>
+          <PortalAddress
+            detail={detail}
+            online={online}
+            busy={busy === 'domain'}
+            onSet={(domain) => {
+              return settle('domain', () => platformApi.setDomain(token, hospitalId, domain));
+            }}
+          />
+        </div>
 
-        <AuditTrail
-          token={token}
-          hospitalId={hospitalId}
-          online={online}
-          revision={detail.health.asOf}
-        />
+        <div hidden={tab !== 'health'}>
+          <AuditTrail
+            token={token}
+            hospitalId={hospitalId}
+            online={online}
+            revision={detail.health.asOf}
+          />
+        </div>
 
-        <section className="flex flex-col gap-3 border-t border-line pt-4">
+        <section
+          hidden={tab !== 'readiness'}
+          className="flex flex-col gap-3 border-t border-line pt-4"
+        >
           <h3 className="text-body-md font-semibold">{t('platformActionsTitle', locale)}</h3>
 
           {/* While it is setting up the next move is the hospital's; the one
@@ -970,8 +1181,7 @@ function WorkspacePanel({
                       reason={reason}
                       data-testid={`platform-act-${act.action}`}
                       onClick={() => {
-                        settle(
-                          act.action,
+                        void settle(act.action, () =>
                           platformApi.act(token, hospitalId, act.route, needsNote ? note : ''),
                         );
                       }}
@@ -983,13 +1193,12 @@ function WorkspacePanel({
               </div>
             </>
           )}
-
-          {problem === null ? null : (
-            <p role="alert" className="text-body-sm text-warn-700" data-testid="platform-problem">
-              {problem}
-            </p>
-          )}
         </section>
+        {problem === null ? null : (
+          <p role="alert" className="text-body-sm text-warn-700" data-testid="platform-problem">
+            {problem}
+          </p>
+        )}
       </div>
     </Card>
   );
@@ -1018,7 +1227,7 @@ function Agreement({
   readonly detail: WorkspaceDetail;
   readonly online: boolean;
   readonly busy: boolean;
-  readonly onSet: (state: AgreementState, note: string | null) => void;
+  readonly onSet: (state: AgreementState, note: string | null) => Promise<boolean>;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
@@ -1026,11 +1235,18 @@ function Agreement({
   const [state, setState] = useState<AgreementState>(detail.agreement.state);
   const [note, setNote] = useState(detail.agreement.note ?? '');
 
-  // What is recorded changed under the form: show what is true now.
-  useEffect(() => {
-    setState(detail.agreement.state);
-    setNote(detail.agreement.note ?? '');
-  }, [detail.agreement.state, detail.agreement.note]);
+  const saveDraft = usePlatformDraft(
+    'agreement',
+    t('platformAgreementTitle', locale),
+    [
+      reviewField(t('platformAgreementTitle', locale), detail.agreement.state, state),
+      reviewField(t('platformAgreementNoteLabel', locale), detail.agreement.note ?? '', note),
+    ],
+    () => {
+      setState(detail.agreement.state);
+      setNote(detail.agreement.note ?? '');
+    },
+  );
 
   const typed = note.trim();
   const same = state === detail.agreement.state && typed === (detail.agreement.note ?? '');
@@ -1084,7 +1300,8 @@ function Agreement({
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
-          if (reason === null && !busy) onSet(state, typed === '' ? null : typed);
+          if (reason === null && !busy)
+            void saveDraft(() => onSet(state, typed === '' ? null : typed));
         }}
       >
         <div className="flex flex-wrap gap-2">
@@ -1518,15 +1735,23 @@ function Modules({
   readonly detail: WorkspaceDetail;
   readonly online: boolean;
   readonly busy: boolean;
-  readonly onSet: (off: readonly string[]) => void;
+  readonly onSet: (off: readonly string[]) => Promise<boolean>;
 }): ReactNode {
   const locale = useLocale();
   const [off, setOff] = useState<readonly string[]>(detail.modulesOff);
 
-  // What is saved changed under the switches: show what is true now.
-  useEffect(() => {
-    setOff(detail.modulesOff);
-  }, [detail.modulesOff]);
+  const saveDraft = usePlatformDraft(
+    'modules',
+    t('platformModulesTitle', locale),
+    [
+      reviewField(
+        t('platformModulesTitle', locale),
+        [...detail.modulesOff].sort(),
+        [...off].sort(),
+      ),
+    ],
+    () => setOff(detail.modulesOff),
+  );
 
   const toggle = (module: HospitalModule): void => {
     setOff((current) => {
@@ -1577,7 +1802,7 @@ function Modules({
           reason={reason}
           data-testid="platform-modules-save"
           onClick={() => {
-            onSet(off);
+            void saveDraft(() => onSet(off));
           }}
         >
           {t('platformModulesSave', locale)}
@@ -1605,15 +1830,17 @@ function PortalAddress({
   readonly detail: WorkspaceDetail;
   readonly online: boolean;
   readonly busy: boolean;
-  readonly onSet: (domain: string | null) => void;
+  readonly onSet: (domain: string | null) => Promise<boolean>;
 }): ReactNode {
   const locale = useLocale();
   const [domain, setDomain] = useState(detail.portalDomain ?? '');
 
-  // What is recorded changed under the field: show what is true now.
-  useEffect(() => {
-    setDomain(detail.portalDomain ?? '');
-  }, [detail.portalDomain]);
+  const saveDraft = usePlatformDraft(
+    'domain',
+    t('platformPortalTitle', locale),
+    [reviewField(t('platformDomainLabel', locale), detail.portalDomain ?? '', domain)],
+    () => setDomain(detail.portalDomain ?? ''),
+  );
 
   const typed = domain.trim().toLowerCase();
   const reason = !online
@@ -1650,7 +1877,7 @@ function PortalAddress({
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
-          if (reason === null && !busy) onSet(typed);
+          if (reason === null && !busy) void saveDraft(() => onSet(typed));
         }}
       >
         <Input
@@ -1681,7 +1908,7 @@ function PortalAddress({
               reason={online ? null : t('platformOffline', locale)}
               data-testid="platform-domain-remove"
               onClick={() => {
-                onSet(null);
+                void saveDraft(() => onSet(null));
               }}
             >
               {t('platformDomainRemove', locale)}
@@ -1697,11 +1924,13 @@ function NewWorkspaceForm({
   token,
   online,
   onCancel,
+  onLocated,
   onCreated,
 }: {
   readonly token: string;
   readonly online: boolean;
   readonly onCancel: () => void;
+  readonly onLocated: (id: string) => void;
   readonly onCreated: (created: CreatedWorkspace) => void;
 }): ReactNode {
   const locale = useLocale();
@@ -1716,6 +1945,30 @@ function NewWorkspaceForm({
   const [adminEmail, setAdminEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [uncertain, setUncertain] = useState(false);
+  const management = useAdminManagement();
+  const fields = [
+    reviewField(t('platformFieldCode', locale), '', code),
+    reviewField(t('platformFieldNameBn', locale), '', nameBn),
+    reviewField(t('platformFieldNameEn', locale), '', nameEn),
+    reviewField(t('platformFieldKind', locale), 'hospital', kind),
+    reviewField(t('platformFieldDivision', locale), 'Dhaka', division),
+    reviewField(t('platformFieldDistrict', locale), '', district),
+    reviewField(t('platformFieldRegistration', locale), '', registrationNo),
+    reviewField(t('platformFieldAdminName', locale), '', adminName),
+    reviewField(t('platformFieldAdminEmail', locale), '', adminEmail),
+  ];
+  usePlatformDraft('create', t('platformFormTitle', locale), fields, () => {
+    setCode('');
+    setNameBn('');
+    setNameEn('');
+    setKind('hospital');
+    setDivision('Dhaka');
+    setDistrict('');
+    setRegistrationNo('');
+    setAdminName('');
+    setAdminEmail('');
+  });
 
   const codeOk = /^[A-Za-z0-9][A-Za-z0-9-]{1,15}$/.test(code.trim());
   const ready =
@@ -1728,146 +1981,203 @@ function NewWorkspaceForm({
 
   const submit = (event: FormEvent): void => {
     event.preventDefault();
-    if (!ready || !online) return;
-    setBusy(true);
-    setProblem(null);
-    void platformApi
-      .create(token, {
-        code: code.trim(),
-        nameBn: nameBn.trim(),
-        nameEn: nameEn.trim(),
-        kind,
-        division,
-        district: district.trim(),
-        ...(registrationNo.trim() === '' ? {} : { registrationNo: registrationNo.trim() }),
-        adminName: adminName.trim(),
-        adminEmail: adminEmail.trim(),
-      })
-      .then((result) => {
+    if (!ready || !online || busy || uncertain) return;
+    const body = {
+      code: code.trim(),
+      nameBn: nameBn.trim(),
+      nameEn: nameEn.trim(),
+      kind,
+      division,
+      district: district.trim(),
+      ...(registrationNo.trim() === '' ? {} : { registrationNo: registrationNo.trim() }),
+      adminName: adminName.trim(),
+      adminEmail: adminEmail.trim(),
+    };
+    void (async () => {
+      if (
+        !(await management?.confirm({
+          title: t('platformCreate', locale),
+          scope: body.code,
+          note: t('platformFormIntro', locale),
+          fields,
+        }))
+      )
+        return;
+      setBusy(true);
+      management?.setBusy(true);
+      setProblem(null);
+      try {
+        const result = await platformApi.create(token, body);
         if (result.ok) onCreated(result.value);
-        else setProblem(failureLine(result.failure, locale));
-      })
-      .finally(() => {
+        else {
+          setProblem(failureLine(result.failure, locale));
+          if (result.failure.kind === 'failed' || result.failure.kind === 'offline')
+            setUncertain(true);
+        }
+      } catch {
+        setProblem(t('platformActionFailed', locale));
+        setUncertain(true);
+      } finally {
         setBusy(false);
-      });
+        management?.setBusy(false);
+      }
+    })();
   };
 
   const reason = !online
     ? t('platformOffline', locale)
-    : ready
-      ? null
-      : t('platformInvalid', locale);
+    : uncertain
+      ? t('manageReconcile', locale)
+      : ready
+        ? null
+        : t('platformInvalid', locale);
 
   return (
     <Card data-testid="platform-new-form">
       <form className="flex flex-col gap-4" onSubmit={submit}>
-        <div>
-          <h2 className="text-title-md">{t('platformFormTitle', locale)}</h2>
-          <p className="text-body-sm text-ink-secondary">{t('platformFormIntro', locale)}</p>
-        </div>
+        <ol className="platform-guide">
+          <li>1. {t('platformFieldNameBn', locale)}</li>
+          <li>2. {t('platformFieldAdminName', locale)}</li>
+          <li>3. {t('manageReview', locale)}</li>
+        </ol>
+        <fieldset className="flex flex-col gap-4" disabled={busy || uncertain}>
+          <div>
+            <h2 className="text-title-md">{t('platformFormTitle', locale)}</h2>
+            <p className="text-body-sm text-ink-secondary">{t('platformFormIntro', locale)}</p>
+          </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Input
-            density="console"
-            label={t('platformFieldNameBn', locale)}
-            value={nameBn}
-            onChange={(event) => {
-              setNameBn(event.target.value);
-            }}
-          />
-          <Input
-            density="console"
-            label={t('platformFieldNameEn', locale)}
-            value={nameEn}
-            onChange={(event) => {
-              setNameEn(event.target.value);
-            }}
-          />
-          <Input
-            density="console"
-            label={t('platformFieldCode', locale)}
-            helper={t('platformFieldCodeHelp', locale)}
-            value={code}
-            autoCapitalize="characters"
-            onChange={(event) => {
-              setCode(event.target.value.toUpperCase());
-            }}
-          />
-          <Input
-            density="console"
-            label={t('platformFieldRegistration', locale)}
-            value={registrationNo}
-            onChange={(event) => {
-              setRegistrationNo(event.target.value);
-            }}
-          />
-        </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input
+              density="console"
+              label={t('platformFieldNameBn', locale)}
+              value={nameBn}
+              onChange={(event) => {
+                setNameBn(event.target.value);
+              }}
+            />
+            <Input
+              density="console"
+              label={t('platformFieldNameEn', locale)}
+              value={nameEn}
+              onChange={(event) => {
+                setNameEn(event.target.value);
+              }}
+            />
+            <Input
+              density="console"
+              label={t('platformFieldCode', locale)}
+              helper={t('platformFieldCodeHelp', locale)}
+              value={code}
+              autoCapitalize="characters"
+              onChange={(event) => {
+                setCode(event.target.value.toUpperCase());
+              }}
+            />
+            <Input
+              density="console"
+              label={t('platformFieldRegistration', locale)}
+              value={registrationNo}
+              onChange={(event) => {
+                setRegistrationNo(event.target.value);
+              }}
+            />
+          </div>
 
-        <fieldset className="flex flex-col gap-2">
-          <legend className="text-body-sm font-semibold">{t('platformFieldKind', locale)}</legend>
-          <div className="flex flex-wrap gap-2">
-            {FACILITY_KINDS.map((candidate) => (
-              <FilterChip
-                key={candidate}
-                selected={kind === candidate}
-                onToggle={() => {
-                  setKind(candidate);
-                }}
-              >
-                {facilityKindName(candidate, locale)}
-              </FilterChip>
-            ))}
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-body-sm font-semibold">{t('platformFieldKind', locale)}</legend>
+            <div className="flex flex-wrap gap-2">
+              {FACILITY_KINDS.map((candidate) => (
+                <FilterChip
+                  key={candidate}
+                  selected={kind === candidate}
+                  onToggle={() => {
+                    setKind(candidate);
+                  }}
+                >
+                  {facilityKindName(candidate, locale)}
+                </FilterChip>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-body-sm font-semibold">
+              {t('platformFieldDivision', locale)}
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {Object.keys(DIVISION_NAMES).map((candidate) => (
+                <FilterChip
+                  key={candidate}
+                  selected={division === candidate}
+                  onToggle={() => {
+                    setDivision(candidate);
+                  }}
+                >
+                  {divisionName(candidate, locale)}
+                </FilterChip>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input
+              density="console"
+              label={t('platformFieldDistrict', locale)}
+              value={district}
+              onChange={(event) => {
+                setDistrict(event.target.value);
+              }}
+            />
+            <span />
+            <Input
+              density="console"
+              label={t('platformFieldAdminName', locale)}
+              value={adminName}
+              onChange={(event) => {
+                setAdminName(event.target.value);
+              }}
+            />
+            <Input
+              density="console"
+              kind="email"
+              label={t('platformFieldAdminEmail', locale)}
+              value={adminEmail}
+              onChange={(event) => {
+                setAdminEmail(event.target.value);
+              }}
+            />
           </div>
         </fieldset>
-
-        <fieldset className="flex flex-col gap-2">
-          <legend className="text-body-sm font-semibold">
-            {t('platformFieldDivision', locale)}
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {Object.keys(DIVISION_NAMES).map((candidate) => (
-              <FilterChip
-                key={candidate}
-                selected={division === candidate}
-                onToggle={() => {
-                  setDivision(candidate);
-                }}
-              >
-                {divisionName(candidate, locale)}
-              </FilterChip>
-            ))}
+        {uncertain ? (
+          <div role="alert" data-testid="platform-create-uncertain">
+            <p>
+              {locale === 'bn'
+                ? 'উত্তর নিশ্চিত নয়। আবার তৈরির আগে সার্ভারে কোডটি যাচাই করুন। পাসওয়ার্ড পুনরুদ্ধার করা যাবে না।'
+                : 'The answer is uncertain. Check this code on the server before creating again. The one-time password cannot be recovered here.'}
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void platformApi
+                  .list(token)
+                  .then((items) => {
+                    const existing = items.find(
+                      (item) => item.code?.toUpperCase() === code.trim().toUpperCase(),
+                    );
+                    if (existing !== undefined) onLocated(existing.id);
+                    else {
+                      setUncertain(false);
+                      setProblem(null);
+                    }
+                  })
+                  .catch(() => setProblem(t('platformLoadFailed', locale)));
+              }}
+              data-testid="platform-create-reconcile"
+            >
+              {t('retry', locale)}
+            </Button>
           </div>
-        </fieldset>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <Input
-            density="console"
-            label={t('platformFieldDistrict', locale)}
-            value={district}
-            onChange={(event) => {
-              setDistrict(event.target.value);
-            }}
-          />
-          <span />
-          <Input
-            density="console"
-            label={t('platformFieldAdminName', locale)}
-            value={adminName}
-            onChange={(event) => {
-              setAdminName(event.target.value);
-            }}
-          />
-          <Input
-            density="console"
-            kind="email"
-            label={t('platformFieldAdminEmail', locale)}
-            value={adminEmail}
-            onChange={(event) => {
-              setAdminEmail(event.target.value);
-            }}
-          />
-        </div>
-
+        ) : null}
         {problem === null ? null : (
           <p
             role="alert"
@@ -1900,6 +2210,13 @@ function CreatedCard({
   readonly onDone: () => void;
 }): ReactNode {
   const locale = useLocale();
+  const [handed, setHanded] = useState(false);
+  usePlatformDraft(
+    'handover',
+    t('platformTempPassword', locale),
+    [reviewField(t('platformTempPassword', locale), true, handed)],
+    () => setHanded(true),
+  );
   return (
     <Card tone="brand" data-testid="platform-created">
       <div className="flex flex-col gap-3">
@@ -1913,8 +2230,26 @@ function CreatedCard({
             {created.temporaryPassword}
           </p>
         </div>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={handed}
+            onChange={(e) => setHanded(e.target.checked)}
+            data-testid="platform-password-handed"
+          />
+          {locale === 'bn'
+            ? 'নিরাপদে প্রশাসককে পাসওয়ার্ড দিয়েছি'
+            : 'I have handed the password to the administrator securely'}
+        </label>
         <div>
-          <Button variant="secondary" data-testid="platform-created-done" onClick={onDone}>
+          <Button
+            variant="secondary"
+            {...(!handed
+              ? { disabled: true, disabledReason: t('platformTempPassword', locale) }
+              : {})}
+            data-testid="platform-created-done"
+            onClick={onDone}
+          >
             {t('platformCreatedDone', locale)}
           </Button>
         </div>

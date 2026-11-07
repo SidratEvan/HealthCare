@@ -173,6 +173,9 @@ jobs:
       DATABASE_URL: postgresql://healthcare:healthcare@localhost:5432/healthcare_dev
       E2E_DATABASE_URL: postgresql://healthcare:healthcare@localhost:5432/healthcare_dev
       DEMO_MODE: "true"
+      # The specs book with random numbers: the demonstration's phone list
+      # (FR-DEM-08) is off, which the API allows only on a local database.
+      DEMO_PHONES: any
       SMS_PROVIDER: log
       PAYMENT_PROVIDER: mock
       TRAVEL_TIME_MODE: static

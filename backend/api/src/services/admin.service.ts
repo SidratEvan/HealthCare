@@ -49,6 +49,7 @@ import {
 import { logger } from '../config/logger.js';
 import { AppError } from '../errors/AppError.js';
 import * as adminRepo from '../repositories/admin.repo.js';
+import { chambersToday, type ChamberSummary } from '../repositories/adminChambers.repo.js';
 import * as bedRepo from '../repositories/bed.repo.js';
 import { withTransaction } from '../repositories/transaction.js';
 
@@ -707,6 +708,10 @@ function daysBefore(date: string, days: number): string {
 // ---------------------------------------------------------------------------
 
 export interface Overview {
+  /** Bangladesh-local reporting day and bounded counts-only chamber board (FR-ADM-12). */
+  readonly date: string;
+  readonly chambers: readonly ChamberSummary[];
+  readonly chambersTruncated: boolean;
   readonly doctors: { readonly scheduled: number; readonly sitting: number };
   readonly waiting: number;
   readonly appointments: { readonly booked: number; readonly seen: number };
@@ -727,17 +732,21 @@ export interface Overview {
 
 export async function overview(hospitalId: string): Promise<Overview> {
   const now = time.fromDate(new Date());
-  const [counts, capacity] = await Promise.all([
+  const date = time.toDhakaDate(now);
+  const [counts, capacity, chamberBoard] = await Promise.all([
     adminRepo.overviewToday({
       hospitalId,
-      date: time.toDhakaDate(now),
+      date,
       onTheWay: ON_THE_WAY_STATES,
       inEr: IN_ER_STATES,
     }),
     bedRepo.publicCapacity([hospitalId]),
+    chambersToday(hospitalId, date),
   ]);
   const published = capacity.get(hospitalId) ?? null;
   return {
+    date,
+    ...chamberBoard,
     doctors: { scheduled: counts.doctorsScheduled, sitting: counts.doctorsSitting },
     waiting: counts.waiting,
     appointments: { booked: counts.appointments, seen: counts.seen },

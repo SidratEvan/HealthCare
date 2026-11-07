@@ -582,6 +582,79 @@ export async function issueTrackingLink(
   );
 }
 
+/** What the counter prints for a serial (`FR-REC-21`). */
+export interface CounterSlip {
+  readonly bookingId: string;
+  readonly serial: number;
+  readonly hospitalNameBn: string;
+  readonly hospitalNameEn: string;
+  readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
+  readonly room: string | null;
+  readonly sessionDate: string;
+  readonly plannedStart: string;
+  readonly plannedEnd: string;
+  /**
+   * The estimated time of the turn and how many are seen first: the same
+   * estimate the live serial page shows (`computeEtas`, `FR-QUE-13`). `null`
+   * when the patient is not waiting or the chamber cannot support a time (the
+   * doctor has not arrived, or it is paused): the slip then prints the
+   * chamber's hours and no guessed time (`PRD.md` §3.2).
+   */
+  readonly estimate: {
+    readonly etaAt: string;
+    readonly bandMinutes: number;
+    readonly patientsAhead: number;
+  } | null;
+  /**
+   * The patient's live serial page, printed as a QR code: with no SMS, this is
+   * how a patient served at the counter follows the queue on their own phone
+   * (`FR-GST-05`). `null` when the patient has no phone on record.
+   */
+  readonly trackingUrl: string | null;
+}
+
+/**
+ * A slip for one serial, and a fresh tracking link to print on it
+ * (`FR-REC-21`, `BTN-B02-SLIP`).
+ *
+ * The link is to the identity behind the patient's phone, made here if the
+ * number never booked online, exactly as a counter registration makes one
+ * (`FR-GST-13`). Each print mints a new link (only its hash is stored); an
+ * earlier one keeps working until it expires.
+ */
+export async function counterSlip(bookingId: string, sessionId: string): Promise<CounterSlip> {
+  const booking = await bookingRepo.findDetail(bookingId);
+  if (booking === null) throw notFound('booking');
+  const phone = await bookingRepo.patientPhone(booking.patientId);
+  let trackingUrl: string | null = null;
+  if (phone !== null) {
+    await withTransaction(async (trx) => {
+      await guestRepo.findOrCreateIdentity(trx, { phone, displayName: booking.patientName });
+    });
+    trackingUrl = await issueTrackingLink(bookingId, sessionId, phone);
+  }
+  const eta = (await queueService.getEtas(sessionId)).find((one) => one.bookingId === bookingId);
+  const estimate =
+    eta === undefined || eta.confidence === 'unknown'
+      ? null
+      : { etaAt: eta.etaAt, bandMinutes: eta.bandMinutes, patientsAhead: eta.patientsAhead };
+  return {
+    bookingId,
+    serial: booking.serial,
+    hospitalNameBn: booking.hospitalNameBn,
+    hospitalNameEn: booking.hospitalNameEn,
+    doctorNameBn: booking.doctorNameBn,
+    doctorNameEn: booking.doctorNameEn,
+    room: booking.room,
+    sessionDate: booking.sessionDate,
+    plannedStart: booking.plannedStart,
+    plannedEnd: booking.plannedEnd,
+    estimate,
+    trackingUrl,
+  };
+}
+
 /**
  * A link for an account holder's own booking (plan F1).
  *
@@ -810,10 +883,11 @@ export async function cancelBooking(input: CancelBookingInput): Promise<AppendEv
   // answer to a second attempt but the wrong one to a retry of the first —
   // which would leave the app showing an error for a cancellation that
   // worked (`FR-QUE-51`, `SY-02`).
-  const replayed = await queueService.findReplay(input.clientEventId ?? null);
-  if (replayed !== null) return replayed;
-
   const booking = await queueService.requireBooking(input.bookingId);
+
+  // In the booking's own chamber only (F-02).
+  const replayed = await queueService.findReplay(input.clientEventId ?? null, booking.sessionId);
+  if (replayed !== null) return replayed;
 
   if (booking.status === 'cancelled') {
     // Not an error worth a stack trace: a patient double-tapping confirm on a

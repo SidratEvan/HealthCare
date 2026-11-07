@@ -18,6 +18,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
+import { approveManagementWrites } from './support/adminManagement.js';
 import { E2E_DATABASE_URL, assertLocalDatabase } from './support/database.js';
 import { bengali } from './support/digits.js';
 
@@ -88,6 +89,7 @@ test.afterAll(async () => {
 });
 
 async function openSettings(page: Page): Promise<void> {
+  await approveManagementWrites(page);
   await page.goto(CONSOLE);
   await expect(page.getByTestId('console-picker')).toBeVisible({ timeout: 45_000 });
   await page.getByTestId(`pick-hospital-${seeded.id}`).click();
@@ -95,6 +97,7 @@ async function openSettings(page: Page): Promise<void> {
   await expect(page.getByTestId('admin-section-today')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('admin-open-settings').click();
   await expect(page.getByTestId('hospital-settings')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('settings-group-face').click();
   await expect(page.getByTestId('settings-face')).toBeVisible();
 }
 
@@ -168,6 +171,14 @@ test.describe('a hospital sets what patients see of it (FR-BRD-06)', () => {
       .toBe(main);
     await page.getByTestId('settings-brand-save').click();
     await expect(page.getByTestId('settings-brand-reset')).toBeVisible();
+    await expect
+      .poll(() =>
+        page
+          .locator('.console-foundation')
+          .first()
+          .evaluate((node) => getComputedStyle(node).getPropertyValue('--brand-600').trim()),
+      )
+      .toBe(main);
     // Saved is saved: the same colour again is nothing to save.
     await expect(page.getByTestId('settings-brand-save')).toBeDisabled();
 
@@ -193,6 +204,16 @@ test.describe('a hospital sets what patients see of it (FR-BRD-06)', () => {
       'data-has-logo',
       'true',
     );
+
+    await expect
+      .poll(() =>
+        page
+          .locator('.cf-logo img')
+          .evaluate(
+            (node) => node instanceof HTMLImageElement && node.complete && node.naturalWidth > 0,
+          ),
+      )
+      .toBe(true);
 
     // --- the patient app, opened for this hospital ------------------------------
     const phone = await context.newPage();
@@ -236,6 +257,8 @@ test.describe('a hospital sets what patients see of it (FR-BRD-06)', () => {
     await page.getByTestId('settings-description-bn').fill(seeded.descriptionBn ?? '');
     await page.getByTestId('settings-description-en').fill(seeded.descriptionEn ?? '');
     await page.getByTestId('settings-save-description').click();
+    // Let the review handler complete before polling the independent API.
+    await expect(page.getByTestId('management-confirm')).not.toBeVisible();
     await expect
       .poll(async () => {
         const again = await fetch(`${API}/hospitals/${seeded.id}`);

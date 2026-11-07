@@ -1,0 +1,170 @@
+{
+  "branch": "feat/console-redesign-doctor",
+  "baseCommit": "7033db69f973bfac5db44bad1a97bf1bbeefd8a7",
+  "capturedUtc": "2026-10-11T07:57:42.3581471Z",
+  "correspondence": "Recovered logs contain no original source hash. Correspondence was checked using current source and assertions, filesystem timestamps, final rebuilt production captures, and passing exit markers. These hashes pin the resumed review state, not an independently recorded pre-run snapshot.",
+  "sourceFiles": [
+    {
+      "path": "e2e/doctor-console.spec.ts",
+      "sha256": "60a3baa1ef0e89b21ef8867feb01c4feac7cd3b13735e618e438b55198163bf7",
+      "lastWriteUtc": "2026-10-11T03:55:07.9740142Z"
+    },
+    {
+      "path": "e2e/doctor-midnight.spec.ts",
+      "sha256": "f454cab7f00864a43ae4eebbbf7d37ff25e64d88ff81259e5971e374a80ae396",
+      "lastWriteUtc": "2026-10-11T06:51:41.0836521Z"
+    },
+    {
+      "path": "e2e/doctor-safety.spec.ts",
+      "sha256": "dcfcaa6e50877b9674f9aac8de26a1e51aac9f3eef65784708f27f418e47e770",
+      "lastWriteUtc": "2026-10-11T04:19:04.7383655Z"
+    },
+    {
+      "path": "e2e/doctor-workspace.spec.ts",
+      "sha256": "433227b6b4b5a1434cdb87e7214341b4ae0b497e48c4fb05e633ae4d6a5b3a10",
+      "lastWriteUtc": "2026-10-11T07:28:16.7565629Z"
+    },
+    {
+      "path": "e2e/production/doctor-midnight.prod.spec.ts",
+      "sha256": "ad273fe0994beadc23b5e8e95048b9106218a7578bf017a22a451fb6866b81ac",
+      "lastWriteUtc": "2026-10-11T05:18:34.2399694Z"
+    },
+    {
+      "path": "e2e/production/doctor-workspace.prod.spec.ts",
+      "sha256": "3afa01ece85b171184d66c44e79f6c9aa4cd151c3d8fbeb646be5ad0029c1fa1",
+      "lastWriteUtc": "2026-10-11T04:01:59.1900204Z"
+    },
+    {
+      "path": "e2e/support/doctor.ts",
+      "sha256": "77b625706a3a44b9e62bb6900520a0d85638446b755d438a36d8313ee1a80b19",
+      "lastWriteUtc": "2026-10-11T04:02:03.4507570Z"
+    },
+    {
+      "path": "frontend/console/src/components/DoctorConsole.tsx",
+      "sha256": "5bf10ace6b81433c810a3478cb051fa263dd572904a87f0e956abe7e28eeebda",
+      "lastWriteUtc": "2026-10-11T06:41:40.9207248Z"
+    },
+    {
+      "path": "frontend/console/src/components/DoctorRecord.tsx",
+      "sha256": "3143017682642f8f6f57899df180936a538cb08893186b92551c77ef0ced97d1",
+      "lastWriteUtc": "2026-10-11T03:56:09.0917934Z"
+    },
+    {
+      "path": "frontend/console/src/components/DoctorWorkspace.tsx",
+      "sha256": "8769c39988c24b394c986301ba2dc36b549957da88a1ff5bc3b59bee52541d90",
+      "lastWriteUtc": "2026-10-11T04:13:02.8427341Z"
+    },
+    {
+      "path": "frontend/console/src/components/PatientPanel.tsx",
+      "sha256": "fdd0dd281fb85f60b0d95e4dc6794679097481115766e4fce6fe48b72bea8fd4",
+      "lastWriteUtc": "2026-10-11T04:06:26.7828679Z"
+    },
+    {
+      "path": "frontend/console/src/lib/visits.ts",
+      "sha256": "98a8a85346def50aec17142b9f8bf4292ae09f75bb57a977e2931732b5520e0b",
+      "lastWriteUtc": "2026-10-11T03:51:52.4663344Z"
+    },
+    {
+      "path": "shared/client/src/__tests__/followUp.test.ts",
+      "sha256": "30c84f69d9c90f572658a9bea1d01c422ebae586b5e9bf59f8fe45899ee23862",
+      "lastWriteUtc": "2026-10-11T06:45:01.0098471Z"
+    },
+    {
+      "path": "shared/client/src/doctor/followUp.ts",
+      "sha256": "d09c83943faae0e672d9e36490906e14b6e534cc56e9ffcca561d34078454e69",
+      "lastWriteUtc": "2026-10-11T03:53:41.5362035Z"
+    },
+    {
+      "path": "shared/client/src/index.ts",
+      "sha256": "1fe85c8e06c749481e5cf4c06915e5f754a3d5ed70c65198b4c3c7dd78fa1d29",
+      "lastWriteUtc": "2026-10-11T03:46:13.3647639Z"
+    },
+    {
+      "path": "shared/i18n/src/messages.ts",
+      "sha256": "fea1e9dff457256c7668c0a1977b0b75a7f6753688a6897863cae73258cecdfc",
+      "lastWriteUtc": "2026-10-11T04:25:53.8960938Z"
+    },
+    {
+      "path": "shared/ui/package.json",
+      "sha256": "053fe98ffc17e9031fb029dba8763cc6e98274f67a099e66fa0ed9a02e242426",
+      "lastWriteUtc": "2026-10-11T03:46:14.2898629Z"
+    },
+    {
+      "path": "shared/ui/src/components/Toast.tsx",
+      "sha256": "b488e9327179bb006ee26bea2887e3c524590606f2b2a54970b3e2268d74f7c6",
+      "lastWriteUtc": "2026-10-11T03:53:41.1360152Z"
+    },
+    {
+      "path": "shared/ui/src/console/doctor.css",
+      "sha256": "f8a8020fb5301ece0687bcd2082a9d15c9d7ab8d485a65de93a6703ffbc61a81",
+      "lastWriteUtc": "2026-10-11T05:02:03.3866748Z"
+    }
+  ],
+  "recoveredLogs": [
+    {
+      "path": "batch4b-build-corrected.log",
+      "sha256": "867955469765b7c79371d05f62163464ab660a5f26cd85fa5d246ebd046eecef",
+      "lastWriteUtc": "2026-10-11T06:51:24.3567502Z"
+    },
+    {
+      "path": "batch4b-build-corrected-exit.log",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+      "lastWriteUtc": "2026-10-11T06:51:24.4526692Z"
+    },
+    {
+      "path": "batch4b-verify-final.log",
+      "sha256": "973fd8219436f09a759d657d6d2b163ea7dd05ff4d8bf10dc459f0906bc59e8b",
+      "lastWriteUtc": "2026-10-11T06:44:41.8353125Z"
+    },
+    {
+      "path": "batch4b-verify-final-exit.log",
+      "sha256": "f1b2f662800122bed0ff255693df89c4487fbdcf453d3524a42d4ec20c3d9c04",
+      "lastWriteUtc": "2026-10-11T06:44:41.9455306Z"
+    },
+    {
+      "path": "batch4b-verify-corrected.log",
+      "sha256": "1e344a0de3301a48c585a8da25838d3f87b68afab3cd6dca4c9902e93604657f",
+      "lastWriteUtc": "2026-10-11T07:01:27.0581058Z"
+    },
+    {
+      "path": "batch4b-verify-corrected-exit.log",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+      "lastWriteUtc": "2026-10-11T07:01:28.3274212Z"
+    },
+    {
+      "path": "batch4b-midnight-red.log",
+      "sha256": "68cdae7772032767203ce17069496bb968e07d05e6c4286fc68c38bf67d58368",
+      "lastWriteUtc": "2026-10-11T05:19:53.5929558Z"
+    },
+    {
+      "path": "batch4b-production-corrected.log",
+      "sha256": "74db4e6abc0e06c5f3af41b72123f91fc845bec088d2aef0ff72dc9224bfa198",
+      "lastWriteUtc": "2026-10-11T07:06:14.6060272Z"
+    },
+    {
+      "path": "batch4b-production-corrected-exit.log",
+      "sha256": "f1b2f662800122bed0ff255693df89c4487fbdcf453d3524a42d4ec20c3d9c04",
+      "lastWriteUtc": "2026-10-11T07:06:14.8211086Z"
+    },
+    {
+      "path": "batch4b-production-isolated.log",
+      "sha256": "09bc7d14c1379d2727d7289e3396344083ec655d48d964ed936e488db296d2a5",
+      "lastWriteUtc": "2026-10-11T07:23:36.7397224Z"
+    },
+    {
+      "path": "batch4b-production-isolated-exit.log",
+      "sha256": "f1b2f662800122bed0ff255693df89c4487fbdcf453d3524a42d4ec20c3d9c04",
+      "lastWriteUtc": "2026-10-11T07:23:37.3106109Z"
+    },
+    {
+      "path": "batch4b-production-final.log",
+      "sha256": "28461797523f3a7fa21737b99c010daea0a4b29ea2fa5f372da440539a99b39f",
+      "lastWriteUtc": "2026-10-11T07:44:23.3765713Z"
+    },
+    {
+      "path": "batch4b-production-final-exit.log",
+      "sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+      "lastWriteUtc": "2026-10-11T07:44:24.8828034Z"
+    }
+  ]
+}

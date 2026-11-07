@@ -48,11 +48,17 @@ import {
 import { format, formatNumber, numeralsFor, t, type ConsoleKey } from '@platform/i18n';
 import { Button, COLOUR, Card, FilterChip, useLocale } from '@platform/ui';
 
-import { loadOwnLogo, settingsApi, type Saved, type SetupSnapshot } from '@/lib/settings';
+import {
+  reviewField,
+  useManagementDraft,
+  useAdminManagement,
+  type ManagementRun,
+} from '@/components/AdminManagementContext';
+import { loadOwnLogo, settingsApi, type SetupSnapshot } from '@/lib/settings';
 
 const DESCRIPTION_MAX = 400;
 
-type Run = <T>(call: () => Promise<Saved<T>>, success: (value: T) => string) => Promise<boolean>;
+type Run = ManagementRun;
 
 interface FaceProps {
   readonly snapshot: SetupSnapshot;
@@ -95,16 +101,20 @@ const FIGURE_KEY: Readonly<Record<PublishableFigure, ConsoleKey>> = {
  * (`FR-BRD-11`), and a switch for it would be a promise about nothing. What
  * its emergency department can treat is not here, and the card says why.
  */
-function Publishing({ snapshot, offline, run }: FaceProps): ReactNode {
+function Publishing({ snapshot, offline, run: baseRun }: FaceProps): ReactNode {
   const locale = useLocale();
   const saved = snapshot.hospital.unpublished;
   const [withheld, setWithheld] = useState<readonly string[]>(saved);
   const [busy, setBusy] = useState(false);
-
-  // What is saved changed under the switches: show what is true now.
-  useEffect(() => {
-    setWithheld(saved);
-  }, [saved]);
+  const run = useManagementDraft(
+    'publishing',
+    t('settingsPublishingTitle', locale),
+    [reviewField(t('settingsPublishingTitle', locale), [...saved].sort(), [...withheld].sort())],
+    baseRun,
+    () => {
+      setWithheld(saved);
+    },
+  );
 
   const offered = PUBLISHABLE_FIGURES.filter(
     (figure) => !snapshot.hospital.modulesOff.includes(MODULE_OF_FIGURE[figure]),
@@ -229,12 +239,25 @@ function PortalAddresses({ snapshot }: { readonly snapshot: SetupSnapshot }): Re
 // What it says of itself
 // ---------------------------------------------------------------------------
 
-function Description({ snapshot, offline, run }: FaceProps): ReactNode {
+function Description({ snapshot, offline, run: baseRun }: FaceProps): ReactNode {
   const locale = useLocale();
   const hospital = snapshot.hospital;
   const [bn, setBn] = useState(hospital.descriptionBn ?? '');
   const [en, setEn] = useState(hospital.descriptionEn ?? '');
   const [busy, setBusy] = useState(false);
+  const run = useManagementDraft(
+    'description',
+    t('settingsFaceHeading', locale),
+    [
+      reviewField(t('settingsNameBn', locale), hospital.descriptionBn ?? '', bn),
+      reviewField(t('settingsNameEn', locale), hospital.descriptionEn ?? '', en),
+    ],
+    baseRun,
+    () => {
+      setBn(hospital.descriptionBn ?? '');
+      setEn(hospital.descriptionEn ?? '');
+    },
+  );
 
   const fits = bn.trim().length <= DESCRIPTION_MAX && en.trim().length <= DESCRIPTION_MAX;
 
@@ -354,13 +377,36 @@ type Chosen =
 const isLogoType = (type: string): type is LogoFileType =>
   (LOGO_FILE_TYPES as readonly string[]).includes(type);
 
-function Logo({ snapshot, offline, run }: FaceProps): ReactNode {
+function Logo({ snapshot, offline, run: baseRun }: FaceProps): ReactNode {
   const locale = useLocale();
   const inputId = useId();
   const current = snapshot.face.logo;
   const [shown, setShown] = useState<string | null>(null);
   const [chosen, setChosen] = useState<Chosen>({ kind: 'none' });
   const [busy, setBusy] = useState(false);
+  const run = useManagementDraft(
+    'logo',
+    t('settingsLogoHeading', locale),
+    [
+      reviewField(
+        t('settingsLogoHeading', locale),
+        current?.version ?? null,
+        chosen.kind === 'none'
+          ? (current?.version ?? null)
+          : chosen.kind === 'ready'
+            ? chosen.content
+            : chosen.kind,
+        (value) =>
+          value === (current?.version ?? null)
+            ? t(current === null ? 'settingsLogoNone' : 'settingsLogoAlt', locale)
+            : t('settingsLogoSave', locale),
+      ),
+    ],
+    baseRun,
+    () => {
+      setChosen({ kind: 'none' });
+    },
+  );
 
   // The logo as the server has it, read again whenever its version changes.
   const version = current?.version ?? null;
@@ -433,6 +479,16 @@ function Logo({ snapshot, offline, run }: FaceProps): ReactNode {
     void run(
       () => settingsApi.removeLogo(),
       () => t('settingsLogoRemoved', locale),
+      {
+        title: t('settingsLogoRemove', locale),
+        fields: [
+          reviewField(
+            t('settingsLogoHeading', locale),
+            t('settingsLogoAlt', locale),
+            t('settingsLogoNone', locale),
+          ),
+        ],
+      },
     ).finally(() => {
       setBusy(false);
     });
@@ -528,7 +584,7 @@ function Logo({ snapshot, offline, run }: FaceProps): ReactNode {
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
-function Colours({ snapshot, offline, run }: FaceProps): ReactNode {
+function Colours({ snapshot, offline, run: baseRun }: FaceProps): ReactNode {
   const locale = useLocale();
   const inputId = useId();
   const saved = snapshot.face.theme;
@@ -538,8 +594,34 @@ function Colours({ snapshot, offline, run }: FaceProps): ReactNode {
     (saved?.colors['brand-600'] ?? COLOUR['brand-600']).toLowerCase(),
   );
   const [busy, setBusy] = useState(false);
+  // The saved theme may have darkened the chosen colour for contrast. Reusing
+  // that canonical theme avoids deriving different secondary shades from its
+  // already-darkened main colour after an acknowledged read-back.
+  const theme = useMemo(
+    () =>
+      saved !== null && colour.toLowerCase() === saved.colors['brand-600'].toLowerCase()
+        ? saved
+        : HEX.test(colour)
+          ? themeFromColour(colour)
+          : null,
+    [colour, saved],
+  );
+  const run = useManagementDraft(
+    'brand',
+    t('settingsBrandHeading', locale),
+    [
+      reviewField(
+        t('settingsBrandColour', locale),
+        (saved?.colors['brand-600'] ?? COLOUR['brand-600']).toLowerCase(),
+        colour,
+      ),
+    ],
+    baseRun,
+    () => {
+      setColour((saved?.colors['brand-600'] ?? COLOUR['brand-600']).toLowerCase());
+    },
+  );
 
-  const theme = useMemo(() => (HEX.test(colour) ? themeFromColour(colour) : null), [colour]);
   const darkened = theme !== null && theme.colors['brand-600'] !== colour.toLowerCase();
   const unchanged =
     theme !== null &&
@@ -685,7 +767,17 @@ function SaveButton({
   readonly onClick?: () => void;
 }): ReactNode {
   const locale = useLocale();
-  const reason = offline ? t('settingsSaveOffline', locale) : (blocked ?? null);
+  const management = useAdminManagement();
+  const conflict = [...(management?.drafts.values() ?? [])].some((draft) => draft.conflict);
+  const reason = management?.readFailed
+    ? t('loadFailed', locale)
+    : management?.busy
+      ? t('manageSaving', locale)
+      : conflict
+        ? t('manageServerChanged', locale)
+        : offline
+          ? t('settingsSaveOffline', locale)
+          : (blocked ?? null);
   const common = {
     variant,
     type: submit ? ('submit' as const) : ('button' as const),

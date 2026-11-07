@@ -766,7 +766,7 @@ describe('the shelf and what the public is told', () => {
   });
 
   it('renews the freshness even when the flag did not change', async () => {
-    const { medicineId, inStock } = await stockedMedicine(shapla.hospitalId);
+    const { medicineId, inStock, expectedUpdatedAt } = await stockedMedicine(shapla.hospitalId);
 
     const before = await sql<{ updated_at: Date }>`
       SELECT updated_at FROM pharmacy_stock
@@ -778,7 +778,7 @@ describe('the shelf and what the public is told', () => {
       .put(`${BASE}/hospitals/${shapla.hospitalId}/pharmacy-stock`)
       .set('Authorization', bearer(shapla.pharmacyToken))
       .set('Idempotency-Key', key)
-      .send({ flags: [{ medicineId, inStock }], idempotencyKey: key })
+      .send({ flags: [{ medicineId, inStock, expectedUpdatedAt }], idempotencyKey: key })
       .expect(200);
 
     const after = await sql<{ updated_at: Date }>`
@@ -793,14 +793,14 @@ describe('the shelf and what the public is told', () => {
   });
 
   it('flags a medicine out of stock, and the search says so', async () => {
-    const { medicineId, genericName } = await stockedMedicine(shapla.hospitalId);
+    const { medicineId, genericName, expectedUpdatedAt } = await stockedMedicine(shapla.hospitalId);
     const key = randomUUID();
 
     await request(app)
       .put(`${BASE}/hospitals/${shapla.hospitalId}/pharmacy-stock`)
       .set('Authorization', bearer(shapla.pharmacyToken))
       .set('Idempotency-Key', key)
-      .send({ flags: [{ medicineId, inStock: false }], idempotencyKey: key })
+      .send({ flags: [{ medicineId, inStock: false, expectedUpdatedAt }], idempotencyKey: key })
       .expect(200);
 
     const search = await request(app)

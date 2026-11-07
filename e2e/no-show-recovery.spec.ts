@@ -70,6 +70,7 @@ async function openDashboard(browser: Browser): Promise<Page> {
 
 /** The recovered tile, read back into poisha. */
 async function recoveredPoisha(dashboard: Page): Promise<number> {
+  await dashboard.getByRole('button', { name: /Reports/ }).click();
   await dashboard.getByTestId('admin-tab-loss').click();
   const text = await dashboard.getByTestId('admin-recovered-value').innerText();
   const taka = Number(latin(text).replace(/[^\d.]/g, ''));
@@ -97,6 +98,7 @@ test.describe('a freed chair, recovered (FR-QUE-30, FR-REC-30, FR-ADM-03)', () =
     await expect(reception.getByTestId('standby-waiting')).toContainText(bengali(2));
 
     // Serial 2 never came. Their grace period ran out an hour ago.
+    await reception.getByTestId('row-more-2').click();
     await reception.getByTestId('queue-row-2').getByRole('button', { name: 'অনুপস্থিত' }).click();
 
     // The chair appears on the card, and its button goes live once the
@@ -137,6 +139,7 @@ test.describe('a freed chair, recovered (FR-QUE-30, FR-REC-30, FR-ADM-03)', () =
 
     // Nothing is free and nobody waits, so there is no card at all yet.
     await expect(reception.getByTestId('standby-card')).toHaveCount(0);
+    await reception.getByTestId('row-more-2').click();
 
     await reception.getByTestId('queue-row-2').getByRole('button', { name: 'অনুপস্থিত' }).click();
 

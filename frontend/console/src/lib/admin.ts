@@ -225,21 +225,51 @@ function client(token: string): ApiClient {
  * server in another zone counting back from its own midnight would silently
  * shift the window by a day for half of each day.
  */
-export function dhakaDate(daysAgo: number): string {
+export function dhakaDate(daysAgo: number, clock = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Dhaka',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date());
+  }).format(clock);
 
   const at = new Date(`${parts}T00:00:00Z`);
   at.setUTCDate(at.getUTCDate() - daysAgo);
   return at.toISOString().slice(0, 10);
 }
 
+/** Capture one clock for both inclusive bounds, including Dhaka midnight. */
+export function reportRange(days: RangeDays, clock = new Date()): Dashboard['range'] {
+  return { from: dhakaDate(days, clock), to: dhakaDate(0, clock) };
+}
+
+export interface ChamberSummary {
+  readonly sessionId: string;
+  readonly doctorNameBn: string;
+  readonly doctorNameEn: string;
+  readonly departmentNameBn: string;
+  readonly departmentNameEn: string;
+  readonly room: string | null;
+  readonly status: 'scheduled' | 'running' | 'paused' | 'ended' | 'cancelled';
+  readonly plannedStart: string;
+  readonly plannedEnd: string;
+  readonly actualStart: string | null;
+  readonly declaredDelayMinutes: number;
+  readonly waiting: number;
+  readonly seen: number;
+  readonly noShows: number;
+  readonly desks: readonly {
+    readonly id: string;
+    readonly nameBn: string;
+    readonly nameEn: string;
+  }[];
+}
+
 /** `GET /admin/overview` — `CARD-B10-NOW` (`FR-ADM-12`, plan R6). */
 export interface Overview {
+  readonly date: string;
+  readonly chambers: readonly ChamberSummary[];
+  readonly chambersTruncated: boolean;
   readonly doctors: { readonly scheduled: number; readonly sitting: number };
   readonly waiting: number;
   readonly appointments: { readonly booked: number; readonly seen: number };
@@ -256,8 +286,7 @@ export interface Overview {
 
 export const adminApi = {
   async dashboard(token: string, days: RangeDays): Promise<Dashboard> {
-    const to = dhakaDate(0);
-    const from = dhakaDate(days);
+    const { from, to } = reportRange(days);
     return await client(token).get<Dashboard>(`/admin/dashboard?from=${from}&to=${to}`);
   },
   async overview(token: string): Promise<Overview> {
@@ -278,9 +307,9 @@ export async function downloadExport(
   token: string,
   view: ExportView,
   days: RangeDays,
+  range: Dashboard['range'] = reportRange(days),
 ): Promise<void> {
-  const to = dhakaDate(0);
-  const from = dhakaDate(days);
+  const { from, to } = range;
 
   const response = await fetch(`${API_BASE}/admin/export?view=${view}&from=${from}&to=${to}`, {
     headers: { Authorization: `Bearer ${token}` },

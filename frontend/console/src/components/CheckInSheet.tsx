@@ -14,7 +14,7 @@
  * fact about who is standing here, true whether or not the network is.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { MAX_QUOTED_WAIT_MINUTES, QUOTE_STEP_MINUTES } from '@platform/domain';
 import { format, formatNumber, formatSerial, t, type Locale, numeralsFor } from '@platform/i18n';
@@ -42,11 +42,13 @@ export function CheckInSheet({
 }): ReactNode {
   const numerals = numeralsFor(locale);
   const [minutes, setMinutes] = useState(suggested ?? FALLBACK_QUOTE_MINUTES);
+  const suggestion = useRef(suggested);
+  suggestion.current = suggested;
 
   // A new patient starts from their own estimate, not the last one's figure.
   useEffect(() => {
-    setMinutes(suggested ?? FALLBACK_QUOTE_MINUTES);
-  }, [serial, suggested]);
+    setMinutes(suggestion.current ?? FALLBACK_QUOTE_MINUTES);
+  }, [serial]);
 
   const step = (delta: number): void => {
     setMinutes((current) => Math.min(MAX_QUOTED_WAIT_MINUTES, Math.max(0, current + delta)));
@@ -54,6 +56,7 @@ export function CheckInSheet({
 
   return (
     <Sheet
+      console
       open={serial !== null}
       onOpenChange={(open) => {
         if (!open) onClose();

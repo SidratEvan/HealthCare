@@ -197,6 +197,9 @@ test.describe('the hospital console (SEG-B00-LANG)', () => {
     await page.reload();
     await expect(page.getByTestId('queue-table')).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-    await expect(page.getByTestId('call-next')).not.toHaveText(BENGALI);
+    await expect(page.getByTestId('call-next')).toHaveAttribute(
+      'aria-label',
+      /Call next patient|Finish and call next/,
+    );
   });
 });

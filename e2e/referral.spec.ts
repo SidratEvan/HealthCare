@@ -146,6 +146,11 @@ test.describe('refer out, refer in, and the timeline (FR-EMG-07, FR-EMG-08, FR-E
 
     // BTN-B07-IN-ARRIVED: the handover.
     await shaplaPage.getByTestId(`er-incoming-arrived-${referralId}`).click();
+    // Opening the new review must not move the patient or create a receiving token.
+    await expect(shaplaPage.getByTestId('er-arrival-confirm')).toBeVisible();
+    expect((await referralOf(walkIn.caseId))?.state).toBe('accepted');
+    await expect(page.getByTestId(`er-row-${walkIn.caseId}`)).toBeVisible();
+    await shaplaPage.getByTestId('er-arrival-confirm').click();
     await expect.poll(async () => (await referralOf(walkIn.caseId))?.state).toBe('arrived');
     const received = (await referralOf(walkIn.caseId))?.arrivedCaseId ?? '';
 

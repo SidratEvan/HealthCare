@@ -46,6 +46,24 @@ x-api-env: &api-env
   SMS_PROVIDER: ${SMS_PROVIDER:-log}
   SMS_API_KEY: ${SMS_API_KEY:-}
   SMS_SENDER_ID: ${SMS_SENDER_ID:-}
+  # The rest of what DEPLOY.md §S3 asks for when an aggregator is switched on.
+  # Without these two the API refuses to start under SMS_PROVIDER=http
+  # (`env.ts`), so they have to reach it (pilot-readiness audit, F-05).
+  SMS_API_URL: ${SMS_API_URL:-}
+  SMS_DLR_SECRET: ${SMS_DLR_SECRET:-}
+  SMS_MONTHLY_CAP: ${SMS_MONTHLY_CAP:-20000}
+  # bKash and Nagad (DEPLOY.md §S3), only once there are merchant accounts.
+  # Blank, a provider is simply not offered.
+  BKASH_BASE_URL: ${BKASH_BASE_URL:-}
+  BKASH_APP_KEY: ${BKASH_APP_KEY:-}
+  BKASH_APP_SECRET: ${BKASH_APP_SECRET:-}
+  BKASH_USERNAME: ${BKASH_USERNAME:-}
+  BKASH_PASSWORD: ${BKASH_PASSWORD:-}
+  NAGAD_BASE_URL: ${NAGAD_BASE_URL:-}
+  NAGAD_MERCHANT_ID: ${NAGAD_MERCHANT_ID:-}
+  NAGAD_MERCHANT_NUMBER: ${NAGAD_MERCHANT_NUMBER:-}
+  NAGAD_PUBLIC_KEY: ${NAGAD_PUBLIC_KEY:-}
+  NAGAD_PRIVATE_KEY: ${NAGAD_PRIVATE_KEY:-}
   TRAVEL_TIME_MODE: static
   TRUST_PROXY_HOPS: "1"
   # How many people one address stands for (DEPLOY.md §S2). 1 unless the
@@ -117,6 +135,8 @@ services:
       migrate: { condition: service_completed_successfully }
 
   console:
+    # Named, so `deploy/images.sh` can save and load it (DEPLOY.md S4).
+    image: medlivebd-console
     build:
       context: ..
       target: console
@@ -129,6 +149,8 @@ services:
       api: { condition: service_healthy }
 
   patient:
+    # Named, so `deploy/images.sh` can save and load it (DEPLOY.md S4).
+    image: medlivebd-patient
     build:
       context: ..
       target: patient
@@ -185,6 +207,8 @@ services:
       BACKUP_AT_UTC_HOUR: ${BACKUP_AT_UTC_HOUR:-20}
       BACKUP_VERIFY_RESTORE: ${BACKUP_VERIFY_RESTORE:-true}
       BACKUP_MAX_AGE_HOURS: ${BACKUP_MAX_AGE_HOURS:-26}
+      # The copy in the second location is encrypted with it (DEPLOY.md §S5).
+      BACKUP_ENCRYPTION_PASSPHRASE: ${BACKUP_ENCRYPTION_PASSPHRASE:-}
       # Set only when the host names a second location: with none, the script
       # says so and reports every run as failing, rather than copying a backup
       # onto the disk it is a backup of and calling that a second copy.
@@ -203,6 +227,32 @@ services:
       retries: 1
     depends_on:
       db: { condition: service_healthy }
+
+  # Somebody is told (DEPLOY.md §S5a, FR-SUP-06). Reads the API's `/readyz`
+  # every minute and posts to ALERT_WEBHOOK_URL when something goes wrong,
+  # changes, stays wrong for ALERT_REPEAT_HOURS, or comes right. The API's own
+  # image runs it, with Node's own modules: no new image, no new dependency.
+  # It waits for nothing to be healthy, since an API that never becomes
+  # healthy is exactly what it has to report.
+  watchdog:
+    image: medlivebd-api
+    restart: unless-stopped
+    logging: *logging
+    command: ["node", "/deploy/watchdog.mjs"]
+    environment:
+      WATCHDOG_READYZ_URL: http://api:4000/readyz
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      ALERT_WEBHOOK_FORMAT: ${ALERT_WEBHOOK_FORMAT:-json}
+      ALERT_SERVER_NAME: ${ALERT_SERVER_NAME:-MedLiveBD server}
+      ALERT_REPEAT_HOURS: ${ALERT_REPEAT_HOURS:-6}
+      ALERT_DAILY_UTC_HOUR: ${ALERT_DAILY_UTC_HOUR:-3}
+    volumes:
+      - ./watchdog.mjs:/deploy/watchdog.mjs:ro
+    # The image's health check asks the API whether it is ready; this is not
+    # the API.
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
 
 volumes:
   db-data:

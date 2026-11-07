@@ -60,6 +60,8 @@ pnpm-debug.log*
 # never committed (FR-SEC-08).
 deploy/backups/
 deploy/backups-second/
+# When deploy/setup.sh created the first administrators on this server.
+deploy/.setup-done
 storage/
 
 # A database dump taken before a release (DEPLOY.md 7.3). It can hold a

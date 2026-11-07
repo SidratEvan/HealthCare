@@ -11,10 +11,10 @@
 
 import { useState, type FormEvent, type ReactNode } from 'react';
 
-import { t, type ConsoleKey } from '@platform/i18n';
-import { Button, Input, useLocale } from '@platform/ui';
+import { CONSOLE, t, type ConsoleKey } from '@platform/i18n';
+import { ConsoleAction, ConsoleInput as Input, useLocale } from '@platform/ui';
 
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
+import { StaffAccessFrame, accessFieldLabel } from '@/components/StaffAccessFrame';
 import { changePassword, signOut, type PasswordOutcome } from '@/lib/staffAuth';
 
 const MIN_LENGTH = 10;
@@ -54,6 +54,9 @@ export function ChangePassword({
     const outcome = await changePassword(current, next);
     setBusy(false);
     if (outcome.ok) {
+      setCurrent('');
+      setNext('');
+      setRepeat('');
       onChanged();
       return;
     }
@@ -61,17 +64,8 @@ export function ChangePassword({
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="bg-brand-700 text-ink-inverse">
-        <div className="mx-auto flex max-w-[1040px] items-center gap-4 px-8 py-8">
-          <h1 className="font-reading text-title-lg">{t('passwordTitle', locale)}</h1>
-          <ConsoleLanguageSwitch />
-        </div>
-      </header>
-
-      <main className="mx-auto flex max-w-[520px] flex-col gap-6 p-8" data-testid="change-password">
-        <p className="text-body-md text-ink-secondary">{t('passwordIntro', locale)}</p>
-
+    <StaffAccessFrame title="passwordTitle" description="passwordIntro" step={1}>
+      <div className="cf-stack" data-testid="change-password">
         <form
           className="flex flex-col gap-4"
           noValidate
@@ -80,7 +74,7 @@ export function ChangePassword({
           }}
         >
           <Input
-            label={t('passwordCurrent', locale)}
+            label={accessFieldLabel('passwordCurrent', locale)}
             kind="password"
             density="console"
             autoComplete="current-password"
@@ -92,7 +86,7 @@ export function ChangePassword({
             }}
           />
           <Input
-            label={t('passwordNew', locale)}
+            label={accessFieldLabel('passwordNew', locale)}
             kind="password"
             density="console"
             autoComplete="new-password"
@@ -105,7 +99,7 @@ export function ChangePassword({
             }}
           />
           <Input
-            label={t('passwordRepeat', locale)}
+            label={accessFieldLabel('passwordRepeat', locale)}
             kind="password"
             density="console"
             autoComplete="new-password"
@@ -128,25 +122,23 @@ export function ChangePassword({
             </p>
           )}
 
-          <Button
+          <ConsoleAction
+            label={CONSOLE.passwordSubmit}
             type="submit"
             {...(ready ? {} : { disabled: true, disabledReason: t('passwordNeedsFields', locale) })}
             loading={busy}
             data-testid="password-submit"
-          >
-            {t('passwordSubmit', locale)}
-          </Button>
+          />
         </form>
 
-        <Button
+        <ConsoleAction
+          label={CONSOLE.signOut}
           variant="secondary"
           onClick={() => {
             void signOut().then(onSignedOut);
           }}
-        >
-          {t('signOut', locale)}
-        </Button>
-      </main>
-    </div>
+        />
+      </div>
+    </StaffAccessFrame>
   );
 }

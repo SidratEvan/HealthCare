@@ -157,7 +157,11 @@ export async function nationalRoles(): Promise<string[]> {
   return result.rows.map((row) => row.role);
 }
 
-/** A real national account holding this role — real for `nationalRoles`' reason. */
+/**
+ * A real national account holding this role — real for `nationalRoles`' reason.
+ * The seeded demonstration account first (`FR-DEM-07`): one created later, by
+ * an administrator or a test, never takes over the picker.
+ */
 export async function nationalStaffFor(
   role: string,
 ): Promise<{ readonly id: string; readonly fullName: string } | null> {
@@ -171,7 +175,7 @@ export async function nationalStaffFor(
        AND sr.deleted_at IS NULL
        AND su.deleted_at IS NULL
        AND sr.deleted_at IS NULL
-     ORDER BY su.full_name
+     ORDER BY (sr.scope @> '{"demo": true}'::jsonb) DESC, su.full_name
      LIMIT 1
   `.execute(db);
 
@@ -186,6 +190,7 @@ export async function nationalStaffFor(
  * token minted for an id that does not exist produces a console whose every
  * action is refused by the database. `FR-QUE-04` — an unattributable queue
  * action cannot be recorded at all — is what makes that the right behaviour.
+ * The seeded demonstration account comes first, as in `nationalStaffFor`.
  */
 export async function staffFor(
   hospitalId: string,
@@ -199,7 +204,7 @@ export async function staffFor(
        AND sr.role = ${role}::staff_role
        AND sr.deleted_at IS NULL
        AND su.deleted_at IS NULL
-     ORDER BY su.full_name
+     ORDER BY (sr.scope @> '{"demo": true}'::jsonb) DESC, su.full_name
      LIMIT 1
   `.execute(db);
 

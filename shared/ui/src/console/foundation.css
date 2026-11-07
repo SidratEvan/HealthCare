@@ -1,0 +1,504 @@
+/* Approved eleven-console foundation. Opt-in only: no html/body/:root rules.
+ * GR-03, GR-06, FR-BRD-12, A11Y-03/07. Portals carry their own theme scope.
+ */
+.console-foundation {
+  --bg-canvas: #f2f5f9;
+  --bg-surface: #ffffff;
+  --bg-sunken: #edf1f6;
+  --ink-primary: #0b1a33;
+  --ink-secondary: #33445e;
+  --ink-muted: #56647b;
+  --line-strong: #c3cedc;
+  --line-soft: #dce3ec;
+  --line-hairline: #dce3ec;
+  --brand-900: #003d85;
+  --brand-700: #0052b0;
+  --brand-600: #0062cf;
+  --brand-300: #2a7fe0;
+  --brand-100: #e1edfc;
+  --brand-border: #c4dbf6;
+  --positive-700: #1a7348;
+  --positive-600: #1a7348;
+  --positive-100: #e3f3ea;
+  --warn-700: #835600;
+  --warn-600: #835600;
+  --warn-100: #f8edd6;
+  --warn-border: #e6cc97;
+  --alert-700: #9f2a1f;
+  --alert-600: #9f2a1f;
+  --alert-100: #fbeae7;
+  --cf-info: #0a5694;
+  --cf-info-bg: #e3effa;
+  --cf-radius-sm: 8px;
+  --cf-radius-md: 12px;
+  --cf-radius-lg: 16px;
+  --cf-space-1: 4px;
+  --cf-space-2: 8px;
+  --cf-space-3: 12px;
+  --cf-space-4: 16px;
+  --cf-space-5: 20px;
+  --cf-space-6: 24px;
+  --cf-touch: 44px;
+  --cf-rail: 92px;
+  --cf-shadow: 0 10px 28px rgb(11 26 51 / 10%);
+  --cf-overlay: rgb(11 26 51 / 35%);
+  --cf-focus: #0a5694;
+  color: var(--ink-primary);
+  background: var(--bg-canvas);
+  font-family: var(--font-anek, 'Anek Bangla'), system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  hyphens: none;
+  box-sizing: border-box;
+}
+.console-foundation *,
+.console-foundation *::before,
+.console-foundation *::after {
+  box-sizing: border-box;
+}
+.console-foundation button,
+.console-foundation input,
+.console-foundation select,
+.console-foundation textarea {
+  font: inherit;
+}
+.console-foundation :focus-visible {
+  outline: 3px solid var(--cf-focus);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+.console-foundation button {
+  cursor: pointer;
+  font-weight: 600;
+  /* State crossfades can temporarily put pale text on a pale fill. */
+  transition: none;
+}
+.console-foundation button:disabled {
+  cursor: not-allowed;
+}
+.console-foundation .cf-bilingual {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.65;
+}
+.console-foundation .cf-bilingual small {
+  font-size: 12px;
+  line-height: 1.65;
+  font-weight: 500;
+}
+.console-foundation .cf-shell {
+  min-height: 100dvh;
+}
+.console-foundation .cf-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cf-space-4);
+  padding: var(--cf-space-3) var(--cf-space-5);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--bg-surface);
+}
+.console-foundation .cf-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-space-3);
+  min-width: 0;
+  flex: 1 1 260px;
+}
+.console-foundation .cf-logo {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: var(--cf-radius-md);
+  color: white;
+  background: var(--brand-600);
+  overflow: hidden;
+}
+.console-foundation .cf-logo svg {
+  width: 30px;
+  height: 30px;
+}
+.console-foundation .cf-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--bg-surface);
+}
+.console-foundation .cf-identity-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.console-foundation .cf-identity-copy strong {
+  font-size: 18px;
+  line-height: 1.4;
+}
+.console-foundation .cf-identity-copy > span {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.console-foundation .cf-workspace {
+  padding: var(--cf-space-2) var(--cf-space-3);
+  border: 1px solid var(--brand-border);
+  border-radius: var(--cf-radius-sm);
+  color: var(--brand-700);
+  background: var(--brand-100);
+}
+.console-foundation .cf-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cf-space-3);
+  margin-left: auto;
+}
+.console-foundation .cf-role {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.console-foundation .cf-body {
+  display: flex;
+  align-items: stretch;
+}
+.console-foundation .cf-nav {
+  flex: 0 0 var(--cf-rail);
+  padding: var(--cf-space-4) var(--cf-space-2);
+  border-right: 1px solid var(--line-soft);
+  background: var(--bg-surface);
+}
+.console-foundation .cf-nav button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cf-space-2);
+  width: 100%;
+  min-height: 76px;
+  margin-bottom: var(--cf-space-2);
+  padding: var(--cf-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--cf-radius-md);
+  background: transparent;
+  color: var(--ink-secondary);
+  text-align: center;
+}
+.console-foundation .cf-nav button:hover {
+  background: var(--bg-sunken);
+}
+.console-foundation .cf-nav button[aria-current] {
+  color: white;
+  background: var(--brand-600);
+  border-color: var(--brand-700);
+  font-weight: 700;
+}
+.console-foundation .cf-nav-mark {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-radius: var(--cf-radius-sm);
+}
+.console-foundation .cf-main {
+  min-width: 0;
+  flex: 1;
+  padding: var(--cf-space-6);
+}
+.console-foundation .cf-skip {
+  position: fixed;
+  top: var(--cf-space-2);
+  left: var(--cf-space-2);
+  transform: translateY(-200%);
+  z-index: 90;
+  padding: var(--cf-space-3);
+  color: white;
+  background: var(--brand-700);
+  border-radius: var(--cf-radius-sm);
+}
+.console-foundation .cf-skip:focus {
+  transform: none;
+}
+.console-foundation .cf-page-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--cf-space-4);
+  margin-bottom: var(--cf-space-5);
+}
+.console-foundation h1 {
+  font-size: 26px;
+  line-height: 1.4;
+  font-weight: 700;
+  margin: 0;
+}
+.console-foundation h2 {
+  font-size: 18px;
+  line-height: 1.5;
+  font-weight: 700;
+  margin: 0;
+}
+.console-foundation p {
+  margin: 0;
+}
+.console-foundation .cf-page-heading p,
+.console-foundation .cf-secondary {
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+.console-foundation .cf-panel > div {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-lg);
+  padding: var(--cf-space-5);
+  background: var(--bg-surface);
+}
+.console-foundation .cf-panel-content {
+  margin-top: var(--cf-space-4);
+  display: grid;
+  gap: var(--cf-space-4);
+}
+.console-foundation .cf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--cf-space-5);
+}
+.console-foundation .cf-stack {
+  display: grid;
+  gap: var(--cf-space-4);
+}
+.console-foundation .cf-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cf-space-3);
+}
+.console-foundation .cf-action {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--cf-space-1);
+}
+.console-foundation .cf-action-reason {
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+.console-foundation .cf-action > button {
+  min-height: var(--cf-touch);
+  border-radius: var(--cf-radius-sm);
+  padding: var(--cf-space-2) var(--cf-space-4);
+  box-shadow: none;
+}
+.console-foundation .cf-action > button:disabled {
+  opacity: 1;
+  color: var(--ink-muted);
+  background: var(--bg-sunken);
+  border-color: var(--line-soft);
+}
+.console-foundation input,
+.console-foundation select,
+.console-foundation textarea {
+  min-height: var(--cf-touch);
+  border-radius: var(--cf-radius-sm);
+}
+.console-foundation input:disabled {
+  color: var(--ink-muted);
+  background: var(--bg-sunken);
+}
+.console-foundation label {
+  font-size: 14px;
+  line-height: 1.65;
+}
+.console-foundation .cf-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cf-space-2);
+  padding: var(--cf-space-1) var(--cf-space-3);
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--cf-radius-sm);
+}
+.console-foundation .cf-status > span {
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+  border-radius: 50%;
+}
+.console-foundation .cf-tone-neutral {
+  color: var(--ink-secondary);
+  background: var(--bg-sunken);
+}
+.console-foundation .cf-tone-positive {
+  color: var(--positive-700);
+  background: var(--positive-100);
+}
+.console-foundation .cf-tone-information {
+  color: var(--cf-info);
+  background: var(--cf-info-bg);
+}
+.console-foundation .cf-tone-caution {
+  color: var(--warn-700);
+  background: var(--warn-100);
+}
+.console-foundation .cf-tone-alert {
+  color: var(--alert-700);
+  background: var(--alert-100);
+}
+.console-foundation .cf-feedback,
+.console-foundation .cf-state {
+  padding: var(--cf-space-4);
+  border-radius: var(--cf-radius-md);
+}
+.console-foundation .cf-feedback p,
+.console-foundation .cf-state p {
+  margin-top: var(--cf-space-1);
+}
+.console-foundation .cf-state {
+  background: var(--bg-sunken);
+  color: var(--ink-secondary);
+  border: 1px solid var(--line-soft);
+}
+.console-foundation .cf-state-offline {
+  background: var(--warn-100);
+  color: var(--warn-700);
+  border-color: var(--warn-border);
+}
+.console-foundation .cf-state-error {
+  background: var(--alert-100);
+  color: var(--alert-700);
+}
+.console-foundation .cf-state .cf-action {
+  margin-top: var(--cf-space-3);
+}
+.console-foundation .cf-skeleton {
+  margin-top: var(--cf-space-3);
+  height: var(--cf-space-5);
+  width: 65%;
+  border-radius: var(--cf-radius-sm);
+  background: var(--line-soft);
+}
+.console-foundation .cf-help-button {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-space-2);
+  min-height: var(--cf-touch);
+  padding: var(--cf-space-2) var(--cf-space-3);
+  color: var(--ink-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--cf-radius-sm);
+}
+.console-foundation .cf-help-button > .cf-help-symbol {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  font-weight: 700;
+}
+.console-foundation .cf-help-button:hover {
+  background: var(--bg-sunken);
+}
+.console-foundation.cf-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: var(--cf-overlay);
+}
+.console-foundation.cf-dialog {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 71;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: var(--cf-space-6);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--cf-radius-lg);
+  background: var(--bg-surface);
+  box-shadow: var(--cf-shadow);
+}
+.console-foundation.cf-help {
+  left: auto;
+  right: var(--cf-space-4);
+  top: var(--cf-space-4);
+  bottom: var(--cf-space-4);
+  transform: none;
+  width: min(420px, calc(100vw - 32px));
+}
+.console-foundation .cf-dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cf-space-3);
+  margin-bottom: var(--cf-space-3);
+}
+.console-foundation .cf-dialog-content {
+  margin-top: var(--cf-space-5);
+}
+.console-foundation .cf-close {
+  flex: none;
+  min-width: var(--cf-touch);
+  min-height: var(--cf-touch);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--cf-radius-sm);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: 24px;
+}
+.console-foundation .cf-help-steps {
+  display: grid;
+  gap: var(--cf-space-5);
+  padding-left: var(--cf-space-6);
+  list-style: decimal;
+}
+.console-foundation .cf-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--cf-space-3);
+}
+@media (max-width: 900px) {
+  .console-foundation .cf-body {
+    flex-direction: column;
+  }
+  .console-foundation .cf-nav {
+    display: flex;
+    flex: none;
+    gap: var(--cf-space-2);
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    overflow-x: auto;
+    padding: var(--cf-space-2);
+  }
+  .console-foundation .cf-nav button {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: var(--cf-touch);
+    margin: 0;
+    padding: var(--cf-space-2) var(--cf-space-4);
+    flex-direction: row;
+  }
+  .console-foundation .cf-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .console-foundation .cf-main {
+    padding: var(--cf-space-4);
+  }
+  .console-foundation .cf-workspace {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .console-foundation *,
+  .console-foundation *::before,
+  .console-foundation *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

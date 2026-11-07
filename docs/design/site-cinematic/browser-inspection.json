@@ -1,0 +1,26 @@
+[
+  {
+    "locale": "en",
+    "width": 1440,
+    "errors": [],
+    "overflow": false
+  },
+  {
+    "locale": "bn",
+    "width": 1440,
+    "errors": [],
+    "overflow": false
+  },
+  {
+    "locale": "en",
+    "width": 390,
+    "errors": [],
+    "overflow": false
+  },
+  {
+    "locale": "bn",
+    "width": 390,
+    "errors": [],
+    "overflow": false
+  }
+]
