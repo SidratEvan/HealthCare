@@ -4,11 +4,12 @@
  */
 
 import express, { json, type Express } from 'express';
+import { pino } from 'pino';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-import { redactedPaths } from '../config/logger.js';
+import { LOG_SERIALIZERS, logger, redactedPaths, safeError } from '../config/logger.js';
 import { errorHandler } from '../middleware/error.js';
 import { idempotency, isUnsafeMethod } from '../middleware/idempotency.js';
 import {
@@ -389,5 +390,128 @@ describe('what the logger refuses to record (CLAUDE.md §7)', () => {
     // person's medical business: shipped to a third party, kept for months,
     // read by people with no clinical relationship to the patient.
     expect(redactedPaths).toContain(path);
+  });
+});
+
+describe('what an error leaves in the log (CLAUDE.md §7, FR-SEC-08)', () => {
+  const SENT =
+    '{"email":"reception@hospital.invalid","password":"hunter2-not-real","phone":"+88017';
+
+  /** The log lines the error handler writes, as the objects handed to pino. */
+  function capture(): { readonly lines: unknown[]; readonly restore: () => void } {
+    const lines: unknown[] = [];
+    const record = (fields: unknown, message?: unknown): void => {
+      lines.push({ fields, message });
+    };
+    const spy = vi.spyOn(logger, 'child').mockReturnValue({
+      info: record,
+      warn: record,
+      error: record,
+    } as unknown as ReturnType<typeof logger.child>);
+    return { lines, restore: () => spy.mockRestore() };
+  }
+
+  const app = harness((a) => {
+    a.post('/staff/login', (_req, res) => {
+      res.json({ ok: true });
+    });
+  });
+
+  it('a body cut off on the way is a refusal, and what it held is not logged', async () => {
+    const log = capture();
+    try {
+      const response = await request(app)
+        .post('/staff/login')
+        .set('content-type', 'application/json')
+        .send(SENT);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details).toEqual({ body: 'not_json' });
+      expect(JSON.stringify(response.body)).not.toContain('hunter2');
+
+      expect(log.lines).toHaveLength(1);
+      const written = JSON.stringify(log.lines[0]);
+      expect(written).toContain('request refused');
+      expect(written).not.toContain('hunter2');
+      expect(written).not.toContain('+88017');
+    } finally {
+      log.restore();
+    }
+  });
+
+  it('a body in a character set the parser does not read is the caller’s fault, not a 500', async () => {
+    const log = capture();
+    try {
+      const response = await request(app)
+        .post('/staff/login')
+        .set('content-type', 'application/json; charset=klingon')
+        .send('{"password":"hunter2-not-real"}');
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.details).toEqual({ body: 'unreadable' });
+      expect(JSON.stringify(log.lines)).not.toContain('hunter2');
+    } finally {
+      log.restore();
+    }
+  });
+
+  it('a parser refusal keeps its kind and drops its body, message and stack', () => {
+    let thrown: unknown;
+    try {
+      JSON.parse(SENT);
+    } catch (error) {
+      thrown = Object.assign(error as Error, {
+        type: 'entity.parse.failed',
+        status: 400,
+        expose: true,
+        body: SENT,
+      });
+    }
+
+    const safe = safeError(thrown);
+
+    expect(safe).toEqual({ type: 'SyntaxError', parser: 'entity.parse.failed', status: 400 });
+    expect(JSON.stringify(safe)).not.toContain('hunter2');
+  });
+
+  it('a database error keeps its constraint and table and drops the row values', () => {
+    const fault = Object.assign(
+      new Error('null value in column "full_name" violates not-null constraint'),
+      {
+        code: '23502',
+        table: 'patients',
+        column: 'full_name',
+        detail: 'Failing row contains (+8801711000000, null, female).',
+        where: 'SQL statement "INSERT …"',
+        parameters: ['+8801711000000'],
+      },
+    );
+
+    const safe = safeError(new Error('import failed', { cause: fault })) as Record<string, unknown>;
+
+    expect(safe['message']).toBe('import failed');
+    expect(safe['cause']).toMatchObject({ code: '23502', table: 'patients', column: 'full_name' });
+    expect(JSON.stringify(safe)).not.toContain('+8801711000000');
+    expect(JSON.stringify(safe)).not.toContain('Failing row');
+  });
+
+  it('a logger configured as the API’s writes errors through that filter', () => {
+    const out: string[] = [];
+    // The same serializers the API's logger is built with, on a stream a test
+    // can read (the API's own is silent under test).
+    const probe = pino(
+      { serializers: LOG_SERIALIZERS },
+      { write: (line: string) => out.push(line) },
+    );
+    const fault = Object.assign(new Error('duplicate key value violates unique constraint "x"'), {
+      code: '23505',
+      detail: 'Key (phone)=(+8801711000000) already exists.',
+    });
+
+    probe.error({ err: fault }, 'unhandled error');
+
+    expect(out.join('')).toContain('23505');
+    expect(out.join('')).not.toContain('+8801711000000');
   });
 });
