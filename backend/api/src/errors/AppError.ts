@@ -80,12 +80,14 @@ export const guardFailed = (code: string, detail: string): AppError =>
 export function asAppError(thrown: unknown): AppError {
   if (thrown instanceof AppError) return thrown;
   // The body parser's own refusals are the caller's doing, not ours: a body
-  // over the limit or one that is not JSON. Answered as such, not as a 500.
-  const type =
-    typeof thrown === 'object' && thrown !== null ? (thrown as { type?: unknown }).type : undefined;
-  if (type === 'entity.too.large') return new AppError('PAYLOAD_TOO_LARGE', { cause: thrown });
-  if (type === 'entity.parse.failed') {
-    return new AppError('VALIDATION_FAILED', { details: { body: 'not_json' }, cause: thrown });
+  // over the limit, one that is not JSON, one cut off on the way, one in an
+  // encoding or character set it does not read. Answered as such, not as a 500.
+  if (isBodyRefusal(thrown)) {
+    if (thrown.status === 413) return new AppError('PAYLOAD_TOO_LARGE', { cause: thrown });
+    return new AppError('VALIDATION_FAILED', {
+      details: { body: thrown.type === 'entity.parse.failed' ? 'not_json' : 'unreadable' },
+      cause: thrown,
+    });
   }
   // A unique index refused a write that a check a moment earlier allowed:
   // two requests raced, and one of them is this one. It is answered as the
@@ -111,4 +113,28 @@ export function asAppError(thrown: unknown): AppError {
 /** True when the error was raised deliberately by application code. */
 export function isAppError(thrown: unknown): thrown is AppError {
   return thrown instanceof AppError;
+}
+
+/**
+ * A refusal by the body parser (`body-parser`, through `express.json`): its
+ * errors carry a `type` such as `entity.parse.failed` and a status below 500
+ * that is safe to expose.
+ *
+ * Such an error also carries what the caller sent — `body` is the raw text of
+ * a body that would not parse, and the message quotes it — so it is the
+ * caller's fault, to be answered and logged as a refusal and never written
+ * out whole (CLAUDE.md §7, `FR-SEC-08`).
+ */
+export function isBodyRefusal(
+  thrown: unknown,
+): thrown is { readonly type: string; readonly status: number } {
+  if (typeof thrown !== 'object' || thrown === null) return false;
+  const { type, status, expose } = thrown as { type?: unknown; status?: unknown; expose?: unknown };
+  return (
+    typeof type === 'string' &&
+    typeof status === 'number' &&
+    status >= 400 &&
+    status < 500 &&
+    expose === true
+  );
 }

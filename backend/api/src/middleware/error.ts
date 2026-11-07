@@ -15,7 +15,7 @@
  */
 
 import { requestLogger } from '../config/logger.js';
-import { AppError, asAppError, isAppError } from '../errors/AppError.js';
+import { AppError, asAppError, isAppError, isBodyRefusal } from '../errors/AppError.js';
 
 import type { NextFunction, Request, Response } from 'express';
 
@@ -41,10 +41,15 @@ export function errorHandler(
   const error = asAppError(thrown);
   const log = requestLogger(req.requestId);
 
-  if (isAppError(thrown)) {
+  if (isAppError(thrown) || isBodyRefusal(thrown)) {
     // Expected: a guard refused, a token expired, a serial was taken. Part of
     // normal operation, so it is not logged at error level — a console full of
     // stack traces for "grace period still running" hides the real failures.
+    //
+    // A body that would not parse is one of these too: a request cut off by a
+    // weak connection is ordinary in a hospital corridor. Its error is not
+    // logged at all, because it holds the text that was sent — a password at
+    // sign-in, a patient's name and phone at the counter (CLAUDE.md §7).
     log.info(
       { code: error.code, status: error.status, route: req.path, method: req.method },
       'request refused',
