@@ -83,15 +83,20 @@ export function counterPhone(typed: string): string | null {
   return normaliseBdMobile(toLatinDigits(typed));
 }
 
-/** Everybody this number reaches (`FR-REC-20`). */
+/**
+ * Everybody this number reaches (`FR-REC-20`), up to the server's limit;
+ * `more` says the number reaches more people than are listed.
+ */
 export async function findByPhone(
   phone: string,
-): Promise<CounterResult<readonly CounterPatient[]>> {
+): Promise<
+  CounterResult<{ readonly patients: readonly CounterPatient[]; readonly more: boolean }>
+> {
   return await attempt(async () => {
-    const data = await client().get<{ patients: CounterPatient[] }>(
+    const data = await client().get<{ patients: CounterPatient[]; more?: boolean }>(
       `/registration/patients?phone=${encodeURIComponent(phone)}`,
     );
-    return data.patients;
+    return { patients: data.patients, more: data.more === true };
   });
 }
 

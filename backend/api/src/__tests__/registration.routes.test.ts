@@ -177,7 +177,7 @@ describe('phone first (FR-REC-20)', () => {
     const phone = spokenPhone();
     const empty = await lookup(phone.typed);
     expect(empty.status).toBe(200);
-    expect(empty.body.data).toEqual({ phone: phone.stored, patients: [] });
+    expect(empty.body.data).toEqual({ phone: phone.stored, patients: [], more: false });
 
     const created = await register({
       phone: phone.typed,
@@ -228,6 +228,22 @@ describe('phone first (FR-REC-20)', () => {
     expect(child.body.data.patientId).not.toBe(first.body.data.patientId);
     expect((await lookup(phone.typed)).body.data.patients).toHaveLength(2);
   });
+
+  it('says when a number reaches more people than one list shows', async () => {
+    const phone = spokenPhone();
+    for (let index = 0; index <= registrationRepo.LOOKUP_MAX; index++) {
+      const made = await register({
+        phone: phone.typed,
+        fullName: `Household member ${String(index)} (Demo)`,
+        ageYears: 20 + (index % 50),
+        sex: index % 2 === 0 ? 'female' : 'male',
+      });
+      expect(made.status).toBe(200);
+    }
+    const found = await lookup(phone.typed);
+    expect(found.body.data.patients).toHaveLength(registrationRepo.LOOKUP_MAX);
+    expect(found.body.data.more).toBe(true);
+  }, 120_000);
 
   it('audits every patient a lookup showed (DB-P7)', async () => {
     const phone = spokenPhone();

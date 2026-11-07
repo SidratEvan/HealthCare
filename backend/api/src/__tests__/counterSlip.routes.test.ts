@@ -74,10 +74,13 @@ describe('the token slip (FR-REC-21)', () => {
     expect(JSON.stringify(opened.body.data)).not.toContain(bookingOf(1));
   });
 
-  it('is refused to another hospital’s counter', async () => {
+  it('is refused to another hospital’s counter, which cannot see the booking', async () => {
     const foreign = await otherHospitalId(fixture.hospitalId);
     const response = await slip(bookingOf(1), await staffToken(['receptionist'], foreign));
-    expect(response.status).toBe(403);
+    // The tenant policies hide another hospital's booking, so it is not found
+    // rather than forbidden, as on every cross-hospital read (FR-SEC-11).
+    expect(response.status).toBe(404);
+    expect(JSON.stringify(response.body)).not.toContain('trackingUrl');
   });
 
   it('is reception’s: a doctor, a patient and nobody are refused', async () => {

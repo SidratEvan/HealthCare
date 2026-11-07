@@ -63,9 +63,15 @@ export async function registeredPatient(trx: Tx, patientId: string): Promise<Cou
   };
 }
 
+/** The most people one lookup lists (`FR-REC-20`). */
+export const LOOKUP_MAX = 50;
+
 /**
  * A patient another hospital imported is that hospital's alone (`FR-IMP-10`),
  * so only this facility's own imported patients are ever shown here.
+ *
+ * Reads one past `LOOKUP_MAX`, so the caller can say there are more rather
+ * than leave the counter believing the list is everybody.
  */
 export async function patientsForPhone(
   phone: string,
@@ -92,7 +98,7 @@ export async function patientsForPhone(
        AND (g.phone = ${phone} OR u.phone = ${phone} OR p.phone = ${phone})
        AND (p.owner_hospital_id IS NULL OR p.owner_hospital_id = ${hospitalId})
      ORDER BY p.is_primary DESC, p.full_name
-     LIMIT 20
+     LIMIT ${LOOKUP_MAX + 1}
   `.execute(db);
   return result.rows.map((row) => ({
     patientId: row.id,

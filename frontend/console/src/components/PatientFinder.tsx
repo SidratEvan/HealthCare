@@ -64,6 +64,8 @@ export function PatientFinder({
   const [typed, setTyped] = useState('');
   const [searched, setSearched] = useState<string | null>(null);
   const [found, setFound] = useState<readonly CounterPatient[] | null>(null);
+  /** The number reaches more people than the list shows (`FR-REC-20`). */
+  const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const [unresolved, setUnresolved] = useState(false);
@@ -117,9 +119,10 @@ export function PatientFinder({
         return;
       }
       setSearched(number);
-      setFound(result.value);
+      setFound(result.value.patients);
+      setMore(result.value.more);
       setCandidate(null);
-      setNewForm(result.value.length === 0);
+      setNewForm(result.value.patients.length === 0);
       setReused(false);
       setAmbiguousReceipt(false);
     },
@@ -237,6 +240,7 @@ export function PatientFinder({
               setBusy(false);
               setSearched(null);
               setFound(null);
+              setMore(false);
               setCandidate(null);
               setNewForm(false);
               setError(null);
@@ -307,6 +311,11 @@ export function PatientFinder({
               ) : (
                 <div className="cf-stack" data-testid="finder-results">
                   <p>{t('counterFound', locale)}</p>
+                  {more ? (
+                    <p className="cf-feedback cf-tone-caution" data-testid="finder-more">
+                      {t('counterFoundMore', locale)}
+                    </p>
+                  ) : null}
                   {(found ?? []).map((person) => (
                     <div className="cf-reg-person" key={person.patientId}>
                       <div>

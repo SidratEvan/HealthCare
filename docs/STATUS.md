@@ -42,8 +42,17 @@ MARKS to confirm in the pilot agreement (F-09). No SMS: counter-only pilot.
   with no SMS this is how a counter patient follows the queue. Tests:
   `counterSlip.routes.test.ts`, `tokenSlip.test.ts`, `e2e/token-slip.spec.ts`.
 
-**Still open:** registration lookup caps at 20 silently; retention and
-erasure (F-16) is legal, not code. MARKS needs a receipt printer at each
+- **Phone lookup at the counter** lists up to 50 people and says so when a
+  number reaches more (`FR-REC-20`); it used to stop at 20 silently.
+- **Incident, 6 November, and its guard.** Running an API test from inside
+  `backend/api` skipped the suites' setup, so `.env`'s `DATABASE_URL` (the
+  public demo's Supabase) was used: 19 chambers in room `TEST`, 52 bookings,
+  2 tracking links, 1 guest identity and 1 queue event were written there,
+  all from demo patients. `config/db.ts` now refuses a test run on any
+  database whose name does not end in `_test`. The release's demo refresh
+  removes the rows. **Always run suites from the repository root.**
+
+**Still open:** retention and erasure (F-16) is legal, not code. MARKS needs a receipt printer at each
 counter (any 80 mm USB printer the browser can print to; an office printer
 works too).
 

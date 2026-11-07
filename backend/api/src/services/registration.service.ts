@@ -38,9 +38,13 @@ function phoneOf(typed: string): string {
 export async function lookup(
   actor: CounterActor,
   typedPhone: string,
-): Promise<{ phone: string; patients: registrationRepo.CounterPatient[] }> {
+): Promise<{ phone: string; patients: registrationRepo.CounterPatient[]; more: boolean }> {
   const phone = phoneOf(typedPhone);
-  const patients = await registrationRepo.patientsForPhone(phone, actor.hospitalId);
+  const read = await registrationRepo.patientsForPhone(phone, actor.hospitalId);
+  // More than the list holds: said, so nobody is registered twice because
+  // the right person was below the cut (`FR-REC-20`).
+  const more = read.length > registrationRepo.LOOKUP_MAX;
+  const patients = read.slice(0, registrationRepo.LOOKUP_MAX);
   if (patients.length > 0) {
     await withTransaction(async (trx) => {
       await registrationRepo.recordLookup(trx, {
@@ -52,7 +56,7 @@ export async function lookup(
       });
     });
   }
-  return { phone, patients };
+  return { phone, patients, more };
 }
 
 /**

@@ -635,6 +635,11 @@ export const CONSOLE = {
   markLate: { bn: 'দেরি', en: 'Late' },
   markNoShow: { bn: 'অনুপস্থিত', en: 'No-show' },
   reinstate: { bn: 'ফিরিয়ে আনুন', en: 'Reinstate' },
+  // FR-REC-20: a number that reaches more people than one list shows.
+  counterFoundMore: {
+    bn: 'এই নম্বরে আরও মানুষ আছেন, সবাইকে এখানে দেখানো যায়নি। নতুন করে যোগ করার আগে নাম ও বয়স ভালো করে মিলিয়ে নিন।',
+    en: 'This number has more people than can be shown here. Check the name and age carefully before adding someone new.',
+  },
   // The token slip (FR-REC-21, BTN-B02-SLIP).
   printSlip: { bn: 'স্লিপ প্রিন্ট করুন', en: 'Print slip' },
   printSlipFailed: {
