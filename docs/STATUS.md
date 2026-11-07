@@ -15,7 +15,7 @@ explain in plain English. The Python/Django rewrite (`migration/django-drf`,
 local and remote, its folders and image) was **deleted** on his order; the
 Node/TypeScript stack is the product.
 
-**Branch `feat/marks-pilot`** (worktree `D:\Projects\HealthCare-ops-alerts`),
+**Branch `feat/marks-pilot`** (checked out in `D:\Projects\HealthCare`),
 on top of `chore/integrate-console-redesign` (`c550343`, the console redesign
 and every fix to 18 October, not yet on `mvp`):
 
@@ -34,9 +34,18 @@ and every fix to 18 October, not yet on `mvp`):
 loaded; Doctor **on**, with hospital-wide access and every view audited, for
 MARKS to confirm in the pilot agreement (F-09). No SMS: counter-only pilot.
 
-**Still open:** the printed token slip (`FR-REC-21`) is not built;
-registration lookup caps at 20 silently; retention and erasure (F-16) is
-legal, not code.
+- **The token slip** (`FR-REC-21`, `BTN-B02-SLIP`): `POST /bookings/:id/slip`
+  and স্লিপ প্রিন্ট করুন on `S-B-03`'s confirmation and in each waiting row's
+  আরও menu. Bangla, 72 mm (an 80 mm receipt printer, or the top of A4): serial,
+  doctor, room, chamber hours, the live estimate or "not yet", how many are
+  ahead, the print time, and a QR code of the patient's live serial page:
+  with no SMS this is how a counter patient follows the queue. Tests:
+  `counterSlip.routes.test.ts`, `tokenSlip.test.ts`, `e2e/token-slip.spec.ts`.
+
+**Still open:** registration lookup caps at 20 silently; retention and
+erasure (F-16) is legal, not code. MARKS needs a receipt printer at each
+counter (any 80 mm USB printer the browser can print to; an office printer
+works too).
 
 ## Previous work — MARKS readiness assessment and remediation (18 October 2026)
 

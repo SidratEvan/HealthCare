@@ -35,6 +35,7 @@ import { ConsoleWorkspaceFrame } from '@/components/ConsoleWorkspaceFrame';
 import { DemoBanner } from '@/components/DemoBanner';
 import { FAILURE_KEY, PatientFinder, type ChosenPatient } from '@/components/PatientFinder';
 import { useStaffWorkspace } from '@/components/StaffEntry';
+import { usePrintSlip } from '@/components/TokenSlip';
 import { readDemoSession } from '@/lib/demo';
 import { addWalkIn } from '@/lib/registration';
 import { fetchStaffChambers, type StaffChamber } from '@/lib/staffAuth';
@@ -52,6 +53,7 @@ const closed = (chamber: StaffChamber): boolean =>
   chamber.status === 'ended' || chamber.status === 'cancelled';
 interface Issued {
   readonly serial: number;
+  readonly bookingId: string;
   readonly patient: ChosenPatient;
   readonly chamber: StaffChamber;
 }
@@ -91,6 +93,7 @@ function RegistrationBody(): ReactNode {
   const [error, setError] = useState<ConsoleKey | null>(null);
   const [issued, setIssued] = useState<Issued | null>(null);
   const [destination, setDestination] = useState<string | null>(null);
+  const slip = usePrintSlip();
   const sending = useRef(false);
   const original = useRef<Attempt | null>(null);
   const allowExit = useRef(false);
@@ -256,7 +259,12 @@ function RegistrationBody(): ReactNode {
       return;
     }
     setUncertain(false);
-    setIssued({ serial: result.value, patient: saved.patient, chamber: saved.chamber });
+    setIssued({
+      serial: result.value.serial,
+      bookingId: result.value.bookingId,
+      patient: saved.patient,
+      chamber: saved.chamber,
+    });
   }
   if (session === null) return null;
   const step = issued !== null ? 4 : patient !== null ? 3 : phoneReady ? 2 : 1;
@@ -320,6 +328,7 @@ function RegistrationBody(): ReactNode {
       }
     >
       <DemoBanner />
+      {slip.sheet}
       <div className="cf-registration cf-stack" data-testid="registration-console">
         <ConsolePageHeader
           title={CONSOLE.registrationTitle}
@@ -375,6 +384,15 @@ function RegistrationBody(): ReactNode {
             <h3>{t('regTellSerial', locale)}</h3>
             <p>{issued.patient.phone}</p>
             <div className="cf-reg-actions">
+              <ConsoleAction
+                label={CONSOLE.printSlip}
+                variant="secondary"
+                data-testid="registration-print-slip"
+                loading={slip.printing}
+                onClick={() => {
+                  void slip.printSlip(issued.bookingId);
+                }}
+              />
               <ConsoleAction
                 label={CONSOLE.regNextPatient}
                 data-testid="registration-next-patient"

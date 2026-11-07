@@ -78,6 +78,12 @@ export const endSessionBody = command({
 });
 
 /**
+ * `POST /bookings/:id/slip` — what the counter prints for a serial
+ * (`FR-REC-21`, `BTN-B02-SLIP`). Nothing to send: the booking is in the path.
+ */
+export const counterSlipBody = command({});
+
+/**
  * `POST /sessions/:id/next` — the single most-used control in the product.
  *
  * Which patient is finished and which is next are both decisions the reducer

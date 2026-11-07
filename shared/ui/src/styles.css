@@ -214,3 +214,13 @@
     display: flex;
   }
 }
+
+/*
+ * The token slip (FR-REC-21, BTN-B02-SLIP): the width a counter's 80 mm
+ * receipt printer prints, which also sits at the top of an A4 sheet when
+ * the counter has only an office printer.
+ */
+[data-token-slip] {
+  width: 72mm;
+  max-width: 100%;
+}

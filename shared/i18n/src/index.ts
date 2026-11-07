@@ -41,6 +41,7 @@ export {
   type SheetPatient,
   type SheetVisit,
 } from './prescription.js';
+export { tokenSlip, type SlipBooking, type SlipLines } from './tokenSlip.js';
 export {
   PAPER_KIND_NAMES,
   PATIENT_PROVIDED,

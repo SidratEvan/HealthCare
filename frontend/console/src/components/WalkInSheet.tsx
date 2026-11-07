@@ -137,7 +137,7 @@ export function WalkInSheet({
     onAdded(
       format('walkInAdded', locale, {
         name: patient.fullName,
-        serial: formatSerial(result.value, numerals),
+        serial: formatSerial(result.value.serial, numerals),
       }),
     );
   }

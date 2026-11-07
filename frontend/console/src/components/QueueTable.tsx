@@ -82,6 +82,8 @@ export interface QueueTableProps {
   readonly onReinstate: (entry: QueueEntry) => void;
   /** `BTN-B02-CHECKIN`: the patient is at the counter (`FR-REC-18`). */
   readonly onCheckIn: (entry: QueueEntry) => void;
+  /** `BTN-B02-SLIP`: print the patient's token slip (`FR-REC-21`). */
+  readonly onPrintSlip?: (entry: QueueEntry) => void;
   /** Patient display names, by patient id. Absent while they load. */
   readonly patientNames: ReadonlyMap<string, string>;
 }
@@ -97,6 +99,7 @@ export function QueueTable({
   onNoShow,
   onReinstate,
   onCheckIn,
+  onPrintSlip,
   patientNames,
 }: QueueTableProps): ReactNode {
   const numerals = numeralsFor(locale);
@@ -190,6 +193,14 @@ export function QueueTable({
                           label={CONSOLE.markDone}
                           variant="secondary"
                           onClick={() => onDone(entry)}
+                        />
+                      ) : null}
+                      {isWaiting(entry.status) && onPrintSlip !== undefined ? (
+                        <ConsoleAction
+                          label={CONSOLE.printSlip}
+                          variant="secondary"
+                          data-testid={testId(`print-slip-${entry.serial}`)}
+                          onClick={() => onPrintSlip(entry)}
                         />
                       ) : null}
                       {isWaiting(entry.status) ? (

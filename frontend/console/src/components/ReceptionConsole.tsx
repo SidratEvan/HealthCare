@@ -73,6 +73,7 @@ import {
   type ReceptionCommands,
 } from '@/components/ReceptionWorkspace';
 import { StandbyCard } from '@/components/StandbyCard';
+import { usePrintSlip } from '@/components/TokenSlip';
 import { WalkInSheet } from '@/components/WalkInSheet';
 import { useSessionQueue, type QueueAction, type UndoOutcome } from '@/hooks/useSessionQueue';
 import { readDemoSession } from '@/lib/demo';
@@ -127,6 +128,8 @@ function ReceptionQueue(props: ReceptionQueueProps): ReactNode {
   const [checkingIn, setCheckingIn] = useState<QueueEntry | null>(null);
   /** `MOD-B02-WALKIN` (pilot step 23). */
   const [walkingIn, setWalkingIn] = useState(false);
+  /** `BTN-B02-SLIP`: the token slip (`FR-REC-21`). */
+  const slip = usePrintSlip();
 
   // The freshness line has to age on screen without anything else happening —
   // that is the whole point of it (FR-OFF-03). One tick a second is enough for
@@ -737,7 +740,11 @@ function ReceptionQueue(props: ReceptionQueueProps): ReactNode {
           onCheckIn={(entry) => {
             if (!afterEnd()) setCheckingIn(entry);
           }}
+          onPrintSlip={(entry) => {
+            void slip.printSlip(entry.bookingId);
+          }}
         />
+        {slip.sheet}
         <OfflineBlock
           connected={queue.connected}
           pendingCount={queue.pendingCount}

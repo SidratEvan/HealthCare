@@ -635,6 +635,16 @@ export const CONSOLE = {
   markLate: { bn: 'দেরি', en: 'Late' },
   markNoShow: { bn: 'অনুপস্থিত', en: 'No-show' },
   reinstate: { bn: 'ফিরিয়ে আনুন', en: 'Reinstate' },
+  // The token slip (FR-REC-21, BTN-B02-SLIP).
+  printSlip: { bn: 'স্লিপ প্রিন্ট করুন', en: 'Print slip' },
+  printSlipFailed: {
+    bn: 'স্লিপটি আনা যায়নি। সংযোগ দেখে আবার চেষ্টা করুন।',
+    en: 'The slip could not be fetched. Check the connection and try again.',
+  },
+  printSlipNoPhone: {
+    bn: 'এই রোগীর ফোন নম্বর নেই, তাই স্লিপে QR কোড থাকবে না।',
+    en: 'This patient has no phone number, so the slip has no QR code.',
+  },
 
   // --- Check-in (FR-REC-18, BTN-B02-CHECKIN, MOD-B02-CHECKIN) ----------------
   // A button, so a verb in English as in Bangla (FRONTEND.md §5.1).

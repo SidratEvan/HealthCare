@@ -13,7 +13,7 @@
 
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import { normaliseBdMobile } from '@platform/domain';
-import { toLatinDigits } from '@platform/i18n';
+import { toLatinDigits, type SlipBooking } from '@platform/i18n';
 
 import { readDemoSession } from '@/lib/demo';
 
@@ -129,8 +129,9 @@ export type WalkInPosition =
   | { readonly kind: 'index'; readonly index: number; readonly reason: string };
 
 /**
- * `POST /sessions/:id/walkin` (`FR-REC-14`). Answers with the serial issued:
- * the receipt names the booking issued by this attempt. The original serial
+ * `POST /sessions/:id/walkin` (`FR-REC-14`). Answers with the serial issued
+ * and its booking, which the token slip prints from (`FR-REC-21`): the
+ * receipt names the booking issued by this attempt. The original serial
  * survives a lost-answer retry after other patients have joined.
  */
 export async function addWalkIn(
@@ -141,9 +142,9 @@ export async function addWalkIn(
     key: crypto.randomUUID(),
     at: new Date().toISOString(),
   },
-): Promise<CounterResult<number>> {
+): Promise<CounterResult<WalkInReceipt>> {
   return await attempt(async () => {
-    const data = await client().post<{ walkin?: { serial: number } }>(
+    const data = await client().post<{ walkin?: { serial: number; bookingId: string } }>(
       `/sessions/${sessionId}/walkin`,
       {
         clientEventId: requestAttempt.key,
@@ -156,8 +157,29 @@ export async function addWalkIn(
       requestAttempt.key,
     );
     const receipt = data.walkin;
-    if (receipt === undefined || !Number.isSafeInteger(receipt.serial) || receipt.serial < 1)
+    if (
+      receipt === undefined ||
+      !Number.isSafeInteger(receipt.serial) ||
+      receipt.serial < 1 ||
+      typeof receipt.bookingId !== 'string'
+    )
       throw new Error('Walk-in receipt missing; retry the original attempt.');
-    return receipt.serial;
+    return { serial: receipt.serial, bookingId: receipt.bookingId };
   }, true);
+}
+
+export interface WalkInReceipt {
+  readonly serial: number;
+  readonly bookingId: string;
+}
+
+/**
+ * `POST /bookings/:id/slip` (`FR-REC-21`, `BTN-B02-SLIP`): what the token
+ * slip prints. A write, because it mints the tracking link on it; a fresh key
+ * each press, since a second press is a second slip.
+ */
+export async function fetchCounterSlip(bookingId: string): Promise<CounterResult<SlipBooking>> {
+  return await attempt(async () => {
+    return await client().post<SlipBooking>(`/bookings/${bookingId}/slip`, {}, crypto.randomUUID());
+  });
 }

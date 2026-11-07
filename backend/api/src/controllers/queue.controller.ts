@@ -23,6 +23,7 @@ import type { QueueActor } from '@platform/domain';
 
 import { ticketsIn } from '../config/serialTicket.js';
 import { AppError, forbiddenScope, notFound } from '../errors/AppError.js';
+import * as bookingService from '../services/booking.service.js';
 import { assertDeskAllows } from '../services/deskAccess.service.js';
 import * as queueService from '../services/queue.service.js';
 
@@ -181,6 +182,12 @@ export async function callNext(req: Request, res: Response): Promise<void> {
       ...envelope(req),
     }),
   );
+}
+
+/** `POST /bookings/:id/slip` — the token slip (`FR-REC-21`, `BTN-B02-SLIP`). */
+export async function counterSlip(req: Request, res: Response): Promise<void> {
+  const { booking, sessionId } = await assertBookingScope(req);
+  res.json({ ok: true, data: await bookingService.counterSlip(booking.id, sessionId) });
 }
 
 /** `POST /bookings/:id/done` */
