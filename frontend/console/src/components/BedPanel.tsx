@@ -51,6 +51,8 @@ import {
 import { Button, Chip, Input, useWindowKeydown } from '@platform/ui';
 
 import { shownState, stateLabel } from '@/lib/bedCopy';
+import { WARD_WORKSPACE as COPY } from '@/lib/wardEmergencyMessages';
+import { canConfirmAdmission } from '@/lib/wardWorkspace';
 
 import type { BedBoard } from '@/hooks/useBedBoard';
 import type { PanelResponse, PendingHandoff, PendingRequest } from '@/lib/beds';
@@ -313,6 +315,7 @@ export function BedPanel(props: BedPanelProps): ReactNode {
       {mode === 'admit' ? (
         <AdmitForm
           bed={bed}
+          now={now}
           locale={locale}
           connected={connected}
           requests={(props.requests ?? []).filter((request) => request.state === 'requested')}
@@ -510,6 +513,7 @@ function DischargeForecast({
 /** `BTN-B06-ADMIT`: "patient search or from pending list". */
 function AdmitForm({
   bed,
+  now,
   locale,
   connected,
   requests,
@@ -520,6 +524,7 @@ function AdmitForm({
   onAdmitRequest,
 }: {
   readonly bed: BedView;
+  readonly now: Date;
   readonly locale: Locale;
   readonly connected: boolean;
   readonly requests: readonly PendingRequest[];
@@ -546,6 +551,8 @@ function AdmitForm({
   );
   const [sex, setSex] = useState<'male' | 'female' | 'other' | null>(initial?.sex ?? null);
   const [tried, setTried] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewVersion, setReviewVersion] = useState<number | null>(null);
 
   const phoneStored = normaliseBdMobile(phone);
   const ageYears = /^\d{1,3}$/.test(age.trim()) ? Number(age.trim()) : null;
@@ -561,6 +568,63 @@ function AdmitForm({
   const ordered = [...requests].sort(
     (a, b) => Number(b.bedKind === bed.kind) - Number(a.bedKind === bed.kind),
   );
+
+  if (reviewing) {
+    const stale = !canConfirmAdmission(bed, reviewVersion, now.toISOString() as Timestamp);
+    return (
+      <section className="ward-admit-review" data-testid="admit-review">
+        <h3>{COPY.review[locale]}</h3>
+        <p>{COPY.reviewHint[locale]}</p>
+        <dl>
+          <dt>{t('admitName', locale)}</dt>
+          <dd>{name.trim()}</dd>
+          <dt>{t('admitPhone', locale)}</dt>
+          <dd>{phoneStored}</dd>
+          <dt>{t('admitAge', locale)}</dt>
+          <dd>{formatNumber(ageYears ?? 0, numeralsFor(locale))}</dd>
+          <dt>{t('admitSex', locale)}</dt>
+          <dd>
+            {sex === 'male'
+              ? t('sexMale', locale)
+              : sex === 'female'
+                ? t('sexFemale', locale)
+                : t('sexOther', locale)}
+          </dd>
+          <dt>{COPY.board[locale]}</dt>
+          <dd>
+            {bed.label} · {bedKindName(bed.kind, locale)}
+          </dd>
+          {fromEr === null ? null : (
+            <>
+              <dt>{t('pendingFromEr', locale)}</dt>
+              <dd>
+                {fromEr.tokenLabel} · {problemName(fromEr.problem, locale)}
+              </dd>
+            </>
+          )}
+        </dl>
+        <Button
+          data-testid="admit-submit-review"
+          {...(stale
+            ? { disabled: true as const, disabledReason: t('bedActionRefused', locale) }
+            : {})}
+          onClick={() => {
+            if (stale || phoneStored === null || ageYears === null || sex === null) return;
+            void onAdmitDesk(
+              { name: name.trim(), phone: phoneStored, ageYears, sex },
+              null,
+              fromEr?.caseId ?? null,
+            );
+          }}
+        >
+          {COPY.confirmAdmission[locale]}
+        </Button>
+        <Button variant="quiet" onClick={() => setReviewing(false)}>
+          {t('goBack', locale)}
+        </Button>
+      </section>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4" data-testid="admit-form">
@@ -625,11 +689,8 @@ function AdmitForm({
           event.preventDefault();
           setTried(true);
           if (!valid || phoneStored === null || ageYears === null || sex === null) return;
-          void onAdmitDesk(
-            { name: name.trim(), phone: phoneStored, ageYears, sex },
-            null,
-            fromEr?.caseId ?? null,
-          );
+          setReviewVersion(bed.version);
+          setReviewing(true);
         }}
       >
         <Input
@@ -698,7 +759,7 @@ function AdmitForm({
 
         <div className="flex gap-2">
           <Button type="submit" data-testid="admit-confirm">
-            {t('admitConfirm', locale)}
+            {COPY.review[locale]}
           </Button>
           <Button type="button" variant="quiet" onClick={onCancel}>
             {t('goBack', locale)}

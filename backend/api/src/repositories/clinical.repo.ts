@@ -18,6 +18,8 @@
  * SQL only lives here (CLAUDE.md §7). Events and notifications only in services.
  */
 
+import { createHash } from 'node:crypto';
+
 import { sql } from 'kysely';
 
 import type { SymptomSignal } from '@platform/domain';
@@ -146,7 +148,10 @@ export async function findPatient(patientId: string): Promise<PatientIdentity | 
  * because a booking has neither — it belongs to a session, and the session is
  * what knows whose chamber this is.
  */
-export async function findChamberBooking(bookingId: string): Promise<ChamberBooking | null> {
+export async function findChamberBooking(
+  bookingId: string,
+  trx?: Tx,
+): Promise<ChamberBooking | null> {
   const result = await sql<{
     booking_id: string;
     patient_id: string;
@@ -163,7 +168,7 @@ export async function findChamberBooking(bookingId: string): Promise<ChamberBook
       FROM bookings b
       JOIN sessions s ON s.id = b.session_id
      WHERE b.id = ${bookingId}::uuid AND b.deleted_at IS NULL
-  `.execute(db);
+  `.execute(trx ?? db);
 
   const row = result.rows[0];
   if (row === undefined) return null;
@@ -306,6 +311,38 @@ export async function findVisitByBooking(
   if (row === undefined) return null;
 
   return { id: row.id, signedAt: row.signed_at?.toISOString() ?? null };
+}
+
+/** FR-DOC-08: opaque content/version token, read under the session lock.
+ * Full timestamp precision plus a digest of the persisted fields/medicines
+ * prevents lost updates even if a timestamp repeats. No schema change.
+ */
+export async function readDraft(bookingId: string, trx: Tx) {
+  const result = await sql<{
+    id: string;
+    revision: string;
+    signed_at: Date | null;
+    diagnosis_text: string | null;
+    advice_text_bn: string | null;
+    follow_up_date: string | null;
+    symptom_signal: SymptomSignal | null;
+  }>`SELECT id, id::text || ':' || updated_at::text AS revision, signed_at,
+      diagnosis_text, advice_text_bn, follow_up_date::text, symptom_signal
+    FROM visits WHERE booking_id=${bookingId}::uuid AND deleted_at IS NULL`.execute(trx);
+  const row = result.rows[0];
+  if (row === undefined) return null;
+  const medicines = (await medicinesFor([row.id], trx)).get(row.id) ?? [];
+  const digest = createHash('sha256').update(JSON.stringify({ row, medicines })).digest('hex');
+  return {
+    visitId: row.id,
+    revision: `${row.revision}:${digest}`,
+    signedAt: row.signed_at?.toISOString() ?? null,
+    diagnosisText: row.diagnosis_text,
+    adviceTextBn: row.advice_text_bn,
+    followUpDate: row.follow_up_date,
+    symptomSignal: row.symptom_signal,
+    medicines,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -787,6 +824,7 @@ export async function findVisitForBooking(bookingId: string): Promise<VisitRecor
  */
 export async function medicinesFor(
   visitIds: readonly string[],
+  trx?: Tx,
 ): Promise<Map<string, PrescribedMedicine[]>> {
   const found = new Map<string, PrescribedMedicine[]>();
   if (visitIds.length === 0) return found;
@@ -808,7 +846,7 @@ export async function medicinesFor(
        AND p.deleted_at IS NULL
        AND i.deleted_at IS NULL
      ORDER BY i.created_at, i.id
-  `.execute(db);
+  `.execute(trx ?? db);
 
   for (const row of result.rows) {
     const list = found.get(row.visit_id) ?? [];

@@ -251,6 +251,22 @@ export async function findDetail(bookingId: string, trx?: Tx): Promise<BookingDe
   };
 }
 
+/**
+ * The phone a patient is reached on (`FR-REC-21`): their guest identity's,
+ * their account's, or the contact number the hospital holds for them, in
+ * that order. `null` when there is none.
+ */
+export async function patientPhone(patientId: string): Promise<string | null> {
+  const result = await sql<{ phone: string | null }>`
+    SELECT coalesce(g.phone, u.phone, p.phone) AS phone
+      FROM patients p
+      LEFT JOIN guest_identities g ON g.id = p.owner_guest_id AND g.deleted_at IS NULL
+      LEFT JOIN users u ON u.id = p.owner_user_id AND u.deleted_at IS NULL
+     WHERE p.id = ${patientId} AND p.deleted_at IS NULL
+  `.execute(db);
+  return result.rows[0]?.phone ?? null;
+}
+
 /** One booking's settled state, exactly as the reducer computed it. */
 export interface BookingProjection {
   readonly bookingId: string;

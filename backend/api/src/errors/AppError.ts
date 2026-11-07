@@ -6,6 +6,8 @@
  * original cause is attached for the log and dropped from the response.
  */
 
+import { refusedPhonePaths } from '@platform/domain';
+
 import { messageFor, statusFor, type ErrorCode } from './codes.js';
 
 /** Extra machine-readable context. Never patient identifiers (CLAUDE.md §7). */
@@ -92,6 +94,16 @@ export function asAppError(thrown: unknown): AppError {
   const code =
     typeof thrown === 'object' && thrown !== null ? (thrown as { code?: unknown }).code : undefined;
   if (code === '23505') return new AppError('WRITE_CONFLICT', { cause: thrown });
+
+  // FR-DEM-08: a schema parsed outside `validate` that refused a person's
+  // phone under the demonstration's rule is that refusal, not a fault.
+  const issues =
+    typeof thrown === 'object' && thrown !== null
+      ? (thrown as { issues?: unknown }).issues
+      : undefined;
+  if (Array.isArray(issues) && refusedPhonePaths(issues).length > 0) {
+    return new AppError('DEMO_PHONE_NOT_ALLOWED', { cause: thrown });
+  }
 
   return new AppError('INTERNAL', { cause: thrown });
 }

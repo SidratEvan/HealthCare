@@ -27,6 +27,15 @@
 #      none configured the run is recorded as failed, because a backup on the
 #      disk it is a backup of does not survive that disk.
 #
+# With BACKUP_ENCRYPTION_PASSPHRASE set, what goes to the second location is
+# encrypted (gpg, AES-256, the passphrase alone; MARKS readiness F-07):
+# db-<stamp>.dump.gpg and files-<stamp>.tar.gz.gpg, with their checksums, and
+# the copy there is decrypted again and compared with the original before the
+# run is called good, so a wrong passphrase or a damaged copy shows the same
+# night, not on the day of a restore. The copy on this server's own disk stays
+# as it is: it is what is restored in a hurry, and that disk is the server's.
+# Without a passphrase the second copy is plain, and every run says so.
+#
 # The result of every run is written to BACKUP_DIR/.status, which `check`
 # reads. A failure is therefore visible in `docker compose ps` as an unhealthy
 # container the next morning, not discovered on the day a restore is needed.
@@ -45,6 +54,7 @@ AT_HOUR="${BACKUP_AT_UTC_HOUR:-20}"
 # A day, and two hours for the run itself and a slow night.
 MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS:-26}"
 VERIFY_RESTORE="${BACKUP_VERIFY_RESTORE:-true}"
+PASSPHRASE="${BACKUP_ENCRYPTION_PASSPHRASE:-}"
 
 STATUS="$DIR/.status"
 SINCE="$DIR/.since"
@@ -123,6 +133,16 @@ record_run() {
     || echo "the result could not be recorded in the database; /readyz will report the last one it holds" >&2
 }
 
+# gpg wants a home of its own; nothing is kept in it but its lock files. The
+# passphrase goes in on a descriptor, never on the command line, where `ps`
+# would show it.
+gpg_with_passphrase() {
+  GNUPGHOME="${TMPDIR:-/tmp}/backup-gnupg"
+  export GNUPGHOME
+  mkdir -p "$GNUPGHOME" && chmod 700 "$GNUPGHOME"
+  printf '%s' "$PASSPHRASE" | gpg --batch --quiet --yes --no-tty --pinentry-mode loopback --passphrase-fd 0 "$@"
+}
+
 # `set -e` is switched off inside a function called on the left of `||`, so a
 # failed pg_dump used to be followed by "backup written". Every step here says
 # what failed and stops the run itself.
@@ -195,21 +215,50 @@ backup_once() {
     failed "the second location cannot be written to"
     return 1
   fi
-  for name in "db-$stamp.dump" "files-$stamp.tar.gz"; do
-    cp "$DIR/$name" "$SECOND/.$name.partial" && mv "$SECOND/.$name.partial" "$SECOND/$name" \
+  if [ -n "$PASSPHRASE" ]; then
+    copied="encrypted and copied"
+    for name in "db-$stamp.dump" "files-$stamp.tar.gz"; do
+      if ! gpg_with_passphrase --symmetric --cipher-algo AES256 \
+        --output "$SECOND/.$name.gpg.partial" "$DIR/$name"; then
+        rm -f "$SECOND/.$name.gpg.partial"
+        failed "the encrypted copy to the second location did not complete"
+        return 1
+      fi
+      mv "$SECOND/.$name.gpg.partial" "$SECOND/$name.gpg" \
+        || { failed "the encrypted copy to the second location did not complete"; return 1; }
+    done
+    (cd "$SECOND" && sha256sum "db-$stamp.dump.gpg" "files-$stamp.tar.gz.gpg" > "sums-$stamp.sha256") \
+      || { failed "the checksums in the second location could not be written"; return 1; }
+    # A copy is only a copy if it comes back: decrypt it and compare.
+    for name in "db-$stamp.dump" "files-$stamp.tar.gz"; do
+      want="$(grep "  $name\$" "$sums" | cut -d ' ' -f 1)"
+      have="$(gpg_with_passphrase --decrypt "$SECOND/$name.gpg" | sha256sum | cut -d ' ' -f 1)"
+      if [ -z "$want" ] || [ "$want" != "$have" ]; then
+        failed "the encrypted copy in the second location does not decrypt to the backup"
+        return 1
+      fi
+    done
+  else
+    copied="copied"
+    echo "WARNING: BACKUP_ENCRYPTION_PASSPHRASE is not set; the copy in the second location is not encrypted." >&2
+    for name in "db-$stamp.dump" "files-$stamp.tar.gz"; do
+      cp "$DIR/$name" "$SECOND/.$name.partial" && mv "$SECOND/.$name.partial" "$SECOND/$name" \
+        || { failed "the copy to the second location did not complete"; return 1; }
+    done
+    cp "$sums" "$SECOND/sums-$stamp.sha256" \
       || { failed "the copy to the second location did not complete"; return 1; }
-  done
-  cp "$sums" "$SECOND/sums-$stamp.sha256" \
-    || { failed "the copy to the second location did not complete"; return 1; }
-  (cd "$SECOND" && sha256sum -c "sums-$stamp.sha256" > /dev/null) \
-    || { failed "the copy in the second location does not match"; return 1; }
+    (cd "$SECOND" && sha256sum -c "sums-$stamp.sha256" > /dev/null) \
+      || { failed "the copy in the second location does not match"; return 1; }
+  fi
 
   find "$SECOND" -maxdepth 1 -name 'db-*.dump' -mtime +"$KEEP_DAYS" -delete
   find "$SECOND" -maxdepth 1 -name 'files-*.tar.gz' -mtime +"$KEEP_DAYS" -delete
+  find "$SECOND" -maxdepth 1 -name 'db-*.dump.gpg' -mtime +"$KEEP_DAYS" -delete
+  find "$SECOND" -maxdepth 1 -name 'files-*.tar.gz.gpg' -mtime +"$KEEP_DAYS" -delete
   find "$SECOND" -maxdepth 1 -name 'sums-*.sha256' -mtime +"$KEEP_DAYS" -delete
 
   write_status ok "" "$stamp" "$verified"
-  echo "backup $stamp written, checked by $verified, and copied"
+  echo "backup $stamp written, checked by $verified, and $copied to the second location"
   return 0
 }
 

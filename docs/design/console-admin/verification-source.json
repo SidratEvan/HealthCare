@@ -1,0 +1,74 @@
+{
+  "capturedUtc": "2026-10-11T09:08:12.485832+00:00",
+  "purpose": "Current application source and browser assertions before the final accessibility-corrected production rebuild and collection.",
+  "sourceFiles": [
+    {
+      "path": "backend/api/src/repositories/adminChambers.repo.ts",
+      "sha256": "620a27b3e5b8df4779c5b58e8091bbe4a5f14bbd9b9462c71d0a83f00f4ac686"
+    },
+    {
+      "path": "backend/api/src/services/admin.service.ts",
+      "sha256": "3279dd367ed31b073473cbae34d4a910bb1991274d5eed5d078ce2aa8fe89ead"
+    },
+    {
+      "path": "backend/api/src/__tests__/adminChambers.routes.test.ts",
+      "sha256": "20bd7099b4bd0442211f23aa65b8c66b749d0eb55a163fd64b299a2d0c871886"
+    },
+    {
+      "path": "frontend/console/src/components/AdminDashboard.tsx",
+      "sha256": "9dedd66b2796c3d3901936e45aed781a11e8f8d1cdffcd646136aa11d02878dc"
+    },
+    {
+      "path": "frontend/console/src/components/AdminReports.tsx",
+      "sha256": "55831cdb6c0e9dc2de1a8dbba563790ed34efb30cecacd098f0c078781255bc2"
+    },
+    {
+      "path": "frontend/console/src/components/AdminNow.tsx",
+      "sha256": "e400a4be37b80e1781726eb2977c3bd23608fb4da690d0e3987c4d7c5e2c906d"
+    },
+    {
+      "path": "frontend/console/src/components/HospitalSettings.tsx",
+      "sha256": "edbbd46bb14fc906f07314606b694b8184040f0455f323b707d1caca78b0c498"
+    },
+    {
+      "path": "frontend/console/src/lib/admin.ts",
+      "sha256": "e345efc4f9d0aa87192bcdfd93ec85372b348ca54ace6acbaee1cb6db9952c81"
+    },
+    {
+      "path": "frontend/console/src/lib/adminBoard.ts",
+      "sha256": "b59fbf07e04d2ac4afe75f3dd16ab89b4ccab296855c6d27655f6779037af3e1"
+    },
+    {
+      "path": "frontend/console/src/lib/__tests__/adminPresentation.test.ts",
+      "sha256": "b62f3789e413c9e804e6b30af4af8aa0bea6d83b3310ee2d0f62944998d62a37"
+    },
+    {
+      "path": "e2e/admin-dashboard.spec.ts",
+      "sha256": "c02439947890c5d05285d6a7fe7911601444a8f982db79dfcb4d415fadae36ba"
+    },
+    {
+      "path": "e2e/admin-workspace.spec.ts",
+      "sha256": "3bf353e3251d02b88fa913193a0cdbcdff38174746652ba4a9a2739c5aec6ae1"
+    },
+    {
+      "path": "e2e/production/admin-workspace.prod.spec.ts",
+      "sha256": "16131ecb4efbaabf4c90a2d31dc5f1c287bda58d9ad39642dd1df3417b57ad99"
+    },
+    {
+      "path": "shared/i18n/src/messages.ts",
+      "sha256": "ff81d3bd2f73eb44b71776d1d984e653defb163ec39b5cbe2298b4dd1bd47514"
+    },
+    {
+      "path": "shared/ui/package.json",
+      "sha256": "6ca14703dbd7c3abf955ed19571e946db624d82f10b89bea1c44b79b038f0608"
+    },
+    {
+      "path": "shared/ui/src/console/admin.css",
+      "sha256": "66bdc87142d548c484205ecb78b521f4543f43d0228b0f042aae7e1e98ec85e2"
+    },
+    {
+      "path": "vitest.config.ts",
+      "sha256": "34cd7893318402482997d1a80f3b474e06ced7b254038a3815496ab1de8bfe73"
+    }
+  ]
+}

@@ -852,6 +852,8 @@ function bookingFailure(error: unknown, locale: Locale): string {
       return tp('chamberFull', locale);
     case 'BOOKING_LIMIT_REACHED':
       return tp('bookingLimitReached', locale);
+    case 'DEMO_PHONE_NOT_ALLOWED':
+      return tp('demoPhoneRefused', locale);
     case 'PREPAYMENT_REQUIRED':
       return tp(why === 'no_shows' ? 'prepaymentAfterNoShows' : 'prepaymentRequired', locale);
     case 'PAYMENT_UNAVAILABLE':

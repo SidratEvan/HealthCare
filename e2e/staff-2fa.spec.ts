@@ -16,6 +16,8 @@
 
 import { expect, test, type Page } from '@playwright/test';
 
+import { accessScreenshot } from './support/accessScreenshots.js';
+import { approveManagementWrites } from './support/adminManagement.js';
 import {
   addStaffMember,
   newFacility,
@@ -44,6 +46,9 @@ async function signIn(page: Page, email: string): Promise<void> {
 }
 
 async function signOut(page: Page): Promise<void> {
+  // A single administrator now lands directly in the dashboard. Switching
+  // back opens the validated workspace picker, including sign-out.
+  if (await page.getByTestId('admin-dashboard').isVisible()) await page.goto(CONSOLE);
   await page.getByTestId('picker-sign-out').click();
   await expect(page.getByTestId('picker-login-link')).toBeVisible({ timeout: 30_000 });
 }
@@ -83,6 +88,7 @@ test.describe('an administrator cannot sign in without the second factor (FR-SEC
 
     // The QR code is drawn in the page, with the key beside it for typing.
     await expect(page.getByTestId('tfa-qr')).toBeVisible();
+    await accessScreenshot(page, 'mfa-setup-bn', ['tfa-qr', 'tfa-secret', 'tfa-setup-code']);
     await page.getByTestId('tfa-setup-code').fill('000000');
     await page.getByTestId('tfa-setup-submit').click();
     await expect(page.getByText('কোডটি মেলেনি।', { exact: false })).toBeVisible();
@@ -103,6 +109,7 @@ test.describe('an administrator cannot sign in without the second factor (FR-SEC
     await signOut(page);
     await signIn(page, facility.adminEmail);
     await expect(page.getByTestId('two-factor-code')).toBeVisible({ timeout: 30_000 });
+    await accessScreenshot(page, 'mfa-code-bn', ['tfa-code']);
     await expect(page.getByTestId('console-picker')).toHaveCount(0);
 
     await page.getByTestId('tfa-code').fill('000000');
@@ -110,10 +117,7 @@ test.describe('an administrator cannot sign in without the second factor (FR-SEC
     await expect(page.getByTestId('tfa-error')).toContainText('কোডটি মেলেনি');
 
     await enterCode(page, facility.adminEmail);
-    await expect(page.getByTestId('console-picker')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId(`open-admin-${facility.hospitalId}`)).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(page.getByTestId('admin-dashboard')).toBeVisible({ timeout: 30_000 });
 
     // A lost phone: a recovery code, typed off paper, signs in once.
     await signOut(page);
@@ -121,7 +125,7 @@ test.describe('an administrator cannot sign in without the second factor (FR-SEC
     const recovery = enrolmentOf(facility.adminEmail).recoveryCodes[0] ?? '';
     await page.getByTestId('tfa-code').fill(recovery.toUpperCase());
     await page.getByTestId('tfa-submit').click();
-    await expect(page.getByTestId('console-picker')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('admin-dashboard')).toBeVisible({ timeout: 30_000 });
   });
 });
 
@@ -138,6 +142,8 @@ test.describe('anybody else may turn it on, and an administrator resets it (S-B-
 
     // Not asked for one, but offered it — and free to leave.
     await signIn(page, reception.email);
+    await expect(page.getByTestId('reception-workspace')).toBeVisible({ timeout: 30_000 });
+    await page.goto(CONSOLE);
     await expect(page.getByTestId('console-picker')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('picker-tfa-setup').click();
     await expect(page.getByTestId('tfa-setup-cancel')).toBeVisible({ timeout: 30_000 });
@@ -150,11 +156,15 @@ test.describe('anybody else may turn it on, and an administrator resets it (S-B-
       const admin = await desk.newPage();
       await signIn(admin, facility.adminEmail);
       await passSecondFactor(admin, facility.adminEmail);
-      await admin.getByTestId(`open-admin-${facility.hospitalId}`).click();
       await expect(admin.getByTestId('admin-dashboard')).toBeVisible({ timeout: 30_000 });
       await admin.getByTestId('admin-open-settings').click();
       await expect(admin.getByTestId('hospital-settings')).toBeVisible({ timeout: 30_000 });
-      await admin.getByTestId('settings-tab-staff').click();
+      await approveManagementWrites(admin);
+      await admin
+        .locator('.cf-nav')
+        .getByRole('button', { name: /Staff|\u0995\u09b0\u09cd\u09ae\u09c0/ })
+        .click();
+      await admin.getByTestId(`management-change-${reception.id}`).click();
 
       const card = admin.getByTestId(`settings-staff-${reception.id}`);
       await expect(card).toContainText('দুই ধাপ চালু');
@@ -170,6 +180,8 @@ test.describe('anybody else may turn it on, and an administrator resets it (S-B-
     try {
       const again = await next.newPage();
       await signIn(again, reception.email);
+      await expect(again.getByTestId('reception-workspace')).toBeVisible({ timeout: 30_000 });
+      await again.goto(CONSOLE);
       await expect(again.getByTestId('console-picker')).toBeVisible({ timeout: 30_000 });
       await expect(again.getByTestId('picker-tfa-setup')).toBeVisible();
     } finally {

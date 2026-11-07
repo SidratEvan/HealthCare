@@ -13,8 +13,7 @@
 
 import { ApiClient, ApiError, NetworkError } from '@platform/client';
 import { normaliseBdMobile } from '@platform/domain';
-import type { QueueState } from '@platform/domain';
-import { toLatinDigits } from '@platform/i18n';
+import { toLatinDigits, type SlipBooking } from '@platform/i18n';
 
 import { readDemoSession } from '@/lib/demo';
 
@@ -31,7 +30,15 @@ export interface CounterPatient {
 }
 
 /** Why a counter call failed, in the words the screen has copy for. */
-export type CounterFailure = 'offline' | 'phone' | 'refused' | 'failed';
+export type CounterFailure =
+  | 'offline'
+  | 'phone'
+  /** A number a demonstration does not take (`FR-DEM-08`). */
+  | 'demoPhone'
+  | 'refused'
+  | 'failed'
+  | 'uncertain'
+  | 'access';
 
 export type CounterResult<T> =
   | { readonly ok: true; readonly value: T }
@@ -44,17 +51,27 @@ function client(): ApiClient {
 function failureOf(error: unknown): CounterFailure {
   if (error instanceof NetworkError) return 'offline';
   if (error instanceof ApiError) {
+    if (error.status === 401 || error.status === 403) return 'access';
+    if (error.code === 'DEMO_PHONE_NOT_ALLOWED') return 'demoPhone';
     if (error.code === 'VALIDATION_FAILED') return 'phone';
     if (error.code === 'QUEUE_GUARD_FAILED' || error.code === 'QUEUE_CONFLICT') return 'refused';
   }
   return 'failed';
 }
 
-async function attempt<T>(call: () => Promise<T>): Promise<CounterResult<T>> {
+async function attempt<T>(call: () => Promise<T>, write = false): Promise<CounterResult<T>> {
   try {
     return { ok: true, value: await call() };
   } catch (error: unknown) {
-    return { ok: false, failure: failureOf(error) };
+    // A missing/invalid write response can follow a committed transaction.
+    // Reuse its attempt; a transport exception does not establish failure.
+    return {
+      ok: false,
+      failure:
+        write && !(error instanceof ApiError && error.status < 500)
+          ? 'uncertain'
+          : failureOf(error),
+    };
   }
 }
 
@@ -66,32 +83,50 @@ export function counterPhone(typed: string): string | null {
   return normaliseBdMobile(toLatinDigits(typed));
 }
 
-/** Everybody this number reaches (`FR-REC-20`). */
+/**
+ * Everybody this number reaches (`FR-REC-20`), up to the server's limit;
+ * `more` says the number reaches more people than are listed.
+ */
 export async function findByPhone(
   phone: string,
-): Promise<CounterResult<readonly CounterPatient[]>> {
+): Promise<
+  CounterResult<{ readonly patients: readonly CounterPatient[]; readonly more: boolean }>
+> {
   return await attempt(async () => {
-    const data = await client().get<{ patients: CounterPatient[] }>(
+    const data = await client().get<{ patients: CounterPatient[]; more?: boolean }>(
       `/registration/patients?phone=${encodeURIComponent(phone)}`,
     );
-    return data.patients;
+    return { patients: data.patients, more: data.more === true };
   });
 }
 
-export async function registerPatient(body: {
+export interface PatientRegistrationReceipt {
+  readonly patientId: string;
   readonly phone: string;
-  readonly fullName: string;
-  readonly ageYears: number;
-  readonly sex: 'male' | 'female' | 'other';
-}): Promise<CounterResult<string>> {
+  readonly created: boolean;
+  readonly ambiguous: boolean;
+  readonly patient: CounterPatient;
+}
+
+export async function registerPatient(
+  body: {
+    readonly phone: string;
+    readonly fullName: string;
+    readonly ageYears: number;
+    readonly sex: 'male' | 'female' | 'other';
+  },
+  requestKey: string = crypto.randomUUID(),
+): Promise<CounterResult<PatientRegistrationReceipt>> {
   return await attempt(async () => {
-    const data = await client().post<{ patientId: string }>(
+    const data = await client().post<PatientRegistrationReceipt>(
       '/registration/patients',
       body,
-      crypto.randomUUID(),
+      requestKey,
     );
-    return data.patientId;
-  });
+    if (data.patient?.patientId !== data.patientId || typeof data.created !== 'boolean')
+      throw new Error('Registration receipt missing; identity must be reconciled.');
+    return data;
+  }, true);
 }
 
 export type WalkInPosition =
@@ -99,28 +134,57 @@ export type WalkInPosition =
   | { readonly kind: 'index'; readonly index: number; readonly reason: string };
 
 /**
- * `POST /sessions/:id/walkin` (`FR-REC-14`). Answers with the serial issued:
- * the highest in the chamber, because a walk-in is always the newest booking
- * even when it is seated earlier in the line.
+ * `POST /sessions/:id/walkin` (`FR-REC-14`). Answers with the serial issued
+ * and its booking, which the token slip prints from (`FR-REC-21`): the
+ * receipt names the booking issued by this attempt. The original serial
+ * survives a lost-answer retry after other patients have joined.
  */
 export async function addWalkIn(
   sessionId: string,
   patientId: string,
   position: WalkInPosition,
-): Promise<CounterResult<number>> {
+  requestAttempt: { readonly key: string; readonly at: string } = {
+    key: crypto.randomUUID(),
+    at: new Date().toISOString(),
+  },
+): Promise<CounterResult<WalkInReceipt>> {
   return await attempt(async () => {
-    const data = await client().post<{ state: QueueState }>(
+    const data = await client().post<{ walkin?: { serial: number; bookingId: string } }>(
       `/sessions/${sessionId}/walkin`,
       {
-        clientEventId: crypto.randomUUID(),
-        clientTs: new Date().toISOString(),
+        clientEventId: requestAttempt.key,
+        clientTs: requestAttempt.at,
         patientId,
         position: position.kind,
         index: position.kind === 'index' ? position.index : null,
         reason: position.kind === 'index' ? position.reason : null,
       },
-      crypto.randomUUID(),
+      requestAttempt.key,
     );
-    return data.state.entries.reduce((max, entry) => Math.max(max, entry.serial), 0);
+    const receipt = data.walkin;
+    if (
+      receipt === undefined ||
+      !Number.isSafeInteger(receipt.serial) ||
+      receipt.serial < 1 ||
+      typeof receipt.bookingId !== 'string'
+    )
+      throw new Error('Walk-in receipt missing; retry the original attempt.');
+    return { serial: receipt.serial, bookingId: receipt.bookingId };
+  }, true);
+}
+
+export interface WalkInReceipt {
+  readonly serial: number;
+  readonly bookingId: string;
+}
+
+/**
+ * `POST /bookings/:id/slip` (`FR-REC-21`, `BTN-B02-SLIP`): what the token
+ * slip prints. A write, because it mints the tracking link on it; a fresh key
+ * each press, since a second press is a second slip.
+ */
+export async function fetchCounterSlip(bookingId: string): Promise<CounterResult<SlipBooking>> {
+  return await attempt(async () => {
+    return await client().post<SlipBooking>(`/bookings/${bookingId}/slip`, {}, crypto.randomUUID());
   });
 }

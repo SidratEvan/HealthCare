@@ -44,6 +44,8 @@ import {
   CapacityMirror,
   FilterChip,
   FreshnessLine,
+  ConsoleHelp,
+  ConsolePageHeader,
   ToastProvider,
   useToast,
   type CapacityMirrorRow,
@@ -51,14 +53,16 @@ import {
 } from '@platform/ui';
 
 import { BedPanel } from '@/components/BedPanel';
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
-import { ConsoleRail } from '@/components/ConsoleRail';
+import { ConsoleWorkspaceFrame } from '@/components/ConsoleWorkspaceFrame';
 import { DemoBanner } from '@/components/DemoBanner';
 import { OfflineBlock } from '@/components/OfflineBlock';
 import { PendingAdmissions } from '@/components/PendingAdmissions';
 import { useBedBoard } from '@/hooks/useBedBoard';
 import { shownState, stateLabel, tileDetail } from '@/lib/bedCopy';
 import { readDemoSession } from '@/lib/demo';
+import { WARD_WORKSPACE as COPY } from '@/lib/wardEmergencyMessages';
+import { WARD_STATES, wardAttention, wardStateCounts } from '@/lib/wardWorkspace';
+import '@platform/ui/console-ward.css';
 
 /** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
 function readToken(): string | null {
@@ -85,6 +89,7 @@ function BoardBody(): ReactNode {
   const [now, setNow] = useState(() => new Date());
   // A ward id, or 'all' for every ward on one screen.
   const [ward, setWard] = useState<string>('all');
+  const [stateFilter, setStateFilter] = useState<(typeof WARD_STATES)[number] | null>(null);
   const [selectedBedId, setSelectedBedId] = useState<string | null>(null);
   // An ER case the ward chose a bed for from the pending list: the panel
   // opens on that bed's admit form with the case already chosen.
@@ -135,7 +140,7 @@ function BoardBody(): ReactNode {
   const at = now.toISOString() as Timestamp;
   const tallies = useMemo(() => tallyByKind(board.beds, at, BED_KINDS), [board.beds, at]);
 
-  if (hospitalId === '') {
+  if (hospitalId === '' || session === null) {
     return <Notice>{t('noSession', locale)}</Notice>;
   }
 
@@ -166,6 +171,8 @@ function BoardBody(): ReactNode {
     );
   }
 
+  const counts = wardStateCounts(board.beds, at);
+  const attention = wardAttention(board.beds, at);
   const loaded = board.board;
   const wards = loaded.wards;
   const selectedBed = board.beds.find((bed) => bed.id === selectedBedId) ?? null;
@@ -192,37 +199,71 @@ function BoardBody(): ReactNode {
   const minutes = (value: number): string => formatAge(value, locale, numerals);
 
   return (
-    <div className="flex min-h-screen" data-testid="ward-board">
-      {/* --- navigation rail ------------------------------------------------- */}
-      <ConsoleRail current="navBeds" locale={locale}>
-        <OfflineBlock
-          connected={board.connected}
-          pendingCount={board.pendingCount}
-          lastServerTs={board.lastServerTs}
-          stuckCount={board.stuckCount}
-          onRetryStuck={() => {
-            void board.retryStuck();
-          }}
-          onDiscardStuck={() => {
-            void board.discardStuck();
-          }}
-          durable={board.durable}
-          locale={locale}
-          now={now}
-        />
-      </ConsoleRail>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* FR-DEM-07: the demo says what it is, on screen, permanently. */}
+    <div className="ward-workspace" data-testid="ward-board">
+      <ConsoleWorkspaceFrame
+        session={session}
+        workspace={COPY.title}
+        rail="navBeds"
+        navigation={[
+          {
+            id: 'beds',
+            label: COPY.board,
+            current: true,
+            roles: ['ward'],
+            enabled: true,
+            onSelect: () => {
+              document.getElementById('ward-tiles')?.scrollIntoView({ block: 'start' });
+            },
+          },
+          {
+            id: 'waiting',
+            label: COPY.waiting,
+            roles: ['ward'],
+            enabled: true,
+            onSelect: () => {
+              document.getElementById('ward-waiting')?.scrollIntoView({ block: 'start' });
+              document.getElementById('ward-waiting')?.focus();
+            },
+          },
+        ]}
+        actions={
+          <>
+            <div className="ward-connection">
+              <OfflineBlock
+                connected={board.connected}
+                pendingCount={board.pendingCount}
+                lastServerTs={board.lastServerTs}
+                stuckCount={board.stuckCount}
+                onRetryStuck={() => {
+                  void board.retryStuck();
+                }}
+                onDiscardStuck={() => {
+                  void board.discardStuck();
+                }}
+                durable={board.durable}
+                locale={locale}
+                now={now}
+              />
+            </div>
+            <ConsoleHelp
+              topic={{
+                id: selectedBedId === null ? 'ward-board' : 'ward-bed',
+                title: selectedBedId === null ? COPY.board : COPY.title,
+                steps: [COPY.helpStates, COPY.helpWaiting, COPY.helpOffline, COPY.helpMirror],
+              }}
+            />
+            <small>{session.staffName}</small>
+            <a className="cf-work-switch" href="/">
+              {t('changeConsole', locale)}
+            </a>
+          </>
+        }
+      >
         <DemoBanner />
-
-        <header className="flex items-center gap-4 border-b border-line px-6 py-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="font-reading text-title-lg text-ink">{t('wardBoardTitle', locale)}</h1>
-            <p className="text-body-sm text-ink-muted">
-              {localName(locale, loaded.hospitalNameBn, loaded.hospitalNameEn)}
-              {session?.staffName === undefined ? '' : ` · ${session.staffName}`}
-            </p>
+        <ConsolePageHeader
+          title={COPY.board}
+          description={COPY.description}
+          actions={
             <FreshnessLine
               asOf={board.lastServerTs === null ? null : new Date(board.lastServerTs)}
               now={now}
@@ -230,18 +271,10 @@ function BoardBody(): ReactNode {
               labels={{ ...freshness, never: t('neverSynced', locale) }}
               formatMinutes={minutes}
             />
-          </div>
-          <a
-            href="/"
-            className="flex min-h-touch items-center rounded-sm px-3 text-body-sm text-brand-600 hover:bg-brand-100"
-          >
-            {t('changeConsole', locale)}
-          </a>
-          <ConsoleLanguageSwitch className="" />
-        </header>
-
-        <main className="flex min-h-0 flex-1">
-          <div className="min-w-0 flex-1 overflow-auto p-6">
+          }
+        />
+        <div className="ward-layout">
+          <div className="ward-board-content" id="ward-tiles">
             {wards.length === 0 ? (
               <div data-testid="board-empty">
                 <p className="text-body-lg text-ink-secondary">{t('noWards', locale)}</p>
@@ -249,6 +282,48 @@ function BoardBody(): ReactNode {
               </div>
             ) : (
               <>
+                <div className="ward-counts" role="group" aria-label={COPY.allStates[locale]}>
+                  {WARD_STATES.map((state) => (
+                    <button
+                      key={state}
+                      type="button"
+                      data-testid={`ward-filter-${state}`}
+                      data-state={state}
+                      aria-pressed={stateFilter === state}
+                      onClick={() => setStateFilter(stateFilter === state ? null : state)}
+                    >
+                      <strong>{formatNumber(counts[state], numerals)}</strong>
+                      <span>{stateLabel(state, locale)}</span>
+                    </button>
+                  ))}
+                </div>
+                {attention.length === 0 ? null : (
+                  <section
+                    className="ward-attention"
+                    aria-label={COPY.attention[locale]}
+                    data-testid="ward-attention"
+                  >
+                    <h2>{COPY.attention[locale]}</h2>
+                    {attention.map((bed) => (
+                      <div key={bed.id}>
+                        <span>
+                          <strong>{bed.label}</strong> · {stateLabel(shownState(bed, now), locale)}{' '}
+                          · {tileDetail(bed, now, locale)}
+                        </span>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedBedId(bed.id);
+                            setAdmitCaseId(null);
+                          }}
+                        >
+                          {COPY.openBed[locale]}
+                        </Button>
+                      </div>
+                    ))}
+                  </section>
+                )}
                 {/* TAB-B06-<ward> */}
                 <div
                   className="mb-4 flex flex-wrap gap-2"
@@ -278,9 +353,17 @@ function BoardBody(): ReactNode {
 
                 <div className="flex flex-col gap-6">
                   {shownWards.map((entry) => {
-                    const beds = board.beds.filter((bed) => bed.wardId === entry.id);
+                    const beds = board.beds.filter(
+                      (bed) =>
+                        bed.wardId === entry.id &&
+                        (stateFilter === null || shownState(bed, now) === stateFilter),
+                    );
                     return (
-                      <section key={entry.id} aria-labelledby={`ward-${entry.id}`}>
+                      <section
+                        key={entry.id}
+                        className="ward-group"
+                        aria-labelledby={`ward-${entry.id}`}
+                      >
                         <h2 id={`ward-${entry.id}`} className="mb-2 text-title-sm text-ink">
                           {localName(locale, entry.nameBn, entry.nameEn)}{' '}
                           <span className="text-body-sm text-ink-muted">
@@ -291,7 +374,10 @@ function BoardBody(): ReactNode {
                             · {bedKindName(entry.kind, locale)}
                           </span>
                         </h2>
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
+                        {beds.length === 0 ? (
+                          <p className="ward-empty-filter">{COPY.emptyFilter[locale]}</p>
+                        ) : null}
+                        <div className="ward-tiles">
                           {beds.map((bed) => (
                             <BedTile
                               key={bed.id}
@@ -318,7 +404,7 @@ function BoardBody(): ReactNode {
           </div>
 
           {/* --- right column ------------------------------------------------ */}
-          <aside className="w-96 shrink-0 space-y-4 overflow-auto border-l border-line p-4">
+          <aside className="ward-sidebar">
             {selectedBed === null ? (
               <div className="rounded-md border border-dashed border-line-strong p-4">
                 <p className="text-title-sm text-ink">{t('chooseBed', locale)}</p>
@@ -348,20 +434,21 @@ function BoardBody(): ReactNode {
               />
             )}
 
-            <CapacityMirror
-              title={t('mirrorTitle', locale)}
-              subtitle={t('mirrorSubtitle', locale)}
-              rows={mirrorRows}
-              now={now}
-              staleAfterMinutes={loaded.staleAfterMinutes}
-              freshnessLabels={freshness}
-              formatMinutes={minutes}
-              freeOfTotal={t('mirrorFreeOfTotal', locale)}
-              mismatch={t('mirrorMismatch', locale)}
-              empty={t('mirrorEmpty', locale)}
-              formatCount={(value) => formatNumber(value, numerals)}
-            />
-
+            <div className="ward-mirror">
+              <CapacityMirror
+                title={t('mirrorTitle', locale)}
+                subtitle={t('mirrorSubtitle', locale)}
+                rows={mirrorRows}
+                now={now}
+                staleAfterMinutes={loaded.staleAfterMinutes}
+                freshnessLabels={freshness}
+                formatMinutes={minutes}
+                freeOfTotal={t('mirrorFreeOfTotal', locale)}
+                mismatch={t('mirrorMismatch', locale)}
+                empty={t('mirrorEmpty', locale)}
+                formatCount={(value) => formatNumber(value, numerals)}
+              />
+            </div>
             {/* FR-BED-04: a forecast, for staff, labelled as such. */}
             {forecast.length === 0 ? null : (
               <section
@@ -394,27 +481,29 @@ function BoardBody(): ReactNode {
               </section>
             )}
 
-            <PendingAdmissions
-              requests={board.requests}
-              handoffs={board.handoffs}
-              onAdmitHandoff={(caseId, bedId) => {
-                setSelectedBedId(bedId);
-                setAdmitCaseId(caseId);
-              }}
-              failed={board.requestsFailed}
-              connected={board.connected}
-              beds={board.beds}
-              locale={locale}
-              now={now}
-              onRespond={board.respond}
-              onAnswered={() => {
-                show({ title: t('pendingAnswered', locale), tone: 'positive' });
-              }}
-              onProblem={onProblem}
-            />
+            <div id="ward-waiting" tabIndex={-1}>
+              <PendingAdmissions
+                requests={board.requests}
+                handoffs={board.handoffs}
+                onAdmitHandoff={(caseId, bedId) => {
+                  setSelectedBedId(bedId);
+                  setAdmitCaseId(caseId);
+                }}
+                failed={board.requestsFailed}
+                connected={board.connected}
+                beds={board.beds}
+                locale={locale}
+                now={now}
+                onRespond={board.respond}
+                onAnswered={() => {
+                  show({ title: t('pendingAnswered', locale), tone: 'positive' });
+                }}
+                onProblem={onProblem}
+              />
+            </div>
           </aside>
-        </main>
-      </div>
+        </div>
+      </ConsoleWorkspaceFrame>
     </div>
   );
 }

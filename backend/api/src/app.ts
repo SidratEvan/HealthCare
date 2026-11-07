@@ -25,6 +25,7 @@
 import express, { json, type Express } from 'express';
 
 import { runInDbScope, scopeOfPrincipal } from './config/dbScope.js';
+import { installDemoPhoneRule } from './config/demoPhones.js';
 import { rememberRawBody } from './config/rawBody.js';
 import { runWithPatientOrigin } from './config/requestOrigin.js';
 import { env } from './env.js';
@@ -69,6 +70,7 @@ const BODY_LIMIT = '256kb';
 const OWN_BODY_LIMIT: readonly RegExp[] = [
   /^\/api\/v1\/test-orders\/[^/]+\/report$/,
   /^\/api\/v1\/hospital\/imports$/,
+  /^\/api\/v1\/hospital\/imports\/(?:analyse|mapped)$/,
   /^\/api\/v1\/hospital\/logo$/,
   // A patient's own old paper, up to 8 MB (`FR-PAT-62`, plan R3; `clinical.routes.ts`).
   /^\/api\/v1\/me\/documents$/,
@@ -76,6 +78,10 @@ const OWN_BODY_LIMIT: readonly RegExp[] = [
 
 export function createApp(): Express {
   const app = express();
+
+  // FR-DEM-08: a demonstration takes a person's phone only from its own list,
+  // checked by the shared schemas during validation.
+  installDemoPhoneRule();
 
   // Render terminates TLS and forwards the caller's address in
   // `X-Forwarded-For`. Without this, `req.ip` is the balancer's address and

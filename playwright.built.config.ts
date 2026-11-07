@@ -63,6 +63,9 @@ export default defineConfig({
       env: {
         DATABASE_URL: asApiRole(),
         DEMO_MODE: 'true',
+        // The specs book with random numbers; the demonstration's phone list
+        // (FR-DEM-08) is off here, which the API allows only on a local database.
+        DEMO_PHONES: 'any',
         NODE_ENV: 'development',
       },
     },

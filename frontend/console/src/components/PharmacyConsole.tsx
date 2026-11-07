@@ -1,49 +1,25 @@
 'use client';
 
-/**
- * The pharmacy — `S-B-09` (`APP_FLOW.md` B5, `FR-PHR-02`).
- *
- * ## What this screen is, and what it is not
- *
- * `APP_FLOW.md` B5 gives `S-B-09` two halves: scan a prescription QR and
- * dispense against it (`FR-PHR-01`), and flag what is out of stock so the
- * patient app's medicine search knows (`FR-PHR-02`).
- *
- * **Only the second half is built, and the screen says so rather than showing
- * a dead scanner.** Dispensing is downstream of `FR-DOC-04`, which the owner
- * removed from this version on 2026-09-19 (`PRD.md` §9): no code path and no
- * seed creates a `prescriptions` row, so there is nothing to scan and nothing
- * to dispense against. A scanner that opened a camera and then found an empty
- * table would be worse than a sentence explaining why it is absent — the same
- * choice `S-A-12` makes about its unbuilt tabs.
- *
- * ## The shelf is a promise somebody has to keep renewing
- *
- * A flag says "we have this". `FR-PHR-02` publishes it to families deciding
- * whether to cross Dhaka, so an old flag is not a small problem — and the
- * honest answer is the third one (`lab/stock.ts`): after twelve hours an
- * in-stock claim lapses to *not known* rather than being repeated.
- *
- * That is why every row shows **what a patient is being told right now**, in
- * the pharmacy's own words, beside what the pharmacy last said. It is
- * `FR-BED-06`'s idea applied to a shelf: the consequence of not renewing is
- * visible to the person who would renew it. And it is why the main action is
- * *still correct* — confirming an unchanged list is the commonest and most
- * valuable thing somebody at this counter does.
- *
- * ## The four states (`GR-03`)
- *
- * Loading is the shape of the list. An error says what failed and retries. An
- * empty pharmacy says no medicines are listed and who adds them. Offline
- * keeps the list readable and says the buttons need a connection.
- */
+/** Availability-only workspace (S-B-09, FR-PHR-02). No dispensing or inventory. */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { format, formatAge, t, type ConsoleKey, type Locale, numeralsFor } from '@platform/i18n';
+import {
+  format,
+  formatAge,
+  formatNumber,
+  t,
+  type ConsoleKey,
+  type Locale,
+  numeralsFor,
+} from '@platform/i18n';
 import {
   Button,
   Card,
+  ConsoleHelp,
+  ConsolePageHeader,
+  ConsoleState,
+  ConsoleConfirmation,
   Chip,
   FreshnessLine,
   ToastProvider,
@@ -52,12 +28,14 @@ import {
 } from '@platform/ui';
 
 import { ActionButton } from '@/components/ActionButton';
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
-import { ConsoleRail } from '@/components/ConsoleRail';
+import { ConsoleWorkspaceFrame } from '@/components/ConsoleWorkspaceFrame';
 import { DemoBanner } from '@/components/DemoBanner';
 import { OfflineBlock } from '@/components/OfflineBlock';
+import { currentStockRows, matchingStockRows } from '@/lib/clinicalWorkspace';
+import { CLINICAL } from '@/lib/clinicalWorkspaceMessages';
 import { readDemoSession } from '@/lib/demo';
 import { failureOf, labApi, type ShelfResponse, type StockRow } from '@/lib/lab';
+import '@platform/ui/console-pharmacy.css';
 
 /** The demo principal (CLAUDE.md §4.1). Supabase Auth replaces this one function. */
 function readToken(): string | null {
@@ -92,8 +70,12 @@ function PharmacyBody(): ReactNode {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<StockRow['publishedAs'] | 'all'>('all');
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [online, setOnline] = useState(true);
+  const writing = useRef(false);
 
   const load = useCallback(async (): Promise<void> => {
     if (hospitalId === '') return;
@@ -134,24 +116,36 @@ function PharmacyBody(): ReactNode {
   }, []);
 
   const write = useCallback(
-    async (flags: readonly { medicineId: string; inStock: boolean }[]): Promise<void> => {
-      if (flags.length === 0) return;
+    async (
+      flags: readonly { medicineId: string; inStock: boolean; expectedUpdatedAt: string | null }[],
+    ): Promise<void> => {
+      if (flags.length === 0 || flags.length > 200 || !online || writing.current) return;
+      writing.current = true;
       setSaving(true);
       try {
         setShelf(await api.setFlags(hospitalId, flags));
         show({ title: t('pharmacySaved', locale), tone: 'positive' });
       } catch (error: unknown) {
         const failure = failureOf(error);
-        show({
-          title:
-            failure.kind === 'offline' ? t('offline', locale) : t('pharmacySaveFailed', locale),
-          tone: 'caution',
-        });
+        if (failure.kind === 'offline') {
+          await load();
+          show({ title: CLINICAL.stockUncertain[locale], tone: 'caution' });
+        } else {
+          await load();
+          show({
+            title:
+              failure.code === 'WRITE_CONFLICT'
+                ? CLINICAL.stockChanged[locale]
+                : t('pharmacySaveFailed', locale),
+            tone: 'caution',
+          });
+        }
       } finally {
+        writing.current = false;
         setSaving(false);
       }
     },
-    [api, hospitalId, show, locale],
+    [api, hospitalId, show, locale, online, load],
   );
 
   const freshness = {
@@ -162,139 +156,224 @@ function PharmacyBody(): ReactNode {
   };
   const minutes = (value: number): string => formatAge(value, locale, numerals);
 
-  if (hospitalId === '') return <Notice>{t('noSession', locale)}</Notice>;
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen gap-6 p-6" aria-busy="true" data-testid="pharmacy-loading">
-        <div className="w-52 shrink-0 rounded-md bg-sunken" />
-        <div className="flex flex-1 flex-col gap-2">
-          {Array.from({ length: 10 }, (_, index) => (
-            <div key={index} className="h-14 rounded-md bg-sunken" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (failed || shelf === null) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <p role="alert" className="text-body-lg text-ink-secondary" data-testid="pharmacy-failed">
-          {t('pharmacyLoadFailed', locale)}
-        </p>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            void load();
-          }}
-        >
-          {t('retry', locale)}
-        </Button>
-      </div>
-    );
-  }
-
-  const rows = shelf.rows;
+  if (session === null || hospitalId === '') return <Notice>{t('noSession', locale)}</Notice>;
+  // Recompute with the domain's exact 720 whole-minute boundary (FR-PHR-02).
+  const rows = currentStockRows(shelf?.rows ?? [], now);
+  const visible = matchingStockRows(rows, search, filter);
   const goneQuiet = rows.filter((row) => row.publishedAs === 'unknown' && row.inStock).length;
-
-  // §5.1: a control that is off says why, rather than being dead.
   const offReason = !online ? t('offline', locale) : saving ? t('actionSending', locale) : null;
-
+  const bulkReason = offReason ?? (rows.length > 200 ? CLINICAL.bulkLimit[locale] : null);
   return (
-    <div className="flex min-h-screen" data-testid="pharmacy-console">
-      <ConsoleRail current="navPharmacy" locale={locale}>
+    <ConsoleWorkspaceFrame
+      session={session}
+      workspace={CLINICAL.pharmacy}
+      rail="navPharmacy"
+      navigation={[
+        {
+          id: 'pharmacy',
+          label: { bn: t('navPharmacy', 'bn'), en: t('navPharmacy', 'en') },
+          current: true,
+          roles: ['pharmacy', 'hospital_admin'],
+          enabled: true,
+          onSelect: () => {
+            setFilter('all');
+            setSearch('');
+          },
+        },
+        {
+          id: 'switch',
+          label: CLINICAL.switchConsole,
+          roles: [session.role],
+          enabled: true,
+          onSelect: () => globalThis.location.assign('/'),
+        },
+      ]}
+      actions={
+        <>
+          <span className={`cf-status cf-tone-${online ? 'positive' : 'caution'}`}>
+            {t(online ? 'online' : 'offline', locale)}
+          </span>
+          <ConsoleHelp
+            topic={{
+              id: 'pharmacy',
+              title: CLINICAL.pharmacy,
+              steps: [CLINICAL.stockHelp, CLINICAL.confirmHint],
+            }}
+          />
+        </>
+      }
+    >
+      <div className="pharmacy-workspace" data-testid="pharmacy-console">
+        <DemoBanner />
+        <ConsolePageHeader
+          title={CLINICAL.pharmacy}
+          description={CLINICAL.pharmacyIntro}
+          actions={
+            shelf === null ? undefined : (
+              <FreshnessLine
+                asOf={new Date(shelf.serverTs)}
+                now={now}
+                labels={freshness}
+                formatMinutes={minutes}
+              />
+            )
+          }
+        />
         <OfflineBlock
           connected={online}
           pendingCount={0}
-          lastServerTs={shelf.serverTs}
+          lastServerTs={shelf?.serverTs ?? null}
           stuckCount={0}
           locale={locale}
           now={now}
         />
-      </ConsoleRail>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* FR-DEM-07 */}
-        <DemoBanner />
-
-        <header className="flex items-center gap-4 border-b border-line px-6 py-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="font-reading text-title-lg text-ink">{t('pharmacyTitle', locale)}</h1>
-            <p className="text-body-sm text-ink-muted">{t('pharmacyIntro', locale)}</p>
+        {loading ? (
+          <div data-testid="pharmacy-loading">
+            <ConsoleState kind="loading" description={CLINICAL.pharmacyIntro} />
           </div>
-          <FreshnessLine
-            asOf={new Date(shelf.serverTs)}
-            now={now}
-            labels={freshness}
-            formatMinutes={minutes}
-          />
-          <ConsoleLanguageSwitch className="" />
-        </header>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-4 p-6">
-          {/* `FR-PHR-01` is absent, and says why rather than showing a dead
-              scanner. See the header. */}
-          <Card data-testid="pharmacy-dispense-absent">
-            <p className="text-body-md text-ink">{t('pharmacyDispenseAbsent', locale)}</p>
-            <p className="mt-1 text-body-sm text-ink-muted">
-              {t('pharmacyDispenseAbsentHint', locale)}
-            </p>
-          </Card>
-
-          {rows.length === 0 ? (
-            <Card data-testid="pharmacy-empty">
-              <p className="text-body-lg text-ink">{t('pharmacyEmpty', locale)}</p>
-              <p className="mt-1 text-body-sm text-ink-muted">{t('pharmacyEmptyHint', locale)}</p>
-            </Card>
-          ) : (
-            <>
-              <div className="flex items-center gap-4">
-                <ActionButton
-                  variant="primary"
-                  size="md"
-                  reason={offReason}
-                  onClick={() => {
-                    // Every row, unchanged: "the whole list is still correct".
-                    void write(
-                      rows.map((row) => ({ medicineId: row.medicineId, inStock: row.inStock })),
-                    );
-                  }}
-                  testId="pharmacy-confirm-all"
+        ) : failed || shelf === null ? (
+          <div data-testid="pharmacy-failed">
+            <ConsoleState
+              kind="error"
+              description={CLINICAL.pharmacyIntro}
+              onRetry={() => {
+                void load();
+              }}
+            />
+          </div>
+        ) : (
+          <>
+            <div
+              className="pharmacy-summaries"
+              role="group"
+              aria-label={t('pharmacyTitle', locale)}
+            >
+              {(['in_stock', 'unknown', 'out_of_stock'] as const).map((answer) => (
+                <button
+                  key={answer}
+                  type="button"
+                  aria-pressed={filter === answer}
+                  data-testid={`pharmacy-filter-${answer}`}
+                  onClick={() => setFilter(filter === answer ? 'all' : answer)}
                 >
-                  {t('pharmacyConfirmAll', locale)}
-                </ActionButton>
-                <p className="text-body-sm text-ink-muted">{t('pharmacyConfirmHint', locale)}</p>
-              </div>
-
-              {goneQuiet > 0 ? (
-                <p className="text-body-sm text-warn-700" data-testid="pharmacy-stale-warning">
-                  {t('pharmacyStaleWarning', locale)}
-                </p>
-              ) : null}
-
-              <ul className="flex flex-col gap-2">
-                {rows.map((row) => (
-                  <li key={row.medicineId}>
-                    <ShelfRow
-                      row={row}
-                      now={now}
-                      locale={locale}
-                      offReason={offReason}
-                      freshness={freshness}
-                      formatMinutes={minutes}
-                      onSet={(inStock) => {
-                        void write([{ medicineId: row.medicineId, inStock }]);
-                      }}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
+                  <strong>
+                    {formatNumber(
+                      rows.filter((row) => row.publishedAs === answer).length,
+                      numerals,
+                    )}
+                  </strong>
+                  <span>{t(ANSWER_LABEL[answer], locale)}</span>
+                </button>
+              ))}
+            </div>
+            {goneQuiet > 0 ? (
+              <p className="cf-feedback cf-tone-caution" data-testid="pharmacy-stale-warning">
+                {t('pharmacyStaleWarning', locale)}
+              </p>
+            ) : null}
+            {rows.length === 0 ? (
+              <Card data-testid="pharmacy-empty">
+                <p>{t('pharmacyEmpty', locale)}</p>
+                <p>{t('pharmacyEmptyHint', locale)}</p>
+              </Card>
+            ) : (
+              <>
+                <div className="pharmacy-renew">
+                  <p>{t('pharmacyConfirmHint', locale)}</p>
+                  <ConsoleConfirmation
+                    open={confirmOpen}
+                    onOpenChange={setConfirmOpen}
+                    pending={saving}
+                    title={CLINICAL.confirmTitle}
+                    description={CLINICAL.confirmHint}
+                    confirmLabel={{
+                      bn: t('pharmacyConfirmAll', 'bn'),
+                      en: t('pharmacyConfirmAll', 'en'),
+                    }}
+                    trigger={
+                      <button
+                        type="button"
+                        className="min-h-touch rounded-sm bg-brand-600 px-4 text-white"
+                        disabled={bulkReason !== null}
+                        title={bulkReason ?? undefined}
+                        data-testid="pharmacy-confirm-all"
+                      >
+                        {t('pharmacyConfirmAll', locale)}
+                      </button>
+                    }
+                    onConfirm={() => {
+                      if (bulkReason !== null || rows.length === 0) return;
+                      setConfirmOpen(false);
+                      void write(
+                        rows.map((row) => ({
+                          medicineId: row.medicineId,
+                          inStock: row.inStock,
+                          expectedUpdatedAt: row.updatedAt,
+                        })),
+                      );
+                    }}
+                  />
+                  {rows.length > 200 ? <p>{CLINICAL.bulkLimit[locale]}</p> : null}
+                </div>
+                <div className="pharmacy-toolbar">
+                  <input
+                    className="pharmacy-search"
+                    type="search"
+                    value={search}
+                    aria-label={CLINICAL.searchMedicines[locale]}
+                    placeholder={CLINICAL.searchMedicines[locale]}
+                    data-testid="pharmacy-search"
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                  <Button
+                    variant="quiet"
+                    onClick={() => {
+                      setSearch('');
+                      setFilter('all');
+                    }}
+                  >
+                    {t('labQueueAll', locale)}
+                  </Button>
+                </div>
+                {visible.length === 0 ? (
+                  <Card data-testid="pharmacy-no-matches">{CLINICAL.noMatches[locale]}</Card>
+                ) : (
+                  <ul className="pharmacy-list">
+                    {visible.map((row) => (
+                      <li key={row.medicineId}>
+                        <ShelfRow
+                          row={row}
+                          now={now}
+                          locale={locale}
+                          offReason={offReason}
+                          freshness={freshness}
+                          formatMinutes={minutes}
+                          onSet={(inStock) => {
+                            void write([
+                              {
+                                medicineId: row.medicineId,
+                                inStock,
+                                expectedUpdatedAt: row.updatedAt,
+                              },
+                            ]);
+                          }}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+            <Card data-testid="pharmacy-dispense-absent">
+              <p>{t('pharmacyDispenseAbsent', locale)}</p>
+              <p className="text-body-sm text-ink-muted">
+                {t('pharmacyDispenseAbsentHint', locale)}
+              </p>
+            </Card>
+          </>
+        )}
       </div>
-    </div>
+    </ConsoleWorkspaceFrame>
   );
 }
 
@@ -318,65 +397,75 @@ function ShelfRow({
   readonly onSet: (inStock: boolean) => void;
 }): ReactNode {
   return (
-    <Card data-testid={`stock-${row.medicineId}`}>
-      <div className="flex items-center gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="text-body-lg text-ink">
-            {row.brandName === null ? row.genericName : `${row.brandName} (${row.genericName})`}
-          </p>
-          <p className="text-body-sm text-ink-muted">
-            {[row.form, row.strengths.join(', ')]
-              .filter((part) => part !== null && part !== '')
-              .join(' · ')}
-          </p>
-          {/* `FR-BED-06`'s idea on a shelf: what the public is being told. */}
-          <p className="mt-1 text-body-sm text-ink-secondary">
-            {format('pharmacyShownAs', locale, {
-              answer: t(ANSWER_LABEL[row.publishedAs], locale),
-            })}
-          </p>
-          <FreshnessLine
-            asOf={new Date(row.updatedAt)}
-            now={now}
-            // Twelve hours, the threshold a stock flag lapses at
-            // (`STOCK_STALE_THRESHOLD_MINUTES`). A bed's ten minutes here
-            // would paint the whole list amber by mid-morning.
-            staleAfterMinutes={12 * 60}
-            labels={freshness}
-            formatMinutes={formatMinutes}
-          />
-        </div>
-
+    <div
+      className="pharmacy-row"
+      data-testid={`stock-${row.medicineId}`}
+      data-answer={row.publishedAs}
+    >
+      <div>
+        <p className="font-semibold text-body-lg">
+          {row.brandName === null ? row.genericName : `${row.brandName} (${row.genericName})`}
+        </p>
+        <p className="text-body-sm text-ink-muted">
+          {[row.form, row.strengths.join(', ')]
+            .filter((part) => part !== null && part !== '')
+            .join(' \u00b7 ')}
+        </p>
         <Chip tone={row.inStock ? 'positive' : 'alert'}>
           {t(row.inStock ? 'pharmacyInStock' : 'pharmacyOutOfStock', locale)}
         </Chip>
-
-        <div className="flex shrink-0 gap-2">
-          <ActionButton
-            size="sm"
-            variant={row.inStock ? 'secondary' : 'primary'}
-            reason={offReason}
-            onClick={() => {
-              onSet(true);
-            }}
-            testId={`stock-in-${row.medicineId}`}
-          >
-            {t('pharmacyInStock', locale)}
-          </ActionButton>
-          <ActionButton
-            size="sm"
-            variant={row.inStock ? 'primary' : 'secondary'}
-            reason={offReason}
-            onClick={() => {
-              onSet(false);
-            }}
-            testId={`stock-out-${row.medicineId}`}
-          >
-            {t('pharmacyOutOfStock', locale)}
-          </ActionButton>
-        </div>
+        <FreshnessLine
+          asOf={new Date(row.updatedAt)}
+          now={now}
+          staleAfterMinutes={12 * 60}
+          labels={freshness}
+          formatMinutes={formatMinutes}
+        />
       </div>
-    </Card>
+      <div className="pharmacy-public">
+        <p className="text-caption text-ink-muted">{CLINICAL.patientAnswer[locale]}</p>
+        <Chip
+          tone={
+            row.publishedAs === 'unknown'
+              ? 'caution'
+              : row.publishedAs === 'in_stock'
+                ? 'positive'
+                : 'alert'
+          }
+        >
+          {t(ANSWER_LABEL[row.publishedAs], locale)}
+        </Chip>
+        <p className="text-body-sm">
+          {format('pharmacyShownAs', locale, { answer: t(ANSWER_LABEL[row.publishedAs], locale) })}
+        </p>
+      </div>
+      <div className="pharmacy-row-actions">
+        <ActionButton
+          size="sm"
+          variant="secondary"
+          reason={offReason}
+          onClick={() => onSet(true)}
+          testId={`stock-in-${row.medicineId}`}
+        >
+          <span aria-current={row.inStock ? 'true' : undefined}>
+            {row.publishedAs === 'unknown' && row.inStock
+              ? CLINICAL.stillInStock[locale]
+              : t('pharmacyInStock', locale)}
+          </span>
+        </ActionButton>
+        <ActionButton
+          size="sm"
+          variant="secondary"
+          reason={offReason}
+          onClick={() => onSet(false)}
+          testId={`stock-out-${row.medicineId}`}
+        >
+          <span aria-current={!row.inStock ? 'true' : undefined}>
+            {t('pharmacyOutOfStock', locale)}
+          </span>
+        </ActionButton>
+      </div>
+    </div>
   );
 }
 

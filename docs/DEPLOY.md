@@ -540,6 +540,16 @@ Real patient data lives here and nowhere else — not on Supabase, Render or
 Vercel, and never in a development or demo database (`FR-SEC-08`,
 `FR-IMP-11`).
 
+**Quick start (6 November 2026).** On a fresh Ubuntu server,
+`sudo bash deploy/setup.sh` does S1's Docker, S2, S3 and the firewall in one
+run: it asks for the web address, the backup folder, the alert link and the
+two first administrators, generates every secret, starts the stack, waits for
+it, creates the administrators and switches the laboratory off (F-08). It
+never overwrites an existing `deploy/.env`. `MEDLIVEBD_SKIP_SYSTEM=1` leaves
+Docker and the firewall to the hospital's IT. The plain-language version for
+the hospital is `docs/MARKS_START_HERE.md`. The sections below remain what
+the script does, step by step.
+
 One command starts the whole stack: the database, the migrations, the API,
 the two web apps, a web server that holds the TLS certificates, and a nightly
 backup that is checked and copied to a second place (`deploy/docker-compose.yml`,
@@ -597,6 +607,10 @@ Fill in `deploy/.env`:
 | `ADDRESS_RATE_LIMIT_FACTOR` | `1` unless patients will book from the hospital's own network. The API limits what one address may do in ten minutes (30 phone checks, 10 standby places, 10 emergency alerts), and a waiting room on the hospital's Wi-Fi is one address: the 31st patient would be told to wait. `10` allows ten times each limit; the most is `100`. The limits on a single phone number are not affected |
 | `BACKUP_AT_UTC_HOUR`, `BACKUP_KEEP_DAYS` | When the nightly backup runs (20 UTC is 02:00 Dhaka) and how many days are kept |
 | `BACKUP_SECOND_DIR` | The folder on **another disk or machine** every backup is copied to (`S5`). Empty means backups stay on this disk and the backup service reports itself failing |
+| `BACKUP_ENCRYPTION_PASSPHRASE` | Encrypts the copy in `BACKUP_SECOND_DIR` (`S5`). Long and random (`openssl rand -base64 32`), **kept off the server too**: without it the encrypted copies cannot be restored. Empty means the second copy is plain |
+| `ALERT_WEBHOOK_URL` | Where the watchdog posts when the server needs a person (`S5a`): a Telegram bot URL or an ntfy topic. A secret. Empty means alerts reach the log only |
+| `ALERT_WEBHOOK_FORMAT` | `json` (Telegram, Slack, Discord) or `text` (ntfy) |
+| `ALERT_SERVER_NAME`, `ALERT_REPEAT_HOURS`, `ALERT_DAILY_UTC_HOUR` | The name in each message; how often a lasting problem is repeated (6); the UTC hour of the daily "all well" (3, 09:00 in Dhaka; empty for none) |
 | `BACKUP_VERIFY_RESTORE` | `true`: each night's dump is restored into a scratch database to prove it restores. Needs free disk the size of the database |
 
 `deploy/.env` holds the hospital's secrets. It is ignored by git and by the
@@ -796,6 +810,32 @@ The `migrate` service runs on every `up` and applies only migrations the
 database has not seen; the API waits for it to finish. Take a backup first
 (`S5`) — migrations are forward-only.
 
+**Building elsewhere, so the counters are not kept waiting.** `--build` above
+compiles the API and both web apps on the server while patients wait, and a
+small server is slow at it. Instead, on any other machine with Docker, at the
+commit to deploy and with a copy of the server's `deploy/.env` (the web apps
+bake `API_ORIGIN` and `PLATFORM_DOMAIN` in; no secret goes into an image):
+
+```bash
+sh deploy/images.sh build deploy/.env medlivebd-images.tar.gz
+scp medlivebd-images.tar.gz* admin@<server>:~/
+```
+
+then on the server, at the same commit:
+
+```bash
+git fetch && git checkout <the commit in medlivebd-images.tar.gz.commit>
+sh deploy/images.sh install ~/medlivebd-images.tar.gz deploy/.env
+```
+
+`install` checks the archive against its checksum, refuses images built from
+another commit than the one checked out (the compose file and the backup
+scripts come from the checkout, the code from the images, and they must
+agree), loads them and starts the stack without building. The API is away
+for as long as the migrations and its own start take. The build refuses a
+checkout with uncommitted changes, and builds for x86-64 servers even on an
+ARM laptop.
+
 **A server first started before plan 1.7** needs two things once, before
 that `up`: `API_DB_USER`, `API_DB_PASSWORD` and `BACKUP_SECOND_DIR` added to
 `deploy/.env` (`S2`), and the uploaded files handed to the account the API now
@@ -827,6 +867,18 @@ They hold patient data: not a service outside Bangladesh without the
 hospital's agreement (`FR-SEC-07`). The stack cannot tell whether the folder
 you name really is another disk; that is for whoever sets it up to make true.
 
+**The copy there is encrypted** when `BACKUP_ENCRYPTION_PASSPHRASE` is set
+(`S2`): `db-<stamp>.dump.gpg` and `files-<stamp>.tar.gz.gpg` (gpg, AES-256),
+so an external drive that is lost or taken gives away nothing. Each night the
+copy is decrypted again and compared with the original before the run counts,
+so a damaged copy is found the same night. The copy on the server's own disk
+stays plain: it is the one restored in a hurry, and the server's disk is
+protected by the server's own full-disk encryption (`S1`). **Write the
+passphrase down somewhere off the server** (the hospital's safe, a password
+manager two people can open): a backup whose passphrase died with the server
+cannot be restored by anybody. Without a passphrase the second copy is plain
+and every run warns.
+
 **Whether last night worked is visible without reading a log:**
 
 ```bash
@@ -854,9 +906,43 @@ sender is not sending), `worker_late` (something the server does on a clock
 has stopped). The rest of `signals` gives the ages and counts behind them.
 None of it makes the API unready: a failed backup is not a reason to stop a
 reception desk. A free uptime checker pointed at that address and set to
-look for an empty `attention` is an alert; this repository sets none up,
-because it needs an account somebody owns. Until one exists, **somebody has
-to look each morning**.
+look for an empty `attention` is a second, outside check (S5a).
+
+### S5a. Being told
+
+The `watchdog` service reads `/readyz` every minute and posts to
+`ALERT_WEBHOOK_URL` (`S2`) when something goes wrong, when what is wrong
+changes, every `ALERT_REPEAT_HOURS` while it lasts, and when it is right
+again. Besides the words above it says `api_unreachable` (three checks in a
+row without an answer, so a restart is not an alarm) and
+`database_unreachable` (the API answers but cannot reach the database). Once a
+day at `ALERT_DAILY_UTC_HOUR` it says all is well; **a day without that
+message means the watchdog, or the whole server, has stopped**. A message
+holds the server's name and the fixed sentences only, never a patient, a
+token or a log line. A message that cannot be posted is tried again at the
+next check.
+
+A free destination, either of:
+
+- **Telegram.** Make a bot with @BotFather, add it to the group that should be
+  told, and set
+  `ALERT_WEBHOOK_URL=https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>`
+  (the chat id is in `https://api.telegram.org/bot<TOKEN>/getUpdates` after
+  somebody writes in the group).
+- **ntfy.** `ALERT_WEBHOOK_URL=https://ntfy.sh/<a long random topic>` and
+  `ALERT_WEBHOOK_FORMAT=text`; subscribe to the topic in the ntfy app. The
+  topic is the only secret, so make it long.
+
+Try it after setting it: stop the API for four minutes
+(`docker compose … stop api`, wait, `start api`); the group gets "needs
+attention" and then "all well again". With `ALERT_WEBHOOK_URL` empty the same
+messages go to `docker compose … logs watchdog` only, and **somebody has to
+look each morning**.
+
+The watchdog runs on the server it watches, so a server that is off, or has
+lost its network, says nothing at all. For that, also point a free outside
+uptime checker (UptimeRobot, Better Stack) at `https://api.<your-domain>/readyz`;
+it needs an account somebody owns.
 
 A backup on demand:
 
@@ -874,6 +960,16 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env stop api cons
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --entrypoint sh backup \
   /deploy/restore.sh /backups/db-<stamp>.dump /backups/files-<stamp>.tar.gz
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+```
+
+From the encrypted copy, name the `.gpg` files instead (they may sit in
+`deploy/backups/` or in the second location, `/backups-second/` inside the
+container); `restore.sh` decrypts them first with the passphrase in
+`deploy/.env`, and stops before touching the database if it cannot:
+
+```bash
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env run --rm --entrypoint sh backup \
+  /deploy/restore.sh /backups-second/db-<stamp>.dump.gpg /backups-second/files-<stamp>.tar.gz.gpg
 ```
 
 Practise this once on a spare machine before the pilot starts; a restore
@@ -924,7 +1020,7 @@ before Docker sees them. A Linux server needs nothing.
 - **Each service reports its own health** (`docker compose ps`): the API is
   healthy only while it can reach the database; the web server waits for the
   three it serves; the backup is healthy only while last night's backup is
-  good (`S5`). Nothing restarts or alerts on it — it is there to be read.
+  good (`S5`). Nothing restarts on it; the watchdog tells somebody (`S5a`).
 
 ## S7. When something is wrong
 

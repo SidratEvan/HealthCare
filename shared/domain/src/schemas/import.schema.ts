@@ -15,13 +15,31 @@ import { IMPORT_SETS } from '../imports/sets.js';
 /** Five megabytes of CSV text. */
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
+/** Portable UTF-8 size, including replacement bytes for isolated surrogates. */
+export function importUtf8Bytes(value: string): number {
+  let bytes = 0;
+  for (const character of value) {
+    const point = character.codePointAt(0) ?? 0;
+    bytes += point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
+  }
+  return bytes;
+}
+
+/** UTF-8 bytes, not JavaScript UTF-16 characters (FR-IMP-09/22). */
+const csvText = z
+  .string()
+  .min(1)
+  .refine((value) => importUtf8Bytes(value) <= MAX_IMPORT_BYTES, {
+    message: 'CSV exceeds the five-megabyte UTF-8 limit',
+  });
+
 export const importSetParams = z.object({ set: z.enum(IMPORT_SETS) });
 export const importParams = z.object({ id: z.string().uuid() });
 
 export const importUploadBody = z.strictObject({
   set: z.enum(IMPORT_SETS),
   fileName: z.string().trim().min(1).max(200),
-  csv: z.string().min(1).max(MAX_IMPORT_BYTES),
+  csv: csvText,
 });
 
 export type ImportUploadBody = z.infer<typeof importUploadBody>;
@@ -37,7 +55,7 @@ const structureType = z.enum(STRUCTURE_TYPES);
  */
 export const importAnalyseBody = z.strictObject({
   set: z.enum(IMPORT_SETS),
-  csv: z.string().min(1).max(MAX_IMPORT_BYTES),
+  csv: csvText,
   rowType: structureType.optional(),
 });
 export type ImportAnalyseBody = z.infer<typeof importAnalyseBody>;
@@ -64,7 +82,7 @@ export const columnMapping = z.strictObject({
 export const importMappedBody = z.strictObject({
   set: z.enum(IMPORT_SETS),
   fileName: z.string().trim().min(1).max(200),
-  csv: z.string().min(1).max(MAX_IMPORT_BYTES),
+  csv: csvText,
   mapping: columnMapping,
   suggestedByModel: z
     .array(z.string().regex(/^[a-z][a-z_]{1,30}$/))

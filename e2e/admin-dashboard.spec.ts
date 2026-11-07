@@ -30,6 +30,13 @@ async function openThroughPicker(page: Page): Promise<void> {
   await expect(open).toBeVisible();
   await open.click();
 
+  // Batch 5A opens Today first. The original V1 report assertions below use
+  // the same default 30-day reporting window, now behind Reports.
+  await page
+    .locator('.cf-nav')
+    .getByRole('button', { name: /Reports/ })
+    .click();
+
   // The first read may rebuild the snapshot (`admin.service.ensureFresh`).
   await expect(page.getByTestId('admin-section-today')).toBeVisible({ timeout: 20_000 });
 }
@@ -54,6 +61,8 @@ test.describe('the hospital dashboard (S-B-10)', () => {
     page,
   }) => {
     await openThroughPicker(page);
+
+    await page.locator('.cf-nav').getByRole('button', { name: /Today/ }).click();
 
     const now = page.getByTestId('admin-now');
     await expect(now).toBeVisible();

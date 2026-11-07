@@ -31,6 +31,7 @@ import {
   type ErHospital,
 } from './support/emergency.js';
 import { bedState, createWardFixture } from './support/ward.js';
+import { reviewWorkspace } from './support/workspaceReview.js';
 
 const CONSOLE = 'http://localhost:3100';
 const PATIENT = 'http://localhost:3000';
@@ -66,6 +67,27 @@ async function phoneAtFarmgate(browser: Browser): Promise<Page> {
 // rest of the run (`support/contexts.ts`).
 test.afterEach(async ({ browser, context }) => {
   await closeOtherContexts(browser, context);
+});
+
+test('unsupported browser audio is stated while visual alerts still arrive', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.addInitScript(() => {
+    Object.defineProperty(globalThis, 'AudioContext', { value: undefined, configurable: true });
+    Object.defineProperty(globalThis, 'webkitAudioContext', {
+      value: undefined,
+      configurable: true,
+    });
+  });
+  await openErConsole(page, shapla);
+  await expect(page.getByTestId('er-sound-unavailable')).toBeVisible();
+  await expect(page.getByTestId('er-sound-on')).toHaveCount(0);
+  const alert = await sendAlert(shapla.hospitalId, 'cardiac');
+  await expect(page.getByTestId(`er-inbound-${alert.caseId}`)).toBeVisible({
+    timeout: ALERT_BUDGET_MS,
+  });
+  await reviewWorkspace(page, 'docs/design/console-ward-emergency/er-bn-tablet.png');
+  await page.getByTestId('language-en').click();
+  await reviewWorkspace(page, 'docs/design/console-ward-emergency/er-en-tablet.png');
 });
 
 test.describe('the burn scenario (PRD.md §24 step 7)', () => {
@@ -263,6 +285,11 @@ test.describe('the ER hands a case to the ward (BTN-B07-ADMIT, FR-BED-07)', () =
     await board.getByTestId('admit-name').fill('রাবেয়া খাতুন (ডেমো)');
     await board.getByTestId('admit-phone').fill('01799887766');
     await board.getByTestId('admit-confirm').click();
+    // Review is not an admission or an ER bed reservation (FR-BED-07).
+    await expect(board.getByTestId('admit-review')).toBeVisible();
+    await expect(board.getByTestId(`bed-tile-${bed.label}`)).toHaveAttribute('data-state', 'free');
+    await expect(page.getByTestId(`er-row-${walkIn.caseId}`)).toBeVisible();
+    await board.getByTestId('admit-submit-review').click();
 
     await expect.poll(async () => await bedState(bed.id)).toBe('occupied');
     await expect.poll(async () => (await caseState(walkIn.caseId)).state).toBe('admitted');

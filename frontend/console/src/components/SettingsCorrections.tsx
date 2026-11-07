@@ -46,15 +46,20 @@ import {
 import { Button, Chip, FilterChip, Input, useLocale } from '@platform/ui';
 
 import {
+  reviewField,
+  useManagementDraft,
+  useAdminManagement,
+  type ManagementRun,
+} from '@/components/AdminManagementContext';
+import {
   settingsApi,
   takaToPoisha,
-  type Saved,
   type SettingsDepartment,
   type SettingsWard,
   type SetupSnapshot,
 } from '@/lib/settings';
 
-type Run = <T>(call: () => Promise<Saved<T>>, success: (value: T) => string) => Promise<boolean>;
+type Run = ManagementRun;
 
 interface Common {
   readonly offline: boolean;
@@ -70,7 +75,7 @@ type Bed = SettingsWard['beds'][number];
 export function IdentityForm({
   snapshot,
   offline,
-  run,
+  run: baseRun,
 }: Common & { readonly snapshot: SetupSnapshot }): ReactNode {
   const locale = useLocale();
   const hospital = snapshot.hospital;
@@ -78,6 +83,25 @@ export function IdentityForm({
   const [district, setDistrict] = useState(hospital.district);
   const [registrationNo, setRegistrationNo] = useState(hospital.registrationNo ?? '');
   const [busy, setBusy] = useState(false);
+  const run = useManagementDraft(
+    'identity',
+    t('manageRegistration', locale),
+    [
+      reviewField(t('platformFieldDivision', locale), hospital.division, division),
+      reviewField(t('platformFieldDistrict', locale), hospital.district, district),
+      reviewField(
+        t('platformFieldRegistration', locale),
+        hospital.registrationNo ?? '',
+        registrationNo,
+      ),
+    ],
+    baseRun,
+    () => {
+      setDivision(hospital.division);
+      setDistrict(hospital.district);
+      setRegistrationNo(hospital.registrationNo ?? '');
+    },
+  );
 
   if (!identityEditable(hospital.lifecycle)) {
     return (
@@ -185,17 +209,32 @@ export function DepartmentRow({
   department,
   doctorsListed,
   offline,
-  run,
+  run: baseRun,
 }: Common & {
   readonly department: SettingsDepartment;
   /** Doctors listed under it, active or not: while there are any it stays. */
   readonly doctorsListed: number;
 }): ReactNode {
   const locale = useLocale();
+  const management = useAdminManagement();
   const [editing, setEditing] = useState(false);
   const [nameBn, setNameBn] = useState(department.nameBn);
   const [nameEn, setNameEn] = useState(department.nameEn);
   const [busy, setBusy] = useState(false);
+  const run = useManagementDraft(
+    `department-${department.id}`,
+    localName(locale, department.nameBn, department.nameEn),
+    [
+      reviewField(t('settingsNameBn', locale), department.nameBn, nameBn),
+      reviewField(t('settingsNameEn', locale), department.nameEn, nameEn),
+    ],
+    baseRun,
+    () => {
+      setNameBn(department.nameBn);
+      setNameEn(department.nameEn);
+    },
+  );
+
   const ready = nameBn.trim() !== '' && nameEn.trim() !== '';
 
   function save(event: FormEvent<HTMLFormElement>): void {
@@ -235,9 +274,11 @@ export function DepartmentRow({
             data-testid={`settings-dept-edit-${department.code}`}
             onClick={() => {
               // Closing without saving puts back what is saved.
-              setNameBn(department.nameBn);
-              setNameEn(department.nameEn);
-              setEditing((open) => !open);
+              management?.navigate(() => {
+                setNameBn(department.nameBn);
+                setNameEn(department.nameEn);
+                setEditing((open) => !open);
+              });
             }}
           >
             {t(editing ? 'settingsCancel' : 'settingsEdit', locale)}
@@ -250,6 +291,16 @@ export function DepartmentRow({
                 run(
                   () => settingsApi.removeDepartment(department.id),
                   () => t('settingsRemoved', locale),
+                  {
+                    title: t('settingsRemove', locale),
+                    fields: [
+                      reviewField(
+                        t('settingsTabDepartments', locale),
+                        localName(locale, department.nameBn, department.nameEn),
+                        '—',
+                      ),
+                    ],
+                  },
                 )
               }
             />
@@ -315,14 +366,30 @@ export function DepartmentRow({
 export function WardEditor({
   ward,
   offline,
-  run,
+  run: baseRun,
 }: Common & { readonly ward: SettingsWard }): ReactNode {
   const locale = useLocale();
+  const management = useAdminManagement();
   const [editing, setEditing] = useState(false);
   const [nameBn, setNameBn] = useState(ward.nameBn);
   const [nameEn, setNameEn] = useState(ward.nameEn);
   const [floor, setFloor] = useState(String(ward.floor));
   const [busy, setBusy] = useState(false);
+  const run = useManagementDraft(
+    `ward-${ward.id}`,
+    localName(locale, ward.nameBn, ward.nameEn),
+    [
+      reviewField(t('settingsNameBn', locale), ward.nameBn, nameBn),
+      reviewField(t('settingsNameEn', locale), ward.nameEn, nameEn),
+      reviewField(t('settingsFloor', locale), String(ward.floor), floor),
+    ],
+    baseRun,
+    () => {
+      setNameBn(ward.nameBn);
+      setNameEn(ward.nameEn);
+      setFloor(String(ward.floor));
+    },
+  );
 
   const floorText = toLatinDigits(floor).trim();
   const floorNumber = /^\d{1,2}$/.test(floorText) ? Number(floorText) : null;
@@ -358,10 +425,12 @@ export function WardEditor({
           type="button"
           data-testid={`settings-edit-ward-${ward.id}`}
           onClick={() => {
-            setNameBn(ward.nameBn);
-            setNameEn(ward.nameEn);
-            setFloor(String(ward.floor));
-            setEditing((open) => !open);
+            management?.navigate(() => {
+              setNameBn(ward.nameBn);
+              setNameEn(ward.nameEn);
+              setFloor(String(ward.floor));
+              setEditing((open) => !open);
+            });
           }}
         >
           {t(editing ? 'settingsCancel' : 'settingsEdit', locale)}
@@ -375,6 +444,16 @@ export function WardEditor({
               run(
                 () => settingsApi.removeWard(ward.id),
                 () => t('settingsRemoved', locale),
+                {
+                  title: t('settingsRemove', locale),
+                  fields: [
+                    reviewField(
+                      t('settingsTabBeds', locale),
+                      localName(locale, ward.nameBn, ward.nameEn),
+                      '—',
+                    ),
+                  ],
+                },
               )
             }
           />
@@ -446,6 +525,7 @@ export function WardBeds({
   run,
 }: Common & { readonly ward: SettingsWard }): ReactNode {
   const locale = useLocale();
+  const management = useAdminManagement();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (ward.beds.length === 0) return null;
@@ -462,7 +542,9 @@ export function WardBeds({
               selected={bed.id === selectedId}
               data-testid={`settings-bedchip-${bed.label}`}
               onToggle={() => {
-                setSelectedId((current) => (current === bed.id ? null : bed.id));
+                management?.navigate(() =>
+                  setSelectedId((current) => (current === bed.id ? null : bed.id)),
+                );
               }}
             >
               {bed.label}
@@ -486,11 +568,25 @@ export function WardBeds({
   );
 }
 
-function BedForm({ bed, offline, run }: Common & { readonly bed: Bed }): ReactNode {
+function BedForm({ bed, offline, run: baseRun }: Common & { readonly bed: Bed }): ReactNode {
   const locale = useLocale();
   const [label, setLabel] = useState(bed.label);
   const [nightly, setNightly] = useState(String(bed.nightlyPoisha / 100));
   const [busy, setBusy] = useState(false);
+  const run = useManagementDraft(
+    `bed-${bed.id}`,
+    bed.label,
+    [
+      reviewField(t('settingsBedLabel', locale), bed.label, label),
+      reviewField(t('settingsNightly', locale), String(bed.nightlyPoisha / 100), nightly),
+    ],
+    baseRun,
+    () => {
+      setLabel(bed.label);
+      setNightly(String(bed.nightlyPoisha / 100));
+    },
+  );
+
   const nightlyPoisha = takaToPoisha(toLatinDigits(nightly));
   const ready = label.trim() !== '' && label.trim().length <= 20 && nightlyPoisha !== null;
 
@@ -558,6 +654,10 @@ function BedForm({ bed, offline, run }: Common & { readonly bed: Bed }): ReactNo
               run(
                 () => settingsApi.removeBed(bed.id),
                 () => t('settingsRemoved', locale),
+                {
+                  title: t('settingsRemove', locale),
+                  fields: [reviewField(t('settingsBedLabel', locale), bed.label, '—')],
+                },
               )
             }
           />
@@ -662,7 +762,17 @@ function SaveButton({
   readonly onClick?: () => void;
 }): ReactNode {
   const locale = useLocale();
-  const reason = offline ? t('settingsSaveOffline', locale) : (blocked ?? null);
+  const management = useAdminManagement();
+  const conflict = [...(management?.drafts.values() ?? [])].some((draft) => draft.conflict);
+  const reason = management?.readFailed
+    ? t('loadFailed', locale)
+    : management?.busy
+      ? t('manageSaving', locale)
+      : conflict
+        ? t('manageServerChanged', locale)
+        : offline
+          ? t('settingsSaveOffline', locale)
+          : (blocked ?? null);
   const common = {
     variant,
     type: submit ? ('submit' as const) : ('button' as const),

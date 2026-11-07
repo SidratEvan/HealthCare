@@ -33,6 +33,12 @@ async function withClient<T>(body: (client: Client) => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * How a facility this suite made is told from a seeded one: its code starts
+ * with this. Fixtures built "from seeded rows" leave these alone.
+ */
+export const FACILITY_CODE_PREFIX = 'E2E';
+
 export interface NewFacility {
   readonly hospitalId: string;
   readonly code: string;
@@ -42,7 +48,7 @@ export interface NewFacility {
 /** An empty, unpublished facility and its first administrator. */
 export async function newFacility(password: string): Promise<NewFacility> {
   const hash = await hashPassword(password);
-  const code = `E2E${randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+  const code = `${FACILITY_CODE_PREFIX}${randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()}`;
   const adminEmail = `admin-${code.toLowerCase()}@settings.demo.invalid`;
   return await withClient(async (client) => {
     const hospital = await client.query<{ id: string }>(

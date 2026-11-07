@@ -38,6 +38,33 @@ types.setTypeParser(20, (value) => value);
  */
 types.setTypeParser(1082, (value) => value);
 
+/**
+ * A test never reaches a database that is not a test database (`FR-SEC-08`).
+ *
+ * The suites' own setup (`__tests__/support/env.setup.ts`) points them at a
+ * `_test` database, but only when vitest runs from the repository root. Run
+ * from `backend/api`, that setup is not loaded and `env.ts` reads `.env`,
+ * whose `DATABASE_URL` may be the public demo's: on 6 November a slip test
+ * run that way wrote chambers into it. So the connection itself refuses.
+ */
+export function assertTestDatabase(url: string, underTest: boolean): void {
+  if (!underTest) return;
+  let name: string;
+  try {
+    name = new URL(url).pathname.replace(/^\//, '');
+  } catch {
+    name = '';
+  }
+  if (!name.endsWith('_test')) {
+    throw new Error(
+      `Refusing to connect a test run to "${name}": the database name must end in _test. ` +
+        'Run the suites from the repository root (pnpm test).',
+    );
+  }
+}
+
+assertTestDatabase(env.DATABASE_URL, process.env['VITEST'] !== undefined);
+
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
   max: env.DATABASE_POOL_MAX,

@@ -12,6 +12,8 @@
  * (`playwright.config.ts`), so `padma.localhost` is Padma's portal.
  */
 
+import { get } from 'node:http';
+
 import { expect, test } from '@playwright/test';
 
 const NETWORK = 'http://localhost:3000';
@@ -30,13 +32,45 @@ interface Manifest {
   readonly icons: readonly { src: string; sizes: string; type: string; purpose: string }[];
 }
 
+/**
+ * A GET as a phone would make it at `address`.
+ *
+ * Browsers send every `*.localhost` to this machine; Node's resolver does not
+ * on every system (Windows answers `ENOTFOUND padma.localhost`, 6 November
+ * 2026). So the request goes to 127.0.0.1 and names the portal in its `Host`
+ * header, which is all the patient app reads to know whose portal it is.
+ */
+function getAt(address: string): Promise<{ status: number; type: string; body: string }> {
+  const url = new URL(address);
+  return new Promise((resolve, reject) => {
+    const request = get(
+      {
+        host: url.hostname.endsWith('.localhost') ? '127.0.0.1' : url.hostname,
+        port: url.port,
+        path: `${url.pathname}${url.search}`,
+        headers: { host: url.host },
+      },
+      (response) => {
+        let body = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk: string) => (body += chunk));
+        response.on('end', () =>
+          resolve({
+            status: response.statusCode ?? 0,
+            type: response.headers['content-type'] ?? '',
+            body,
+          }),
+        );
+      },
+    );
+    request.on('error', reject);
+  });
+}
+
 async function manifestAt(address: string): Promise<{ type: string; manifest: Manifest }> {
-  const response = await fetch(`${address}`);
+  const response = await getAt(address);
   expect(response.status).toBe(200);
-  return {
-    type: response.headers.get('content-type') ?? '',
-    manifest: (await response.json()) as Manifest,
-  };
+  return { type: response.type, manifest: JSON.parse(response.body) as Manifest };
 }
 
 test.describe('what a phone is told when the app is installed', () => {

@@ -24,10 +24,10 @@
 import QRCode from 'qrcode';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
-import { t, toLatinDigits } from '@platform/i18n';
-import { Button, Card, Input, useLocale } from '@platform/ui';
+import { CONSOLE, t, toLatinDigits } from '@platform/i18n';
+import { ConsoleAction, Card, ConsoleInput as Input, useLocale } from '@platform/ui';
 
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
+import { StaffAccessFrame, accessFieldLabel } from '@/components/StaffAccessFrame';
 import {
   enableTwoFactor,
   refreshStaffSession,
@@ -140,20 +140,11 @@ export function TwoFactorSetup({
   const codeReady = online && /^\d{6}$/.test(toLatinDigits(code.trim()));
 
   return (
-    <div className="min-h-screen">
-      <header className="bg-brand-700 text-ink-inverse">
-        <div className="mx-auto flex max-w-[1040px] items-center gap-4 px-8 py-8">
-          <h1 className="font-reading text-title-lg">
-            {t(phase.kind === 'codes' ? 'tfaRecoveryTitle' : 'tfaSetupTitle', locale)}
-          </h1>
-          <ConsoleLanguageSwitch />
-        </div>
-      </header>
-
-      <main
-        className="mx-auto flex max-w-[640px] flex-col gap-6 p-8"
-        data-testid="two-factor-setup"
-      >
+    <StaffAccessFrame
+      title={phase.kind === 'codes' ? 'tfaRecoveryTitle' : 'tfaSetupTitle'}
+      step={2}
+    >
+      <div className="cf-stack" data-testid="two-factor-setup">
         {online ? null : (
           <p
             role="status"
@@ -182,13 +173,12 @@ export function TwoFactorSetup({
             >
               {t(phase.offline ? 'loginOffline' : 'tfaSetupFailed', locale)}
             </p>
-            <Button
+            <ConsoleAction
+              label={CONSOLE.retry}
               onClick={() => {
                 void start();
               }}
-            >
-              {t('retry', locale)}
-            </Button>
+            />
           </div>
         ) : null}
 
@@ -209,13 +199,13 @@ export function TwoFactorSetup({
                     alt={t('tfaQrAlt', locale)}
                     width={200}
                     height={200}
-                    className="self-center rounded-sm bg-surface"
+                    className="cf-qr"
                     data-testid="tfa-qr"
                   />
                 )}
                 <div>
                   <p className="text-body-sm text-ink-secondary">{t('tfaSetupManual', locale)}</p>
-                  <p className="mt-1 break-all font-mono text-title-sm" data-testid="tfa-secret">
+                  <p className="cf-secret" data-testid="tfa-secret">
                     {grouped(phase.secret)}
                   </p>
                 </div>
@@ -230,7 +220,7 @@ export function TwoFactorSetup({
               }}
             >
               <Input
-                label={t('tfaSetupStep3', locale)}
+                label={accessFieldLabel('tfaSetupStep3', locale)}
                 density="console"
                 autoComplete="one-time-code"
                 spellCheck={false}
@@ -252,7 +242,8 @@ export function TwoFactorSetup({
                   {t('loginFailed', locale)}
                 </p>
               ) : null}
-              <Button
+              <ConsoleAction
+                label={CONSOLE.tfaSetupSubmit}
                 type="submit"
                 {...(codeReady
                   ? {}
@@ -262,9 +253,7 @@ export function TwoFactorSetup({
                     })}
                 loading={busy}
                 data-testid="tfa-setup-submit"
-              >
-                {t('tfaSetupSubmit', locale)}
-              </Button>
+              />
             </form>
           </>
         ) : null}
@@ -273,23 +262,19 @@ export function TwoFactorSetup({
           <>
             <p className="text-body-md text-ink-secondary">{t('tfaRecoveryIntro', locale)}</p>
             <Card>
-              <ol
-                className="grid grid-cols-2 gap-x-6 gap-y-2 font-mono text-body-md"
-                data-testid="tfa-recovery-codes"
-              >
+              <ol className="cf-recovery" data-testid="tfa-recovery-codes">
                 {phase.codes.map((recovery) => (
                   <li key={recovery}>{recovery}</li>
                 ))}
               </ol>
             </Card>
-            <Button
+            <ConsoleAction
+              label={CONSOLE.tfaRecoveryPrint}
               variant="secondary"
               onClick={() => {
                 globalThis.print();
               }}
-            >
-              {t('tfaRecoveryPrint', locale)}
-            </Button>
+            />
             <label className="flex min-h-touch items-center gap-3 text-body-md">
               <input
                 type="checkbox"
@@ -301,32 +286,33 @@ export function TwoFactorSetup({
               />
               {t('tfaRecoverySaved', locale)}
             </label>
-            <Button
+            <ConsoleAction
+              label={CONSOLE.tfaRecoveryContinue}
               {...(kept ? {} : { disabled: true, disabledReason: t('tfaRecoveryNeeds', locale) })}
               onClick={onDone}
               data-testid="tfa-recovery-continue"
-            >
-              {t('tfaRecoveryContinue', locale)}
-            </Button>
+            />
           </>
         ) : (
           <div className="flex flex-wrap gap-3">
             {required || onCancel === undefined ? null : (
-              <Button variant="secondary" onClick={onCancel} data-testid="tfa-setup-cancel">
-                {t('tfaCancel', locale)}
-              </Button>
+              <ConsoleAction
+                label={CONSOLE.tfaCancel}
+                variant="secondary"
+                onClick={onCancel}
+                data-testid="tfa-setup-cancel"
+              />
             )}
-            <Button
+            <ConsoleAction
+              label={CONSOLE.signOut}
               variant="quiet"
               onClick={() => {
                 void signOut().then(onSignedOut);
               }}
-            >
-              {t('signOut', locale)}
-            </Button>
+            />
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </StaffAccessFrame>
   );
 }

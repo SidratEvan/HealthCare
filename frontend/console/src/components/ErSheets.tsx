@@ -39,6 +39,8 @@ import {
 } from '@platform/i18n';
 import { Button, Chip, FilterChip, Input, Sheet, SheetActions } from '@platform/ui';
 
+import { ER_WORKSPACE as COPY } from '@/lib/wardEmergencyMessages';
+
 import type { WalkInInput } from '@/hooks/useEmergencyConsole';
 import type { SuggestedHospital } from '@/lib/emergency';
 
@@ -408,7 +410,7 @@ export function AdmitSheet({
       }}
       variant="modal"
       title={t('erAdmitTitle', locale)}
-      description={t('erAdmitHint', locale)}
+      description={COPY.handoff[locale]}
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap gap-2" data-testid="er-admit-kinds">

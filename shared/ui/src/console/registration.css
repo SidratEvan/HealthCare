@@ -1,0 +1,194 @@
+/* Opt-in console registration presentation (FR-REC-20, GR-06). */
+.console-foundation .cf-reg-read-time {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+}
+.console-foundation .cf-reg-read-time p {
+  margin: 0;
+}
+.console-foundation .cf-registration {
+  padding-bottom: 140px;
+}
+.console-foundation .cf-reg-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.console-foundation .cf-reg-panel {
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: white;
+  padding: 24px;
+  min-width: 0;
+}
+.console-foundation .cf-reg-panel h2 {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 16px;
+  font-size: 22px;
+}
+.console-foundation .cf-reg-number {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--brand-700);
+  color: white;
+  font-size: 18px;
+}
+.console-foundation .cf-reg-phone {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.console-foundation .cf-reg-phone > div {
+  flex: 1;
+  min-width: 0;
+}
+.console-foundation .cf-reg-phone > button {
+  margin-top: 28px;
+}
+.console-foundation .cf-reg-person {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+}
+.console-foundation .cf-reg-person > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.console-foundation .cf-reg-selected {
+  padding: 18px;
+  border: 1px solid #81bba3;
+  border-radius: 12px;
+  background: #e5f4ed;
+}
+.console-foundation .cf-reg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.console-foundation .cf-reg-new {
+  background: #f3f6fa;
+  padding: 20px;
+  border-radius: 12px;
+}
+.console-foundation .cf-reg-steps {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.console-foundation .cf-reg-steps li {
+  padding: 12px;
+  border-bottom: 3px solid var(--line-soft);
+}
+.console-foundation .cf-reg-steps li[aria-current='step'] {
+  border-color: var(--brand-700);
+  font-weight: 700;
+}
+.console-foundation .cf-reg-chamber {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 96px;
+  text-align: start;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 18px;
+  background: white;
+}
+.console-foundation .cf-reg-chamber[aria-pressed='true'] {
+  border: 2px solid var(--brand-700);
+  background: #f0f5fc;
+}
+.console-foundation .cf-reg-chamber:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+.console-foundation .cf-reg-chamber > span:last-child {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+.console-foundation .cf-reg-chamber strong,
+.console-foundation .cf-reg-chamber small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.console-foundation .cf-reg-chamber small {
+  margin-top: 6px;
+}
+.console-foundation .cf-reg-summary {
+  position: sticky;
+  bottom: 12px;
+  z-index: 8;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 8px 24px #15294120;
+}
+.console-foundation .cf-reg-summary > div {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.console-foundation .cf-reg-summary button {
+  min-width: 160px;
+}
+.console-foundation .cf-reg-confirmed {
+  max-width: 700px;
+  margin: 24px auto;
+  text-align: center;
+}
+.console-foundation .cf-reg-serial {
+  background: var(--brand-700);
+  color: white;
+  border-radius: 18px;
+  padding: 24px;
+  margin: 24px 0;
+}
+.console-foundation .cf-reg-serial strong {
+  display: block;
+  font-size: clamp(64px, 10vw, 120px);
+  line-height: 1.3;
+}
+.console-foundation .cf-reg-queue-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px;
+}
+@media (max-width: 850px) {
+  .console-foundation .cf-reg-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .console-foundation .cf-reg-panel {
+    padding: 20px;
+  }
+  .console-foundation .cf-reg-steps li {
+    padding: 8px 4px;
+    font-size: 14px;
+  }
+  .console-foundation .cf-reg-summary {
+    bottom: 8px;
+  }
+}

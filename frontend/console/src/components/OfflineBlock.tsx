@@ -31,6 +31,7 @@ import { Button, Chip } from '@platform/ui';
 import type { ReactNode } from 'react';
 
 export interface OfflineBlockProps {
+  readonly scope?: string | null;
   readonly connected: boolean;
   readonly pendingCount: number;
   /** Null when this console has never reached the server. */
@@ -46,6 +47,7 @@ export interface OfflineBlockProps {
 }
 
 export function OfflineBlock({
+  scope = null,
   connected,
   pendingCount,
   lastServerTs,
@@ -56,6 +58,7 @@ export function OfflineBlock({
   locale,
   now,
 }: OfflineBlockProps): ReactNode {
+  const testId = (name: string): string => (scope === null ? name : `${name}-${scope}`);
   const numerals = numeralsFor(locale);
   /** `GR-01`: discarding names its consequence and is asked for twice. */
   const [confirming, setConfirming] = useState(false);
@@ -63,7 +66,7 @@ export function OfflineBlock({
   return (
     <section
       className="rounded-md border border-line bg-surface p-4"
-      data-testid="offline-block"
+      data-testid={testId('offline-block')}
       data-connected={connected ? 'true' : 'false'}
       // A11Y-04: connection state changes without the operator doing anything,
       // so it is announced rather than silently swapped.
@@ -81,14 +84,14 @@ export function OfflineBlock({
         {pendingCount > 0 ? (
           <span
             className="text-body-sm tabular-nums text-ink-secondary"
-            data-testid="pending-count"
+            data-testid={testId('pending-count')}
           >
             {t('pendingToSync', locale)}: {formatNumber(pendingCount, numerals)}
           </span>
         ) : null}
       </div>
 
-      <p className="mt-3 text-caption text-ink-muted" data-testid="last-synced">
+      <p className="mt-3 text-caption text-ink-muted" data-testid={testId('last-synced')}>
         {lastServerTs === null
           ? t('neverSynced', locale)
           : `${t('lastSynced', locale)}: ${formatNumber(minutesSince(lastServerTs, now), numerals)} ${t('minutesShort', locale)}`}
@@ -101,7 +104,7 @@ export function OfflineBlock({
       ) : null}
 
       {stuckCount > 0 ? (
-        <div className="mt-3" role="alert" data-testid="sync-stuck">
+        <div className="mt-3" role="alert" data-testid={testId('sync-stuck')}>
           <p className="text-caption text-warn-600">
             {format('syncStuck', locale, { count: formatNumber(stuckCount, numerals) })}
           </p>
@@ -115,7 +118,7 @@ export function OfflineBlock({
                 <Button
                   size="sm"
                   variant="secondary"
-                  data-testid="sync-stuck-discard-confirm"
+                  data-testid={testId('sync-stuck-discard-confirm')}
                   onClick={() => {
                     setConfirming(false);
                     onDiscardStuck?.();
@@ -139,7 +142,7 @@ export function OfflineBlock({
               <Button
                 size="sm"
                 variant="secondary"
-                data-testid="sync-stuck-retry"
+                data-testid={testId('sync-stuck-retry')}
                 onClick={() => {
                   onRetryStuck?.();
                 }}
@@ -149,7 +152,7 @@ export function OfflineBlock({
               <Button
                 size="sm"
                 variant="secondary"
-                data-testid="sync-stuck-discard"
+                data-testid={testId('sync-stuck-discard')}
                 onClick={() => {
                   setConfirming(true);
                 }}
@@ -162,7 +165,11 @@ export function OfflineBlock({
       ) : null}
 
       {!durable ? (
-        <p className="mt-2 text-caption text-warn-600" role="alert" data-testid="not-durable">
+        <p
+          className="mt-2 text-caption text-warn-600"
+          role="alert"
+          data-testid={testId('not-durable')}
+        >
           {t('queueNotDurable', locale)}
         </p>
       ) : null}

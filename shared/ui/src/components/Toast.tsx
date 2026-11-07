@@ -67,9 +67,15 @@ export interface ToastProviderProps {
   readonly children: ReactNode;
   /** Bottom-centre on mobile, bottom-right on the console (§5.7). */
   readonly placement?: 'mobile' | 'console';
+  /** Scoped workspace offset for persistent actions; default placement is unchanged. */
+  readonly viewportClassName?: string;
 }
 
-export function ToastProvider({ children, placement = 'mobile' }: ToastProviderProps): ReactNode {
+export function ToastProvider({
+  children,
+  placement = 'mobile',
+  viewportClassName,
+}: ToastProviderProps): ReactNode {
   // One toast, never a queue — see the note above.
   const [toast, setToast] = useState<ToastRequest | null>(null);
   const [instance, setInstance] = useState(0);
@@ -150,6 +156,7 @@ export function ToastProvider({ children, placement = 'mobile' }: ToastProviderP
           className={cx(
             'fixed z-50 flex w-full max-w-[420px] flex-col gap-2 p-5 outline-none',
             placement === 'mobile' ? 'bottom-0 left-1/2 -translate-x-1/2' : 'bottom-0 right-0',
+            viewportClassName,
           )}
         />
       </RadixToast.Provider>

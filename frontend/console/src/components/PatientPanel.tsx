@@ -50,7 +50,15 @@ import {
 
 import type { ReactNode } from 'react';
 
-export function PatientPanel({ entry }: { readonly entry: QueueEntry }): ReactNode {
+export function PatientPanel({
+  entry,
+  compact = false,
+  onRecords,
+}: {
+  readonly entry: QueueEntry;
+  readonly compact?: boolean;
+  readonly onRecords?: (bookingId: string, records: PatientRecords) => void;
+}): ReactNode {
   const locale = useLocale();
   const [records, setRecords] = useState<PatientRecords | null>(null);
   const [failed, setFailed] = useState(false);
@@ -70,7 +78,10 @@ export function PatientPanel({ entry }: { readonly entry: QueueEntry }): ReactNo
       bookingId,
     })
       .then((result) => {
-        if (!cancelled) setRecords(result);
+        if (!cancelled) {
+          setRecords(result);
+          onRecords?.(bookingId, result);
+        }
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -79,12 +90,16 @@ export function PatientPanel({ entry }: { readonly entry: QueueEntry }): ReactNo
     return () => {
       cancelled = true;
     };
-  }, [patientId, bookingId]);
+  }, [patientId, bookingId, onRecords]);
 
   return (
-    <Card tone="brand">
+    <Card tone={compact ? 'default' : 'brand'}>
       <div className="flex flex-col gap-5" data-testid="patient-panel">
-        <Header entry={entry} records={records} />
+        {compact ? (
+          <h2>{t('doctorIntakeTitle', locale)}</h2>
+        ) : (
+          <Header entry={entry} records={records} />
+        )}
 
         {failed ? (
           // GR-03's error state. The serial is still correct and still useful,

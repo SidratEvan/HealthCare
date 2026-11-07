@@ -22,18 +22,18 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
+    passWithNoTests: true,
     // Playwright owns `e2e/`; vitest must not try to collect those specs.
     exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
     projects: [
       {
         test: {
           name: 'unit',
-          include: ['shared/*/src/**/*.{test,spec}.ts'],
+          include: ['shared/*/src/**/*.{test,spec}.ts', 'frontend/console/src/lib/**/*.test.ts'],
           environment: 'node',
           globals: false,
           restoreMocks: true,
           // shared/config ships configuration and will never have tests.
-          passWithNoTests: true,
         },
       },
       {
@@ -56,7 +56,6 @@ export default defineConfig({
           setupFiles: ['shared/ui/src/__tests__/setup.ts'],
           globals: false,
           restoreMocks: true,
-          passWithNoTests: true,
         },
       },
       {
@@ -91,7 +90,6 @@ export default defineConfig({
           environment: 'node',
           globals: false,
           restoreMocks: true,
-          passWithNoTests: true,
           testTimeout: 20_000,
           hookTimeout: 60_000,
         },
@@ -104,7 +102,6 @@ export default defineConfig({
           environment: 'node',
           globals: false,
           restoreMocks: true,
-          passWithNoTests: true,
           // One database, shared. Transactions give isolation; a long-running
           // pg_sleep in a timestamp test should not fail a neighbour.
           testTimeout: 20_000,

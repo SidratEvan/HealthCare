@@ -15,6 +15,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
+import { approveManagementWrites } from './support/adminManagement.js';
 import { E2E_DATABASE_URL, assertLocalDatabase } from './support/database.js';
 
 const CONSOLE = 'http://localhost:3100';
@@ -61,6 +62,7 @@ test.afterAll(async () => {
 });
 
 async function openSettings(page: Page, hospitalId: string): Promise<void> {
+  await approveManagementWrites(page);
   await page.goto(CONSOLE);
   await expect(page.getByTestId('console-picker')).toBeVisible({ timeout: 45_000 });
   await page.getByTestId(`pick-hospital-${hospitalId}`).click();
@@ -68,6 +70,7 @@ async function openSettings(page: Page, hospitalId: string): Promise<void> {
   await expect(page.getByTestId('admin-section-today')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('admin-open-settings').click();
   await expect(page.getByTestId('hospital-settings')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('settings-group-face').click();
   await expect(page.getByTestId('settings-publishing')).toBeVisible();
 }
 

@@ -50,9 +50,10 @@ export function brandKept(hospitalId: string): WorkspaceBrand | null {
 export async function loadBrand(
   hospitalId: string,
   token: string | null,
+  refresh = false,
 ): Promise<WorkspaceBrand | null> {
   const already = kept(hospitalId);
-  if (already !== null) return already;
+  if (!refresh && already !== null) return already;
   try {
     const client = new ApiClient({ baseUrl: API_BASE, getToken: () => token });
     const brand = await client.get<WorkspaceBrand>('/hospital/brand');

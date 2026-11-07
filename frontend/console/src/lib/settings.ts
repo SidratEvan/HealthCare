@@ -391,6 +391,12 @@ export const settingsApi = {
       nameEn?: string;
       doctorIds?: readonly string[];
       staffIds?: readonly string[];
+      expected?: {
+        readonly nameBn: string;
+        readonly nameEn: string;
+        readonly doctorIds: readonly string[];
+        readonly staffIds: readonly string[];
+      };
     },
   ) => save((api, key) => api.patch(`/hospital/desks/${deskId}`, body, key)),
   removeDesk: (deskId: string) => save((api, key) => api.delete(`/hospital/desks/${deskId}`, key)),

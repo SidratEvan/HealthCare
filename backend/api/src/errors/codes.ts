@@ -251,6 +251,15 @@ export const ERROR_CODES = {
     message: 'This Idempotency-Key was already used for a different request.',
   },
   /**
+   * A person's phone a demonstration does not take (`FR-DEM-08`): under
+   * `DEMO_MODE`, only the demonstration's own numbers. Refused before any
+   * handler, so nothing of the request was written.
+   */
+  DEMO_PHONE_NOT_ALLOWED: {
+    status: 422,
+    message: 'This is a demonstration: only its own demonstration phone numbers can be used.',
+  },
+  /**
    * Two writes reached for the same thing at the same moment and the database
    * let one through. Not a fault of the server: the caller reads again and
    * decides. Used where no route has a more precise word for the race.

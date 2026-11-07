@@ -9,6 +9,10 @@
 #   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 #
 # The files archive is optional; without it only the database is restored.
+#
+# From the second location the files end in .gpg (BACKUP_ENCRYPTION_PASSPHRASE,
+# DEPLOY.md §S5): they are decrypted into a temporary folder first, with the
+# same passphrase, which must be in deploy/.env.
 
 set -eu
 
@@ -23,6 +27,30 @@ if [ -n "$files" ] && [ ! -f "$files" ]; then
   echo "no such files archive: $files" >&2
   exit 1
 fi
+
+# An encrypted copy is decrypted first, and the restore stops if it does not.
+work=""
+decrypted=""
+decrypt() {
+  if [ -z "${BACKUP_ENCRYPTION_PASSPHRASE:-}" ]; then
+    echo "$1 is encrypted: set BACKUP_ENCRYPTION_PASSPHRASE in deploy/.env to the passphrase it was made with" >&2
+    exit 1
+  fi
+  if [ -z "$work" ]; then
+    work="$(mktemp -d)"
+    trap 'rm -rf "$work"' EXIT
+    mkdir -m 700 "$work/gnupg"
+  fi
+  decrypted="$work/$(basename "$1" .gpg)"
+  if ! printf '%s' "$BACKUP_ENCRYPTION_PASSPHRASE" | GNUPGHOME="$work/gnupg" \
+    gpg --batch --quiet --yes --no-tty --pinentry-mode loopback --passphrase-fd 0 \
+    --output "$decrypted" --decrypt "$1"; then
+    echo "$1 could not be decrypted: is it the passphrase it was made with?" >&2
+    exit 1
+  fi
+}
+case "$dump" in *.gpg) decrypt "$dump"; dump="$decrypted" ;; esac
+case "$files" in *.gpg) decrypt "$files"; files="$decrypted" ;; esac
 
 echo "restoring $dump into $PGDATABASE on $PGHOST"
 

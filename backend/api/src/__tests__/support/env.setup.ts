@@ -72,6 +72,8 @@ const TEST_ENV: Readonly<Record<string, string>> = {
   TRAVEL_TIME_MODE: 'static',
   LOG_LEVEL: 'error',
   DEMO_MODE: 'true',
+  // Random numbers throughout; FR-DEM-08's own suite turns the list back on.
+  DEMO_PHONES: 'any',
 
   // The per-address limits as a deployment gets them by default. A developer's
   // `.env` may raise this for a shared network; the tests of those limits must

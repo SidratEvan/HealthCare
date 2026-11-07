@@ -58,11 +58,11 @@ test('a hospital with a mark and colours wears them, powered by MedLiveBD (FR-BR
   page,
 }) => {
   await openAdminConsole(page, 'PADMA');
-  const rail = page.getByTestId('brand-mark');
+  const rail = page.getByTestId('console-rail');
 
-  await expect(rail.getByTestId('brand-logo')).toBeVisible();
-  await expect(rail.getByTestId('brand-name')).toContainText('পদ্মা');
-  await expect(rail.getByTestId('brand-powered-by')).toHaveText('Powered by MedLiveBD');
+  await expect(rail.getByTestId('rail-logo')).toBeVisible();
+  await expect(rail.getByTestId('rail-hospital')).toContainText('পদ্মা');
+  await expect(rail.getByTestId('rail-powered-by')).toHaveText('Powered by MedLiveBD');
   await expect(rail).toHaveAttribute('data-brand', 'hospital');
 
   // The colours are on the document, as a portal's are on the patient app.
@@ -76,10 +76,10 @@ test('a hospital with neither shows its name on the platform’s colour, and the
   page,
 }) => {
   await openAdminConsole(page, 'KARNAPHULI');
-  const rail = page.getByTestId('brand-mark');
+  const rail = page.getByTestId('console-rail');
 
-  await expect(rail.getByTestId('brand-powered-by')).toHaveText('Powered by MedLiveBD');
-  await expect(rail.getByTestId('brand-logo')).toHaveCount(0);
+  await expect(rail.getByTestId('rail-powered-by')).toHaveText('Powered by MedLiveBD');
+  await expect(rail.getByTestId('rail-logo')).toHaveCount(0);
   await expect(rail).toHaveAttribute('data-brand', 'platform');
   const primary = await page.evaluate(() =>
     document.documentElement.style.getPropertyValue('--brand-600'),

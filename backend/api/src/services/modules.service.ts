@@ -27,6 +27,7 @@
 import { isHospitalModule, type HospitalModule } from '@platform/domain';
 
 import { AppError } from '../errors/AppError.js';
+import { dropHospitalSockets } from '../realtime/auth.js';
 import * as settingsRepo from '../repositories/hospitalSettings.repo.js';
 
 const REMEMBER_MS = 30_000;
@@ -49,7 +50,10 @@ export async function modulesOff(hospitalId: string): Promise<readonly HospitalM
 /** Called after this process changes a hospital's modules, so the next question reads again. */
 export function forgetModules(hospitalId?: string): void {
   if (hospitalId === undefined) remembered.clear();
-  else remembered.delete(hospitalId);
+  else {
+    remembered.delete(hospitalId);
+    dropHospitalSockets(hospitalId);
+  }
 }
 
 /** The first of `needed` this hospital has off, or null when it runs them all. */

@@ -154,7 +154,7 @@ export function ConsoleRail({
     <nav
       aria-label={t(current, locale)}
       data-brand={brand?.theme === null || brand === null ? 'platform' : 'hospital'}
-      className="flex w-56 shrink-0 flex-col gap-6 bg-brand-700 p-4 text-ink-inverse"
+      className="console-rail flex min-h-screen w-56 shrink-0 flex-col gap-6 bg-brand-700 p-4 text-ink-inverse"
       data-testid="console-rail"
     >
       <div className="px-2 pt-2">
@@ -168,10 +168,10 @@ export function ConsoleRail({
             data-testid="rail-logo"
           />
         )}
-        {session?.hospitalNameBn === undefined ? null : (
+        {brand === null && session?.hospitalNameBn === undefined ? null : (
           <p className="text-title-sm font-bold" data-testid="rail-hospital">
             {brand === null
-              ? localName(locale, session.hospitalNameBn, session.hospitalNameEn)
+              ? localName(locale, session?.hospitalNameBn ?? '', session?.hospitalNameEn ?? '')
               : localName(locale, brand.nameBn, brand.nameEn)}
           </p>
         )}

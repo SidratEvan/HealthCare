@@ -15,6 +15,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client } from 'pg';
 
+import { approveManagementWrites } from './support/adminManagement.js';
 import { E2E_DATABASE_URL, assertLocalDatabase } from './support/database.js';
 
 const CONSOLE = 'http://localhost:3100';
@@ -37,6 +38,7 @@ test.beforeAll(async () => {
 });
 
 async function openSettings(page: Page): Promise<void> {
+  await approveManagementWrites(page);
   await page.goto(CONSOLE);
   await expect(page.getByTestId('console-picker')).toBeVisible({ timeout: 45_000 });
   await page.getByTestId(`pick-hospital-${shapla}`).click();
@@ -44,6 +46,7 @@ async function openSettings(page: Page): Promise<void> {
   await expect(page.getByTestId('admin-section-today')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('admin-open-settings').click();
   await expect(page.getByTestId('hospital-settings')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('settings-group-sms').click();
 }
 
 test.describe('this month’s SMS, on the hospital’s settings (FR-NOT-06)', () => {
@@ -80,15 +83,25 @@ test.describe('this month’s SMS, on the hospital’s settings (FR-NOT-06)', ()
       // No cap in the seed: a plain count.
       await expect(page.getByTestId('settings-sms-sent')).not.toContainText('এর মধ্যে');
 
+      await page.getByTestId('settings-back').click();
+      await page.getByTestId('settings-group-rules').click();
       await cap.fill('5000');
       await page.getByTestId('settings-save-rules').click();
+      await expect(page.getByTestId('management-unsaved')).not.toBeVisible();
+      await page.getByTestId('settings-back').click();
+      await page.getByTestId('settings-group-sms').click();
       await expect(page.getByTestId('settings-sms-sent')).toContainText('৫,০০০-এর মধ্যে', {
         timeout: 15_000,
       });
     } finally {
       // As the seed leaves it: no cap.
+      await page.getByTestId('settings-back').click();
+      await page.getByTestId('settings-group-rules').click();
       await cap.fill('');
       await page.getByTestId('settings-save-rules').click();
+      await expect(page.getByTestId('management-unsaved')).not.toBeVisible();
+      await page.getByTestId('settings-back').click();
+      await page.getByTestId('settings-group-sms').click();
       await expect(page.getByTestId('settings-sms-sent')).not.toContainText('এর মধ্যে', {
         timeout: 15_000,
       });

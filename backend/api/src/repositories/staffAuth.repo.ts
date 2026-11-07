@@ -306,22 +306,25 @@ export interface RefreshSession {
   readonly familyId: string;
 }
 
-export async function createRefreshSession(input: {
-  readonly staffId: string;
-  readonly tokenHash: string;
-  readonly expiresAt: Date;
-  readonly ip: string | null;
-  readonly userAgent: string | null;
-  /** The sign-in this session belongs to, carried through every renewal (0042). */
-  readonly familyId: string;
-}): Promise<string> {
+export async function createRefreshSession(
+  input: {
+    readonly staffId: string;
+    readonly tokenHash: string;
+    readonly expiresAt: Date;
+    readonly ip: string | null;
+    readonly userAgent: string | null;
+    /** The sign-in this session belongs to, carried through every renewal (0042). */
+    readonly familyId: string;
+  },
+  executor: Executor = db,
+): Promise<string> {
   const result = await sql<{ id: string }>`
     INSERT INTO sessions_auth
       (subject_id, subject_kind, token_hash, device_fingerprint, ip, expires_at, family_id)
     VALUES (${input.staffId}, 'staff', ${input.tokenHash}, ${input.userAgent},
             ${input.ip}::inet, ${input.expiresAt}, ${input.familyId}::uuid)
     RETURNING id
-  `.execute(db);
+  `.execute(executor);
   const id = result.rows[0]?.id;
   if (id === undefined) throw new Error('sessions_auth returned no id');
   return id;
@@ -390,11 +393,11 @@ export async function accessState(
  * call revoked it — so two refreshes racing with the same token cannot both
  * succeed.
  */
-export async function revokeRefreshSession(id: string): Promise<boolean> {
+export async function revokeRefreshSession(id: string, executor: Executor = db): Promise<boolean> {
   const result = await sql`
     UPDATE sessions_auth SET revoked_at = now(), updated_at = now()
      WHERE id = ${id} AND revoked_at IS NULL
-  `.execute(db);
+  `.execute(executor);
   return Number(result.numAffectedRows ?? 0) === 1;
 }
 

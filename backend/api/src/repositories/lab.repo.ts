@@ -22,6 +22,7 @@ import { sql } from 'kysely';
 import type { TestOrderView, TestReportView, TestState, Timestamp } from '@platform/domain';
 
 import { db } from '../config/db.js';
+import { AppError } from '../errors/AppError.js';
 
 import type { Tx } from './transaction.js';
 
@@ -314,12 +315,14 @@ export async function insertReport(
 export async function findReportByIdempotencyKey(
   key: string,
   trx?: Tx,
-): Promise<{ id: string; fileUrl: string } | null> {
-  const result = await sql<{ id: string; file_url: string }>`
-    SELECT id, file_url FROM reports WHERE idempotency_key = ${key}
+): Promise<{ id: string; fileUrl: string; testOrderId: string } | null> {
+  const result = await sql<{ id: string; file_url: string; test_order_id: string }>`
+    SELECT id, file_url, test_order_id FROM reports WHERE idempotency_key = ${key}
   `.execute(trx ?? db);
   const row = result.rows[0];
-  return row === undefined ? null : { id: row.id, fileUrl: row.file_url };
+  return row === undefined
+    ? null
+    : { id: row.id, fileUrl: row.file_url, testOrderId: row.test_order_id };
 }
 
 /**
@@ -392,7 +395,7 @@ interface StockSqlRow {
   form: string | null;
   strengths: string[] | null;
   in_stock: boolean;
-  updated_at: Date;
+  updated_at: string;
 }
 
 /** One pharmacy's shelf, oldest flag first — what needs checking (`S-B-09`). */
@@ -409,7 +412,7 @@ export async function listStock(hospitalId: string): Promise<
 > {
   const result = await sql<StockSqlRow>`
     SELECT s.medicine_id, m.generic_name, m.brand_name, m.form, m.strengths,
-           s.in_stock, s.updated_at
+           s.in_stock, to_char(s.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
       FROM pharmacy_stock s
       JOIN medicines m ON m.id = s.medicine_id
      WHERE s.hospital_id = ${hospitalId}::uuid
@@ -425,7 +428,7 @@ export async function listStock(hospitalId: string): Promise<
     form: row.form,
     strengths: row.strengths ?? [],
     inStock: row.in_stock,
-    updatedAt: row.updated_at.toISOString() as Timestamp,
+    updatedAt: row.updated_at as Timestamp,
   }));
 }
 
@@ -442,11 +445,35 @@ export async function upsertStockFlags(
   trx: Tx,
   input: {
     readonly hospitalId: string;
-    readonly flags: readonly { medicineId: string; inStock: boolean }[];
+    readonly flags: readonly {
+      medicineId: string;
+      inStock: boolean;
+      expectedUpdatedAt: string | null;
+    }[];
     readonly at: Date;
     readonly staffUserId: string | null;
   },
 ): Promise<number> {
+  // FR-PHR-02: serialize the hospital's shelf writes and compare all flags
+  // before any change. Text preserves PostgreSQL microseconds for round trips.
+  await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`pharmacy:${input.hospitalId}`}, 0))`.execute(
+    trx,
+  );
+  const current = await sql<{ medicine_id: string; updated_at: string }>`
+    SELECT medicine_id,
+           to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at
+      FROM pharmacy_stock
+     WHERE hospital_id = ${input.hospitalId}::uuid AND deleted_at IS NULL
+       AND medicine_id = ANY(${input.flags.map((flag) => flag.medicineId)}::uuid[])
+     ORDER BY medicine_id FOR UPDATE
+  `.execute(trx);
+  const versions = new Map(current.rows.map((row) => [row.medicine_id, row.updated_at]));
+  if (
+    new Set(input.flags.map((flag) => flag.medicineId)).size !== input.flags.length ||
+    input.flags.some((flag) => (versions.get(flag.medicineId) ?? null) !== flag.expectedUpdatedAt)
+  ) {
+    throw new AppError('WRITE_CONFLICT', { details: { reason: 'stock_changed_reload' } });
+  }
   const medicineIds = input.flags.map((flag) => flag.medicineId);
   const values = input.flags.map((flag) => flag.inStock);
 
@@ -460,6 +487,9 @@ export async function upsertStockFlags(
     RETURNING medicine_id
   `.execute(trx);
 
+  if (result.rows.length !== input.flags.length) {
+    throw new AppError('WRITE_CONFLICT', { details: { reason: 'medicine_unavailable' } });
+  }
   return result.rows.length;
 }
 

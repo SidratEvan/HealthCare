@@ -43,6 +43,15 @@ import { validate } from '../middleware/validate.js';
 
 export const clinicalRoutes: Router = Router();
 
+/** FR-DOC-08/FR-DOC-10: drafts never enter the wallet/history contract. */
+clinicalRoutes.get(
+  '/visits/booking/:id',
+  requireAuth,
+  requireRole('doctor'),
+  validate({ params: idParams }),
+  clinical.getConsultation,
+);
+
 /**
  * `GET /patients/:id/records` — the wallet and the doctor's patient panel.
  *

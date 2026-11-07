@@ -36,7 +36,7 @@ const PROD: Readonly<Record<string, string>> = {
   VAPID_PUBLIC_KEY: 'vapid-public',
   VAPID_PRIVATE_KEY: 'vapid-private',
   PAYMENT_PROVIDER: 'live',
-  STORAGE_PROVIDER: 'supabase',
+  STORAGE_PROVIDER: 'local',
   SENTRY_DSN: 'https://sentry.example.com/1',
   TOTP_ENCRYPTION_KEY: 'd'.repeat(32),
   DEMO_MODE: 'false',
@@ -189,11 +189,17 @@ describe('production', () => {
 
   it('refuses missing storage credentials, and says what breaks', () => {
     try {
-      loadEnv({ ...PROD, SUPABASE_SERVICE_ROLE_KEY: '' });
+      loadEnv({ ...PROD, STORAGE_PROVIDER: 'supabase', SUPABASE_SERVICE_ROLE_KEY: '' });
       expect.unreachable('should have thrown');
     } catch (error) {
       expect((error as EnvError).message).toContain('no patient could open a report');
     }
+  });
+
+  it('refuses Supabase Storage, which has no adapter in this version (audit F-04)', () => {
+    // Accepted by the schema, its keys asked for, and then every upload
+    // refused by `UnconfiguredStorageAdapter`. A server must not boot that way.
+    expect(problemsOf({ ...PROD, STORAGE_PROVIDER: 'supabase' })).toContain('STORAGE_PROVIDER');
   });
 
   it('refuses missing SMS credentials when a real provider is configured', () => {
@@ -261,6 +267,34 @@ describe('production', () => {
  * the variable only parsed while it was absent, and both templates say to set
  * it.
  */
+describe("a demonstration's phone list (FR-DEM-08)", () => {
+  it('is the built-in list when unset, and a deployment’s own when given', () => {
+    expect(loadEnv({ ...DEV, DEMO_MODE: 'true' }).DEMO_PHONES).toBeUndefined();
+    expect(
+      loadEnv({ ...DEV, DEMO_MODE: 'true', DEMO_PHONES: '01380000001, +880 1380-000002' })
+        .DEMO_PHONES,
+    ).toEqual(['+8801380000001', '+8801380000002']);
+  });
+
+  it('refuses an entry that is not a Bangladeshi mobile', () => {
+    expect(problemsOf({ ...DEV, DEMO_MODE: 'true', DEMO_PHONES: '01380000001,12345' })).toContain(
+      'DEMO_PHONES',
+    );
+  });
+
+  it('takes "any" only with a database on this machine', () => {
+    expect(loadEnv({ ...DEV, DEMO_MODE: 'true', DEMO_PHONES: 'any' }).DEMO_PHONES).toBe('any');
+    expect(
+      problemsOf({
+        ...DEV,
+        DEMO_MODE: 'true',
+        DEMO_PHONES: 'any',
+        DATABASE_URL: 'postgresql://postgres:x@aws-0-ap-southeast-1.pooler.supabase.com:5432/db',
+      }),
+    ).toContain('DEMO_PHONES');
+  });
+});
+
 describe('the shipped configuration parses', () => {
   it('accepts a platform fee of zero, which is what both templates say', () => {
     // An environment variable is a string. `positive().or(literal(0))` looked

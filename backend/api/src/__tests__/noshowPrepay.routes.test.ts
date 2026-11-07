@@ -60,13 +60,20 @@ async function noShows(guestId: string, sessionId: string, count: number): Promi
        AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.patient_id = p.id AND b.session_id = ${sessionId}::uuid)
      ORDER BY random() LIMIT ${count}
   `.execute(db);
+  // FR-GST-14: random serials can collide before the behavior under test.
+  // Reserve a distinct high range above this session's existing fixtures.
+  const serials = await sql<{ last: number }>`
+    SELECT coalesce(max(serial_number), 0)::int AS last FROM bookings
+     WHERE session_id = ${sessionId}::uuid
+  `.execute(db);
+  const firstSerial = (serials.rows[0]?.last ?? 0) + 900;
   for (let index = 0; index < count; index += 1) {
     const patient = free.rows[index]?.id;
     await sql`
       INSERT INTO bookings
         (session_id, patient_id, serial_number, source, fee_poisha, intake,
          booked_by_guest_id, status)
-      VALUES (${sessionId}::uuid, ${patient}::uuid, ${900 + index + Math.floor(Math.random() * 90)},
+      VALUES (${sessionId}::uuid, ${patient}::uuid, ${firstSerial + index},
               'guest_link', 50000, '{"demo":true}'::jsonb, ${guestId}::uuid, 'no_show')
     `.execute(db);
   }

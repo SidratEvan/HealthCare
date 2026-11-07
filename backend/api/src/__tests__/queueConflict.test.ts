@@ -49,13 +49,16 @@ async function staffToken(hospitalId: string, sub: string): Promise<string> {
 }
 
 /** One counter tapping `next`. Its own idempotency key, like a real device. */
-async function tapNext(token: string): Promise<request.Response> {
+async function tapNext(
+  token: string,
+  body: Record<string, unknown> = {},
+): Promise<request.Response> {
   counter += 1;
   return await request(app)
     .post(`${BASE}/sessions/${fixture.sessionId}/next`)
     .set('Authorization', `Bearer ${token}`)
     .set('Idempotency-Key', `conflict-${String(counter)}-${String(Date.now())}`)
-    .send({});
+    .send(body);
 }
 
 beforeEach(async () => {
@@ -127,6 +130,38 @@ describe('two counters calling next at the same moment (FR-QUE-53)', () => {
     const cached = await cachedStateOf(fixture.sessionId);
     expect(cached?.now_serving_serial).toBe(5);
     expect(cached?.done_count).toBe(4);
+  });
+
+  it('refuses a second next that names a patient no longer in the chamber (F-03)', async () => {
+    const token = await staffToken(fixture.hospitalId, fixture.receptionistId);
+    await tapNext(token);
+    const before = await queueService.getState(fixture.sessionId);
+    const serving = before.entries.find((entry) => entry.status === 'in_chamber');
+    expect(serving?.serial).toBe(1);
+    const expected = { expectedBookingId: serving?.bookingId };
+
+    // Two counters, both looking at serial 1, both tap at once.
+    const [first, second] = await Promise.all([tapNext(token, expected), tapNext(token, expected)]);
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([200, 422]);
+    const refused = first.status === 422 ? first : second;
+    expect(refused.body.error.code).toBe('QUEUE_GUARD_FAILED');
+    expect(refused.body.error.details.guard).toBe('CONSULTATION_CHANGED');
+
+    // Serial 1 was finished once and serial 2 called; serial 2 was not
+    // finished by the counter that never saw it.
+    const state = await queueService.getState(fixture.sessionId);
+    const statusOf = (serial: number) =>
+      state.entries.find((entry) => entry.serial === serial)?.status;
+    expect(statusOf(1)).toBe('done');
+    expect(statusOf(2)).toBe('in_chamber');
+    expect(statusOf(3)).not.toBe('in_chamber');
+  });
+
+  it('refuses an expected patient that is not a booking id', async () => {
+    const token = await staffToken(fixture.hospitalId, fixture.receptionistId);
+    const response = await tapNext(token, { expectedBookingId: 'serial-1' });
+    expect(response.status).toBe(400);
   });
 
   it('keeps the cache in step with the log after concurrent writes (DB-P1)', async () => {
