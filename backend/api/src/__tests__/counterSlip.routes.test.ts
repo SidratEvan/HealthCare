@@ -124,7 +124,7 @@ describe('the token slip (FR-REC-21)', () => {
     const still = await request(createApp())
       .get(`/api/v1/bookings/${bookingOf(2)}`)
       .set('authorization', bearer(await staffToken(['receptionist'], fixture.hospitalId)));
-    expect(JSON.stringify(still.body.data)).not.toContain('"cancelled"');
+    expect((still.body.data as { booking: { status: string } }).booking.status).toBe('booked');
   });
 
   it('is refused to another hospital’s counter, which cannot see the booking', async () => {
