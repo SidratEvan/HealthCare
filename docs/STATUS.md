@@ -7,7 +7,45 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Latest work — released to `main`, and a security check (7 November 2026)
+## Latest work — full security check before real patients (7 November 2026, second pass)
+
+Owner's question: is it safe to start MARKS with real patient data, against
+bugs and break-ins. Record: [docs/audit/security-check-2026-11-07.md](audit/security-check-2026-11-07.md).
+**Verdict: yes for the software**, once the fix below is released and the
+S8 dry run is done on MARKS's server; the rest is how the server and the
+accounts are run.
+
+- **Method.** All access-deciding code read (194 routes, auth, RLS, records,
+  files, socket, both apps, deploy). Then 84 break-in attempts against the
+  API built and run as on MARKS's server (`NODE_ENV=production`,
+  `DEMO_MODE=false`, payments off, the limited role) on a scratch database
+  `healthcare_probe` (local Docker, demo seed). None got in. The probe script
+  is not in the repo (scratchpad of that session); most of it duplicates the
+  auth-matrix and tenancy suites.
+- **Found and fixed: `fix/log-request-bodies` (`64d7d01`).** A body that
+  would not parse was logged whole at error level (body-parser's `err.body`,
+  and V8 quotes the text in the message): a cut-off sign-in logged the
+  password, a cut-off registration the patient's name and phone. Postgres
+  `detail` (row values) was logged too. Now one `err` serializer with an
+  allowlist (`config/logger.ts` `safeError`), and every body-parser 4xx is a
+  refusal logged without the error (`middleware/error.ts`; an unsupported
+  charset or aborted body used to be a 500). Gate: `pnpm verify`.
+- **Docs: `chore/marks-security-docs`.** `DEPLOY.md` S8 no longer names
+  `fb1d1d8` (it has no `setup.sh`, no tenant isolation, none of the fixes
+  since): the pilot installs the released commit STATUS names, and S8's
+  "what the pilot is" matches the owner's decisions of 6 November.
+  `MARKS_START_HERE.md`: the slip is built (it said "not built yet"); new
+  §8 *Keeping it safe* (SSH keys only, updates on, lock the PC, sign out,
+  doctors turn on two-step, switch off a leaver's account).
+- **Not changed, for the owner** (record §6): two-step required for doctors,
+  and an idle sign-out on shared PCs, are product decisions (`FR-SEC-10`);
+  today both are the person's to do (doctors can turn two-step on; the guide
+  tells staff to lock the PC). `CLAUDE.md` §4.4 still calls `fb1d1d8` the
+  reception-pilot candidate; that line is the owner's to update.
+- **Release.** Not yet on `main`. The release gate (`pnpm verify`, `build`,
+  and the three browser suites) takes about 1.5 hours on this machine.
+
+## Previous work — released to `main`, and a security check (7 November 2026)
 
 **Owner, 6 November:** full permission to merge, push and release without
 asking. `feat/marks-pilot` is merged into `mvp` as **`f18c370`** and pushed
