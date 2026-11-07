@@ -160,6 +160,20 @@ So, for MARKS:
   the web (80 and 443); the database is never reachable from the network.
 - `deploy/.env` holds every password the system uses. Keep its two copies
   safe, and never send it by email or chat.
+- **Staff sign-in only from MARKS's own network (strongly advised).** Once
+  MedLiveBD has approved MARKS going live, put MARKS's public internet
+  address in `deploy/.env`, for example `STAFF_NETWORKS=203.0.113.10/32`
+  (ask your internet provider for it; several are separated by spaces), and
+  run `sudo docker compose -f deploy/docker-compose.yml --env-file
+  deploy/.env up -d web`. From then on the staff console opens only inside
+  MARKS, and nobody on the internet can even try a staff password; patients
+  still reach their pages from anywhere. Check it straight away by signing
+  in at one counter. If that is refused too, empty the value again, run the
+  same command, and tell MedLiveBD (`DEPLOY.md` S2).
+- **Counter and doctors' PCs lock themselves**: set Windows to lock the
+  screen after 5 minutes without use (a Group Policy, or Settings →
+  Accounts → Sign-in options on each PC), so a screen left open does not
+  stay open.
 
 **For everybody who signs in**
 

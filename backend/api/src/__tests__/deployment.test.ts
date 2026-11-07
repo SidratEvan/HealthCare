@@ -144,3 +144,47 @@ describe('the self-hosted stack passes every setting DEPLOY.md asks for', () => 
     expect(example).toMatch(new RegExp(`^${key}=`, 'm'));
   });
 });
+
+/**
+ * Where staff may sign in from (`STAFF_NETWORKS`, `DEPLOY.md` S2): the web
+ * server's rule, not the API's, so it is checked here as the files state it.
+ * Caddy itself was run against this rule on 7 November (allowed and refused
+ * addresses, and fourteen disguised paths); this keeps the rule from being
+ * edited away unnoticed.
+ */
+describe('staff sign-in can be held to the hospital’s network (FR-SEC-06, FR-SEC-07)', () => {
+  const root = resolve(import.meta.dirname, '../../../..');
+  const caddy = readFileSync(join(root, 'deploy/Caddyfile'), 'utf8');
+  const compose = readFileSync(join(root, 'deploy/docker-compose.yml'), 'utf8');
+  const example = readFileSync(join(root, 'deploy/.env.example'), 'utf8');
+
+  /** One site's block of the Caddyfile, from its address to the next site. */
+  function site(origin: string): string {
+    const start = caddy.indexOf(`{$${origin}} {`);
+    expect(start).toBeGreaterThan(-1);
+    return caddy.slice(start, caddy.indexOf('\n}\n', start));
+  }
+
+  it('refuses every staff route on the API outside the networks, and nothing else', () => {
+    const api = site('API_ORIGIN');
+    expect(api).toContain('path /api/v1/staff /api/v1/staff/*');
+    expect(api).toContain('not remote_ip {$STAFF_NETWORKS}');
+    expect(api).toContain('{"ok":false,"error":{"code":"AUTH_FORBIDDEN_SCOPE"');
+    expect(api).toContain('reverse_proxy api:4000');
+  });
+
+  it('opens the staff console only inside them', () => {
+    const consoleSite = site('CONSOLE_ORIGIN');
+    expect(consoleSite).toContain('@outside_staff_networks not remote_ip {$STAFF_NETWORKS}');
+    expect(consoleSite).toContain('reverse_proxy console:3100');
+  });
+
+  it('leaves the patient app open to everybody', () => {
+    expect(site('APP_ORIGIN')).not.toContain('remote_ip');
+  });
+
+  it('means everywhere when the hospital has not set it', () => {
+    expect(compose).toContain('STAFF_NETWORKS: ${STAFF_NETWORKS:-0.0.0.0/0 ::/0}');
+    expect(example).toMatch(/^STAFF_NETWORKS=$/m);
+  });
+});
