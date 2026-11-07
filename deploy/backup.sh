@@ -46,6 +46,12 @@
 
 set -u
 
+# Every file made here is the whole patient database or a copy of it: readable
+# by the account that runs the backups and by nobody else on the server. The
+# default (022) left each dump readable by every user on the machine
+# (FR-SEC-08; the security check of 7 November).
+umask 077
+
 DIR="${BACKUP_DIR:-/backups}"
 SECOND="${BACKUP_SECOND_DIR:-}"
 FILES_DIR="${BACKUP_FILES_DIR:-/data/files}"
