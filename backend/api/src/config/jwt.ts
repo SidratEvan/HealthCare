@@ -125,6 +125,8 @@ export interface TokenClaims extends JWTPayload {
   sid?: string;
   /** Present for a guest tracking link: the one booking it may see. */
   bookingId?: string;
+  /** A printed slip's tracking link: it may read, and change nothing (`FR-REC-21`). */
+  view?: boolean;
   /** Present for a bed request's status link: the one request it may see. */
   bedRequestId?: string;
   /** Present for an emergency alert's status link: the one case it may see. */

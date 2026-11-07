@@ -262,6 +262,12 @@ export interface TrackingLinkView extends BookingView {
   readonly token: string;
   readonly expiresInSeconds: number;
   /**
+   * A printed slip's link (`FR-REC-21`): it follows the queue and changes
+   * nothing, so the screen offers no lateness or cancelling. Absent from an
+   * older API, which is a link that may act.
+   */
+  readonly viewOnly?: boolean;
+  /**
    * The signed record for this booking, once the doctor has written one.
    *
    * `FR-GST-08`: records are "downloadable from the tracking link for a limited

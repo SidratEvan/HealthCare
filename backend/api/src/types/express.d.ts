@@ -27,6 +27,8 @@ export interface GuestPrincipal {
   readonly kind: 'guest';
   readonly id: string;
   readonly bookingId: string | null;
+  /** From a printed slip's link: reads only (`FR-REC-21`). */
+  readonly viewOnly?: boolean;
 }
 
 /** A hospital employee, always scoped to one hospital (FR-ROLE-01). */

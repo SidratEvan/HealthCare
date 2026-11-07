@@ -38,6 +38,19 @@ function bookingOf(serial: number): string {
   return id;
 }
 
+async function slipUrl(serial: number): Promise<string> {
+  const response = await slip(
+    bookingOf(serial),
+    await staffToken(['receptionist'], fixture.hospitalId),
+  );
+  return String((response.body.data as { trackingUrl: string }).trackingUrl);
+}
+
+async function openSlipLink(serial: number): Promise<request.Response> {
+  const token = new URL(await slipUrl(serial)).searchParams.get('t') ?? '';
+  return await request(createApp()).get(`/api/v1/guest/link/${token}`);
+}
+
 describe('the token slip (FR-REC-21)', () => {
   it('gives the counter the serial, the chamber and a live-serial link', async () => {
     const response = await slip(
@@ -57,7 +70,7 @@ describe('the token slip (FR-REC-21)', () => {
       expect(Number.isNaN(Date.parse(estimate.etaAt))).toBe(false);
       expect(estimate.patientsAhead).toBeGreaterThanOrEqual(0);
     }
-    expect(String(data['trackingUrl'])).toMatch(/\/s\?b=[0-9a-f-]{36}&t=[A-Za-z0-9_-]{43}$/);
+    expect(String(data['trackingUrl'])).toMatch(/\/s\?b=[0-9a-f-]{36}&t=[A-Za-z0-9_-]{44}$/);
   });
 
   it('the printed link opens that booking, as the patient would open it', async () => {
@@ -72,6 +85,46 @@ describe('the token slip (FR-REC-21)', () => {
     expect(opened.status).toBe(200);
     expect(JSON.stringify(opened.body.data)).toContain(bookingOf(2));
     expect(JSON.stringify(opened.body.data)).not.toContain(bookingOf(1));
+  });
+
+  it('prints a view-only link: the queue, and nothing written at the visit', async () => {
+    const opened = await openSlipLink(2);
+    expect(opened.status).toBe(200);
+    const view = opened.body.data as { viewOnly: boolean; record: unknown; tests: unknown[] };
+    expect(view.viewOnly).toBe(true);
+    expect(view.record).toBeNull();
+    expect(view.tests).toEqual([]);
+  });
+
+  it('a found slip cannot cancel the booking or declare it late, and opens no report', async () => {
+    const opened = await openSlipLink(2);
+    const data = opened.body.data as { token: string };
+    const token = String(new URL(await slipUrl(2)).searchParams.get('t'));
+
+    const cancel = await request(createApp())
+      .post(`/api/v1/bookings/${bookingOf(2)}/cancel`)
+      .set('authorization', bearer(data.token))
+      .set('Idempotency-Key', `slip-cancel-${String(Date.now())}`)
+      .send({});
+    expect(cancel.status).toBe(403);
+
+    const late = await request(createApp())
+      .post(`/api/v1/bookings/${bookingOf(2)}/late`)
+      .set('authorization', bearer(data.token))
+      .set('Idempotency-Key', `slip-late-${String(Date.now())}`)
+      .send({ expectedMinutes: 20 });
+    expect(late.status).toBe(403);
+
+    const report = await request(createApp()).get(
+      `/api/v1/guest/link/${token}/reports/00000000-0000-0000-0000-000000000000`,
+    );
+    expect(report.status).toBe(404);
+
+    // Still a booking that may be cancelled: the counter's own token can.
+    const still = await request(createApp())
+      .get(`/api/v1/bookings/${bookingOf(2)}`)
+      .set('authorization', bearer(await staffToken(['receptionist'], fixture.hospitalId)));
+    expect((still.body.data as { booking: { status: string } }).booking.status).toBe('booked');
   });
 
   it('is refused to another hospital’s counter, which cannot see the booking', async () => {

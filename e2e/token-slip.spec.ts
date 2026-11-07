@@ -110,6 +110,9 @@ test('a walk-in leaves registration with a slip whose QR opens their live serial
   const patient = await phoneContext.newPage();
   await patient.goto(slip.data.trackingUrl);
   await expect(patient.getByTestId('live-serial-number')).toHaveText('৫');
+  // View-only: paper is left behind, so the printed link cannot change the booking.
+  await expect(patient.getByTestId('declare-late')).toHaveCount(0);
+  await expect(patient.getByTestId('cancel-booking')).toHaveCount(0);
 });
 
 test('reception prints a waiting patient’s slip from the row', async ({ page }) => {
