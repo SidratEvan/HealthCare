@@ -11,7 +11,11 @@ is in `docs/DEPLOY.md` Part S.
 - **Reception** registers patients at the counter, gives each a serial for a
   doctor's chamber, and moves the queue: *call next*, *late*, *no-show*,
   *bring back*. It keeps working if the internet drops, and catches up when
-  it returns.
+  it returns. It can print a **token slip** for the patient (any 80 mm
+  receipt printer, or an office printer): the serial, the doctor, the room,
+  and a QR code the patient scans to follow the queue on their own phone.
+  The slip's link can only show the queue; it cannot cancel or change
+  anything, and it does not open the patient's record.
 - **Every screen showing that chamber updates within two seconds** of a tap:
   the other counters and the doctor's screen. (Once SMS is switched on,
   patients also get a link and follow their place in the queue on their own
@@ -30,7 +34,6 @@ is in `docs/DEPLOY.md` Part S.
 | SMS to patients | Needs an SMS company account and an approved sender name | Patients are served at the counter; the serial is said there and shown on the queue screens |
 | Online payment (bKash, Nagad, cards) | Needs merchant accounts | Fees are taken at the counter as today |
 | Laboratory orders | Real prices are needed first; until then they would be wrong | The laboratory starts **switched off**. Send MedLiveBD your test price list and it is switched on |
-| A printed token slip | Not built yet | The serial is said at the counter and shown on the queue |
 
 ## 2. One decision MARKS confirms in writing
 
@@ -138,14 +141,46 @@ again on a rebuilt machine with the same `deploy/.env`.
 | A counter loses internet | Keep working; it says it is offline, and sends everything when the connection returns. Only new walk-in serials need the connection |
 | An administrator lost their phone | Use a recovery code, or another administrator resets it from Settings → the person → reset two-step verification |
 | The server's disk died | A new server, the same `deploy/.env`, the backup disk, and `DEPLOY.md` S5 "putting one back". Practise this once before the pilot |
+| A member of staff leaves, or somebody may know their password | Settings → the person → switch the account off (they are signed out on every screen at once), or reset their password. Tell MedLiveBD if records may have been seen: every opening is in the log |
 
-## 8. Updates
+## 8. Keeping it safe
+
+The software checks every request: who is asking, which hospital they belong
+to, and what their role allows; the database checks it a second time. What
+it cannot do is protect a password somebody shares or a screen left open.
+So, for MARKS:
+
+**For whoever looks after the server**
+
+- Remote login (SSH) **with keys only**, no passwords, and only for the
+  named people who look after it.
+- Leave Ubuntu's automatic security updates on (they are on by default) and
+  restart the server when it says a restart is needed, at a quiet hour.
+- Open nothing else on its firewall. The setup opens only remote login and
+  the web (80 and 443); the database is never reachable from the network.
+- `deploy/.env` holds every password the system uses. Keep its two copies
+  safe, and never send it by email or chat.
+
+**For everybody who signs in**
+
+- Your own account only. Never tell anybody your password, and never sign
+  in for somebody else.
+- **Lock the computer when you step away** (Windows key + L). The console
+  does not sign itself out while the browser stays open. At the end of the
+  shift, press **Sign out**.
+- **Doctors: please turn on two-step verification** too. A doctor's account
+  can open any MARKS patient's record, so it deserves the same protection
+  as an administrator's. After signing in, choose **দুই ধাপের যাচাই চালু
+  করুন** (Turn on two-step verification) and scan the code with the
+  authenticator app.
+
+## 9. Updates
 
 MedLiveBD sends a new version as one file. On the server it is loaded with
 one command, `sh deploy/images.sh install …` (`DEPLOY.md` S4), and the
 system is away for under a minute. A backup is taken first.
 
-## 9. Patient data
+## 10. Patient data
 
 - Everything stays on MARKS's server in Bangladesh. Nothing is sent abroad.
 - MARKS's records are visible to MARKS's staff only, each to their role
