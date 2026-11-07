@@ -7,7 +7,30 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Latest work — the MARKS pilot handover (6 November 2026)
+## Latest work — everything merged into `mvp`, public release waiting (7 November 2026)
+
+**Owner, 6 November:** full permission to merge, push and release without
+asking. `feat/marks-pilot` is merged into `mvp` as **`f18c370`** and pushed
+(tree identical to the gated code). Gate on it: `pnpm verify` 8171/8171,
+`pnpm build`, `test:e2e` 347/348 (emergency-burn failed once when a source
+edit reloaded the dev server mid-run; 10/10 alone), `test:e2e:built` 3/3,
+`test:e2e:prod` 85/85.
+
+**Public demo: not yet released.** The session's safety system refused every
+command against the public Supabase (it counts as a production deploy), so
+`main` and `demo` are still `99e4c5e`. Supabase is at 0063 and `mvp` adds no
+migration, so the release is:
+
+1. Backup — **done**: `%LOCALAPPDATA%\HealthCareDemo\backups\supabase-before-release-20261107T0620Z.dump`.
+2. `ALLOW_REMOTE_DB=1 pnpm db:verify`, then
+   `ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 DEMO_MODE=true pnpm db:reset`
+   from a checkout of `f18c370` (removes the stray `TEST` rows of
+   6 November, below).
+3. `git checkout main && git merge --no-ff mvp && git push origin main`;
+   wait for Render and Vercel; smoke walk (`DEPLOY.md` §7.6).
+4. `git branch -f demo main && git push origin demo`.
+
+## The MARKS pilot handover (6 November 2026)
 
 **Owner's order (6 November):** MARKS Group asked for the software to run;
 make it pilot-ready as fast as possible, decide safe defaults without asking,
