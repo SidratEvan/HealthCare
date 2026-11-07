@@ -28,7 +28,9 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-ROOT="$(pwd)"
+# `pwd -W` exists only in Git Bash on Windows, where Docker needs D:/… rather
+# than /d/…; on a Linux server it fails and `pwd` is used.
+ROOT="$(pwd -W 2> /dev/null || pwd)"
 ENV_FILE="$ROOT/deploy/.env"
 DONE_MARK="$ROOT/deploy/.setup-done"
 COMPOSE=(docker compose -f "$ROOT/deploy/docker-compose.yml" --env-file "$ENV_FILE")
@@ -158,7 +160,7 @@ API="$(value API_ORIGIN)"
 here="$(curl -fsS -4 --max-time 10 https://api.ipify.org 2>/dev/null || true)"
 for origin in "$APP" "$CONSOLE" "$API"; do
   name="${origin#https://}"
-  points="$(getent ahostsv4 "$name" | awk 'NR==1 {print $1}' || true)"
+  points="$(getent ahostsv4 "$name" 2> /dev/null | awk 'NR==1 {print $1}' || true)"
   if [ -z "$points" ]; then
     echo "WARNING: $name does not exist in DNS yet. Ask whoever runs the domain to point it at ${here:-the public address of this server}."
   elif [ -n "$here" ] && [ "$points" != "$here" ]; then
