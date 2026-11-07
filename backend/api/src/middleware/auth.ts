@@ -19,7 +19,7 @@
 import { NATIONAL_ROLES, STAFF_ROLES, type NationalRole, type StaffRole } from '@platform/domain';
 
 import { verifyToken, type TokenClaims } from '../config/jwt.js';
-import { AppError, authRequired, tokenInvalid } from '../errors/AppError.js';
+import { AppError, authRequired, forbiddenScope, tokenInvalid } from '../errors/AppError.js';
 import { staffAccessLive } from '../services/staffAccess.service.js';
 
 import type { Principal } from '../types/express.js';
@@ -36,6 +36,19 @@ const BEARER = /^Bearer (.+)$/i;
  * a public browser and give them an empty console instead of an error they can
  * act on.
  */
+/**
+ * A printed slip's link may read and change nothing (`FR-REC-21`,
+ * `FR-GST-05`): true when this request is a write by such a principal.
+ *
+ * Refused where every token becomes a principal, so no route has to remember
+ * it: a cancel, a lateness, a payment, a standby answer, anything that is not
+ * a read.
+ */
+export function refuseViewOnlyWrite(req: Request, principal: Principal): boolean {
+  if (principal.kind !== 'guest' || principal.viewOnly !== true) return false;
+  return !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+}
+
 export async function attachPrincipal(
   req: Request,
   _res: Response,
@@ -68,6 +81,11 @@ export async function attachPrincipal(
   const principal = toPrincipal(result.claims);
   if (principal === null) {
     next(tokenInvalid('incomplete_claims'));
+    return;
+  }
+
+  if (refuseViewOnlyWrite(req, principal)) {
+    next(forbiddenScope({ reason: 'view_only_link' }));
     return;
   }
 
@@ -160,6 +178,7 @@ export function toPrincipal(claims: TokenClaims): Principal | null {
         kind: 'guest',
         id: claims.sub,
         bookingId: typeof claims.bookingId === 'string' ? claims.bookingId : null,
+        ...(claims.view === true ? { viewOnly: true } : {}),
       };
 
     case 'staff': {

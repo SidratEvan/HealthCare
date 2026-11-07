@@ -19,6 +19,8 @@
 import { verifyToken } from '../config/jwt.js';
 import { AppError, authRequired, forbiddenScope, tokenInvalid } from '../errors/AppError.js';
 
+import { refuseViewOnlyWrite } from './auth.js';
+
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 /**
@@ -69,7 +71,17 @@ export async function attachGuestFromLink(
 
   // A principal already attached by `attachPrincipal` wins: a logged-in
   // patient who happens to open a forwarded link is still themselves.
-  req.principal ??= { kind: 'guest', id: sub, bookingId };
+  const principal = req.principal ?? {
+    kind: 'guest' as const,
+    id: sub,
+    bookingId,
+    ...(result.claims.view === true ? { viewOnly: true } : {}),
+  };
+  if (refuseViewOnlyWrite(req, principal)) {
+    next(forbiddenScope({ reason: 'view_only_link' }));
+    return;
+  }
+  req.principal = principal;
   next();
 }
 

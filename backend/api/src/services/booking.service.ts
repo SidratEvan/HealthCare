@@ -570,8 +570,14 @@ export async function issueTrackingLink(
   bookingId: string,
   sessionId: string,
   phone: string,
+  options: { readonly viewOnly?: boolean } = {},
 ): Promise<string> {
-  const { token, hospitalId } = await mintTrackingToken({ bookingId, sessionId, phone });
+  const { token, hospitalId } = await mintTrackingToken({
+    bookingId,
+    sessionId,
+    phone,
+    ...(options.viewOnly === true ? { viewOnly: true } : {}),
+  });
 
   // Inside a portal the link is that portal's (`config/links.ts`). Issued by a
   // counter or a worker, it goes to the hospital's own domain if it has one.
@@ -609,7 +615,8 @@ export interface CounterSlip {
   /**
    * The patient's live serial page, printed as a QR code: with no SMS, this is
    * how a patient served at the counter follows the queue on their own phone
-   * (`FR-GST-05`). `null` when the patient has no phone on record.
+   * (`FR-GST-05`). View-only: it shows the queue and nothing written at the
+   * visit, and cannot cancel. `null` when the patient has no phone on record.
    */
   readonly trackingUrl: string | null;
 }
@@ -632,7 +639,8 @@ export async function counterSlip(bookingId: string, sessionId: string): Promise
     await withTransaction(async (trx) => {
       await guestRepo.findOrCreateIdentity(trx, { phone, displayName: booking.patientName });
     });
-    trackingUrl = await issueTrackingLink(bookingId, sessionId, phone);
+    // View-only: paper is left behind (`trackingLink.isViewOnlyToken`).
+    trackingUrl = await issueTrackingLink(bookingId, sessionId, phone, { viewOnly: true });
   }
   const eta = (await queueService.getEtas(sessionId)).find((one) => one.bookingId === bookingId);
   const estimate =

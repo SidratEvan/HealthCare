@@ -24,6 +24,27 @@ import * as sessionRepo from '../repositories/session.repo.js';
 const GRACE_MS = 24 * 3_600_000;
 
 /**
+ * A link printed on paper is view-only (`FR-REC-21`, `FR-GST-05`).
+ *
+ * An SMS link reaches the patient's own phone, so it may show what was
+ * written at the visit and cancel the booking. A token slip can be left in a
+ * waiting room or a bin, so its link shows the live serial and nothing else:
+ * no visit record, no report, no cancelling or lateness, and it lapses two
+ * hours after the chamber's end rather than a day.
+ *
+ * Marked by its length (33 random bytes, 44 characters, against 32 and 43),
+ * so no column is needed: the stored hash is of the whole token, and a link's
+ * holder cannot turn one kind into the other.
+ */
+const VIEW_ONLY_BYTES = 33;
+const VIEW_ONLY_GRACE_MS = 2 * 3_600_000;
+
+/** Whether a tracking token is a printed slip's view-only one. */
+export function isViewOnlyToken(token: string): boolean {
+  return token.length === Math.ceil((VIEW_ONLY_BYTES * 4) / 3);
+}
+
+/**
  * Mints a tracking token for one booking and stores its hash.
  *
  * @returns the token, to be put in a link and handed over once, and the
@@ -33,8 +54,11 @@ export async function mintTrackingToken(input: {
   readonly bookingId: string;
   readonly sessionId: string;
   readonly phone: string;
+  /** A printed slip's link: view-only, and shorter-lived. */
+  readonly viewOnly?: boolean;
 }): Promise<{ readonly token: string; readonly hospitalId: string }> {
-  const token = randomBytes(32).toString('base64url');
+  const viewOnly = input.viewOnly === true;
+  const token = randomBytes(viewOnly ? VIEW_ONLY_BYTES : 32).toString('base64url');
   const tokenHash = createHash('sha256').update(token).digest('hex');
 
   const guestId = await guestRepo.identityIdForPhone(input.phone);
@@ -46,7 +70,9 @@ export async function mintTrackingToken(input: {
   // Session end plus a day. A patient reads the SMS on the way home as often
   // as on the way in, and a link that died the moment the chamber closed would
   // be useless exactly then (DATABASE.md §8 keeps the row for 30 days).
-  const expiresAt = new Date(new Date(session.plannedEnd).getTime() + GRACE_MS);
+  const expiresAt = new Date(
+    new Date(session.plannedEnd).getTime() + (viewOnly ? VIEW_ONLY_GRACE_MS : GRACE_MS),
+  );
 
   await guestRepo.insertTrackingLink({ bookingId: input.bookingId, guestId, tokenHash, expiresAt });
 
