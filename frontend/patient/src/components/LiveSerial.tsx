@@ -125,6 +125,7 @@ export function LiveSerial({ linkToken }: { readonly linkToken: string | null })
       now={now}
       stale={channel.isStale}
       token={link.token}
+      viewOnly={link.initial?.viewOnly === true}
     />
   );
 }
@@ -139,6 +140,7 @@ function Ready({
   now,
   stale,
   token,
+  viewOnly,
 }: {
   /** What was paid, for the refund `MOD-A08-CANCEL` has to state. */
   readonly payment: BookingView['payment'];
@@ -154,6 +156,8 @@ function Ready({
   readonly now: Date;
   readonly stale: boolean;
   readonly token: string | null;
+  /** A printed slip's link: no lateness, no cancelling (`FR-REC-21`). */
+  readonly viewOnly: boolean;
 }): ReactNode {
   const locale = useLocale();
   const numerals = numeralsFor(locale);
@@ -362,45 +366,47 @@ function Ready({
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-2.5">
-        <LateSheet
-          // Somebody checked in at the counter is not running late.
-          disabled={mine === null || called || mine.arrivedAt !== null}
-          onChoose={(minutes) => {
-            void act(
-              async ({ bookingId, token: bearer }) => {
-                await declareLate({
-                  bookingId,
-                  token: bearer,
-                  expectedMinutes: minutes,
-                  idempotencyKey: crypto.randomUUID(),
-                  clientEventId: crypto.randomUUID(),
-                });
-              },
-              tp('lateDone', locale).replace('{count}', formatMinutes(3, numerals)),
-            );
-          }}
-        />
+      {viewOnly ? null : (
+        <div className="grid grid-cols-2 gap-2.5">
+          <LateSheet
+            // Somebody checked in at the counter is not running late.
+            disabled={mine === null || called || mine.arrivedAt !== null}
+            onChoose={(minutes) => {
+              void act(
+                async ({ bookingId, token: bearer }) => {
+                  await declareLate({
+                    bookingId,
+                    token: bearer,
+                    expectedMinutes: minutes,
+                    idempotencyKey: crypto.randomUUID(),
+                    clientEventId: crypto.randomUUID(),
+                  });
+                },
+                tp('lateDone', locale).replace('{count}', formatMinutes(3, numerals)),
+              );
+            }}
+          />
 
-        <CancelSheet
-          serial={formatSerial(booking.serial, numerals)}
-          refund={cancellationRefund(booking, payment)}
-          disabled={mine === null || mine.status === 'cancelled'}
-          onConfirm={() => {
-            void act(
-              async ({ bookingId, token: bearer }) => {
-                await cancelBooking({
-                  bookingId,
-                  token: bearer,
-                  idempotencyKey: crypto.randomUUID(),
-                  clientEventId: crypto.randomUUID(),
-                });
-              },
-              tp('cancelled', locale),
-            );
-          }}
-        />
-      </div>
+          <CancelSheet
+            serial={formatSerial(booking.serial, numerals)}
+            refund={cancellationRefund(booking, payment)}
+            disabled={mine === null || mine.status === 'cancelled'}
+            onConfirm={() => {
+              void act(
+                async ({ bookingId, token: bearer }) => {
+                  await cancelBooking({
+                    bookingId,
+                    token: bearer,
+                    idempotencyKey: crypto.randomUUID(),
+                    clientEventId: crypto.randomUUID(),
+                  });
+                },
+                tp('cancelled', locale),
+              );
+            }}
+          />
+        </div>
+      )}
 
       <QueuePreview state={state} mine={mine} />
     </TabScreen>

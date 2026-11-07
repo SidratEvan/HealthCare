@@ -39,6 +39,7 @@ import * as guestRepo from '../repositories/guest.repo.js';
 
 import * as bookingService from './booking.service.js';
 import * as lab from './lab.service.js';
+import { isViewOnlyToken } from './trackingLink.js';
 
 import type { BookingView } from './booking.service.js';
 import type { VisitRecord } from '../repositories/clinical.repo.js';
@@ -56,6 +57,11 @@ export interface TrackingLinkView extends BookingView {
   readonly token: string;
   /** Seconds until that token needs exchanging again. */
   readonly expiresInSeconds: number;
+  /**
+   * A printed slip's link (`FR-REC-21`): the screen offers no cancelling or
+   * lateness, and there is no record or report to show.
+   */
+  readonly viewOnly: boolean;
   /**
    * The signed visit record for this booking, once there is one (`FR-GST-08`).
    *
@@ -105,6 +111,9 @@ const TOKEN_TTL_SECONDS = 15 * 60;
 export async function reportUrl(token: string, reportId: string): Promise<string> {
   const link = await resolve(token);
   if (link === null) throw new AppError('GUEST_LINK_EXPIRED');
+  // A printed slip's link opens no report (`isViewOnlyToken`): the same 404
+  // as a report that is not this booking's.
+  if (isViewOnlyToken(token)) throw notFound('report');
 
   // **The link's own booking, and nothing else.** A live token must not open
   // a report belonging to somebody else's visit, so the report is looked up
@@ -161,19 +170,29 @@ export async function openTrackingLink(token: string): Promise<TrackingLinkView>
 
   if (link === null) throw new AppError('GUEST_LINK_EXPIRED');
 
+  // A printed slip's link: the queue only (`trackingLink.isViewOnlyToken`).
+  const viewOnly = isViewOnlyToken(token);
+
   return await asLink(link, async () => {
     const view = await bookingService.bookingView(link.bookingId, 'patient');
 
     return {
       ...view,
-      record: await clinicalRepo.findVisitForBooking(link.bookingId),
-      tests: await lab.ordersForBooking(link.bookingId),
+      viewOnly,
+      record: viewOnly ? null : await clinicalRepo.findVisitForBooking(link.bookingId),
+      tests: viewOnly ? [] : await lab.ordersForBooking(link.bookingId),
       token: await signToken({
         kind: 'access',
         // `bookingId` is what scopes it: `requireBookingScope` refuses this
         // principal on any other booking, so one forwarded SMS cannot be walked
         // through a hospital's queue.
-        claims: { sub: link.guestId, kind: 'guest', bookingId: link.bookingId },
+        // `view` makes it read-only (`middleware/auth.ts` `refuseViewOnlyWrite`).
+        claims: {
+          sub: link.guestId,
+          kind: 'guest',
+          bookingId: link.bookingId,
+          ...(viewOnly ? { view: true } : {}),
+        },
       }),
       expiresInSeconds: TOKEN_TTL_SECONDS,
     };
