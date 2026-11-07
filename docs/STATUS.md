@@ -7,7 +7,7 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Latest work — everything merged into `mvp`, public release waiting (7 November 2026)
+## Latest work — released to `main`, and a security check (7 November 2026)
 
 **Owner, 6 November:** full permission to merge, push and release without
 asking. `feat/marks-pilot` is merged into `mvp` as **`f18c370`** and pushed
@@ -16,19 +16,45 @@ asking. `feat/marks-pilot` is merged into `mvp` as **`f18c370`** and pushed
 edit reloaded the dev server mid-run; 10/10 alone), `test:e2e:built` 3/3,
 `test:e2e:prod` 85/85.
 
-**Public demo: not yet released.** The session's safety system refused every
-command against the public Supabase (it counts as a production deploy), so
-`main` and `demo` are still `99e4c5e`. Supabase is at 0063 and `mvp` adds no
-migration, so the release is:
+**Released, 7 November, on the owner's word ("everything should be on the
+main branch").** `main` and `demo` are **`bf4ba22`** (tree = `mvp`
+`fca56bf`); Render and Vercel serve it (`/readyz` ready, schema 0063, the
+console carries the slip, the patient app the view-only link). No migration
+was needed. **Still not done on Supabase:** the demo-data refresh, which
+the session's safety system refused (it counts as a production deploy). It
+would remove the stray `TEST` chambers of 6 November (below):
+`ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 DEMO_MODE=true pnpm db:reset`
+from a checkout of `main`. Backup taken first:
+`%LOCALAPPDATA%\HealthCareDemo\backups\supabase-before-release-20261107T0620Z.dump`.
 
-1. Backup — **done**: `%LOCALAPPDATA%\HealthCareDemo\backups\supabase-before-release-20261107T0620Z.dump`.
-2. `ALLOW_REMOTE_DB=1 pnpm db:verify`, then
-   `ALLOW_REMOTE_DB=1 ALLOW_DESTRUCTIVE_DB=1 DEMO_MODE=true pnpm db:reset`
-   from a checkout of `f18c370` (removes the stray `TEST` rows of
-   6 November, below).
-3. `git checkout main && git merge --no-ff mvp && git push origin main`;
-   wait for Render and Vercel; smoke walk (`DEPLOY.md` §7.6).
-4. `git branch -f demo main && git push origin demo`.
+**Security check, 7 November.** Found and fixed (released):
+
+- `pnpm audit --prod`: 2 critical (Next.js unauthenticated remote code
+  execution, twice), 3 high (Next.js Server Actions DoS, zod memory, body-parser
+  DoS), 1 moderate (qs). All patched in-major (`fix/security-deps`); now
+  "No known vulnerabilities found".
+- The token slip's QR link opened the visit's record and reports and could
+  cancel the booking: right for an SMS link, wrong for paper left in a waiting
+  room. Now view-only (`fix/slip-view-only`; `APP_FLOW.md` B1.4, `BACKEND.md`).
+
+Checked and sound: no secret in the repository or its history; only the
+`.env.example` files are tracked. Live: every API route refuses no or forged
+tokens; no CORS grant to a foreign origin; HSTS, nosniff, frame denial, CSP,
+referrer and permissions policies on the API and both apps; HTTP redirects to
+HTTPS; errors carry no internals; per-address limits on sign-in (300/10 min)
+and on the API (1,200). Code since the 18 October audit: refresh-token rotation
+is atomic; demo phones are enforced on every intake; the hospital server
+publishes only Caddy (80/443), the database is internal; secrets are generated
+on the server into a 600 file; the off-site backup is AES-256 with the
+passphrase on a file descriptor; the watchdog never logs its webhook.
+
+Accepted, not changed: the public demo is password-less by design
+(`DEMO_MODE`, synthetic data) and its API connects as the database owner, so
+row-level security does not bind it there (`DEPLOY.md` §7.5, optional);
+`setup.sh` opens SSH as `OpenSSH` (port 22), so a server on another SSH port
+must allow it before running; the image archive's checksum guards against
+corruption, not a substituted archive. Not tested live: the per-account
+lockout, to avoid locking a public demo account; its API tests pass.
 
 ## The MARKS pilot handover (6 November 2026)
 
