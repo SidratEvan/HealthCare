@@ -106,6 +106,11 @@ QR link made view-only (`docs/STATUS.md`).
   allowed and refused addresses, and fourteen ways of disguising the path
   (capitals, doubled slashes, `..`, percent-encoding, a trailing slash, a
   query): every one refused.
+- **Backup files are private to the server's system account.** Each night's
+  dump was written readable by every user on the server (the Linux default).
+  `deploy/backup.sh` now makes every file it writes, on the server and in
+  the second location, readable by its own account only. Checked by a real
+  backup in the database image: every file `-rw-------`.
 - **The test tools' advisories** closed (vitest 5.0.5, vite 8.3.5, undici
   8.12.3, jsdom 30.1.3). `pnpm audit` lists one left, moderate: `minimatch`
   inside the linter, whose fix is a new major eleven days old that the
