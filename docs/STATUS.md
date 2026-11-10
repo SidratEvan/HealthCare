@@ -71,9 +71,14 @@ accounts are run.
   API call 200); alone, `--repeat-each=3`, 18/18. The session ended between
   `test:e2e` and the last two suites; on 10 November Docker Desktop was not
   running after a restart (`docker start healthcare-db` after starting it).
-- **Released** to `mvp`, `main` and `demo`: the commits are in `git log`
-  (merge messages name each branch). The pilot installs `main` as of this
-  release (`DEPLOY.md` S8). No migration: Supabase stays at 0063.
+- **On `mvp` and pushed (10 November). `main` and `demo` wait for the
+  owner's push**: the session's safety system refuses a push to `main` as a
+  production deploy (it redeploys Render and Vercel). The release merge is
+  made locally as branch `release/security-2026-11-10` (tree = `mvp`); to
+  release: `git push origin release/security-2026-11-10:main` and
+  `git push origin release/security-2026-11-10:demo` (both fast-forward from
+  `b9e1ed8`). No migration: Supabase stays at 0063. Until `main` moves, the
+  pilot installs nothing older than that commit (`DEPLOY.md` S8).
 
 ## Previous work — released to `main`, and a security check (7 November 2026)
 
