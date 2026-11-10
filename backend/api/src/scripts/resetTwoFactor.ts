@@ -9,7 +9,7 @@
  * sign-in sets a new one up. Every session the account holds ends, and the
  * reset is written to the audit log with no actor.
  *
- *   pnpm staff:reset-2fa --email admin@marks.example [--hospital-code MARKS]
+ *   pnpm staff:reset-2fa --email admin@hospital.example [--hospital-code SHAPLA]
  *
  * The hospital code is needed only when the email has accounts at more than
  * one facility on this server. Reads DATABASE_URL like the API.
