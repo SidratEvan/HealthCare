@@ -37,13 +37,43 @@ accounts are run.
   `MARKS_START_HERE.md`: the slip is built (it said "not built yet"); new
   §8 *Keeping it safe* (SSH keys only, updates on, lock the PC, sign out,
   doctors turn on two-step, switch off a leaver's account).
-- **Not changed, for the owner** (record §6): two-step required for doctors,
-  and an idle sign-out on shared PCs, are product decisions (`FR-SEC-10`);
-  today both are the person's to do (doctors can turn two-step on; the guide
-  tells staff to lock the PC). `CLAUDE.md` §4.4 still calls `fb1d1d8` the
+- Both merged into `mvp` as `4de85cb` and pushed. The merge was made on a
+  detached `origin/mvp` in this checkout and pushed as `HEAD:mvp`, because
+  local `mvp` is checked out in `D:\Projects\HealthCare-site-cinematic` and
+  the session's safety system refused a merge there. **That worktree's local
+  `mvp` is behind `origin/mvp`**: `git pull --ff-only` there before using it.
+- **Added after the check (owner, 7 November: "dont stop ... i dont want any
+  complaint later"), stacked in this order on `4de85cb`:**
+  - `chore/dev-deps-advisories` (`cbe7e57`): the test tools' seventeen
+    advisories closed (vitest ~5.0.4 → 5.0.5, jsdom ^30.1.3, overrides vite
+    8.3.5 and undici 8.12.3, each out two weeks or more). `pnpm audit`: one
+    left, moderate, `minimatch` under eslint; its fix is minimatch 11, too new
+    and not accepted by eslint 10 (`pnpm-workspace.yaml`).
+  - `chore/staff-networks` (`9980ab3`): optional `STAFF_NETWORKS` in
+    `deploy/.env`; outside it Caddy does not open the console and refuses
+    `/api/v1/staff…`. Default everywhere. Tested on `caddy:2` (fourteen
+    disguised paths refused); `deployment.test.ts` keeps the rule in the
+    files. `DEPLOY.md` S2, `MARKS_START_HERE.md` §8 (also: Windows locks each
+    PC after five idle minutes), `setup.sh` prints it as advised.
+  - `fix/backup-file-mode` (`a1f4d24`): `umask 077` in `backup.sh`; every
+    dump was world-readable on the server. A real backup in the postgis image
+    leaves every file `-rw-------`.
+- **Not changed, for the owner** (record §6): two-step *required* for doctors,
+  and an idle sign-out inside the console, are product decisions
+  (`FR-SEC-10`); for MARKS, `STAFF_NETWORKS`, the doctors' own two-step and
+  Windows' screen lock cover both. `CLAUDE.md` §4.4 still calls `fb1d1d8` the
   reception-pilot candidate; that line is the owner's to update.
-- **Release.** Not yet on `main`. The release gate (`pnpm verify`, `build`,
-  and the three browser suites) takes about 1.5 hours on this machine.
+- **Gate on `a1f4d24` (7 and 10 November):** `pnpm verify` 8182/8182,
+  `pnpm build`, `test:e2e` 347/348, `test:e2e:built` 3/3, `test:e2e:prod`
+  85/85; both two-device canaries green. The one red case,
+  `language-switch.spec.ts:114`, met a blank patient page while the dev
+  server did a full reload mid-test (trace: `next dev` HMR reconnect, every
+  API call 200); alone, `--repeat-each=3`, 18/18. The session ended between
+  `test:e2e` and the last two suites; on 10 November Docker Desktop was not
+  running after a restart (`docker start healthcare-db` after starting it).
+- **Released** to `mvp`, `main` and `demo`: the commits are in `git log`
+  (merge messages name each branch). The pilot installs `main` as of this
+  release (`DEPLOY.md` S8). No migration: Supabase stays at 0063.
 
 ## Previous work — released to `main`, and a security check (7 November 2026)
 
