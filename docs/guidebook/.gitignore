@@ -1,0 +1,7 @@
+# Build output of the guidebook (README.md): screenshots, the HTML and the PDF.
+shots/
+book.html
+*.pdf
+*.log
+state.json
+ids-*.txt
