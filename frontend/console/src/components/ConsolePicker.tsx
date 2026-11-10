@@ -38,15 +38,26 @@ import {
   numeralsFor,
   t,
   type ConsoleKey,
+  PATIENT,
 } from '@platform/i18n';
-import { Button, Card, CardMeta, CardTitle, FilterChip, useLocale } from '@platform/ui';
+import {
+  Button,
+  Card,
+  CardMeta,
+  CardTitle,
+  ConsoleHeader,
+  ConsoleShell,
+  ConsoleTheme,
+  FilterChip,
+  useLocale,
+} from '@platform/ui';
 
-import { ConsoleLanguageSwitch } from '@/components/ConsoleLanguageSwitch';
 import { mintDemoToken, readDemoSession, writeDemoSession } from '@/lib/demo';
 import { loadDesks, type Desk } from '@/lib/settings';
 import { fetchStaffChambers, fetchStaffModulesOff, signOut } from '@/lib/staffAuth';
 
 import type { ReactNode } from 'react';
+import '@platform/ui/console.css';
 
 const API = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/api/v1';
 
@@ -777,80 +788,81 @@ function Shell({
   const locale = useLocale();
   const session = mode === 'staff' ? readDemoSession() : null;
   return (
-    <div className="min-h-screen">
-      {/* The institution's colour across the top, as the consoles' rail is:
-          the first screen a director sees should look like the product, not
-          like a form in front of it. */}
-      <header className="bg-brand-700 text-ink-inverse">
-        <div className="mx-auto flex max-w-[1040px] items-center gap-4 px-8 py-8">
-          <h1 className="font-reading text-title-lg">{t('chooseConsole', locale)}</h1>
-          <ConsoleLanguageSwitch />
-        </div>
-      </header>
-
-      <main className="mx-auto flex max-w-[1040px] flex-col gap-6 p-8" data-testid="console-picker">
-        {mode === 'staff' ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-body-sm text-ink-secondary" data-testid="picker-signed-in">
-              {format('signedInAs', locale, { name: session?.staffName ?? '' })} ·{' '}
-              {t('staffPickerNote', locale)}
-            </p>
-            <div className="flex flex-wrap items-center gap-3">
-              {session?.twoFactor === undefined ? null : session.twoFactor.enabled ? (
-                <span className="text-body-sm text-ink-secondary" data-testid="picker-tfa-on">
-                  {t('tfaOnNote', locale)}
-                </span>
-              ) : (
-                <a
-                  href="/?view=2fa"
-                  className="text-body-sm text-brand-600 underline"
-                  data-testid="picker-tfa-setup"
-                >
-                  {t('tfaSetupTitle', locale)}
-                </a>
-              )}
-              <Button
-                variant="secondary"
-                size="sm"
-                data-testid="picker-sign-out"
-                onClick={() => {
-                  void signOut().then(() => onSignedOut?.());
-                }}
-              >
-                {t('signOut', locale)}
-              </Button>
-            </div>
-            {/* A recovery code was used for a lost phone: say when few are
-                left, while an administrator can still reset it in time. */}
-            {session?.twoFactor?.enabled === true && session.twoFactor.recoveryCodesLeft <= 3 ? (
-              <p
-                role="status"
-                className="w-full rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
-                data-testid="picker-tfa-low"
-              >
-                {format('tfaRecoveryLow', locale, {
-                  count: formatNumber(session.twoFactor.recoveryCodesLeft, numeralsFor(locale)),
-                })}
+    // The redesigned console frame (GR-06), the same header the sign-in and
+    // every console carry: the first screen a director sees is the product.
+    <ConsoleTheme>
+      <ConsoleShell
+        navigation={[]}
+        header={<ConsoleHeader identity={PATIENT.appName} logo="/brand/medlivebd-logo-light.png" />}
+      >
+        <div
+          className="mx-auto flex w-full max-w-[1040px] flex-col gap-6 p-6"
+          data-testid="console-picker"
+        >
+          <h1 className="text-title-lg">{t('chooseConsole', locale)}</h1>
+          {mode === 'staff' ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-body-sm text-ink-secondary" data-testid="picker-signed-in">
+                {format('signedInAs', locale, { name: session?.staffName ?? '' })} ·{' '}
+                {t('staffPickerNote', locale)}
               </p>
-            ) : null}
-          </div>
-        ) : (
-          // The demo picker needs no password. Saying so is the honest state,
-          // and it is the same reason every demo row carries its label
-          // (`FR-DEM-07`). Signing in with an account is offered beside it.
-          <p className="flex flex-wrap items-center gap-3 rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
-            <span>{t('demoSignIn', locale)}</span>
-            <a href="/?login=1" className="underline" data-testid="picker-login-link">
-              {t('loginDemoLink', locale)}
-            </a>
-            <a href="/?apply=1" className="underline" data-testid="picker-apply-link">
-              {t('applyLink', locale)}
-            </a>
-          </p>
-        )}
+              <div className="flex flex-wrap items-center gap-3">
+                {session?.twoFactor === undefined ? null : session.twoFactor.enabled ? (
+                  <span className="text-body-sm text-ink-secondary" data-testid="picker-tfa-on">
+                    {t('tfaOnNote', locale)}
+                  </span>
+                ) : (
+                  <a
+                    href="/?view=2fa"
+                    className="text-body-sm text-brand-600 underline"
+                    data-testid="picker-tfa-setup"
+                  >
+                    {t('tfaSetupTitle', locale)}
+                  </a>
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  data-testid="picker-sign-out"
+                  onClick={() => {
+                    void signOut().then(() => onSignedOut?.());
+                  }}
+                >
+                  {t('signOut', locale)}
+                </Button>
+              </div>
+              {/* A recovery code was used for a lost phone: say when few are
+                left, while an administrator can still reset it in time. */}
+              {session?.twoFactor?.enabled === true && session.twoFactor.recoveryCodesLeft <= 3 ? (
+                <p
+                  role="status"
+                  className="w-full rounded-sm bg-warn-100 px-3 py-2 text-body-sm text-warn-700"
+                  data-testid="picker-tfa-low"
+                >
+                  {format('tfaRecoveryLow', locale, {
+                    count: formatNumber(session.twoFactor.recoveryCodesLeft, numeralsFor(locale)),
+                  })}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            // The demo picker needs no password. Saying so is the honest state,
+            // and it is the same reason every demo row carries its label
+            // (`FR-DEM-07`). Signing in with an account is offered beside it.
+            <p className="flex flex-wrap items-center gap-3 rounded-sm bg-warn-100 px-3 py-2 text-caption text-warn-700">
+              <span>{t('demoSignIn', locale)}</span>
+              <a href="/?login=1" className="underline" data-testid="picker-login-link">
+                {t('loginDemoLink', locale)}
+              </a>
+              <a href="/?apply=1" className="underline" data-testid="picker-apply-link">
+                {t('applyLink', locale)}
+              </a>
+            </p>
+          )}
 
-        {children}
-      </main>
-    </div>
+          {children}
+        </div>
+      </ConsoleShell>
+    </ConsoleTheme>
   );
 }
