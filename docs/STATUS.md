@@ -27,7 +27,7 @@ client named, "a guide book as well as the core book of the whole project".
   pushed (each its own branch; focused gate on the combined tree: `pnpm
   verify` 8184/8184, Playwright `patient-phone-width`, `lab-report`,
   `platform-onboarding`, `staff-login` 29/29). `main` and `demo` still wait
-  for the owner's push (`release/security-2026-11-10` predates these three):
+  for the owner's push; `release/security-2026-11-10` now holds all of it (the security work, these three fixes and the guidebook):
   - `fix/beds-row-overflow`: the bed search was 600 px wide on a 390 px phone
     (a `<fieldset>`'s min-content width around the scrolling chip row);
     `min-w-0`, and `e2e/patient-phone-width.spec.ts` measures ten patient
