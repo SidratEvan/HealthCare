@@ -31,6 +31,9 @@ export const ignores = [
   '**/test-results/**',
   '**/*.d.ts',
   'pnpm-lock.yaml',
+  // The guidebook's capture and layout scripts (docs/guidebook/README.md):
+  // tooling that drives the apps from outside, not product code.
+  'docs/guidebook/**',
 ];
 
 /**

@@ -7,7 +7,46 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Latest work — full security check before real patients (7 November 2026, second pass)
+## Latest work — the guidebook, and what capturing every screen found (10 November 2026)
+
+Owner, 10 November: one PDF with screenshots of every page, points and
+arrows, one part for non-technical readers and one for technical ones, no
+client named, "a guide book as well as the core book of the whole project".
+
+- **The book**: `docs/guidebook/` builds `MedLiveBD-Guidebook.pdf` (A4
+  landscape) from real screenshots of the apps on demonstration data, with
+  numbered markers placed from each element's `data-testid` box. Part A (for
+  everyone): what it is, who it is for, a day in the life, principles, every
+  patient and staff screen, the roadmap, privacy, FAQ, glossary. Part B (for
+  engineers): architecture, repository, stack, queue engine, realtime,
+  offline sync, data model, scope and RLS, API, identity, web apps,
+  adapters, import, security, deployment, workflow, testing, documents.
+  How to regenerate: `docs/guidebook/README.md`. The PDF, shots and HTML are
+  build output, not committed.
+- **Found by the capture and fixed**, merged into `mvp` as `eb7521d` and
+  pushed (each its own branch; focused gate on the combined tree: `pnpm
+  verify` 8184/8184, Playwright `patient-phone-width`, `lab-report`,
+  `platform-onboarding`, `staff-login` 29/29). `main` and `demo` still wait
+  for the owner's push (`release/security-2026-11-10` predates these three):
+  - `fix/beds-row-overflow`: the bed search was 600 px wide on a 390 px phone
+    (a `<fieldset>`'s min-content width around the scrolling chip row);
+    `min-w-0`, and `e2e/patient-phone-width.spec.ts` measures ten patient
+    screens at phone width.
+  - `fix/neutral-code-example`: two console hints named a client as the
+    example hospital code; now `SHAPLA` (a demo facility); `messages.test.ts`
+    refuses a client name in either catalogue.
+  - `chore/e2e-fetch-types`: `tsc -p e2e` failed on three `input.url` in
+    `lab-report.spec.ts` (fetch input may be a URL); now clean. Not in
+    `pnpm typecheck`, which is why nothing caught it.
+- **Found, not changed — for the owner**: a signed-in patient's **Records**
+  tab says "No records yet" and "sign in on the Profile tab", while Profile
+  lists the same account's visits. `APP_FLOW.md` S-A-12 still describes the
+  wallet as "this device's: there are no accounts", written before patient
+  sign-in (step 25). Proposed: when signed in, Records shows the account's
+  records (`GET /patients/:id/records`, already built and scoped) and drops
+  the sign-in line; documents first. Not a pilot issue (counter-only).
+
+## Previous work — full security check before real patients (7 November 2026, second pass)
 
 Owner's question: is it safe to start MARKS with real patient data, against
 bugs and break-ins. Record: [docs/audit/security-check-2026-11-07.md](audit/security-check-2026-11-07.md).
