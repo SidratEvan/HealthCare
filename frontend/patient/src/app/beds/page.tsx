@@ -136,8 +136,11 @@ export default function Page(): ReactNode {
           </section>
         )}
 
-        {/* CHIP-A11-<type> */}
-        <fieldset className="flex flex-col gap-2">
+        {/* CHIP-A11-<type>. `min-w-0`: a fieldset is as wide as its content by
+            default (min-inline-size: min-content), so without it the row below
+            widened the whole page to 600 px on a 390 px phone instead of
+            scrolling inside itself. */}
+        <fieldset className="flex min-w-0 flex-col gap-2">
           <legend className="text-body-md text-ink-secondary">
             {tp('bedsChooseKind', locale)}
           </legend>

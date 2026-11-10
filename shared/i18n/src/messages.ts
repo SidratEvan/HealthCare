@@ -359,8 +359,8 @@ export const CONSOLE = {
   loginPassword: { bn: 'পাসওয়ার্ড', en: 'Password' },
   loginHospitalCode: { bn: 'হাসপাতালের কোড', en: 'Hospital code' },
   loginHospitalCodeHint: {
-    bn: 'এই ইমেইলে একাধিক প্রতিষ্ঠানে অ্যাকাউন্ট আছে। কোনটিতে ঢুকবেন, তার কোড লিখুন (যেমন MARKS)।',
-    en: 'This email has accounts at more than one facility. Enter the code of the one you want (for example MARKS).',
+    bn: 'এই ইমেইলে একাধিক প্রতিষ্ঠানে অ্যাকাউন্ট আছে। কোনটিতে ঢুকবেন, তার কোড লিখুন (যেমন SHAPLA)।',
+    en: 'This email has accounts at more than one facility. Enter the code of the one you want (for example SHAPLA).',
   },
   loginSubmit: { bn: 'লগ ইন করুন', en: 'Sign in' },
   loginSubmitting: { bn: 'যাচাই হচ্ছে…', en: 'Checking…' },
@@ -2544,8 +2544,8 @@ export const CONSOLE = {
   platformFieldNameEn: { bn: 'হাসপাতালের নাম (ইংরেজি)', en: 'Hospital name (English)' },
   platformFieldCode: { bn: 'হাসপাতালের কোড', en: 'Hospital code' },
   platformFieldCodeHelp: {
-    bn: 'ইংরেজি অক্ষর ও সংখ্যা, যেমন MARKS। পরে বদলানো যায় না।',
-    en: 'Letters and digits, such as MARKS. It cannot be changed later.',
+    bn: 'ইংরেজি অক্ষর ও সংখ্যা, যেমন SHAPLA। পরে বদলানো যায় না।',
+    en: 'Letters and digits, such as SHAPLA. It cannot be changed later.',
   },
   platformFieldRegistration: {
     bn: 'নিবন্ধন বা লাইসেন্স নম্বর',

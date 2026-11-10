@@ -459,7 +459,7 @@ test.describe('redesigned lab and pharmacy safeguards', () => {
       const nativeFetch = globalThis.fetch.bind(globalThis);
       globalThis.fetch = async (input, init) => {
         const url = new URL(
-          typeof input === 'string' ? input : input.url,
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
           globalThis.location.href,
         );
         if (init?.method !== 'POST' || !url.pathname.endsWith(`/test-orders/${orderId}/report`))
@@ -576,7 +576,7 @@ test.describe('redesigned lab and pharmacy safeguards', () => {
       const nativeFetch = globalThis.fetch.bind(globalThis);
       globalThis.fetch = async (input, init) => {
         const url = new URL(
-          typeof input === 'string' ? input : input.url,
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
           globalThis.location.href,
         );
         if (init?.method !== 'POST' || !url.pathname.endsWith(`/test-orders/${orderId}/report`))
@@ -621,7 +621,7 @@ test.describe('redesigned lab and pharmacy safeguards', () => {
         const nativeFetch = globalThis.fetch.bind(globalThis);
         globalThis.fetch = async (input, init) => {
           const url = new URL(
-            typeof input === 'string' ? input : input.url,
+            typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
             globalThis.location.href,
           );
           if (init?.method !== 'POST' || !url.pathname.endsWith(`/test-orders/${orderId}/report`))

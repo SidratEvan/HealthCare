@@ -6,7 +6,7 @@
  * facility too (not live, empty). It prints a temporary password once; the
  * first sign-in asks for the person's own before any console opens.
  *
- *   pnpm staff:create --hospital-code MARKS --email admin@example.org \
+ *   pnpm staff:create --hospital-code SHAPLA --email admin@example.org \
  *     --name "Full Name" \
  *     [--hospital-name-bn "…" --hospital-name-en "…" --kind hospital \
  *      --division Dhaka --district Dhaka]

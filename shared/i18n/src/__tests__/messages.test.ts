@@ -117,3 +117,18 @@ describe('the patient catalogue', () => {
     }
   });
 });
+
+describe('no client is named on a screen', () => {
+  // The product is shown to every hospital; an example in a hint names a demo
+  // facility (SHAPLA), never an organisation the company works with. Found by
+  // the guidebook capture of 10 November 2026.
+  it.each([
+    ['console', CONSOLE],
+    ['patient', PATIENT],
+  ] as const)('the %s catalogue', (_name, catalogue) => {
+    const named = Object.entries(catalogue as Record<string, Message>).filter(([, message]) =>
+      /\bMARKS\b|Marks Group|মার্কস/i.test(`${message.bn} ${message.en}`),
+    );
+    expect(named.map(([key]) => key)).toEqual([]);
+  });
+});
