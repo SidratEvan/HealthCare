@@ -26,8 +26,12 @@ client named, "a guide book as well as the core book of the whole project".
 - **Found by the capture and fixed**, merged into `mvp` as `eb7521d` and
   pushed (each its own branch; focused gate on the combined tree: `pnpm
   verify` 8184/8184, Playwright `patient-phone-width`, `lab-report`,
-  `platform-onboarding`, `staff-login` 29/29). `main` and `demo` still wait
-  for the owner's push; `release/security-2026-11-10` now holds all of it (the security work, these three fixes and the guidebook):
+  `platform-onboarding`, `staff-login` 29/29). The owner pushed the
+  security release to `main` and `demo` as `cea95f2`; these three fixes and
+  the guidebook are not on it yet. `release/security-2026-11-10` (`f21d08a`,
+  tree = `mvp` `c8f258b`) fast-forwards over `cea95f2` and brings them:
+  `git push origin release/security-2026-11-10:main` and
+  `git push origin release/security-2026-11-10:demo`. No migration.
   - `fix/beds-row-overflow`: the bed search was 600 px wide on a 390 px phone
     (a `<fieldset>`'s min-content width around the scrolling chip row);
     `min-w-0`, and `e2e/patient-phone-width.spec.ts` measures ten patient
@@ -110,14 +114,14 @@ accounts are run.
   API call 200); alone, `--repeat-each=3`, 18/18. The session ended between
   `test:e2e` and the last two suites; on 10 November Docker Desktop was not
   running after a restart (`docker start healthcare-db` after starting it).
-- **On `mvp` and pushed (10 November). `main` and `demo` wait for the
-  owner's push**: the session's safety system refuses a push to `main` as a
-  production deploy (it redeploys Render and Vercel). The release merge is
-  made locally as branch `release/security-2026-11-10` (tree = `mvp`); to
-  release: `git push origin release/security-2026-11-10:main` and
-  `git push origin release/security-2026-11-10:demo` (both fast-forward from
-  `b9e1ed8`). No migration: Supabase stays at 0063. Until `main` moves, the
-  pilot installs nothing older than that commit (`DEPLOY.md` S8).
+- **Released (10 November).** The session's safety system refuses a push
+  to `main` as a production deploy (it redeploys Render and Vercel), so the
+  owner pushed it: `main` and `demo` = **`cea95f2`**. Checked live the same
+  day: the patient app and the console answer 200, the API's `/readyz` is
+  ready at schema 0063 (Supabase; no migration), the demo data is today's
+  (6 hospitals, 40 chambers, no test rooms). Render's free tier sleeps: the
+  first request after a quiet spell takes about 70 s. The pilot installs
+  nothing older than this commit (`DEPLOY.md` S8).
 
 ## Previous work — released to `main`, and a security check (7 November 2026)
 
