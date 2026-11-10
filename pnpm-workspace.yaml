@@ -34,8 +34,19 @@ allowBuilds:
 # still accepts the older ones.
 #   body-parser    denial of service after a compressed body, fixed in 2.4.0
 #   qs             uncaught TypeError (denial of service), fixed in 6.16.1
+#
+# And the test tools (chore/dev-deps-advisories, 7 November). None runs on a
+# server, but `pnpm audit` should read clean. Exact versions, each out for at
+# least two weeks when chosen, rather than whatever was published yesterday.
+#   vite           six advisories (launch-editor on Windows, fs.allow), fixed in 8.3.3
+#   undici         seven advisories (jsdom's fetch), fixed in 8.12.2
+# Not overridden: minimatch under eslint (a slow glob, only for patterns this
+# repository writes). Its fix is minimatch 11.0.1, a new major eleven days old
+# that eslint 10 does not yet accept.
 overrides:
   sharp: ^0.35.5
   source-map-js: ^1.2.2
   body-parser: ^2.4.0
   qs: ^6.16.1
+  vite: 8.3.5
+  undici: 8.12.3
