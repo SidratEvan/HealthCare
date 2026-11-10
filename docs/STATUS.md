@@ -114,6 +114,17 @@ accounts are run.
   API call 200); alone, `--repeat-each=3`, 18/18. The session ended between
   `test:e2e` and the last two suites; on 10 November Docker Desktop was not
   running after a restart (`docker start healthcare-db` after starting it).
+- **Released again (10 November, the owner's order): `main` and `demo` =
+  `6237385`**, with the three fixes, the guidebook and
+  `fix/demo-picker-redesign`: the demo's first screen, "Choose a console"
+  (`S-B-01`), had been left out of the October console redesign and still
+  drew the old green header; it now sits in the same `ConsoleTheme`,
+  `ConsoleShell` and `ConsoleHeader` as the sign-in and every console. Seen
+  live on Vercel. Checks: typecheck, lint, format, a look at 1440 and 390 px,
+  `two-device-queue` and `console-access` 21/21 (one case timed out while
+  the console was being built beside it; alone, it passed). The guidebook's
+  three picker shots were retaken from the live console and both PDFs
+  rebuilt.
 - **Released (10 November).** The session's safety system refuses a push
   to `main` as a production deploy (it redeploys Render and Vercel), so the
   owner pushed it: `main` and `demo` = **`cea95f2`**. Checked live the same
