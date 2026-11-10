@@ -599,6 +599,7 @@ Fill in `deploy/.env`:
 | Value | What to put |
 |---|---|
 | `APP_ORIGIN`, `CONSOLE_ORIGIN`, `API_ORIGIN` | The three names, as `https://…` |
+| `STAFF_NETWORKS` | Where staff may sign in from: the hospital's public address(es), space-separated (`203.0.113.10/32 198.51.100.0/28`). Outside them the console does not open and Caddy refuses every `/api/v1/staff…` route with `AUTH_FORBIDDEN_SCOPE`, so nobody elsewhere can guess a password or lock an account; patients' pages and the rest of the API are untouched. **Empty: from anywhere.** Set it after the platform administrator has approved the hospital (`S3`), or include their address, and check by signing in from a counter: if every sign-in is refused, the server is seeing another address (a proxy in front, or Docker without iptables), and the value goes back to empty. Applied with `docker compose … up -d web` |
 | `POSTGRES_PASSWORD` | A long random password (the command is in the file). This is the **owner**: it runs the migrations and the backups and serves no request |
 | `API_DB_USER`, `API_DB_PASSWORD` | The role the **API** connects as, and a second, different password from the same command. It can read and write rows and nothing else (`S6`). Created on the first start |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GUEST_LINK_SECRET`, `TOTP_ENCRYPTION_KEY` | Four **different** random values of 64 hex characters. The last encrypts every administrator's two-step verification (pilot step 28): a restored database needs the same value, so keep it with the other secrets |

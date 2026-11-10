@@ -93,7 +93,24 @@ QR link made view-only (`docs/STATUS.md`).
   workers). It contains no patient data, and the morning check uses it.
 - **Two-step sign-in is required for administrators only.** Other staff,
   doctors included, may switch it on themselves (section 5).
-- **The console does not sign itself out when left idle.**
+- **The console does not sign itself out when left idle.** Windows locks
+  the PC instead (section 5).
+
+## 4b. Added after the check, the same day
+
+- **Staff sign-in only from the hospital's network** (`STAFF_NETWORKS`,
+  `deploy/Caddyfile`, `DEPLOY.md` S2). Optional, off by default. When set,
+  the staff console does not open outside those addresses and the web
+  server refuses every staff sign-in route there, so nobody on the internet
+  can guess a staff password or lock an account. Tested against Caddy itself:
+  allowed and refused addresses, and fourteen ways of disguising the path
+  (capitals, doubled slashes, `..`, percent-encoding, a trailing slash, a
+  query): every one refused.
+- **The test tools' advisories** closed (vitest 5.0.5, vite 8.3.5, undici
+  8.12.3, jsdom 30.1.3). `pnpm audit` lists one left, moderate: `minimatch`
+  inside the linter, whose fix is a new major eleven days old that the
+  linter does not accept yet. It can only slow a lint run on a developer's
+  machine, on patterns this repository writes.
 
 ## 5. What MARKS must do (none of it is code)
 
@@ -104,12 +121,15 @@ QR link made view-only (`docs/STATUS.md`).
    left on; disk encryption on the server and the backup disk; nothing else
    opened on the firewall.
 3. **`deploy/.env`**: two safe copies off the server; never emailed.
-4. **Doctors switch on two-step verification**, since a doctor's account can
+4. **Set `STAFF_NETWORKS`** to MARKS's public address once the hospital is
+   approved, and check one counter can still sign in.
+5. **Doctors switch on two-step verification**, since a doctor's account can
    open records (`docs/MARKS_START_HERE.md` §8).
-5. **Lock the PC when stepping away; sign out at the end of the shift.**
-6. **When somebody leaves**, switch their account off the same day. It signs
+6. **Windows locks every counter and doctor's PC after 5 idle minutes**;
+   staff lock it when stepping away and sign out at the end of the shift.
+7. **When somebody leaves**, switch their account off the same day. It signs
    them out everywhere at once.
-7. **Sign the data agreement** (who controls the data, how long it is kept,
+8. **Sign the data agreement** (who controls the data, how long it is kept,
    how a patient asks for it to be erased — decision F-16). That is legal
    work, not software.
 
@@ -117,8 +137,7 @@ QR link made view-only (`docs/STATUS.md`).
 
 - A penetration test by an outside firm, once the company is registered
   (`docs/PRD.md` §4.2b).
-- Making two-step verification required for doctors, and an idle sign-out for
-  shared computers: each a product decision for the owner, then a small
-  branch (`FR-SEC-10`).
-- The testing tools' own advisories (vitest, jsdom): updating them is
-  housekeeping; they never run on the server.
+- Making two-step verification required for doctors, and an idle sign-out in
+  the console itself: each a product decision for the owner, then a small
+  branch (`FR-SEC-10`). For MARKS, `STAFF_NETWORKS`, the doctors' own
+  two-step and Windows' screen lock cover both.

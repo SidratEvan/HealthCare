@@ -244,3 +244,4 @@ echo "on their phone. Then Settings: departments, doctors, schedules, counters a
 echo "The guide for each step is docs/MARKS_START_HERE.md."
 [ -n "$(value BACKUP_SECOND_DIR)" ] || echo "STILL TO DO: a backup disk. Until BACKUP_SECOND_DIR is set in deploy/.env the backup reports itself failing."
 [ -n "$(value ALERT_WEBHOOK_URL)" ] || echo "STILL TO DO: alerts. Until ALERT_WEBHOOK_URL is set, somebody must check the server each morning."
+[ -n "$(value STAFF_NETWORKS)" ] || echo "ADVISED, once MedLiveBD has approved the hospital: set STAFF_NETWORKS in deploy/.env to the hospital's public address, so staff can sign in only from inside it (docs/MARKS_START_HERE.md section 8)."
