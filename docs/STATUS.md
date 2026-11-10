@@ -63,9 +63,17 @@ accounts are run.
   (`FR-SEC-10`); for MARKS, `STAFF_NETWORKS`, the doctors' own two-step and
   Windows' screen lock cover both. `CLAUDE.md` §4.4 still calls `fb1d1d8` the
   reception-pilot candidate; that line is the owner's to update.
-- **Release.** The full gate (`pnpm verify`, `build`, `test:e2e`,
-  `test:e2e:built`, `test:e2e:prod`) runs on `a1f4d24`; its summary is
-  written to the session scratchpad as `gate-summary.log`.
+- **Gate on `a1f4d24` (7 and 10 November):** `pnpm verify` 8182/8182,
+  `pnpm build`, `test:e2e` 347/348, `test:e2e:built` 3/3, `test:e2e:prod`
+  85/85; both two-device canaries green. The one red case,
+  `language-switch.spec.ts:114`, met a blank patient page while the dev
+  server did a full reload mid-test (trace: `next dev` HMR reconnect, every
+  API call 200); alone, `--repeat-each=3`, 18/18. The session ended between
+  `test:e2e` and the last two suites; on 10 November Docker Desktop was not
+  running after a restart (`docker start healthcare-db` after starting it).
+- **Released** to `mvp`, `main` and `demo`: the commits are in `git log`
+  (merge messages name each branch). The pilot installs `main` as of this
+  release (`DEPLOY.md` S8). No migration: Supabase stays at 0063.
 
 ## Previous work — released to `main`, and a security check (7 November 2026)
 
