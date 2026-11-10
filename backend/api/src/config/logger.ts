@@ -66,6 +66,83 @@ const REDACTED_PATHS = [
 ];
 
 /**
+ * The fields of an error that are written to the log. Everything else an
+ * error object carries is left out.
+ *
+ * Kept: what kind of failure it was and where (`stack`), and for a Postgres
+ * error which constraint, table and column refused — enough to find the bug.
+ *
+ * Left out, because they hold what somebody sent or what a row contains, and
+ * the path-based redaction above cannot see inside a string:
+ *
+ * - `body`: the body parser puts the raw text of a body it could not parse
+ *   here, a sign-in's password or a registration's name and phone among it;
+ * - `detail`, `where`, `hint`: Postgres puts row values here ("Key (phone)=…",
+ *   "Failing row contains (…)");
+ * - anything a library may add later. An allowlist does not need to know it.
+ */
+const ERROR_FIELDS = [
+  'code',
+  'status',
+  'statusCode',
+  'constraint',
+  'table',
+  'column',
+  'schema',
+  'dataType',
+  'routine',
+  'severity',
+] as const;
+
+/** How deep `cause` is followed: an error wrapping an error wrapping the fault. */
+const CAUSE_DEPTH = 3;
+
+/**
+ * An error as the log may record it (CLAUDE.md §7, `FR-SEC-08`).
+ *
+ * A body parser's refusal keeps its kind and nothing of its message or stack,
+ * whose first line is the message: V8's JSON errors quote the text they could
+ * not read (`Unexpected token … "{"password":"…" is not valid JSON`). The
+ * error handler does not log one anyway (`middleware/error.ts`); this is for
+ * a call site that one day does.
+ */
+export function safeError(value: unknown, depth = 0): unknown {
+  if (typeof value !== 'object' || value === null) return value;
+
+  const error = value as Record<string, unknown> & { message?: unknown; stack?: unknown };
+  const parserType = typeof error['type'] === 'string' ? error['type'] : null;
+  const fromParser = parserType !== null && ('body' in error || error['expose'] === true);
+  const kind =
+    value instanceof Error
+      ? value.constructor.name
+      : typeof error['name'] === 'string'
+        ? error['name']
+        : 'Object';
+
+  const safe: Record<string, unknown> = { type: kind };
+  if (fromParser) {
+    safe['parser'] = parserType;
+  } else {
+    if (typeof error.message === 'string') safe['message'] = error.message;
+    if (typeof error.stack === 'string') safe['stack'] = error.stack;
+  }
+  for (const field of ERROR_FIELDS) {
+    const kept = error[field];
+    if (typeof kept === 'string' || typeof kept === 'number') safe[field] = kept;
+  }
+  if (depth < CAUSE_DEPTH && error['cause'] !== undefined) {
+    safe['cause'] = safeError(error['cause'], depth + 1);
+  }
+  return safe;
+}
+
+/**
+ * Every call site logs a failure as `{ err }`; this is the one place what that
+ * writes is decided. Exported so a test can build a logger the same way.
+ */
+export const LOG_SERIALIZERS = { err: (value: unknown): unknown => safeError(value) } as const;
+
+/**
  * The root logger.
  *
  * Pretty output is deliberately not configured: it needs another dependency,
@@ -74,6 +151,7 @@ const REDACTED_PATHS = [
 export const logger: Logger = pino({
   level: isTest() ? 'silent' : env.LOG_LEVEL,
   redact: { paths: REDACTED_PATHS, censor: '[redacted]' },
+  serializers: LOG_SERIALIZERS,
   base: { service: 'api' },
   formatters: {
     level: (label) => ({ level: label }),

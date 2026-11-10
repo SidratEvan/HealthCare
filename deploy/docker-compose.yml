@@ -178,6 +178,9 @@ services:
       APP_ORIGIN: ${APP_ORIGIN}
       CONSOLE_ORIGIN: ${CONSOLE_ORIGIN}
       API_ORIGIN: ${API_ORIGIN}
+      # Where staff may sign in from (deploy/.env, DEPLOY.md S2). Empty means
+      # everywhere; the Caddyfile always receives a list.
+      STAFF_NETWORKS: ${STAFF_NETWORKS:-0.0.0.0/0 ::/0}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

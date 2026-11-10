@@ -7,7 +7,80 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Latest work — released to `main`, and a security check (7 November 2026)
+## Latest work — full security check before real patients (7 November 2026, second pass)
+
+Owner's question: is it safe to start MARKS with real patient data, against
+bugs and break-ins. Record: [docs/audit/security-check-2026-11-07.md](audit/security-check-2026-11-07.md).
+**Verdict: yes for the software**, once the fix below is released and the
+S8 dry run is done on MARKS's server; the rest is how the server and the
+accounts are run.
+
+- **Method.** All access-deciding code read (194 routes, auth, RLS, records,
+  files, socket, both apps, deploy). Then 84 break-in attempts against the
+  API built and run as on MARKS's server (`NODE_ENV=production`,
+  `DEMO_MODE=false`, payments off, the limited role) on a scratch database
+  `healthcare_probe` (local Docker, demo seed). None got in. The probe script
+  is not in the repo (scratchpad of that session); most of it duplicates the
+  auth-matrix and tenancy suites.
+- **Found and fixed: `fix/log-request-bodies` (`64d7d01`).** A body that
+  would not parse was logged whole at error level (body-parser's `err.body`,
+  and V8 quotes the text in the message): a cut-off sign-in logged the
+  password, a cut-off registration the patient's name and phone. Postgres
+  `detail` (row values) was logged too. Now one `err` serializer with an
+  allowlist (`config/logger.ts` `safeError`), and every body-parser 4xx is a
+  refusal logged without the error (`middleware/error.ts`; an unsupported
+  charset or aborted body used to be a 500). Gate: `pnpm verify`.
+- **Docs: `chore/marks-security-docs`.** `DEPLOY.md` S8 no longer names
+  `fb1d1d8` (it has no `setup.sh`, no tenant isolation, none of the fixes
+  since): the pilot installs the released commit STATUS names, and S8's
+  "what the pilot is" matches the owner's decisions of 6 November.
+  `MARKS_START_HERE.md`: the slip is built (it said "not built yet"); new
+  §8 *Keeping it safe* (SSH keys only, updates on, lock the PC, sign out,
+  doctors turn on two-step, switch off a leaver's account).
+- Both merged into `mvp` as `4de85cb` and pushed. The merge was made on a
+  detached `origin/mvp` in this checkout and pushed as `HEAD:mvp`, because
+  local `mvp` is checked out in `D:\Projects\HealthCare-site-cinematic` and
+  the session's safety system refused a merge there. **That worktree's local
+  `mvp` is behind `origin/mvp`**: `git pull --ff-only` there before using it.
+- **Added after the check (owner, 7 November: "dont stop ... i dont want any
+  complaint later"), stacked in this order on `4de85cb`:**
+  - `chore/dev-deps-advisories` (`cbe7e57`): the test tools' seventeen
+    advisories closed (vitest ~5.0.4 → 5.0.5, jsdom ^30.1.3, overrides vite
+    8.3.5 and undici 8.12.3, each out two weeks or more). `pnpm audit`: one
+    left, moderate, `minimatch` under eslint; its fix is minimatch 11, too new
+    and not accepted by eslint 10 (`pnpm-workspace.yaml`).
+  - `chore/staff-networks` (`9980ab3`): optional `STAFF_NETWORKS` in
+    `deploy/.env`; outside it Caddy does not open the console and refuses
+    `/api/v1/staff…`. Default everywhere. Tested on `caddy:2` (fourteen
+    disguised paths refused); `deployment.test.ts` keeps the rule in the
+    files. `DEPLOY.md` S2, `MARKS_START_HERE.md` §8 (also: Windows locks each
+    PC after five idle minutes), `setup.sh` prints it as advised.
+  - `fix/backup-file-mode` (`a1f4d24`): `umask 077` in `backup.sh`; every
+    dump was world-readable on the server. A real backup in the postgis image
+    leaves every file `-rw-------`.
+- **Not changed, for the owner** (record §6): two-step *required* for doctors,
+  and an idle sign-out inside the console, are product decisions
+  (`FR-SEC-10`); for MARKS, `STAFF_NETWORKS`, the doctors' own two-step and
+  Windows' screen lock cover both. `CLAUDE.md` §4.4 still calls `fb1d1d8` the
+  reception-pilot candidate; that line is the owner's to update.
+- **Gate on `a1f4d24` (7 and 10 November):** `pnpm verify` 8182/8182,
+  `pnpm build`, `test:e2e` 347/348, `test:e2e:built` 3/3, `test:e2e:prod`
+  85/85; both two-device canaries green. The one red case,
+  `language-switch.spec.ts:114`, met a blank patient page while the dev
+  server did a full reload mid-test (trace: `next dev` HMR reconnect, every
+  API call 200); alone, `--repeat-each=3`, 18/18. The session ended between
+  `test:e2e` and the last two suites; on 10 November Docker Desktop was not
+  running after a restart (`docker start healthcare-db` after starting it).
+- **On `mvp` and pushed (10 November). `main` and `demo` wait for the
+  owner's push**: the session's safety system refuses a push to `main` as a
+  production deploy (it redeploys Render and Vercel). The release merge is
+  made locally as branch `release/security-2026-11-10` (tree = `mvp`); to
+  release: `git push origin release/security-2026-11-10:main` and
+  `git push origin release/security-2026-11-10:demo` (both fast-forward from
+  `b9e1ed8`). No migration: Supabase stays at 0063. Until `main` moves, the
+  pilot installs nothing older than that commit (`DEPLOY.md` S8).
+
+## Previous work — released to `main`, and a security check (7 November 2026)
 
 **Owner, 6 November:** full permission to merge, push and release without
 asking. `feat/marks-pilot` is merged into `mvp` as **`f18c370`** and pushed

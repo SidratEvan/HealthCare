@@ -599,6 +599,7 @@ Fill in `deploy/.env`:
 | Value | What to put |
 |---|---|
 | `APP_ORIGIN`, `CONSOLE_ORIGIN`, `API_ORIGIN` | The three names, as `https://…` |
+| `STAFF_NETWORKS` | Where staff may sign in from: the hospital's public address(es), space-separated (`203.0.113.10/32 198.51.100.0/28`). Outside them the console does not open and Caddy refuses every `/api/v1/staff…` route with `AUTH_FORBIDDEN_SCOPE`, so nobody elsewhere can guess a password or lock an account; patients' pages and the rest of the API are untouched. **Empty: from anywhere.** Set it after the platform administrator has approved the hospital (`S3`), or include their address, and check by signing in from a counter: if every sign-in is refused, the server is seeing another address (a proxy in front, or Docker without iptables), and the value goes back to empty. Applied with `docker compose … up -d web` |
 | `POSTGRES_PASSWORD` | A long random password (the command is in the file). This is the **owner**: it runs the migrations and the backups and serves no request |
 | `API_DB_USER`, `API_DB_PASSWORD` | The role the **API** connects as, and a second, different password from the same command. It can read and write rows and nothing else (`S6`). Created on the first start |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `GUEST_LINK_SECRET`, `TOTP_ENCRYPTION_KEY` | Four **different** random values of 64 hex characters. The last encrypts every administrator's two-step verification (pilot step 28): a restored database needs the same value, so keep it with the other secrets |
@@ -1034,37 +1035,38 @@ before Docker sees them. A Linux server needs nothing.
 | A patient cannot find the hospital | Not live yet, or no doctor's BMDC number verified (`S3`) |
 | Every administrator's two-step code is refused after a restore or a move | `TOTP_ENCRYPTION_KEY` is not the value the database was written with (the API log says the secret does not open). Put the old value back; failing that, `pnpm staff:reset-2fa` each administrator (`S3`) |
 
-## S8. The reception pilot: which code, and the dry run
+## S8. The pilot: which code, and the dry run
 
-**The code.** The reception pilot is deployed from one exact commit, and the
-dry run and any first deployment use that same commit (owner's decision,
-2026-10-05):
-
-```
-fb1d1d816c8204f68fe1c0c95666baf68b0dbb76
-```
+**The code.** The pilot is deployed from one exact commit of `main`, the
+release `docs/STATUS.md` names under *Latest work* as passing the whole gate
+(`pnpm verify`, `pnpm build`, `test:e2e`, `test:e2e:built`,
+`test:e2e:prod`). The dry run and the first deployment use that same commit,
+and the person who installs it writes the hash down:
 
 ```bash
 git fetch origin
-git checkout fb1d1d816c8204f68fe1c0c95666baf68b0dbb76
-git rev-parse HEAD        # must print the line above, and nothing else
+git checkout <the released commit named in STATUS>
+git rev-parse HEAD        # must print that hash, and nothing else
 ```
 
-Not `main`: `main` is the demonstration's release of 27 September and has
-none of the pilot's work on it, and it is not moved for this. That commit
-passed the whole gate here and all three CI jobs, the reception pilot's own
-path under the production configuration among them
-(`e2e/production/reception-pilot.prod.spec.ts`). If the dry run finds a real
-blocker, only that is fixed, on a small branch, the gate is run again, and
-the new commit replaces the one above, here, before anything is redeployed.
+Never an older commit. Until 7 November this section named `fb1d1d8`
+(5 October, the reception-only candidate): it has no `deploy/setup.sh`, no
+`MARKS_START_HERE.md`, no tenant isolation in the database, and none of the
+security fixes since, among them those of 7 November (`docs/audit/`
+`security-check-2026-11-07.md`). If the dry run finds a real blocker, only
+that is fixed, on a small branch, the gate is run again and released, and
+the new commit is the one installed.
 
-**What the pilot is.** One hospital on its own server and database, one
-department, one to three chambers, reception only: staff sign-in,
-registration at the counter and walk-ins, doctor arrived, call next, done,
-late, absent, bring back, pause and resume, undo, end chamber, and the four
-counters on the console. Pay at the hospital. Outside it for now: the
-doctor's screen, the ward board, the ER console, the lab, the pharmacy, the
-patient app and live tracking, SMS, online payment.
+**What the pilot is** (owner, 6 November; `docs/MARKS_START_HERE.md` §1).
+One hospital on its own server and database: staff sign-in; reception
+(registration at the counter, walk-ins, the printed token slip, and the
+queue: arrived, call next, done, late, absent, bring back, pause, resume,
+undo, end); the doctor's screen, with hospital-wide record access that MARKS
+confirms in writing and every opening audited; administration and its
+reports; beds and emergency where the hospital switches them on. Pay at the
+hospital. Outside it for now: the laboratory (switched off by `setup.sh`
+until MARKS's price list is loaded), SMS and therefore online booking and
+patient sign-in, and online payment.
 
 **The dry run**, on the hospital's own hardware and network, before any real
 patient. Each step either passes or is written down as what happened.

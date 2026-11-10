@@ -3,6 +3,13 @@
 # Each origin in deploy/.env is a site here. Given as https://… (or a bare
 # name) Caddy obtains and renews its certificate itself; given as http://… it
 # is served plainly, for trying the stack on a machine with no public name.
+#
+# STAFF_NETWORKS (deploy/.env, DEPLOY.md S2) is where staff may sign in from.
+# docker-compose.yml always passes a list: the hospital's addresses when they
+# are set, everywhere (0.0.0.0/0 ::/0) when they are not. Outside it the staff
+# console does not open and the API refuses every staff sign-in route, so
+# nobody elsewhere can guess a password or lock an account. Patients' pages and
+# the rest of the API are not affected.
 
 {$APP_ORIGIN} {
 	encode gzip
@@ -11,13 +18,31 @@
 
 {$CONSOLE_ORIGIN} {
 	encode gzip
-	reverse_proxy console:3100
+	@outside_staff_networks not remote_ip {$STAFF_NETWORKS}
+	handle @outside_staff_networks {
+		header Content-Type "text/plain; charset=utf-8"
+		respond "এই কনসোল শুধু হাসপাতালের নেটওয়ার্ক থেকে খোলে।
+This console opens only from the hospital's network." 403
+	}
+	handle {
+		reverse_proxy console:3100
+	}
 }
 
 {$API_ORIGIN} {
 	encode gzip
-	# The realtime socket upgrades on this same address (BACKEND.md §6).
-	reverse_proxy api:4000
+	@staff_signin_outside {
+		path /api/v1/staff /api/v1/staff/*
+		not remote_ip {$STAFF_NETWORKS}
+	}
+	handle @staff_signin_outside {
+		header Content-Type "application/json; charset=utf-8"
+		respond `{"ok":false,"error":{"code":"AUTH_FORBIDDEN_SCOPE","message":"Staff sign-in is open only from the hospital's network.","details":{"reason":"outside_staff_networks"}}}` 403
+	}
+	handle {
+		# The realtime socket upgrades on this same address (BACKEND.md §6).
+		reverse_proxy api:4000
+	}
 }
 
 # A hospital's portal is the patient app at another name (FR-BRD-07, plan C2):
