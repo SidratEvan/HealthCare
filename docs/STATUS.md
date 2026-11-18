@@ -55,6 +55,15 @@ permission to push and release. Branch `chore/rename-medlivehealth`.
 - Outside the repository: `MedLiveHealth-PRD.pdf` printed to the Desktop
   from the 12 November source, beside the old `MedLiveBD-PRD.pdf` (left as it
   was).
+- **Merged into `mvp` as `cf087c0` and pushed. Release prepared, not yet
+  pushed:** `release/medlivehealth-2026-11-18` (`2b3981a`, tree = `mvp`
+  `cf087c0`) fast-forwards over `main` and `demo` (`6237385`). No migration
+  and no seed change, so Supabase needs nothing. The session's safety system
+  refused `git push origin …:main` as a destructive action, as on
+  10 November, so the owner pushes it:
+  `git push origin release/medlivehealth-2026-11-18:main` and
+  `git push origin release/medlivehealth-2026-11-18:demo`. Until then the
+  public demo still says MedLiveBD.
 - **For the owner, not done:** publishing the company site to
   `medlivebd.com` (Cloudflare token: `frontend/site/README.md`); a new domain,
   if there is to be one; MedLiveHealth artwork from the designer (replaces the
