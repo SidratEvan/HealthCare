@@ -236,7 +236,7 @@ describe('production', () => {
       problemsOf({
         ...PROD,
         STORAGE_PROVIDER: 'local',
-        STORAGE_DIR: '/var/lib/medlivebd/files',
+        STORAGE_DIR: '/var/lib/medlivehealth/files',
         PAYMENT_PROVIDER: 'off',
         SUPABASE_URL: '',
         SUPABASE_SERVICE_ROLE_KEY: '',

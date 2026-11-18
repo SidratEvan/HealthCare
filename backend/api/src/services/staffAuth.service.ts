@@ -396,7 +396,7 @@ export async function startTwoFactorSetup(staffId: string): Promise<TwoFactorSet
       account: account.email,
       // What the app lists the entry under: the facility, so somebody with
       // accounts at two can tell them apart.
-      issuer: account.hospitalNameEn ?? 'MedLiveBD',
+      issuer: account.hospitalNameEn ?? 'MedLiveHealth',
     }),
   };
 }

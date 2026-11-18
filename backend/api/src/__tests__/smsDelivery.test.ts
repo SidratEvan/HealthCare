@@ -84,7 +84,7 @@ function configured(overrides: Partial<HttpSmsConfig> = {}): HttpSmsAdapter {
   return new HttpSmsAdapter({
     url: aggregatorUrl,
     apiKey: 'test-only-api-key',
-    senderId: 'MedLiveBD',
+    senderId: 'MedLiveHealth',
     receiptSecret: SECRET,
     timeoutMs: 2_000,
     ...overrides,
@@ -215,7 +215,7 @@ describe('a message leaves through the aggregator (SMS_PROVIDER=http)', () => {
     expect(taken).toHaveLength(sent.length);
     for (const message of taken) {
       expect(message.authorization).toBe('Bearer test-only-api-key');
-      expect(message.body['senderId']).toBe('MedLiveBD');
+      expect(message.body['senderId']).toBe('MedLiveHealth');
       expect(message.body['to']).toBe('+8801712345678');
       expect(String(message.body['text'])).toContain('৩০');
       // Ours, so an answer and a receipt can be matched to the row.

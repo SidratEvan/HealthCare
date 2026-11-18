@@ -12,12 +12,12 @@
 # with a copy of the server's deploy/.env (the web apps bake API_ORIGIN and
 # PLATFORM_DOMAIN in; nothing secret is built into any image):
 #
-#   sh deploy/images.sh build deploy/.env medlivebd-images.tar.gz
+#   sh deploy/images.sh build deploy/.env medlivehealth-images.tar.gz
 #
 # writes the archive, a .sha256 beside it, and a .commit naming the commit.
 # Copy all three to the server (scp), then on the server, at the same commit:
 #
-#   sh deploy/images.sh install medlivebd-images.tar.gz deploy/.env
+#   sh deploy/images.sh install medlivehealth-images.tar.gz deploy/.env
 #
 # which checks the archive, refuses it if it was built from another commit
 # than the one checked out here (the compose file and the backup scripts come
@@ -27,7 +27,7 @@
 set -eu
 
 COMPOSE_FILE="$(dirname "$0")/docker-compose.yml"
-IMAGES="medlivebd-api medlivebd-console medlivebd-patient"
+IMAGES="medlivehealth-api medlivehealth-console medlivehealth-patient"
 
 usage() {
   echo "usage: images.sh build <env-file> <out.tar.gz>" >&2

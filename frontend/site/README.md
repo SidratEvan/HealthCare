@@ -1,4 +1,4 @@
-# frontend/site — MedLiveBD company website
+# frontend/site — MedLiveHealth company website
 
 The company presentation for **medlivebd.com**: the founder-approved final design
 of 12 October 2026 (`docs/design/site-final/README.md`), released from `mvp`

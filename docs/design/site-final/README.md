@@ -18,7 +18,7 @@ The homepage has seven scenes:
 1. **Hero:** Codex's doctors photograph, the owner's headline, and two large
    audience doors on the first screen at every size.
 2. **The idea:** the statement lights word by word with scroll; a signal leaves
-   *Hospitals*, passes the MedLiveBD mark and reaches *Patients*. It tells the
+   *Hospitals*, passes the MedLiveHealth mark and reaches *Patients*. It tells the
    live queue without a screenshot.
 3. **For Hospitals:** the case, then the team photograph as a full-width band
    (all three doctors in frame), then four capabilities.
@@ -28,7 +28,7 @@ The homepage has seven scenes:
    scene holds (sticky, never hijacked) while the view pulls back from Dhaka,
    the outline traces and lines reach the eight division headquarters. It is
    labelled a vision, not coverage.
-6. **The people behind MedLiveBD:** names, roles and focus as type; no invented
+6. **The people behind MedLiveHealth:** names, roles and focus as type; no invented
    faces.
 7. **Closing:** Dhaka at blue hour, **Request a Demo**, support@medlivebd.com.
 

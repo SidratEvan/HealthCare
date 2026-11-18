@@ -61,9 +61,9 @@ await writeFile(
   join(output, 'preview.css'),
   styles.css + '\n' + foundationStyles + '\n' + fontFaces.join('\n'),
 );
-const logo = join(root, 'docs/design/brand/medlivebd-logo-light.png');
+const logo = join(root, 'docs/design/brand/medlivehealth-logo-light.png');
 const html =
-  '<!doctype html><html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MedLiveBD local design review</title><link rel="stylesheet" href="/preview.css"></head><body><div id="root"></div><script src="/preview.js"></script></body></html>';
+  '<!doctype html><html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MedLiveHealth local design review</title><link rel="stylesheet" href="/preview.css"></head><body><div id="root"></div><script src="/preview.js"></script></body></html>';
 const assets = new Map([
   ['/preview.js', [join(output, 'preview.js'), 'text/javascript']],
   ['/preview.css', [join(output, 'preview.css'), 'text/css']],

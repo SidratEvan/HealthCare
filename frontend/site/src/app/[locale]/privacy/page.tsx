@@ -23,7 +23,7 @@ export async function generateMetadata({
   return pageMetadata(
     locale,
     '/privacy',
-    `${t.privacyTitle} — MedLiveBD`,
+    `${t.privacyTitle} — MedLiveHealth`,
     t.privacySections[0]?.body ?? t.description,
   );
 }

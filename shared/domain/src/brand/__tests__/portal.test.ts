@@ -13,7 +13,7 @@ import {
   portalHostOf,
 } from '../portal.js';
 
-const DOMAIN = 'medlivebd.example';
+const DOMAIN = 'medlivehealth.example';
 
 describe('a host is the network’s, a hospital’s by its code, or somebody else’s', () => {
   it('the platform’s own address is the network', () => {

@@ -35,7 +35,7 @@ What was deliberately not used, and why:
   on the site.
 - **Rights beyond copyright:** Creative Commons licences cover copyright, not
   personality rights. The site states that the people shown are not
-  MedLiveBD staff, customers or patients and imply no endorsement. **Before
+  MedLiveHealth staff, customers or patients and imply no endorsement. **Before
   paid advertising** (as distinct from this informational site), replace the
   three photographs with recognisable faces (`nurses`, `lab`, `paddy`) with
   commissioned or model-released photography.

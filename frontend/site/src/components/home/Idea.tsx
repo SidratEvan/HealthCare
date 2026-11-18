@@ -36,8 +36,8 @@ function Word({
 /**
  * The page's signature moment (S-C-01): the one idea, lit word by word as the
  * reader arrives, then the connection it names — hospitals on one side,
- * patients on the other, MedLiveBD between. A signal leaves the hospital,
- * passes through MedLiveBD and reaches the patient: the live queue, told
+ * patients on the other, MedLiveHealth between. A signal leaves the hospital,
+ * passes through MedLiveHealth and reaches the patient: the live queue, told
  * without a screenshot. Tied to scroll and reversible; still and complete
  * without script or with reduced motion.
  */
@@ -75,7 +75,7 @@ export function Idea({ locale }: { readonly locale: Locale }): ReactNode {
         <div
           className="motif"
           role="img"
-          aria-label={`${t.hospitals} — MedLiveBD — ${t.patients}`}
+          aria-label={`${t.hospitals} — MedLiveHealth — ${t.patients}`}
           data-motion={enabled}
         >
           <div className="motif-end motif-start">
@@ -87,7 +87,7 @@ export function Idea({ locale }: { readonly locale: Locale }): ReactNode {
               <m.span className="motif-ink" data-scrub="" style={enabled ? { scaleX: left } : {}} />
             </span>
             <m.span className="motif-hub" data-scrub="" style={enabled ? { scale: hub } : {}}>
-              <img src="/brand/medlivebd-mark.webp" alt="" width="222" height="128" />
+              <img src="/brand/medlivehealth-mark.webp" alt="" width="222" height="128" />
             </m.span>
             <span className="motif-rail motif-rail-right">
               <m.span

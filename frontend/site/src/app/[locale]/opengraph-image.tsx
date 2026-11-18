@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 
 /** The share card for a link to either edition (S-C-01). Latin only: no font is fetched. */
-export const alt = 'MedLiveBD — healthcare technology for Bangladesh';
+export const alt = 'MedLiveHealth — healthcare technology for Bangladesh';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -33,7 +33,7 @@ export default function OpengraphImage(): ImageResponse {
       }}
     >
       <div style={{ display: 'flex', fontSize: 36, fontWeight: 700, letterSpacing: -0.5 }}>
-        MedLiveBD
+        MedLiveHealth
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', fontSize: 68, fontWeight: 700, lineHeight: 1.08 }}>

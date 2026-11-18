@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The hospital's logo and name, with Powered by MedLiveBD beneath, at the head
+ * The hospital's logo and name, with Powered by MedLiveHealth beneath, at the head
  * of a console that has no rail: the administrator's dashboard, settings and
  * the doctor's console (plan K4; `PRD.md` `FR-BRD-12`). The rail draws the
  * same three things itself.

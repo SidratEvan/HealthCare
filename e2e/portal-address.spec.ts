@@ -120,7 +120,7 @@ test.describe('under the platform’s domain, a hospital’s code is its portal'
 
   test('the network’s own address is still the network', async ({ page }) => {
     await page.goto(NETWORK);
-    await expect(page.getByTestId('app-name')).toHaveText('MedLiveBD');
+    await expect(page.getByTestId('app-name')).toHaveText('MedLiveHealth');
     await expect(page.locator('html')).not.toHaveAttribute('data-scope', /.+/);
     expect(await brand600(page)).toBe(PLATFORM_BRAND);
   });

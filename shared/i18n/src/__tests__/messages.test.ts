@@ -47,12 +47,12 @@ describe('every key carries both languages', () => {
  */
 // Written the same in both languages by the owner's word: the product's name
 // (`CLAUDE.md` §1.2), and the line beneath a hospital's mark in its console,
-// "Powered by MedLiveBD" (`FR-BRD-12`, decision 9 of 8 October).
+// "Powered by MedLiveHealth" (`FR-BRD-12`, decision 9 of 8 October).
 const NAMES = new Set(['patient.appName', 'console.consolePoweredBy']);
 
 describe('the Bangla is written, not transliterated', () => {
   it('writes the product’s name the way the owner gave it, in both languages', () => {
-    expect(PATIENT.appName).toEqual({ bn: 'MedLiveBD', en: 'MedLiveBD' });
+    expect(PATIENT.appName).toEqual({ bn: 'MedLiveHealth', en: 'MedLiveHealth' });
   });
 
   it.each(entries.filter(([key]) => !NAMES.has(key)))('%s is in Bengali script', (key, message) => {

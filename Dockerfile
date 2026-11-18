@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# MedLiveBD — every service from one image definition (pilot step 26,
+# MedLiveHealth — every service from one image definition (pilot step 26,
 # `FR-SEC-07`: a hospital's own server in Bangladesh). `deploy/docker-compose.yml`
 # builds three targets from it:
 #

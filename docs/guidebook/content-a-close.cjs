@@ -6,7 +6,7 @@ module.exports = [
   {
     type: 'chapter',
     num: 'A16',
-    title: 'What MedLiveBD will become',
+    title: 'What MedLiveHealth will become',
     lead: 'One platform, never software rewritten for each hospital. The same product grows along three lines: more hospitals in the network, each hospital\'s own branded app, and connections to the services around care.',
     html: `
 <h3>1 · A network of hospitals</h3>
@@ -19,7 +19,7 @@ module.exports = [
   },
   {
     type: 'text',
-    crumb: 'A16 · What MedLiveBD will become',
+    crumb: 'A16 · What MedLiveHealth will become',
     title: 'The road ahead',
     html: `${T(
       [
@@ -32,13 +32,13 @@ module.exports = [
       ['Stage', 'What it brings'],
     )}
 <div class="box"><b>What stays the same at every stage.</b> Live figures with their age; honest “not known”; Bangla first; emergency never behind a login; the patient owns the record; one platform for every hospital; data about patients in Bangladesh.</div>
-<div class="box teal"><b>What MedLiveBD is not.</b> Not an ERP: no payroll, HR, general accounting, inventory or insurance administration. Not a diagnostic tool: no AI diagnosis, no generated prescriptions, no treatment advice. The only AI in the product suggests how the columns of a hospital's own spreadsheet match the import template, from the column names only; a person confirms, and no patient row is ever sent to it.</div>`,
+<div class="box teal"><b>What MedLiveHealth is not.</b> Not an ERP: no payroll, HR, general accounting, inventory or insurance administration. Not a diagnostic tool: no AI diagnosis, no generated prescriptions, no treatment advice. The only AI in the product suggests how the columns of a hospital's own spreadsheet match the import template, from the column names only; a person confirms, and no patient row is ever sent to it.</div>`,
   },
   {
     type: 'chapter',
     num: 'A17',
     title: 'Privacy and safety, in plain words',
-    lead: 'A hospital trusts MedLiveBD with its patients. This is how that trust is kept — the same rules described for engineers in Part B, without the technical words.',
+    lead: 'A hospital trusts MedLiveHealth with its patients. This is how that trust is kept — the same rules described for engineers in Part B, without the technical words.',
     html: `
 <div class="cards">
 <div class="card"><h3>Each hospital is private</h3>Hospital A can never see Hospital B's patients, bookings or records. This is enforced twice: by the software and again by the database itself.</div>

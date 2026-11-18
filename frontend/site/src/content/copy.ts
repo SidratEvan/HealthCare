@@ -2,14 +2,14 @@
  * Company-site copy: GR-06; truthful S-C-01/02/04/05, FR-SEC-08.
  *
  * The site sells the idea, not the implementation (owner, 12 October 2026):
- * what MedLiveBD is, who it serves, where each audience goes next. Detailed
+ * what MedLiveHealth is, who it serves, where each audience goes next. Detailed
  * workflows belong in a private demonstration. No customers, partners,
  * figures, testimonials or certifications; the map is a vision, never
  * coverage; the patient app is always named as a demonstration.
  */
 export const contactEmail = 'support@medlivebd.com';
 export const demoHref = `mailto:${contactEmail}?subject=${encodeURIComponent(
-  'MedLiveBD — Hospital demonstration request',
+  'MedLiveHealth — Hospital demonstration request',
 )}&body=${encodeURIComponent('Hospital or clinic:\nCity:\nYour name and role:\nPhone:\n\n')}`;
 /**
  * The patient web app (demo, `DEMO_MODE=true`, docs/STATUS.md). Owner, 12 October
@@ -29,9 +29,9 @@ export type Locale = 'bn' | 'en';
 type Point = readonly [title: string, body: string];
 
 const en = {
-  title: 'MedLiveBD — A Connected Healthcare Ecosystem for a Healthier Bangladesh',
+  title: 'MedLiveHealth — A Connected Healthcare Ecosystem for a Healthier Bangladesh',
   description:
-    'MedLiveBD connects hospitals, healthcare professionals and patients through technology designed for Bangladesh.',
+    'MedLiveHealth connects hospitals, healthcare professionals and patients through technology designed for Bangladesh.',
   skip: 'Skip to content',
   menu: 'Menu',
   close: 'Close menu',
@@ -64,7 +64,7 @@ const en = {
   idea: {
     label: 'One connected ecosystem',
     statement: 'Better connected hospitals. A clearer journey for patients.',
-    body: 'When everyone inside a hospital works from the same live picture of the day, the people waiting for care can see it too. MedLiveBD connects both sides.',
+    body: 'When everyone inside a hospital works from the same live picture of the day, the people waiting for care can see it too. MedLiveHealth connects both sides.',
     hospitals: 'Hospitals',
     hospitalsParts: 'Reception · Doctors · Beds · Emergency · Laboratory',
     patients: 'Patients',
@@ -123,17 +123,17 @@ const en = {
 
   closing: {
     title: 'Let’s build more connected care, together.',
-    body: 'Discover how MedLiveBD can support your hospital’s next step.',
+    body: 'Discover how MedLiveHealth can support your hospital’s next step.',
     alt: 'Illustrative scene: a Dhaka-inspired neighbourhood at blue hour, warm lights among the rooftops.',
   },
 
   hospitalsPage: {
-    title: 'For Hospitals — MedLiveBD',
+    title: 'For Hospitals — MedLiveHealth',
     description:
-      'MedLiveBD helps hospitals in Bangladesh work as one connected team: live queues, beds and emergency visibility, and clear information for staff.',
+      'MedLiveHealth helps hospitals in Bangladesh work as one connected team: live queues, beds and emergency visibility, and clear information for staff.',
     label: 'For Hospitals',
     heading: 'Help your hospital work as one connected team.',
-    lead: 'MedLiveBD brings reception, doctors, wards, emergency and the laboratory onto one shared, live picture of the day — and keeps the patients who are waiting informed.',
+    lead: 'MedLiveHealth brings reception, doctors, wards, emergency and the laboratory onto one shared, live picture of the day — and keeps the patients who are waiting informed.',
     alt: 'Illustrative scene: Bangladeshi nursing, medical and administrative staff coordinating at a hospital workstation, with wards beyond.',
     capabilitiesTitle: 'What changes for your hospital',
     capabilities: [
@@ -167,23 +167,26 @@ const en = {
         'Honest information',
         'Live figures show how recent they are. Missing data is never guessed.',
       ],
-      ['People decide care', 'MedLiveBD supports coordination. It makes no clinical decisions.'],
+      [
+        'People decide care',
+        'MedLiveHealth supports coordination. It makes no clinical decisions.',
+      ],
     ] as readonly Point[],
     stepsTitle: 'How we begin',
     steps: [
       ['A conversation', 'Tell us about your hospital and what you would like to improve.'],
       [
         'A private demonstration',
-        'See MedLiveBD on synthetic data, shaped around your departments.',
+        'See MedLiveHealth on synthetic data, shaped around your departments.',
       ],
       ['A careful start', 'Set up with your team and begin alongside how you work today.'],
     ] as readonly Point[],
-    ctaTitle: 'See MedLiveBD for your hospital.',
+    ctaTitle: 'See MedLiveHealth for your hospital.',
     ctaBody: 'Demonstrations use synthetic data — never real patient information.',
   },
 
   aboutPage: {
-    title: 'About Us — MedLiveBD',
+    title: 'About Us — MedLiveHealth',
     label: 'About us',
   },
 
@@ -204,7 +207,7 @@ const en = {
     'Original AI-generated campaign scenes and openly licensed geographic data. All assets are served from this website.',
   assetsTitle: 'Original campaign imagery',
   assetsIntro:
-    'These scenes were generated with OpenAI image generation for this website on 12 October 2026. The people and settings are synthetic illustrations, not photographs of MedLiveBD staff, customers or hospitals. They do not imply endorsement or actual coverage.',
+    'These scenes were generated with OpenAI image generation for this website on 12 October 2026. The people and settings are synthetic illustrations, not photographs of MedLiveHealth staff, customers or hospitals. They do not imply endorsement or actual coverage.',
   assetNames: [
     'Connected clinicians',
     'Hospital teamwork',
@@ -214,14 +217,14 @@ const en = {
   ],
   creditsMap: 'Map data',
   creditsSource: 'Source',
-  back: 'Back to MedLiveBD',
+  back: 'Back to MedLiveHealth',
 
   privacyTitle: 'Privacy notice',
   privacyUpdated: 'Last updated 12 October 2026',
   privacySections: [
     {
       heading: 'This website',
-      body: 'This is the company website of MedLiveBD. It has no accounts, forms, cookies, analytics or advertising trackers, and it does not ask for your personal information. Its photographs, fonts and map are served from this site itself.',
+      body: 'This is the company website of MedLiveHealth. It has no accounts, forms, cookies, analytics or advertising trackers, and it does not ask for your personal information. Its photographs, fonts and map are served from this site itself.',
     },
     {
       heading: 'If you email us',
@@ -233,11 +236,11 @@ const en = {
     },
     {
       heading: 'Demonstrations',
-      body: 'MedLiveBD demonstrations use synthetic data. The patient app linked from this site is a demonstration with sample data: please do not enter real personal information in it. The healthcare and city scenes on this website are AI-generated illustrations and do not depict actual MedLiveBD staff, patients or customers.',
+      body: 'MedLiveHealth demonstrations use synthetic data. The patient app linked from this site is a demonstration with sample data: please do not enter real personal information in it. The healthcare and city scenes on this website are AI-generated illustrations and do not depict actual MedLiveHealth staff, patients or customers.',
     },
     {
-      heading: 'The MedLiveBD platform',
-      body: 'This notice covers this website only. Patient and hospital information handled by the MedLiveBD platform is governed by the terms agreed with each hospital and the notices shown in the platform itself.',
+      heading: 'The MedLiveHealth platform',
+      body: 'This notice covers this website only. Patient and hospital information handled by the MedLiveHealth platform is governed by the terms agreed with each hospital and the notices shown in the platform itself.',
     },
     {
       heading: 'Questions',
@@ -249,9 +252,9 @@ const en = {
 export type Copy = typeof en;
 
 const bn: Copy = {
-  title: 'MedLiveBD — সুস্থ বাংলাদেশের জন্য একটি সংযুক্ত স্বাস্থ্যসেবা ইকোসিস্টেম',
+  title: 'MedLiveHealth — সুস্থ বাংলাদেশের জন্য একটি সংযুক্ত স্বাস্থ্যসেবা ইকোসিস্টেম',
   description:
-    'বাংলাদেশের জন্য তৈরি প্রযুক্তিতে MedLiveBD হাসপাতাল, স্বাস্থ্যসেবা পেশাজীবী ও রোগীদের যুক্ত করে।',
+    'বাংলাদেশের জন্য তৈরি প্রযুক্তিতে MedLiveHealth হাসপাতাল, স্বাস্থ্যসেবা পেশাজীবী ও রোগীদের যুক্ত করে।',
   skip: 'মূল বিষয়বস্তুতে যান',
   menu: 'মেনু',
   close: 'মেনু বন্ধ করুন',
@@ -283,7 +286,7 @@ const bn: Copy = {
   idea: {
     label: 'একটি সংযুক্ত ইকোসিস্টেম',
     statement: 'আরও সংযুক্ত হাসপাতাল। রোগীর জন্য আরও স্পষ্ট পথ।',
-    body: 'হাসপাতালের ভেতরের সবাই যখন দিনের একই লাইভ চিত্র দেখে কাজ করেন, সেবার অপেক্ষায় থাকা মানুষও তখন তা দেখতে পান। MedLiveBD দুই পক্ষকেই যুক্ত করে।',
+    body: 'হাসপাতালের ভেতরের সবাই যখন দিনের একই লাইভ চিত্র দেখে কাজ করেন, সেবার অপেক্ষায় থাকা মানুষও তখন তা দেখতে পান। MedLiveHealth দুই পক্ষকেই যুক্ত করে।',
     hospitals: 'হাসপাতাল',
     hospitalsParts: 'রিসেপশন · চিকিৎসক · শয্যা · জরুরি বিভাগ · ল্যাব',
     patients: 'রোগী',
@@ -339,17 +342,17 @@ const bn: Copy = {
 
   closing: {
     title: 'আরও সংযুক্ত স্বাস্থ্যসেবা গড়ি, একসঙ্গে।',
-    body: 'আপনার হাসপাতালের পরবর্তী ধাপে MedLiveBD কীভাবে পাশে থাকতে পারে, জেনে নিন।',
+    body: 'আপনার হাসপাতালের পরবর্তী ধাপে MedLiveHealth কীভাবে পাশে থাকতে পারে, জেনে নিন।',
     alt: 'দৃষ্টান্তমূলক দৃশ্য: সন্ধ্যার নীল আলোয় ঢাকাকে ঘিরে একটি এলাকা, ছাদের সারিতে ঘরের উষ্ণ আলো।',
   },
 
   hospitalsPage: {
-    title: 'হাসপাতালের জন্য — MedLiveBD',
+    title: 'হাসপাতালের জন্য — MedLiveHealth',
     description:
-      'MedLiveBD বাংলাদেশের হাসপাতালকে একটি সংযুক্ত দল হিসেবে কাজ করতে সাহায্য করে: লাইভ কিউ, শয্যা ও জরুরি বিভাগের চিত্র, আর কর্মীদের জন্য স্পষ্ট তথ্য।',
+      'MedLiveHealth বাংলাদেশের হাসপাতালকে একটি সংযুক্ত দল হিসেবে কাজ করতে সাহায্য করে: লাইভ কিউ, শয্যা ও জরুরি বিভাগের চিত্র, আর কর্মীদের জন্য স্পষ্ট তথ্য।',
     label: 'হাসপাতালের জন্য',
     heading: 'আপনার হাসপাতাল চলুক একটি সংযুক্ত দল হিসেবে।',
-    lead: 'MedLiveBD রিসেপশন, চিকিৎসক, ওয়ার্ড, জরুরি বিভাগ ও ল্যাবকে দিনের একই লাইভ চিত্রে আনে — আর অপেক্ষায় থাকা রোগীদের রাখে অবগত।',
+    lead: 'MedLiveHealth রিসেপশন, চিকিৎসক, ওয়ার্ড, জরুরি বিভাগ ও ল্যাবকে দিনের একই লাইভ চিত্রে আনে — আর অপেক্ষায় থাকা রোগীদের রাখে অবগত।',
     alt: 'দৃষ্টান্তমূলক দৃশ্য: বাংলাদেশের একটি হাসপাতালের ওয়ার্কস্টেশনে নার্স, চিকিৎসক ও প্রশাসনিক কর্মী একসঙ্গে কাজ করছেন, পেছনে ওয়ার্ড দেখা যাচ্ছে।',
     capabilitiesTitle: 'আপনার হাসপাতালে যা বদলাবে',
     capabilities: [
@@ -377,20 +380,20 @@ const bn: Copy = {
       ['হাসপাতালভিত্তিক গোপনীয়তা', 'প্রতিটি হাসপাতালের তথ্য থাকে তার নিজস্ব কর্মক্ষেত্রে।'],
       ['আগে সম্মতি', 'রোগীর রেকর্ড অন্য হাসপাতালে যায় শুধু তাঁর সম্মতিতে।'],
       ['সৎ তথ্য', 'লাইভ সংখ্যা জানায় তা কতটা সাম্প্রতিক। না-থাকা তথ্য কখনো অনুমান করা হয় না।'],
-      ['সিদ্ধান্ত মানুষের', 'MedLiveBD সমন্বয়ে সহায়তা করে। কোনো চিকিৎসা-সিদ্ধান্ত নেয় না।'],
+      ['সিদ্ধান্ত মানুষের', 'MedLiveHealth সমন্বয়ে সহায়তা করে। কোনো চিকিৎসা-সিদ্ধান্ত নেয় না।'],
     ],
     stepsTitle: 'যেভাবে শুরু করি',
     steps: [
       ['একটি আলাপ', 'আপনার হাসপাতাল ও যা উন্নত করতে চান, সে সম্পর্কে আমাদের জানান।'],
-      ['একটি ব্যক্তিগত ডেমো', 'আপনার বিভাগগুলোর আদলে কৃত্রিম তথ্যে MedLiveBD দেখুন।'],
+      ['একটি ব্যক্তিগত ডেমো', 'আপনার বিভাগগুলোর আদলে কৃত্রিম তথ্যে MedLiveHealth দেখুন।'],
       ['একটি যত্নশীল শুরু', 'আপনার দলের সঙ্গে প্রস্তুতি, আর আজকের কাজের ধরনের পাশাপাশি শুরু।'],
     ],
-    ctaTitle: 'আপনার হাসপাতালের জন্য MedLiveBD দেখুন।',
+    ctaTitle: 'আপনার হাসপাতালের জন্য MedLiveHealth দেখুন।',
     ctaBody: 'ডেমোতে কৃত্রিম তথ্য ব্যবহার করা হয় — কখনো প্রকৃত রোগীর তথ্য নয়।',
   },
 
   aboutPage: {
-    title: 'আমাদের সম্পর্কে — MedLiveBD',
+    title: 'আমাদের সম্পর্কে — MedLiveHealth',
     label: 'আমাদের সম্পর্কে',
   },
 
@@ -411,7 +414,7 @@ const bn: Copy = {
     'এই সাইটের জন্য এআই দিয়ে তৈরি দৃশ্য ও উন্মুক্ত লাইসেন্সের ভৌগোলিক তথ্য। সব ফাইল এই ওয়েবসাইট থেকেই সরবরাহ করা হয়।',
   assetsTitle: 'এই সাইটের জন্য তৈরি ছবি',
   assetsIntro:
-    '২০২৬ সালের ১২ অক্টোবর OpenAI-এর ইমেজ জেনারেশন দিয়ে এই সাইটের জন্য দৃশ্যগুলো তৈরি করা হয়েছে। মানুষ ও পরিবেশগুলো কৃত্রিম দৃষ্টান্ত, MedLiveBD-এর প্রকৃত কর্মী, গ্রাহক বা হাসপাতালের ছবি নয়। এগুলো কোনো সমর্থন বা বর্তমান কভারেজ বোঝায় না।',
+    '২০২৬ সালের ১২ অক্টোবর OpenAI-এর ইমেজ জেনারেশন দিয়ে এই সাইটের জন্য দৃশ্যগুলো তৈরি করা হয়েছে। মানুষ ও পরিবেশগুলো কৃত্রিম দৃষ্টান্ত, MedLiveHealth-এর প্রকৃত কর্মী, গ্রাহক বা হাসপাতালের ছবি নয়। এগুলো কোনো সমর্থন বা বর্তমান কভারেজ বোঝায় না।',
   assetNames: [
     'চিকিৎসকদের সংযোগ',
     'হাসপাতালের দল',
@@ -421,14 +424,14 @@ const bn: Copy = {
   ],
   creditsMap: 'মানচিত্রের তথ্য',
   creditsSource: 'উৎস',
-  back: 'MedLiveBD-তে ফিরে যান',
+  back: 'MedLiveHealth-এ ফিরে যান',
 
   privacyTitle: 'গোপনীয়তা নীতি',
   privacyUpdated: 'সর্বশেষ হালনাগাদ ১২ অক্টোবর ২০২৬',
   privacySections: [
     {
       heading: 'এই ওয়েবসাইট',
-      body: 'এটি MedLiveBD-এর প্রাতিষ্ঠানিক ওয়েবসাইট। এখানে কোনো অ্যাকাউন্ট, ফর্ম, কুকি, অ্যানালিটিক্স বা বিজ্ঞাপনের ট্র্যাকার নেই, এবং আপনার ব্যক্তিগত তথ্য চাওয়া হয় না। এর ছবি, ফন্ট ও মানচিত্র এই সাইট থেকেই আসে।',
+      body: 'এটি MedLiveHealth-এর প্রাতিষ্ঠানিক ওয়েবসাইট। এখানে কোনো অ্যাকাউন্ট, ফর্ম, কুকি, অ্যানালিটিক্স বা বিজ্ঞাপনের ট্র্যাকার নেই, এবং আপনার ব্যক্তিগত তথ্য চাওয়া হয় না। এর ছবি, ফন্ট ও মানচিত্র এই সাইট থেকেই আসে।',
     },
     {
       heading: 'আপনি ইমেইল করলে',
@@ -440,11 +443,11 @@ const bn: Copy = {
     },
     {
       heading: 'ডেমো',
-      body: 'MedLiveBD-এর ডেমোতে কৃত্রিম তথ্য ব্যবহার করা হয়। এই সাইট থেকে যে পেশেন্ট অ্যাপ খোলে, সেটি নমুনা তথ্যে চলা একটি ডেমো: অনুগ্রহ করে সেখানে প্রকৃত ব্যক্তিগত তথ্য দেবেন না। এই সাইটের স্বাস্থ্যসেবা ও শহরের দৃশ্যগুলো এআই দিয়ে তৈরি দৃষ্টান্ত; এগুলো MedLiveBD-এর প্রকৃত কর্মী, রোগী বা গ্রাহককে দেখায় না।',
+      body: 'MedLiveHealth-এর ডেমোতে কৃত্রিম তথ্য ব্যবহার করা হয়। এই সাইট থেকে যে পেশেন্ট অ্যাপ খোলে, সেটি নমুনা তথ্যে চলা একটি ডেমো: অনুগ্রহ করে সেখানে প্রকৃত ব্যক্তিগত তথ্য দেবেন না। এই সাইটের স্বাস্থ্যসেবা ও শহরের দৃশ্যগুলো এআই দিয়ে তৈরি দৃষ্টান্ত; এগুলো MedLiveHealth-এর প্রকৃত কর্মী, রোগী বা গ্রাহককে দেখায় না।',
     },
     {
-      heading: 'MedLiveBD প্ল্যাটফর্ম',
-      body: 'এই নীতি শুধু এই ওয়েবসাইটের জন্য। MedLiveBD প্ল্যাটফর্মে রোগী ও হাসপাতালের তথ্য প্রতিটি হাসপাতালের সঙ্গে সম্মত শর্ত ও প্ল্যাটফর্মে দেখানো নোটিশ অনুযায়ী পরিচালিত হয়।',
+      heading: 'MedLiveHealth প্ল্যাটফর্ম',
+      body: 'এই নীতি শুধু এই ওয়েবসাইটের জন্য। MedLiveHealth প্ল্যাটফর্মে রোগী ও হাসপাতালের তথ্য প্রতিটি হাসপাতালের সঙ্গে সম্মত শর্ত ও প্ল্যাটফর্মে দেখানো নোটিশ অনুযায়ী পরিচালিত হয়।',
     },
     {
       heading: 'প্রশ্ন',

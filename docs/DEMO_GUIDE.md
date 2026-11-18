@@ -1,6 +1,6 @@
-# MedLiveBD — showing the public demo
+# MedLiveHealth — showing the public demo
 
-For whoever presents MedLiveBD to a hospital. About ten minutes end to end.
+For whoever presents MedLiveHealth to a hospital. About ten minutes end to end.
 Everything in the demo is synthetic: six demonstration hospitals, each named
 "(Demo)", forty doctors and two hundred made-up patients. No real person,
 hospital or availability is shown (`FR-DEM-07`, `FR-SEC-08`).
@@ -100,7 +100,7 @@ use `database/seeds/samples/hospital-export-patients.csv`).
 **11. Many hospitals, one platform.** Patient app at
 <https://healthcare-patient-zeta.vercel.app/?scope=PADMA> is Padma's own
 app: its name, its colours, its doctors only. `?scope=` with nothing after it
-returns to the MedLiveBD network. On the console picker, **প্ল্যাটফর্ম
+returns to the MedLiveHealth network. On the console picker, **প্ল্যাটফর্ম
 পরিচালনা → হাসপাতাল অনবোর্ডিং খুলুন** shows every hospital's workspace and how
 a new one is created, reviewed and taken live.
 

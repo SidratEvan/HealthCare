@@ -1,6 +1,6 @@
-# The MedLiveBD guidebook
+# The MedLiveHealth guidebook
 
-`MedLiveBD-Guidebook.pdf` is built from this folder: real screenshots of every
+`MedLiveHealth-Guidebook.pdf` is built from this folder: real screenshots of every
 screen, taken from the apps running on demonstration data, with numbered
 markers and arrows placed from each element's position, and the text of both
 parts (A for everyone, B for engineers).
@@ -47,7 +47,7 @@ build output and are not committed (`.gitignore`).
    ```
 
    It prints the page count, any marker whose element was not found
-   (`MISSING`), and writes `MedLiveBD-Guidebook.pdf` here.
+   (`MISSING`), and writes `MedLiveHealth-Guidebook.pdf` here.
 
 ## How it is put together
 

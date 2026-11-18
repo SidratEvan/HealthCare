@@ -31,26 +31,26 @@ const people = {
 
 const en = {
   label: 'Founders',
-  heading: 'The people behind MedLiveBD.',
+  heading: 'The people behind MedLiveHealth.',
   founders: [
     { ...people.sidrat, title: 'Managing Partner & CEO' },
     { ...people.mayesha, title: 'Partner & COO' },
   ] as readonly Founder[],
   email: 'Email',
   phone: 'Phone',
-  ctaTitle: 'Interested in working with MedLiveBD?',
+  ctaTitle: 'Interested in working with MedLiveHealth?',
 };
 
 const bn: typeof en = {
   label: 'প্রতিষ্ঠাতা',
-  heading: 'MedLiveBD-এর পেছনের মানুষ।',
+  heading: 'MedLiveHealth-এর পেছনের মানুষ।',
   founders: [
     { ...people.sidrat, title: 'ম্যানেজিং পার্টনার ও সিইও' },
     { ...people.mayesha, title: 'পার্টনার ও সিওও' },
   ],
   email: 'ইমেইল',
   phone: 'ফোন',
-  ctaTitle: 'MedLiveBD-এর সঙ্গে কাজ করতে আগ্রহী?',
+  ctaTitle: 'MedLiveHealth-এর সঙ্গে কাজ করতে আগ্রহী?',
 };
 
 export const founders = { en, bn } as const;

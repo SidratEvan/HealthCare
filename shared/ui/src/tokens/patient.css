@@ -1,7 +1,7 @@
 /*
  * The patient app's palette: Visual Direction 2 (FRONTEND.md §0.5, §1.3b).
  *
- * Approved by the owner on 2026-10-07 with the official MedLiveBD logo. The
+ * Approved by the owner on 2026-10-07 with the official MedLiveHealth logo. The
  * patient app loads this after `styles.css`, so it replaces the shared values
  * of the same names and every utility follows; the consoles never load it and
  * keep §1.1 as it is. `PATIENT_COLOUR` in `index.ts` mirrors every value here

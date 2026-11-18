@@ -11,7 +11,7 @@ import { LOCALES, pageMetadata } from '@/content/site';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
-/** About MedLiveBD: the founders and how to reach them — nothing more (S-C-01, S-C-05). */
+/** About MedLiveHealth: the founders and how to reach them — nothing more (S-C-01, S-C-05). */
 export function generateStaticParams(): { locale: string }[] {
   return LOCALES;
 }

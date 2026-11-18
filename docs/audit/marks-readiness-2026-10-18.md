@@ -1,6 +1,6 @@
 # MARKS demonstration and 60-day pilot readiness — 18 October 2026
 
-**For:** the founders, deciding what to authorise before showing MedLiveBD to
+**For:** the founders, deciding what to authorise before showing MedLiveHealth to
 MARKS Medical College Hospital and before a 60-day pilot there.
 **Code assessed:** `audit/pilot-readiness-2026-10-12` @ `b7bee62` (the newest
 Patient App, Console and API; 39 commits not on `mvp`).
@@ -209,7 +209,7 @@ scale-out (Socket.IO adapter, shared files) only when one server is not enough.
 - **Bangladesh-hosted shared option:** the same stack on a Bangladeshi VPS;
   meets `FR-SEC-07`; tenant isolation is built and tested. The dry run is
   needed on whichever machine holds the data. Indicative costs:
-  `docs/reports/MEDLIVEBD_INFRASTRUCTURE_COST_AUDIT.md` Part 6.
+  `docs/reports/MEDLIVEHEALTH_INFRASTRUCTURE_COST_AUDIT.md` Part 6.
 
 ## 7. HMS integration
 
@@ -217,7 +217,7 @@ scale-out (Socket.IO adapter, shared files) only when one server is not enough.
   (appointments) with mapping, check, preview, approval, all-or-nothing write,
   undo and audit; MARKS's own identifier kept per row, so re-import updates;
   optional model mapping suggestions from headings only (`FR-IMP-17`); twelve
-  CSV report exports; a 193-route REST API built for MedLiveBD's own apps.
+  CSV report exports; a 193-route REST API built for MedLiveHealth's own apps.
 - **Missing:** knowledge of MARKS's HMS; service accounts or scoped API keys; a
   published API specification; outbound events; import set D; a read-only
   database connector or FHIR R4 feed (`FR-IMP-09`, later, not before the HMS is

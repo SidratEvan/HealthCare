@@ -758,7 +758,7 @@ ORG_APPLICATIONS_OPEN_MAX=200 # hospitals' own applications that may wait unansw
 OTP_TTL_SECONDS=300, OTP_MAX_PER_HOUR=5
 MAPPING_PROVIDER=off|claude, MAPPING_API_KEY, MAPPING_MODEL=claude-opus-5-5, MAPPING_BASE_URL, MAPPING_TIMEOUT_MS=20000   # the model that suggests import column mappings; off needs nothing (FR-IMP-16)
 EXTRA_ALLOWED_ORIGINS=      # comma-separated exact origins the API also answers (a hospital's portal, a branded app's web origin); empty by default (FR-BRD-04)
-PLATFORM_DOMAIN=            # the platform's own domain, no scheme (medlivebd.example). With it <code>.<domain> is a hospital's portal and a recorded domain is too; empty: none, ?scope= as before (FR-BRD-07). The patient app is built with the same value as NEXT_PUBLIC_PLATFORM_DOMAIN
+PLATFORM_DOMAIN=            # the platform's own domain, no scheme (medlivehealth.example). With it <code>.<domain> is a hospital's portal and a recorded domain is too; empty: none, ?scope= as before (FR-BRD-07). The patient app is built with the same value as NEXT_PUBLIC_PLATFORM_DOMAIN
 ADDRESS_RATE_LIMIT_FACTOR=1 # 1–100: multiplies every limit keyed on the caller's address, for a deployment whose callers share one; never the per-number limits
 SMS_PROVIDER=local|log, SMS_API_KEY, SMS_SENDER_ID, SMS_MONTHLY_CAP
 VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT

@@ -111,7 +111,7 @@ rules; recorded in `docs/STATUS.md`.
 ### 0.5 The patient app: Visual Direction 2 (owner, 2026-10-07)
 
 On 7 October the owner approved **Visual Direction 2** for the patient app and
-made the MedLiveBD logo official. The approved board is
+made the MedLiveHealth logo official. The approved board is
 `docs/design/patient-direction-2.png`, with the home screen at full size in
 `docs/design/patient-home-closeup.png`. It is a reference for composition, as
 §0.4's canvas was; the rules below are the authority. **The staff consoles are
@@ -134,21 +134,33 @@ them and a test keeps the two equal and checks every pair in §1.3b. A
 hospital's own theme (`FR-BRD-03`) still replaces the six brand tokens on top
 of these.
 
-**The logo.** The official MedLiveBD logo is used as supplied: its artwork,
+**The logo.** The official MedLiveHealth logo is used as supplied: its artwork,
 proportions and colours are never redrawn, simplified or recoloured. The
 light version (white ground) is the one inside the app; the dark version is
 for dark presentation surfaces only. It is the stacked lockup as approved: the
 home header carries it at 68 px tall, and the foot of the More screen at a
 smaller size. Inner screens carry a page title instead. The master is
-`docs/design/brand/medlivebd-logo-light.png`, the light half of the supplied
-artwork (`medlivebd-logo-supplied.png`) cut at its native pixels without
-altering it; the app shows `frontend/patient/public/brand/medlivebd-logo-light.webp`,
-the same artwork at three times its display size (12 KB, inside §11.4's
-first-paint budget), through `<BrandLogo>`, so that a later asset replaces one
-file. It blends onto the ground with `mix-blend-mode: multiply` because the
-supplied file is not transparent; a transparent master from the designer would
-remove the need. Inside a hospital's own app the
-hospital's mark and name stand where the logo stands (`FR-BRD-06`).
+`docs/design/brand/medlivehealth-logo-light.png`, the light half of
+`medlivehealth-logo-master.png` cut at its native pixels (971 × 480); the app
+shows `frontend/patient/public/brand/medlivehealth-logo-light.webp`, the same
+artwork at three times its display size (8 KB, inside §11.4's first-paint
+budget), through `<BrandLogo>`, so that a later asset replaces one file. It
+blends onto the ground with `mix-blend-mode: multiply` because the supplied
+file is not transparent; a transparent master from the designer would remove
+the need. Inside a hospital's own app the hospital's mark and name stand where
+the logo stands (`FR-BRD-06`).
+
+**Since the rename of 18 November** the logo says MedLiveHealth. The artwork
+supplied on 7 October (`medlivebd-logo-supplied.png`, kept as the record) says
+MedLiveBD, and no artwork for the new name has been supplied yet, so
+`frontend/site/scripts/prepare-logo.mjs` makes every logo file from it: the
+mark, "MedLive" and the tagline are the supplied pixels, untouched (checked
+pixel for pixel), and only "BD" is replaced by "Health", set in Montserrat
+ExtraBold (SIL Open Font Licence) measured against the supplied letters: their
+cap height, baseline, stroke width, letter width, spacing, and the colour of
+"BD" in each half. The canvas is wider by the longer word and the mark and the
+tagline stay centred. When the designer supplies MedLiveHealth artwork, it
+replaces the master and the script's first half.
 
 **The illustration.** One illustration is approved: the Bangladeshi family on
 the home screen's welcome card (`frontend/patient/public/illustrations/family.webp`).

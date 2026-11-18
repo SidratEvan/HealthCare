@@ -1,7 +1,7 @@
 # Security check before real patients — 7 November 2026
 
 For the owner, and for MARKS Group's IT staff. The question asked: is
-MedLiveBD safe to start the MARKS pilot with real patient data, against bugs
+MedLiveHealth safe to start the MARKS pilot with real patient data, against bugs
 and against people trying to break in?
 
 ## 1. Answer

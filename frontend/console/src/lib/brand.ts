@@ -22,7 +22,7 @@ export interface WorkspaceBrand {
   readonly logo: string | null;
 }
 
-const KEY = 'medlivebd.console.brand.';
+const KEY = 'medlivehealth.console.brand.';
 
 function kept(hospitalId: string): WorkspaceBrand | null {
   try {

@@ -1,4 +1,4 @@
-# MedLiveBD — start here
+# MedLiveHealth — start here
 
 For MARKS Group: the people who will set up the server, and the people who
 will run the pilot. Plain words first; the technical detail behind each step
@@ -33,7 +33,7 @@ is in `docs/DEPLOY.md` Part S.
 |---|---|---|
 | SMS to patients | Needs an SMS company account and an approved sender name | Patients are served at the counter; the serial is said there and shown on the queue screens |
 | Online payment (bKash, Nagad, cards) | Needs merchant accounts | Fees are taken at the counter as today |
-| Laboratory orders | Real prices are needed first; until then they would be wrong | The laboratory starts **switched off**. Send MedLiveBD your test price list and it is switched on |
+| Laboratory orders | Real prices are needed first; until then they would be wrong | The laboratory starts **switched off**. Send MedLiveHealth your test price list and it is switched on |
 
 ## 2. One decision MARKS confirms in writing
 
@@ -59,7 +59,7 @@ doctor's screen is switched off and doctors keep working on paper.
    machine, mounted on the server (for example at `/mnt/backup`). Every night
    a full copy is made, checked by actually restoring it, **encrypted**, and
    put there.
-4. **Two people's names and emails**: the MedLiveBD platform administrator
+4. **Two people's names and emails**: the MedLiveHealth platform administrator
    (approves the hospital going live) and MARKS's hospital administrator
    (sets up doctors and staff). Each needs a smartphone with an authenticator
    app (Google Authenticator or Microsoft Authenticator), because
@@ -71,7 +71,7 @@ doctor's screen is switched off and doctors keep working on paper.
 
 ## 4. Setting up the server — one command
 
-Copy the MedLiveBD folder to the server, open a terminal in it, and run:
+Copy the MedLiveHealth folder to the server, open a terminal in it, and run:
 
 ```bash
 sudo bash deploy/setup.sh
@@ -80,7 +80,7 @@ sudo bash deploy/setup.sh
 It asks, in plain words, for the web address, the backup folder, the alert
 link and the two administrators, and then does everything else:
 
-- installs Docker (the system that runs MedLiveBD's parts) if it is missing;
+- installs Docker (the system that runs MedLiveHealth's parts) if it is missing;
 - **makes every password and secret itself** and writes them to
   `deploy/.env`;
 - opens the firewall for the web and remote login only;
@@ -115,7 +115,7 @@ again on a rebuilt machine with the same `deploy/.env`.
    current system as a CSV or Excel file (পুরোনো তথ্য আমদানি করুন). The
    screen shows exactly what will be written before anything is, and an
    import can be undone.
-4. **Ask for review** (পর্যালোচনার অনুরোধ করুন). The MedLiveBD platform
+4. **Ask for review** (পর্যালোচনার অনুরোধ করুন). The MedLiveHealth platform
    administrator checks the setup, verifies each doctor's BMDC number, and
    approves. Until then nothing of MARKS is visible to the public.
 5. **Rehearse at one counter for an hour** before real patients: register a
@@ -136,12 +136,12 @@ again on a rebuilt machine with the same `deploy/.env`.
 
 | What you see | What to do |
 |---|---|
-| A message "Last night's backup failed" | Check the backup disk is plugged in and mounted; the next night tries again. Tell MedLiveBD if it repeats |
-| "The API is not answering" | `sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`; if it stays, send MedLiveBD the output of `… logs --tail 200 api` |
+| A message "Last night's backup failed" | Check the backup disk is plugged in and mounted; the next night tries again. Tell MedLiveHealth if it repeats |
+| "The API is not answering" | `sudo docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`; if it stays, send MedLiveHealth the output of `… logs --tail 200 api` |
 | A counter loses internet | Keep working; it says it is offline, and sends everything when the connection returns. Only new walk-in serials need the connection |
 | An administrator lost their phone | Use a recovery code, or another administrator resets it from Settings → the person → reset two-step verification |
 | The server's disk died | A new server, the same `deploy/.env`, the backup disk, and `DEPLOY.md` S5 "putting one back". Practise this once before the pilot |
-| A member of staff leaves, or somebody may know their password | Settings → the person → switch the account off (they are signed out on every screen at once), or reset their password. Tell MedLiveBD if records may have been seen: every opening is in the log |
+| A member of staff leaves, or somebody may know their password | Settings → the person → switch the account off (they are signed out on every screen at once), or reset their password. Tell MedLiveHealth if records may have been seen: every opening is in the log |
 
 ## 8. Keeping it safe
 
@@ -161,7 +161,7 @@ So, for MARKS:
 - `deploy/.env` holds every password the system uses. Keep its two copies
   safe, and never send it by email or chat.
 - **Staff sign-in only from MARKS's own network (strongly advised).** Once
-  MedLiveBD has approved MARKS going live, put MARKS's public internet
+  MedLiveHealth has approved MARKS going live, put MARKS's public internet
   address in `deploy/.env`, for example `STAFF_NETWORKS=203.0.113.10/32`
   (ask your internet provider for it; several are separated by spaces), and
   run `sudo docker compose -f deploy/docker-compose.yml --env-file
@@ -169,7 +169,7 @@ So, for MARKS:
   MARKS, and nobody on the internet can even try a staff password; patients
   still reach their pages from anywhere. Check it straight away by signing
   in at one counter. If that is refused too, empty the value again, run the
-  same command, and tell MedLiveBD (`DEPLOY.md` S2).
+  same command, and tell MedLiveHealth (`DEPLOY.md` S2).
 - **Counter and doctors' PCs lock themselves**: set Windows to lock the
   screen after 5 minutes without use (a Group Policy, or Settings →
   Accounts → Sign-in options on each PC), so a screen left open does not
@@ -190,7 +190,7 @@ So, for MARKS:
 
 ## 9. Updates
 
-MedLiveBD sends a new version as one file. On the server it is loaded with
+MedLiveHealth sends a new version as one file. On the server it is loaded with
 one command, `sh deploy/images.sh install …` (`DEPLOY.md` S4), and the
 system is away for under a minute. A backup is taken first.
 

@@ -34,7 +34,7 @@ export function StaffAccessFrame({
         header={
           <ConsoleHeader
             identity={PATIENT.appName}
-            logo="/brand/medlivebd-logo-light.png"
+            logo="/brand/medlivehealth-logo-light.png"
             actions={
               <ConsoleHelp
                 topic={{

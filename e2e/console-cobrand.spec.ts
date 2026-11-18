@@ -3,7 +3,7 @@
  * `APP_FLOW.md` B1.1).
  *
  * Padma, which the seed gives a mark and colours (`FR-BRD-06`), shows its logo
- * and wears its colours on the console, with Powered by MedLiveBD beneath its
+ * and wears its colours on the console, with Powered by MedLiveHealth beneath its
  * name. Karnaphuli, which the seed gives neither, shows its name on the
  * platform's colour, and the same line beneath. Read-only: nothing is changed.
  */
@@ -54,7 +54,7 @@ async function openAdminConsole(page: Page, code: string): Promise<void> {
   await expect(page.getByTestId('admin-dashboard')).toBeVisible();
 }
 
-test('a hospital with a mark and colours wears them, powered by MedLiveBD (FR-BRD-12)', async ({
+test('a hospital with a mark and colours wears them, powered by MedLiveHealth (FR-BRD-12)', async ({
   page,
 }) => {
   await openAdminConsole(page, 'PADMA');
@@ -62,7 +62,7 @@ test('a hospital with a mark and colours wears them, powered by MedLiveBD (FR-BR
 
   await expect(rail.getByTestId('rail-logo')).toBeVisible();
   await expect(rail.getByTestId('rail-hospital')).toContainText('পদ্মা');
-  await expect(rail.getByTestId('rail-powered-by')).toHaveText('Powered by MedLiveBD');
+  await expect(rail.getByTestId('rail-powered-by')).toHaveText('Powered by MedLiveHealth');
   await expect(rail).toHaveAttribute('data-brand', 'hospital');
 
   // The colours are on the document, as a portal's are on the patient app.
@@ -78,7 +78,7 @@ test('a hospital with neither shows its name on the platform’s colour, and the
   await openAdminConsole(page, 'KARNAPHULI');
   const rail = page.getByTestId('console-rail');
 
-  await expect(rail.getByTestId('rail-powered-by')).toHaveText('Powered by MedLiveBD');
+  await expect(rail.getByTestId('rail-powered-by')).toHaveText('Powered by MedLiveHealth');
   await expect(rail.getByTestId('rail-logo')).toHaveCount(0);
   await expect(rail).toHaveAttribute('data-brand', 'platform');
   const primary = await page.evaluate(() =>
