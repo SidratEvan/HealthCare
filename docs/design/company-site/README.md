@@ -1,4 +1,4 @@
-# MedLiveBD company site — the brand story
+# MedLiveHealth company site — the brand story
 
 Updated 12 October 2026. Worktree `D:\Projects\HealthCare-site-mvp`, branch
 `feat/site-brand`, cut from `feat/site-premium` (`669aa80`, the approved
@@ -8,7 +8,7 @@ product-led version, kept for comparison). Site-only: nothing outside
 ## Direction (owner, 12 October 2026)
 
 Sell the experience, not the implementation. The public site says who
-MedLiveBD is, why connected care matters in Bangladesh, and what hospitals and
+MedLiveHealth is, why connected care matters in Bangladesh, and what hospitals and
 patients gain. The software itself is shown in a private demonstration. The
 approved look is kept: the headline, the blue/navy/teal identity, typography
 and motion. The screenshot tour is gone, and people and place come in.

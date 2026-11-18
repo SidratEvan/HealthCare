@@ -124,7 +124,7 @@ export async function requestCode(
   const minutes = Math.round(env.OTP_TTL_SECONDS / 60);
   const sent = await sms().send({
     to: phone,
-    body: `${code} — MedLiveBD যাচাই কোড। ${String(minutes)} মিনিট পর্যন্ত কাজ করবে। কাউকে বলবেন না।`,
+    body: `${code} — MedLiveHealth যাচাই কোড। ${String(minutes)} মিনিট পর্যন্ত কাজ করবে। কাউকে বলবেন না।`,
     notificationId: challengeId,
     templateKey: 'auth.otp',
     sensitive: true,

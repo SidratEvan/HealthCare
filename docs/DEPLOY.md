@@ -419,15 +419,15 @@ with the owner URL, never through the API, so it is unaffected.
    other secrets.
 2. From the machine, with the owner URL:
    ```bash
-   API_DB_USER=medlivebd_api API_DB_PASSWORD='…' ALLOW_REMOTE_DB=1 pnpm db:role
+   API_DB_USER=medlivehealth_api API_DB_PASSWORD='…' ALLOW_REMOTE_DB=1 pnpm db:role
    ```
    It creates the role (login, no superuser, no bypass of row-level
    security), grants rows only, and makes it a member of `app_tenant`; it
    touches no Supabase role. Safe to run again.
-3. Check it, as that role, through the pooler (user `medlivebd_api.<project-ref>`):
+3. Check it, as that role, through the pooler (user `medlivehealth_api.<project-ref>`):
    ```sql
    SELECT current_user, r.rolbypassrls FROM pg_roles r WHERE r.rolname = current_user;
-   -- medlivebd_api | f
+   -- medlivehealth_api | f
    ```
 4. **Render:** change `DATABASE_URL` to the same session-pooler address with
    that user and password (percent-encoded, §1.1). Redeploy. `GET /readyz`.
@@ -545,7 +545,7 @@ Vercel, and never in a development or demo database (`FR-SEC-08`,
 run: it asks for the web address, the backup folder, the alert link and the
 two first administrators, generates every secret, starts the stack, waits for
 it, creates the administrators and switches the laboratory off (F-08). It
-never overwrites an existing `deploy/.env`. `MEDLIVEBD_SKIP_SYSTEM=1` leaves
+never overwrites an existing `deploy/.env`. `MEDLIVEHEALTH_SKIP_SYSTEM=1` leaves
 Docker and the firewall to the hospital's IT. The plain-language version for
 the hospital is `docs/MARKS_START_HERE.md`. The sections below remain what
 the script does, step by step.
@@ -818,15 +818,15 @@ commit to deploy and with a copy of the server's `deploy/.env` (the web apps
 bake `API_ORIGIN` and `PLATFORM_DOMAIN` in; no secret goes into an image):
 
 ```bash
-sh deploy/images.sh build deploy/.env medlivebd-images.tar.gz
-scp medlivebd-images.tar.gz* admin@<server>:~/
+sh deploy/images.sh build deploy/.env medlivehealth-images.tar.gz
+scp medlivehealth-images.tar.gz* admin@<server>:~/
 ```
 
 then on the server, at the same commit:
 
 ```bash
-git fetch && git checkout <the commit in medlivebd-images.tar.gz.commit>
-sh deploy/images.sh install ~/medlivebd-images.tar.gz deploy/.env
+git fetch && git checkout <the commit in medlivehealth-images.tar.gz.commit>
+sh deploy/images.sh install ~/medlivehealth-images.tar.gz deploy/.env
 ```
 
 `install` checks the archive against its checksum, refuses images built from

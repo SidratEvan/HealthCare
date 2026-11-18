@@ -436,7 +436,7 @@ module.exports = [
     { id: 'import-check', label: 'Check', text: 'nothing is written yet.' },
     { id: 'import-history', label: 'Imports so far', text: 'with undo.' },
   ]),
-  fig(A13, 'c-import-mapping', 'Matching the columns', 'The hospital\'s own export has its own column names. Each is matched to what MedLiveBD needs, with the reason; a person confirms.', [
+  fig(A13, 'c-import-mapping', 'Matching the columns', 'The hospital\'s own export has its own column names. Each is matched to what MedLiveHealth needs, with the reason; a person confirms.', [
     { id: 'import-mapping', label: 'Match your file\'s columns' },
     { id: 'map-ref', label: 'Your own ID', text: 'kept, so a second import updates instead of duplicating.' },
     { id: 'map-why-ref', label: 'Why', text: '“Proposed by a rule · high confidence”.' },
@@ -455,7 +455,7 @@ module.exports = [
     type: 'chapter',
     num: 'A14',
     title: 'Platform onboarding',
-    lead: 'MedLiveBD\'s own workspace for bringing hospitals onto the platform: create or review a workspace, see how ready it is, verify doctors, switch modules on or off, and approve it to go live. It shows organisations — never a patient.',
+    lead: 'MedLiveHealth\'s own workspace for bringing hospitals onto the platform: create or review a workspace, see how ready it is, verify doctors, switch modules on or off, and approve it to go live. It shows organisations — never a patient.',
   },
   fig(A14, 'c-platform', 'Hospital onboarding', 'Every organisation on the platform with its state.', [
     { id: 'platform-no-patients', label: 'Organisations only', text: 'no patient data on this screen, ever.' },
@@ -509,7 +509,7 @@ module.exports = [
     { id: 'platform-trail-show', label: 'Show the trail' },
   ]),
   fig(A14, 'c-platform-applied', 'A hospital that applied by itself', 'The application from chapter A6, in “setting up”. It is the hospital\'s move until it asks for review.', [{ id: 'platform-workspace', label: 'Setting up' }]),
-  fig(A14, 'c-platform-new', 'Creating a workspace', 'For a hospital onboarded by MedLiveBD: names, a code, kind, division, and the first administrator.', [{ id: 'platform-new-form', label: 'A new hospital workspace' }, { id: 'platform-create', label: 'Create the workspace' }]),
+  fig(A14, 'c-platform-new', 'Creating a workspace', 'For a hospital onboarded by MedLiveHealth: names, a code, kind, division, and the first administrator.', [{ id: 'platform-new-form', label: 'A new hospital workspace' }, { id: 'platform-create', label: 'Create the workspace' }]),
   fig(A14, 'c-platform-review', 'Review before creating', 'Every field shown once more before anything is created.', [{ id: 'management-confirm', label: 'What will be created' }, { id: 'management-confirm-save', label: 'Confirm and save' }]),
   fig(A14, 'c-platform-created', 'The workspace exists', 'The first administrator\'s temporary password, shown once, to be handed over; they choose their own and set up two-step at first sign-in.', [
     { id: 'platform-temp-password', label: 'Temporary password' },

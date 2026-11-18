@@ -164,7 +164,7 @@ test.describe('a hospital applies by itself (FR-ONB-09)', () => {
     await expect(phone.getByTestId('search-empty')).toBeVisible({ timeout: 30_000 });
     await phone.goto(`${PATIENT}/?scope=DHALESHWARI`);
     // A code that is not a live hospital's is nobody's: the network's own app.
-    await expect(phone.getByTestId('app-name')).toHaveText('MedLiveBD');
+    await expect(phone.getByTestId('app-name')).toHaveText('MedLiveHealth');
 
     // --- the platform can decline it: close it, with the reason (FR-ONB-10) -------
     // While it is setting up the next move is the hospital's, and closing is

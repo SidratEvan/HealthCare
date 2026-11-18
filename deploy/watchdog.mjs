@@ -31,11 +31,11 @@ const INTERVAL_SECONDS = positive(env.WATCHDOG_INTERVAL_SECONDS, 60);
 // An API restarting is unreachable for a minute; three misses in a row is not
 // a restart.
 const MISSES_BEFORE_ALERT = positive(env.WATCHDOG_MISSES_BEFORE_ALERT, 3);
-const STATE_FILE = env.WATCHDOG_STATE_FILE || '/tmp/medlivebd-watchdog.json';
+const STATE_FILE = env.WATCHDOG_STATE_FILE || '/tmp/medlivehealth-watchdog.json';
 const WEBHOOK_URL = env.ALERT_WEBHOOK_URL || '';
 const WEBHOOK_FORMAT = env.ALERT_WEBHOOK_FORMAT === 'text' ? 'text' : 'json';
 const REPEAT_HOURS = positive(env.ALERT_REPEAT_HOURS, 6);
-const SERVER_NAME = env.ALERT_SERVER_NAME || 'MedLiveBD server';
+const SERVER_NAME = env.ALERT_SERVER_NAME || 'MedLiveHealth server';
 // Blank: no daily message. 3 is 09:00 in Dhaka.
 const DAILY_UTC_HOUR =
   env.ALERT_DAILY_UTC_HOUR === undefined || env.ALERT_DAILY_UTC_HOUR === ''

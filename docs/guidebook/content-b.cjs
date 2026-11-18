@@ -105,7 +105,7 @@ module.exports = [
     type: 'part',
     letter: 'B',
     title: 'For engineers',
-    lead: 'How MedLiveBD is built, why it is built that way, and how to work on it without breaking what matters. Read Part A first if you have not used the product: every rule below exists to protect something you saw there.',
+    lead: 'How MedLiveHealth is built, why it is built that way, and how to work on it without breaking what matters. Read Part A first if you have not used the product: every rule below exists to protect something you saw there.',
     html: '<div class="who"><div><b>You are</b><br>a developer, tester or operations engineer joining the project.</div><div><b>You will learn</b><br>the architecture, the code layout, the queue engine, the database and its security, the API, the apps, deployment, the workflow and the tests.</div><div><b>Source of truth</b><br>Five documents in <code>docs/</code> govern behaviour. If code and a document disagree, the document wins.</div></div>',
   },
   {

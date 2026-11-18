@@ -1,10 +1,13 @@
 /**
- * `<BrandLogo>`: the official MedLiveBD logo (FRONTEND.md §0.5).
+ * `<BrandLogo>`: the official MedLiveHealth logo (FRONTEND.md §0.5).
  *
  * The owner made the logo official on 2026-10-07 with one rule above the
  * others: its artwork, proportions and colours are never redrawn, simplified
  * or recoloured. So this component draws nothing. It shows the supplied light
  * lockup, at the height asked for and at its own proportions, and that is all.
+ * Since the rename of 18 November the lockup says MedLiveHealth: the supplied
+ * mark, "MedLive" and tagline, with "Health" set in their place until new
+ * artwork is supplied (`frontend/site/scripts/prepare-logo.mjs`).
  *
  * ## Why it multiplies onto the ground
  *
@@ -18,7 +21,7 @@
  *
  * The image is decorative to a screen reader (`alt=""`): the product's name is
  * said once, in text, by the visually hidden span beside it, so the heading it
- * sits in reads "MedLiveBD" and `data-testid="app-name"` still holds the name.
+ * sits in reads "MedLiveHealth" and `data-testid="app-name"` still holds the name.
  */
 
 import { tp } from '@platform/i18n';
@@ -27,10 +30,10 @@ import { useLocale } from '@platform/ui';
 import type { ReactNode } from 'react';
 
 /** The light lockup, cut from the supplied artwork (`docs/design/brand`). */
-const LOGO_SRC = '/brand/medlivebd-logo-light.webp';
+const LOGO_SRC = '/brand/medlivehealth-logo-light.webp';
 
-/** The lockup's own proportions: 727 × 480 at the master's native pixels. */
-const ASPECT = 727 / 480;
+/** The lockup's own proportions: 971 × 480 at the master's native pixels. */
+const ASPECT = 971 / 480;
 
 export function BrandLogo({ height }: { readonly height: number }): ReactNode {
   const locale = useLocale();

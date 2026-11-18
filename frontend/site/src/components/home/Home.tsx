@@ -12,7 +12,7 @@ import type { Locale } from '@/content/copy';
 import type { ReactNode } from 'react';
 
 /**
- * The company homepage (S-C-01–05), redesigned 12 October 2026: who MedLiveBD
+ * The company homepage (S-C-01–05), redesigned 12 October 2026: who MedLiveHealth
  * is and where each audience goes next, told in seven scenes.
  */
 export function Home({ locale }: { readonly locale: Locale }): ReactNode {

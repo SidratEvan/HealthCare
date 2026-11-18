@@ -378,7 +378,7 @@ module.exports = [
       { shot: 'p-portal-shapla', caption: 'Shapla General Hospital (Demo)', callouts: [{ id: 'app-name', n: 4 }] },
     ],
     legend: [
-      { n: 1, label: 'The hospital\'s name and mark', text: 'instead of MedLiveBD.' },
+      { n: 1, label: 'The hospital\'s name and mark', text: 'instead of MedLiveHealth.' },
       { n: 2, label: 'Its own welcome', text: '“See what Padma Specialised Hospital has…”.' },
       { n: 3, label: 'Emergency', text: 'still searches every hospital: patient safety before brand.' },
       { n: 4, label: 'Another hospital, another portal', text: 'one platform, never a copy of the software.' },

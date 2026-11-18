@@ -46,7 +46,7 @@ the same day, `docs/HANDOVER.md`, and the code on `mvp` at `87d3dd2`.
 ### Now: V1 completion (owner, 6 October)
 
 The pitch build was released on 6 October (below). The same day the owner
-replaced "then stop adding scope": **build MedLiveBD to the complete V1, and
+replaced "then stop adding scope": **build MedLiveHealth to the complete V1, and
 leave undone only what needs an account, credential, contract or approval he
 has not provided** (`CLAUDE.md` §4.5). This table is the remaining work, from
 an audit of the code on that day. One branch per row, in order; a row that
@@ -109,7 +109,7 @@ integration points marked ▣ and at J.
 | K2 | `fix/beds-honest-status` | A bed figure past its freshness threshold is still shown as an exact count, with a stale warning beside it | An exact count only while it is fresh; past the threshold, available or none as last confirmed, with its age; never confirmed, not known. Never a zero for what is not known (`FR-PAT-14`, `FR-PAT-51`, §3.2) | F |
 | **K** (cont.) | | **Priority 2 from the owner's second note of 8 October** | | |
 | K3 | `fix/beds-unknown-when-stale` | K2 says "beds were free when last confirmed" past the threshold | Decision 10: past the threshold, or never confirmed, the figure is not known, with the age of the last confirmation | F |
-| K4 | `feat/console-cobrand` | The staff workspace shows the hospital's name on the platform's colour | Decision 9: the hospital's logo, name and colours in the console's rail, with Powered by MedLiveBD beneath; one read any member of staff may make | F |
+| K4 | `feat/console-cobrand` | The staff workspace shows the hospital's name on the platform's colour | Decision 9: the hospital's logo, name and colours in the console's rail, with Powered by MedLiveHealth beneath; one read any member of staff may make | F |
 | **J** | `chore/v1-release` | | The full gate, clean, on the whole suite; the migration plan for Supabase and the deployment checklist written. **Moving `main` and `demo`, applying migrations to Supabase and resetting its data wait for the owner's word** (`CLAUDE.md` §4.6) | Full ▣ |
 
 **Blocked outside the repository** (built up to the adapter; activation only):
@@ -137,7 +137,7 @@ integration points marked ▣ and at J.
 | Q3 | Reschedule (`FR-PAT-23`) was put outside V1 on 5 October. Still outside? | Outside |
 | Q4 | Push notifications wait for a signed hospital (decision 84) and need a dependency. Still waiting? | SMS only |
 | Q5 | More than one API instance needs a shared store (Redis), which costs money. Not needed at V1's size | One instance |
-| Q6 | The Bangla spelling of MedLiveBD, and the platform's domain | Latin letters; `PLATFORM_DOMAIN` is a setting |
+| Q6 | The Bangla spelling of MedLiveHealth, and the platform's domain | Latin letters; `PLATFORM_DOMAIN` is a setting |
 | Q7 | A counter that types a mobile number is shown the people registered under it at any hospital (`FR-REC-20`, `FR-GST-12`/`13`). Does `FR-NET-02` mean a counter should see only people its own hospital has seen? | One identity per number, network-wide, as the requirements are written |
 | Q8 | May a hospital that runs an emergency desk keep what its emergency department can treat out of the network (`FR-NET-04` against `FR-BRD-09`, `FR-PAT-43`)? | No: it is always shared; only serials, beds and stock can be kept |
 | Q9 | An application takes a hospital code made from its name, and a declined one keeps it. Free the code of a workspace closed without ever going live? | A code is never handed on; the real hospital gets another |
@@ -175,7 +175,7 @@ against the code on 8 October and left for the review after the pilot:
 
 - *The hospital's own brand in the staff workspace.* Today the rail names the
   hospital and the member of staff on the platform's colour. Missing: the
-  hospital's logo, its colours, and **Powered by MedLiveBD** beneath. The
+  hospital's logo, its colours, and **Powered by MedLiveHealth** beneath. The
   logo and colours already exist (`FR-BRD-06`, C1) and are shown to
   patients; the consoles do not read them yet.
 - *A simpler administrator's first screen*: doctors working today, patients
@@ -225,7 +225,7 @@ October. *Built* means in `mvp` and tested; *partly* says which half;
 | 7 | Registered hospitals, clinics and approved private chambers as organisations; no open self-registration for unregistered chambers | **Built** (R7, 8 October) | `FR-ONB-11`: `chamber` is an organisation kind (0062) the platform administrator creates; the public application form does not offer it and the API refuses it there | 3, `feat/chamber-organisations` (R7) |
 | 8a | Role-based first screens: reception sees reception, a doctor their own workspace | **Built** | The console opens on the role's screen | — |
 | 8b | A simple administrator overview: doctors working today, patients waiting, beds available, ED status, today's appointments; reports on their own screens | **Built** (R6, 8 October) | `FR-ADM-12`, `CARD-B10-NOW`: five live tiles above the reports, read every minute with their age; absent where the hospital has no ward or no emergency desk; counts only | 3, `feat/admin-overview` (R6) |
-| 9 | Each hospital's workspace shows its own logo, name and colours, with **Powered by MedLiveBD** beneath | **Partly** | The logo and colours exist (`FR-BRD-06`, C1) and patients see them; the console's rail shows the name only, on the platform's colour | **2**, `feat/console-cobrand` (K4) |
+| 9 | Each hospital's workspace shows its own logo, name and colours, with **Powered by MedLiveHealth** beneath | **Partly** | The logo and colours exist (`FR-BRD-06`, C1) and patients see them; the console's rail shows the name only, on the platform's colour | **2**, `feat/console-cobrand` (K4) |
 | 10 | Beds: exact numbers when recently confirmed; unavailable when reliably confirmed; **unknown when missing or outdated**; last-updated kept; never an unconfirmed number as live | **Partly** | K2 shows a count only while fresh, with the age; past the threshold it says "were free / none when last confirmed", which this decision replaces with unknown | **2**, `fix/beds-unknown-when-stale` (K3) |
 | 11 | Emergency discovery by reported capability; nearby; freshness; call; I'm on my way; 999; no promise of acceptance; no AI diagnosis | **Built** | `S-A-10`, `FR-PAT-40`–`47` | — |
 | 12 | Medicines: participating hospitals' pharmacies only; available, unavailable, unknown | **Built** | `S-A-medicines`, `FR-PHR-02` | — |
@@ -741,7 +741,7 @@ In addition to `CLAUDE.md`:
 | K1 | `fix/patient-profiles-label` | **merged 8 October** — `moreProfilesTitle` reads এই নম্বরে বুক করা রোগী / People booked under this number; `patient-account.spec.ts` asserts the heading and that nothing on the account says পরিবার. Nothing added, removed or relinked; the booking step's কার জন্য সিরিয়াল? was already neutral |
 | K2 | `fix/beds-honest-status` | **merged 8 October** — `bedFigure` in `shared/domain` (`beds/capacity.ts`: a count while fresh, `was_free`, `was_none`, `unknown`); the hospital card's two chips, the bed search's result, the search result's bed line and the emergency result's beds and ICU say a count only while fresh; nine new bn/en keys. `capacity.test.ts` (+4); `patient-search.spec.ts` holds whichever side of the threshold the seed's figure is on. **Raised:** question 16 (the threshold beds use) |
 | K3 | `fix/beds-unknown-when-stale` | **merged 8 October** — decision 10: `bedFigure` answers a count while fresh (zero is none free) or unknown; the card, the bed search, the search result and the emergency result say not known past the threshold, with the age kept; K2's six "when last confirmed" keys removed. `capacity.test.ts`, `patient-search.spec.ts`; in the browser patient-search, emergency-burn, publish-controls, ward-board (34). Focused gate |
-| K4 | `feat/console-cobrand` | **merged 8 October** — decision 9, `FR-BRD-12`: `GET /hospital/brand` (any member of staff, own hospital, logo as a `data:` URL); `useWorkspaceBrand` puts the hospital's colours on the console as a portal's are on the patient app; the rail and `<WorkspaceBrandMark>` (dashboard, settings, doctor's console) show its logo and name with Powered by MedLiveBD. `workspaceBrand.routes.test.ts` (3), `e2e/console-cobrand.spec.ts` (2: Padma's mark and colours, Karnaphuli's plain); in the browser with hospital-profile, hospital-settings, offline-console, ward-board and the canary (34). No migration, no seed change: the seed's marks and colours (C1) are what show |
+| K4 | `feat/console-cobrand` | **merged 8 October** — decision 9, `FR-BRD-12`: `GET /hospital/brand` (any member of staff, own hospital, logo as a `data:` URL); `useWorkspaceBrand` puts the hospital's colours on the console as a portal's are on the patient app; the rail and `<WorkspaceBrandMark>` (dashboard, settings, doctor's console) show its logo and name with Powered by MedLiveHealth. `workspaceBrand.routes.test.ts` (3), `e2e/console-cobrand.spec.ts` (2: Padma's mark and colours, Karnaphuli's plain); in the browser with hospital-profile, hospital-settings, offline-console, ward-board and the canary (34). No migration, no seed change: the seed's marks and colours (C1) are what show |
 | J | `chore/v1-release` | **prepared 8 October, not released** — the full gate on `mvp`: `pnpm verify` (7,067), `pnpm build`, the browser suite (254), the built suite (3), the production suite (26). It found two things, each fixed on its own branch and merged: `consolePoweredBy` failed the Bangla-script check (K4; the owner's wording is the same in both languages, `FR-BRD-12`), and the publish-controls spec expected a number on a chamber line that, after the day's chambers end, honestly has none. `DEPLOY.md` §7: the migrations Supabase lacks (0039–0058), the reset, the order, and the booking gap 0041 opens under the old API. Questions 18 and 19 raised. **Moving `main` and `demo`, Supabase and the deploy wait for the owner's word** |
 | 2.1 | `feat/notification-worker` | now H1 |
 | 2.2 | `feat/sms-live` | waits: D1 |

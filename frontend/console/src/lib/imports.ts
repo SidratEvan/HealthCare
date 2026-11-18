@@ -212,7 +212,7 @@ export async function downloadTemplate(set: ImportSet): Promise<boolean> {
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement('a');
     link.href = url;
-    link.download = `medlivebd-${set}-template.csv`;
+    link.download = `medlivehealth-${set}-template.csv`;
     link.click();
     URL.revokeObjectURL(url);
     return true;

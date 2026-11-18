@@ -4,7 +4,7 @@ Branch `feat/console-redesign-access`, based on the approved foundation commit `
 
 ## Completed workflows
 
-Sign-in, password change, MFA code entry, MFA setup and recovery-code acknowledgement use the Batch 1 scoped theme, bilingual actions, labelled fields and contextual Help. MedLiveBD identity appears before hospital identification. Sign-in supports show/hide password, shared-computer guidance, offline/loading/failure states, generic credential errors, real lockout responses and the existing hospital-code prompt. Passwords remain transient form state; the existing per-tab session/refresh storage and backend authentication are preserved.
+Sign-in, password change, MFA code entry, MFA setup and recovery-code acknowledgement use the Batch 1 scoped theme, bilingual actions, labelled fields and contextual Help. MedLiveHealth identity appears before hospital identification. Sign-in supports show/hide password, shared-computer guidance, offline/loading/failure states, generic credential errors, real lockout responses and the existing hospital-code prompt. Passwords remain transient form state; the existing per-tab session/refresh storage and backend authentication are preserved.
 
 Staff entry reads the existing `/staff/me` endpoint before deciding role/hospital scope. A hospital's existing `/staff/chambers` response supplies both its scoped chambers and disabled modules; `/hospital/desks` supplies actual receptionist assignments. National accounts skip the hospital-only roster endpoint. Password-change and mandatory MFA gates remain ahead of all private workspaces, including when browser metadata is altered.
 
@@ -29,7 +29,7 @@ New production code/assets:
 
 - `frontend/console/src/components/StaffAccessFrame.tsx`
 - `frontend/console/src/components/StaffEntry.tsx`
-- `frontend/console/public/brand/medlivebd-logo-light.png` (existing approved asset reused)
+- `frontend/console/public/brand/medlivehealth-logo-light.png` (existing approved asset reused)
 - `shared/client/src/workspaces.ts`
 - `shared/ui/src/console/access.css`
 

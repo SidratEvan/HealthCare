@@ -204,7 +204,7 @@ export const CONSOLE = {
   // --- Navigation rail (B1.1) ---------------------------------------------
   navQueue: { bn: 'সিরিয়াল', en: 'Queue' },
   // Beneath the hospital's own name on every console (FR-BRD-12, plan K4).
-  consolePoweredBy: { bn: 'Powered by MedLiveBD', en: 'Powered by MedLiveBD' },
+  consolePoweredBy: { bn: 'Powered by MedLiveHealth', en: 'Powered by MedLiveHealth' },
   navRegistration: { bn: 'রেজিস্ট্রেশন', en: 'Registration' },
   navBeds: { bn: 'বেড', en: 'Beds' },
   navEmergency: { bn: 'জরুরি', en: 'Emergency' },
@@ -3671,7 +3671,7 @@ export const PATIENT = {
   // The product's name (owner, 2026-10-06). A name is not translated, and
   // the owner gave it in one spelling: it is written the same in both
   // languages until he gives a Bangla one.
-  appName: { bn: 'MedLiveBD', en: 'MedLiveBD' },
+  appName: { bn: 'MedLiveHealth', en: 'MedLiveHealth' },
   findDoctor: { bn: 'ডাক্তার খুঁজুন', en: 'Find a doctor' },
   findHospital: { bn: 'হাসপাতাল খুঁজুন', en: 'Find a hospital' },
   emergency: { bn: 'জরুরি', en: 'Emergency' },

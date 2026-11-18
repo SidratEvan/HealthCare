@@ -43,9 +43,9 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
-  title: 'MedLiveBD',
+  title: 'MedLiveHealth',
   description: 'ডাক্তারের সিরিয়াল নিন, আর অপেক্ষা সরাসরি দেখুন।',
-  applicationName: 'MedLiveBD',
+  applicationName: 'MedLiveHealth',
   icons: {
     icon: '/icon.svg',
   },
@@ -79,7 +79,7 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
       <head>
         <link rel="manifest" href="/manifest.webmanifest" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="MedLiveBD" />
+        <meta name="apple-mobile-web-app-title" content="MedLiveHealth" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <link rel="apple-touch-icon" href="/icon.svg" />
       </head>

@@ -793,7 +793,9 @@ function Shell({
     <ConsoleTheme>
       <ConsoleShell
         navigation={[]}
-        header={<ConsoleHeader identity={PATIENT.appName} logo="/brand/medlivebd-logo-light.png" />}
+        header={
+          <ConsoleHeader identity={PATIENT.appName} logo="/brand/medlivehealth-logo-light.png" />
+        }
       >
         <div
           className="mx-auto flex w-full max-w-[1040px] flex-col gap-6 p-6"

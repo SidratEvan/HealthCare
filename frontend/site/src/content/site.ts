@@ -28,7 +28,7 @@ export function pageMetadata(
     },
     openGraph: {
       type: 'website',
-      siteName: 'MedLiveBD',
+      siteName: 'MedLiveHealth',
       url: `/${locale}${path}`,
       title,
       description,

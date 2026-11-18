@@ -21,7 +21,7 @@
 
 /** The platform's own install description (`frontend/patient` used to hold it as a file). */
 export const PLATFORM_INSTALL = {
-  name: 'MedLiveBD',
+  name: 'MedLiveHealth',
   description: 'ডাক্তারের সিরিয়াল নিন, আর অপেক্ষা সরাসরি দেখুন।',
   /** The app's ground (`--color-bg-canvas`): the splash, and the network's own bar. */
   ground: '#F6F4EF',

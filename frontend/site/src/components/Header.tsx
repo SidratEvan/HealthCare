@@ -23,10 +23,10 @@ export function Logo({ priority = false }: { readonly priority?: boolean }): Rea
   return (
     <img
       className="logo"
-      src="/brand/medlivebd-lockup-dark.webp"
-      width="607"
+      src="/brand/medlivehealth-lockup-dark.webp"
+      width="718"
       height="112"
-      alt="MedLiveBD"
+      alt="MedLiveHealth"
       fetchPriority={priority ? 'high' : 'auto'}
       decoding="async"
     />
@@ -138,7 +138,7 @@ export function Header({
       data-open={open ? 'true' : 'false'}
     >
       <div className="shell header-bar">
-        <a className="brand" href={`/${locale}`} aria-label="MedLiveBD">
+        <a className="brand" href={`/${locale}`} aria-label="MedLiveHealth">
           <Logo priority />
         </a>
         <nav className="primary-nav" aria-label={t.mainNav}>

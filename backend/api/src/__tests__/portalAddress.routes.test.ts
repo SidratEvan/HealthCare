@@ -33,7 +33,7 @@ import { bearer, nationalToken, staffToken } from './support/tokens.js';
 import type { Express } from 'express';
 
 const BASE = '/api/v1';
-const DOMAIN = 'medlivebd.example';
+const DOMAIN = 'medlivehealth.example';
 const OWN = 'portal.padma-hospital.example';
 
 const mutable = env as { PLATFORM_DOMAIN: string };

@@ -29,7 +29,7 @@ export function Footer({
     <footer className="site-footer">
       <div className="shell footer-grid">
         <div className="footer-brand">
-          <a href={`/${locale}`} aria-label="MedLiveBD">
+          <a href={`/${locale}`} aria-label="MedLiveHealth">
             <Logo />
           </a>
           <p>{f.line}</p>
@@ -58,7 +58,7 @@ export function Footer({
       <div className="shell footer-base">
         <p>{f.synthetic}</p>
         <div className="footer-base-end">
-          <span>© {fmt(new Date().getFullYear(), locale)} MedLiveBD</span>
+          <span>© {fmt(new Date().getFullYear(), locale)} MedLiveHealth</span>
           <a href="#top">
             {f.backTop}
             <Icon name="up" className="icon" />

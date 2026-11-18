@@ -25,7 +25,7 @@ const LIVE = `<div class="diagram"><svg viewBox="0 0 1000 230" font-family="Anek
 <text x="130" y="118" text-anchor="middle" font-size="12" fill="#45597a">Nazma taps</text>
 <rect x="70" y="128" width="120" height="30" rx="8" fill="#0b5ed7"/><text x="130" y="148" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Finish and call next</text>
 <rect x="390" y="70" width="220" height="90" rx="14" fill="#fff4dc" stroke="#d99a00" stroke-width="1.6"/>
-<text x="500" y="105" text-anchor="middle" font-size="16" font-weight="800" fill="#7a5600">MedLiveBD</text>
+<text x="500" y="105" text-anchor="middle" font-size="16" font-weight="800" fill="#7a5600">MedLiveHealth</text>
 <text x="500" y="127" text-anchor="middle" font-size="12" fill="#7a5600">records it, recalculates every wait</text>
 <line x1="240" y1="115" x2="390" y2="115" stroke="#f05a1f" stroke-width="2.4" marker-end="url(#g)"/>
 <text x="315" y="105" text-anchor="middle" font-size="12" font-weight="700" fill="#a33a10">one tap</text>
@@ -41,7 +41,7 @@ ${[0, 1, 2, 3]
 module.exports = [
   {
     type: 'cover',
-    title: 'MedLiveBD — the complete guidebook',
+    title: 'MedLiveHealth — the complete guidebook',
     subtitle: 'What the platform is, what it is becoming, every screen explained with points and arrows, and how it is built. One book for hospitals, clinics, partners and the people who will build it with us.',
     parts:
       '<div><b>Part A — For everyone</b>Hospitals, clinics, partners, staff and anyone who is not a programmer: the idea, the people it serves, and a guided tour of every screen.</div><div><b>Part B — For engineers</b>Developers, testers and operations: architecture, the live queue engine, the database and its security, the API, deployment, workflow and tests.</div>',
@@ -52,14 +52,14 @@ module.exports = [
     type: 'part',
     letter: 'A',
     title: 'For everyone',
-    lead: 'Start here if you run a hospital or clinic, work at a counter or in a ward, are considering a partnership, or simply want to understand what MedLiveBD does. No technical knowledge is needed: every screen is shown and every important button is pointed out.',
-    html: '<div class="who"><div><b>How to read the screenshots</b><br>Orange numbered markers point at buttons and panels. The numbered list beside each picture explains them in order.</div><div><b>About the data</b><br>All hospitals, doctors and patients are invented for demonstration and labelled “(Demo)”. Patient names stay in Bangla even when the screen is in English, because names are data, not interface.</div><div><b>Languages</b><br>MedLiveBD is Bangla first. Most screenshots here are in English so every reader can follow; key screens are also shown in Bangla.</div></div>',
+    lead: 'Start here if you run a hospital or clinic, work at a counter or in a ward, are considering a partnership, or simply want to understand what MedLiveHealth does. No technical knowledge is needed: every screen is shown and every important button is pointed out.',
+    html: '<div class="who"><div><b>How to read the screenshots</b><br>Orange numbered markers point at buttons and panels. The numbered list beside each picture explains them in order.</div><div><b>About the data</b><br>All hospitals, doctors and patients are invented for demonstration and labelled “(Demo)”. Patient names stay in Bangla even when the screen is in English, because names are data, not interface.</div><div><b>Languages</b><br>MedLiveHealth is Bangla first. Most screenshots here are in English so every reader can follow; key screens are also shown in Bangla.</div></div>',
   },
   {
     type: 'chapter',
     num: 'A1',
-    title: 'What MedLiveBD is',
-    lead: 'MedLiveBD is a healthcare platform for Bangladesh that keeps a hospital\'s live state — who is being seen, how long each person will wait, which beds are free, what the emergency room can take — true in real time, and shares the right part of it with patients.',
+    title: 'What MedLiveHealth is',
+    lead: 'MedLiveHealth is a healthcare platform for Bangladesh that keeps a hospital\'s live state — who is being seen, how long each person will wait, which beds are free, what the emergency room can take — true in real time, and shares the right part of it with patients.',
     html: `
 <h3>The problem it solves</h3>
 <ul>
@@ -71,7 +71,7 @@ module.exports = [
 <li>Hospitals lose money to no-shows, unmanaged queues and referrals that leak elsewhere — and cannot see any of it.</li>
 </ul>
 <h3>The idea</h3>
-<p>Most healthcare apps treat hospital information as a <b>listing</b>: names, specialities, a phone number, a booking form. MedLiveBD treats it as <b>live state</b>. When reception taps “next”, every waiting patient's phone updates within two seconds. When a ward frees a bed, the public count changes. When nobody has confirmed a figure for a while, the screen says so.</p>
+<p>Most healthcare apps treat hospital information as a <b>listing</b>: names, specialities, a phone number, a booking form. MedLiveHealth treats it as <b>live state</b>. When reception taps “next”, every waiting patient's phone updates within two seconds. When a ward frees a bed, the public count changes. When nobody has confirmed a figure for a while, the screen says so.</p>
 <h3>Two sides, one system</h3>
 <p><b>For patients and families</b>: find a doctor or a bed across participating hospitals, book with or without an account, follow the live serial from home, get emergency help with no login, and keep visits and reports in one place.</p>
 <p><b>For hospitals and clinics</b>: consoles their staff prefer to paper — reception, registration, doctor, wards, emergency, laboratory, pharmacy, administration — in the hospital's own private workspace.</p>
@@ -79,7 +79,7 @@ module.exports = [
   },
   {
     type: 'text',
-    crumb: 'A1 · What MedLiveBD is',
+    crumb: 'A1 · What MedLiveHealth is',
     title: 'How the live queue works, in one picture',
     html: `${LIVE}
 <div class="cards"><div class="card"><h3>For the patient</h3>A serial number, the person now being served, how many are ahead, and an estimated time with an honest margin (“9:08 PM ±7 min”). Leave home when the phone says so, not three hours early.</div><div class="card"><h3>For reception</h3>One button finishes the current patient and calls the next. Late patients are put back a few places instead of being dropped. Walk-ins are added in seconds. It all works offline and catches up later.</div><div class="card"><h3>For the director</h3>Today's chambers, who is waiting, average and longest waits, promises kept, no-shows and the money recovered from freed chairs — read from the same live record, never typed twice.</div></div>
@@ -87,7 +87,7 @@ module.exports = [
   },
   {
     type: 'text',
-    crumb: 'A1 · What MedLiveBD is',
+    crumb: 'A1 · What MedLiveHealth is',
     title: 'One platform, three faces',
     html: `
 <div class="cards"><div class="card"><h3>1 · The patient network</h3>The main patient app. A patient searches for what they need — a doctor, a speciality, a hospital, an ICU, a burn unit, a bed, an open serial — and sees which participating hospitals can provide it now, live figures first, each with its age.</div><div class="card"><h3>2 · A private workspace per hospital</h3>The staff consoles live inside each hospital's own workspace. Hospital A never sees hospital B's patients or internal data. A hospital shares only public operational figures with the network: beds, capabilities, who is sitting, open serials, and how old each figure is.</div><div class="card"><h3>3 · A hospital-branded app</h3>The same patient app, limited to one hospital and in its colours, at its own address — installable on a phone with the hospital's name and icon. Emergency search stays network-wide even there: patient safety comes before brand.</div></div>
@@ -111,7 +111,7 @@ ${T(
     type: 'chapter',
     num: 'A2',
     title: 'Who it is for',
-    lead: 'MedLiveBD is designed around real people. Every design argument is settled by asking what these six would need.',
+    lead: 'MedLiveHealth is designed around real people. Every design argument is settled by asking what these six would need.',
     html: `
 <div class="cards"><div class="card"><h3>Rahela, 62 — patient</h3>Diabetic and hypertensive, sees a cardiologist every few months. Reads Bangla only. Cannot tolerate small text or multi-step flows. Wants to know one thing: <i>when should I leave the house?</i></div>
 <div class="card"><h3>Sabbir, 29 — attendant</h3>Books for his mother and his daughter from his own phone. Needs several profiles, forwards details to relatives, pays with bKash.</div>

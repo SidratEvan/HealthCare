@@ -146,7 +146,7 @@ const sharp = createRequire(
   realpathSync(join(REPO, 'frontend/site/node_modules/next/package.json')),
 )('sharp');
 await mkdir(OUT, { recursive: true });
-const raw = await mkdtemp(join(tmpdir(), 'medlivebd-screens-'));
+const raw = await mkdtemp(join(tmpdir(), 'medlivehealth-screens-'));
 const browser = await chromium.launch();
 
 async function context(locale, mobile) {

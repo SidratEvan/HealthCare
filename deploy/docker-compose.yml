@@ -1,4 +1,4 @@
-# MedLiveBD on a hospital's own server (pilot step 26, `FR-SEC-07`).
+# MedLiveHealth on a hospital's own server (pilot step 26, `FR-SEC-07`).
 #
 #   cp deploy/.env.example deploy/.env      then fill it in (DEPLOY.md §S2)
 #   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
@@ -17,6 +17,11 @@
 # API_DB_USER, which can read and write rows and nothing else — the `migrate`
 # service creates it, and narrows it again on every start.
 
+# The project name is the product's old name on purpose, and stays. Docker
+# names every volume after it (medlivebd_db-data holds the database,
+# medlivebd_files the uploads, medlivebd_caddy-data the certificates), so a
+# server installed before the rename to MedLiveHealth would come back up with
+# empty volumes, and a second stack beside the first, if this line changed.
 name: medlivebd
 
 # A container's log is a file on the host that grows until the disk is full,
@@ -110,7 +115,7 @@ services:
   # owner besides the backup.
   migrate:
     build: { context: .., target: api }
-    image: medlivebd-api
+    image: medlivehealth-api
     logging: *logging
     command: ["sh", "-c", "pnpm db:migrate && pnpm db:role"]
     environment:
@@ -125,7 +130,7 @@ services:
     healthcheck: { disable: true }
 
   api:
-    image: medlivebd-api
+    image: medlivehealth-api
     restart: unless-stopped
     logging: *logging
     environment: *api-env
@@ -136,7 +141,7 @@ services:
 
   console:
     # Named, so `deploy/images.sh` can save and load it (DEPLOY.md S4).
-    image: medlivebd-console
+    image: medlivehealth-console
     build:
       context: ..
       target: console
@@ -150,7 +155,7 @@ services:
 
   patient:
     # Named, so `deploy/images.sh` can save and load it (DEPLOY.md S4).
-    image: medlivebd-patient
+    image: medlivehealth-patient
     build:
       context: ..
       target: patient
@@ -238,7 +243,7 @@ services:
   # It waits for nothing to be healthy, since an API that never becomes
   # healthy is exactly what it has to report.
   watchdog:
-    image: medlivebd-api
+    image: medlivehealth-api
     restart: unless-stopped
     logging: *logging
     command: ["node", "/deploy/watchdog.mjs"]
@@ -246,7 +251,7 @@ services:
       WATCHDOG_READYZ_URL: http://api:4000/readyz
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
       ALERT_WEBHOOK_FORMAT: ${ALERT_WEBHOOK_FORMAT:-json}
-      ALERT_SERVER_NAME: ${ALERT_SERVER_NAME:-MedLiveBD server}
+      ALERT_SERVER_NAME: ${ALERT_SERVER_NAME:-MedLiveHealth server}
       ALERT_REPEAT_HOURS: ${ALERT_REPEAT_HOURS:-6}
       ALERT_DAILY_UTC_HOUR: ${ALERT_DAILY_UTC_HOUR:-3}
     volumes:

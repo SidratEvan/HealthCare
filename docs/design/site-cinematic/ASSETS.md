@@ -1,7 +1,7 @@
 # Campaign assets and provenance
 
 Created 12 October 2026 with the built-in OpenAI image-generation tool for this
-MedLiveBD redesign. These are synthetic illustrations, not commissioned photos,
+MedLiveHealth redesign. These are synthetic illustrations, not commissioned photos,
 actual people, actual hospital partners or documentary views. No real patient
 reference images or data were supplied. No claim of model releases, exclusive
 copyright or Creative Commons licensing is made for generated imagery.

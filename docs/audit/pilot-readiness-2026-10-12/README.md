@@ -1,4 +1,4 @@
-# MedLiveBD pilot-readiness audit — 12 October 2026
+# MedLiveHealth pilot-readiness audit — 12 October 2026
 
 **For:** the founders, deciding whether the existing Patient App, Hospital
 Console and API can carry a controlled pilot at the first hospital that signs.
@@ -188,7 +188,7 @@ boots after), and the full gate in §6.
 ### Recovery drill (synthetic, local)
 
 The real `deploy/backup.sh` and `deploy/restore.sh`, in the stack's own
-`postgis/postgis:16-3.4` image, against `medlivebd_drill`, a throwaway copy
+`postgis/postgis:16-3.4` image, against `medlivehealth_drill`, a throwaway copy
 of the seeded test database (61 migrations, 1,970 bookings, 1,529 queue
 events, 200 patients) plus one uploaded file:
 

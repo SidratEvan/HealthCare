@@ -78,8 +78,8 @@ test.describe('what a phone is told when the app is installed', () => {
     const { type, manifest } = await manifestAt(`${NETWORK}/manifest.webmanifest`);
     expect(type).toContain('application/manifest+json');
     expect(manifest).toMatchObject({
-      name: 'MedLiveBD',
-      short_name: 'MedLiveBD',
+      name: 'MedLiveHealth',
+      short_name: 'MedLiveHealth',
       start_url: '/',
       display: 'standalone',
     });
@@ -129,25 +129,25 @@ test.describe('what a phone is told when the app is installed', () => {
     const unknownPortal = await manifestAt(
       'http://nosuchplace.localhost:3000/manifest.webmanifest',
     );
-    expect(unknownPortal.manifest.name).toBe('MedLiveBD');
+    expect(unknownPortal.manifest.name).toBe('MedLiveHealth');
     const unknownScope = await manifestAt(`${NETWORK}/manifest.webmanifest?scope=NOSUCH`);
-    expect(unknownScope.manifest.name).toBe('MedLiveBD');
+    expect(unknownScope.manifest.name).toBe('MedLiveHealth');
     const notACode = await manifestAt(`${NETWORK}/manifest.webmanifest?scope=%3Cscript%3E`);
-    expect(notACode.manifest.name).toBe('MedLiveBD');
+    expect(notACode.manifest.name).toBe('MedLiveHealth');
   });
 });
 
 test.describe('the page says whose app it is', () => {
   test('the network’s own: its title, its install description, its icon', async ({ page }) => {
     await page.goto(NETWORK);
-    await expect(page).toHaveTitle('MedLiveBD');
+    await expect(page).toHaveTitle('MedLiveHealth');
     await expect(page.locator('link[rel="manifest"]')).toHaveAttribute(
       'href',
       '/manifest.webmanifest',
     );
     await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute(
       'content',
-      'MedLiveBD',
+      'MedLiveHealth',
     );
   });
 

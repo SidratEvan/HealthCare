@@ -21,7 +21,7 @@ below. The four campaign originals and their 24 renditions are byte-identical
 | --- | --- |
 | The light hospital and patient sections after the panorama are gone; their points sit on navy under each photograph | They repeated the team and patient photos. Each photo now appears once, in Codex's panorama |
 | Feature points made concrete (live queue and serials; beds and emergency; every role — find care; book a serial; follow it live) | Owner: "only important point-to-point features" |
-| Three rotating ovals → a MedLiveBD node with a bridge into both photos | The ovals meant nothing; the node says "one platform, both audiences" |
+| Three rotating ovals → a MedLiveHealth node with a bridge into both photos | The ovals meant nothing; the node says "one platform, both audiences" |
 | Hero curve removed; thread starts at the hero's foot | It stretched with the window (`preserveAspectRatio="none"`), began on a stethoscope and drifted as the photo moved |
 | Map strokes `vector-effect: non-scaling-stroke`; one labelled spoke per division headquarters | They were in viewBox units: ~0.7 px spokes, ~0.3 px divisions at 0.2 opacity |
 | Closing gradient line removed; "Meet the founders" link | Decorative, ended nowhere |
@@ -63,7 +63,7 @@ read as two unmistakable experiences. Nothing else changed.
   per experience (blue / teal top edge, label and list markers), one action
   each: Request a Demo (email) and Explore the patient experience (the patient
   information under its scene, with the coming-soon note — never the demo).
-- The MedLiveBD bridge now lives in the gap between the photographs and stops
+- The MedLiveHealth bridge now lives in the gap between the photographs and stops
   at their edges; it no longer crosses a face or text.
 - Three short benefits per experience; lines tightened.
 - Phone: both doors on the first screen; over the stacked scenes a pinned

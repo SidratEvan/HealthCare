@@ -1,4 +1,4 @@
-# MedLiveBD — Infrastructure, Architecture & Operating Cost Audit (October 2026)
+# MedLiveHealth — Infrastructure, Architecture & Operating Cost Audit (October 2026)
 
 **Prepared:** 9 October 2026, from the repository at commit `ca88c47` (branch `mvp`).
 **Method:** read-only. I read the code, the deployment files and the project documents, and ran read-only size queries against the local development database, which holds only synthetic demo data. Nothing was changed, deployed or bought. No secret values were opened or copied. The only file written is this report.
@@ -43,7 +43,7 @@ Passing automated tests is **not** treated here as proof of operational readines
 
 ### 1.1 The pieces
 
-MedLiveBD is one code repository (a "monorepo") holding several programs that share code. **VERIFIED** (`pnpm-workspace.yaml`, each `package.json`).
+MedLiveHealth is one code repository (a "monorepo") holding several programs that share code. **VERIFIED** (`pnpm-workspace.yaml`, each `package.json`).
 
 | Piece | Folder | What it is, in plain words | State |
 |---|---|---|---|
@@ -315,7 +315,7 @@ Small tables overstate per-row size because of fixed overheads, so these figures
 
 **Workload assumptions (ASSUMPTION — replace with real hospital figures):**
 
-- An average participating hospital handles **500 patient visits a day** through MedLiveBD. A small clinic or chamber: **100**.
+- An average participating hospital handles **500 patient visits a day** through MedLiveHealth. A small clinic or chamber: **100**.
 - Each visit produces about **10 KB** of database rows in total: one booking, ~5 queue events, ~4 messages, a payment row, a share of visits/prescriptions/orders, audit rows.
 - **5% of visits** produce an uploaded file averaging **0.5 MB** (a lab report PDF, a scanned document). That averages 25 KB of files per visit.
 - Backups: 14 nightly copies kept, each = compressed database dump (~30% of live database size) + a full copy of all files.
@@ -345,7 +345,7 @@ How sensitive this is: **files and the way they are backed up dominate.** If onl
 
 ### 4.1 Overview
 
-**MedLiveBD uses its own authentication, built into the API. Supabase Auth is not used anywhere** (VERIFIED: no Supabase auth library, no `auth.*` SQL; `BACKEND.md` §0 records the switch away from Supabase Auth on 28 September because real deployments must run in Bangladesh).
+**MedLiveHealth uses its own authentication, built into the API. Supabase Auth is not used anywhere** (VERIFIED: no Supabase auth library, no `auth.*` SQL; `BACKEND.md` §0 records the switch away from Supabase Auth on 28 September because real deployments must run in Bangladesh).
 
 | Topic | How it works | Evidence | State |
 |---|---|---|---|
@@ -360,7 +360,7 @@ How sensitive this is: **files and the way they are backed up dominate.** If onl
 | **Hospital-level authorisation** | Roles per staff member (`staff_roles`), route checks (`requireRole`, `requireHospitalScope`), and database row-level security (Part 3.8) | `middleware/`, migrations 0043/0044/0056 | IMPLEMENTED |
 | **Audit log** | `audit_log` table: insert-only for the API's account, readable by the hospital's admin. Record views by consent are logged | `DATABASE.md` §2.7, §5.1 | IMPLEMENTED |
 | **Encryption in transit** | HTTPS via Caddy (self-host) or Vercel/Render (demo). Strict security headers on the API and both apps | `middleware/securityHeaders.ts`, `next.config.mjs` | IMPLEMENTED |
-| **Encryption at rest** | Only the 2FA secrets are encrypted by the application. Patient data, files and backups are **not** encrypted by MedLiveBD. Disk encryption depends on the server provider | Code search: only `config/totp.ts` uses encryption | UNKNOWN / host-dependent |
+| **Encryption at rest** | Only the 2FA secrets are encrypted by the application. Patient data, files and backups are **not** encrypted by MedLiveHealth. Disk encryption depends on the server provider | Code search: only `config/totp.ts` uses encryption | UNKNOWN / host-dependent |
 | **Secret management** | Secrets live in a plain file `deploy/.env` on the server (excluded from git). No secret vault. `DEPLOY.md` S2 says to keep a copy off the machine, and that a restore needs the same `TOTP_ENCRYPTION_KEY` | `deploy/.env.example` | IMPLEMENTED (manual) |
 | **Logging hygiene** | Phone numbers, SMS text, codes and tracking links are never written to logs; SMS text is deleted from the database after 90 days | `adapters/sms.ts`, `jobs.service.ts` | IMPLEMENTED |
 | **Rate limiting** | Per-address and per-number limits, held **in the API's memory** | `middleware/rateLimit.ts` | IMPLEMENTED (single-server assumption) |
@@ -431,7 +431,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 
 - **Branding** (name, logo, colours, enabled modules) is data in the shared database. VERIFIED (migrations 0036, 0045–0047).
 - **A hospital's own portal address** comes in two forms (VERIFIED, `deploy/Caddyfile` comments, `env.ts` `PLATFORM_DOMAIN`):
-  1. `<code>.<platform-domain>` (for example `padma.medlivebd.example`): needs a **wildcard DNS record and a wildcard certificate**. Caddy can only get a wildcard certificate through a DNS challenge, which needs **a custom Caddy build with the DNS provider's plugin**. The bundle uses the standard `caddy:2` image, so this is **not set up**.
+  1. `<code>.<platform-domain>` (for example `padma.medlivehealth.example`): needs a **wildcard DNS record and a wildcard certificate**. Caddy can only get a wildcard certificate through a DNS challenge, which needs **a custom Caddy build with the DNS provider's plugin**. The bundle uses the standard `caddy:2` image, so this is **not set up**.
   2. The hospital's own domain (for example `portal.hospital.com.bd`): the hospital points DNS at the server, an operator **hand-edits the Caddyfile** to add a site, and a platform admin records the domain on `S-B-12`.
 - `NEXT_PUBLIC_PLATFORM_DOMAIN` is baked into the patient app **when it is built**, so changing the platform domain means rebuilding.
 - Until a domain exists, a hospital's branded view opens as `?scope=<code>` on the shared app. VERIFIED.
@@ -487,32 +487,32 @@ Prices quoted below are **indicative public list prices found on 9 October 2026*
 
 | # | Service | What it does | Used now? | Mandatory for production? | Free / open-source alternative | What sets the monthly cost | Fixed or usage | Who logically pays |
 |---|---|---|---|---|---|---|---|---|
-| 1 | **Server hosting (Bangladesh)** | Runs everything | No (demo uses Render/Vercel/Supabase) | **Yes** | Hospital's own machine | vCPU, RAM, disk size, bandwidth bundle | Fixed per month | MedLiveBD (shared) or the hospital (dedicated) |
+| 1 | **Server hosting (Bangladesh)** | Runs everything | No (demo uses Render/Vercel/Supabase) | **Yes** | Hospital's own machine | vCPU, RAM, disk size, bandwidth bundle | Fixed per month | MedLiveHealth (shared) or the hospital (dedicated) |
 | 2 | PostgreSQL | Database | Yes (Supabase, demo) | Yes | **Self-hosted Postgres in the bundle is free** | Disk and RAM of the server | Fixed (part of #1) | Same as #1 |
 | 3 | Backup storage | Second copy of nightly backups | Demo: Supabase + founder PC | **Yes** | An external drive or a second machine | Size of backups (Part 3.10), number of days kept | Grows with data | Same as #1 |
 | 4 | File storage | Lab reports, documents | Demo: API memory | Yes (on the server disk) | Server disk (built) | Disk GB | Grows with uploads | Same as #1 |
 | 5 | **SMS** | Booking confirmations, live updates, patient login codes | No (log only) | **Yes for the patient app**; no for a counter-only pilot | None that reaches ordinary phones for free | Number of message segments × price per segment. Bangla text uses 70 characters per segment; most queue messages are written to fit one (`shared/i18n/src/__tests__/templates.test.ts`), the confirmation with its link is longer. Branded "masking" sender names cost more than numeric senders | **Usage** | Logically the hospital (its patients, its volume); a per-hospital monthly SMS cap exists (`FR-NOT-06`, set in hospital settings; empty means no cap) |
 | 6 | Email | — | No (not implemented) | No | — | — | — | — |
 | 7 | Push notifications | Phone notifications | No (adapter records "skipped") | No | Web Push is free (VAPID keys) | — | — | — |
-| 8 | **Domain** | `medlivebd…` and subdomains | No | **Yes** | None | Yearly fee per domain | Fixed yearly | MedLiveBD (platform domain); hospital (its own domain) |
+| 8 | **Domain** | `medlivehealth…` and subdomains | No | **Yes** | None | Yearly fee per domain | Fixed yearly | MedLiveHealth (platform domain); hospital (its own domain) |
 | 9 | SSL certificates | HTTPS | Included by Vercel/Render | Yes | **Let's Encrypt, built in, free** | — (wildcard needs DNS-provider API access) | — | — |
-| 10 | DNS | Name → server | No | Yes | Many registrars/DNS hosts include it free | Some charge for API access needed by wildcard certificates | Usually free/low | MedLiveBD |
+| 10 | DNS | Name → server | No | Yes | Many registrars/DNS hosts include it free | Some charge for API access needed by wildcard certificates | Usually free/low | MedLiveHealth |
 | 11 | CDN | Faster static files | Vercel's, demo only | No | Caddy serves directly; gzip on | — | — | — |
-| 12 | Uptime monitoring / alerts | Tell a person when it breaks | No | **Effectively yes** (nothing alerts today) | Free tiers of external uptime checkers can poll `/readyz` | Number of checks, interval, SMS/phone alerts | Fixed tier | MedLiveBD |
-| 13 | Error tracking | Collect crashes | No (`SENTRY_DSN` unused) | No (logs exist) | Self-hosted options exist; none wired | Events per month | Usage | MedLiveBD |
-| 14 | Log storage | Keep history of logs | Container logs only (50 MB per container) | Recommended for incident investigation | Keep on server | GB stored / retention | Usage | MedLiveBD |
+| 12 | Uptime monitoring / alerts | Tell a person when it breaks | No | **Effectively yes** (nothing alerts today) | Free tiers of external uptime checkers can poll `/readyz` | Number of checks, interval, SMS/phone alerts | Fixed tier | MedLiveHealth |
+| 13 | Error tracking | Collect crashes | No (`SENTRY_DSN` unused) | No (logs exist) | Self-hosted options exist; none wired | Events per month | Usage | MedLiveHealth |
+| 14 | Log storage | Keep history of logs | Container logs only (50 MB per container) | Recommended for incident investigation | Keep on server | GB stored / retention | Usage | MedLiveHealth |
 | 15 | **Payment gateways (bKash, Nagad)** | Online fees | No (mock in demo; `off` in self-host) | **No** (pay at the hospital is supported) | Pay at counter | A percentage per transaction (merchant discount rate) set by each provider's merchant agreement. Not researched here | Usage | Whoever holds the merchant account. **Undecided**: one account for the platform vs. one per hospital (`STATUS.md` question 17) |
 | 16 | Maps / geolocation | Directions | Plain Google Maps link; built-in distance table | No | Built (no API) | — | — | — |
-| 17 | AI import helper (Anthropic API) | Suggests column mapping for a hospital's export | No (`MAPPING_PROVIDER=off`) | **No** (rules + manual mapping work) | Leave off | Tokens per request; one short request per **new** export format, remembered after confirmation | Usage, tiny | MedLiveBD (onboarding cost) |
-| 18 | Security testing | Independent penetration test | No (`PLATFORM_PLAN.md` X8) | Strongly recommended before scale; not required by the code | — | Vendor quote per engagement | One-time | MedLiveBD |
+| 17 | AI import helper (Anthropic API) | Suggests column mapping for a hospital's export | No (`MAPPING_PROVIDER=off`) | **No** (rules + manual mapping work) | Leave off | Tokens per request; one short request per **new** export format, remembered after confirmation | Usage, tiny | MedLiveHealth (onboarding cost) |
+| 18 | Security testing | Independent penetration test | No (`PLATFORM_PLAN.md` X8) | Strongly recommended before scale; not required by the code | — | Vendor quote per engagement | One-time | MedLiveHealth |
 | 19 | Data import / onboarding | Bringing a hospital's data in | Built in (CSV/XLSX, `S-B-14`) | No external service | Built | Staff time | — | — |
-| 20 | **GitHub** | Code, CI, deploy trigger | Yes | Yes for the current update process | — | Plan and CI minutes | Fixed/usage | MedLiveBD. **UNKNOWN** current plan |
-| 21 | Vercel | Demo web apps | Yes | No | — | Plan | Fixed | MedLiveBD. **UNKNOWN** plan. Check whether its free tier's terms allow commercial use if the demo continues there |
-| 22 | Render | Demo API | Yes | No | — | Instance size; free plan sleeps after idle | Fixed | MedLiveBD |
-| 23 | Supabase | Demo database | Yes | No | — | Plan; free projects may be paused after inactivity (check the current terms; the daily refresh keeps it active) | Fixed | MedLiveBD |
+| 20 | **GitHub** | Code, CI, deploy trigger | Yes | Yes for the current update process | — | Plan and CI minutes | Fixed/usage | MedLiveHealth. **UNKNOWN** current plan |
+| 21 | Vercel | Demo web apps | Yes | No | — | Plan | Fixed | MedLiveHealth. **UNKNOWN** plan. Check whether its free tier's terms allow commercial use if the demo continues there |
+| 22 | Render | Demo API | Yes | No | — | Instance size; free plan sleeps after idle | Fixed | MedLiveHealth |
+| 23 | Supabase | Demo database | Yes | No | — | Plan; free projects may be paused after inactivity (check the current terms; the daily refresh keeps it active) | Fixed | MedLiveHealth |
 | 24 | Docker Hub / npm / Google Fonts | Build-time downloads | Yes | Yes (at build) | — | Free; anonymous pull limits possible | — | — |
-| 25 | People | Server care, backups checked each morning, restores, updates, support | — | **Yes** | — | Hours per month | Fixed + per incident | MedLiveBD (shared) or hospital IT (dedicated) |
-| 26 | Store developer accounts | Play / App Store | No | No (PWA) | PWA | Yearly/one-time fee | Fixed | MedLiveBD or hospital (branded app) |
+| 25 | People | Server care, backups checked each morning, restores, updates, support | — | **Yes** | — | Hours per month | Fixed + per incident | MedLiveHealth (shared) or hospital IT (dedicated) |
+| 26 | Store developer accounts | Play / App Store | No | No (PWA) | PWA | Yearly/one-time fee | Fixed | MedLiveHealth or hospital (branded app) |
 
 **Indicative Bangladeshi price points found (verify before use):**
 
@@ -580,7 +580,7 @@ Bandwidth reasoning (ASSUMPTION): the patient app's first load is roughly 1–2 
 
 ## Part 8 — Production readiness and operations
 
-What must be true before the first hospital uses MedLiveBD with real patient data.
+What must be true before the first hospital uses MedLiveHealth with real patient data.
 
 ### 8.1 Already implemented and verified (by tests, not by production use)
 
@@ -638,12 +638,12 @@ What must be true before the first hospital uses MedLiveBD with real patient dat
 ### 8.5 Requires a hospital or founder decision
 
 1. **Shared platform from day one, or the single-hospital reception pilot from `fb1d1d8`?** The pilot commit predates database-level hospital separation; it is fine alone on one hospital's server, not on a shared one.
-2. **Who owns and pays for the server**: MedLiveBD (shared) or the hospital (dedicated).
+2. **Who owns and pays for the server**: MedLiveHealth (shared) or the hospital (dedicated).
 3. **Where the second backup copy lives**, and who checks backups every morning (`DEPLOY.md` S8 step 10 needs a named person).
 4. **Merchant account model** for payments (`STATUS.md` question 17), or pay-at-counter only.
 5. **Whether the patient app is offered at the first hospital** (it needs SMS; otherwise counter-only).
 6. **SMS budget per hospital** (the cap setting) and who pays for SMS.
-7. **Data protection and legal**: who is responsible for the data (hospital vs MedLiveBD), retention periods, deletion requests, written agreement on importing patient data (`FR-IMP-11`, `FR-IMP-12` require the hospital's legal adviser's agreement).
+7. **Data protection and legal**: who is responsible for the data (hospital vs MedLiveHealth), retention periods, deletion requests, written agreement on importing patient data (`FR-IMP-11`, `FR-IMP-12` require the hospital's legal adviser's agreement).
 8. **Hospital IT's answer**: can the server be reached by public HTTPS names, or only inside the hospital (`DEPLOY.md` S1)?
 9. **Support responsibilities**: who answers the phone when reception says "it's not updating", and in what hours.
 10. **The owner's release restrictions** (`CLAUDE.md` §4.6) still apply: nothing is deployed without the owner's word.
@@ -731,7 +731,7 @@ A server in Bangladesh, a second disk or machine for backups, a domain, and **SM
 Only for the public demo. Real patient data cannot go there (must stay in Bangladesh), and the product does not depend on any Supabase feature. It is used purely as a hosted PostgreSQL.
 
 **5. Do I need Supabase Auth?**
-No. MedLiveBD has its own login for staff (password + authenticator-app 2FA) and patients (SMS code). Supabase Auth is not used anywhere.
+No. MedLiveHealth has its own login for staff (password + authenticator-app 2FA) and patients (SMS code). Supabase Auth is not used anywhere.
 
 **6. Can PostgreSQL run on my own Bangladesh server?**
 Yes. The self-host kit already does it (PostGIS 16 in Docker), with migrations, a limited API account and nightly backups.
@@ -761,7 +761,7 @@ Their SMS volume (the per-hospital SMS cap and monthly count already exist), the
 One shared Bangladeshi VPS (indicatively BDT 3,500–9,000/month for 4 vCPU / 8 GB in public listings) with a larger disk, a second small storage location for backups, a `.com.bd` domain (about BDT 700 first year), Let's Encrypt, a free uptime checker on `/readyz`, and a **counter-only reception pilot first** (no SMS, pay at the hospital). Rehearse a restore before the first patient. Add SMS when the hospital wants the patient app, with a cap per hospital. This is a framework, not a recommendation of one vendor; trade-offs are in 9.3.
 
 **15. What is still missing before a reliable monthly budget?**
-Real visit volumes from the first hospital(s); how many SMS per visit you actually want to send; an SMS aggregator quote (and whether Bangla is billed per 70 characters); two or three Bangladeshi VPS and backup-storage quotes, including disk upgrades; whether the hospital or MedLiveBD pays for servers, SMS and payment fees; the hospital's upload volume (lab reports); current Vercel, GitHub, Render and Supabase plan status; payment gateway rates if online payment is wanted; a penetration test quote; and a load test to know when one server stops being enough.
+Real visit volumes from the first hospital(s); how many SMS per visit you actually want to send; an SMS aggregator quote (and whether Bangla is billed per 70 characters); two or three Bangladeshi VPS and backup-storage quotes, including disk upgrades; whether the hospital or MedLiveHealth pays for servers, SMS and payment fees; the hospital's upload volume (lab reports); current Vercel, GitHub, Render and Supabase plan status; payment gateway rates if online payment is wanted; a penetration test quote; and a load test to know when one server stops being enough.
 
 ---
 

@@ -38,8 +38,8 @@ describe('the network’s own app', () => {
   it('installs as itself', () => {
     const manifest = installManifest(null);
     expect(manifest).toMatchObject({
-      name: 'MedLiveBD',
-      short_name: 'MedLiveBD',
+      name: 'MedLiveHealth',
+      short_name: 'MedLiveHealth',
       start_url: '/',
       display: 'standalone',
       lang: 'bn',
@@ -109,7 +109,9 @@ describe('a name under an icon', () => {
   it('is whole words from the front, as many as fit', () => {
     expect(shortInstallName('পদ্মা স্পেশালাইজড হাসপাতাল (ডেমো)')).toBe('পদ্মা');
     expect(shortInstallName('City Care Hospital')).toBe('City Care');
-    expect(shortInstallName('MedLiveBD')).toBe('MedLiveBD');
+    expect(shortInstallName('MedLive')).toBe('MedLive');
+    // One word longer than a launcher shows is cut, not dropped.
+    expect(shortInstallName('MedLiveHealth')).toBe('MedLiveHealt');
     expect(shortInstallName('  শাপলা   জেনারেল  ')).toBe('শাপলা');
   });
 

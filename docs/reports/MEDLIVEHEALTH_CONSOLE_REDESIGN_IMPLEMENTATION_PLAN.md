@@ -1,4 +1,4 @@
-# MedLiveBD console redesign implementation plan — Phase 8A
+# MedLiveHealth console redesign implementation plan — Phase 8A
 
 **Date:** 10 October 2026. **Status:** planning complete; implementation requires founder approval for Phase 8B.
 
@@ -78,7 +78,7 @@ Reusable ownership should remain simple:
 | Module workspaces | Existing Reception/Doctor/Admin/etc components with extracted table/editor sections | Actual task presentation, permitted controls, module-specific dirty/selection state. Avoid a generic form engine or a single giant configurable workspace. |
 | Existing adapters/hooks | `useSessionQueue`, `useBedBoard`, `useEmergencyConsole`, `lib/*`, shared client/domain | Server state, tenant/account-scoped stores, replay/sequence/conflict rules and business invariants. |
 
-Keep `WorkspaceBrandMark`, `useWorkspaceBrand`, `lib/brand.ts` and existing logo fallback. Show hospital name continuously, including loading/error/offline. Access pages use MedLiveBD identity until hospital identity is established; do not leak hospital membership through login errors. Platform/National use platform identity, not a hospital's stale CSS theme. Reset theme/role preferences correctly on hospital/account change.
+Keep `WorkspaceBrandMark`, `useWorkspaceBrand`, `lib/brand.ts` and existing logo fallback. Show hospital name continuously, including loading/error/offline. Access pages use MedLiveHealth identity until hospital identity is established; do not leak hospital membership through login errors. Platform/National use platform identity, not a hospital's stale CSS theme. Reset theme/role preferences correctly on hospital/account change.
 
 ### Interaction standards shared across all eleven workspaces
 

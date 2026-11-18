@@ -21,7 +21,7 @@ export async function generateMetadata({
   const { locale } = await params;
   if (locale !== 'bn' && locale !== 'en') return {};
   const t = copy[locale];
-  return pageMetadata(locale, '/credits', `${t.creditsTitle} — MedLiveBD`, t.creditsIntro);
+  return pageMetadata(locale, '/credits', `${t.creditsTitle} — MedLiveHealth`, t.creditsIntro);
 }
 
 const MAP_SOURCES = [

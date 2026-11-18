@@ -8,8 +8,8 @@ const L = require('./lib.cjs');
 const DIR = __dirname;
 const SHOTS = join(DIR, 'shots');
 const OUT_HTML = join(DIR, 'book.html');
-const OUT_PDF = join(DIR, 'MedLiveBD-Guidebook.pdf');
-const LOGO = join(DIR, '../../frontend/patient/public/brand/medlivebd-logo-light.webp');
+const OUT_PDF = join(DIR, 'MedLiveHealth-Guidebook.pdf');
+const LOGO = join(DIR, '../../frontend/patient/public/brand/medlivehealth-logo-light.webp');
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -247,7 +247,7 @@ function render(pages) {
   for (const m of ['./content-a.cjs', './content-b.cjs']) delete require.cache[require.resolve(m)];
   const pages = [...require('./content-a.cjs'), ...require('./content-b.cjs')];
   const body = render(pages);
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>MedLiveBD — Guidebook</title>
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>MedLiveHealth — Guidebook</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>${CSS}</style></head><body>${body}</body></html>`;
   writeFileSync(OUT_HTML, html);
@@ -288,7 +288,7 @@ function render(pages) {
     displayHeaderFooter: true,
     headerTemplate: '<div></div>',
     footerTemplate:
-      '<div style="width:100%;font-size:8px;color:#6b7a90;padding:0 14mm;display:flex;justify-content:space-between;font-family:Segoe UI,Arial"><span>MedLiveBD Guidebook · demonstration data only</span><span class="pageNumber"></span></div>',
+      '<div style="width:100%;font-size:8px;color:#6b7a90;padding:0 14mm;display:flex;justify-content:space-between;font-family:Segoe UI,Arial"><span>MedLiveHealth Guidebook · demonstration data only</span><span class="pageNumber"></span></div>',
     margin: { top: '0', bottom: '9mm', left: '0', right: '0' },
   });
   await browser.close();
