@@ -7,7 +7,63 @@ already in `CLAUDE.md` or derivable from `git log`.
 a fresh session costs one file read instead of a re-explanation, and it is only
 worth that if it is true.
 
-## Latest work — the guidebook, and what capturing every screen found (10 November 2026)
+## Latest work — the name is MedLiveHealth (18 November 2026)
+
+Owner, 18 November: "its name is MedLiveHealth. change everywhere", with
+permission to push and release. Branch `chore/rename-medlivehealth`.
+
+- **Renamed everywhere the name is read:** the patient app (header, title,
+  installed name, the verification SMS), the console (tab, "Powered by", the
+  demo picker and sign-in logo, import template names
+  `medlivehealth-<set>-template.csv`, an authenticator entry's fallback
+  issuer), the company site's copy, the guidebook's sources, every document,
+  the self-host stack's messages, image names and the new-install database
+  names (`POSTGRES_USER`/`POSTGRES_DB` `medlivehealth`, role
+  `medlivehealth_api`; a server's existing `deploy/.env` keeps its own), and the
+  three `docs/reports/MEDLIVEHEALTH_*` file names. History is left true:
+  MedLiveBD from 6 October, MedLiveHealth from 18 November.
+- **Kept as `medlivebd`, on purpose** (`CLAUDE.md` §1.2): the domain
+  `medlivebd.com` and its mail (`support@`, the founders'), because
+  `medlivehealth.com` already points at somebody else's server; the Cloudflare
+  Pages project `medlivebd`; the self-host compose project `medlivebd`
+  (its volumes hold a server's database, files and certificates: renaming it
+  would bring an installed server up empty, beside its old stack); git branch
+  names; two paths on the owner's Desktop; the supplied artwork.
+- **The logo.** The supplied artwork says MedLiveBD and none exists for the
+  new name. `frontend/site/scripts/prepare-logo.mjs` now makes every logo file
+  from it: the mark, "MedLive" and the tagline are the supplied pixels (checked
+  equal, pixel for pixel), only "BD" becomes "Health", in Montserrat ExtraBold
+  (OFL) measured against the supplied letters (`FRONTEND.md` §0.5). The lockup
+  is wider (971 × 480, was 727 × 480). Rerun with the font's path to remake.
+- `setup.sh` still reads the old `MEDLIVEBD_*` answers when the new
+  `MEDLIVEHEALTH_*` ones are not set.
+- **Checks (focused level):** `pnpm typecheck`, `pnpm lint`,
+  `pnpm format:check`, `tsc -p e2e`; unit 4481/4481 (brand, messages), API
+  248/248 (env, SMS delivery, portal address, deployment, TOTP, auth matrix,
+  watchdog, import); `setup.sh`'s fallback tried by hand. Browser: the six
+  specs that read the name (portal-install, console-cobrand, hospital-scope,
+  portal-address, hospital-application, data-import) and
+  `patient-phone-width` (the lockup is wider) passed; console-access:84 and
+  the two-device canary failed on cold dev servers (the live-serial page took
+  29.6 s to compile in the trace; the canary measured 2,043 ms once) and then
+  passed **50/50** warm with `--repeat-each=2` behind `guest-booking`, both
+  canary runs included. Company site: static export built (every page says
+  MedLiveHealth; `medlivebd` only in its own address and mail), smoke 30/30.
+  Its `test:smoke` cannot start its own preview (`tests/playwright.config.ts`
+  runs `scripts/preview-static.mjs` from `tests/`); start the preview from the
+  root first, as the README says. Not fixed here.
+- Outside the repository: `MedLiveHealth-PRD.pdf` printed to the Desktop
+  from the 12 November source, beside the old `MedLiveBD-PRD.pdf` (left as it
+  was).
+- **For the owner, not done:** publishing the company site to
+  `medlivebd.com` (Cloudflare token: `frontend/site/README.md`); a new domain,
+  if there is to be one; MedLiveHealth artwork from the designer (replaces the
+  master); a Bangla spelling, if any; and the installed app's label:
+  "MedLiveHealth" is 13 letters, one more than some launchers show under an
+  icon (they may show "MedLiveHeal…"). A shorter label is one line in
+  `shared/domain/src/brand/manifest.ts`.
+
+## Previous work — the guidebook, and what capturing every screen found (10 November 2026)
 
 Owner, 10 November: one PDF with screenshots of every page, points and
 arrows, one part for non-technical readers and one for technical ones, no
